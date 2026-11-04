@@ -8,6 +8,7 @@ import {
   ElementRef,
   inject,
   Injector,
+  linkedSignal,
   signal,
   type Signal,
   type WritableSignal,
@@ -85,6 +86,32 @@ export class RunDetailPage {
     const status = this.store.revisionsStatus();
     return status === 'idle' || status === 'loading' ? 'loading' : status;
   });
+  /**
+   * The evidence update announced to assistive tech. The region that renders this lives outside the
+   * tab panels, so a change is still spoken while the Evidence tab is hidden; the first paint sets
+   * the baseline silently and an unchanged state stays silent, so polling never repeats a message.
+   */
+  private readonly announcedEvidence = linkedSignal<
+    { readonly selected: number | null; readonly newer: number | null },
+    string | null
+  >({
+    source: () => ({
+      selected: this.store.pinnedRevision(),
+      newer: this.store.newerRevisionExists() ? this.store.latestRevisionNo() : null,
+    }),
+    computation: (state, previous) => {
+      const before = previous?.source;
+      // A first paint is not an update, and a null pin is not a selection to announce.
+      if (before === undefined || before.selected === null || state.selected === null) return null;
+      if (before.selected === state.selected && before.newer === state.newer) return null;
+      return state.newer === null
+        ? $localize`:@@runs.evidence.announcement-selected:Viewing evidence revision ${state.selected}:SELECTED:`
+        : $localize`:@@runs.evidence.announcement-newer:Viewing evidence revision ${state.selected}:SELECTED:. Newer revision ${state.newer}:NEWER: is available.`;
+    },
+  });
+
+  protected readonly evidenceAnnouncement = computed(() => this.announcedEvidence() ?? '');
+
   protected readonly copy = {
     title: $localize`:@@runs.detail.title:Run detail`,
     sections: $localize`:@@runs.detail.sections:Run sections`,

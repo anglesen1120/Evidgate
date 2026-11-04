@@ -82,6 +82,77 @@ describe('RunDetailPage evidence and decision tabs', () => {
     expect(getDecision).toHaveBeenCalledTimes(1);
   });
 
+  it('announces an evidence change once, outside the hidden panel, while the decision tab is active', async () => {
+    const { root, harness, evidence, decision } = await open();
+    decision.click();
+    await harness.fixture.whenStable();
+    const regions = [...root.querySelectorAll<HTMLElement>('[data-evidence-announcement]')];
+    expect(regions).toHaveLength(1);
+    const region = regions[0];
+    if (!region) throw new Error('Evidence announcement region was not rendered');
+    expect(region.getAttribute('role')).toBe('status');
+    expect(region.getAttribute('aria-live')).toBe('polite');
+    // Outside both panels: a live region inside the hidden evidence panel is never spoken.
+    expect(region.closest('[role="tabpanel"]')).toBeNull();
+    expect(region.closest('[hidden]')).toBeNull();
+    expect(region.textContent?.trim()).toBe('');
+
+    await harness.navigateByUrl(
+      `/projects/project-1/runs/${run.run_id}?evidence_revision=4`,
+      RunDetailPage,
+    );
+    await harness.fixture.whenStable();
+    expect(
+      root.querySelector('app-evidence-panel')?.closest<HTMLElement>('[role="tabpanel"]')?.hidden,
+    ).toBe(true);
+    expect(region.textContent).toContain('Viewing evidence revision 4');
+    const spoken = [...root.querySelectorAll<HTMLElement>('[role="status"]')].filter((entry) =>
+      entry.textContent?.includes('Viewing evidence revision'),
+    );
+    expect(spoken).toEqual([region]);
+
+    // Showing the panel neither adds a second region nor repeats the message in the panel.
+    evidence.click();
+    await harness.fixture.whenStable();
+    expect(root.querySelectorAll('[data-evidence-announcement]')).toHaveLength(1);
+    expect(root.querySelector('app-evidence-panel')?.textContent).not.toContain(
+      'Viewing evidence revision',
+    );
+    expect(region.textContent).toContain('Viewing evidence revision 4');
+  });
+
+  it('keeps both panels out of the tab order and only the selected panel visible', async () => {
+    const { root, harness, decision } = await open();
+    const panels = [...root.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+    expect(panels).toHaveLength(2);
+    const evidencePanel = panels.find(
+      (panel) => panel.querySelector('app-evidence-panel') !== null,
+    );
+    const decisionPanel = panels.find((panel) => panel.querySelector('app-decision-view') !== null);
+    if (!evidencePanel || !decisionPanel) throw new Error('Detail panels were not rendered');
+    // Brain hardcodes tabindex="0" on every panel; each panel here holds its own focusable
+    // controls, so the page removes the panel stop and those controls stay the tab stops.
+    for (const panel of panels) {
+      expect(panel.hasAttribute('tabindex')).toBe(false);
+      expect(panel.tabIndex).toBe(-1);
+    }
+    const stops = [
+      ...root.querySelectorAll<HTMLElement>('a[href], button, select, textarea, [tabindex]'),
+    ];
+    expect(stops).not.toContain(evidencePanel);
+    expect(stops).not.toContain(decisionPanel);
+    expect(evidencePanel.hidden).toBe(false);
+    expect(decisionPanel.hidden).toBe(true);
+    expect(evidencePanel.querySelector('[role="combobox"]')).not.toBeNull();
+
+    decision.click();
+    await harness.fixture.whenStable();
+    expect(evidencePanel.hidden).toBe(true);
+    expect(decisionPanel.hidden).toBe(false);
+    expect(root.querySelectorAll('[role="tabpanel"][hidden]')).toHaveLength(1);
+    expect(root.querySelector<HTMLElement>('[role="tabpanel"][hidden]')).toBe(evidencePanel);
+  });
+
   it('supports arrow, Home and End keyboard selection with roving focus', async () => {
     const { harness, evidence, decision } = await open();
     evidence.focus();

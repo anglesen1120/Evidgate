@@ -12,8 +12,6 @@
     class="m-0 font-(family-name:--eg-font-display) text-(length:--eg-text-xl) leading-(--eg-leading-xl)"
     [textContent]="copy.title"
   ></h2>
-  <!-- The live region exists from the first paint; only a real revision update fills it. -->
-  <p class="sr-only" role="status" data-evidence-announcement>{{ announcement() }}</p>
 
   @if (revisionsStatus() === 'loading') {
     <app-loading-pattern [label]="copy.loading" />

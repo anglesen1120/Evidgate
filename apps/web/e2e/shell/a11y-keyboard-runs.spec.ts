@@ -119,7 +119,8 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(page.locator('app-attempts-table button')).toHaveCount(0);
 
   // Evidence and the latest live decision are tabs: only the selected tab is a Tab stop, the arrow
-  // keys move inside the list, and the panel that follows is a stop of its own.
+  // keys move inside the list. The panel itself is no Tab stop — it holds its own controls — so
+  // Tab continues into the selected panel's first control.
   await page.keyboard.press('Tab');
   const evidenceTab = page.getByRole('tab', { name: 'Evidence' });
   await expect(evidenceTab).toBeFocused();
@@ -132,9 +133,7 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   // Brain focuses immediately; selection and the roving tabindex follow in the render.
   await expect(evidenceTab).toHaveAttribute('aria-selected', 'true');
   await expect(decisionTab).toHaveAttribute('tabindex', '-1');
-
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('tabpanel')).toBeFocused();
+  await expect(page.getByRole('tabpanel')).not.toHaveAttribute('tabindex', '0');
 
   // The selected panel's revision picker is a combobox (the page is pinned to a frozen revision,
   // so it is a real stop of the walk), then the manifest panel's copy button ends the page.

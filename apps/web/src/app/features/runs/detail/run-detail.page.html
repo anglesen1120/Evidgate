@@ -34,6 +34,15 @@
         (retry)="retryAttempts()"
         (loadMore)="loadMoreAttempts()"
       />
+      <!-- One polite region for evidence updates, kept outside both tab panels: the Evidence panel
+           is hidden while the decision tab is active, and a hidden live region is never spoken. -->
+      <p
+        class="sr-only"
+        role="status"
+        aria-live="polite"
+        data-evidence-announcement
+        [textContent]="evidenceAnnouncement()"
+      ></p>
       <div
         hlmTabs
         [tab]="detailTab()"
@@ -61,10 +70,10 @@
             {{ copy.decision }}
           </button>
         </div>
-        <div
-          [hlmTabsContent]="'evidence'"
-          class="min-w-0 focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
-        >
+        <!-- Brain hides the inactive panel but hardcodes tabindex="0" on every panel. Both panels
+             hold focusable controls, so APG keeps the panel itself out of the tab order and the
+             page removes that stop; the panel's own controls stay the stops. -->
+        <div [hlmTabsContent]="'evidence'" [attr.tabindex]="null" class="min-w-0">
           <app-evidence-panel
             [decision]="store.decision()"
             [pinnedRevision]="store.pinnedRevision()"
@@ -83,10 +92,7 @@
             (retry)="retryRevisions()"
           />
         </div>
-        <div
-          [hlmTabsContent]="'decision'"
-          class="min-w-0 focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
-        >
+        <div [hlmTabsContent]="'decision'" [attr.tabindex]="null" class="min-w-0">
           <app-decision-view
             [decision]="store.decision()"
             [pinnedRevision]="store.pinnedRevision()"
