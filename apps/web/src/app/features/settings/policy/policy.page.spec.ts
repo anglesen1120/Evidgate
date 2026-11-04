@@ -1,11 +1,16 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import type { PolicyRevisionDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
+import type {
+  PolicyActivationStateDto,
+  PolicyRevisionDto,
+  PolicyRevisionSummaryDto,
+} from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { PolicyPage } from './policy.page';
+import type { PolicyReadView } from './policy-reads';
 import { PolicyStore, type PublishResult } from './policy.store';
 
 provideLayoutTestStubs();
@@ -21,6 +26,26 @@ const revision: PolicyRevisionDto = {
   created_at: '2026-10-26T00:00:00Z',
   version: 1,
 };
+
+const activation: PolicyActivationStateDto = {
+  project_id: 'project',
+  policy_revision_id: revision.id,
+  hash: revision.hash,
+  mode: 'advisory',
+  activated_by: 'actor',
+  activated_at: '2026-10-26T00:00:00Z',
+};
+
+const head: PolicyRevisionSummaryDto = {
+  id: revision.id,
+  revision_no: revision.revision_no,
+  hash: revision.hash,
+  state: revision.state,
+  created_by: revision.created_by,
+  created_at: revision.created_at,
+  version: revision.version,
+};
+
 class FakePolicyStore {
   readonly phase = signal<'idle' | 'ready' | 'loading' | 'not_found' | 'error'>('ready');
   readonly projectId = signal<string | null>('project');
@@ -30,6 +55,18 @@ class FakePolicyStore {
   readonly hasMore = signal(false);
   readonly publishing = signal(false);
   readonly loadError = signal<ApiError | null>(null);
+  readonly reads = {
+    activation: signal<PolicyReadView<PolicyActivationStateDto>>({
+      phase: 'ready',
+      value: activation,
+      error: null,
+    }),
+    head: signal<PolicyReadView<PolicyRevisionSummaryDto>>({
+      phase: 'ready',
+      value: head,
+      error: null,
+    }),
+  };
   readonly open = vi.fn(() => Promise.resolve());
   readonly loadBody = vi.fn(() => Promise.resolve(revision));
   readonly publish = vi.fn<(body: string) => Promise<PublishResult>>(() =>
@@ -81,7 +118,7 @@ describe('PolicyPage', () => {
     await fixture.whenStable();
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
-  it('uses an h2 heading and shows revision metadata with unavailable mode', async () => {
+  it('uses an h2 heading and shows revision metadata with the activation mode', async () => {
     const { root } = await render();
     expect(root.querySelector('h2#heading')?.textContent).toMatch(/\S/);
     expect(root.querySelector('h1')).toBeNull();
@@ -89,8 +126,34 @@ describe('PolicyPage', () => {
     expect(root.querySelector('[data-policy-revision]')?.getAttribute('data-revision-no')).toBe(
       '2',
     );
-    expect(root.querySelector('[data-policy-mode]')?.getAttribute('data-mode')).toBe('unavailable');
+    expect(root.querySelector('[data-policy-mode]')?.getAttribute('data-mode')).toBe('advisory');
     expect(root.querySelector('[data-policy-publish-open]')).not.toBeNull();
+  });
+  it('shows the no-activation state without hiding the revisions', async () => {
+    store.reads.activation.set({ phase: 'empty', value: null, error: null });
+    const { root } = await render();
+    expect(root.querySelector('[data-policy-activation-empty]')).not.toBeNull();
+    expect(root.querySelectorAll('[data-policy-revision]')).toHaveLength(1);
+  });
+  it('retries both project reads from the summary retry control', async () => {
+    store.reads.head.set({
+      phase: 'error',
+      value: null,
+      error: {
+        kind: 'unavailable',
+        status: 503,
+        code: 'unavailable',
+        message: 'a dependency is busy',
+        requestId: null,
+        retryable: true,
+        details: [],
+        retryAfterSeconds: null,
+      },
+    });
+    const { fixture, root } = await render();
+    root.querySelector<HTMLButtonElement>('[data-policy-reads-retry]')?.click();
+    await fixture.whenStable();
+    expect(store.reload).toHaveBeenCalledTimes(1);
   });
   it('omits publish control entirely without policy:write', async () => {
     canWrite.set(false);

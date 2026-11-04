@@ -21,8 +21,9 @@ import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSkeleton } from '@evidgate/ui/skeleton';
 import type { PublishedRevision } from '../../../core/data/policy-data.service';
 import { SessionStore } from '../../../core/session/session.store';
-import { PolicyModeChipComponent } from './policy-mode-chip.component';
+import { PolicyProjectReads } from './policy-reads';
 import { PolicyStore } from './policy.store';
+import { PolicySummaryComponent } from './policy-summary.component';
 import { PublishDialogComponent } from './publish-dialog.component';
 import { RevisionDiffComponent } from './revision-diff.component';
 import { RevisionListComponent } from './revision-list.component';
@@ -36,12 +37,12 @@ import { RevisionListComponent } from './revision-list.component';
     HlmInput,
     HlmLabel,
     HlmSkeleton,
-    PolicyModeChipComponent,
+    PolicySummaryComponent,
     RevisionListComponent,
     RevisionDiffComponent,
     PublishDialogComponent,
   ],
-  providers: [PolicyStore],
+  providers: [PolicyStore, PolicyProjectReads],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './policy.page.html',
   host: {

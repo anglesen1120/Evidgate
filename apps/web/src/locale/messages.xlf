@@ -2616,6 +2616,18 @@
       <trans-unit id="settings.policy.conflict-not-set" datatype="html"><source>(not set)</source></trans-unit>
       <trans-unit id="settings.policy.load-failed" datatype="html"><source>The policy revisions could not be loaded.</source></trans-unit>
       <trans-unit id="settings.policy.load-retry" datatype="html"><source>Retry</source></trans-unit>
+      <trans-unit id="settings.policy.summary-title" datatype="html"><source>Project policy</source></trans-unit>
+      <trans-unit id="settings.policy.activation" datatype="html"><source>Activation</source></trans-unit>
+      <trans-unit id="settings.policy.activation-loading" datatype="html"><source>Reading the activation…</source></trans-unit>
+      <trans-unit id="settings.policy.activation-empty" datatype="html"><source>No activation: this project is not gated by a policy.</source></trans-unit>
+      <trans-unit id="settings.policy.activation-forbidden" datatype="html"><source>You cannot read this project's activation.</source></trans-unit>
+      <trans-unit id="settings.policy.head-revision" datatype="html"><source>Head revision</source></trans-unit>
+      <trans-unit id="settings.policy.head-loading" datatype="html"><source>Reading the head revision…</source></trans-unit>
+      <trans-unit id="settings.policy.head-empty" datatype="html"><source>No policy revisions yet.</source></trans-unit>
+      <trans-unit id="settings.policy.head-forbidden" datatype="html"><source>You cannot read this project's head revision.</source></trans-unit>
+      <trans-unit id="settings.policy.activated-at" datatype="html"><source>Activated</source></trans-unit>
+      <trans-unit id="settings.policy.read-failed" datatype="html"><source>The project's policy details could not be read.</source></trans-unit>
+      <trans-unit id="settings.policy.read-retry" datatype="html"><source>Reload policy details</source></trans-unit>
       <trans-unit id="settings.secrets.ci.title" datatype="html"><source>CI bindings</source></trans-unit>
       <trans-unit id="settings.secrets.ci.description" datatype="html"><source>Repository bindings and allowed CI references. Metadata only; bindings are managed during onboarding.</source></trans-unit>
       <trans-unit id="settings.secrets.ci.provider" datatype="html"><source>Provider</source></trans-unit>

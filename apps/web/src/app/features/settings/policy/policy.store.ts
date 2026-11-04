@@ -8,10 +8,11 @@
 //
 // Seven rules shape every method:
 //
-// 1. A revision id is the page's only key (S83 P2). The contract has NO read for a project's head
-//    revision or its activation, so `open()` starts from a revision id, learns the PROJECT from the
-//    revision itself (`revision.project_id`, never from the URL or the route scope), and reads the
-//    revision list through that same id. An id that is not UUID-shaped is the "no revision
+// 1. A revision id is the page's only key (S83 P2). `open()` starts from a revision id, learns the
+//    PROJECT from the revision itself (`revision.project_id`, never from the URL or the route
+//    scope), and reads the revision list through that same id. The project's activation and head
+//    revision have their own reads (`policy-reads.ts`), which start once the project is known and
+//    never decide whether the list is shown. An id that is not UUID-shaped is the "no revision
 //    selected" state and requests nothing at all.
 // 2. No existence leak. A revision of a project this session is not in is refused as `not_found` —
 //    the same state a `404`/`403` renders — and nothing else is requested, so the tab cannot be used
@@ -47,7 +48,7 @@
 
 import { computed, inject, Injectable, signal } from '@angular/core';
 import type {
-  PolicyActivationDto,
+  PolicyActivationStateDto,
   PolicyRevisionDto,
   PolicyRevisionSummaryDto,
 } from '@evidgate/sdk';
@@ -60,9 +61,11 @@ import {
   type ApiError,
   type ApiErrorKind,
 } from '../../../core/http/api-error';
+import { settledRead } from '../../../core/http/settled-read';
 import { SessionStore } from '../../../core/session/session.store';
 import { conflictFromError } from '../../../shared/ui/conflict/conflict-details';
 import { POLICY_BODY_MAX_BYTES, policyBodyBytes } from './policy-body-size';
+import { PolicyProjectReads } from './policy-reads';
 
 /** The tab's read state: `idle` before a revision is opened, `not_found` for every refusal. */
 export type PolicyPhase = 'idle' | 'loading' | 'ready' | 'error' | 'not_found';
@@ -208,18 +211,6 @@ const FOREIGN_REVISION_FAILURE: ApiError = {
   retryAfterSeconds: null,
 };
 
-/** One read, settled so a rejection is inspected instead of thrown. */
-type SettledRead<T> =
-  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: unknown };
-
-async function settledRead<T>(read: () => Promise<T>): Promise<SettledRead<T>> {
-  try {
-    return { ok: true, value: await read() };
-  } catch (error) {
-    return { ok: false, error };
-  }
-}
-
 /**
  * The body a publish sends: the textarea's text parsed, or `null` when it is not a JSON OBJECT.
  * An array and a scalar are refused with the same `invalid_json`, because the wire body is a closed
@@ -242,6 +233,11 @@ function parsePolicyObject(bodyText: string): Record<string, unknown> | null {
 export class PolicyStore {
   private readonly data = inject(PolicyDataService);
   private readonly session = inject(SessionStore);
+  /**
+   * The project's activation and head revision, read beside the list. Exposed as is: the summary
+   * renders their phases, which are independent of the list's own phase.
+   */
+  readonly reads = inject(PolicyProjectReads);
 
   private readonly revisionsSignal = signal<readonly PolicyRevisionSummaryDto[]>(NO_REVISIONS);
   private readonly phaseSignal = signal<PolicyPhase>('idle');
@@ -249,7 +245,7 @@ export class PolicyStore {
   private readonly nextCursorSignal = signal<string | null>(null);
   private readonly projectIdSignal = signal<string | null>(null);
   private readonly headRevisionIdSignal = signal<string | null>(null);
-  private readonly activationSignal = signal<PolicyActivationDto | null>(null);
+  private readonly activationSignal = signal<PolicyActivationStateDto | null>(null);
   /**
    * The double-submit lock. It is this flag, not the absence of an answer, that decides whether a
    * publish may start: the request is out and a second press would append a second revision (or
@@ -311,8 +307,9 @@ export class PolicyStore {
     () => this.revisionsSignal().find((revision) => revision.state === 'active') ?? null,
   );
   /**
-   * The project's policy activation, as the seam {@link applyActivation} was handed. No route reads
-   * it today (S83 P2), so it is `null` in production and the chip renders "unavailable".
+   * The project's policy activation, as the seam {@link applyActivation} was handed: the served
+   * object once {@link PolicyProjectReads} read it, `null` while that read is out or when the
+   * project has no activation (or the caller may not read it).
    */
   readonly activation = this.activationSignal.asReadonly();
   /** `policy_activation.mode`, VERBATIM — never derived from a revision's `state`. */
@@ -364,6 +361,7 @@ export class PolicyStore {
     }
 
     this.projectIdSignal.set(projectId);
+    this.startReads(projectId);
     await this.readList(id, generation, true);
   }
 
@@ -423,7 +421,8 @@ export class PolicyStore {
 
   /**
    * Re-reads the list from its first page — the explicit reload a `412` conflict dialog offers, and
-   * the page's own retry. It settles `error`/`not_found` on a refusal (so the dialog's reload path
+   * the page's own retry. It also restarts the project reads, so one control retries every read the
+   * summary renders. It settles `error`/`not_found` on a refusal (so the dialog's reload path
    * sees the failure) and never rejects.
    *
    * With no anchor there is no list to re-read: the open that was meant to set one failed before the
@@ -437,6 +436,10 @@ export class PolicyStore {
         await this.open(this.lastRequestedRevisionId);
       }
       return;
+    }
+    const projectId = this.projectIdSignal();
+    if (projectId !== null) {
+      this.startReads(projectId);
     }
     const generation = ++this.generation;
     await this.readList(anchor, generation, true);
@@ -616,11 +619,11 @@ export class PolicyStore {
   }
 
   /**
-   * The activation seam (S83 P2): the page renders exactly what the server said, and nothing is
-   * inferred from a revision's `state`. An activation belongs to the project on screen, so
-   * {@link open} and {@link reset} clear it; nothing else ever writes it.
+   * The activation seam: the page renders exactly what the server said, and nothing is inferred
+   * from a revision's `state`. {@link PolicyProjectReads} calls it with the served object, and with
+   * `null` for an absent, forbidden or failed read; nothing else ever writes it.
    */
-  applyActivation(activation: PolicyActivationDto | null): void {
+  applyActivation(activation: PolicyActivationStateDto | null): void {
     this.activationSignal.set(activation);
   }
 
@@ -760,8 +763,19 @@ export class PolicyStore {
     this.headRevisionIdSignal.set(null);
     this.loadErrorSignal.set(null);
     this.activationSignal.set(null);
+    // The project's own reads belong to the view too: their generations are bumped there, so an
+    // answer still on its way cannot report the project that just left the screen.
+    this.reads.clear();
     this.anchorRevisionId = null;
     this.followedCursors.clear();
     this.pagesRead = 1;
+  }
+
+  /**
+   * Starts the activation and head reads for the project on screen. Not awaited and never rejected:
+   * a refused or slow read is a state of the summary, never a reason for the list to wait or fail.
+   */
+  private startReads(projectId: string): void {
+    this.reads.start(projectId, (activation) => this.applyActivation(activation));
   }
 }

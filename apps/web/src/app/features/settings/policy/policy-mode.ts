@@ -5,8 +5,7 @@
 // `enforcing`, but a server that later serves a third mode must not be rendered as one of the two
 // (a chip that says "Gating" for a mode nobody declared is a security claim the UI invented).
 // So anything else is `unknown` with the raw value kept for the chip to show as text, and a mode
-// that is absent — no activation is readable yet, which is the production state until a
-// `GET /v1/projects/{p}/policy-activation` exists (S83 P2) — is `unavailable`.
+// that is absent — no activation, or one the caller may not read — is `unavailable`.
 //
 // Pure and Angular-free: the store, the chip and their specs share this one table, and nothing
 // here reads a revision's `state` (a revision being `active` is a different fact from the
