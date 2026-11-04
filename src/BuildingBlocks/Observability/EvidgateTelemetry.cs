@@ -25,6 +25,12 @@ public static class EvidgateTelemetry
     /// <summary>Span tag carrying the 00 §9.1 request id.</summary>
     public const string RequestIdTag = "evidgate.request_id";
 
+    /// <summary>Span tag carrying the producer id a batch's events declare.</summary>
+    public const string ProducerIdTag = "evidgate.producer_id";
+
+    /// <summary>Span tag carrying how many events the parsed batch holds.</summary>
+    public const string EventCountTag = "evidgate.event_count";
+
     /// <summary>Counter of module operations, tagged by <see cref="ModuleTag"/>.</summary>
     public const string ModuleOperationCounterName = "evidgate.module.operations";
 
@@ -216,11 +222,10 @@ public static class EvidgateTelemetry
             new KeyValuePair<string, object?>("protocol_major", ProtocolMajorBucket(protocolMajor)));
 
     /// <summary>
-    /// Counts one event batch refused by a transport or decode cap (04.1.1-T3), tagged by
-    /// <paramref name="reason"/> from the closed vocabulary only — never a body, an event id or any
-    /// request value.
+    /// Counts one event batch refused before it was written, tagged by <paramref name="reason"/> from
+    /// the closed vocabulary only — never a body, an event id or any request value.
     /// </summary>
-    /// <param name="reason">One of <c>body_too_large</c>, <c>event_count</c>, <c>expanded_too_large</c>, <c>ratio_exceeded</c>, <c>encoding_unsupported</c>, <c>gzip_invalid</c>.</param>
+    /// <param name="reason">One of <c>body_too_large</c>, <c>event_count</c>, <c>expanded_too_large</c>, <c>ratio_exceeded</c>, <c>encoding_unsupported</c>, <c>gzip_invalid</c>, <c>rate_limited</c>.</param>
     public static void RecordIngestBatchRejected(string reason) =>
         IngestBatchRejections.Add(1, new KeyValuePair<string, object?>("reason", reason));
 

@@ -1,4 +1,7 @@
 using System.Buffers;
+using System.Diagnostics;
+using System.Globalization;
+using Evidgate.BuildingBlocks.Observability.Correlation;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -55,6 +58,12 @@ public static class IngestionEndpoints
         return group;
     }
 
+    /// <summary>
+    /// Admits, reads and hands one batch to the handler. The burst limit is charged before the
+    /// body is read and before the pipeline's permission check: a caller over its budget is
+    /// refused cheaply there by design, and every refusal is counted once. A caller the limiter
+    /// cannot key on is left to the pipeline and the handler, which refuse it without a write.
+    /// </summary>
     private static async Task<Result<BatchAckResult>> IngestEventBatchAsync(
         Guid r,
         HttpContext context,
@@ -62,10 +71,18 @@ public static class IngestionEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(IngestionEndpoints));
+
+        // AC7: a refusal never reaches the handler's module span, so the run id and the request id
+        // go on the request span first. Neither the token id nor any other credential value is tagged.
+        TagRequestSpan(context, r);
+
         // Nothing of the body is read for a caller who is nobody; parsing and validation run in the handler,
         // after the pipeline's permission check (04.1.1 §5).
         if (principals.Current is null)
         {
+            IngestBatchRejection.Record(logger, IngestBatchRejection.Unauthenticated, context.TraceIdentifier, r, 0, 0);
+
             return Result.Failure<BatchAckResult>(new Error(
                 ApiErrorCode.Unauthenticated,
                 "no authenticated producer could be resolved",
@@ -73,7 +90,31 @@ public static class IngestionEndpoints
         }
 
         var limits = context.RequestServices.GetRequiredService<IOptions<IngestionLimits>>().Value;
-        var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(IngestionEndpoints));
+
+        // The burst limit runs before a byte of the body is read, keyed by the authenticated project
+        // and token id only: no header or body value moves a caller into another partition. A caller
+        // whose key cannot be resolved is not refused here — the limiter never answers before the
+        // pipeline does — and the handler refuses it without a write.
+        if (TryRatePartition(principals.Current, out var partition))
+        {
+            var limiter = context.RequestServices.GetRequiredService<IngestionRateLimiter>();
+
+            // One charge against both budgets (the token's own and the project's), committed only when
+            // both admit, so a refused token never spends the budget its siblings share.
+            var admission = limiter.AcquireBoth(partition.ProjectId, partition.TokenId);
+
+            if (!admission.Allowed)
+            {
+                context.Response.Headers.RetryAfter = RetryAfterHeader.Format(admission.RetryAfterSeconds);
+                IngestBatchRejection.Record(logger, IngestBatchRejection.RateLimited, context.TraceIdentifier, r, 0, 0);
+
+                return Result.Failure<BatchAckResult>(new Error(
+                    ApiErrorCode.RateLimited,
+                    "the project's event ingest rate was exceeded",
+                    StatusCodes.Status429TooManyRequests,
+                    Retryable: true));
+            }
+        }
 
         // Content-Encoding must be exactly one of gzip/identity (case-insensitive). Anything else — an
         // unknown coding or a stacked list — is refused at the header: the 00 §9.2 envelope has no code for
@@ -116,9 +157,14 @@ public static class IngestionEndpoints
 
             if (!gzip)
             {
-                return await mediator
-                    .Send(new IngestEventBatch(r, bytes, context.TraceIdentifier, bytesIn, bytesIn), cancellationToken)
-                    .ConfigureAwait(false);
+                return Counted(
+                    await mediator
+                        .Send(new IngestEventBatch(r, bytes, context.TraceIdentifier, bytesIn, bytesIn), cancellationToken)
+                        .ConfigureAwait(false),
+                    logger,
+                    context,
+                    r,
+                    bytesIn);
             }
 
             using var decoded = EventBodyDecoder.DecodeGzip(bytes, limits);
@@ -132,17 +178,80 @@ public static class IngestionEndpoints
                     : Result.Failure<BatchAckResult>(TooLarge());
             }
 
-            return await mediator
-                .Send(
-                    new IngestEventBatch(r, decoded.Bytes, context.TraceIdentifier, bytesIn, decoded.ExpandedBytes),
-                    cancellationToken)
-                .ConfigureAwait(false);
+            return Counted(
+                await mediator
+                    .Send(
+                        new IngestEventBatch(r, decoded.Bytes, context.TraceIdentifier, bytesIn, decoded.ExpandedBytes),
+                        cancellationToken)
+                    .ConfigureAwait(false),
+                logger,
+                context,
+                r,
+                bytesIn);
         }
         finally
         {
             // The buffer held the tenant's request body, so it is cleared before it is pooled.
             ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
         }
+    }
+
+    /// <summary>
+    /// Counts one rejection for a failure the pipeline or handler returned, under
+    /// <see cref="IngestBatchRejection.ReasonFor"/>'s closed vocabulary. A
+    /// <c>batch_too_large</c> is skipped because the cap that refused it already counted it.
+    /// </summary>
+    private static Result<BatchAckResult> Counted(
+        Result<BatchAckResult> result,
+        ILogger logger,
+        HttpContext context,
+        Guid runId,
+        int bytesIn)
+    {
+        if (result.Error is { } error
+            && !string.Equals(error.Code, ApiErrorCode.BatchTooLarge, StringComparison.Ordinal))
+        {
+            IngestBatchRejection.Record(
+                logger, IngestBatchRejection.ReasonFor(error), context.TraceIdentifier, runId, bytesIn, 0);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Puts the route's run id and the effective request id on the request span before any refusal,
+    /// so a 401/403/429 is attributable without the handler's module span (AC7). A no-op when nothing
+    /// listens to tracing.
+    /// </summary>
+    private static void TagRequestSpan(HttpContext context, Guid runId)
+    {
+        if (Activity.Current is not { } activity)
+        {
+            return;
+        }
+
+        activity.SetTag(CorrelationNames.RunId, runId.ToString("D", CultureInfo.InvariantCulture));
+        activity.SetTag(CorrelationNames.RequestId, context.TraceIdentifier);
+    }
+
+    /// <summary>
+    /// The limiter partition of the authenticated caller: the token's project scope and its
+    /// credential id. Only a service principal carries both; any other shape has no budget to
+    /// charge and is left to the pipeline and the handler, which refuse it without a write.
+    /// </summary>
+    private static bool TryRatePartition(IRequestPrincipal? principal, out (Guid ProjectId, string TokenId) partition)
+    {
+        if (principal is { Kind: PrincipalKind.ServicePrincipal, ProjectScope: { } projectId }
+            && !string.IsNullOrEmpty(principal.CredentialId))
+        {
+            partition = (projectId, principal.CredentialId);
+
+            return true;
+        }
+
+        partition = default;
+
+        return false;
     }
 
     /// <summary>
