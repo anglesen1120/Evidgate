@@ -17,7 +17,7 @@
     <hlm-select-trigger [buttonId]="orgId" class="min-h-(--eg-control-touch) w-full min-w-0">
       <span class="truncate">{{ currentOrg()?.name || chooseOrganization }}</span>
     </hlm-select-trigger>
-    <hlm-select-content *hlmSelectPortal [aria-labelledby]="orgId + '-label'">
+    <hlm-select-content *hlmSelectPortal class="animate-none" [aria-labelledby]="orgId + '-label'">
       @for (organization of organizations(); track organization.id) {
         <hlm-select-item
           [value]="organization.id"
@@ -50,7 +50,11 @@
         currentProject()?.name || (projects().length === 0 ? noProjects : chooseProject)
       }}</span>
     </hlm-select-trigger>
-    <hlm-select-content *hlmSelectPortal [aria-labelledby]="projectId + '-label'">
+    <hlm-select-content
+      *hlmSelectPortal
+      class="animate-none"
+      [aria-labelledby]="projectId + '-label'"
+    >
       @for (item of projects(); track item.id) {
         <hlm-select-item
           [value]="item.id"

@@ -188,9 +188,12 @@ describe('ShellComponent', () => {
     await fixture.whenStable();
     const aside = root.querySelector<HTMLElement>('aside')!;
     const close = root.querySelector<HTMLButtonElement>('.close-button')!;
+    expect(close.classList.contains('transition-none')).toBe(true);
+    const nativeFocus = close.focus.bind(close);
     const focus = vi.spyOn(close, 'focus').mockImplementation(() => {
       expect(aside.hasAttribute('inert')).toBe(false);
       expect(aside.classList.contains('invisible')).toBe(false);
+      nativeFocus();
     });
 
     fixture.componentInstance.toggleNavigation();
@@ -210,6 +213,63 @@ describe('ShellComponent', () => {
     await fixture.whenStable();
     expect(focus).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(root.querySelector('.nav-toggle'));
+  });
+
+  it('retries a refused focus on a frame and stops after the control receives focus', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const frames: FrameRequestCallback[] = [];
+    const close = root.querySelector<HTMLButtonElement>('.close-button')!;
+    const nativeFocus = close.focus.bind(close);
+    const focus = vi.spyOn(close, 'focus').mockImplementationOnce(() => undefined);
+    fixture.componentInstance.toggleNavigation();
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback),
+    );
+    await fixture.whenStable();
+    expect(focus).toHaveBeenCalledOnce();
+    expect(frames).toHaveLength(1);
+    focus.mockImplementation(nativeFocus);
+    frames.shift()!(0);
+    expect(document.activeElement).toBe(close);
+    expect(frames).toHaveLength(0);
+  });
+
+  it('bounds refused focus retries to three frames', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const frames: FrameRequestCallback[] = [];
+    const focus = vi
+      .spyOn(root.querySelector<HTMLButtonElement>('.close-button')!, 'focus')
+      .mockImplementation(() => undefined);
+    fixture.componentInstance.toggleNavigation();
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback),
+    );
+    await fixture.whenStable();
+    for (let frame = 0; frame < 3; frame++) frames.shift()!(frame);
+    expect(focus).toHaveBeenCalledTimes(4);
+    expect(frames).toHaveLength(0);
+  });
+
+  it('keeps focus on main when a drawer link revisits an already-loaded destination', async () => {
+    const router = TestBed.inject(Router);
+    const destination = '/orgs/org-one/projects/project-one/overview';
+    await router.navigateByUrl(destination);
+    await router.navigateByUrl('/other');
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    fixture.componentInstance.toggleNavigation();
+    await fixture.whenStable();
+    const link = root.querySelector<HTMLAnchorElement>('aside nav a')!;
+    link.click();
+    await fixture.whenStable();
+    expect(router.url).toBe(destination);
+    expect(fixture.componentInstance.drawerOpen()).toBe(false);
+    expect(document.activeElement).toBe(root.querySelector('#main-content'));
   });
 
   it('keeps a scope placeholder until the deferred mobile switcher is ready', async () => {

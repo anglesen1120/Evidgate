@@ -82,6 +82,7 @@ export class ShellComponent {
   private hasNavigated = this.router.navigated;
   /** Path (no query, no fragment) of the previous NavigationEnd, for the focus handoff. */
   private lastPath: string | null = null;
+  private focusRequest = 0;
 
   constructor() {
     this.router.events
@@ -97,6 +98,7 @@ export class ShellComponent {
         this.hasNavigated = true;
         this.lastPath = path;
         this.drawerOpen.set(false);
+        this.focusRequest++;
         afterNextRender(
           () => {
             const main = this.main()?.nativeElement;
@@ -146,36 +148,34 @@ export class ShellComponent {
     this.focusWhenUnblocked('drawer');
   }
 
-  closeDrawer(): void {
+  closeDrawer(restoreOpener = true): void {
     this.drawerOpen.set(false);
-    this.focusWhenUnblocked('opener');
+    if (restoreOpener) this.focusWhenUnblocked('opener');
+    else this.focusRequest++;
   }
 
   /**
-   * Moves focus once the render that flips `inert` has committed.
-   *
-   * The two focus targets sit on opposite sides of the drawer's `inert` boundary, so the browser
-   * refuses `focus()` until the attribute change is in the DOM: a real browser silently ignores it
-   * while the subtree is still inert and leaves focus on `body` — the visitor then has to tab from
-   * the top of the page, and the drawer's trap never engages. Wait for Angular's render, then a
-   * microtask so all render callbacks have completed before handing off focus. Check the current
-   * state again so an open/close or resize in the same turn cannot focus a now-hidden control.
+   * Focus after the inert boundary has rendered, with bounded frame retries if the browser
+   * has not made the control focusable yet. The close button disables Helm's transition-all:
+   * otherwise inherited visibility remains hidden at the start of its reveal transition.
+   * Navigation and newer drawer actions invalidate pending retries instead of stealing focus.
    */
   private focusWhenUnblocked(target: 'drawer' | 'opener'): void {
-    afterNextRender(
-      () => {
-        queueMicrotask(() => {
-          if (target === 'drawer' ? !this.mobile() || !this.drawerOpen() : this.drawerOpen())
-            return;
-          const element =
-            target === 'drawer'
-              ? this.closeButton()?.nativeElement
-              : this.toggleButton()?.nativeElement;
-          if (element?.isConnected && !element.closest('[inert]')) element.focus();
-        });
-      },
-      { injector: this.injector },
-    );
+    const request = ++this.focusRequest;
+    const focus = (framesLeft: number): void => {
+      if (request !== this.focusRequest) return;
+      if (target === 'drawer' ? !this.mobile() || !this.drawerOpen() : this.drawerOpen()) return;
+      const element =
+        target === 'drawer'
+          ? this.closeButton()?.nativeElement
+          : this.toggleButton()?.nativeElement;
+      if (!element?.isConnected) return;
+      if (!element.closest('[inert]')) element.focus();
+      if (this.document.activeElement !== element && framesLeft > 0) {
+        this.document.defaultView?.requestAnimationFrame(() => focus(framesLeft - 1));
+      }
+    };
+    afterNextRender(() => focus(3), { injector: this.injector });
   }
 
   onDrawerKeydown(event: KeyboardEvent): void {

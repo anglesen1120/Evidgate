@@ -43,7 +43,7 @@
         hlmBtn
         [variant]="'ghost'"
         [size]="'icon'"
-        class="icon-button close-button absolute end-(--eg-space-3) top-(--eg-space-3) min-h-(--eg-control-touch) min-w-(--eg-control-touch)"
+        class="icon-button close-button absolute end-(--eg-space-3) top-(--eg-space-3) min-h-(--eg-control-touch) min-w-(--eg-control-touch) transition-none"
         [attr.aria-label]="closeLabel"
         (click)="closeDrawer()"
       >
@@ -101,7 +101,7 @@
       class="flex-1"
       [groups]="nav.groups()"
       [collapsed]="collapsed()"
-      (itemSelected)="mobile() && closeDrawer()"
+      (itemSelected)="mobile() && closeDrawer(false)"
     />
   </aside>
   <div class="main-stack flex min-w-0 flex-col" [attr.inert]="mobile() && drawerOpen() ? '' : null">
