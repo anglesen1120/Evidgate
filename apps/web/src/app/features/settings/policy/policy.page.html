@@ -1,11 +1,20 @@
-<header class="page-header">
-  <h2 #heading id="heading" tabindex="-1">{{ copy.title }}</h2>
-  <p>{{ copy.description }}</p>
+<header class="mb-4 grid min-w-0 gap-2">
+  <h2
+    #heading
+    id="heading"
+    tabindex="-1"
+    class="m-0 font-[family-name:var(--eg-font-display)] text-xl md:text-2xl focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-offset-[var(--eg-focus-offset)] focus-visible:outline-ring"
+  >
+    {{ copy.title }}
+  </h2>
+  <p class="text-muted-foreground">{{ copy.description }}</p>
 </header>
-<form class="revision-entry" (submit)="openRevision($event)">
-  <div class="field">
-    <label for="policy-revision-id">{{ copy.revisionId }}</label>
+<form hlmCard class="mb-4 flex flex-wrap items-end gap-3 p-4" (submit)="openRevision($event)">
+  <div class="grid min-w-0 flex-1 basis-[var(--eg-rail-width)] gap-2">
+    <label hlmLabel for="policy-revision-id">{{ copy.revisionId }}</label>
     <input
+      hlmInput
+      class="min-h-[var(--eg-control-touch)]"
       id="policy-revision-id"
       type="text"
       autocomplete="off"
@@ -16,6 +25,9 @@
     />
   </div>
   <button
+    hlmBtn
+    [variant]="'outline'"
+    class="min-h-[var(--eg-control-touch)] whitespace-normal"
     type="submit"
     data-policy-open
     [disabled]="store.publishing() || store.phase() === 'loading'"
@@ -23,12 +35,13 @@
     {{ copy.open }}
   </button>
 </form>
-<div class="page-actions">
+<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
   <app-policy-mode-chip [mode]="store.mode()" />
   @if (canWrite()) {
     <button
       type="button"
-      class="primary mutation"
+      hlmBtn
+      class="hidden min-h-[var(--eg-control-touch)] whitespace-normal md:inline-flex"
       data-policy-publish-open
       [disabled]="
         store.phase() !== 'ready' || store.publishing() || !(targetId() || store.headRevisionId())
@@ -40,27 +53,34 @@
   }
 </div>
 @if (canWrite()) {
-  <p class="narrow-notice">{{ copy.narrow }}</p>
+  <p class="mb-3! text-muted-foreground md:hidden" data-policy-narrow-notice>{{ copy.narrow }}</p>
 }
 <div role="status">
   @if (published(); as result) {
-    <p class="success" data-policy-published>
+    <p
+      hlmAlert
+      class="mb-4! bg-[var(--eg-success-bg)] text-[var(--eg-success-fg)]"
+      data-policy-published
+    >
       {{ result.created ? copy.created : copy.unchanged }} {{ copy.revision }}
       {{ result.revision.revision_no }}
     </p>
   }
 </div>
 @if (store.phase() === 'idle') {
-  <p class="state">{{ copy.idle }}</p>
+  <p hlmAlert class="text-muted-foreground">{{ copy.idle }}</p>
 }
 @if (store.phase() === 'loading') {
-  <p class="state" role="status">{{ copy.loading }}</p>
+  <div class="grid gap-3" role="status" [attr.aria-busy]="true">
+    <p>{{ copy.loading }}</p>
+    <div hlmSkeleton class="h-[var(--eg-space-12)] w-full" aria-hidden="true"></div>
+  </div>
 }
 @if (store.phase() === 'not_found') {
-  <p class="state">{{ copy.notFound }}</p>
+  <p hlmAlert class="text-muted-foreground">{{ copy.notFound }}</p>
 }
 @if (store.loadError(); as error) {
-  <div class="failure" role="alert">
+  <div hlmAlert [variant]="'destructive'" class="mb-3 wrap-anywhere" role="alert">
     <code>{{ error.code }}</code>
     <p>{{ error.message }}</p>
     <ul>
@@ -73,6 +93,9 @@
     </ul>
   </div>
   <button
+    hlmBtn
+    [variant]="'outline'"
+    class="min-h-[var(--eg-control-touch)] whitespace-normal"
     type="button"
     [disabled]="store.publishing() || store.phase() === 'loading'"
     (click)="reload()"
@@ -81,9 +104,12 @@
   </button>
 }
 @if (store.phase() === 'error' && store.loadError() === null) {
-  <div class="failure" role="alert" data-policy-error-generic>
+  <div hlmAlert [variant]="'destructive'" class="grid gap-3" role="alert" data-policy-error-generic>
     <p>{{ copy.loadFailed }}</p>
     <button
+      hlmBtn
+      [variant]="'outline'"
+      class="min-h-[var(--eg-control-touch)] whitespace-normal"
       type="button"
       data-policy-retry
       [disabled]="store.publishing() || store.phase() === 'loading'"
@@ -94,14 +120,18 @@
   </div>
 }
 @if (store.phase() === 'ready' || store.revisions().length > 0) {
-  <app-policy-revision-list
-    [rows]="store.revisions()"
-    [headId]="store.headRevisionId()"
-    [hasMore]="store.hasMore()"
-    [busy]="paging() || store.phase() === 'loading' || store.publishing()"
-    (loadMore)="loadMore()"
-  />
-  <app-revision-diff (targetChanged)="targetId.set($event)" />
+  <div
+    class="mt-6 grid min-w-0 items-start gap-6 xl:grid-cols-[var(--eg-rail-width)_minmax(0,1fr)]"
+  >
+    <app-policy-revision-list
+      [rows]="store.revisions()"
+      [headId]="store.headRevisionId()"
+      [hasMore]="store.hasMore()"
+      [busy]="paging() || store.phase() === 'loading' || store.publishing()"
+      (loadMore)="loadMore()"
+    />
+    <app-revision-diff (targetChanged)="targetId.set($event)" />
+  </div>
 }
 @if (canWrite()) {
   <app-policy-publish-dialog (completed)="onPublished($event)" (reloaded)="focusHeading()" />

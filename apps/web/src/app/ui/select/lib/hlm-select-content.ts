@@ -22,7 +22,7 @@ import { HlmSelectScrollUp } from './hlm-select-scroll-up';
       <hlm-select-scroll-up />
     }
 
-    <div brnSelectList [class]="_computedListboxClasses()">
+    <div brnSelectList [class]="_computedListboxClasses()" [attr.aria-label]="listLabel()">
       <ng-content />
     </div>
 
@@ -33,6 +33,9 @@ import { HlmSelectScrollUp } from './hlm-select-scroll-up';
 })
 export class HlmSelectContent {
   protected readonly _computedListboxClasses = computed(() => hlm('flex flex-col'));
+
+  /** Accessible name of the listbox; the popup content has no visible label of its own. */
+  public readonly listLabel = input<string | null>(null);
 
   public readonly showScroll = input<boolean, BooleanInput>(false, { transform: booleanAttribute });
 

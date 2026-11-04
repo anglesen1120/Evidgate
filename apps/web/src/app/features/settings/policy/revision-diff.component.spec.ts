@@ -5,6 +5,9 @@ import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { MAX_DIFF_VALUE_CHARS } from './policy-diff';
 import { PolicyStore } from './policy.store';
 import { RevisionDiffComponent } from './revision-diff.component';
+import { provideSelectTestLayout } from './select.test-support';
+
+provideSelectTestLayout();
 
 const previous: PolicyRevisionDto = {
   id: 'a',
@@ -72,10 +75,48 @@ describe('RevisionDiffComponent', () => {
     await settle(fixture);
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
+  async function choose(
+    fixture: ComponentFixture<RevisionDiffComponent>,
+    root: HTMLElement,
+    selector: string,
+    label: string,
+  ): Promise<void> {
+    const trigger = root.querySelector<HTMLButtonElement>(selector);
+    if (!trigger) throw new Error('Expected revision picker');
+    trigger.click();
+    await fixture.whenStable();
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (item) => item.textContent?.trim() === label,
+    );
+    if (!option) throw new Error(`Expected option ${label}`);
+    option.click();
+    await settle(fixture);
+  }
+  it('labels its keyboard picker and dismisses it with Escape without changing the comparison', async () => {
+    const { fixture, root } = await render();
+    const trigger = root.querySelector<HTMLButtonElement>('#policy-diff-target');
+    if (!trigger) throw new Error('Expected target picker');
+    expect(root.querySelector('label[for="policy-diff-target"]')?.textContent).toContain(
+      'Target revision',
+    );
+    trigger.focus();
+    trigger.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', keyCode: 40, bubbles: true }),
+    );
+    await fixture.whenStable();
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await fixture.whenStable();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(trigger.textContent).toContain('Revision 2');
+    expect(document.activeElement).toBe(trigger);
+  });
   it('defaults to head versus the previous revision and renders all difference kinds as text', async () => {
     const { root } = await render();
-    expect(root.querySelector<HTMLSelectElement>('#policy-diff-base')?.value).toBe('a');
-    expect(root.querySelector<HTMLSelectElement>('#policy-diff-target')?.value).toBe('b');
+    expect(root.querySelector('#policy-diff-base')?.textContent).toContain('Revision 1');
+    expect(root.querySelector('#policy-diff-target')?.textContent).toContain('Revision 2');
     expect(store.loadBody).toHaveBeenCalledWith('a');
     expect(store.loadBody).toHaveBeenCalledWith('b');
     expect(root.querySelector('[data-diff-kind="added"]')?.textContent).toContain(
@@ -94,11 +135,7 @@ describe('RevisionDiffComponent', () => {
     const { fixture, root } = await render();
     const selected = vi.fn();
     fixture.componentInstance.targetChanged.subscribe(selected);
-    const select = root.querySelector<HTMLSelectElement>('#policy-diff-target');
-    if (!select) throw new Error('Expected target picker');
-    select.value = 'a';
-    select.dispatchEvent(new Event('change'));
-    await settle(fixture);
+    await choose(fixture, root, '#policy-diff-target', 'Revision 1');
     expect(selected).toHaveBeenCalledWith('a');
     expect(store.loadBody).toHaveBeenCalledWith('a');
     expect(root.querySelectorAll('[data-diff-row]')).toHaveLength(0);
@@ -107,15 +144,8 @@ describe('RevisionDiffComponent', () => {
   it('keeps the pickers on the revision the reader chose and reloads the comparison', async () => {
     const { fixture, root } = await render();
     store.loadBody.mockClear();
-    const base = root.querySelector<HTMLSelectElement>('#policy-diff-base');
-    if (!base) throw new Error('Expected base picker');
-    base.value = 'b';
-    base.dispatchEvent(new Event('change'));
-    await settle(fixture);
-    // The picker really shows the chosen revision (the select was rendered before its options).
-    expect(root.querySelector<HTMLSelectElement>('#policy-diff-base')?.value).toBe('b');
-    expect(root.querySelector<HTMLSelectElement>('#policy-diff-base')?.selectedIndex).toBe(2);
-    // And the comparison reloaded for the new pair.
+    await choose(fixture, root, '#policy-diff-base', 'Revision 2');
+    expect(root.querySelector('#policy-diff-base')?.textContent).toContain('Revision 2');
     expect(store.loadBody).toHaveBeenCalledWith('b');
     expect(root.querySelectorAll('[data-diff-row]')).toHaveLength(0);
   });
@@ -124,6 +154,7 @@ describe('RevisionDiffComponent', () => {
     const { root } = await render();
     expect(store.loadBody).not.toHaveBeenCalled();
     expect(root.querySelector('[data-policy-diff]')?.textContent).toMatch(/\S/);
+    expect(root.querySelector<HTMLButtonElement>('#policy-diff-base')?.disabled).toBe(true);
   });
   it('shows a failed body read with a manual retry', async () => {
     store.loadBody.mockRejectedValue(new ApiRequestError(failure));
@@ -134,7 +165,7 @@ describe('RevisionDiffComponent', () => {
     // Server text is rendered as text: the message has no markup of its own on the page.
     expect(root.querySelector('b')).toBeNull();
     store.loadBody.mockImplementation((id) => Promise.resolve(id === 'a' ? previous : head));
-    root.querySelector<HTMLButtonElement>('button')?.click();
+    root.querySelector<HTMLButtonElement>('[data-policy-diff] button')?.click();
     await settle(fixture);
     expect(root.querySelector('[role="alert"]')).toBeNull();
     expect(root.querySelectorAll('[data-diff-row]').length).toBeGreaterThan(0);
@@ -161,10 +192,7 @@ describe('RevisionDiffComponent', () => {
     expect(root.querySelector('[data-policy-diff-truncated]')?.textContent).toMatch(/\S/);
   });
   it('clips a rendered row label to the same budget as its values, keeping the raw pointer', async () => {
-    // D3: a JSON pointer carries the whole key of the field it points at, so a body with a long key
-    // gives a row label as long as a value. The label is cut exactly like the values are. The raw
-    // pointer stays on the row's `data-diff-path`, where nothing is truncated, and that is what the
-    // pointer assertions elsewhere in this spec read.
+    // Pointer labels use the same display budget as values, without altering the raw path.
     const longKey = 'k'.repeat(MAX_DIFF_VALUE_CHARS * 2);
     store.loadBody.mockImplementation((id) =>
       Promise.resolve(
@@ -176,7 +204,7 @@ describe('RevisionDiffComponent', () => {
 
     const row = root.querySelector('[data-diff-row]');
     expect(row?.getAttribute('data-diff-path')).toBe(`/${longKey}`);
-    const label = row?.querySelector('.revision-heading code')?.textContent ?? '';
+    const label = row?.querySelector('code')?.textContent ?? '';
     expect(label.length).toBeLessThanOrEqual(MAX_DIFF_VALUE_CHARS);
     expect(label).toContain('…');
     expect(label).not.toContain(longKey);

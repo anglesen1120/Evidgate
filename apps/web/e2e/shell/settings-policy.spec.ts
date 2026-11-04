@@ -26,12 +26,9 @@
 // proves it row by row — and the 412 dialog's server column comes from the head read. Every other
 // operation still answers one document per operation.
 //
-// The diff pickers carry their selection through each option's own `selected` state
-// (`revision-diff.component.ts`: the select exists, with only its placeholder, before the revisions
-// arrive, so a value written then would be discarded). Both displayed values are therefore real:
-// the head is the target and the newest revision below it is the base, and the case that owns the
-// default corpus asserts both through `toHaveValue`; the comparison itself is asserted through
-// `[data-policy-diff]`.
+// Helm pickers expose their current revision in the combobox text and their portalled
+// options' aria-selected state. Both must agree with the served revision id; the comparison
+// itself is asserted through [data-policy-diff].
 //
 // Frozen-grant and refusal corpora are separate documents selected per operation through
 // `?fixture.variant.<operationId>=<variant>`; no case infers a state by clicking twice. Every
@@ -78,7 +75,7 @@ const SUBMIT = '[data-policy-publish-submit]';
 const LOCAL_ERROR = '[data-policy-publish-local-error]';
 const SERVER_ERROR = '[data-policy-error]';
 const PUBLISHED = '[data-policy-published]';
-const CONFLICT = '[role="dialog"]:has(hlm-dialog-content)';
+const CONFLICT = '[role="dialog"]:has(.revision)';
 
 /** The head revision the corpus opens by default (`?revision=…`), and the body it seeds. */
 const HEAD_ID = head.body.id;
@@ -181,11 +178,15 @@ async function ready(page: Page, rowCount: number): Promise<void> {
   await expect(page.locator(ROWS)).toHaveCount(rowCount);
   await expect(page.locator(HEAD_ROW)).toHaveCount(1);
   await expect(page.locator(DIFF)).toBeVisible();
-  // The pickers are built from the served rows: one placeholder plus one option per revision.
-  // Which option is selected depends on the corpus this case served, so the exact displayed values
-  // are asserted by the case that owns the default corpus; here the offered OPTIONS are the claim.
-  await expect(page.locator('#policy-diff-base option')).toHaveCount(rowCount + 1);
-  await expect(page.locator('#policy-diff-target option')).toHaveCount(rowCount + 1);
+  // Options are portalled only while open; the placeholder is not a selectable revision.
+  for (const id of ['policy-diff-base', 'policy-diff-target']) {
+    const trigger = page.locator(`#${id}`);
+    await expect(trigger).toHaveRole('combobox');
+    await trigger.click();
+    await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(rowCount);
+    await page.keyboard.press('Escape');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  }
   await expect(page.locator(DIFF)).not.toHaveAttribute('aria-busy', 'true');
   // The panel compares the two documents the id-keyed read answered, so either outcome is a
   // settled panel: differing rows, or the "no field differences" state when the two bodies agree.
@@ -211,6 +212,23 @@ async function openPublish(page: Page, seed: string = SEED): Promise<Locator> {
   await expect(dialog).toBeVisible();
   await expect(dialog.locator(BODY)).toHaveValue(seed);
   return dialog;
+}
+
+async function expectRevisionSelection(page: Page, id: string, revisionId: string): Promise<void> {
+  const trigger = page.locator(`#${id}`);
+  await trigger.click();
+  const options = page.getByRole('listbox').getByRole('option');
+  await expect(options).toHaveCount(revisions.body.items.length);
+  expect(
+    await options.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-value'))),
+  ).toEqual(revisions.body.items.map((revision) => revision.id));
+  const selected = page.getByRole('listbox').getByRole('option', { selected: true });
+  await expect(selected).toHaveCount(1);
+  await expect(selected).toHaveAttribute('data-value', revisionId);
+  const label = (await selected.innerText()).trim();
+  await page.keyboard.press('Escape');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  await expect(trigger).toHaveText(label);
 }
 
 /** True while the browser's focused element is inside the selector the case is about. */
@@ -240,22 +258,8 @@ for (const locale of LOCALES) {
     await expect(page.locator(MODE)).toHaveText(/\S/);
     await expect(page.locator('#policy-diff-base')).toBeEnabled();
     await expect(page.locator('#policy-diff-target')).toBeEnabled();
-    // The panel compares the head against the newest revision below it, and each picker SHOWS
-    // that selection: the selected option's own state, not a value written before the options
-    // existed, so this is the real displayed value.
-    await expect(page.locator('#policy-diff-base')).toHaveValue(PREVIOUS_ID);
-    await expect(page.locator('#policy-diff-target')).toHaveValue(HEAD_ID);
-    // Both pickers offer exactly the served revisions, by id, in the served order.
-    for (const [index, revision] of revisions.body.items.entries()) {
-      await expect(page.locator('#policy-diff-base option').nth(index + 1)).toHaveAttribute(
-        'value',
-        revision.id,
-      );
-      await expect(page.locator('#policy-diff-target option').nth(index + 1)).toHaveAttribute(
-        'value',
-        revision.id,
-      );
-    }
+    await expectRevisionSelection(page, 'policy-diff-base', PREVIOUS_ID);
+    await expectRevisionSelection(page, 'policy-diff-target', HEAD_ID);
     // The backend answers `getPolicyRevision` by the id in the path (09.7.1-F15 note 3), so the two
     // selections above are two DIFFERENT corpus documents: the panel lists their differences
     // instead of the no-differences state. The rows themselves are the next case's subject.
@@ -272,8 +276,8 @@ for (const locale of LOCALES) {
     expect(PREVIOUS_ID).toBe(previous.body.id);
     expect(HEAD_ID).toBe(head.body.id);
     await visit(page, locale, [POLICY_WRITE, CREATE_412]);
-    await expect(page.locator('#policy-diff-base')).toHaveValue(PREVIOUS_ID);
-    await expect(page.locator('#policy-diff-target')).toHaveValue(HEAD_ID);
+    await expectRevisionSelection(page, 'policy-diff-base', PREVIOUS_ID);
+    await expectRevisionSelection(page, 'policy-diff-target', HEAD_ID);
     // Ten differing pointers between revision 2 and revision 3 of the corpus (one of them,
     // `/required_suites`, twice: `legacy-cart` removed, `storefront-catalog` added).
     const rows = page.locator(DIFF_ROWS);
@@ -360,7 +364,7 @@ for (const locale of LOCALES) {
     await expect(page.locator(DIALOG)).toHaveCount(0);
     await expect(page.locator(BODY)).toHaveCount(0);
     await expect(page.locator(SUBMIT)).toHaveCount(0);
-    await expect(page.locator(`${PAGE} .narrow-notice`)).toHaveCount(0);
+    await expect(page.locator(`${PAGE} [data-policy-narrow-notice]`)).toHaveCount(0);
     await expect(page.locator(ROWS)).toHaveCount(revisions.body.items.length);
     await expect(page.locator(MODE)).toBeVisible();
   });
@@ -540,7 +544,7 @@ for (const locale of LOCALES) {
   test(`360px is inspection-only (${locale})`, async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 800 });
     await visit(page, locale);
-    const notice = page.locator(`${PAGE} .narrow-notice`);
+    const notice = page.locator(`${PAGE} [data-policy-narrow-notice]`);
     await expect(notice).toBeVisible();
     await expect(notice).toHaveText(/\S/);
     // CSS-hidden, and therefore not a keyboard stop either.
@@ -604,7 +608,20 @@ for (const locale of LOCALES) {
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
       await expectNoA11yViolations(page, `Policy list/diff ${locale} ${theme}`);
+      for (const id of ['policy-diff-base', 'policy-diff-target']) {
+        const trigger = page.locator(`#${id}`);
+        await trigger.click();
+        await expect(page.getByRole('listbox')).toHaveAccessibleName(
+          await page.locator(`label[for="${id}"]`).innerText(),
+        );
+        // The portal mounts closed; its entrance animation starts only after the open state.
+        await waitForDialogAnimations(page, 'hlm-select-content[data-state="open"]');
+        await expectNoA11yViolations(page, `Policy ${id} options ${locale} ${theme}`);
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('listbox')).toHaveCount(0);
+      }
       const dialog = await openPublish(page);
+      await waitForDialogAnimations(page, DIALOG);
       await expectNoA11yViolations(page, `Policy publish dialog ${locale} ${theme}`);
       await dialog.locator(SUBMIT).click();
       const conflict = page.locator(CONFLICT);

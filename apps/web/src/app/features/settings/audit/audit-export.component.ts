@@ -8,29 +8,29 @@ import {
   inject,
   input,
 } from '@angular/core';
+import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
 import { AuditStore } from './audit.store';
 
-/**
- * P3 review: `URL.revokeObjectURL()` in the same task as `anchor.click()` can cancel the download
- * in engines that start the navigation asynchronously, so the revoke is deferred by one task. The
- * anchor is still detached synchronously in `finally`, so a throwing `click()` leaves no residue,
- * and a component destroyed before the timer fires still revokes its own URL instead of leaking it.
- */
+// Let navigation consume the object URL before releasing it on the next task.
 function revokeDeferred(url: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 @Component({
   selector: 'app-audit-export',
-  standalone: true,
+  imports: [HlmAlertImports, HlmButton],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './audit.page.css',
-  host: { '[attr.data-audit-export-phase]': 'store.exportState().phase' },
+  host: {
+    class: 'block min-w-0 max-w-full',
+    '[attr.data-audit-export-phase]': 'store.exportState().phase',
+  },
   template: `
-    <div class="export-content">
+    <div class="grid min-w-0 gap-3 wrap-anywhere [&_p]:m-0" [attr.aria-busy]="running()">
       <button
         type="button"
-        class="primary"
+        hlmBtn
+        class="min-h-[var(--eg-control-touch)] whitespace-normal"
         data-audit-export
         [disabled]="running() || !orgId()"
         (click)="download()"
@@ -44,7 +44,12 @@ function revokeDeferred(url: string): void {
           }
           @if (state.phase === 'done') {
             @if (state.capped) {
-              <p class="banner" role="status" data-audit-export-capped>
+              <p
+                hlmAlert
+                class="bg-muted text-muted-foreground"
+                role="status"
+                data-audit-export-capped
+              >
                 {{ cappedMessage(state.rows) }}
               </p>
             } @else {
@@ -55,12 +60,26 @@ function revokeDeferred(url: string): void {
       </div>
       @if (store.exportState(); as state) {
         @if (state.phase === 'failed') {
-          <div class="banner failure" role="alert" data-audit-export-error>
+          <div
+            hlmAlert
+            [variant]="'destructive'"
+            class="grid gap-3"
+            role="alert"
+            data-audit-export-error
+          >
             @if (state.error; as failure) {
               <p>{{ failure.message }}</p>
               <code>{{ failure.code }}</code>
             }
-            <button type="button" (click)="download()">{{ copy.retry }}</button>
+            <button
+              hlmBtn
+              [variant]="'outline'"
+              class="min-h-[var(--eg-control-touch)] whitespace-normal"
+              type="button"
+              (click)="download()"
+            >
+              {{ copy.retry }}
+            </button>
           </div>
         }
       }
@@ -78,12 +97,7 @@ export class AuditExportComponent {
     export: $localize`:@@settings.audit.export:Export CSV`,
     retry: $localize`:@@settings.audit.retry:Retry`,
   };
-  // A5 review: the number is formatted through the active locale (`10,000` en, `10.000` vi)
-  // instead of `toLocaleString('en-US')`, which printed `10,000` in every locale's banner.
-  // F-4: the banner prints the rows actually exported, not `AUDIT_EXPORT_CAP` — `capped` is also
-  // true when the export stops at its safety page bound with a cursor still named, and then only a
-  // few hundred rows were collected. At the row cap the two are the same number, so the en copy of
-  // AC7 is unchanged. The placeholder id is `rows` in both catalogs.
+  // The safety page bound can stop below the row cap; report the actual exported count.
   protected cappedMessage(rows: number): string {
     return $localize`:@@settings.audit.export-capped:First ${formatNumber(rows, this.locale)}:rows: rows exported — narrow the filter for a complete export.`;
   }

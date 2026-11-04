@@ -1,75 +1,97 @@
 import { ChangeDetectionStrategy, Component, ElementRef, inject, input } from '@angular/core';
 import type { AuditEntryDto } from '@evidgate/sdk';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmTableImports } from '@evidgate/ui/table';
+import { HlmTooltip } from '@evidgate/ui/tooltip';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
 import { supportAccessOf } from './support-access';
 
 @Component({
   selector: 'app-audit-table',
-  standalone: true,
-  imports: [StatusPillComponent],
+  imports: [HlmButton, HlmTableImports, HlmTooltip, StatusPillComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './audit.page.css',
+  host: { class: 'block min-w-0' },
   template: `
-    <div class="table-scroll" tabindex="0" role="region" [attr.aria-label]="copy.caption">
-      <table>
-        <caption>
+    <div
+      hlmTableContainer
+      class="table-scroll rounded-md border border-solid border-border bg-card focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
+      tabindex="0"
+      role="region"
+      [attr.aria-label]="copy.caption"
+    >
+      <table hlmTable role="table" class="w-full table-fixed max-md:block">
+        <caption hlmCaption class="m-0 p-3 text-start text-foreground">
           {{
             copy.caption
           }}
         </caption>
-        <thead>
-          <tr>
-            <th scope="col">{{ copy.time }}</th>
-            <th scope="col">{{ copy.actor }}</th>
-            <th scope="col">{{ copy.action }}</th>
-            <th scope="col">{{ copy.object }}</th>
-            <th scope="col">{{ copy.request }}</th>
-            <th scope="col">{{ copy.support }}</th>
+        <thead hlmTHead role="rowgroup" class="bg-secondary max-md:sr-only">
+          <tr hlmTr role="row">
+            <th hlmTh role="columnheader" scope="col">{{ copy.time }}</th>
+            <th hlmTh role="columnheader" scope="col">{{ copy.actor }}</th>
+            <th hlmTh role="columnheader" scope="col">{{ copy.action }}</th>
+            <th hlmTh role="columnheader" scope="col">{{ copy.object }}</th>
+            <th hlmTh role="columnheader" scope="col">{{ copy.request }}</th>
+            <th hlmTh role="columnheader" scope="col">{{ copy.support }}</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody hlmTBody role="rowgroup" class="max-md:block">
           @for (row of rows(); track row.id) {
             <tr
+              hlmTr
+              role="row"
+              class="max-md:grid max-md:gap-2 max-md:p-3 [&>td]:align-top [&>td]:whitespace-normal [&>td]:wrap-anywhere [&>th]:align-top [&>th]:whitespace-normal [&>th]:wrap-anywhere max-md:[&>td]:min-h-[var(--eg-control-touch)] max-md:[&>td]:p-0 max-md:[&>th]:p-0"
               data-audit-row
               [attr.data-audit-support]="supportOf(row) !== null ? 'true' : 'false'"
             >
-              <th scope="row">
+              <th hlmTh role="rowheader" scope="row" class="h-auto text-foreground">
+                <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
+                  copy.time
+                }}</span>
                 <time [attr.datetime]="row.created_at">{{ row.created_at }}</time>
               </th>
-              <td>
-                <app-status-pill [tone]="'neutral'" [label]="actorLabel(row.actor_type)" /><span
-                  class="identifier"
-                  >{{ row.actor_id }}</span
-                >
+              <td hlmTd role="cell">
+                <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
+                  copy.actor
+                }}</span>
+                <app-status-pill [tone]="'neutral'" [label]="actorLabel(row.actor_type)" />
+                <span class="block wrap-anywhere">{{ row.actor_id }}</span>
               </td>
-              <td>{{ row.action }}</td>
-              <td>
-                <span>{{ row.object_type ?? copy.absent }}</span
-                ><span class="identifier">{{ row.object_id ?? copy.absent }}</span>
+              <td hlmTd role="cell">
+                <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
+                  copy.action
+                }}</span>
+                {{ row.action }}
               </td>
-              <td class="identifier">{{ row.request_id ?? copy.absent }}</td>
-              <td>
+              <td hlmTd role="cell">
+                <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
+                  copy.object
+                }}</span>
+                <span>{{ row.object_type ?? copy.absent }}</span>
+                <span class="block wrap-anywhere">{{ row.object_id ?? copy.absent }}</span>
+              </td>
+              <td hlmTd role="cell">
+                <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
+                  copy.request
+                }}</span>
+                {{ row.request_id ?? copy.absent }}
+              </td>
+              <td hlmTd role="cell">
+                <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
+                  copy.support
+                }}</span>
                 @if (supportOf(row); as access) {
-                  <span
-                    class="support-access"
-                    role="group"
-                    tabindex="0"
-                    [attr.aria-label]="copy.support"
-                    [attr.aria-describedby]="'audit-support-' + row.id"
-                    (mouseenter)="description.hidden = false"
-                    (focusin)="description.hidden = false"
-                    (keydown.escape)="description.hidden = true; $event.stopPropagation()"
+                  <button
+                    hlmBtn
+                    [variant]="'ghost'"
+                    type="button"
+                    class="support-access h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal p-0"
+                    [hlmTooltip]="supportDescription(access.grantId)"
+                    [position]="'top'"
                   >
                     <app-status-pill [tone]="'warning'" [label]="copy.support" />
-                    <span
-                      #description
-                      class="support-description"
-                      role="tooltip"
-                      [id]="'audit-support-' + row.id"
-                      >{{ supportDescription(access.grantId) }}</span
-                    >
-                  </span>
+                  </button>
                 } @else {
                   {{ copy.absent }}
                 }

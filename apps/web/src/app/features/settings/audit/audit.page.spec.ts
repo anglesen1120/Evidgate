@@ -1,12 +1,15 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 import type { AuditEntryDto, AuditListResponse } from '@evidgate/sdk';
 import { AuditDataService, type AuditListQuery } from '../../../core/data/audit-data.service';
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
+import { provideSelectTestLayout } from '../policy/select.test-support';
 import { AuditPage } from './audit.page';
 import { AUDIT_MAX_PAGES, AuditStore, EMPTY_AUDIT_FILTERS } from './audit.store';
+
+provideSelectTestLayout();
 
 function entry(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
   return {
@@ -61,7 +64,7 @@ class FakeAuditDataService {
   );
 }
 
-describe('AuditPage (09.7.1-T6)', () => {
+describe('AuditPage', () => {
   let data: FakeAuditDataService;
   const org = signal<{ id: string } | null>({ id: 'org1' });
   let routeData: Record<string, unknown>;
@@ -89,16 +92,29 @@ describe('AuditPage (09.7.1-T6)', () => {
     return { fixture, store, root: fixture.nativeElement as HTMLElement };
   }
   function input(root: HTMLElement, name: string, value: string): void {
-    const field = root.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${name}"]`)!;
+    const field = root.querySelector<HTMLInputElement>(`input[name="${name}"]`);
+    if (!field) throw new Error(`Expected input ${name}`);
     field.value = value;
-    field.dispatchEvent(
-      new Event(field instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }),
-    );
+    field.dispatchEvent(new Event('input', { bubbles: true }));
   }
   function submit(root: HTMLElement): void {
-    root
-      .querySelector('form')!
-      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const form = root.querySelector('form');
+    if (!form) throw new Error('Expected audit filters form');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  }
+  async function chooseActor(
+    fixture: ComponentFixture<AuditPage>,
+    root: HTMLElement,
+    label: string,
+  ): Promise<void> {
+    root.querySelector<HTMLButtonElement>('#audit-actor')?.click();
+    await fixture.whenStable();
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (item) => item.textContent?.trim() === label,
+    );
+    if (!option) throw new Error(`Expected actor option ${label}`);
+    option.click();
+    await fixture.whenStable();
   }
   it('loads the current organization into a real scoped store and flags support activity', async () => {
     const { root } = await render();
@@ -112,7 +128,7 @@ describe('AuditPage (09.7.1-T6)', () => {
   it('submits a labelled form with bounded inputs and maps local date inputs to UTC filters', async () => {
     const { fixture, root, store } = await render();
     const load = vi.spyOn(store, 'load');
-    input(root, 'actorType', 'ci_producer');
+    await chooseActor(fixture, root, 'CI producer');
     input(root, 'action', 'run.created');
     input(root, 'objectType', 'run');
     input(root, 'from', '2026-10-20T10:30');
@@ -130,6 +146,8 @@ describe('AuditPage (09.7.1-T6)', () => {
     expect(root.querySelector('[name="objectType"]')?.getAttribute('maxlength')).toBe('64');
     expect(root.querySelectorAll('label')).toHaveLength(5);
     expect(root.querySelector('button[type="submit"]')).not.toBeNull();
+    expect(root.querySelector('#audit-actor')?.textContent).toContain('CI producer');
+    expect(root.querySelector('label[for="audit-actor"]')).not.toBeNull();
   });
   it('blocks reversed dates inline without calling load and accepts equal boundaries', async () => {
     const { fixture, root, store } = await render();
@@ -177,6 +195,25 @@ describe('AuditPage (09.7.1-T6)', () => {
     expect(root.textContent).toContain('new-member');
     expect(root.textContent).not.toContain('member1');
     expect((root.querySelector('[name="action"]') as HTMLInputElement).value).toBe('');
+  });
+  it('opens actor choices from the keyboard and dismisses without applying a filter', async () => {
+    const { fixture, root, store } = await render();
+    const load = vi.spyOn(store, 'load');
+    const trigger = root.querySelector<HTMLButtonElement>('#audit-actor');
+    if (!trigger) throw new Error('Expected actor picker');
+    trigger.focus();
+    trigger.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', keyCode: 40, bubbles: true }),
+    );
+    await fixture.whenStable();
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await fixture.whenStable();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
+    expect(load).not.toHaveBeenCalled();
   });
   it('shows shared loading state while the first page is pending', async () => {
     const pending = deferred<AuditListResponse>();
@@ -333,7 +370,7 @@ describe('AuditPage (09.7.1-T6)', () => {
     button.click();
     fixture.detectChanges();
     expect(button.disabled).toBe(true);
-    expect(root.querySelector('.audit-content')?.getAttribute('aria-busy')).toBe('true');
+    expect(root.querySelector('section[aria-busy]')?.getAttribute('aria-busy')).toBe('true');
     expect(root.textContent).toContain('Loading more activity…');
     pending.resolve({ items: [entry('second')], next_cursor: null });
     await fixture.whenStable();
@@ -341,7 +378,7 @@ describe('AuditPage (09.7.1-T6)', () => {
     // the view still rendered from `paging() === true` — the store has settled, the DOM has not.
     fixture.detectChanges();
     expect(store.paging()).toBe(false);
-    expect(root.querySelector('.audit-content')?.getAttribute('aria-busy')).toBe('false');
+    expect(root.querySelector('section[aria-busy]')?.getAttribute('aria-busy')).toBe('false');
   });
   it('contains an unexpected paging rejection without rendering internal exception text', async () => {
     data.list.mockResolvedValueOnce({ items: [entry('first')], next_cursor: 'page2' });

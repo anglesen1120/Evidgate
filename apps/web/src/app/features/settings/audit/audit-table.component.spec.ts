@@ -20,7 +20,7 @@ function row(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
   };
 }
 
-describe('AuditTableComponent (AC8)', () => {
+describe('AuditTableComponent', () => {
   beforeEach(() =>
     TestBed.configureTestingModule({
       imports: [AuditTableComponent],
@@ -56,59 +56,54 @@ describe('AuditTableComponent (AC8)', () => {
       expect(root.querySelector('[data-audit-support="true"]')).toBeNull();
     },
   );
-  it('dismisses the support description with Escape and restores it on refocus', async () => {
+  it('dismisses the portalled support description with Escape and restores it on refocus', async () => {
     const { fixture, root } = await render([
       row('operator', { actor_type: 'platform_operator' }),
       row('other', { metadata: { support_grant_id: 'grant-other' } }),
     ]);
-    const chip = root.querySelector<HTMLElement>('.support-access')!;
-    const description = root.querySelector<HTMLElement>('#audit-support-operator')!;
-    const other = root.querySelector<HTMLElement>('#audit-support-other')!;
+    const chip = root.querySelector<HTMLButtonElement>('.support-access');
+    if (!chip) throw new Error('Expected support trigger');
     chip.focus();
-    await fixture.whenStable();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
+        'grant id not recorded',
+      );
+    });
     expect(document.activeElement).toBe(chip);
-    expect(description.hidden).toBe(false);
-    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    await fixture.whenStable();
-    expect(description.hidden).toBe(false);
-    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await fixture.whenStable();
-    expect(description.hidden).toBe(true);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27 }));
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    });
     expect(document.activeElement).toBe(chip);
-    expect(other.hidden).toBe(false);
-    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-    await fixture.whenStable();
-    expect(description.hidden).toBe(true);
     chip.blur();
     chip.focus();
-    await fixture.whenStable();
-    expect(description.hidden).toBe(false);
-    expect(chip.getAttribute('aria-describedby')).toBe(description.id);
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(document.querySelector('[role="tooltip"]')).not.toBeNull();
+    });
   });
-  it('keeps Escape dismissal until hover re-entry, not movement inside the chip', async () => {
+  it('shows the support description on hover without changing the audit row', async () => {
     const { fixture, root } = await render([row('operator', { actor_type: 'platform_operator' })]);
-    const chip = root.querySelector<HTMLElement>('.support-access')!;
-    const description = root.querySelector<HTMLElement>('#audit-support-operator')!;
-    chip.dispatchEvent(new MouseEvent('mouseenter'));
-    await fixture.whenStable();
-    expect(description.hidden).toBe(false);
-    description.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-    await fixture.whenStable();
-    expect(description.hidden).toBe(false);
-    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    await fixture.whenStable();
-    expect(description.hidden).toBe(true);
-    description.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-    chip.dispatchEvent(new MouseEvent('mousemove'));
-    await fixture.whenStable();
-    expect(description.hidden).toBe(true);
-    chip.dispatchEvent(new MouseEvent('mouseleave'));
-    chip.dispatchEvent(new MouseEvent('mouseenter'));
-    await fixture.whenStable();
-    expect(description.hidden).toBe(false);
+    const chip = root.querySelector<HTMLButtonElement>('.support-access');
+    if (!chip) throw new Error('Expected support trigger');
+    chip.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
+        'Platform staff access',
+      );
+    });
+    chip.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    });
+    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(1);
   });
   it('flags only support rows with a keyboard reachable grant description and row marker', async () => {
-    const { root } = await render([
+    const { fixture, root } = await render([
       row('ordinary'),
       row('operator', {
         actor_type: 'platform_operator',
@@ -117,25 +112,36 @@ describe('AuditTableComponent (AC8)', () => {
     ]);
     const rows = Array.from(root.querySelectorAll('tbody tr'));
     expect(rows).toHaveLength(2);
-    const first = rows[0]!;
-    const second = rows[1]!;
+    const first = rows[0];
+    const second = rows[1];
+    if (!first || !second) throw new Error('Expected ordinary and support rows');
     expect(first.getAttribute('data-audit-support')).not.toBe('true');
     expect(first.querySelector('.support-access')).toBeNull();
     expect(second.getAttribute('data-audit-support')).toBe('true');
-    const chip = second.querySelector<HTMLElement>('.support-access')!;
+    const chip = second.querySelector<HTMLButtonElement>('.support-access');
+    if (!chip) throw new Error('Expected support trigger');
     expect(chip.textContent).toContain('Support access');
     expect(chip.tabIndex).toBe(0);
-    const description = root.querySelector(`[id="${chip.getAttribute('aria-describedby')}"]`);
-    expect(description?.textContent).toBe('Platform staff access under support grant grant-42');
+    chip.focus();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
+        'Platform staff access under support grant grant-42',
+      );
+    });
     expect(root.textContent).not.toContain('not for display');
     expect(root.textContent).not.toContain('expiry');
   });
   it('flags an operator without a grant key without inventing a grant or expiry', async () => {
-    const { root } = await render([row('operator', { actor_type: 'platform_operator' })]);
+    const { fixture, root } = await render([row('operator', { actor_type: 'platform_operator' })]);
     expect(root.querySelector('[data-audit-support="true"]')).not.toBeNull();
-    expect(root.querySelector('[role="tooltip"]')?.textContent).toBe(
-      'Platform staff access (grant id not recorded on this row)',
-    );
+    root.querySelector<HTMLButtonElement>('.support-access')?.focus();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
+        'Platform staff access (grant id not recorded on this row)',
+      );
+    });
   });
   it('flags a support grant on another actor type and preserves full long values as text', async () => {
     const long = '<b>' + 'actor-'.repeat(80);
@@ -159,5 +165,19 @@ describe('AuditTableComponent (AC8)', () => {
     expect(root.querySelector('caption')?.textContent).toContain('Audit activity');
     expect(root.querySelectorAll('thead th[scope="col"]')).toHaveLength(6);
     expect(root.querySelector<HTMLElement>('[role="region"]')?.tabIndex).toBe(0);
+    expect(root.querySelector('table')?.getAttribute('role')).toBe('table');
+    expect(root.querySelectorAll('tbody [role="cell"]')).toHaveLength(5);
+    const labels = [...root.querySelectorAll('tbody span[aria-hidden="true"]')].map((item) =>
+      item.textContent?.trim(),
+    );
+    expect(labels).toEqual([
+      'Time (UTC)',
+      'Actor',
+      'Action',
+      'Object',
+      'Request id',
+      'Support access',
+    ]);
+    expect(root.querySelector('[data-audit-row]')?.classList.contains('max-md:grid')).toBe(true);
   });
 });

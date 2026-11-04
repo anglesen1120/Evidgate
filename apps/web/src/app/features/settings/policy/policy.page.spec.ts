@@ -6,6 +6,9 @@ import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { PolicyPage } from './policy.page';
 import { PolicyStore, type PublishResult } from './policy.store';
+import { provideSelectTestLayout } from './select.test-support';
+
+provideSelectTestLayout();
 
 const revision: PolicyRevisionDto = {
   id: '182003de-f396-481b-8578-d18baf086204',
@@ -36,8 +39,6 @@ class FakePolicyStore {
   readonly loadMore = vi.fn(() => Promise.resolve());
   readonly reset = vi.fn();
 }
-const originalShow = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal');
-const originalClose = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
 describe('PolicyPage', () => {
   let store: FakePolicyStore;
   const canWrite = signal(true);
@@ -52,18 +53,6 @@ describe('PolicyPage', () => {
     currentProject.set(null);
     projects.set([{ id: 'project' }]);
     route.snapshot.queryParamMap = convertToParamMap({});
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     TestBed.configureTestingModule({
       providers: [
         { provide: ActivatedRoute, useValue: route },
@@ -84,10 +73,6 @@ describe('PolicyPage', () => {
   });
   afterEach(() => {
     TestBed.resetTestingModule();
-    if (originalShow) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', originalShow);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (originalClose) Object.defineProperty(HTMLDialogElement.prototype, 'close', originalClose);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
   async function render() {
@@ -111,8 +96,6 @@ describe('PolicyPage', () => {
     canWrite.set(false);
     const { root } = await render();
     expect(root.querySelector('[data-policy-publish-open]')).toBeNull();
-    // AC1 is about the DOM, not about a disabled control: the dialog, its textarea and its submit
-    // button are not rendered at all, so no grant-less session can reach them by any means.
     expect(root.querySelector('[data-policy-publish-dialog]')).toBeNull();
     expect(root.querySelector('#policy-publish-body')).toBeNull();
     expect(root.querySelector('[data-policy-publish-submit]')).toBeNull();
@@ -132,7 +115,7 @@ describe('PolicyPage', () => {
     const { root } = await render();
     expect(store.open).not.toHaveBeenCalled();
     expect(store.loadBody).not.toHaveBeenCalled();
-    expect(root.querySelector('.state')?.textContent).toMatch(/\S/);
+    expect(root.querySelector('[hlmAlert]')?.textContent).toContain('No revision selected');
   });
   it('lets the store validate manual revision entry and never puts a policy body in the URL', async () => {
     const { fixture, root } = await render();
@@ -187,17 +170,15 @@ describe('PolicyPage', () => {
       const { fixture, root } = await render();
       root.querySelector<HTMLButtonElement>('[data-policy-publish-open]')?.click();
       await fixture.whenStable();
-      const body = root.querySelector<HTMLTextAreaElement>('#policy-publish-body');
+      const body = document.querySelector<HTMLTextAreaElement>('#policy-publish-body');
       expect(body?.value).toBe(JSON.stringify(revision.body, null, 2));
-      root.querySelector<HTMLButtonElement>('[data-policy-publish-submit]')?.click();
+      document.querySelector<HTMLButtonElement>('[data-policy-publish-submit]')?.click();
       await fixture.whenStable();
       const status = root.querySelector('[data-policy-published]');
       expect(status?.textContent).toMatch(/\S/);
       expect(status?.textContent).toContain(String(revision.revision_no));
       expect(status?.closest('[role="status"]')).not.toBeNull();
-      expect(root.querySelector<HTMLDialogElement>('[data-policy-publish-dialog]')?.open).toBe(
-        false,
-      );
+      expect(document.querySelector('[data-policy-publish-dialog]')).toBeNull();
       expect(store.publish).toHaveBeenCalledTimes(1);
     },
   );
@@ -218,10 +199,8 @@ describe('PolicyPage', () => {
       if (scope === 'membership') projects.set([]);
       await fixture.whenStable();
       expect(store.reset).toHaveBeenCalledTimes(1);
-      expect(root.querySelector<HTMLDialogElement>('[data-policy-publish-dialog]')?.open).toBe(
-        false,
-      );
-      expect(root.querySelector<HTMLTextAreaElement>('#policy-publish-body')?.value).toBe('');
+      expect(document.querySelector('[data-policy-publish-dialog]')).toBeNull();
+      expect(document.querySelector('#policy-publish-body')).toBeNull();
       expect(root.querySelectorAll('[data-policy-revision]')).toHaveLength(0);
       expect(store.publish).not.toHaveBeenCalled();
     },
@@ -234,5 +213,22 @@ describe('PolicyPage', () => {
     expect(store.loadMore).toHaveBeenCalledTimes(1);
     fixture.destroy();
     expect(store.reset).toHaveBeenCalledTimes(1);
+  });
+  it('announces loading, labels the revision field and disables actions until the read completes', async () => {
+    store.phase.set('loading');
+    store.revisions.set([]);
+    const { root } = await render();
+    expect(root.querySelector('label[for="policy-revision-id"]')?.textContent).toContain(
+      'Revision ID',
+    );
+    expect(root.querySelector('[role="status"][aria-busy="true"]')?.textContent).toContain(
+      'Loading revisions',
+    );
+    expect(root.querySelector('[hlmSkeleton]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(root.querySelector<HTMLInputElement>('#policy-revision-id')?.disabled).toBe(true);
+    expect(root.querySelector<HTMLButtonElement>('[data-policy-open]')?.disabled).toBe(true);
+    expect(root.querySelector<HTMLButtonElement>('[data-policy-publish-open]')?.disabled).toBe(
+      true,
+    );
   });
 });
