@@ -13,11 +13,11 @@
 --
 -- CHECKS: `state` is the closed local vocabulary of the execution stop — `requested`, `soft_stopping`, `soft_stopped`,
 -- `killed` — and is NOT the run state machine (`run.state` is already `canceled` when this row exists); a new value is
--- a migration, like every other enum-like text column (D4). `reason` is caller free text, nullable, trimmed and at most
--- 1000 characters: the route applies the same bound before any statement, and the database check is the cheap half that
--- keeps a writer skipping the route from storing text no screen can render. `soft_stop_deadline_at >= requested_at and
--- kill_at >= soft_stop_deadline_at` keeps the two windows in order whatever writes the row (the route also computes them
--- from configuration, in that order).
+-- a migration, like every other enum-like text column (D4). `reason` is caller free text, nullable, at most 1000
+-- characters as written and not blank once trimmed: the route applies the same bound before any statement, and the
+-- database check is the cheap half that keeps a writer skipping the route from storing text no screen can render.
+-- `soft_stop_deadline_at >= requested_at and kill_at >= soft_stop_deadline_at` keeps the two windows in order whatever
+-- writes the row (the route also computes them from configuration, in that order).
 --
 -- RLS: ENABLE + FORCE with a policy `to evidgate_app` over `evidgate.current_org_id()` (never raw `current_setting`):
 -- another org's request is not a row at all, so a foreign run id reads and writes nothing and the route answers the same
@@ -62,7 +62,7 @@ create table if not exists public.run_cancel_request (
   constraint run_cancel_request_state_check
     check (state in ('requested', 'soft_stopping', 'soft_stopped', 'killed')),
   constraint run_cancel_request_reason_check
-    check (reason is null or char_length(btrim(reason)) between 1 and 1000),
+    check (reason is null or (char_length(reason) between 1 and 1000 and btrim(reason) <> '')),
   constraint run_cancel_request_window_check
     check (soft_stop_deadline_at >= requested_at and kill_at >= soft_stop_deadline_at)
 );

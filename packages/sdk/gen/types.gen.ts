@@ -254,7 +254,7 @@ export type EvidenceRevisionPage = {
  */
 export type CancelRunRequest = {
     /**
-     * The caller's business context for the cancel, stored with the request row. Trimmed 1..1000 characters when present; a blank string is 422 `request_invalid` (`details[].path` `/reason`, reason `invalid_value`), a longer one `too_long`.
+     * The caller's business context for the cancel, stored untrimmed with the request row. It must be 1..1000 Unicode code points (the unit `maxLength` and the row's check both count) and not blank: a blank string is 422 `request_invalid` (`details[].path` `/reason`, reason `invalid_value`), a longer one `too_long`.
      */
     reason?: string | null;
 };
