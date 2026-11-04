@@ -367,6 +367,57 @@ public static class EvidgateTelemetry
     public static void RecordAiSettingsWrite(string outcome) =>
         AiSettingsWrites.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
 
+    /// <summary>Counter of queued authoring changes, tagged by the closed change-type vocabulary.</summary>
+    public const string AuthoringChangeQueuedMetricName = "evidgate_authoring_change_queued_total";
+
+    private static readonly Counter<long> AuthoringChangesQueued = Meter.CreateCounter<long>(
+        AuthoringChangeQueuedMetricName,
+        unit: "{change}",
+        description: "Authoring changes queued, by change type (comment, delete, merge, split). Never a title, a comment body or an id: only the closed type vocabulary, so the tag stays low-cardinality.");
+
+    /// <summary>
+    /// Counts one successfully queued authoring change. A refused queue is not counted: the request's own status and
+    /// the error code already describe it, and this counter answers "how much review work is arriving".
+    /// </summary>
+    /// <param name="changeType">One of <c>comment</c>, <c>delete</c>, <c>merge</c> or <c>split</c>.</param>
+    public static void RecordAuthoringChangeQueued(string changeType) =>
+        AuthoringChangesQueued.Add(1, new KeyValuePair<string, object?>("change_type", changeType));
+
+    /// <summary>Counter of batched applies, tagged by the closed outcome vocabulary.</summary>
+    public const string AuthoringChangeApplyMetricName = "evidgate_authoring_apply_total";
+
+    private static readonly Counter<long> AuthoringChangesApplied = Meter.CreateCounter<long>(
+        AuthoringChangeApplyMetricName,
+        unit: "{apply}",
+        description: "Batched authoring applies by outcome (applied, stale, conflict). Never an ids list or a count: only the closed vocabulary, so the tag stays low-cardinality.");
+
+    /// <summary>
+    /// Counts one apply attempt, tagged by the closed outcome vocabulary: <c>applied</c> (the batch committed),
+    /// <c>stale</c> (a precondition or a version lost) or <c>conflict</c> (a selected change was no longer pending).
+    /// A refused request is counted here: "how often do applies lose their precondition" is the number the plan asks
+    /// for, and the selection's own size is the separate batch-size histogram.
+    /// </summary>
+    /// <param name="outcome">One of <c>applied</c>, <c>stale</c> or <c>conflict</c>.</param>
+    public static void RecordAuthoringApply(string outcome) =>
+        AuthoringChangesApplied.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
+
+    /// <summary>Histogram of how many changes one committed apply carried.</summary>
+    public const string AuthoringChangeApplyBatchSizeMetricName = "evidgate_authoring_apply_batch_size";
+
+    private static readonly Histogram<int> AuthoringChangeApplyBatchSizes = Meter.CreateHistogram<int>(
+        AuthoringChangeApplyBatchSizeMetricName,
+        unit: "{change}",
+        description: "Changes carried by one committed apply. No labels: batches are compared as a distribution, which answers \"do maintainers batch\" without storing a selection.",
+        advice: new InstrumentAdvice<int>
+        {
+            HistogramBucketBoundaries = [1, 2, 3, 5, 8, 13, 20, 50, 100, 200],
+        });
+
+    /// <summary>Records the selection size of one committed apply.</summary>
+    /// <param name="changeCount">The number of changes the batch applied; 1..200 in practice.</param>
+    public static void RecordAuthoringApplyBatchSize(int changeCount) =>
+        AuthoringChangeApplyBatchSizes.Record(changeCount);
+
     private static readonly Histogram<double> EvaluationDecisionLatencies = Meter.CreateHistogram<double>(
         EvaluationDecisionLatencyMetricName,
         unit: "s",
