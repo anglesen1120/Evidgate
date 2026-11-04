@@ -23,7 +23,7 @@ p {
 }
 h1 {
   font-family: var(--eg-font-display);
-  font-size: clamp(22px, 2vw, var(--eg-text-2xl));
+  font-size: clamp(var(--eg-text-xl), 2vw, var(--eg-text-2xl));
   line-height: var(--eg-leading-2xl);
 }
 h2 {

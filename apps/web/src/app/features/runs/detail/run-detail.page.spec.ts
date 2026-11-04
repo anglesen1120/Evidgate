@@ -143,7 +143,9 @@ describe('RunDetailPage', () => {
     const title = root.querySelector('h1');
     expect(title).not.toBeNull();
     if (title) {
-      expect(getComputedStyle(title).fontSize).toBe('clamp(22px, 2vw, var(--eg-text-2xl))');
+      expect(getComputedStyle(title).fontSize).toBe(
+        'clamp(var(--eg-text-xl), 2vw, var(--eg-text-2xl))',
+      );
       expect(getComputedStyle(title).lineHeight).toBe('var(--eg-leading-2xl)');
     }
   });
