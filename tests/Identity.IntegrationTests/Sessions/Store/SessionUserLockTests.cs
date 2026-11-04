@@ -167,8 +167,8 @@ public sealed class SessionUserLockTests : SessionHardeningTestBase
         }
 
         (await OwnerScalarAsync<bool>(
-            "select not has_function_privilege('evidgate_app', 'evidgate_resolve.session_user_lock(uuid)', 'execute') " +
-            "and not has_function_privilege('public', 'evidgate_resolve.session_user_lock(uuid)', 'execute')"))
+            "select not has_function_privilege('evidgate_app', 'evidgate.session_user_lock(uuid)', 'execute') " +
+            "and not has_function_privilege('public', 'evidgate.session_user_lock(uuid)', 'execute')"))
             .ShouldBeTrue("the lock helper is only reachable from the owner-run definers");
     }
 

@@ -10,7 +10,7 @@
 --     predecessor protects one session, not the user. The three 0045 definers that write
 --     sessions of a user (`session_create`, `session_rotate`, `session_revoke_all_for_user`)
 --     now take one transaction-scoped advisory lock per user, through ONE helper
---     (`evidgate_resolve.session_user_lock`), before they read or write session rows. Under
+--     (`evidgate.session_user_lock`), before they read or write session rows. Under
 --     READ COMMITTED the statements after the lock take a fresh snapshot, so a rotation that
 --     waited behind a committed revoke-all matches no live predecessor and answers `not_live`,
 --     and a login that waited creates its session after the removal (which grants nothing: the
@@ -33,9 +33,10 @@
 -- Not changed: `session_authenticate` (the S85 residual (a) predicate stays an accepted
 -- residual, the row is untouched).
 
--- Plain (invoker) function on purpose: it touches no table, only the lock manager, and is
--- reachable solely from the three owner-run definers below (EXECUTE is revoked from everyone else).
-create or replace function evidgate_resolve.session_user_lock(p_user_id uuid)
+-- Plain (invoker) function in `evidgate`, not `evidgate_resolve`, on purpose: every function of
+-- that schema is a definer the app role may call (ResolverTests), and this one touches no table,
+-- only the lock manager, and must be reachable solely from the owner-run definers below.
+create or replace function evidgate.session_user_lock(p_user_id uuid)
 returns void
 language sql
 volatile
@@ -73,7 +74,7 @@ declare
   v_status text;
   v_ip inet;
 begin
-  perform evidgate_resolve.session_user_lock(p_user_id);
+  perform evidgate.session_user_lock(p_user_id);
 
   v_status := (select u.status from public."user" u where u.id = p_user_id);
 
@@ -152,7 +153,7 @@ begin
     return;
   end if;
 
-  perform evidgate_resolve.session_user_lock(v_user_id);
+  perform evidgate.session_user_lock(v_user_id);
 
   v_user_status := (select u.status
                       from public.session s
@@ -235,7 +236,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  perform evidgate_resolve.session_user_lock(p_user_id);
+  perform evidgate.session_user_lock(p_user_id);
 
   return query
   with revoked as (
@@ -251,7 +252,9 @@ begin
 end
 $$;
 
-revoke all on function evidgate_resolve.session_user_lock(uuid) from public;
+-- The schema's default privileges grant EXECUTE to the app role on every new function; the helper
+-- must not be one of them.
+revoke all on function evidgate.session_user_lock(uuid) from public, evidgate_app;
 revoke all on function evidgate_resolve.session_create(uuid, uuid, bytea, integer, text, text, timestamptz, timestamptz, bytea[], timestamptz) from public;
 revoke all on function evidgate_resolve.session_rotate(uuid, uuid, bytea, integer, timestamptz, integer, text, text) from public;
 revoke all on function evidgate_resolve.session_revoke_all_for_user(uuid, timestamptz) from public;
