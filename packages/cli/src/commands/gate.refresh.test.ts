@@ -19,9 +19,9 @@ import {
   refusal,
   runId,
   stubFetch,
-} from './gate.kit.test.js';
+} from './gate.kit.testing.js';
 
-import type { StubCall } from './gate.kit.test.js';
+import type { StubCall } from './gate.kit.testing.js';
 
 const decisionPath = `/v1/runs/${runId}/decision`;
 

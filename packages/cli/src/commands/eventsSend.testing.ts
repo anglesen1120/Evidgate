@@ -11,12 +11,18 @@ import { mkdtempSync } from 'node:fs';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { gunzipSync } from 'node:zlib';
 
 import { main } from '../main.js';
-import type { Io } from '../redact.js';
 import { ProducerSpool } from '../spool.js';
 
+import {
+  capture,
+  jsonResponse,
+  stubFetch as sharedStubFetch,
+  type Captured,
+  type StubCall,
+  type StubHarness,
+} from './cliSpec.testing.js';
 import { devExchangeAnswer, devToken } from './devExchange.testing.js';
 
 import type { ExchangeDeps } from '../auth/exchange.js';
@@ -39,21 +45,8 @@ export interface TestDeps extends ExchangeDeps {
   readonly stdin?: AsyncIterable<Uint8Array>;
 }
 
-export interface Captured {
-  readonly io: Io;
-  readonly stdout: string[];
-  readonly stderr: string[];
-}
-
-export function capture(): Captured {
-  const stdout: string[] = [];
-  const stderr: string[] = [];
-  return {
-    io: { stdout: (text) => stdout.push(text), stderr: (text) => stderr.push(text) },
-    stdout,
-    stderr,
-  };
-}
+export { capture, jsonResponse };
+export type { Captured, StubCall };
 
 /**
  * A virtual clock: `sleep` advances the same clock `now` reads, so an outage of ten
@@ -77,71 +70,14 @@ export function virtualClock(): {
   };
 }
 
-/** One recorded request: the headers the send chose and the body bytes it sent. */
-export interface StubCall {
-  readonly request: Request;
-  /** The bytes the sender actually put on the wire (gzipped when it compressed). */
-  readonly wire: Buffer;
-  /** The decoded JSON body bytes (equal to `wire` unless it was compressed). */
-  readonly body: Buffer;
-  readonly key: string | null;
-  readonly events: ReadonlyArray<Record<string, unknown>>;
-}
-
 /**
  * A `fetch` stub that parses each body and answers from `handler` (never the network).
  * `EVIDGATE_DEV_TOKEN` is an ingest credential, so a run exchanges it at `POST /v1/ci/token`
  * before its first batch: the stub answers that call itself, handing `mintedToken` back, and
  * keeps it in `exchanges`, so `calls` holds only the send's own requests.
  */
-export function stubFetch(handler: (call: StubCall) => Response | Promise<Response>): {
-  readonly fetchImpl: typeof fetch;
-  readonly calls: StubCall[];
-  readonly exchanges: StubCall[];
-} {
-  const calls: StubCall[] = [];
-  const exchanges: StubCall[] = [];
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    const raw = Buffer.from(await request.clone().arrayBuffer());
-    // `packBatches` switches to `Content-Encoding: gzip` once compression saves > 1 KiB,
-    // so the recorded body is the decoded JSON (the bytes on the wire stay in `wire`).
-    const wire = raw;
-    const body = request.headers.get('content-encoding') === 'gzip' ? gunzipSync(raw) : raw;
-    const parsed = JSON.parse(body.toString('utf8')) as { events?: unknown };
-    const events = Array.isArray(parsed.events)
-      ? parsed.events.filter(
-          (event): event is Record<string, unknown> =>
-            typeof event === 'object' && event !== null && !Array.isArray(event),
-        )
-      : [];
-    const call: StubCall = {
-      request,
-      wire,
-      body,
-      key: request.headers.get('idempotency-key'),
-      events,
-    };
-    const exchange = devExchangeAnswer(request);
-    if (exchange !== undefined) {
-      exchanges.push(call);
-      return exchange;
-    }
-    calls.push(call);
-    return handler(call);
-  };
-  return { fetchImpl, calls, exchanges };
-}
-
-export function jsonResponse(
-  status: number,
-  body: unknown,
-  headers: Record<string, string> = {},
-): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json', ...headers },
-  });
+export function stubFetch(handler: (call: StubCall) => Response | Promise<Response>): StubHarness {
+  return sharedStubFetch((call) => handler(call), { exchange: (call) => devExchangeAnswer(call) });
 }
 
 /** The 200 the events route returns, with one ack per event (order = request order). */

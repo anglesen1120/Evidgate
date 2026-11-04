@@ -21,7 +21,7 @@ import {
   pending,
   refusal,
   runId,
-} from './gate.kit.test.js';
+} from './gate.kit.testing.js';
 
 describe('gate', () => {
   const dirs = cacheDirs();

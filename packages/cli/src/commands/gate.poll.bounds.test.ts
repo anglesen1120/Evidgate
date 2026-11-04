@@ -17,7 +17,7 @@ import {
   refusal,
   runId,
   withTokenExchange,
-} from './gate.kit.test.js';
+} from './gate.kit.testing.js';
 import { hangUntilAborted, stallingBody } from './gate.poll.testing.js';
 
 describe('gate --wait', () => {
