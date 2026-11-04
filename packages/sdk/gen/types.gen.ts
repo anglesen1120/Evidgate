@@ -96,7 +96,7 @@ export type RunSummary = {
      */
     rerun_scope: 'full' | 'failed_subset' | null;
     /**
-     * The verdict of the run's newest `live` evaluation (highest evidence revision), `null` while the run has none (00 §9.3), UPPER per 00 §7. A `shadow` evaluation never decides this value.
+     * The verdict of the run's newest `live` evaluation (highest evidence revision), UPPER per 00 §7; a `shadow` evaluation never decides this value. `null` has two causes, both read as "no verdict here": the run has no `live` evaluation (00 §9.3), or the caller does not hold `decision:read` — this row answers under `run:read`, so a verdict the caller may not read is never served, not even as a value.
      */
     decision?: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | null;
     /**
