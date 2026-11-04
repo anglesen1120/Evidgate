@@ -3,48 +3,23 @@
 // non-regular inputs (a device, a FIFO) are refused without a request or a hang.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { symlink } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../main.js';
 import { resetSecrets } from '../redact.js';
 
 import { devStubFetch } from './devExchange.testing.js';
-import { capture, createdManifest as ok, devUploadEnv } from './manifestsUpload.testing.js';
+import { capture, createdManifest as ok, useManifestSpec } from './manifestsUpload.testing.js';
 
 describe('manifests upload — boundaries', () => {
-  const dirs: string[] = [];
+  const { tempDir, manifestFile, devEnv } = useManifestSpec('evidgate-cli-qa-');
 
   beforeEach(() => {
     resetSecrets();
   });
-
-  afterEach(async () => {
-    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-  });
-
-  async function tempDir(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'evidgate-cli-qa-'));
-    dirs.push(dir);
-    return dir;
-  }
-
-  async function manifestFile(content: string | Buffer): Promise<string> {
-    const path = join(await tempDir(), 'manifest.json');
-    await writeFile(path, content);
-    return path;
-  }
-
-  /**
-   * The dev path: the token is a seeded ingest credential, so every run exchanges it at
-   * `POST /v1/ci/token` (and caches the result) before the upload.
-   */
-  async function devEnv(extra: Record<string, string> = {}) {
-    return devUploadEnv(await tempDir(), extra);
-  }
 
   // ---- boundary: non-UTF-8 bytes travel verbatim and the key is their digest ----
 

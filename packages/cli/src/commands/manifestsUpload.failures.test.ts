@@ -1,11 +1,9 @@
 // The failure paths of `evidgate manifests upload`: the 401 that purges the cached CI token
 // and the 403 that must keep it, the swallowed purge failure, redaction of both credentials,
 // and the replies that become `request_failed`/`transport` without echoing the body or URL.
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { chmod } from 'node:fs/promises';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { readCachedToken, writeCachedToken } from '../auth/tokenCache.js';
 import { resolveConfig } from '../config.js';
@@ -21,46 +19,21 @@ import {
 } from './devExchange.testing.js';
 import {
   capture,
-  devUploadEnv,
   exchangePath,
   ingestUploadEnv,
   jsonResponse,
   manifestId,
   project,
   stubFetch,
+  useManifestSpec,
 } from './manifestsUpload.testing.js';
 
 describe('manifests upload', () => {
-  const dirs: string[] = [];
+  const { tempDir, manifestFile, devEnv } = useManifestSpec();
 
   beforeEach(() => {
     resetSecrets();
   });
-
-  afterEach(async () => {
-    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-  });
-
-  async function tempDir(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'evidgate-cli-'));
-    dirs.push(dir);
-    return dir;
-  }
-
-  /** Writes `text` to a fresh temp file and returns its path. */
-  async function manifestFile(text: string): Promise<string> {
-    const path = join(await tempDir(), 'manifest.json');
-    await writeFile(path, text, 'utf8');
-    return path;
-  }
-
-  /**
-   * The dev path: the token is a seeded ingest credential, so every run exchanges it at
-   * `POST /v1/ci/token` (and caches the result) before the upload.
-   */
-  async function devEnv(extra: Record<string, string> = {}) {
-    return devUploadEnv(await tempDir(), extra);
-  }
 
   /** An ingest source: `getToken()` would exchange at `/v1/ci/token` when the cache is cold. */
   async function ingestEnv(extra: Record<string, string> = {}) {

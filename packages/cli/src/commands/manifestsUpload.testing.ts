@@ -1,11 +1,20 @@
 // The fixtures the `manifests upload` specs share: a valid answer's ids, the captured-io
-// record, the `fetch` stub that keeps the raw request body, the JSON answer builder and the
-// two token-source environments. Every spec drives the command through `main()` with an
-// injected transport, so none of these fixtures touch the network themselves.
+// record, the `fetch` stub that keeps the raw request body, the JSON answer builder, the
+// two token-source environments and the per-test temp root the file and cache live in.
+// Every spec file calls `useManifestSpec()` for itself, so each gets its own hooks and
+// roots and the split files start from the same baseline. Every spec drives the command
+// through `main()` with an injected transport, so none of these fixtures touch the network
+// themselves.
 //
 // This file is not a spec: the shared Vitest base collects `src/**/*.test.ts` only. It is
 // also excluded from the emitting project in tsconfig.json, so it never reaches `dist`; the
 // no-emit tsconfig.spec.json is the project that type-checks it.
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach } from 'vitest';
+
 import type { Io } from '../redact.js';
 
 import { devToken } from './devExchange.testing.js';
@@ -110,4 +119,40 @@ export function ingestUploadEnv(
     EVIDGATE_INGEST_TOKEN: 'egt_ingest_secret_value',
     ...extra,
   };
+}
+
+/**
+ * Registers the per-test temp roots and their cleanup hook, and returns the factories the
+ * specs drive the command with. `prefix` names the roots, so a spec file keeps the ones it
+ * already used.
+ */
+export function useManifestSpec(prefix = 'evidgate-cli-') {
+  const dirs: string[] = [];
+
+  afterEach(async () => {
+    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  });
+
+  async function tempDir(): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), prefix));
+    dirs.push(dir);
+    return dir;
+  }
+
+  /** Writes `content` to a fresh temp file and returns its path (`utf8` for a string). */
+  async function manifestFile(content: string | Buffer): Promise<string> {
+    const path = join(await tempDir(), 'manifest.json');
+    await writeFile(path, content);
+    return path;
+  }
+
+  /**
+   * The dev path: the token is a seeded ingest credential, so every run exchanges it at
+   * `POST /v1/ci/token` (and caches the result) before the upload.
+   */
+  async function devEnv(extra: Record<string, string> = {}) {
+    return devUploadEnv(await tempDir(), extra);
+  }
+
+  return { tempDir, manifestFile, devEnv };
 }

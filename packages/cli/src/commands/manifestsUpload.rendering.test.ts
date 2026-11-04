@@ -2,11 +2,7 @@
 // skipped, the control-character escaping that keeps a field from forging a workflow
 // command, the 200-code-point caps, and the envelope edges (unsafe code, request_id
 // fallback, server 413).
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../main.js';
 import { resetSecrets } from '../redact.js';
@@ -14,41 +10,17 @@ import { resetSecrets } from '../redact.js';
 import { devStubFetch } from './devExchange.testing.js';
 import {
   capture,
-  devUploadEnv,
   errorEnvelope as envelope,
   jsonResponse,
+  useManifestSpec,
 } from './manifestsUpload.testing.js';
 
 describe('manifests upload — boundaries', () => {
-  const dirs: string[] = [];
+  const { manifestFile, devEnv } = useManifestSpec('evidgate-cli-qa-');
 
   beforeEach(() => {
     resetSecrets();
   });
-
-  afterEach(async () => {
-    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-  });
-
-  async function tempDir(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'evidgate-cli-qa-'));
-    dirs.push(dir);
-    return dir;
-  }
-
-  async function manifestFile(content: string | Buffer): Promise<string> {
-    const path = join(await tempDir(), 'manifest.json');
-    await writeFile(path, content);
-    return path;
-  }
-
-  /**
-   * The dev path: the token is a seeded ingest credential, so every run exchanges it at
-   * `POST /v1/ci/token` (and caches the result) before the upload.
-   */
-  async function devEnv(extra: Record<string, string> = {}) {
-    return devUploadEnv(await tempDir(), extra);
-  }
 
   // ---- details rendering: skipped fields, escaping, caps ----
 

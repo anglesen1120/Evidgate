@@ -1,11 +1,7 @@
 // Output rules for `evidgate manifests upload`: `--verbose` must not print the manifest
 // content or either credential, `--json` keeps errors on stderr, and a 401 without a cache
 // entry is not reported as a cache error.
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { readCachedToken } from '../auth/tokenCache.js';
 import { resolveConfig } from '../config.js';
@@ -16,43 +12,19 @@ import { devStubFetch, devToken, mintedToken } from './devExchange.testing.js';
 import {
   capture,
   createdManifest as ok,
-  devUploadEnv,
   errorEnvelope as envelope,
   jsonResponse,
   project,
   stubFetch,
+  useManifestSpec,
 } from './manifestsUpload.testing.js';
 
 describe('manifests upload — boundaries', () => {
-  const dirs: string[] = [];
+  const { tempDir, manifestFile, devEnv } = useManifestSpec('evidgate-cli-qa-');
 
   beforeEach(() => {
     resetSecrets();
   });
-
-  afterEach(async () => {
-    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-  });
-
-  async function tempDir(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'evidgate-cli-qa-'));
-    dirs.push(dir);
-    return dir;
-  }
-
-  async function manifestFile(content: string | Buffer): Promise<string> {
-    const path = join(await tempDir(), 'manifest.json');
-    await writeFile(path, content);
-    return path;
-  }
-
-  /**
-   * The dev path: the token is a seeded ingest credential, so every run exchanges it at
-   * `POST /v1/ci/token` (and caches the result) before the upload.
-   */
-  async function devEnv(extra: Record<string, string> = {}) {
-    return devUploadEnv(await tempDir(), extra);
-  }
 
   // ---- output rules: --verbose, --json on failure, token cache ----
 

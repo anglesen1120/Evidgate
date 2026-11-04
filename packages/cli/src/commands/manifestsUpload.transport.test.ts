@@ -1,49 +1,22 @@
 // The redirect refusal for `evidgate manifests upload`: `redirect: 'error'` lives in the
 // transport layer, so this case needs a real 127.0.0.1 server — an injected `fetch` stub
 // that returns a 302 never performs the redirect.
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../main.js';
 import { resetSecrets } from '../redact.js';
 
 import { exchangeBody, mintedToken } from './devExchange.testing.js';
-import { capture, devUploadEnv, exchangePath, project } from './manifestsUpload.testing.js';
+import { capture, exchangePath, project, useManifestSpec } from './manifestsUpload.testing.js';
 
 describe('manifests upload — boundaries', () => {
-  const dirs: string[] = [];
+  const { manifestFile, devEnv } = useManifestSpec('evidgate-cli-qa-');
 
   beforeEach(() => {
     resetSecrets();
   });
-
-  afterEach(async () => {
-    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-  });
-
-  async function tempDir(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'evidgate-cli-qa-'));
-    dirs.push(dir);
-    return dir;
-  }
-
-  async function manifestFile(content: string | Buffer): Promise<string> {
-    const path = join(await tempDir(), 'manifest.json');
-    await writeFile(path, content);
-    return path;
-  }
-
-  /**
-   * The dev path: the token is a seeded ingest credential, so every run exchanges it at
-   * `POST /v1/ci/token` (and caches the result) before the upload.
-   */
-  async function devEnv(extra: Record<string, string> = {}) {
-    return devUploadEnv(await tempDir(), extra);
-  }
 
   // The redirect refusal lives in the transport layer (`redirect: 'error'` on the
   // outgoing Request), so it needs a real 127.0.0.1 server: an injected `fetch` stub

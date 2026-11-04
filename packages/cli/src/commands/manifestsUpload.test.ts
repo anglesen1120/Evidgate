@@ -2,11 +2,9 @@
 // `manifest_hash` output, the `manifest_invalid` details passthrough, the local size cap and
 // the input errors that exit before any request (contracts/cli.md §5/§6).
 import { createHash } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { main } from '../main.js';
 import { resetSecrets } from '../redact.js';
@@ -14,49 +12,24 @@ import { resetSecrets } from '../redact.js';
 import { devStubFetch, devToken, mintedToken } from './devExchange.testing.js';
 import {
   capture,
-  devUploadEnv,
   ingestUploadEnv,
   jsonResponse,
   manifestHash,
   manifestId,
   project,
   stubFetch,
+  useManifestSpec,
 } from './manifestsUpload.testing.js';
 
 /** The server's documented body cap (`createManifest`: "Body ≤ 256 KiB → 413"). */
 const maxManifestBytes = 256 * 1024;
 
 describe('manifests upload', () => {
-  const dirs: string[] = [];
+  const { tempDir, manifestFile, devEnv } = useManifestSpec();
 
   beforeEach(() => {
     resetSecrets();
   });
-
-  afterEach(async () => {
-    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-  });
-
-  async function tempDir(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'evidgate-cli-'));
-    dirs.push(dir);
-    return dir;
-  }
-
-  /** Writes `text` to a fresh temp file and returns its path. */
-  async function manifestFile(text: string): Promise<string> {
-    const path = join(await tempDir(), 'manifest.json');
-    await writeFile(path, text, 'utf8');
-    return path;
-  }
-
-  /**
-   * The dev path: the token is a seeded ingest credential, so every run exchanges it at
-   * `POST /v1/ci/token` (and caches the result) before the upload.
-   */
-  async function devEnv(extra: Record<string, string> = {}) {
-    return devUploadEnv(await tempDir(), extra);
-  }
 
   /** An ingest source: `getToken()` would exchange at `/v1/ci/token` when the cache is cold. */
   async function ingestEnv(extra: Record<string, string> = {}) {
