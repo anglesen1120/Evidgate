@@ -186,6 +186,10 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
     cursorQueryParameter: 'cursor',
   },
   { operationId: 'updateProject', method: 'PATCH', path: '/projects/{p}' },
+  // The evidence retention pair: one path, two verbs, so the method is what tells them apart and
+  // neither row can match the other's request (the read takes no body, the upsert a closed one).
+  { operationId: 'getRetentionPolicy', method: 'GET', path: '/projects/{p}/retention' },
+  { operationId: 'setRetentionPolicy', method: 'PUT', path: '/projects/{p}/retention' },
   { operationId: 'createPolicyRevision', method: 'POST', path: '/projects/{p}/policies' },
   {
     operationId: 'activatePolicyRevision',

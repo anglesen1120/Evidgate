@@ -223,6 +223,14 @@ public sealed class TenantGucTests
             ("project_id", projectId));
         await scope.ExecuteAsync(
             """
+            insert into public.retention_policy (id, org_id, project_id, artifact_days, metadata_days)
+            values (@id, @org_id, @project_id, 14, 90)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
             insert into public.ci_token_issue (id, org_id, project_id, binding_id, provider, jti, repository_id, repository_full_name, ref, sha, run_id, run_attempt, job_workflow_ref, expires_at)
             values (@id, @org_id, @project_id, @binding_id, 'github_actions', 'jti-probe', 1, 'acme/web', 'refs/heads/main', 'abc', 1, 1, 'wf', now() + interval '1 hour')
             """,
