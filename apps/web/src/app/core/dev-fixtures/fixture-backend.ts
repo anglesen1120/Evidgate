@@ -55,6 +55,7 @@ import {
   makeEnvironmentProviders,
   type EnvironmentProviders,
 } from '@angular/core';
+import type { RunPage } from '@evidgate/sdk';
 import { mergeMap, type Observable, of, throwError, timer } from 'rxjs';
 
 import { newUuid } from '../http/random-id';
@@ -142,6 +143,26 @@ function wireBody(body: unknown, responseType: string, contentType: string): unk
   }
 }
 
+// Filter the selected fixture page without consuming its continuation; filtered pages may be empty.
+function listDecisionBody(entry: FixtureEntry, request: HttpRequest<unknown>): unknown {
+  const decision = queryParameter(request.urlWithParams, 'decision');
+  if (
+    entry.document.operation_id !== 'listRuns' ||
+    entry.document.status !== 200 ||
+    decision === null
+  ) {
+    return entry.document.body;
+  }
+  // Catalog success bodies are checked against the RunPage contract by fixture-contract.spec.
+  const page = entry.document.body as RunPage;
+  return {
+    ...page,
+    items: page.items.filter((row) =>
+      decision === 'pending' ? row.decision === null : row.decision?.toLowerCase() === decision,
+    ),
+  };
+}
+
 /**
  * The 00 §9.2 envelope of a request no fixture answers. `request_id` echoes the header the request
  * interceptor set (so the page shows the same id a real answer would carry) and falls back to a
@@ -216,7 +237,7 @@ export class FixtureHttpBackend implements HttpBackend {
     return this.respond(
       request,
       entry.document.status,
-      entry.document.body,
+      listDecisionBody(entry, request),
       fixtureHeaders(entry),
       Math.max(0, latency),
     );

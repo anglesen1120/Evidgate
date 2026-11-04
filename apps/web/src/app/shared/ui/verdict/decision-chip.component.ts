@@ -24,7 +24,7 @@ export class DecisionChipComponent {
   readonly decision = input<DecisionValue | 'pending' | 'unavailable' | null | undefined>();
   readonly explanation = computed(() =>
     this.decision() === 'unavailable'
-      ? $localize`:@@shared.decision-chip.list-unavailable:The run list does not carry decisions. Open the run for its stored decision.`
+      ? $localize`:@@shared.decision-chip.read-unavailable:The decision could not be read. Try again.`
       : null,
   );
 
@@ -56,8 +56,7 @@ export class DecisionChipComponent {
       case null:
       case undefined:
       case 'pending':
-        // AC8 requires this literal in both locales; the vi catalog also preserves it.
-        return $localize`:@@shared.decision-chip.pending:pending`;
+        return $localize`:@@shared.decision-chip.pending:Not evaluated`;
       default:
         return null;
     }

@@ -51,12 +51,13 @@ export class RunListPage {
   private readonly pagingSection = viewChild<ElementRef<HTMLElement>>('paging');
   protected readonly copy = {
     title: $localize`:@@runs.list.title:Runs`,
-    description: $localize`:@@runs.list.description:Review collection state. Open a run for its stored decision and evidence completeness.`,
-    filters: $localize`:@@runs.list.filters:Filter loaded runs`,
-    filterHint: $localize`:@@runs.list.filter-hint:State, decision and run scope filter loaded runs only. Ref name filters the server list. Load more to search older runs.`,
+    description: $localize`:@@runs.list.description:Review collection state and the latest stored decision. Open a run for evidence completeness.`,
+    filters: $localize`:@@runs.list.filters:Filter runs`,
+    filterHint: $localize`:@@runs.list.filter-hint:Decision and ref name filter the server list. State and run scope filter loaded runs only. Load more to search older runs.`,
     state: $localize`:@@runs.list.state-filter:State in loaded runs`,
-    decision: $localize`:@@runs.list.decision-filter:Decision in loaded runs`,
-    decisionHint: $localize`:@@shared.decision-chip.list-unavailable:The run list does not carry decisions. Open the run for its stored decision.`,
+    decision: $localize`:@@runs.list.decision-filter:Decision`,
+    decisionHint: $localize`:@@runs.list.decision-hint:The latest live evaluation determines the decision. Not evaluated means no live evaluation yet.`,
+    pending: $localize`:@@shared.decision-chip.pending:Not evaluated`,
     scope: $localize`:@@runs.list.scope-filter:Scope in loaded runs`,
     ref: $localize`:@@runs.list.ref-filter:Ref name (exact match)`,
     any: $localize`:@@runs.list.any:All`,
@@ -75,7 +76,7 @@ export class RunListPage {
     emptyTitle: $localize`:@@runs.list.empty-title:No runs recorded`,
     emptyDescription: $localize`:@@runs.list.empty-description:Runs will appear here when a producer creates them.`,
     filteredTitle: $localize`:@@runs.list.filtered-title:No matching runs in the loaded rows`,
-    filteredDescription: $localize`:@@runs.list.filtered-description:These filters apply to loaded runs, not the entire project. Load more when available, or clear filters.`,
+    filteredDescription: $localize`:@@runs.list.filtered-description:No loaded runs match these filters. Load more when available, or clear filters.`,
     pagination: $localize`:@@runs.list.pagination:More runs`,
     more: $localize`:@@runs.list.more:Load more`,
     loadingMore: $localize`:@@runs.list.loading-more:Loading more runs…`,
@@ -100,15 +101,6 @@ export class RunListPage {
         const raw = Object.fromEntries(
           ['state', 'decision', 'scope', 'ref'].map((key) => [key, query.get(key) ?? undefined]),
         );
-        if (raw['decision'] === 'pending') {
-          raw['decision'] = undefined;
-          void this.router.navigate([], {
-            relativeTo: this.route,
-            queryParams: { decision: null },
-            queryParamsHandling: 'merge',
-            replaceUrl: true,
-          });
-        }
         const current = this.store.toQuery();
         // A form submission already updated the store. Its own URL emission must not reset rows.
         if (

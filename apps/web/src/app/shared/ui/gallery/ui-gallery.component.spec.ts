@@ -27,7 +27,7 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
     );
     expect(row?.querySelector('app-evidence-badge')?.textContent).toContain('Evidence incomplete');
     expect(row?.querySelector('app-outcome-pill')?.textContent).toContain('No results');
-    expect(row?.querySelector('app-decision-chip')?.textContent).toContain('pending');
+    expect(row?.querySelector('app-decision-chip')?.textContent).toContain('Not evaluated');
   });
 
   it('never paints incomplete evidence and a pending decision as success', () => {

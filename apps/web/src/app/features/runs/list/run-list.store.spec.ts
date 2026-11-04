@@ -37,7 +37,7 @@ describe('RunListStore (09.3.1-T1)', () => {
       expect(data.calls).toEqual([{ projectId: 'p-1', request: { limit: RUN_LIST_PAGE_LIMIT } }]);
     });
 
-    it('reads the filters the URL carries and sends only the ref filter', async () => {
+    it('reads URL filters and sends decision and ref filters to the server', async () => {
       data.all = rows(3);
 
       await store.init('p-1', {
@@ -53,10 +53,11 @@ describe('RunListStore (09.3.1-T1)', () => {
         scope: 'rerun',
         refName: 'refs/heads/main',
       });
-      // `state`, `decision` and `scope` are client-side; the wire carries the page size and `ref`.
+      // State and scope remain local; the server owns decision and ref filtering.
       expect(data.calls[0]?.request).toEqual({
         limit: RUN_LIST_PAGE_LIMIT,
         refName: 'refs/heads/main',
+        decision: 'PASS',
       });
     });
 
@@ -176,22 +177,56 @@ describe('RunListStore (09.3.1-T1)', () => {
       expect(store.loadedCount()).toBe(RUN_LIST_PAGE_LIMIT * (1 + RUN_LIST_AUTO_PAGES));
     });
 
-    it('ignores a stale pending URL filter and only matches explicit verdicts', async () => {
-      data.all = [
-        run(1, { decision: 'PASS' }),
-        run(2, { decision: null }),
-        run(3),
-        run(4, { decision: 'FAIL' }),
-      ];
+    it.each(['pending', 'PASS', 'FAIL', 'INCONCLUSIVE'] as const)(
+      'round-trips and requests the %s decision filter',
+      async (decision) => {
+        data.all = [
+          run(1, { decision: 'PASS' }),
+          run(2, { decision: null }),
+          run(3, { decision: 'INCONCLUSIVE' }),
+          run(4, { decision: 'FAIL' }),
+        ];
+        await store.init('p-1', { decision });
+        expect(store.visibleRows()).toEqual(
+          data.all.filter((row) => row.decision === (decision === 'pending' ? null : decision)),
+        );
+        expect(store.toQuery()).toEqual({ decision });
+        expect(data.calls[0]?.request).toEqual({ limit: RUN_LIST_PAGE_LIMIT, decision });
+        await store.setFilters({ decision: '' });
+        expect(data.calls.at(-1)?.request).toEqual({ limit: RUN_LIST_PAGE_LIMIT });
+        expect(store.visibleRows()).toHaveLength(4);
+        expect(store.toQuery()).toEqual({});
+      },
+    );
 
-      await store.init('p-1', { decision: 'pending' });
-      expect(store.visibleRows()).toHaveLength(4);
-      expect(store.filters().decision).toBe('');
-      expect(store.toQuery()).not.toHaveProperty('decision');
+    it('follows short and empty decision-filtered pages using the cursor, not their length', async () => {
+      data.pageSizeOverride = 1;
+      data.all = rows(9, (index) => ({ decision: index === 0 || index === 8 ? 'FAIL' : 'PASS' }));
+      await store.init('p-1', { decision: 'FAIL', ref: 'main' });
+      expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-0']);
+      expect(store.hasMore()).toBe(true);
+      expect(store.autoLoadCapped()).toBe(true);
+      await store.loadMore();
+      expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-0', 'run-8']);
+      expect(store.hasMore()).toBe(false);
+      expect(
+        data.calls.every(
+          ({ request }) => request.decision === 'FAIL' && request.refName === 'main',
+        ),
+      ).toBe(true);
+    });
 
-      await store.setFilters({ decision: 'PASS' });
-
-      expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-1']);
+    it('discards an in-flight page when the decision filter changes', async () => {
+      data.manual = true;
+      const previous = store.init('p-1', { decision: 'PASS' });
+      const current = store.setFilters({ decision: 'pending' });
+      expect(data.calls.map(({ request }) => request.decision)).toEqual(['PASS', 'pending']);
+      data.pending[1]?.resolve({ items: [run(2)], next_cursor: null });
+      await current;
+      data.pending[0]?.resolve({ items: [run(1, { decision: 'PASS' })], next_cursor: null });
+      await previous;
+      expect(store.visibleRows().map((row) => row.run_id)).toEqual(['run-2']);
+      expect(store.toQuery()).toEqual({ decision: 'pending' });
     });
 
     it('classifies rerun, reprocess and original scope from the labels', async () => {

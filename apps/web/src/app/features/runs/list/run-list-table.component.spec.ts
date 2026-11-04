@@ -19,6 +19,7 @@ function run(index: number, changes: Partial<RunSummary> = {}): RunSummary {
       is_fork: false,
     },
     unverified_ref: false,
+    decision: null,
     completeness: 'complete',
     parent_run_id: null,
     rerun_scope: null,
@@ -48,12 +49,14 @@ describe('RunListTableComponent', () => {
     expect(link.textContent).toContain(run(1).run_id.slice(0, 8));
   });
   it('keeps collection state, evidence unavailable and stored decisions independent; no outcome column', async () => {
+    const unavailable = run(5);
+    delete unavailable.decision;
     const { root } = await render([
       run(1, { decision: 'PASS' }),
       run(2, { state: 'incomplete', decision: 'FAIL' }),
       run(3, { decision: 'INCONCLUSIVE' }),
       run(4, { decision: null }),
-      run(5),
+      unavailable,
     ]);
     expect(
       [...root.querySelectorAll('[role="columnheader"]')].map((cell) => cell.textContent?.trim()),
@@ -68,16 +71,16 @@ describe('RunListTableComponent', () => {
       'Decision:PASS',
       'Decision:FAIL',
       'Decision:INCONCLUSIVE',
-      'Decision: Decision unavailable',
+      'Decision:Not evaluated',
       'Decision: Decision unavailable',
     ]);
     expect(root.querySelector('app-outcome-pill')).toBeNull();
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-27T00:00:00Z');
     expect(root.querySelector('abbr')?.getAttribute('aria-label')).toBe(run(1).run_id);
-    expect(root.querySelectorAll('[data-run-decision] [data-tone="neutral"]')).toHaveLength(2);
-    expect(root.querySelector('[data-run-decision] [data-tone="pending"]')).toBeNull();
-    expect(root.querySelector('[data-run-decision] [title]')?.getAttribute('title')).toContain(
-      'Open the run for its stored decision',
+    expect(root.querySelectorAll('[data-run-decision] [data-tone="pending"]')).toHaveLength(1);
+    expect(root.querySelectorAll('[data-run-decision] [data-tone="neutral"]')).toHaveLength(1);
+    expect(root.querySelector('[data-run-decision] [title]')?.getAttribute('title')).toBe(
+      'The decision could not be read. Try again.',
     );
   });
   it('supplies localized field labels for every stacked record without changing table semantics', async () => {
