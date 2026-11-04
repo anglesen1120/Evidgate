@@ -102,8 +102,7 @@
         "unverified_ref": false,
         "completeness": null,
         "parent_run_id": null,
-        "rerun_scope": null,
-        "decision": "INCONCLUSIVE"
+        "rerun_scope": null
       }
     ],
     "next_cursor": null
