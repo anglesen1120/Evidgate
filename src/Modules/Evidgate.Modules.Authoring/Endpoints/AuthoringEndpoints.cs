@@ -48,6 +48,8 @@ public static class AuthoringEndpoints
         // because RLS hides it — no route here re-implements either rule.
         var authoring = group.MapGroup("/projects/{p}/authoring");
 
+        AiSettingsEndpoints.MapAiSettingsEndpoints(group);
+
         AuthoringNodeEndpoints.MapAuthoringNodeEndpoints(authoring);
         AuthoringChecklistEndpoints.MapAuthoringChecklistEndpoints(authoring);
         AuthoringManualCaseEndpoints.MapAuthoringManualCaseEndpoints(authoring);

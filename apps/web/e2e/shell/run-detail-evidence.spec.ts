@@ -304,7 +304,7 @@ for (const locale of LOCALES) {
     await expect(page.locator('#evidence-panel app-error-pattern')).toBeVisible();
     await expect(page.locator('[data-evidence-revision-select]')).toHaveCount(0);
     await expect(page.locator('#decision-panel [data-decision-pending]')).toBeVisible();
-    await expect(page.locator('app-run-header')).toBeVisible();
+    await expect(page.locator('app-run-header .run-summary')).toBeVisible();
   });
 }
 

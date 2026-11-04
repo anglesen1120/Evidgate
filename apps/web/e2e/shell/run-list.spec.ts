@@ -62,7 +62,7 @@ async function ready(page: Page) {
 }
 
 for (const locale of LOCALES) {
-  test(`stored dimensions, pending, isolated refs and scope labels (${locale})`, async ({
+  test(`stored dimensions, unavailable decisions, isolated refs and scope labels (${locale})`, async ({
     page,
   }) => {
     await page.goto(withVariants(path(locale), [VARIANTS.runs]));
@@ -78,7 +78,7 @@ for (const locale of LOCALES) {
     for (const row of runList.body.items) {
       const rendered = page.locator(`${ROWS}[data-run-id="${row.run_id}"]`);
       await expect(rendered.locator('[data-run-decision]')).toContainText(
-        row.decision ?? 'pending',
+        row.decision ?? (locale === 'vi' ? 'Quyết định chưa khả dụng' : 'Decision unavailable'),
       );
       await expect(rendered.locator('time')).toHaveAttribute('datetime', row.created_at);
       await expect(rendered.locator('[data-run-unverified]')).toHaveCount(
@@ -283,6 +283,22 @@ for (const locale of LOCALES) {
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
+      const table = page.locator('app-run-list-table .run-table');
+      expect(await table.evaluate((element) => getComputedStyle(element).minInlineSize)).toBe(
+        '0px',
+      );
+      const firstRow = page.locator(ROWS).first();
+      await expect(firstRow.locator('[data-label]')).toHaveCount(7);
+      expect(await firstRow.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true,
+      );
+      expect(
+        await firstRow
+          .locator('[data-label]')
+          .first()
+          .evaluate((element) => getComputedStyle(element, '::before').content),
+      ).not.toBe('none');
+      await expect(page.locator('#run-decision option[value="pending"]')).toHaveCount(0);
       await expectNoA11yViolations(page, `run list ${locale}/${theme}/360px`);
     });
   }

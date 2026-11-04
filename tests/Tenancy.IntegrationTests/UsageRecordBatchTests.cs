@@ -210,6 +210,47 @@ public sealed class UsageRecordBatchTests
     }
 
     [Fact]
+    public async Task FindAsync_ReadsTheStoredRow_AndOtherOrgsSeeNothing()
+    {
+        await using var world = await StartAsync();
+        const string BillingKey = "batch:find:results";
+
+        (await RecordAsync(
+            world,
+            [Entry(BillingKey, world.Project, 3m)],
+            cancellationToken: TestContext.Current.CancellationToken)).Inserted.ShouldBe([BillingKey]);
+
+        var found = await FindAsync(world, BillingKey);
+
+        found.ShouldNotBeNull();
+        found.BillingKey.ShouldBe(BillingKey);
+        found.Metric.ShouldBe(UsageLedgerMetricNames.Results);
+        found.ProjectId.ShouldBe(world.Project);
+        found.Quantity.ShouldBe(3m);
+        found.Unit.ShouldBe("batch");
+        found.Period.ShouldBe(Period);
+
+        (await FindAsync(world, "batch:absent:results")).ShouldBeNull();
+
+        // The key belongs to the org that recorded it: another org's read is an absence, never that row.
+        var otherOrg = await CreateOrgAsync(world.Client, Guid.CreateVersion7(), Unique.Slug("other-find"));
+        (await FindAsync(world, BillingKey, otherOrg)).ShouldBeNull();
+    }
+
+    /// <summary>One <see cref="IUsageLedger.FindAsync"/> call inside an explicit tenant scope.</summary>
+    private static async Task<UsageEntryRecord?> FindAsync(World world, string billingKey, Guid? org = null)
+    {
+        var token = TestContext.Current.CancellationToken;
+
+        await using var services = world.Commands.Services.CreateAsyncScope();
+        var provider = services.ServiceProvider;
+        var scopes = provider.GetRequiredService<ITenantScopeFactory>();
+        await using var scope = await scopes.BeginAsync(org ?? world.Org, null, false, token);
+
+        return await provider.GetRequiredService<IUsageLedger>().FindAsync(billingKey, token);
+    }
+
+    [Fact]
     public async Task RecordUsageBatch_InBatchRepeatedKey_FirstOccurrenceWins()
     {
         await using var world = await StartAsync();

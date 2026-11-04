@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ai-settings.v1.json",
+  "title": "Project AI settings document v1",
+  "description": "The guidance document of one project: the text every manual test case and generated script is written from. One shape validates the API `settings` member, the template `content` member and the input to `content_hash`, so the three cannot drift. Unknown members are refused at the document level and inside `priority_criteria`, so a typo is a 422 rather than silently stored content. Lengths are Unicode code points (RFC 8259 string length), the same unit as PostgreSQL `char_length` and the server's own counter. The four plan-13 limits are contractual: writing_style 250, coverage_strategy 1500, exclusion_rules 1500, step_detail 200; description 1000, environment_url 2048 and each criterion 250 are the recommended defaults recorded for the owner question on the remaining caps. `languages` is stored sorted ascending with no duplicates; a request naming a language twice is refused by the validator with `duplicate_value`, and the array bound here mirrors that rule. `environment_url` is an absolute http(s) URL without credentials: its scheme, userinfo and secret-shaped segments are checked by the shared URL rule at runtime, which a JSON Schema cannot express faithfully, so this schema bounds its length only.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "description",
+    "environment_url",
+    "languages",
+    "writing_style",
+    "coverage_strategy",
+    "priority_criteria",
+    "exclusion_rules",
+    "step_detail"
+  ],
+  "properties": {
+    "description": {
+      "type": "string",
+      "maxLength": 1000,
+      "description": "What the project's AI-written cases should know first: the product area, its users and the flow under test."
+    },
+    "environment_url": {
+      "type": ["string", "null"],
+      "maxLength": 2048,
+      "description": "The application origin the guidance is written for, null when the project has not named one. Absolute http(s), no userinfo and no secret-shaped part, checked by the shared URL rule at runtime."
+    },
+    "languages": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": { "type": "string", "enum": ["vi", "en"] },
+      "description": "The output languages of generated cases, stored sorted ascending ('en' before 'vi'). Closed to the two G1 locales: widening the set needs a migration, because the table's CHECK carries the same pair."
+    },
+    "writing_style": {
+      "type": "string",
+      "maxLength": 250,
+      "description": "How a step should read: voice, person, what to name and what to leave out (contractual cap: 250 code points)."
+    },
+    "coverage_strategy": {
+      "type": "string",
+      "maxLength": 1500,
+      "description": "What every checklist item must cover: the paths, boundaries, authorization cases and destructive actions the project expects (contractual cap: 1500 code points)."
+    },
+    "priority_criteria": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["critical", "high", "medium", "low"],
+      "description": "One criterion per checklist priority level, so the same word means the same thing in every item of the project.",
+      "properties": {
+        "critical": {
+          "type": "string",
+          "maxLength": 250,
+          "description": "What makes a failure critical: the release-blocking class of defect."
+        },
+        "high": {
+          "type": "string",
+          "maxLength": 250,
+          "description": "What makes a failure high: a wrong main path or a missing check that still has a workaround."
+        },
+        "medium": {
+          "type": "string",
+          "maxLength": 250,
+          "description": "What makes a failure medium: a secondary path, a validation message or an empty state."
+        },
+        "low": {
+          "type": "string",
+          "maxLength": 250,
+          "description": "What makes a failure low: wording, spacing or cosmetics that change no behaviour."
+        }
+      }
+    },
+    "exclusion_rules": {
+      "type": "string",
+      "maxLength": 1500,
+      "description": "What must never be tested automatically, such as destructive actions against real customer data (contractual cap: 1500 code points)."
+    },
+    "step_detail": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "How much detail a single step carries (contractual cap: 200 code points)."
+    }
+  }
+}

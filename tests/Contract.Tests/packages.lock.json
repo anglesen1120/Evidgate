@@ -1075,6 +1075,7 @@
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Evidgate.Modules.Ingestion.Contracts": "[1.0.0, )",
           "Evidgate.Modules.Orchestrator.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Usage.Contracts": "[1.0.0, )",
           "Mediator.Abstractions": "[3.0.2, )"
         }
       },

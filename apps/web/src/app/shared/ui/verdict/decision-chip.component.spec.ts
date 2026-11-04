@@ -46,6 +46,7 @@ describe('DecisionChipComponent', () => {
     [undefined, 'pending', 'pending'],
     [null, 'pending', 'pending'],
     ['pending', 'pending', 'pending'],
+    ['unavailable', 'neutral', 'Decision unavailable'],
     ['unknown', 'neutral', 'Decision unavailable'],
     ['pass', 'neutral', 'Decision unavailable'],
     ['fail', 'neutral', 'Decision unavailable'],
@@ -101,6 +102,19 @@ describe('DecisionChipComponent', () => {
     expect(root.querySelector('.verdict__value')?.textContent).toBe('pending');
     expect(root.innerHTML).not.toMatch(/PASS|FAIL/);
     expect(root.querySelector('[data-tone="success"]')).toBeNull();
+  });
+  it('explains an unavailable list decision without changing pending detail semantics', async () => {
+    const fixture = TestBed.createComponent(DecisionChipComponent);
+    fixture.componentRef.setInput('decision', 'unavailable');
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('[data-tone="neutral"]')?.getAttribute('title')).toBe(
+      'The run list does not carry decisions. Open the run for its stored decision.',
+    );
+    fixture.componentRef.setInput('decision', null);
+    await fixture.whenStable();
+    expect(root.querySelector('[title]')).toBeNull();
+    expect(root.querySelector('.verdict__value')?.textContent).toBe('pending');
   });
 
   it('renders unavailable separately from pending and restores canonical pending', async () => {

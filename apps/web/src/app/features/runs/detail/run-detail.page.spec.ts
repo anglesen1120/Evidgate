@@ -119,6 +119,50 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('app-outcome-pill')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
   });
+  it('places compact run facts before attempts and evidence, with full provenance last', async () => {
+    const { root } = await open();
+    const regions = [
+      ...root.querySelectorAll(
+        'app-run-header, app-attempts-table, app-evidence-panel, app-decision-view, app-manifest-panel',
+      ),
+    ];
+    expect(regions.map((region) => region.tagName.toLowerCase())).toEqual([
+      'app-run-header',
+      'app-attempts-table',
+      'app-evidence-panel',
+      'app-decision-view',
+      'app-run-header',
+      'app-manifest-panel',
+    ]);
+    expect(regions[0]?.querySelector('[data-run-environment]')).toBeNull();
+    expect(regions[4]?.querySelector('[data-run-environment]')).not.toBeNull();
+    expect(regions[0]?.querySelector('app-decision-chip')).toBeNull();
+  });
+  it('uses the responsive page title scale rather than a section-heading size', async () => {
+    const { root } = await open();
+    const title = root.querySelector('h1');
+    expect(title).not.toBeNull();
+    if (title) {
+      expect(getComputedStyle(title).fontSize).toBe(
+        'clamp(var(--eg-text-xl), 2vw, var(--eg-text-2xl))',
+      );
+      expect(getComputedStyle(title).lineHeight).toBe('var(--eg-leading-2xl)');
+    }
+  });
+  it('explains incomplete collection before attempts without inventing a missing reason', async () => {
+    get.mockResolvedValue({ ...run, state: 'incomplete' });
+    const { root } = await open();
+    const note = root.querySelector('[data-run-missing-summary]');
+    expect(note?.textContent).toContain('Collection is incomplete');
+    note?.querySelector('button')?.click();
+    expect(document.activeElement).toBe(root.querySelector('#evidence-title'));
+    expect(note?.textContent).not.toMatch(/PASS|FAIL|missing_shard/);
+  });
+  it('does not announce incomplete collection when no such state is supplied', async () => {
+    get.mockResolvedValue({ ...run, state: 'complete' });
+    const { root } = await open();
+    expect(root.querySelector('[data-run-missing-summary]')).toBeNull();
+  });
   it('renders the manifest panel verbatim from the run read', async () => {
     const { root } = await open();
     const panel = root.querySelector('app-manifest-panel')!;

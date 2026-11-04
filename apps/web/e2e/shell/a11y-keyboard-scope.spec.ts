@@ -1,26 +1,5 @@
-// 09.8.1-T1.2 (plan 09.8.1 §10 T1.2, §2 AC2; finding F-SWITCH-01 in docs/a11y): the scope flow is
-// walked with the keyboard ALONE — every focus move in this file is a real `page.keyboard.press`
-// (Tab, Shift+Tab, Enter), every control is reached by Tabbing from the skip link, with no `click`,
-// no `force` and no `locator.focus()` — at the desktop width and at 360px, and every stop is
-// asserted by element identity plus geometry, never by counting Tabs.
-//
-// One exception, and it is not a focus move: `stepSelect` dispatches the select's step (its
-// `keydown`, the value write and the `input`/`change` the browser would have fired), because this
-// host's engine does not step a closed native `<select>` from the keyboard at all. The probe
-// evidence and the exact boundary of that exception are at the helper.
-//
-// The finding was a focus order that followed paint rather than the document: below 768px the
-// `.topbar` wraps, the two scope selects are painted on a second row, and a `order: 3` rule lifted
-// them below the theme toggle's row — while the theme toggle stayed AFTER the selects in the DOM.
-// Tab therefore reached navigation toggle → organization → project → theme toggle, so the last
-// keyboard stop jumped back up into the first visual row (WCAG 2.4.3 Focus Order). The fix moved
-// the theme toggle before the scope group in the document and deleted the reorder, so the topbar's
-// keyboard order is its visual order at both widths; this spec pins that contract on the real
-// browser, where layout and sequential focus navigation exist.
-//
-// F-SWITCH-02 (a held step committing on blur) was judged not a defect and stays pinned by
-// `scope-switcher-keyboard.spec.ts`; the commit cases below only assert the handoff a committed
-// change makes, and the url/step behaviour those cases already own is not re-litigated here.
+// Keyboard traversal follows visible controls: compact desktop scope lives in the topbar;
+// narrow layouts expose those same choices in the modal navigation drawer.
 import { expect, test } from '@playwright/test';
 import type { Locator, Page } from '@playwright/test';
 
@@ -85,20 +64,10 @@ async function stepSelect(select: Locator, value: string): Promise<void> {
   await expect(select).toHaveValue(value);
 }
 
-/**
- * The topbar's four stops, in the order the fixed document gives them (F-SWITCH-01).
- */
+/** Desktop stops in document and visual order. */
 type TopbarStop = 'navigation' | 'theme' | 'organization' | 'project';
 
-/**
- * Reaches a topbar stop with real key presses only, asserting element identity at every stop on
- * the way: the skip link first, then the brand and the sidebar rows (`desktop`), or the navigation
- * toggle directly (`compact` — below 768px the brand is not a stop and the drawer is inert), then
- * navigation toggle → theme toggle → organization → project. It returns once `stop` holds focus.
- *
- * This exists because AC2 allows no `locator.focus()`: the commit cases below used to focus the
- * select programmatically, which is a synthetic focus move, not a keyboard one.
- */
+/** Walk from the document start without synthetic focus moves. */
 async function walkTopbar(
   page: Page,
   stop: TopbarStop,
@@ -120,9 +89,9 @@ async function walkTopbar(
 
   const stops: readonly (readonly [TopbarStop, Locator])[] = [
     ['navigation', page.locator('button.nav-toggle')],
-    ['theme', page.locator('button.theme-toggle')],
     ['organization', page.getByRole('combobox', { name: 'Organization' })],
     ['project', page.getByRole('combobox', { name: 'Project' })],
+    ['theme', page.locator('button.theme-toggle')],
   ];
   const last = stops.findIndex(([name]) => name === stop);
   if (last < 0) throw new Error(`${stop} is not a topbar stop`);
@@ -209,17 +178,11 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     }
     await expect(page.getByRole('navigation')).toHaveAccessibleName('Primary navigation');
 
-    // 4–7. The topbar: navigation toggle → theme toggle → organization → project. The theme toggle
-    // used to be the LAST stop of this row while being painted first (F-SWITCH-01).
+    // The scope controls precede the trailing theme action in both paint and Tab order.
     const navToggle = page.locator('button.nav-toggle');
     await page.keyboard.press('Tab');
     await expectFocusVisible(page, navToggle);
     await expect(navToggle).toHaveAccessibleName('Collapse navigation');
-
-    const themeToggle = page.locator('button.theme-toggle');
-    await page.keyboard.press('Tab');
-    await expectFocusVisible(page, themeToggle);
-    await expect(themeToggle).toHaveAttribute('aria-pressed', /^(true|false)$/);
 
     const orgSelect = page.getByRole('combobox', { name: 'Organization' });
     await page.keyboard.press('Tab');
@@ -232,6 +195,10 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     await page.keyboard.press('Tab');
     await expectFocusVisible(page, projectSelect);
     await expect(projectSelect).toHaveValue(PROJECT_STOREFRONT);
+    const themeToggle = page.locator('button.theme-toggle');
+    await page.keyboard.press('Tab');
+    await expectFocusVisible(page, themeToggle);
+    await expect(themeToggle).toHaveAttribute('aria-pressed', /^(true|false)$/);
 
     // Traversing the switcher is not a commitment: only a step plus Enter, or a blur, commits, and
     // no step was taken (WCAG 3.2.2 — no change on focus or on tabbing through a control).
@@ -244,14 +211,8 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
       boxOf(orgSelect),
       boxOf(projectSelect),
     ]);
-    expect(
-      themeBox.x,
-      'the theme toggle is painted right of the navigation toggle',
-    ).toBeGreaterThan(navBox.x);
-    expect(
-      orgBox.x,
-      'the organization select is painted right of the theme toggle',
-    ).toBeGreaterThan(themeBox.x);
+    expect(themeBox.x, 'theme follows the project selector').toBeGreaterThan(projectBox.x);
+    expect(orgBox.x, 'scope follows navigation').toBeGreaterThan(navBox.x);
     expect(
       projectBox.x,
       'the project select is painted right of the organization select',
@@ -263,17 +224,9 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
     ] as const) {
       expectSameRow(navBox, box, `${label} shares the toggle's row`);
     }
-    // The toggle joins the header's leading icon cluster: the auto margin that right-aligns it
-    // below 768px gets no free space at this width, because the scope group grows into all of it.
-    expect(
-      themeBox.x,
-      'the theme toggle starts within one topbar gap of the navigation toggle',
-    ).toBeLessThan(navBox.x + navBox.width + 24);
-
-    // 8. The project select is the header's last stop, so the next Tab leaves the topbar instead of
-    // walking back up to a control painted above it.
+    // The theme action is the last stop in the header.
     await page.keyboard.press('Tab');
-    await expect(projectSelect).not.toBeFocused();
+    await expect(themeToggle).not.toBeFocused();
     expect(await focusInsideTopbar(page)).toBe(false);
   });
 
@@ -349,9 +302,9 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
 
     const stops = [
       page.locator('button.nav-toggle'),
-      page.locator('button.theme-toggle'),
       page.locator('app-scope-switcher select').nth(0),
       page.locator('app-scope-switcher select').nth(1),
+      page.locator('button.theme-toggle'),
     ];
     for (const stop of stops) {
       await page.keyboard.press('Tab');
@@ -364,122 +317,68 @@ test.describe('scope flow: keyboard order (AC2, F-SWITCH-01)', () => {
   });
 });
 
-test.describe('scope flow at 360px: keyboard order (AC2, F-SWITCH-01)', () => {
-  // The width the finding was reported at: the selects are a second (and, at ≤420px, third) row.
-  test.use({ viewport: { width: 360, height: 900 } });
+for (const width of [360, 390]) {
+  test.describe(`scope flow at ${width}px`, () => {
+    test.use({ viewport: { width, height: 900 } });
 
-  test('mobile: Tab follows the two rows — toggles first, then organization, then project', async ({
-    page,
-  }) => {
-    await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
-    const startPath = new URL(page.url()).pathname;
-    // Below 768px the sidebar is a closed, inert drawer: it must not take any of these stops.
-    await expect(page.locator('#shell-navigation')).toHaveAttribute('inert', '');
+    test('keeps one compact topbar row and leaves scope in the closed drawer', async ({ page }) => {
+      await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
+      await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+      await expect(page.locator('#shell-navigation')).toHaveAttribute('inert', '');
+      await expect(page.locator('header.topbar select')).toHaveCount(0);
+      await expect(page.locator('#shell-navigation select')).toHaveCount(2);
+      await walkTopbar(page, 'navigation', 'compact');
+      const navToggle = page.locator('button.nav-toggle');
+      const themeToggle = page.locator('button.theme-toggle');
+      await page.keyboard.press('Tab');
+      await expectFocusVisible(page, themeToggle);
+      const [navBox, themeBox, topbarBox] = await Promise.all([
+        boxOf(navToggle),
+        boxOf(themeToggle),
+        boxOf(page.locator('header.topbar')),
+      ]);
+      expectSameRow(navBox, themeBox, 'both controls share a single row');
+      expect(themeBox.x).toBeGreaterThan(navBox.x);
+      expect(topbarBox.height).toBeGreaterThanOrEqual(64);
+      expect(topbarBox.height).toBeLessThan(80);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      await page.keyboard.press('Tab');
+      expect(await focusInsideTopbar(page)).toBe(false);
+    });
 
-    await page.keyboard.press('Tab');
-    const skipLink = page.locator('a.skip-link');
-    await expectFocusVisible(page, skipLink);
-
-    await page.keyboard.press('Tab');
-    const navToggle = page.locator('button.nav-toggle');
-    await expectFocusVisible(page, navToggle);
-    await expect(navToggle).toHaveAccessibleName('Open navigation');
-    await expect(navToggle).toHaveAttribute('aria-expanded', 'false');
-
-    // The theme toggle is the SECOND stop, in the first visual row beside the navigation toggle.
-    // Before the fix it was the fourth stop, painted in that same first row: Tab reached the two
-    // selects in the second row and then jumped back up (F-SWITCH-01).
-    await page.keyboard.press('Tab');
-    const themeToggle = page.locator('button.theme-toggle');
-    await expectFocusVisible(page, themeToggle);
-
-    await page.keyboard.press('Tab');
-    const orgSelect = page.getByRole('combobox', { name: 'Organization' });
-    await expectFocusVisible(page, orgSelect);
-    await expect(orgSelect).toHaveValue(ORG_ACME);
-
-    await page.keyboard.press('Tab');
-    const projectSelect = page.getByRole('combobox', { name: 'Project' });
-    await expectFocusVisible(page, projectSelect);
-    await expect(projectSelect).toHaveValue(PROJECT_STOREFRONT);
-    expect(new URL(page.url()).pathname).toBe(startPath);
-
-    // The geometry of the walk, in the same sequence: toggles on row 1 left to right, the selects
-    // below them, the project select below the organization select at this width.
-    const [navBox, themeBox, orgBox, projectBox] = await Promise.all([
-      boxOf(navToggle),
-      boxOf(themeToggle),
-      boxOf(orgSelect),
-      boxOf(projectSelect),
-    ]);
-    expectSameRow(navBox, themeBox, 'both toggles share the first row');
-    expect(themeBox.x, 'the theme toggle ends the first row').toBeGreaterThan(navBox.x);
-    expect(
-      orgBox.y,
-      'the organization select is painted below the first row',
-    ).toBeGreaterThanOrEqual(themeBox.y + themeBox.height);
-    expect(
-      projectBox.y,
-      'the project select is painted below the organization select',
-    ).toBeGreaterThan(orgBox.y);
-    // The theme toggle closes the first row on the same inline-end edge as the rows below it: the
-    // auto margin puts it there, not in a beginning-edge cluster as on wider screens.
-    expect(
-      Math.abs(themeBox.x + themeBox.width - (projectBox.x + projectBox.width)),
-      'the first row ends flush with the scope rows',
-    ).toBeLessThanOrEqual(2);
-
-    // And the header's last stop is the project select: focus moves on into the page.
-    await page.keyboard.press('Tab');
-    await expect(projectSelect).not.toBeFocused();
-    expect(await focusInsideTopbar(page)).toBe(false);
+    test('opens scope in drawer order, traps focus and closes with Escape', async ({ page }) => {
+      await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
+      await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
+      await walkTopbar(page, 'navigation', 'compact');
+      const navToggle = page.locator('button.nav-toggle');
+      const aside = page.locator('#shell-navigation');
+      const close = aside.locator('button.close-button');
+      await page.keyboard.press('Enter');
+      await expect(aside).toHaveAttribute('role', 'dialog');
+      await expect(page.locator('.main-stack')).toHaveAttribute('inert', '');
+      await expectFocusVisible(page, close);
+      await page.keyboard.press('Tab');
+      await expectFocusVisible(page, aside.locator('a.brand'));
+      await page.keyboard.press('Tab');
+      await expectFocusVisible(page, aside.getByRole('combobox', { name: 'Organization' }));
+      await page.keyboard.press('Tab');
+      await expectFocusVisible(page, aside.getByRole('combobox', { name: 'Project' }));
+      const links = aside.locator('app-shell-nav nav a');
+      for (let index = 0; index < (await links.count()); index += 1) {
+        await page.keyboard.press('Tab');
+        await expectFocusVisible(page, links.nth(index));
+      }
+      await page.keyboard.press('Tab');
+      await expectFocusVisible(page, close);
+      await page.keyboard.press('Shift+Tab');
+      await expectFocusVisible(page, links.last());
+      await page.keyboard.press('Escape');
+      await expect(aside).toHaveAttribute('inert', '');
+      await expect(navToggle).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(page.locator('button.theme-toggle')).toBeFocused();
+    });
   });
-
-  test('mobile: the drawer still traps focus, closes on Escape and returns it in the fixed order', async ({
-    page,
-  }) => {
-    await page.goto(withVariant(overviewPath('en'), LIMITED_GRANTS));
-    await expect(page.locator('#main-content h1')).toHaveText('Storefront web');
-
-    const navToggle = page.locator('button.nav-toggle');
-    const themeToggle = page.locator('button.theme-toggle');
-    const orgSelect = page.getByRole('combobox', { name: 'Organization' });
-
-    // The walk starts at the skip link and, below 768px, asserts the navigation toggle as its second
-    // stop (no `locator.focus()`); from there Tab reaches the organization select and Shift+Tab
-    // comes back out: the theme toggle and the navigation toggle are the two stops above it in the
-    // fixed order.
-    await walkTopbar(page, 'navigation', 'compact');
-    await page.keyboard.press('Tab');
-    await expect(themeToggle).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(orgSelect).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    await expect(themeToggle).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    await expect(navToggle).toBeFocused();
-
-    // Enter opens the drawer; it is modal, focus lands on its close button and the page behind is
-    // inert (the trap is a property of the DOM, not only a key handler).
-    const aside = page.locator('#shell-navigation');
-    await page.keyboard.press('Enter');
-    await expect(aside).toHaveAttribute('role', 'dialog');
-    await expect(page.locator('.main-stack')).toHaveAttribute('inert', '');
-    await expect(page.locator('#shell-navigation button.close-button')).toBeFocused();
-
-    // Escape closes it and gives focus back to the control that opened it.
-    await page.keyboard.press('Escape');
-    await expect(aside).not.toHaveAttribute('role', 'dialog');
-    await expect(aside).toHaveAttribute('inert', '');
-    await expect(navToggle).toBeFocused();
-
-    // The order resumes exactly where it left off: theme toggle, then organization, then project.
-    await page.keyboard.press('Tab');
-    await expect(themeToggle).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(orgSelect).toBeFocused();
-    await page.keyboard.press('Tab');
-    await expect(page.getByRole('combobox', { name: 'Project' })).toBeFocused();
-  });
-});
+}

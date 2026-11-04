@@ -22,8 +22,8 @@ internal sealed record EnvironmentConfiguration(string BaseUrlsJson, string Depe
 /// </summary>
 internal static class EnvironmentRevisionRules
 {
-    internal const string SecretValueDetected = "secret_value_detected";
-    internal const string InvalidUrl = "invalid_url";
+    internal const string SecretValueDetected = UrlSafety.SecretValueDetected;
+    internal const string InvalidUrl = UrlSafety.InvalidUrl;
     internal const string InvalidValue = "invalid_value";
 
     private const int MaxDetails = 50;
@@ -111,53 +111,7 @@ internal static class EnvironmentRevisionRules
     }
 
     /// <summary>Null for an absolute http(s) URL with no credential anywhere in it, else the reason it is refused.</summary>
-    internal static string? UrlProblem(string key, string url)
-    {
-        if (SecretShape.KeyLooksSecret(key))
-        {
-            return SecretValueDetected;
-        }
-
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) || string.IsNullOrEmpty(uri.Host))
-        {
-            // A credential-shaped string that is not even a URL is still reported as the secret it looks like.
-            return SecretShape.ValueLooksSecret(url) ? SecretValueDetected : InvalidUrl;
-        }
-
-        if (!string.IsNullOrEmpty(uri.UserInfo) || SecretShape.ValueLooksSecret(url))
-        {
-            return SecretValueDetected;
-        }
-
-        foreach (var label in uri.Host.Split('.'))
-        {
-            if (SecretShape.ValueLooksSecret(label))
-            {
-                return SecretValueDetected;
-            }
-        }
-
-        foreach (var segment in uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (SecretShape.ValueLooksSecret(Uri.UnescapeDataString(segment)))
-            {
-                return SecretValueDetected;
-            }
-        }
-
-        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var cut = pair.IndexOf('=', StringComparison.Ordinal);
-            var name = Uri.UnescapeDataString(cut < 0 ? pair : pair[..cut]);
-            var value = cut < 0 ? string.Empty : Uri.UnescapeDataString(pair[(cut + 1)..]);
-            if ((value.Length > 0 && SecretShape.KeyLooksSecret(name)) || SecretShape.ValueLooksSecret(value) || SecretShape.ValueLooksSecret(name))
-            {
-                return SecretValueDetected;
-            }
-        }
-
-        return uri.Fragment.Length > 1 && SecretShape.ValueLooksSecret(Uri.UnescapeDataString(uri.Fragment[1..])) ? SecretValueDetected : null;
-    }
+    internal static string? UrlProblem(string key, string url) => UrlSafety.Problem(key, url);
 
     private static bool HasNul(string? text) => text is not null && text.Contains('\0', StringComparison.Ordinal);
 
