@@ -65,6 +65,11 @@ internal static class EvidenceModule
         // piece; only the Worker runs a consumer, and the Api host tolerates the row until it does (T19).
         services.AddTaskHandler<ArtifactStagingDeletePayload, ArtifactStagingDeleteTaskHandler>();
 
+        // 06.2.3-T1: the masking scan the completion enqueues for every ready artifact. Registered transactionless
+        // because the object read must run with no database transaction open (00 §5.7 P5): the handler opens a short
+        // read scope, reads the object and scans it, then opens the write scope that commits the verdict.
+        services.AddTransactionlessTaskHandler<RunArtifactSecretScanPayload, RunArtifactSecretScanHandler>();
+
         // 06.3.1-T1.2: the one untrusted-parser profile (00 §5.7 S5), published on the module's .Contracts.
         // It has no consumer yet: the `complete` verifier uses the static MediaSniffer directly (06.3.1-T1),
         // and 04.4.1's report mapper is the first IParsing consumer, resolving this same singleton instead of

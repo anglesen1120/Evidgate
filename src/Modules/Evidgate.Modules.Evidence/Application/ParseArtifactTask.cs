@@ -378,26 +378,11 @@ internal sealed partial class ParseArtifactTaskHandler(
     private static async Task<long> MaxBytesAsync(
         EvidenceDbContext context,
         Artifact artifact,
-        CancellationToken cancellationToken)
-    {
-        var row = await context.KindPolicies
-            .AsNoTracking()
-            .SingleOrDefaultAsync(
-                policy => policy.ProjectId == artifact.ProjectId && policy.Kind == artifact.Kind,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        var resolved = ArtifactKindDefaults.Resolve(
-            artifact.Kind,
-            row is null
-                ? null
-                : new KindPolicyRow(row.MaxBytes, row.MediaTypes, row.CaptureEnabled, row.DefaultSensitivity));
-
-        return resolved is { CaptureEnabled: true } policy
-            ? policy.MaxBytes
-            : throw new InvalidOperationException(
-                "the artifact's kind has no effective capture policy, so no byte cap exists for a parse");
-    }
+        CancellationToken cancellationToken) =>
+        (await ArtifactCapturePolicy
+            .ResolveAsync(context, artifact.ProjectId, artifact.Kind, cancellationToken)
+            .ConfigureAwait(false))
+        .MaxBytes;
 
     /// <summary>
     /// The profile arm a declared media type selects, or <see langword="null"/> for a type the profile has no arm
