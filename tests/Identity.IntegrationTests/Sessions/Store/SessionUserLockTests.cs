@@ -244,8 +244,11 @@ public sealed class SessionUserLockTests : SessionHardeningTestBase
     {
         var first = await SeedUserAsync(Unique.Email("held-user"));
         var other = await SeedUserAsync(Unique.Email("free-user"));
-        (await OwnerScalarAsync<bool>("select hashtext(@a::text) <> hashtext(@b::text)",
-            ("a", first), ("b", other))).ShouldBeTrue("this case tests non-colliding user keys");
+        while (await OwnerScalarAsync<bool>("select hashtext(@a::text) = hashtext(@b::text)", ("a", first), ("b", other)))
+        {
+            // A 32-bit key collision would legitimately serialise the pair: draw another user.
+            other = await SeedUserAsync(Unique.Email("free-user"));
+        }
         var predecessor = await CreateSessionAsync(other, ClockAt());
         await using var holder = await OpenOwnerTransactionAsync();
         await ExecuteAsync(holder, "select evidgate.session_user_lock(@user)", ("user", first));
