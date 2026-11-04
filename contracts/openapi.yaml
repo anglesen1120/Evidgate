@@ -11332,7 +11332,44 @@ components:
           type: integer
           minimum: 1
     AiSettingsDocument:
-      $ref: './schemas/ai-settings.v1.json'
+      description: >-
+        The guidance document of one project. The external JSON Schema remains the single source of the wire shape and
+        of the runtime validation; the second branch only names the `priority_criteria` member's own schema, which the
+        served document carries as a separate component (01.3.2-T3.2 AC4), and adds no constraint the external file
+        does not already state.
+      allOf:
+        - $ref: './schemas/ai-settings.v1.json'
+        - type: object
+          properties:
+            priority_criteria:
+              $ref: '#/components/schemas/AiSettingsPriorityCriteria'
+    AiSettingsPriorityCriteria:
+      type: object
+      description: >-
+        One criterion per checklist priority level, so the same word means the same thing in every item of the
+        project — the settings document's nested `priority_criteria` member (`contracts/schemas/ai-settings.v1.json`,
+        which remains the single source of the wire shape and of the runtime validation). It is declared as its own
+        component because the served document names the member's type, and every served schema name must exist here
+        (01.3.2-T3.2 AC4). Unknown members are refused, and each criterion is at most 250 code points.
+      additionalProperties: false
+      required: [critical, high, medium, low]
+      properties:
+        critical:
+          type: string
+          maxLength: 250
+          description: 'What makes a failure critical: the release-blocking class of defect.'
+        high:
+          type: string
+          maxLength: 250
+          description: 'What makes a failure high: a wrong main path or a missing check that still has a workaround.'
+        medium:
+          type: string
+          maxLength: 250
+          description: 'What makes a failure medium: a secondary path, a validation message or an empty state.'
+        low:
+          type: string
+          maxLength: 250
+          description: 'What makes a failure low: wording, spacing or cosmetics that change no behaviour.'
     AiSettingsView:
       type: object
       description: >-

@@ -2000,7 +2000,34 @@ export type AiSettingsTemplateRef = {
     version: number;
 };
 
-export type AiSettingsDocument = AiSettingsV1;
+/**
+ * The guidance document of one project. The external JSON Schema remains the single source of the wire shape and of the runtime validation; the second branch only names the `priority_criteria` member's own schema, which the served document carries as a separate component (01.3.2-T3.2 AC4), and adds no constraint the external file does not already state.
+ */
+export type AiSettingsDocument = AiSettingsV1 & {
+    priority_criteria?: AiSettingsPriorityCriteria;
+};
+
+/**
+ * One criterion per checklist priority level, so the same word means the same thing in every item of the project — the settings document's nested `priority_criteria` member (`contracts/schemas/ai-settings.v1.json`, which remains the single source of the wire shape and of the runtime validation). It is declared as its own component because the served document names the member's type, and every served schema name must exist here (01.3.2-T3.2 AC4). Unknown members are refused, and each criterion is at most 250 code points.
+ */
+export type AiSettingsPriorityCriteria = {
+    /**
+     * What makes a failure critical: the release-blocking class of defect.
+     */
+    critical: string;
+    /**
+     * What makes a failure high: a wrong main path or a missing check that still has a workaround.
+     */
+    high: string;
+    /**
+     * What makes a failure medium: a secondary path, a validation message or an empty state.
+     */
+    medium: string;
+    /**
+     * What makes a failure low: wording, spacing or cosmetics that change no behaviour.
+     */
+    low: string;
+};
 
 /**
  * The 200/201 body of the settings read and save routes (13.2.1-T1): the effective document with its version, origin and provenance. Before the first save the answer is the platform default template's document with `version_no` 0, `source` `default_template`, `settings_id` and `created_at` null, and `ETag: "0"`; version 0 is never a stored row.
@@ -2019,7 +2046,7 @@ export type AiSettingsView = {
      * `sha256:` over the RFC 8785 canonical settings document.
      */
     content_hash: string;
-    settings: AiSettingsV1;
+    settings: AiSettingsDocument;
     template: AiSettingsTemplateRef | null;
     /**
      * The membership that saved the head version, null for the default-template state.
@@ -2033,7 +2060,7 @@ export type AiSettingsView = {
  * Body of the settings save (13.2.1-T1). `settings` is the whole document and is validated against `contracts/schemas/ai-settings.v1.json`; `template` records provenance only and never has to match the document (an edited copy is the normal case); `reason` is shown in the version timeline and never carries the field text into an audit row.
  */
 export type SaveAiSettingsRequest = {
-    settings: AiSettingsV1;
+    settings: AiSettingsDocument;
     template?: AiSettingsTemplateRef;
     reason?: string;
 };
@@ -2072,7 +2099,7 @@ export type AiSettingsVersion = {
     author_membership_id: string;
     reason: string | null;
     created_at: string;
-    settings: AiSettingsV1;
+    settings: AiSettingsDocument;
 };
 
 /**
@@ -2088,7 +2115,7 @@ export type AiSettingsTemplateView = {
      */
     is_default: boolean;
     content_hash: string;
-    settings: AiSettingsV1;
+    settings: AiSettingsDocument;
 };
 
 /**

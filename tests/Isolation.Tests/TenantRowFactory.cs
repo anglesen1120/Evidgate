@@ -661,6 +661,16 @@ internal sealed class TenantRowFactory
             // before the composite FK under test is reached: a fresh number per generated row, like
             // case_attempt's attempt_no above.
             ("public.event", "sequence") => Interlocked.Increment(ref _sequence),
+            // project_ai_settings (0064) is the append-only guidance chain. Its `content_hash` is the 00 §7 content
+            // address (CHECK ^sha256:[0-9a-f]{64}$) and `languages` is closed to the two G1 locales with a
+            // cardinality 1..2 / `<@ {vi,en}` CHECK, so the generic text and text[] candidates are both rejected by
+            // the table before a composite FK under test is reached. Every other constrained member has a default
+            // (`description`, `writing_style`, … are `not null default ''`), and `template_code`/`template_version`
+            // are nullable and written as a pair, so leaving them unset satisfies `project_ai_settings_template_check`.
+            // `version_no` stays the generic 1: the unique key is (org_id, project_id, version_no) and the corrupt row
+            // differs from the valid one in its org and parent, never only in the version.
+            ("public.project_ai_settings", "content_hash") => "sha256:" + new string('d', 64),
+            ("public.project_ai_settings", "languages") => new[] { "en" },
             _ => (object?)null,
         };
 
