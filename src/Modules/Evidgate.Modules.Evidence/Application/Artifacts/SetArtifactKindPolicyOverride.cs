@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -99,11 +100,17 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
         """;
 
     /// <summary>The upsert on the row's unique key; the triggers own <c>version</c>/<c>updated_at</c>.</summary>
+    /// <remarks>
+    /// The tenant Dapper path refuses array parameters (<c>StringArrayTypeHandler</c>), so <c>media_types</c> travels
+    /// as JSON text and is rebuilt in SQL, keeping the submitted order (<c>AdapterCapabilityStore</c> precedent).
+    /// </remarks>
     private const string UpsertSql = """
         insert into public.artifact_kind_policy
             (id, org_id, project_id, kind, max_bytes, media_types, default_sensitivity, reject_on_secret, capture_enabled)
         values
-            (@id, @org_id, @project_id, @kind, @max_bytes, @media_types, @default_sensitivity, @reject_on_secret, @capture_enabled)
+            (@id, @org_id, @project_id, @kind, @max_bytes,
+             array(select m from jsonb_array_elements_text(@media_types::jsonb) with ordinality as t(m, n) order by n),
+             @default_sensitivity, @reject_on_secret, @capture_enabled)
         on conflict (org_id, project_id, kind) do update
            set max_bytes = excluded.max_bytes,
                media_types = excluded.media_types,
@@ -143,7 +150,8 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
             project_id = command.ProjectId,
             kind = command.Kind,
             max_bytes = command.MaxBytes,
-            media_types = command.MediaTypes,
+            // A list, so it travels as JSON text: the tenant Dapper path refuses array parameters.
+            media_types = JsonSerializer.Serialize(command.MediaTypes),
             default_sensitivity = command.DefaultSensitivity,
             reject_on_secret = command.RejectOnSecret,
             capture_enabled = command.CaptureEnabled,
