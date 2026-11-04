@@ -1,150 +1,16 @@
+/* One resolved row token drives both CDK measurements and the rendered geometry. */
 :host {
-  display: block;
-  min-width: 0;
-  color: var(--eg-text);
-  background: var(--eg-surface);
-  font-family: var(--eg-font-body);
-  font-size: var(--eg-text-sm);
-  line-height: var(--eg-leading-sm);
+  --eg-table-row: var(--eg-row-default);
+  --eg-table-inset: var(--eg-space-3);
 }
 
-.caption {
-  margin: 0;
-  padding: var(--eg-space-3) var(--eg-space-4);
-  color: var(--eg-text-muted);
-  overflow-wrap: anywhere;
-}
-
-.scroll {
-  width: 100%;
-  min-width: 0;
-  overflow: auto;
-  /* O8: eight existing row tokens reserve the local table viewport, no new size. */
-  max-height: calc(var(--eg-row-default) * 9);
-  border: var(--eg-border-width) solid var(--eg-border);
-  border-radius: var(--eg-radius-md);
-}
-
-:host(.virtual) .scroll {
-  max-height: none;
-}
-
-.table {
-  width: 100%;
-  table-layout: fixed;
-  border-collapse: separate;
-  /* Cell gap adoption: space-0, intentionally tokenized despite the lint gap. */
-  border-spacing: var(--eg-space-0);
-}
-
-.table .cell {
-  box-sizing: border-box;
-  min-width: 0;
-  height: var(--eg-row-default);
-  padding: var(--eg-space-3) var(--eg-space-4);
-  text-align: start;
-  vertical-align: top;
-  overflow-wrap: anywhere;
-  border-bottom: var(--eg-border-width) solid var(--eg-border);
-}
-
-/* More specific than .table .cell: the v2 numeric cascade bug cannot recur. */
-.table .cell.numeric {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.header-table {
-  position: sticky;
-  top: 0;
-  z-index: var(--eg-z-sticky);
-  background: var(--eg-surface-raised);
-  box-shadow: var(--eg-elevation-1);
-}
-
-.header-table .cell {
-  color: var(--eg-text-muted);
-  font-size: var(--eg-text-xs);
-  font-weight: var(--eg-weight-semibold);
-  line-height: var(--eg-leading-xs);
-}
-
-.body-table tr:hover {
-  background: var(--eg-surface-raised);
-}
-
-:host(.compact) .cell {
-  height: var(--eg-row-compact);
-  padding-block: var(--eg-space-2);
-}
-
-.viewport {
-  display: block;
-  height: calc(var(--eg-row-default) * 8);
-  width: 100%;
-}
-
-:host(.compact) .viewport {
-  height: calc(var(--eg-row-compact) * 8);
-}
-
-.token-probe {
-  position: absolute;
-  visibility: hidden;
-  pointer-events: none;
-  height: var(--eg-row-default);
-  width: 0;
-}
-
-:host(.compact) .token-probe {
-  height: var(--eg-row-compact);
-}
-
-/* Fixed-size CDK rows cannot grow with narrative text (ADR-0008 rule 8). */
-:host(.virtual) .body-table .cell {
-  height: var(--eg-row-default);
-  padding-block: 0;
-  border-bottom: 0;
-  box-shadow: var(--eg-elevation-1);
-}
-
-:host(.virtual) .body-table app-data-table-value {
-  max-height: var(--eg-row-default);
-  overflow: hidden;
-}
-
-:host(.virtual.compact) .body-table .cell {
-  height: var(--eg-row-compact);
-}
-
-:host(.virtual.compact) .body-table app-data-table-value {
-  max-height: var(--eg-row-compact);
-}
-
-.scroll:focus-visible,
-.viewport:focus-visible {
-  outline: var(--eg-focus-width) solid var(--eg-focus);
-  outline-offset: var(--eg-focus-offset);
+:host(.compact) {
+  --eg-table-row: var(--eg-row-compact);
+  --eg-table-inset: var(--eg-space-2);
 }
 
 @media (pointer: coarse) {
-  :host(.compact) .cell,
-  :host(.virtual.compact) .body-table .cell,
-  :host(.compact) .token-probe {
-    height: var(--eg-row-default);
-  }
-
-  :host(.compact) .viewport {
-    height: calc(var(--eg-row-default) * 8);
-  }
-
-  :host(.virtual.compact) .body-table app-data-table-value {
-    max-height: var(--eg-row-default);
-  }
-}
-
-@media (max-width: 767px) {
-  [data-eg-mutate] {
-    display: none;
+  :host(.compact) {
+    --eg-table-row: var(--eg-row-default);
   }
 }

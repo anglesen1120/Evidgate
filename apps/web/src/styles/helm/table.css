@@ -1,0 +1,37 @@
+@layer components {
+  .spartan-table-container {
+    @apply relative w-full overflow-x-auto;
+  }
+
+  .spartan-table {
+    @apply w-full caption-bottom text-sm;
+  }
+
+  .spartan-table-header {
+    @apply [&_tr]:border-b;
+  }
+
+  .spartan-table-body {
+    @apply [&_tr:last-child]:border-0;
+  }
+
+  .spartan-table-footer {
+    @apply bg-muted/50 border-t font-medium [&>tr]:last:border-b-0;
+  }
+
+  .spartan-table-row {
+    @apply hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors;
+  }
+
+  .spartan-table-head {
+    @apply text-foreground h-10 px-2 text-start align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pe-0;
+  }
+
+  .spartan-table-cell {
+    @apply p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pe-0;
+  }
+
+  .spartan-table-caption {
+    @apply text-muted-foreground mt-4 text-sm;
+  }
+}

@@ -112,6 +112,14 @@ npm packages (direct dependencies/devDependencies, root + workspaces):
 | @evidgate/sdk | 0.0.0 | first-party workspace (private) | First-party (unpublished) | `packages/sdk` — generated from `contracts/openapi.yaml` by `@hey-api/openapi-ts` (01.3.2-T1); ships no third-party code of its own |
 | @evidgate/cli | 0.0.0 | first-party workspace (private) | First-party (unpublished) | `packages/cli` — the `evidgate` CLI (04.2.1) and its Ajv 8 contract validator (01.3.2-T2); listed because `packages/test-fixtures` depends on it for the 04.7.1-T3 protocol matrix spec, and `packages/adapter-playwright` depends on it for the 04.3.3-T2 attachment upload facade (`createAttachmentUploader`, which wraps `uploadFile()`) — one lazy dynamic `import()` in `src/attach.ts`, type-only imports elsewhere, and never the reverse direction; its third-party dependencies have their own rows |
 | @evidgate/test-fixtures | 0.0.0 | first-party workspace (private) | First-party (unpublished) | `packages/test-fixtures` — `fixtures/` loaders + golden-file helper (01.6.1-T3); dependencies: `canonicalize` (row above) and the first-party `@evidgate/cli` (04.7.1-T3 protocol matrix spec, row above) |
+| @spartan-ng/brain | 1.9.0 | no engines field; Angular/CDK peers `>=21 <23`, covers pinned Angular 22.2 / CDK 22.2 | MIT | ✅ https://registry.npmjs.org/@spartan-ng/brain/1.9.0 — headless primitives; ADR-0011 |
+| clsx | 2.1.1 | `engines.node >=6` | MIT | ✅ https://registry.npmjs.org/clsx/2.1.1 — Brain peer and Helm class composition; ADR-0011 |
+| class-variance-authority | 0.7.1 | no engines field | Apache-2.0 | ✅ https://registry.npmjs.org/class-variance-authority/0.7.1 — copied Helm variant definitions; ADR-0011 |
+| tailwind-merge | 3.7.0 | no engines field | MIT | ✅ https://registry.npmjs.org/tailwind-merge/3.7.0 — copied Helm class conflict resolution; ADR-0011 |
+| tw-animate-css | 1.4.0 | no engines field | MIT | ✅ https://registry.npmjs.org/tw-animate-css/1.4.0 — Brain peer and state animation utilities; ADR-0011 |
+| tailwindcss | 4.3.4 | no engines field; build-time only | MIT | ✅ https://registry.npmjs.org/tailwindcss/4.3.4 — Angular PostCSS route; ADR-0011 |
+| @tailwindcss/postcss | 4.3.4 | no engines field; build-time only | MIT | ✅ https://registry.npmjs.org/@tailwindcss/postcss/4.3.4 — Angular builder plugin; ADR-0011 |
+| postcss | 8.5.32 | `engines.node ^10 \|\| ^12 \|\| >=14` | MIT | ✅ https://registry.npmjs.org/postcss/8.5.32 — plugin host and theme source parsing tests; ADR-0011 |
 
 .NET local tools (`.config/dotnet-tools.json`; 01.7.1 — scanned out-of-process, never linked):
 

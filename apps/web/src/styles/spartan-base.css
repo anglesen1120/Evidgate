@@ -1,0 +1,50 @@
+/* Do not reset existing screens: only the adopted primitives receive these defaults. */
+@layer base {
+  [data-slot] {
+    box-sizing: border-box;
+    border-color: var(--eg-border);
+    border-style: solid;
+    border-width: 0;
+    font-family: var(--eg-font-body);
+  }
+
+  button[hlmBtn],
+  button[hlmTabsTrigger] {
+    cursor: pointer;
+  }
+
+  hlm-icon {
+    width: var(--eg-text-md);
+    height: var(--eg-text-md);
+  }
+
+  @media (pointer: coarse) {
+    button[hlmBtn],
+    button[hlmTabsTrigger],
+    [data-slot='select-trigger'],
+    [data-slot='dropdown-menu-item'],
+    [data-slot='select-item'],
+    .spartan-checkbox,
+    input[hlmInput] {
+      min-width: var(--eg-control-touch);
+      min-height: var(--eg-control-touch);
+    }
+  }
+}
+
+/* Keep keyboard outlines above Helm's layered outline-none utilities. */
+[data-slot]:focus-visible,
+.spartan-checkbox:focus-visible {
+  outline: var(--eg-focus-width) solid var(--eg-focus);
+  outline-offset: var(--eg-focus-offset);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot],
+  [data-slot] *,
+  .spartan-dialog-overlay,
+  .spartan-tooltip-content {
+    animation: none;
+    transition: none;
+  }
+}

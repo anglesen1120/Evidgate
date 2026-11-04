@@ -1,0 +1,5 @@
+@layer components {
+  .spartan-toast {
+    @apply rounded-2xl!;
+  }
+}

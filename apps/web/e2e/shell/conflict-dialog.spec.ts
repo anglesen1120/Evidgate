@@ -1,25 +1,17 @@
-// 09.1.1-T4.4 (plan 09.1.1 §10 T4, §2 AC6; T8 hand-over): the 412 conflict dialog as a real
-// Chromium runs it. The T8 unit specs assert the component's own state; none of them can show what
-// the browser does with a native `showModal()` dialog — the top layer, Tab containment, Escape as
-// `cancel`, the backdrop hit test, and the inertness of everything behind it.
-//
-// Assertions below state what `ConflictDialogComponent` actually defines, read from its source
-// (`src/app/shared/ui/conflict/conflict-dialog.component.ts`):
-//   - opening: `afterRenderEffect` calls `dialog.showModal()` and remembers `document.activeElement`
-//     as the opener (`:194-203`);
-//   - dismissal: `dismiss()` closes the dialog, emits `keepEditing`, and focuses the remembered
-//     opener (`:229-247`) — Escape reaches it through the native `cancel` event and the component's
-//     own `keydown.escape`, both of which call `cancel()`;
-//   - a click dismisses ONLY when its target is the `<dialog>` element itself AND its coordinates
-//     are outside the dialog's box (`:219-231`); a click on any child never dismisses.
-//
-// Defects this file finds in `shared/ui` are REPORTED, not fixed (the task owns `shell/**` only).
+// Real-browser coverage for Brain's modal overlay, focus trap, dismissal and restoration.
 import { expect, test, type Page } from '@playwright/test';
 
-import { axeScan, axeViolations, localePath, LOCALES, THEMES } from './support';
+import {
+  axeScan,
+  axeViolations,
+  localePath,
+  LOCALES,
+  THEMES,
+  waitForDialogAnimations,
+} from './support';
 
 const OPENER = '[data-demo="conflict-opener"]';
-const DIALOG = '[data-demo="conflict"] dialog';
+const DIALOG = '[role="dialog"]:has(hlm-dialog-content)';
 
 /**
  * The gallery is review-only and has no shell (`/dev/ui-gallery`), so the theme is only the
@@ -43,9 +35,7 @@ async function openGallery(
 async function openDialog(page: Page): Promise<void> {
   await page.locator(OPENER).click();
   await expect(page.locator(DIALOG)).toBeVisible();
-  expect(await page.locator(DIALOG).evaluate((dialog: HTMLDialogElement) => dialog.open)).toBe(
-    true,
-  );
+  await expect(page.locator(DIALOG)).toHaveAttribute('aria-modal', 'true');
 }
 
 /**
@@ -82,9 +72,7 @@ for (const locale of LOCALES) {
       const outside = (steps: string[]) => steps.filter((step) => step.startsWith('outside'));
       const bodyStops = (steps: string[]) => steps.filter((step) => step === 'body');
 
-      // Containment: no page control and no `body` stop is reachable in either direction. The
-      // platform alone leaves one `body` stop between the last and the first control; the
-      // component's `wrapFocus` removes it, so the cycle goes straight from edge to edge.
+      // CDK's focus-trap sentinels wrap both boundaries without a stop on the page or body.
       expect(outside(forward), forward.join(' | ')).toEqual([]);
       expect(outside(backward), backward.join(' | ')).toEqual([]);
       expect(bodyStops(forward), forward.join(' | ')).toEqual([]);
@@ -95,27 +83,16 @@ for (const locale of LOCALES) {
       expect(new Set(inside(backward))).toEqual(new Set(inside(forward)));
     });
 
-    test('Escape dismisses, leaves the top layer and returns focus to the opener', async ({
-      page,
-    }) => {
+    test('Escape dismisses the overlay and returns focus to the opener', async ({ page }) => {
       await openGallery(page, locale, 'light');
       await openDialog(page);
 
-      // `:modal` is the browser's own statement that the dialog is in the top layer and the rest of
-      // the document is inert — the property `showModal()` exists for, and one jsdom cannot have.
-      const modalWhileOpen = await page
-        .locator(DIALOG)
-        .evaluate((dialog: HTMLDialogElement) => dialog.matches(':modal'));
-      expect(modalWhileOpen, 'the dialog is modal while open').toBe(true);
+      await expect(page.locator(DIALOG)).toHaveAttribute('aria-modal', 'true');
 
       await page.keyboard.press('Escape');
 
       await expect(page.locator(DIALOG)).toBeHidden();
-      const afterClose = await page.locator(DIALOG).evaluate((dialog: HTMLDialogElement) => ({
-        open: dialog.open,
-        modal: dialog.matches(':modal'),
-      }));
-      expect(afterClose).toEqual({ open: false, modal: false });
+      await expect(page.locator(DIALOG)).toHaveCount(0);
       await expect(page.locator(OPENER)).toBeFocused();
     });
 
@@ -132,14 +109,15 @@ for (const locale of LOCALES) {
       );
       await expect(page.locator(DIALOG)).toBeVisible();
 
-      // A click in the viewport corner hits the ::backdrop; Chromium reports the `<dialog>` as the
-      // target with coordinates outside its box, which is exactly the component's condition.
+      // The CDK backdrop fills the viewport outside the content.
       await page.mouse.click(4, 4);
       await expect(page.locator(DIALOG)).toBeHidden();
       await expect(page.locator(OPENER)).toBeFocused();
     });
 
-    test('the rest of the page is inert while the dialog is open', async ({ page }) => {
+    test('the modal blocks background pointer access and hides background content from assistive technology', async ({
+      page,
+    }) => {
       await openGallery(page, locale, 'light');
       await openDialog(page);
 
@@ -151,7 +129,10 @@ for (const locale of LOCALES) {
           const element = document.elementFromPoint(x, y);
           const dialog = document.querySelector(selector);
           return {
-            isDialog: element === dialog,
+            blocked:
+              element === dialog ||
+              dialog?.contains(element) ||
+              element?.classList.contains('cdk-overlay-backdrop'),
             tag: element?.tagName.toLowerCase() ?? 'nothing',
           };
         },
@@ -161,26 +142,15 @@ for (const locale of LOCALES) {
           y: (box?.y ?? 0) + (box?.height ?? 0) / 2,
         },
       );
-      // The backdrop sits in the top layer, so the opener's own pixels now belong to the dialog.
-      expect(hit, `elementFromPoint over the opener returned ${hit.tag}`).toEqual({
-        isDialog: true,
-        tag: 'dialog',
-      });
+      expect(hit.blocked, `elementFromPoint over the opener returned ${hit.tag}`).toBe(true);
+      await expect(
+        page
+          .locator('app-ui-gallery')
+          .locator('xpath=ancestor-or-self::*[@aria-hidden="true"]')
+          .first(),
+      ).toBeAttached();
 
-      // Programmatic focus is refused too: a modal dialog makes everything else inert, so the
-      // opener cannot take focus until the dialog closes.
-      const focused = await page.evaluate((selector) => {
-        const openerElement = document.querySelector(
-          '[data-demo="conflict-opener"]',
-        ) as HTMLElement;
-        openerElement.focus();
-        const dialog = document.querySelector(selector) as HTMLElement;
-        return dialog.contains(document.activeElement);
-      }, DIALOG);
-      expect(focused, 'focus is still inside the dialog after focusing the opener').toBe(true);
-
-      // Chromium's accessibility tree: recorded, not asserted, because how much of the inert page
-      // stays exposed is the browser's decision, not the component's.
+      // The accessibility snapshot exposes the modal rather than the background gallery.
       const snapshot = await page.locator('body').ariaSnapshot();
       test.info().annotations.push({
         type: 'dialog-open-aria-snapshot',
@@ -193,6 +163,7 @@ for (const locale of LOCALES) {
       test(`axe with the dialog open, ${theme}`, async ({ page }) => {
         await openGallery(page, locale, theme);
         await openDialog(page);
+        await waitForDialogAnimations(page, DIALOG);
 
         const results = await axeScan(page);
         const contrast = [...results.passes, ...results.incomplete].filter(
@@ -203,10 +174,7 @@ for (const locale of LOCALES) {
           `axe evaluated color-contrast with the dialog open`,
         ).toBeGreaterThan(0);
 
-        // Nothing at all — not even the gallery's own pinned finding. The page behind a modal
-        // dialog is inert and axe skips inert subtrees, so `aria-required-children` on the virtual
-        // table's `role="table"` wrapper (pinned in `ui-gallery.spec.ts`) is unreachable from here.
-        // What this proves is that the dialog surface adds no violation with contrast on.
+        // CDK hides the background from assistive technology while this modal is open.
         const found = axeViolations(results).map((violation) => ({
           id: violation.id,
           targets: violation.targets.map((target) => JSON.stringify(target)),

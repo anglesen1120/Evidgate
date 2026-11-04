@@ -17,7 +17,9 @@ describe('ForbiddenPatternComponent', () => {
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
     expect(reflectComponentType(ForbiddenPatternComponent)?.inputs).toEqual([]);
-    expect(root.querySelector('[role="status"] h2')?.textContent).toBe('Not authorized');
+    expect(root.querySelector('section')?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelector('h2')?.getAttribute('data-slot')).toBe('card-title');
+    expect(root.querySelector('[role="status"] h2')?.textContent?.trim()).toBe('Not authorized');
     expect(root.textContent).toContain('Ask a project administrator for access to this workspace.');
     expect(root.textContent).not.toMatch(/tenant|organization|exists|\bid\b/i);
     expect(

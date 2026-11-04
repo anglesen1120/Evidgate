@@ -30,6 +30,43 @@ describe('LabelChip (FR-09-2/3/4)', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
+  it('uses noninteractive Helm badges without clipping long healed metadata', () => {
+    const fixture = TestBed.createComponent(LabelChip);
+    fixture.componentRef.setInput('kind', 'healed');
+    fixture.componentRef.setInput('candidateHash', hash.repeat(3));
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('.label-healed')?.getAttribute('data-slot')).toBe('badge');
+    const candidate = root.querySelector('.candidate-hash');
+    expect(candidate?.getAttribute('data-variant')).toBe('outline');
+    expect(candidate?.classList.contains('whitespace-pre-wrap')).toBe(true);
+    expect(candidate?.classList.contains('max-w-full')).toBe(true);
+    expect(candidate?.classList.contains('h-auto')).toBe(true);
+    expect(candidate?.classList.contains('min-h-[var(--eg-space-6)]')).toBe(true);
+    expect(candidate?.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
+    expect(candidate?.classList.contains('h-5')).toBe(false);
+    expect(root.querySelector('[tabindex], [role="button"], [role="alert"]')).toBeNull();
+  });
+
+  it.each([
+    { kind: 'flaky', candidateHash: '', text: 'Flaky' },
+    { kind: 'healed', candidateHash: hash, text: 'Healed with candidate' },
+    { kind: 'healed', candidateHash: '', text: 'Candidate hash unavailable' },
+    { kind: 'unknown', candidateHash: '', text: 'Label unavailable' },
+  ])('allows the "$text" badge to grow when its text wraps', ({ kind, candidateHash, text }) => {
+    const fixture = TestBed.createComponent(LabelChip);
+    fixture.componentRef.setInput('kind', kind);
+    fixture.componentRef.setInput('candidateHash', candidateHash);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const badge = root.querySelector('.label');
+    expect(badge?.textContent?.trim()).toBe(text);
+    expect(badge?.classList.contains('h-auto')).toBe(true);
+    expect(badge?.classList.contains('h-5')).toBe(false);
+    expect(badge?.classList.contains('whitespace-normal')).toBe(true);
+    expect(badge?.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
+  });
+
   describe.each<LabelKind>(['flaky', 'healed'])('%s label', (kind) => {
     it.each(states)('covers the %s state without changing the original outcome', (state) => {
       const fixture = TestBed.createComponent(LabelChip);

@@ -1,4 +1,16 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import {
+  afterNextRender,
+  ChangeDetectionStrategy,
+  Component,
+  type ElementRef,
+  inject,
+  Injector,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard } from '@evidgate/ui/card';
+import { HlmDropdownMenuImports } from '@evidgate/ui/dropdown-menu';
 
 import type { ApiError } from '../../../core/http/api-error';
 import { LabelChip, MissingReasonList, WaiverBanner, type MissingReason } from '../annotations';
@@ -26,12 +38,17 @@ import {
   RequestStateComponent,
 } from '../states';
 import { DecisionChipComponent, EvidenceBadgeComponent, OutcomePillComponent } from '../verdict';
+import { ConnectStepRevealComponent } from '../reveal/connect-step-reveal.component';
+import { RevealSlot } from '../reveal/one-time-reveal.slot';
 
 /** Isolated specimens; only explicit commands change local demo state. No API calls. */
 @Component({
   selector: 'app-ui-gallery',
-  standalone: true,
   imports: [
+    HlmButton,
+    HlmCard,
+    HlmDropdownMenuImports,
+    ConnectStepRevealComponent,
     DecisionChipComponent,
     EvidenceBadgeComponent,
     OutcomePillComponent,
@@ -54,9 +71,18 @@ import { DecisionChipComponent, EvidenceBadgeComponent, OutcomePillComponent } f
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ui-gallery.component.html',
-  styleUrl: './ui-gallery.component.css',
+  providers: [RevealSlot],
+  host: { class: 'block min-w-0 bg-background text-foreground font-sans text-base' },
 })
 export class UiGalleryComponent {
+  protected readonly reveal = inject(RevealSlot);
+  private readonly injector = inject(Injector);
+  private readonly revealOpener = viewChild<ElementRef<HTMLButtonElement>>('revealOpener');
+  protected readonly revealHeading = $localize`:@@shared.gallery.reveal-heading:Save your ingest token`;
+  protected readonly revealWarning = $localize`:@@shared.gallery.reveal-warning:Shown only once. Save this value before leaving this step. If copying fails, select and copy the value manually.`;
+  protected readonly copyLabel = $localize`:@@shared.gallery.reveal-copy:Copy value`;
+  protected readonly copiedLabel = $localize`:@@shared.gallery.reveal-copied:Value copied.`;
+  protected readonly dismissLabel = $localize`:@@shared.gallery.reveal-dismiss:Dismiss secret`;
   protected readonly conflictOpen = signal(false);
   protected readonly conflictFields: readonly ConflictField[] = [
     {
@@ -68,7 +94,9 @@ export class UiGalleryComponent {
   ];
   protected readonly reloadedFields: readonly ConflictField[] = [
     {
-      ...this.conflictFields[0]!,
+      id: 'title',
+      label: $localize`:@@shared.gallery.conflict-field:Requirement title`,
+      local: $localize`:@@shared.gallery.conflict-draft:Checkout requires a verified email`,
       server: $localize`:@@shared.gallery.conflict-server:Checkout requires email verification`,
     },
   ];
@@ -100,6 +128,15 @@ export class UiGalleryComponent {
 
   protected recordRetry(): void {
     this.retryCount.update((count) => count + 1);
+  }
+
+  protected showReveal(): void {
+    this.reveal.show({ source: 'ingest-token', value: 'example-value-not-a-credential' });
+  }
+
+  protected dismissReveal(): void {
+    this.reveal.clear();
+    afterNextRender(() => this.revealOpener()?.nativeElement.focus(), { injector: this.injector });
   }
 
   protected readonly runStates: readonly RunState[] = [

@@ -1,4 +1,27 @@
+@layer tokens, theme, base, layout, components, utilities;
 @import './styles/tokens.css';
+@import 'tailwindcss/theme.css' layer(theme);
+@import './styles/spartan-tailwind.css';
+@import '@angular/cdk/overlay-prebuilt.css';
+@import 'tw-animate-css';
+@import './styles/spartan-variants.css';
+@import './styles/spartan-theme.css';
+@import './styles/helm/alert.css';
+@import './styles/helm/badge.css';
+@import './styles/helm/button.css';
+@import './styles/helm/card.css';
+@import './styles/helm/checkbox.css';
+@import './styles/helm/dialog.css';
+@import './styles/helm/dropdown-menu.css';
+@import './styles/helm/input.css';
+@import './styles/helm/label.css';
+@import './styles/helm/select.css';
+@import './styles/helm/skeleton.css';
+@import './styles/helm/sonner.css';
+@import './styles/helm/table.css';
+@import './styles/helm/tabs.css';
+@import './styles/helm/tooltip.css';
+@import './styles/spartan-base.css';
 
 html,
 body {
