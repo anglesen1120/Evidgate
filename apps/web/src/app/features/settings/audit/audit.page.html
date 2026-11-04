@@ -40,7 +40,7 @@
         >
           <hlm-select-value [placeholder]="copy.anyActor" />
         </hlm-select-trigger>
-        <hlm-select-content *hlmSelectPortal [listLabel]="copy.actorType">
+        <hlm-select-content *hlmSelectPortal [aria-label]="copy.actorType">
           <hlm-select-item [value]="''">{{ copy.anyActor }}</hlm-select-item>
           <hlm-select-item [value]="'user'">{{ copy.user }}</hlm-select-item>
           <hlm-select-item [value]="'ci_producer'">{{ copy.ciProducer }}</hlm-select-item>

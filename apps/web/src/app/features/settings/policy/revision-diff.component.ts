@@ -41,7 +41,7 @@ import { PolicyStore } from './policy.store';
             >
               <hlm-select-value [placeholder]="copy.choose" />
             </hlm-select-trigger>
-            <hlm-select-content *hlmSelectPortal [listLabel]="copy.base">
+            <hlm-select-content *hlmSelectPortal [aria-label]="copy.base">
               @for (revision of store.revisions(); track revision.id) {
                 <hlm-select-item [value]="revision.id"
                   >{{ copy.revision }} {{ revision.revision_no }}</hlm-select-item
@@ -64,7 +64,7 @@ import { PolicyStore } from './policy.store';
             >
               <hlm-select-value [placeholder]="copy.choose" />
             </hlm-select-trigger>
-            <hlm-select-content *hlmSelectPortal [listLabel]="copy.target">
+            <hlm-select-content *hlmSelectPortal [aria-label]="copy.target">
               @for (revision of store.revisions(); track revision.id) {
                 <hlm-select-item [value]="revision.id"
                   >{{ copy.revision }} {{ revision.revision_no }}</hlm-select-item

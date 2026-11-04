@@ -1,4 +1,3 @@
-// 09.2.1-T7.2; contracts/cli.md §§3, 4, 10 and packages/cli/README.md.
 import {
   ChangeDetectionStrategy,
   Component,
@@ -12,6 +11,8 @@ import {
   type ElementRef,
 } from '@angular/core';
 import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
 
 interface QuickstartInput {
   projectRef: string | null;
@@ -62,24 +63,26 @@ let nextQuickstartId = 0;
 
 @Component({
   selector: 'app-cli-quickstart',
-  standalone: true,
+  imports: [HlmButton, HlmCardImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['../../../shared/ui/states/state-panel.css', './cli-quickstart.component.css'],
-  host: { 'data-testid': 'cli-quickstart' },
+  host: { 'data-testid': 'cli-quickstart', class: 'block min-w-0' },
   template: `
-    <section class="quickstart" [attr.aria-labelledby]="headingId">
-      <h3 [id]="headingId">{{ heading }}</h3>
-      <p [id]="hintId">{{ hint }}</p>
+    <section hlmCard class="gap-(--eg-space-4) p-(--eg-space-6)" [attr.aria-labelledby]="headingId">
+      <h3 hlmCardTitle [id]="headingId">{{ heading }}</h3>
+      <p hlmCardDescription class="m-0" [id]="hintId">{{ hint }}</p>
       <pre
         #snippetControl
+        class="m-0 min-w-0 max-w-full whitespace-pre-wrap rounded-md border border-border bg-muted p-(--eg-space-4) font-mono text-xs [overflow-wrap:anywhere] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
         tabindex="0"
         [attr.aria-labelledby]="headingId"
         [attr.aria-describedby]="hintId"
       ><code data-testid="cli-quickstart-snippet">{{ snippet() }}</code></pre>
-      <div class="quickstart__actions">
+      <div class="flex flex-wrap justify-end gap-(--eg-space-3)">
         <button
           type="button"
-          class="state-panel__action"
+          hlmBtn
+          [variant]="outlineVariant"
+          class="min-h-(--eg-control-touch) max-w-full whitespace-normal aria-disabled:cursor-default aria-disabled:border-border aria-disabled:bg-muted aria-disabled:text-muted-foreground"
           data-testid="cli-quickstart-copy"
           [attr.aria-disabled]="copying()"
           [attr.aria-busy]="copying()"
@@ -89,6 +92,7 @@ let nextQuickstartId = 0;
         </button>
       </div>
       <p
+        class="m-0 min-h-(--eg-leading-sm) text-sm text-muted-foreground"
         data-testid="cli-quickstart-copy-status"
         role="status"
         [attr.aria-live]="'polite'"
@@ -104,6 +108,7 @@ export class CliQuickstartComponent {
   readonly token = input<QuickstartInput['token']>(null);
   readonly binding = input<QuickstartInput['binding']>(null);
 
+  protected readonly outlineVariant = 'outline';
   protected readonly heading = $localize`:@@onboarding.quickstart.title:CLI quickstart`;
   protected readonly hint = $localize`:@@onboarding.quickstart.hint:Replace the API URL placeholder with your API root, without /v1. Run these commands with your CI variables and credentials injected. This snippet contains metadata only, not credentials.`;
   protected readonly copyLabel = $localize`:@@onboarding.quickstart.copy:Copy CLI quickstart commands`;

@@ -53,8 +53,9 @@ describe('NavComponent', () => {
     await fixture.whenStable();
     const link = (fixture.nativeElement as HTMLElement).querySelector('a')!;
     expect(link.getAttribute('aria-current')).toBe('page');
+    expect(link.hasAttribute('hlmBtn')).toBe(true);
     link.click();
-    expect(selected).toHaveBeenCalledOnce();
+    expect(selected).toHaveBeenCalledExactlyOnceWith(['/overview']);
   });
 
   it('retains accessible names in rail mode and renders no invented items for an empty view', async () => {
@@ -65,6 +66,8 @@ describe('NavComponent', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.classList.contains('rail')).toBe(true);
     expect(root.querySelector('a')?.getAttribute('aria-label')).toBe('Overview');
+    expect(root.getAttribute('data-collapsed')).toBe('true');
+    expect(root.querySelector('a')?.getAttribute('title')).toBe('Overview');
     fixture.componentRef.setInput('groups', []);
     await fixture.whenStable();
     expect(root.querySelectorAll('a')).toHaveLength(0);

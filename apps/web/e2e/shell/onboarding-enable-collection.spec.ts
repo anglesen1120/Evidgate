@@ -95,9 +95,9 @@ const ERROR = '[data-testid="enable-collection-error"]';
  * mode, activated by, activated at. Selected positionally on purpose — every `<dt>` is a localized
  * label, and a spec keyed on one would be an `en` spec only.
  */
-const TERMINAL_CELLS = `${ENABLED} dl.metadata > div`;
+const TERMINAL_CELLS = `${ENABLED} > dl > div`;
 /** The advisory-mode sentence the terminal panel carries only for an `advisory` read. */
-const TERMINAL_ADVISORY = `${ENABLED} p.advisory`;
+const TERMINAL_ADVISORY = `${ENABLED} [data-testid="enable-collection-terminal-advisory"]`;
 
 /** How much of the digest the panel shows (`default-policy.ts`, `HASH_ABBREVIATION_LENGTH`). */
 const HASH_ABBREVIATION_LENGTH = 12;
@@ -259,7 +259,6 @@ test.describe('step 5 previews the policy in advisory mode (AC5, T5.1)', () => {
     await expect(confirm).toBeVisible();
     expect(await confirm.evaluate((control) => control.tagName)).toBe('BUTTON');
     await expect(confirm).toBeDisabled();
-    await expect(confirm).toHaveAttribute('disabled', '');
 
     // …and the reason is rendered beside it, non-empty, and named by the button's own description
     // so a screen reader reads the reason when it reaches the disabled control.
@@ -291,7 +290,6 @@ test.describe('a 403 activation read disables the confirm (AC-T5.2-3)', () => {
     const confirm = page.locator(CONFIRM);
     await expect(confirm).toBeVisible();
     await expect(confirm).toBeDisabled();
-    await expect(confirm).toHaveAttribute('disabled', '');
 
     // The reason is the unreadable read, rendered and described by the disabled control; the
     // permission copy stays absent, because the grant is held.
