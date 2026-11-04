@@ -402,3 +402,62 @@ test.describe('an org with no membership yet', () => {
     });
   }
 });
+
+test.describe('members matrix responsive records', () => {
+  for (const locale of LOCALES) {
+    for (const theme of THEMES) {
+      test(`intact desktop words and labelled narrow records (${locale}/${theme})`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await seedStoredTheme(page, theme);
+        await page.goto(withVariants(membersPath(locale), [SETTINGS_ADMIN_GRANTS]));
+        await expectMembersReady(page);
+        const matrix = page.locator('[data-members-matrix]');
+        const statuses = matrix.locator('tbody td > span:last-child');
+        expect(await statuses.count()).toBeGreaterThan(0);
+        for (const header of await matrix.locator('thead th').all()) {
+          await expect(header).toHaveCSS('white-space', 'nowrap');
+        }
+        for (const status of await statuses.all()) {
+          await expect(status).toHaveCSS('overflow-wrap', 'normal');
+          await expect(status).toHaveCSS('word-break', 'normal');
+          expect(
+            await status.evaluate((node) => {
+              const text = node.firstChild;
+              if (text?.nodeType !== Node.TEXT_NODE) return false;
+              for (const word of (text.textContent ?? '').matchAll(/\S+/gu)) {
+                const range = document.createRange();
+                range.setStart(text, word.index);
+                range.setEnd(text, word.index + word[0].length);
+                if (range.getClientRects().length !== 1) return false;
+              }
+              return true;
+            }),
+          ).toBe(true);
+        }
+        for (const width of [390, 360]) {
+          await page.setViewportSize({ width, height: 844 });
+          const cells = matrix.locator('tbody td');
+          for (const cell of await cells.all()) {
+            await expect(cell).toHaveCSS('display', 'grid');
+            await expect(cell.locator('.record-label')).toBeVisible();
+            await expect(cell.locator('.record-label')).toHaveAttribute('aria-hidden', 'true');
+          }
+          const identity = matrix.locator('tbody th').first();
+          await expect(identity.locator('span:last-child')).toHaveText(
+            MEMBERSHIPS[0]?.invited_email ?? '',
+          );
+          expect(
+            await page.evaluate(
+              () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+            ),
+          ).toBe(true);
+          await expect(
+            page.locator('app-members-page [data-members-invite-open]'),
+          ).not.toBeVisible();
+        }
+      });
+    }
+  }
+});

@@ -81,3 +81,25 @@ p[role='status'] {
   min-height: var(--eg-leading-sm);
   margin: 0;
 }
+
+.run-summary dl {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-block-end: 0;
+}
+.run-summary h2 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-space-3);
+}
+@media (max-width: 767px) {
+  .run-summary dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.missing-summary {
+  margin: var(--eg-space-4) 0 0;
+  padding: var(--eg-space-3) var(--eg-space-4);
+  color: var(--eg-warning-fg);
+  background: var(--eg-warning-bg);
+  border-inline-start: var(--eg-focus-width) solid currentColor;
+}

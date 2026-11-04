@@ -19,17 +19,28 @@ import { MEMBERS_COPY } from './member-list.component';
             <tr>
               <th scope="col">{{ copy.member }}</th>
               @for (role of matrix().columns; track role.id) {
-                <th scope="col">{{ role.name }}</th>
+                <th scope="col" [id]="'matrix-role-' + role.id">{{ role.name }}</th>
               }
             </tr>
           </thead>
           <tbody>
             @for (row of matrix().rows; track row.membership.id) {
               <tr>
-                <th scope="row">{{ row.membership.invited_email }}</th>
+                <th scope="row" class="member-identity" [id]="'matrix-member-' + row.membership.id">
+                  <span class="record-label" aria-hidden="true">{{ copy.member }}</span>
+                  <span>{{ row.membership.invited_email }}</span>
+                </th>
                 @for (role of matrix().columns; track role.id) {
-                  <td [attr.data-granted]="row.granted.has(role.id) ? 'true' : null">
-                    {{ row.granted.has(role.id) ? copy.granted : copy.notGranted }}
+                  <td
+                    class="role-grant"
+                    [attr.headers]="
+                      'matrix-member-' + row.membership.id + ' matrix-role-' + role.id
+                    "
+                  >
+                    <span class="record-label" aria-hidden="true">{{ role.name }}</span>
+                    <span [attr.data-granted]="row.granted.has(role.id) ? 'true' : null">
+                      {{ row.granted.has(role.id) ? copy.granted : copy.notGranted }}
+                    </span>
                   </td>
                 }
               </tr>

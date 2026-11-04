@@ -122,7 +122,7 @@ for (const locale of LOCALES) {
     await page.goto(path(locale, 'detail-ready', RUN.run_id, 'unavailable'));
     await ready(page);
     await expect(page.locator('app-attempts-table app-error-pattern')).toBeVisible();
-    await expect(page.locator('app-run-header')).toBeVisible();
+    await expect(page.locator('app-run-header .run-summary')).toBeVisible();
   });
   test(`foreign and missing ids share one 404 view; 403 is separate (${locale})`, async ({
     page,

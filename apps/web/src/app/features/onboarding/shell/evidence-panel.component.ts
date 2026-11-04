@@ -1,7 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import type { ProjectDto } from '@evidgate/sdk';
-
-import type { StepNumber } from '../data/step-derivation';
+import type { OnboardingProgress } from '../data/onboarding-progress.service';
 
 @Component({
   selector: 'app-onboarding-evidence-panel',
@@ -9,16 +7,48 @@ import type { StepNumber } from '../data/step-derivation';
   template: `
     <aside data-testid="onboarding-evidence-panel" aria-labelledby="onboarding-evidence-title">
       <h2 id="onboarding-evidence-title">{{ title }}</h2>
-      <p>{{ descriptions()[step() - 1] }}</p>
-      @if (step() >= 2 && project(); as createdProject) {
-        <dl>
-          <dt>{{ projectLabel }}</dt>
-          <dd>{{ createdProject.name }}</dd>
-          <dt>{{ identifierLabel }}</dt>
-          <dd class="identifier">{{ createdProject.id }}</dd>
-        </dl>
+      @if (progress(); as resources) {
+        @if (resources.project; as createdProject) {
+          <dl>
+            <dt>{{ projectLabel }}</dt>
+            <dd>{{ createdProject.name }}</dd>
+            <dt>{{ identifierLabel }}</dt>
+            <dd class="identifier">{{ createdProject.id }}</dd>
+            @if (resources.bindings.length) {
+              <dt>{{ bindingsLabel }}</dt>
+              <dd>{{ resources.bindings.length }}{{ resources.bindingsTruncated ? '+' : '' }}</dd>
+            }
+            @if (resources.tokens.length) {
+              <dt>{{ tokensLabel }}</dt>
+              <dd>{{ resources.tokens.length }}{{ resources.tokensTruncated ? '+' : '' }}</dd>
+            }
+            @if (resources.sampleRun; as run) {
+              <dt>{{ sampleLabel }}</dt>
+              <dd class="identifier">{{ run.run_id }}</dd>
+              @if (run.current_evidence_revision_id; as revision) {
+                <dt>{{ evidenceLabel }}</dt>
+                <dd class="identifier">{{ revision }}</dd>
+              }
+            }
+            @if (activation(); as active) {
+              <dt>{{ activationLabel }}</dt>
+              <dd class="identifier">{{ active.policy_revision_id }}</dd>
+              <dt>{{ activatedAtLabel }}</dt>
+              <dd>{{ active.activated_at }}</dd>
+            }
+          </dl>
+          @if (resources.activation.kind === 'forbidden') {
+            <p [attr.data-resource-state]="'unavailable'">{{ activationUnavailable }}</p>
+          }
+        } @else {
+          <p class="empty" [attr.data-resource-state]="'empty'">{{ empty }}</p>
+        }
+      } @else {
+        <p [attr.data-resource-state]="'unavailable'">{{ unavailable }}</p>
       }
-      <p class="empty">{{ empty }}</p>
+      @if (refreshFailed()) {
+        <p role="status" [attr.data-resource-state]="'stale'">{{ stale }}</p>
+      }
     </aside>
   `,
   styles: `
@@ -69,17 +99,23 @@ import type { StepNumber } from '../data/step-derivation';
   `,
 })
 export class EvidencePanelComponent {
-  readonly step = input.required<StepNumber>();
-  readonly project = input<ProjectDto | null>(null);
+  readonly progress = input<OnboardingProgress | null>(null);
+  readonly refreshFailed = input(false);
+  protected readonly activation = computed(() => {
+    const activation = this.progress()?.activation;
+    return activation?.kind === 'active' ? activation.state : null;
+  });
   protected readonly title = $localize`:@@onboarding.evidence.title:Created resources`;
   protected readonly projectLabel = $localize`:@@onboarding.evidence.project:Project`;
   protected readonly identifierLabel = $localize`:@@onboarding.evidence.identifier:Project ID`;
-  protected readonly empty = $localize`:@@onboarding.evidence.empty:Nothing produced yet for this step.`;
-  protected readonly descriptions = computed(() => [
-    $localize`:@@onboarding.evidence.step-1:The created project will appear here.`,
-    $localize`:@@onboarding.evidence.step-2:Connection resources will appear here.`,
-    $localize`:@@onboarding.evidence.step-3:Sample-run evidence will appear here.`,
-    $localize`:@@onboarding.evidence.step-4:Comparison resources will appear here.`,
-    $localize`:@@onboarding.evidence.step-5:Activation resources will appear here. Collection is not enabled by viewing this step.`,
-  ]);
+  protected readonly empty = $localize`:@@onboarding.evidence.no-resources:No setup resources have been created yet.`;
+  protected readonly unavailable = $localize`:@@onboarding.evidence.unavailable:Created resources are unavailable.`;
+  protected readonly stale = $localize`:@@onboarding.evidence.stale:Resources could not be refreshed. Showing the last confirmed resources.`;
+  protected readonly bindingsLabel = $localize`:@@onboarding.evidence.bindings:CI bindings`;
+  protected readonly tokensLabel = $localize`:@@onboarding.evidence.tokens:Ingest tokens`;
+  protected readonly sampleLabel = $localize`:@@onboarding.evidence.sample:Sample run ID`;
+  protected readonly evidenceLabel = $localize`:@@onboarding.evidence.revision:Evidence revision ID`;
+  protected readonly activationLabel = $localize`:@@onboarding.evidence.activation:Activated policy revision`;
+  protected readonly activatedAtLabel = $localize`:@@onboarding.evidence.activated-at:Activated at`;
+  protected readonly activationUnavailable = $localize`:@@onboarding.evidence.activation-unavailable:Activation details are unavailable with your current access.`;
 }

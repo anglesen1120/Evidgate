@@ -178,6 +178,10 @@ export class RunDetailPage {
     // The mismatch notice disappears once the pin matches the decision, taking its action with it.
     this.handoffEvidenceFocus('[data-decision-mismatch] .decision-mismatch__action');
   }
+  protected showEvidence(): void {
+    const target = this.host.nativeElement.querySelector<HTMLElement>('#evidence-title');
+    if (target) this.focusEvidenceTarget(target);
+  }
   /**
    * Moves focus to the evidence heading after the render that removed `controlSelector`, and only
    * when the control is actually gone: a control that still answers keeps the focus it had.

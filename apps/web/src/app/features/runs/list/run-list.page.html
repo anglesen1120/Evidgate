@@ -26,13 +26,18 @@
     </label>
     <label for="run-decision"
       >{{ copy.decision }}
-      <select id="run-decision" name="decision" [(ngModel)]="draft.decision">
+      <select
+        id="run-decision"
+        name="decision"
+        [(ngModel)]="draft.decision"
+        [attr.aria-describedby]="'run-decision-hint'"
+      >
         <option value="">{{ copy.any }}</option>
         @for (decision of ['PASS', 'FAIL', 'INCONCLUSIVE']; track decision) {
           <option [value]="decision">{{ decision }}</option>
         }
-        <option value="pending">{{ copy.pending }}</option>
       </select>
+      <span id="run-decision-hint">{{ copy.decisionHint }}</span>
     </label>
     <label for="run-scope"
       >{{ copy.scope }}

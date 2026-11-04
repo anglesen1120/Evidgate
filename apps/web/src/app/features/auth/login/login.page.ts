@@ -1,8 +1,9 @@
-import { NgComponentOutlet } from '@angular/common';
+import { DOCUMENT, NgComponentOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  LOCALE_ID,
   effect,
   inject,
   resource,
@@ -10,26 +11,57 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 
-import { AuthFlow } from '../auth-flow';
+import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
+import { ThemeService } from '../../../shell/layout/theme.service';
+import { AuthFlow, LOCATION_NAVIGATE } from '../auth-flow';
 import { LOGIN_EXTENSION_LOADER } from './login-extension';
 
 @Component({
   selector: 'app-login-page',
-  standalone: true,
-  // 09.1.1-T5 review (delta): the flow belongs to THIS page instance. A route-level `providers`
-  // entry is built once per Route object in the router's environment injector, so it would keep the
-  // first visit's query and resolve `ActivatedRoute` from the root chain. In the component injector
-  // the route is the activation's own, and the flow (with its `pageshow` listener) is destroyed with
-  // the page.
+  // The flow belongs to this visit so callback and expiry notices cannot retain an earlier query.
   providers: [AuthFlow],
-  imports: [NgComponentOutlet],
+  imports: [NgComponentOutlet, ShellIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shell/layout/shell-page.css', './login.page.css'],
   template: `
+    <header class="login-topbar">
+      <div class="login-brand">
+        <app-shell-icon name="shield-check" />
+        <span i18n="@@shell.layout.brand">Evidgate</span>
+      </div>
+      <div class="login-preferences">
+        @if (canSwitchLocale) {
+          <button
+            type="button"
+            class="locale-toggle"
+            [disabled]="auth.redirecting()"
+            [attr.aria-label]="localeLabel"
+            (click)="switchLocale()"
+          >
+            <span lang="en" i18n="@@auth.login.locale-en">EN</span>
+            <span aria-hidden="true"> / </span>
+            <span lang="vi" i18n="@@auth.login.locale-vi">VI</span>
+          </button>
+        }
+        <button
+          type="button"
+          class="theme-toggle"
+          [attr.aria-label]="darkLabel"
+          [attr.aria-pressed]="theme.isDark()"
+          (click)="theme.toggle()"
+        >
+          <app-shell-icon [name]="theme.isDark() ? 'moon' : 'sun'" />
+        </button>
+      </div>
+    </header>
     <main aria-labelledby="login-heading">
-      <section class="login-card">
+      <header class="login-intro">
+        <h1 #loginHeading id="login-heading" tabindex="-1">{{ heading }}</h1>
+        <p>{{ introduction }}</p>
+      </header>
+      <section class="login-card" aria-labelledby="provider-heading">
         <header>
-          <h1 #loginHeading id="login-heading" tabindex="-1">{{ heading }}</h1>
+          <h2 id="provider-heading">{{ welcome }}</h2>
           <p>{{ explanation }}</p>
         </header>
 
@@ -67,7 +99,12 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
         </div>
 
         <div class="login-providers" [attr.aria-busy]="auth.redirecting()">
-          <button type="button" [disabled]="auth.redirecting()" (click)="auth.start('google')">
+          <button
+            class="primary-provider"
+            type="button"
+            [disabled]="auth.redirecting()"
+            (click)="auth.start('google')"
+          >
             {{ google }}
           </button>
           <button type="button" [disabled]="auth.redirecting()" (click)="auth.start('github')">
@@ -80,29 +117,32 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
           <ng-container *ngComponentOutlet="component" />
         }
       </section>
+      <section class="login-destination" aria-labelledby="destination-heading">
+        <h2 id="destination-heading">{{ destinationHeading }}</h2>
+        <p>{{ auth.returnUrl() === '/' ? defaultDestination : savedDestination }}</p>
+        <p>{{ destinationPrivacy }}</p>
+      </section>
     </main>
   `,
 })
 export class LoginPage {
   protected readonly auth = inject(AuthFlow);
+  protected readonly theme = inject(ThemeService);
+  private readonly document = inject(DOCUMENT);
+  private readonly locale = inject(LOCALE_ID);
+  private readonly navigate = inject(LOCATION_NAVIGATE);
+  private readonly localeBase = new URL(this.document.baseURI).pathname;
+  private readonly localeSegment = /(?:^|\/)(?:en|vi)\/$/.exec(this.localeBase);
+  readonly canSwitchLocale = this.localeSegment !== null;
+  readonly darkLabel = $localize`:@@shell.theme.dark-mode:Dark mode`;
+  readonly localeLabel = $localize`:@@auth.login.switch-language:EN / VI: Switch language between English and Vietnamese`;
   private readonly loadExtension = inject(LOGIN_EXTENSION_LOADER);
   protected readonly extension = resource({ loader: () => this.loadExtension() });
   private readonly router = inject(Router);
   /** The page's own focus target: `tabindex="-1"`, so it is reachable but never a Tab stop. */
   private readonly headingTarget = viewChild<ElementRef<HTMLElement>>('loginHeading');
 
-  /**
-   * F-LOGIN-01 (09.8.1-T1.2): `/login` renders OUTSIDE the shell (`app.routes.ts` spreads
-   * `AUTH_ROUTES` at the top level), so the shell's path-change handoff
-   * (`shell.component.ts:78-89`) never runs for it. Every client-side entry — the callback's
-   * `failed`/`unavailable` redirect, the store's `expired`/`signed-out` redirect — would leave focus
-   * on `body`: the top of a document the visitor did not load, with nothing said about the new page.
-   *
-   * `Router.navigated` is the same marker the shell uses: false while the initial document
-   * navigation is still activating (a fresh load keeps the browser's own focus start, the visitor's
-   * first Tab reaches the first provider button), true once any navigation has ENDed — which is
-   * exactly "this page was reached from inside the app".
-   */
+  // Standalone auth routes do not receive the shell's client-navigation focus handoff.
   private readonly arrivedByNavigation = this.router.navigated;
 
   constructor() {
@@ -115,13 +155,7 @@ export class LoginPage {
       this.headingTarget()?.nativeElement.focus();
     });
 
-    // F-LOGIN-02 (09.8.1-T1.2): activating a provider disables the button that holds focus
-    // (`[disabled]="auth.redirecting()"`), and a disabled element cannot keep focus — the browser
-    // drops it to `body`, leaving the still-rendered page with no focus indicator at all until the
-    // document leaves, and a Back return re-enters it with focus on `body`. Focus moves to the
-    // page's own heading while the redirect is pending, so the ring stays visible and the browser
-    // restores the same element on a Back return. The live region (`role="status"`) still announces
-    // the state on its own.
+    // Disabling the focused provider would drop focus to body while the browser is leaving.
     effect(() => {
       if (!this.auth.redirecting()) {
         return;
@@ -129,6 +163,23 @@ export class LoginPage {
       this.headingTarget()?.nativeElement.focus();
     });
   }
+
+  switchLocale(): void {
+    if (this.auth.redirecting() || this.localeSegment === null) return;
+    const target = this.locale.startsWith('vi') ? 'en' : 'vi';
+    // Localized builds are siblings; retain a deployment prefix when one is present.
+    const prefix = this.localeBase.slice(0, this.localeSegment.index);
+    const query = new URLSearchParams({ returnUrl: this.auth.returnUrl() });
+    if (this.auth.reason() !== 'none') query.set('reason', this.auth.reason());
+    this.navigate(`${prefix}/${target}/login?${query.toString()}`);
+  }
+
+  readonly introduction = $localize`:@@auth.login.introduction:Return to your workspace to review evidence and make informed release decisions.`;
+  readonly welcome = $localize`:@@auth.login.welcome:Welcome back`;
+  readonly destinationHeading = $localize`:@@auth.login.destination-heading:Your return destination`;
+  readonly savedDestination = $localize`:@@auth.login.saved-destination:After sign-in, continue to your saved workspace destination. Access is checked before it opens.`;
+  readonly defaultDestination = $localize`:@@auth.login.default-destination:After sign-in, continue to your workspace.`;
+  readonly destinationPrivacy = $localize`:@@auth.login.destination-privacy:Private route details are not displayed on this sign-in page.`;
 
   readonly heading = $localize`:@@auth.login.heading:Sign in to Evidgate`;
   readonly explanation = $localize`:@@auth.login.explanation:Choose your provider to continue.`;
