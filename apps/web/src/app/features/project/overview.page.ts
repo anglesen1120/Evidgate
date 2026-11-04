@@ -1,34 +1,47 @@
-// 09.1.1-T4.1 (plan 09.1.1 §10 T4): the project overview entry — the one project-scope screen the
-// shell story delivers, because it is what proves the whole chain end to end: the router resolved
-// an org and a project from the URL, `SessionStore` loaded the project list through
-// `ApiGateway` → the fixture backend → `fixtures/web-api/projects-list/`, and the page renders a
-// server-provided name. Nothing here is derived: the name and slug come from `ProjectDto`, and a
-// project the store does not hold renders the empty copy instead of a guess.
-//
-// Everything else on this screen (runs, authoring, releases) arrives with its feature story.
+// Show only the project resolved by the session scope; never guess a name from the URL.
 
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { HlmCard, HlmCardTitle, HlmCardDescription } from '@evidgate/ui/card';
 
 import { SessionStore } from '../../core/session/session.store';
 
 @Component({
   selector: 'app-project-overview',
+  imports: [HlmCard, HlmCardTitle, HlmCardDescription],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: '../../shell/layout/shell-page.css',
-  template: `@if (project(); as project) {
-      <section>
-        <h1>{{ project.name }}</h1>
-        <p class="slug">{{ project.slug }}</p>
-        <p i18n="@@shell.overview.arriving">
-          This project's runs, authoring and releases arrive with their own stories. For now this
-          page shows the project the URL resolved to.
-        </p>
-      </section>
+  host: { class: 'block min-w-0 font-sans text-foreground' },
+  template: `<section
+    hlmCard
+    class="min-w-0 items-start gap-(--eg-space-4) px-(--eg-space-4) py-(--eg-space-8) [overflow-wrap:anywhere] min-[768px]:px-(--eg-space-5)"
+    aria-labelledby="project-overview-heading"
+  >
+    @if (project(); as project) {
+      <h1
+        hlmCardTitle
+        class="m-0 min-w-0 max-w-full font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
+        id="project-overview-heading"
+        [textContent]="project.name"
+      ></h1>
+      <p
+        hlmCardDescription
+        class="slug m-0 min-w-0 max-w-full font-(family-name:--eg-font-mono)"
+        [textContent]="project.slug"
+      ></p>
+      <p hlmCardDescription class="m-0" i18n="@@shell.overview.arriving">
+        This project's runs, authoring and releases arrive with their own stories. For now this page
+        shows the project the URL resolved to.
+      </p>
     } @else {
-      <section>
-        <h1 i18n="@@shell.overview.no-project">No project selected</h1>
-      </section>
-    }`,
+      <h1
+        hlmCardTitle
+        class="m-0 min-w-0 max-w-full font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
+        id="project-overview-heading"
+        i18n="@@shell.overview.no-project"
+      >
+        No project selected
+      </h1>
+    }
+  </section>`,
 })
 export class ProjectOverviewPage {
   private readonly session = inject(SessionStore);
