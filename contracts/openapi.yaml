@@ -4418,6 +4418,56 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/cases/{c}:
+    patch:
+      operationId: setCaseRequirementRef
+      tags: [catalog]
+      summary: Set or clear a case's external requirement reference (03.1.4)
+      description: >-
+        The only member is `requirement_ref`: a trimmed 1..128 character text of `A-Z a-z 0-9 . _ : / # -`
+        naming an external requirement (D-A6), or `null` to clear it. Metadata only — no `test_revision` is created and no `revision_hash` changes.
+        A case outside `{p}`, of another org, or an unknown id is the same 404 as a missing one.
+      x-permission: case:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/CaseId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetCaseRequirementRequest'
+      responses:
+        '200':
+          description: The case with its new requirement reference
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /cases/{c}:
     get:
       operationId: getCase
@@ -4586,12 +4636,18 @@ paths:
       operationId: listSuites
       tags: [catalog]
       summary: Cursor page of a project's suites (03.2.1)
+      description: >-
+        The taxonomy filters (03.1.4 AC3) select the suites of one platform, level or purpose; an unknown value is a
+        422 naming the member, never an empty page.
       x-permission: suite:read
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/Cursor'
         - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/PlatformFilter'
+        - $ref: '#/components/parameters/LevelFilter'
+        - $ref: '#/components/parameters/PurposeFilter'
       responses:
         '200':
           description: Page of suites
@@ -7961,6 +8017,24 @@ components:
       description: Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
       schema:
         type: string
+    PlatformFilter:
+      name: platform
+      in: query
+      required: false
+      description: Only suites of this platform (03.1.4 AC3); an unknown value is a 422.
+      schema: { $ref: './schemas/taxonomy.v1.json#/$defs/platform' }
+    LevelFilter:
+      name: level
+      in: query
+      required: false
+      description: Only suites of this level; an unknown value is a 422.
+      schema: { $ref: './schemas/taxonomy.v1.json#/$defs/level' }
+    PurposeFilter:
+      name: purpose
+      in: query
+      required: false
+      description: Only suites of this purpose; an unknown value is a 422.
+      schema: { $ref: './schemas/taxonomy.v1.json#/$defs/purpose' }
     PolicyRevisionCursor:
       name: cursor
       in: query
@@ -9778,6 +9852,7 @@ components:
           created_at,
           updated_at,
           version,
+          requirement_ref,
         ]
       properties:
         id:
@@ -9829,6 +9904,14 @@ components:
         version:
           type: integer
           description: Optimistic-concurrency token; the response `ETag` and the `If-Match` value (00 §9.1).
+        requirement_ref:
+          type: [string, 'null']
+          maxLength: 128
+          pattern: '^[A-Za-z0-9._:/#-]+$'
+          description: >-
+            External requirement id or URL this case protects (D-A6: trimmed, 1..128 characters of
+            `A-Z a-z 0-9 . _ : / # -`), or null. Metadata only: it is not part of any revision content or
+            hash (00 §7).
     CaseIdentitySourceDto:
       type: object
       required: [source, raw_key, commit_sha, created_at]
@@ -9902,6 +9985,23 @@ components:
           items:
             type: string
             maxLength: 64
+    SetCaseRequirementRequest:
+      type: object
+      description: >-
+        The requirement pointer of one case. `requirement_ref` is required: send `null` to clear it, or a value
+        that is trimmed to 1..128 characters of `A-Z a-z 0-9 . _ : / # -` (D-A6). Any other member, a missing
+        member or a value outside that rule is 422 `request_invalid` with `requirement_ref` (or the offending
+        member) in `details[]` and a field-level reason: `invalid_length` or `invalid_value` for the pointer
+        itself, `invalid_type` for a non-string non-null value, `unknown_field` for another member, `required`
+        for a missing one.
+      additionalProperties: false
+      required: [requirement_ref]
+      properties:
+        requirement_ref:
+          type: [string, 'null']
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z0-9._:/#-]+$'
     CaseRevisionDto:
       type: object
       required:
@@ -10091,7 +10191,21 @@ components:
         `params`, the three strategy documents) say what they hold in their own description.
     SuiteDto:
       type: object
-      required: [id, org_id, project_id, name, slug, status, created_at, updated_at, version]
+      required:
+        [
+          id,
+          org_id,
+          project_id,
+          name,
+          slug,
+          status,
+          platform,
+          level,
+          purpose,
+          created_at,
+          updated_at,
+          version,
+        ]
       properties:
         id: { type: string, format: uuid }
         org_id: { type: string, format: uuid }
@@ -10099,6 +10213,11 @@ components:
         name: { type: string, maxLength: 128 }
         slug: { type: string, pattern: '^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$' }
         status: { type: string, enum: [active, archived] }
+        platform:
+          $ref: './schemas/taxonomy.v1.json#/$defs/platform'
+          description: 'Platform of the head revision (03.1.4); a mobile suite whose every variant names a browser engine is device emulation and is stored as web.'
+        level: { $ref: './schemas/taxonomy.v1.json#/$defs/level' }
+        purpose: { $ref: './schemas/taxonomy.v1.json#/$defs/purpose' }
         head_revision_id: { type: [string, 'null'], format: uuid }
         head_revision_no: { type: [integer, 'null'] }
         created_at: { type: string, format: date-time }
@@ -10118,6 +10237,15 @@ components:
       properties:
         name: { type: string, maxLength: 128 }
         slug: { type: string, pattern: '^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$' }
+        platform:
+          $ref: './schemas/taxonomy.v1.json#/$defs/platform'
+          description: 'Taxonomy of the suite (03.1.4); default web. `mobile` is refused here with `mobile_capability_required` — a suite carries the evidence only once a revision has a member whose variant names a native mobile platform.'
+        level:
+          $ref: './schemas/taxonomy.v1.json#/$defs/level'
+          description: "Default: the platform's level (api -> integration, unit -> unit, otherwise e2e)."
+        purpose:
+          $ref: './schemas/taxonomy.v1.json#/$defs/purpose'
+          description: 'Default regression.'
     SuiteMemberInput:
       type: object
       required: [case_revision_id]
@@ -10162,15 +10290,32 @@ components:
         environment_requirements:
           type: object
           description: contracts/catalog/environment-requirements.v1.json; secret-free, default {}.
+        platform:
+          $ref: './schemas/taxonomy.v1.json#/$defs/platform'
+          description: >-
+            Taxonomy this revision is authored under (03.1.4); default the suite's current platform. A mobile suite is
+            stored as web when every variant names a browser engine (device emulation), and refused when no variant
+            names a native mobile platform.
+        level:
+          $ref: './schemas/taxonomy.v1.json#/$defs/level'
+          description: "Default: the suite's current level, or the platform's level when this request names a platform."
+        purpose: { $ref: './schemas/taxonomy.v1.json#/$defs/purpose' }
     SuiteRevisionHead:
       type: object
-      required: [revision_no, revision_hash, status, created, warnings]
+      required: [revision_no, revision_hash, status, created, warnings, platform, level, purpose]
       properties:
         suite_revision_id: { type: [string, 'null'], format: uuid }
         revision_no: { type: integer }
         revision_hash: { type: string }
         status: { type: string, enum: [draft, published, preview] }
         created: { type: boolean }
+        platform:
+          {
+            $ref: './schemas/taxonomy.v1.json#/$defs/platform',
+            description: 'The platform stored with the revision; web when a mobile request was device emulation.',
+          }
+        level: { $ref: './schemas/taxonomy.v1.json#/$defs/level' }
+        purpose: { $ref: './schemas/taxonomy.v1.json#/$defs/purpose' }
         head_moved:
           {
             type: boolean,
@@ -10204,6 +10349,9 @@ components:
           revision_no,
           revision_hash,
           status,
+          platform,
+          level,
+          purpose,
           shard_strategy,
           retry_policy,
           environment_requirements,
@@ -10217,6 +10365,9 @@ components:
         revision_no: { type: integer }
         revision_hash: { type: string }
         status: { type: string, enum: [draft, published] }
+        platform: { $ref: './schemas/taxonomy.v1.json#/$defs/platform' }
+        level: { $ref: './schemas/taxonomy.v1.json#/$defs/level' }
+        purpose: { $ref: './schemas/taxonomy.v1.json#/$defs/purpose' }
         shard_strategy: { type: object }
         retry_policy: { type: object }
         environment_requirements: { type: object }
@@ -10269,6 +10420,7 @@ components:
         retry_policy: { oneOf: [{ $ref: '#/components/schemas/SuiteDelta' }, { type: 'null' }] }
         environment_requirements:
           { oneOf: [{ $ref: '#/components/schemas/SuiteDelta' }, { type: 'null' }] }
+        taxonomy: { oneOf: [{ $ref: '#/components/schemas/SuiteDelta' }, { type: 'null' }] }
     CiBindingView:
       type: object
       description: A CI binding as listed and read; never carries the challenge or its hash.

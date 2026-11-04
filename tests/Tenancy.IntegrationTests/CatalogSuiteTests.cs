@@ -782,4 +782,241 @@ public sealed class CatalogSuiteTests
 
         error.SqlState.ShouldBe("23514");
     }
+
+    // ------------------------------------------------------------------ 03.1.4 taxonomy
+
+    private static IEnumerable<string> DetailPaths(ApiAnswer answer) =>
+        answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().Select(detail => detail.GetProperty("path").GetString()!);
+
+    [Fact]
+    public async Task SuiteTaxonomy_OutOfCatalogue_422()
+    {
+        await using var world = await StartAsync();
+
+        (await world.Client.SendAsync(HttpMethod.Post, $"/v1/projects/{world.Project}/suites", world.Admin, new { name = "desk", slug = "desk", platform = "desktop" }, NewKey()))
+            .Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await world.Client.SendAsync(HttpMethod.Post, $"/v1/projects/{world.Project}/suites", world.Admin, new { name = "lev", slug = "lev", level = "smoke_test" }, NewKey()))
+            .Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await world.Client.SendAsync(HttpMethod.Post, $"/v1/projects/{world.Project}/suites", world.Admin, new { name = "pur", slug = "pur", purpose = "gate" }, NewKey()))
+            .Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+
+        // The level follows the platform: an api suite is an integration suite unless the caller says otherwise.
+        var api = await world.Client.SendAsync(HttpMethod.Post, $"/v1/projects/{world.Project}/suites", world.Admin, new { name = "api", slug = "api-suite", platform = "api" }, NewKey());
+        api.Status.ShouldBe(HttpStatusCode.Created, api.ErrorMessage);
+        api.Text("platform").ShouldBe("api");
+        api.Text("level").ShouldBe("integration");
+        api.Text("purpose").ShouldBe("regression");
+
+        // A revision and a list filter are held to the same lists, and each names its own member.
+        var revision = await CreateRevisionAsync(world, new { level = "weekly" });
+        revision.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        DetailPaths(revision).ShouldContain("/level");
+
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/suites?platform=desktop", world.Admin))
+            .Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/suites?purpose=gate", world.Admin))
+            .Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task SuiteTaxonomy_RoundTrips_AndFiltersTheList()
+    {
+        await using var world = await StartAsync();
+        var api = await world.Client.SendAsync(HttpMethod.Post, $"/v1/projects/{world.Project}/suites", world.Admin, new { name = "Api", slug = "api-suite", platform = "api", purpose = "release_gate" }, NewKey());
+        api.Status.ShouldBe(HttpStatusCode.Created, api.ErrorMessage);
+        var apiId = api.Id();
+
+        var web = await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/suites?platform=web", world.Admin);
+        web.Body.GetProperty("items").EnumerateArray().Single().GetProperty("id").GetGuid().ShouldBe(world.Suite);
+
+        var gate = await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/suites?purpose=release_gate&level=integration", world.Admin);
+        gate.Body.GetProperty("items").EnumerateArray().Single().GetProperty("id").GetGuid().ShouldBe(apiId);
+
+        var read = await world.Client.SendAsync(HttpMethod.Get, $"/v1/suites/{apiId}", world.Admin);
+        read.Text("platform").ShouldBe("api");
+        read.Text("level").ShouldBe("integration");
+        read.Text("purpose").ShouldBe("release_gate");
+    }
+
+    [Fact]
+    public async Task SuiteTaxonomyChange_CreatesNewRevision_OldHashStable()
+    {
+        await using var world = await StartAsync(1);
+        var first = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) } });
+        first.Status.ShouldBe(HttpStatusCode.Created, first.ErrorMessage);
+
+        var second = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) }, purpose = "release_gate" });
+        second.Status.ShouldBe(HttpStatusCode.Created, second.ErrorMessage);
+        second.Text("purpose").ShouldBe("release_gate");
+        second.Body.GetProperty("revision_hash").GetString().ShouldNotBe(first.Body.GetProperty("revision_hash").GetString());
+
+        // The suite now reads as the head revision it holds.
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/suites/{world.Suite}", world.Admin)).Text("purpose").ShouldBe("release_gate");
+
+        // The older revision keeps the taxonomy and the hash it was written with: nothing recomputes an old hash.
+        var older = await world.Client.SendAsync(HttpMethod.Get, $"/v1/suite-revisions/{first.Id("suite_revision_id")}", world.Admin);
+        older.Status.ShouldBe(HttpStatusCode.OK);
+        older.Text("purpose").ShouldBe("regression");
+        older.Body.GetProperty("revision_hash").GetString().ShouldBe(first.Body.GetProperty("revision_hash").GetString());
+
+        // Re-submitting the older content, taxonomy included, moves the head and the taxonomy back with it. The taxonomy
+        // is part of the hash, so the revert is only the same revision when the request names the old taxonomy too.
+        var again = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) }, purpose = "regression" });
+        again.Status.ShouldBe(HttpStatusCode.OK, again.ErrorMessage);
+        again.Body.GetProperty("created").GetBoolean().ShouldBeFalse();
+        again.Body.GetProperty("head_moved").GetBoolean().ShouldBeTrue();
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/suites/{world.Suite}", world.Admin)).Text("purpose").ShouldBe("regression");
+
+        // The taxonomy moved, so the diff between the new head and the revision before it says so.
+        var diff = await world.Client.SendAsync(
+            HttpMethod.Get, $"/v1/suite-revisions/{again.Id("suite_revision_id")}/diff?against={second.Id("suite_revision_id")}", world.Admin);
+        diff.Status.ShouldBe(HttpStatusCode.OK, diff.ErrorMessage);
+        diff.Body.GetProperty("taxonomy").GetProperty("from").GetProperty("purpose").GetString().ShouldBe("release_gate");
+        diff.Body.GetProperty("taxonomy").GetProperty("to").GetProperty("purpose").GetString().ShouldBe("regression");
+        diff.Body.GetProperty("members_added").GetArrayLength().ShouldBe(0);
+        diff.Body.GetProperty("shard_strategy").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task SuiteTaxonomy_OmittedMember_KeepsTheCurrentValue()
+    {
+        await using var world = await StartAsync(2);
+        var first = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) }, purpose = "release_gate", level = "smoke" });
+        first.Status.ShouldBe(HttpStatusCode.Created, first.ErrorMessage);
+
+        // A request that names no taxonomy at all inherits all three: an omitted member is not a reset to the default.
+        var inherited = await CreateRevisionAsync(world, new
+        {
+            members = new[] { Member(world.Revisions[0]), Member(world.Revisions[1]) },
+        });
+        inherited.Status.ShouldBe(HttpStatusCode.Created, inherited.ErrorMessage);
+        inherited.Text("purpose").ShouldBe("release_gate");
+        inherited.Text("level").ShouldBe("smoke");
+        inherited.Text("platform").ShouldBe("web");
+
+        // Naming only the purpose keeps the level the suite holds.
+        var partly = await CreateRevisionAsync(world, new
+        {
+            members = new[] { Member(world.Revisions[0]), Member(world.Revisions[1]) },
+            purpose = "exploratory",
+            shard_strategy = new { kind = "count", count = 3 },
+        });
+        partly.Status.ShouldBe(HttpStatusCode.Created, partly.ErrorMessage);
+        partly.Text("purpose").ShouldBe("exploratory");
+        partly.Text("level").ShouldBe("smoke");
+        partly.Text("platform").ShouldBe("web");
+    }
+
+    [Fact]
+    public async Task CreateSuite_MobileWithoutCapability_422()
+    {
+        await using var world = await StartAsync();
+
+        // A new suite has no member whose variant could name a native platform: `mobile` would be unexecutable.
+        var mobile = await world.Client.SendAsync(
+            HttpMethod.Post, $"/v1/projects/{world.Project}/suites", world.Admin, new { name = "mob", slug = "mob-suite", platform = "mobile" }, NewKey());
+        mobile.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        DetailPaths(mobile).ShouldContain("/platform");
+        mobile.Body.GetProperty("error").GetProperty("details").EnumerateArray()
+            .Select(detail => detail.GetProperty("reason").GetString()).ShouldContain("mobile_capability_required");
+
+        // The other three platforms are accepted and keep their catalogue defaults.
+        foreach (var (platform, level) in new[] { ("web", "e2e"), ("api", "integration"), ("unit", "unit") })
+        {
+            var created = await world.Client.SendAsync(
+                HttpMethod.Post, $"/v1/projects/{world.Project}/suites", world.Admin, new { name = platform, slug = $"{platform}-suite", platform }, NewKey());
+            created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+            created.Text("level").ShouldBe(level);
+            created.Text("purpose").ShouldBe("regression");
+        }
+    }
+
+    [Fact]
+    public async Task MobileViewportVariant_OnWebRunner_StoredAsWeb()
+    {
+        await using var world = await StartAsync(1);
+
+        // A browser variant under `mobile` is device emulation: the revision is stored as a web suite.
+        var emulated = await CreateRevisionAsync(world, new
+        {
+            members = new[] { Member(world.Revisions[0], new { browser = "chromium", viewport = "390x844" }) },
+            platform = "mobile",
+        });
+        emulated.Status.ShouldBe(HttpStatusCode.Created, emulated.ErrorMessage);
+        emulated.Text("platform").ShouldBe("web");
+        emulated.Body.GetProperty("warnings").EnumerateArray().Select(warning => warning.GetString()).ShouldContain(
+            warning => warning!.Contains("device emulation", StringComparison.Ordinal));
+
+        // Without a native platform anywhere, `mobile` cannot be executed by any runner: refused, naming the member.
+        var unsupported = await CreateRevisionAsync(world, new { platform = "mobile" });
+        unsupported.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        DetailPaths(unsupported).ShouldContain("/platform");
+
+        // A variant naming the platform runs natively, so the suite is stored as mobile.
+        var native = await CreateRevisionAsync(world, new
+        {
+            members = new[] { Member(world.Revisions[0], new { platform = "android" }) },
+            platform = "mobile",
+        });
+        native.Status.ShouldBe(HttpStatusCode.Created, native.ErrorMessage);
+        native.Text("platform").ShouldBe("mobile");
+    }
+
+    [Fact]
+    public async Task MobilePlatform_MixedVariants_StayMobile()
+    {
+        await using var world = await StartAsync(2);
+
+        // One native variant is enough: the suite is not device emulation just because another member uses a browser.
+        var mixed = await CreateRevisionAsync(world, new
+        {
+            members = new[]
+            {
+                Member(world.Revisions[0], new { platform = "android" }),
+                Member(world.Revisions[1], new { browser = "chromium", viewport = "390x844" }),
+            },
+            platform = "mobile",
+        });
+        mixed.Status.ShouldBe(HttpStatusCode.Created, mixed.ErrorMessage);
+        mixed.Text("platform").ShouldBe("mobile");
+        mixed.Body.GetProperty("warnings").EnumerateArray().Select(warning => warning.GetString())
+            .ShouldNotContain(warning => warning!.Contains("device emulation", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Taxonomy_CrossOrgInvisible_AndNeedsSuiteWrite()
+    {
+        await using var world = await StartAsync();
+        var otherUser = Guid.CreateVersion7();
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
+        var rival = TenancyApiFactory.Resolved(user: otherUser, orgHeader: otherOrg);
+
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/suites/{world.Suite}", rival)).Status.ShouldBe(HttpStatusCode.NotFound);
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/suites?platform=web", rival)).Status.ShouldBe(HttpStatusCode.NotFound);
+
+        var reader = TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: world.Project, servicePermissions: ["suite:read"]);
+        (await world.Client.SendAsync(HttpMethod.Post, $"/v1/projects/{world.Project}/suites", reader, new { name = "x", slug = "x-suite", platform = "api" }, NewKey()))
+            .Status.ShouldBe(HttpStatusCode.Forbidden);
+        (await world.Client.SendAsync(HttpMethod.Post, $"/v1/suites/{world.Suite}/revisions", reader, new { purpose = "smoke" }, NewKey()))
+            .Status.ShouldBe(HttpStatusCode.Forbidden);
+
+        // The taxonomy never crosses a project either: another project of the same org has its own suites.
+        var secondProject = await CreateProjectAsync(world.Client, world.User, world.Org, "billing");
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{secondProject}/suites?platform=web", world.Admin))
+            .Body.GetProperty("items").GetArrayLength().ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Database_RefusesATaxonomyChangeWithoutItsRevision()
+    {
+        await using var world = await StartAsync(1);
+        var created = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) } });
+        created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+
+        var changed = await Should.ThrowAsync<PostgresException>(async () => await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.suite set purpose = 'smoke' where id = '{world.Suite}'"));
+
+        changed.SqlState.ShouldBe("23514");
+    }
 }

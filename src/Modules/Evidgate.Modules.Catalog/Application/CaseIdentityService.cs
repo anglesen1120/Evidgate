@@ -38,10 +38,10 @@ internal sealed class CaseIdentityService(
         """;
 
     private const string InsertCasesSql = """
-        insert into public.test_case (id, org_id, project_id, annotation_id, name, framework, language, file_path, first_seen_commit)
-        select r.id, @org_id, @project_id, r.annotation_id, r.name, r.framework, r.language, r.file_path, @commit
+        insert into public.test_case (id, org_id, project_id, annotation_id, name, framework, language, file_path, first_seen_commit, requirement_ref)
+        select r.id, @org_id, @project_id, r.annotation_id, r.name, r.framework, r.language, r.file_path, @commit, r.requirement_ref
           from jsonb_to_recordset(@rows::jsonb)
-               as r(id uuid, annotation_id uuid, name text, framework text, language text, file_path text)
+               as r(id uuid, annotation_id uuid, name text, framework text, language text, file_path text, requirement_ref text)
         """;
 
     private const string InsertSourcesSql = """
@@ -163,7 +163,7 @@ internal sealed class CaseIdentityService(
             if (!existing.TryGetValue(item.Id, out var row))
             {
                 caseId = Guid.CreateVersion7();
-                newCases.Add(new NewCase(caseId, item.Id, item.Name, item.Framework, item.Language, item.Path));
+                newCases.Add(new NewCase(caseId, item.Id, item.Name, item.Framework, item.Language, item.Path, item.RequirementRef));
                 sources.Add(new NewSource(Guid.CreateVersion7(), caseId, item.Source, item.RawKey));
                 entries.Add(new CaseSyncEntry(item.Path, CaseSyncResults.Registered, caseId));
                 registered++;
@@ -300,7 +300,7 @@ internal sealed class CaseIdentityService(
     // as JSON text and are unpacked in SQL: one parameter, one plan, whatever the tree's size.
     private static string Json<T>(IEnumerable<T> values) => JsonSerializer.Serialize(values, Snake);
 
-    private sealed record NewCase(Guid Id, Guid AnnotationId, string Name, string Framework, string? Language, string FilePath);
+    private sealed record NewCase(Guid Id, Guid AnnotationId, string Name, string Framework, string? Language, string FilePath, string? RequirementRef);
 
     private sealed record NewSource(Guid Id, Guid CaseId, string Source, string RawKey);
 

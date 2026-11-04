@@ -36,6 +36,11 @@ export const SIDECAR_SCHEMA_V1: Record<string, unknown> = {
             minLength: 1,
             maxLength: 512,
           },
+          requirement: {
+            type: ['string', 'number', 'boolean', 'null'],
+            description:
+              'Optional external requirement this file protects (D-A6): trimmed to 1..128 characters of A-Z a-z 0-9 . _ : / # -. A string is used as written and a number as its digits; a bare true/false, or a string or number outside the length or charset rule, is a warning on that entry, never a schema failure: the manifest stays valid and the case keeps its id with a null reference.',
+          },
         },
       },
     },

@@ -11,7 +11,17 @@ namespace Evidgate.Modules.Catalog.Domain;
 /// <param name="Framework">Framework from the caller.</param>
 /// <param name="Language">Language from the caller.</param>
 /// <param name="Content">The file text, carried so the revision store can hash it; it is never stored.</param>
-internal sealed record DiscoveredCase(string Path, Guid Id, string Source, string RawKey, string Name, string Framework, string? Language, string Content);
+/// <param name="RequirementRef">The sidecar's requirement pointer at first registration, or null.</param>
+internal sealed record DiscoveredCase(
+    string Path,
+    Guid Id,
+    string Source,
+    string RawKey,
+    string Name,
+    string Framework,
+    string? Language,
+    string Content,
+    string? RequirementRef);
 
 /// <summary>What a tree held, before it is matched against the database.</summary>
 /// <param name="Cases">One row per file whose id was resolved, in path order.</param>
@@ -82,6 +92,13 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
             foreach (var problem in read.Problems)
             {
                 problems.Add(Warning(problem.Path, CaseSyncCodes.InvalidSidecarEntry, problem.Message));
+            }
+
+            // A dropped requirement value never holds the directory: it is metadata on an entry whose id is still
+            // valid, unlike a refused entry or manifest.
+            foreach (var warning in read.Warnings)
+            {
+                problems.Add(Warning(warning.Path, CaseSyncCodes.InvalidSidecarEntry, warning.Message));
             }
 
             // A refused sidecar (or one that lost an entry) can no longer vouch for the files it used to identify:
@@ -161,12 +178,12 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
                     held.Add(sidecar.Id);
                     continue;
                 case AnnotationOutcome.Valid:
-                    resolved.Add(Build(file, annotation.Id!.Value, "annotation", annotation.Raw!, sidecar?.Name));
+                    resolved.Add(Build(file, annotation.Id!.Value, "annotation", annotation.Raw!, sidecar?.Name, sidecar?.RequirementRef));
                     break;
                 default:
                     if (sidecar is not null)
                     {
-                        resolved.Add(Build(file, sidecar.Id, "sidecar", sidecar.RawKey, sidecar.Name));
+                        resolved.Add(Build(file, sidecar.Id, "sidecar", sidecar.RawKey, sidecar.Name, sidecar.RequirementRef));
                     }
 
                     break;
@@ -218,7 +235,7 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
         }
     }
 
-    private static DiscoveredCase Build(SourceFile file, Guid id, string source, string rawKey, string? sidecarName)
+    private static DiscoveredCase Build(SourceFile file, Guid id, string source, string rawKey, string? sidecarName, string? requirementRef)
     {
         var name = TextRules.IsClean(sidecarName) ? sidecarName! : Stem(file.Path);
         var framework = TextRules.IsClean(file.Framework) && !string.IsNullOrWhiteSpace(file.Framework)
@@ -226,7 +243,8 @@ internal sealed class CaseDiscovery(SidecarManifestReader sidecars)
             : "unknown";
         var language = file.Language is { } l && TextRules.IsClean(l) && l.Length is > 0 and <= 64 ? l : null;
 
-        return new DiscoveredCase(file.Path, id, source, rawKey, TextRules.Truncate(name, 512), framework, language, file.Content);
+        return new DiscoveredCase(
+            file.Path, id, source, rawKey, TextRules.Truncate(name, 512), framework, language, file.Content, requirementRef);
     }
 
     private static string Stem(string path)

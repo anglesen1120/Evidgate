@@ -136,6 +136,7 @@ const EXPECTED = [
   ['/support-grants/{g}/revoke', 'post', 'support:approve', 'v1'],
   ['/orgs/{o}/security-events', 'get', 'security_event:read', 'v1'],
   ['/projects/{p}/cases', 'get', 'case:read', 'v1'],
+  ['/projects/{p}/cases/{c}', 'patch', 'case:write', 'v1'],
   ['/cases/{c}', 'get', 'case:read', 'v1'],
   ['/cases/{c}', 'patch', 'case:write', 'v1'],
   ['/cases/{c}/revisions', 'get', 'case:read', 'v1'],

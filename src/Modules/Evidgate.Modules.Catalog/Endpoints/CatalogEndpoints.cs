@@ -40,6 +40,11 @@ public static class CatalogEndpoints
             .Produces<CaseListResponse>(StatusCodes.Status200OK)
             .WithSummary("Cursor page of a project's test cases (03)");
 
+        group.MapPatch("/projects/{p}/cases/{c}", SetCaseRequirementRefAsync)
+            .Accepts<SetCaseRequirementRequest>("application/json")
+            .Produces<CaseDto>(StatusCodes.Status200OK)
+            .WithSummary("Set or clear a case's external requirement reference (03)");
+
         group.MapGet("/cases/{c}", GetCaseAsync)
             .Produces<CaseDetailDto>(StatusCodes.Status200OK)
             .WithSummary("One test case with its identity trail; another org's id is 404 (03)");
@@ -94,7 +99,9 @@ public static class CatalogEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var result = await mediator.Send(new CreateSuiteCommand(p, request.Name, request.Slug, IdempotencyKey(context)), cancellationToken).ConfigureAwait(false);
+        var result = await mediator.Send(
+            new CreateSuiteCommand(p, request.Name, request.Slug, IdempotencyKey(context), request.Platform, request.Level, request.Purpose),
+            cancellationToken).ConfigureAwait(false);
 
         if (result.IsSuccess && result.SuccessValue is SuiteDto created)
         {
@@ -115,7 +122,15 @@ public static class CatalogEndpoints
             return Result.Failure<SuiteListResponse>(error);
         }
 
-        return await mediator.Send(new ListSuitesQuery(p, Blank(context.Request.Query["cursor"]), limit), cancellationToken).ConfigureAwait(false);
+        return await mediator.Send(
+            new ListSuitesQuery(
+                p,
+                Blank(context.Request.Query["cursor"]),
+                limit,
+                Blank(context.Request.Query["platform"]),
+                Blank(context.Request.Query["level"]),
+                Blank(context.Request.Query["purpose"])),
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<Result> GetSuiteAsync(
@@ -242,6 +257,58 @@ public static class CatalogEndpoints
         return WithETag(context, result, detail => detail.Case.Version);
     }
 
+    private static async Task<Result<CaseDto>> SetCaseRequirementRefAsync(
+        Guid p,
+        Guid c,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var (body, readError) = await ReadObjectAsync(context, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
+        if (readError is not null)
+        {
+            return Result.Failure<CaseDto>(readError);
+        }
+
+        if (RequirementBodyError(body) is { } bodyError)
+        {
+            return Result.Failure<CaseDto>(bodyError);
+        }
+
+        var member = body.GetProperty("requirement_ref");
+        string? requirementRef;
+        if (member.ValueKind is JsonValueKind.Null)
+        {
+            requirementRef = null;
+        }
+        else if (member.ValueKind is JsonValueKind.String)
+        {
+            try
+            {
+                requirementRef = member.GetString();
+            }
+            catch (InvalidOperationException)
+            {
+                // A lone surrogate escape parses as JSON but has no UTF-16 text: refuse it as the 422, never a 500.
+                return Result.Failure<CaseDto>(Error.Invalid(
+                    "requirement_ref must be well-formed Unicode text",
+                    [new ErrorDetail("requirement_ref", "invalid_value")]));
+            }
+        }
+        else
+        {
+            return Result.Failure<CaseDto>(Error.Invalid(
+                "requirement_ref must be a string or null",
+                [new ErrorDetail("requirement_ref", "invalid_type")]));
+        }
+
+        var result = await mediator.Send(
+            new SetCaseRequirementRefCommand(p, c, requirementRef, IdempotencyKey(context)),
+            cancellationToken).ConfigureAwait(false);
+
+        return WithETag(context, result, found => found.Version);
+    }
+
     private static async Task<Result<CaseDto>> UpdateCaseAsync(
         Guid c,
         HttpContext context,
@@ -338,6 +405,35 @@ public static class CatalogEndpoints
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow,
     };
+
+    /// <summary>The only member the requirement route accepts; the body must carry it (null clears).</summary>
+    private static readonly string[] RequirementMembers = ["requirement_ref"];
+
+    /// <summary>The requirement route's body: one known member, present; anything else is the dedicated 422.</summary>
+    private static Error? RequirementBodyError(JsonElement body)
+    {
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            return Error.Invalid("the body must be a JSON object", [new ErrorDetail(string.Empty, "invalid_type")]);
+        }
+
+        var present = false;
+        foreach (var member in body.EnumerateObject())
+        {
+            if (!RequirementMembers.Contains(member.Name, StringComparer.Ordinal))
+            {
+                var shown = Domain.TextRules.Brief(member.Name, 64);
+
+                return Error.Invalid($"'{shown}' is not a field of a requirement update", [new ErrorDetail(shown, "unknown_field")]);
+            }
+
+            present = true;
+        }
+
+        return present
+            ? null
+            : Error.Invalid("requirement_ref is required: send null to clear it", [new ErrorDetail("requirement_ref", "required")]);
+    }
 
     /// <summary>The body must be an object of known members; an identity member is the dedicated 422.</summary>
     private static Error? BodyError(JsonElement body)

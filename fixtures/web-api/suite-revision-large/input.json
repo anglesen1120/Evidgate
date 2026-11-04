@@ -12,6 +12,9 @@
     "revision_no": 5,
     "revision_hash": "sha256:e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
     "status": "draft",
+    "platform": "web",
+    "level": "e2e",
+    "purpose": "regression",
     "shard_strategy": {
       "kind": "count",
       "count": 3,
