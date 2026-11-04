@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { resetSecrets } from '../redact.js';
 
-import { exchangeBody } from './devExchange.testing.js';
+import { exchangeBody, isDevExchange } from './devExchange.testing.js';
 import {
   cacheDirs,
   capture,
@@ -23,7 +23,6 @@ import {
 
 import type { StubCall } from './gate.kit.test.js';
 
-const exchangePath = '/v1/ci/token';
 const decisionPath = `/v1/runs/${runId}/decision`;
 
 interface TokenStub {
@@ -38,7 +37,7 @@ interface TokenStub {
 function tokenStub(answer: (authorization: string | null) => Response): TokenStub {
   let exchanges = 0;
   const stub = stubFetch((request) => {
-    if (request.url.endsWith(exchangePath)) {
+    if (isDevExchange(request)) {
       exchanges += 1;
       return jsonResponse(200, exchangeBody(`egt-token-${exchanges}`));
     }
@@ -47,7 +46,7 @@ function tokenStub(answer: (authorization: string | null) => Response): TokenStu
   return {
     fetchImpl: stub.fetchImpl,
     exchanges: () => exchanges,
-    decisionCalls: () => stub.calls.filter((call) => !call.request.url.endsWith(exchangePath)),
+    decisionCalls: () => stub.calls.filter((call) => !isDevExchange(call.request)),
   };
 }
 

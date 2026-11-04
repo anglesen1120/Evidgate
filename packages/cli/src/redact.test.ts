@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRedactingIo, redact, redacted, registerSecret, resetSecrets } from './redact.js';
 
@@ -451,15 +451,73 @@ describe('URL credential spellings', () => {
     },
   ];
 
+  // Process CPU time, not wall clock: a busy machine delays both sizes alike, so the ratio
+  // stays a property of the scan, where a suffix rescan inside the match loop turns the
+  // expected 4x into about 16x. The best of three runs drops collection pauses.
+  const cpuMicros = (): number => {
+    const usage = process.cpuUsage();
+    return usage.user + usage.system;
+  };
+
+  const measureMicros = (input: string): number => {
+    let best = Number.POSITIVE_INFINITY;
+    for (let run = 0; run < 3; run += 1) {
+      const started = cpuMicros();
+      redact(input);
+      best = Math.min(best, cpuMicros() - started);
+    }
+    return best;
+  };
+
   it.each(hostileRows)(
     'redacts a megabyte of $shape without a rescan',
     ({ unit, stripped, repeats }) => {
       const text = unit.repeat(repeats);
       const expected = (stripped === '' ? unit : unit.replace(stripped, '')).repeat(repeats);
-      const started = performance.now();
+      const matchAll = RegExp.prototype[Symbol.matchAll];
+      let lastStart = -1;
+      let starts = 0;
 
-      expect(redact(text)).toBe(expected);
-      expect(performance.now() - started).toBeLessThan(200);
+      // Counted progress, not elapsed time: load cannot change the order of matches, while a
+      // rescan that restarts at an earlier authority start repeats one. Throwing there stops a
+      // regression at once instead of letting it walk the text quadratically.
+      const countStarts = vi.spyOn(RegExp.prototype, Symbol.matchAll).mockImplementation(function (
+        this: RegExp,
+        input: string,
+      ) {
+        const matches = matchAll.call(this, input);
+        const step = matches.next.bind(matches);
+        matches.next = () => {
+          const result = step();
+          if (!result.done) {
+            const start = result.value.index;
+            if (start <= lastStart) {
+              throw new Error('authority scan restarted over an earlier authority start');
+            }
+            lastStart = start;
+            starts += 1;
+          }
+          return result;
+        };
+        return matches;
+      });
+      let output: string;
+      try {
+        output = redact(text);
+      } finally {
+        countStarts.mockRestore();
+      }
+
+      expect(output).toBe(expected);
+      expect(starts).toBeGreaterThan(0);
+
+      const quarter = text.slice(0, Math.floor(repeats / 4) * unit.length);
+      const quarterMicros = measureMicros(quarter);
+      const fullMicros = measureMicros(text);
+
+      // Linear work scores about 4x on four times the input, quadratic about 16x; the floor keeps
+      // a sub-100us baseline from turning scheduling noise into a ratio.
+      expect(fullMicros).toBeLessThanOrEqual(10 * Math.max(quarterMicros, 100));
     },
   );
 });

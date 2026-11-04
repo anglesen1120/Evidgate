@@ -314,6 +314,32 @@ describe('tokenCache', () => {
     expect(await readdir(cacheDir)).toEqual([]);
   });
 
+  // A cache dir another account owns may be one it planted, so the write is refused rather than
+  // handing it a token. Only the uid differs between the two halves; the dir is really this user's.
+  it.runIf(posix)('writes nothing into a cache dir owned by another user', async () => {
+    const config = cacheConfig(cacheDir);
+    await mkdir(cacheDir, { mode: 0o700 });
+    await writeCachedToken(config, { token: 'egt_secret', expiresAt: '2030-01-01T00:00:00.000Z' });
+    expect(await readdir(cacheDir)).toEqual([basename(tokenCachePath(config))]);
+
+    const foreignUid = (await stat(cacheDir)).uid + 1;
+    const getuid = process.getuid;
+    process.getuid = () => foreignUid;
+    try {
+      await writeCachedToken(config, {
+        token: 'egt_rotated',
+        expiresAt: '2030-01-02T00:00:00.000Z',
+      });
+    } finally {
+      if (getuid !== undefined) {
+        process.getuid = getuid;
+      }
+    }
+
+    // The entry the first write left still holds its own token: the refused write wrote nothing.
+    expect(await readFile(tokenCachePath(config), 'utf8')).toBe(validBody);
+  });
+
   it('purges entries of the destination minted under another credential after a write', async () => {
     const base = cacheConfig(cacheDir);
     const first = { ...base, ingestToken: 'ingest-one' };

@@ -22,6 +22,7 @@ import { resetSecrets, type Io } from '../redact.js';
 import { defaultSpoolMaxBytes, ProducerSpool } from '../spool.js';
 import { writerLockFileName } from '../spoolLock.js';
 
+import { devExchangeAnswer, devToken, isDevExchange, mintedToken } from './devExchange.testing.js';
 import { deriveFinalizeIdempotencyKey } from './runsFinalize.js';
 
 /** The project slug the command scopes the finalize to. */
@@ -34,14 +35,6 @@ const producerId = 'shard-1';
 const shard = 1;
 /** A valid `manifest_hash` (`sha256:` + 64 lowercase hex); assembled, no digest literal. */
 const manifestHash = `sha256:${'a'.repeat(64)}`;
-/** The dev bearer the `EVIDGATE_DEV_TOKEN` path returns (never on disk, never printed). */
-const devToken = 'dev-token-value';
-/**
- * The `ci_producer` token the dev exchange mints: the bearer the finalize sends. It is
- * deliberately a different string from `devToken`, so a finalize that sent the dev token raw
- * would fail the `Bearer ${mintedToken}` assertion.
- */
-const mintedToken = 'egt_minted_ci_token';
 /** The namespace of the documented derived-key pre-image. */
 const keyVersion = 'evidgate.finalize-key.v1';
 
@@ -124,29 +117,23 @@ function refusal(status: number, code: string, requestId = 'req-3'): Response {
 const exchangeProjectId = '5a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
 
 /**
- * The `/v1/ci/token` answer for the dev source: the dev token is exchanged like an ingest
- * credential, so the bearer the command sends is the token this body hands out. It mints
- * `mintedToken`, a different string from the credential sent in, so an exchange that was
- * skipped shows up as a `Bearer ${devToken}` mismatch, and expires 30 minutes out, inside the
- * cache's 60 + 5 minute freshness window.
+ * A stub whose handler answers the command's own request, never the token exchange: the dev
+ * token is exchanged like an ingest credential, so the bearer the command sends is the token
+ * the exchange hands out. The minted token expires 30 minutes out, inside the cache's 60 + 5
+ * minute freshness window, and it is a different string from the credential sent in, so an
+ * exchange that was skipped shows up as a `Bearer ${devToken}` mismatch.
  */
-function devTokenExchange(request: Request): Response | undefined {
-  return new URL(request.url).pathname === '/v1/ci/token'
-    ? jsonResponse(200, {
-        token: mintedToken,
-        expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
-        project_id: exchangeProjectId,
-        permission_set: [],
-      })
-    : undefined;
-}
-
-/** A stub whose handler answers the command's own request, never the token exchange. */
 function stubDevFetch(handler: (request: Request) => Response | Promise<Response>): {
   readonly fetchImpl: typeof fetch;
   readonly calls: StubCall[];
 } {
-  return stubFetch((request) => devTokenExchange(request) ?? handler(request));
+  return stubFetch(
+    (request) =>
+      devExchangeAnswer(request, {
+        projectId: exchangeProjectId,
+        expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+      }) ?? handler(request),
+  );
 }
 
 /**
@@ -154,7 +141,7 @@ function stubDevFetch(handler: (request: Request) => Response | Promise<Response
  * index means the same thing it did before the dev source gained a token exchange.
  */
 function apiCalls(stub: { readonly calls: StubCall[] }): StubCall[] {
-  return stub.calls.filter((call) => new URL(call.request.url).pathname !== '/v1/ci/token');
+  return stub.calls.filter((call) => !isDevExchange(call.request));
 }
 
 /** The JSON body the stub recorded for `call`. */
@@ -803,15 +790,13 @@ describe('runs finalize', () => {
     const { spoolDir, producerDir } = await writeSpool({ spooled: 2, acked: 2 });
     const env = await devEnv(spoolDir, { EVIDGATE_SPOOL_MAX_BYTES: '1048576' });
     const producerToken = 'egt_producer_token_for_finalize';
-    const stub = stubFetch((request) =>
-      new URL(request.url).pathname === '/v1/ci/token'
-        ? jsonResponse(200, {
-            token: producerToken,
-            expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
-            project_id: exchangeProjectId,
-            permission_set: [],
-          })
-        : accepted(),
+    const stub = stubFetch(
+      (request) =>
+        devExchangeAnswer(request, {
+          token: producerToken,
+          projectId: exchangeProjectId,
+          expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
+        }) ?? accepted(),
     );
     const out = capture();
 

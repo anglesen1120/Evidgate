@@ -16,7 +16,13 @@ import { resolveConfig } from '../config.js';
 import { main } from '../main.js';
 import { resetSecrets, type Io } from '../redact.js';
 
-import { devStubFetch, devToken, exchangeBody, mintedToken } from './devExchange.testing.js';
+import {
+  devStubFetch,
+  devToken,
+  exchangeBody,
+  isDevExchange,
+  mintedToken,
+} from './devExchange.testing.js';
 
 /** The project slug the command scopes the upload to. */
 const project = 'proj-1';
@@ -557,9 +563,8 @@ describe('manifests upload', () => {
     const seen: string[] = [];
     const fetchImpl: typeof fetch = (input, init) => {
       const request = input instanceof Request ? input : new Request(input, init);
-      const path = new URL(request.url).pathname;
-      seen.push(path);
-      return path === exchangePath
+      seen.push(new URL(request.url).pathname);
+      return isDevExchange(request)
         ? Promise.resolve(jsonResponse(200, exchangeBody(mintedToken)))
         : Promise.reject(new TypeError('fetch failed http://secret'));
     };
