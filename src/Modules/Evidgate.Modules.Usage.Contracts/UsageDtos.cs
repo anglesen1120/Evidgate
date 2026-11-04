@@ -112,6 +112,26 @@ public sealed record UsageEntryInput(
     DateTimeOffset OccurredAt);
 
 /// <summary>
+/// One ledger row as recorded, read back by <see cref="IUsageLedger.FindAsync"/>: the content a later caller
+/// compares before it treats a duplicate billing key as its own replay. <c>occurred_at</c> is deliberately absent — a
+/// meter that re-derives a batch's instant from a different clock still bills the same fact, so the instant is not part
+/// of the identity a replay must match.
+/// </summary>
+/// <param name="BillingKey">The key the row was recorded under (the first write's key, which is the caller's).</param>
+/// <param name="Metric">The stored <c>metric</c> column: one of <see cref="UsageLedgerMetricNames"/>' values.</param>
+/// <param name="ProjectId">The row's project, or null for an org-level metric.</param>
+/// <param name="Quantity">The recorded amount in <paramref name="Unit"/>.</param>
+/// <param name="Unit">The recorded unit.</param>
+/// <param name="Period">The recorded billing period, <c>YYYY-MM</c>.</param>
+public sealed record UsageEntryRecord(
+    string BillingKey,
+    string Metric,
+    Guid? ProjectId,
+    decimal Quantity,
+    string Unit,
+    string Period);
+
+/// <summary>
 /// One <see cref="IUsageLedger.RecordAsync"/> call: the entries of one metering source (04.8.1's batch,
 /// 06.5.2's period, 12.2.1's support hours).
 /// <para>

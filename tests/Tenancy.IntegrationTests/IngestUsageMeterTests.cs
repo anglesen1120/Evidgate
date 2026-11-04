@@ -4,6 +4,7 @@
 // each asserted on the ledger's own rows, because a double-billed batch is the failure this story exists to prevent.
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Usage.Application;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.Configuration;
@@ -119,6 +120,39 @@ public sealed class IngestUsageMeterTests
             database,
             $"update public.task set state = 'queued', attempts = 0, locked_until = null, available_at = now() "
             + $"where task_type = '{MeteringTask}'");
+
+    private Task<string> LastErrorAsync(IngestTestWorld world) =>
+        _fixture.ScalarAsync<string>(
+            world.Database, $"select last_error from public.task where task_type = '{MeteringTask}'");
+
+    /// <summary>The entry the handler builds for <paramref name="batchId"/>, as a seed the caller can vary.</summary>
+    private async Task<UsageEntryInput> SeededEntryAsync(IngestTestWorld world, Guid batchId, decimal quantity)
+    {
+        var period = await BatchColumnAsync(
+            world.Database, batchId, "to_char(created_at at time zone 'UTC', 'YYYY-MM')");
+
+        return new UsageEntryInput(
+            $"batch:{batchId:D}:event",
+            UsageMetric.Results,
+            world.Project,
+            quantity,
+            "batch",
+            period,
+            DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>Records one ledger row through the real in-process surface, committed before the task runs.</summary>
+    private static async Task SeedLedgerAsync(IngestTestWorld world, UsageEntryInput entry)
+    {
+        await using var services = world.Host.Services.CreateAsyncScope();
+        var provider = services.ServiceProvider;
+        var scopes = provider.GetRequiredService<ITenantScopeFactory>();
+
+        await using var scope = await scopes.BeginAsync(world.Org, null, false, Token);
+        await provider.GetRequiredService<IUsageLedger>()
+            .RecordAsync(new RecordUsageBatchRequest([entry]), Token);
+        await scope.CommitAsync(Token);
+    }
 
     private static TaskConsumer Consumer(IngestTestWorld world) =>
         world.Host.Services.GetRequiredService<TaskConsumer>();
@@ -336,6 +370,69 @@ public sealed class IngestUsageMeterTests
         (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(0);
     }
 
+    // ------------------------------------------------------------------ fail-closed duplicates
+
+    [Fact]
+    public async Task MeterBatch_SeededDuplicateWithDifferentQuantity_FailsClosed()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(owned.Name);
+        var batchId = await PostBatchAsync(world, events: 2);
+
+        // A row already on file under this batch's key but with another quantity: the batch was billed as something
+        // else, which is never "already done".
+        await SeedLedgerAsync(world, await SeededEntryAsync(world, batchId, quantity: 7m));
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.task set max_attempts = 1 where task_type = '{MeteringTask}'");
+
+        (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
+        (await Consumer(world).PollOnceAsync(Queue, Token)).ShouldBe(1);
+
+        (await TaskStateAsync(world.Database))
+            .ShouldBe("dead_letter", "a stored bill that disagrees is a failure, not a replay");
+        (await LastErrorAsync(world)).ShouldContain("quantity");
+        (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1, "the stored bill is never rewritten");
+        (await LedgerColumnAsync(world.Database, world.Org, batchId, "quantity::text")).ShouldBe("7");
+    }
+
+    [Fact]
+    public async Task MeterBatch_SeededDuplicateWithDifferentProject_FailsClosed()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(owned.Name);
+        var batchId = await PostBatchAsync(world, events: 2);
+
+        // Every compared field but the project matches: the batch names a project, the stored row does not.
+        await SeedLedgerAsync(world, (await SeededEntryAsync(world, batchId, quantity: 2m)) with { ProjectId = null });
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.task set max_attempts = 1 where task_type = '{MeteringTask}'");
+
+        (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
+        (await Consumer(world).PollOnceAsync(Queue, Token)).ShouldBe(1);
+
+        (await TaskStateAsync(world.Database)).ShouldBe("dead_letter");
+        (await LastErrorAsync(world)).ShouldContain("project_id");
+        (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1);
+        (await LedgerColumnAsync(world.Database, world.Org, batchId, "project_id::text")).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task MeterBatch_SeededMatchingDuplicate_IsAFreeReplay()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(owned.Name);
+        var batchId = await PostBatchAsync(world, events: 2);
+
+        // The row the handler would have written is already there: the duplicate is this batch's own replay.
+        await SeedLedgerAsync(world, await SeededEntryAsync(world, batchId, quantity: 2m));
+
+        await DispatchAndRunAsync(world);
+
+        (await TaskStateAsync(world.Database)).ShouldBe("done");
+        (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1);
+        (await LedgerColumnAsync(world.Database, world.Org, batchId, "quantity::text")).ShouldBe("2");
+    }
+
     // ------------------------------------------------------------------ dead-letter cap
 
     [Fact]
@@ -437,6 +534,9 @@ public sealed class IngestUsageMeterTests
             failures.TryConsume()
                 ? throw new InvalidOperationException("the usage ledger is unavailable")
                 : inner.RecordAsync(request, cancellationToken);
+
+        public Task<UsageEntryRecord?> FindAsync(string billingKey, CancellationToken cancellationToken) =>
+            inner.FindAsync(billingKey, cancellationToken);
     }
 
     /// <summary>The real ledger, failing once only after the inner call returned: the write happened, then the attempt died.</summary>
@@ -452,5 +552,8 @@ public sealed class IngestUsageMeterTests
                 ? throw new InvalidOperationException("the usage ledger lost its connection after the write")
                 : result;
         }
+
+        public Task<UsageEntryRecord?> FindAsync(string billingKey, CancellationToken cancellationToken) =>
+            inner.FindAsync(billingKey, cancellationToken);
     }
 }

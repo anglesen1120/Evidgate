@@ -26,6 +26,16 @@ internal sealed class UsageLedgerStore(
     ITenantScopeAccessor scopes)
 {
     /// <summary>
+    /// The stored row of one key, on the unique index <c>(org_id, billing_key)</c>: the columns a caller compares before
+    /// treating a duplicate key as its own replay. <c>occurred_at</c> is not read — it is not part of that identity.
+    /// </summary>
+    private const string FindSql = """
+        select billing_key, metric, project_id, quantity, unit, period
+        from public.usage_ledger_entry
+        where org_id = @org_id and billing_key = @billing_key
+        """;
+
+    /// <summary>
     /// The batch as a single statement. <c>price_ref</c>, <c>amount</c> and <c>currency</c> are written as null: 12.3.1-T1
     /// stores unpriced rows (DECISIONS O5, ruling T60), and 12.3.1-T3 resolves the price inside the same transaction.
     /// <c>occurred_at</c> travels as UTC <c>timestamptz[]</c>, preserving PostgreSQL microsecond precision without
@@ -53,6 +63,48 @@ internal sealed class UsageLedgerStore(
         on conflict (org_id, billing_key) do nothing
         returning billing_key
         """;
+
+    /// <summary>
+    /// Reads the row <paramref name="orgId"/>'s tenant holds under <paramref name="billingKey"/>, or null when it holds
+    /// none. One indexed read on the caller's tenant transaction: row security makes another org's key an absence, and the
+    /// read takes no lock, so a caller comparing a duplicate key never blocks the writer that created it.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope (never a value from the caller's key).</param>
+    /// <param name="billingKey">The key to read; the unique index on <c>(org_id, billing_key)</c> answers it.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal async Task<UsageEntryRecord?> FindAsync(
+        Guid orgId,
+        string billingKey,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(billingKey);
+
+        await using var context = contexts.Create();
+        await using var command = (NpgsqlCommand)context.Database.GetDbConnection().CreateCommand();
+        command.Transaction = (NpgsqlTransaction)scopes.Require().Transaction;
+        command.CommandText = FindSql;
+        command.Parameters.Add(new NpgsqlParameter("org_id", NpgsqlDbType.Uuid) { Value = orgId });
+        command.Parameters.Add(new NpgsqlParameter("billing_key", NpgsqlDbType.Text) { Value = billingKey });
+
+        await using var reader = await command.ExecuteReaderAsync(
+                CommandBehavior.SingleRow, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        var projectIsNull = await reader.IsDBNullAsync(2, cancellationToken).ConfigureAwait(false);
+
+        return new UsageEntryRecord(
+            reader.GetString(0),
+            reader.GetString(1),
+            projectIsNull ? null : reader.GetGuid(2),
+            reader.GetDecimal(3),
+            reader.GetString(4),
+            reader.GetString(5));
+    }
 
     /// <summary>
     /// Validates the distinct projects of <paramref name="entries"/> in one read inside the caller's transaction. A

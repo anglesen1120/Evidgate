@@ -95,9 +95,67 @@ internal sealed class MeterEventBatchTaskHandler(IServiceScopeFactory scopeFacto
             occurredAt.ToString("yyyy-MM", CultureInfo.InvariantCulture),
             occurredAt);
 
-        // One call per metric (V1 has one). The key already on file is reported as a duplicate: the ledger's first
-        // write is the fact, so a replayed task is a success and never a second row.
-        await attempt.ServiceProvider.GetRequiredService<IUsageLedger>()
-            .RecordAsync(new RecordUsageBatchRequest([entry]), cancellationToken).ConfigureAwait(false);
+        var ledger = attempt.ServiceProvider.GetRequiredService<IUsageLedger>();
+
+        // One call per metric (V1 has one). A key the ledger reports as a duplicate is either this task's own replay —
+        // the stored row equals the one built here — or a row this batch never wrote, which must never be rewritten.
+        var result = await ledger
+            .RecordAsync(new RecordUsageBatchRequest([entry]), cancellationToken)
+            .ConfigureAwait(false);
+
+        if (result.Duplicates.Contains(entry.BillingKey, StringComparer.Ordinal))
+        {
+            await EnsureDuplicateIsThisBatchAsync(ledger, payload.EventBatchId, entry, cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Compares the stored row of a duplicate key with the entry this attempt built. A missing row (the ledger just
+    /// reported it, so this is a contract failure) or a different metric, project, quantity, unit or period means the
+    /// batch was billed as something else: the attempt throws, so the queue retries and dead-letters the row instead of
+    /// accepting a wrong bill. The message names the batch and the differing fields, never their values.
+    /// </summary>
+    private static async Task EnsureDuplicateIsThisBatchAsync(
+        IUsageLedger ledger,
+        Guid eventBatchId,
+        UsageEntryInput entry,
+        CancellationToken cancellationToken)
+    {
+        var stored = await ledger.FindAsync(entry.BillingKey, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException(
+                $"the usage ledger reported the billing key of batch {eventBatchId} as a duplicate but holds no such row");
+
+        var differ = new List<string>(5);
+        if (!string.Equals(stored.Metric, UsageLedgerMetricNames.Results, StringComparison.Ordinal))
+        {
+            differ.Add("metric");
+        }
+
+        if (stored.ProjectId != entry.ProjectId)
+        {
+            differ.Add("project_id");
+        }
+
+        if (stored.Quantity != entry.Quantity)
+        {
+            differ.Add("quantity");
+        }
+
+        if (!string.Equals(stored.Unit, entry.Unit, StringComparison.Ordinal))
+        {
+            differ.Add("unit");
+        }
+
+        if (!string.Equals(stored.Period, entry.Period, StringComparison.Ordinal))
+        {
+            differ.Add("period");
+        }
+
+        if (differ.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"the usage ledger row of batch {eventBatchId} differs in {string.Join(", ", differ)}: a recorded bill is never rewritten");
+        }
     }
 }

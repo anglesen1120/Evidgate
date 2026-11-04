@@ -57,4 +57,17 @@ public interface IUsageLedger
     /// No tenant transaction is open: the tenant-scope guard throws before any statement runs.
     /// </exception>
     Task<UsageBatchResult> RecordAsync(RecordUsageBatchRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reads the row <paramref name="billingKey"/> recorded for the caller's org, or null when this org has none: another
+    /// org's key is invisible under row security, so a cross-org lookup is an absence, never a row. The same rules as
+    /// <see cref="RecordAsync"/> apply — one statement inside the caller's tenant transaction, no connection or
+    /// transaction of its own, no commit — because a caller that is about to treat a duplicate key as its own replay
+    /// reads what the first write stored.
+    /// </summary>
+    /// <param name="billingKey">The key whose stored row to read.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <returns>The stored row, or null when this tenant has no row under the key.</returns>
+    /// <exception cref="InvalidOperationException">No tenant transaction is open: the scope guard throws before any statement runs.</exception>
+    Task<UsageEntryRecord?> FindAsync(string billingKey, CancellationToken cancellationToken);
 }
