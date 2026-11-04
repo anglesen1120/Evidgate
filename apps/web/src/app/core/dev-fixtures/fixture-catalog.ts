@@ -390,6 +390,9 @@ export interface FixtureCatalogRow {
  * revoke row spells `tenant_admin` with the underscore, unlike the older `membership-remove-*` rows,
  * which are left as they were instead of being rewritten behind their own suite.
  *
+ * `permissions-list-usage-read` (`?fixture.variant.listPermissions=usage-read`) holds `organization:read`
+ * and `usage:read` alone, the one grant the Usage page needs, so it is reachable as a rendered surface.
+ *
  * 09.7.1-T3 (with `F12`) adds the Settings area's own pages. `permissions-list-settings-secrets-write`
  * (`?fixture.variant.listPermissions=settings-secrets-write`) is `permissions-list-settings-admin`
  * plus `ingest_token:write` — eleven rows copied verbatim from `contracts/permissions.json`, the
