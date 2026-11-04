@@ -451,6 +451,24 @@ describe('URL credential spellings', () => {
     },
   ];
 
+  // Process CPU time, not wall clock: a busy machine delays both sizes alike, so the ratio
+  // stays a property of the scan, where a suffix rescan inside the match loop turns the
+  // expected 4x into about 16x. The best of three runs drops collection pauses.
+  const cpuMicros = (): number => {
+    const usage = process.cpuUsage();
+    return usage.user + usage.system;
+  };
+
+  const measureMicros = (input: string): number => {
+    let best = Number.POSITIVE_INFINITY;
+    for (let run = 0; run < 3; run += 1) {
+      const started = cpuMicros();
+      redact(input);
+      best = Math.min(best, cpuMicros() - started);
+    }
+    return best;
+  };
+
   it.each(hostileRows)(
     'redacts a megabyte of $shape without a rescan',
     ({ unit, stripped, repeats }) => {
@@ -492,6 +510,14 @@ describe('URL credential spellings', () => {
 
       expect(output).toBe(expected);
       expect(starts).toBeGreaterThan(0);
+
+      const quarter = text.slice(0, Math.floor(repeats / 4) * unit.length);
+      const quarterMicros = measureMicros(quarter);
+      const fullMicros = measureMicros(text);
+
+      // Linear work scores about 4x on four times the input, quadratic about 16x; the floor keeps
+      // a sub-100us baseline from turning scheduling noise into a ratio.
+      expect(fullMicros).toBeLessThanOrEqual(10 * Math.max(quarterMicros, 100));
     },
   );
 });
