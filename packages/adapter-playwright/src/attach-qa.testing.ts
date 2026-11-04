@@ -15,6 +15,7 @@ import {
   ARTIFACT_A,
   ARTIFACT_B,
   attachment,
+  fakeResult as sharedFakeResult,
   file,
   recordsOf,
   tempDir,
@@ -30,7 +31,6 @@ export {
   attachment,
   configFor,
   endOfRun,
-  fakeResult,
   file,
   fullResult,
   gate,
@@ -39,6 +39,16 @@ export {
   tempDir,
   warnOf,
 } from './attach.testing.js';
+
+/**
+ * The QA probes were written against `duration: 11`; the shared helper defaults to 9 for the
+ * delivered attach specs. The value lives here so every QA probe keeps its original fixture.
+ */
+export function fakeResult(
+  attachments: readonly PlaywrightAttachment[],
+): Parameters<EvidgateReporter['onTestEnd']>[1] {
+  return sharedFakeResult(attachments, 11);
+}
 
 export const RUN_ID = 'run-qa-s87';
 export const PRODUCER_ID = 'shard-1';

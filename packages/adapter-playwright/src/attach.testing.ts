@@ -231,10 +231,11 @@ export function fakeTest(): Parameters<EvidgateReporter['onTestEnd']>[0] {
 
 export function fakeResult(
   attachments: readonly PlaywrightAttachment[],
+  duration = 9,
 ): Parameters<EvidgateReporter['onTestEnd']>[1] {
   return {
     status: 'passed',
-    duration: 9,
+    duration,
     retry: 0,
     steps: [],
     annotations: [],
