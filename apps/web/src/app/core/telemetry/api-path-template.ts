@@ -49,6 +49,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'decision',
   'dev',
   'diff',
+  'discard',
   'download-url',
   'drafts',
   'dry-run',
