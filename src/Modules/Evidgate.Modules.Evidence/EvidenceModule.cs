@@ -65,7 +65,7 @@ internal static class EvidenceModule
         // piece; only the Worker runs a consumer, and the Api host tolerates the row until it does (T19).
         services.AddTaskHandler<ArtifactStagingDeletePayload, ArtifactStagingDeleteTaskHandler>();
 
-        // 06.2.3-T1: the masking scan the completion enqueues for every ready artifact. Registered transactionless
+        // The masking scan the completion enqueues for every ready artifact. Registered transactionless
         // because the object read must run with no database transaction open (00 §5.7 P5): the handler opens a short
         // read scope, reads the object and scans it, then opens the write scope that commits the verdict.
         services.AddTransactionlessTaskHandler<RunArtifactSecretScanPayload, RunArtifactSecretScanHandler>();

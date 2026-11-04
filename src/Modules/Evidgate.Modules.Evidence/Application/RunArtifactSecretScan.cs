@@ -342,4 +342,3 @@ internal sealed partial class RunArtifactSecretScanHandler(
         [property: JsonPropertyName("hit_count")] int HitCount,
         [property: JsonPropertyName("action")] string Action);
 }
-
