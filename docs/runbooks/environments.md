@@ -104,7 +104,18 @@ A third kind of row is a non-secret **tunable safety cap**: the ingestion limit 
 ordinary bound integers with a safe default (8 MiB expanded, 20:1 gzip ratio), so no environment provides
 them — every row is `source: default`, `required: false`, `requiredAtBoot: false` — while the matrix still
 records the option's `[Range]` bounds (1 MiB..64 MiB and 1..1000), which the lint derives from the
-attributes.
+attributes. The same shape covers the events route's burst budget
+(`EVIDGATE__INGESTION__RATELIMIT__PERMITLIMIT`, `…__PROJECTPERMITLIMIT`, `…__WINDOWSECONDS`,
+`…__MAXPARTITIONS`): defaults of 120 requests per 60 s per token, 480 per project and window, and at most
+10,000 resident partitions — two per request, the project's and the token's, so the floor is 2. One
+request is charged to the token's own budget and to the project-wide budget in a single step and is
+admitted only when both allow, so minting more producer tokens cannot raise what a project may send and
+a refused request spends neither budget. A token that finds no room in the map is charged to the
+project's budget alone; only a project that cannot get a partition of its own is refused. `PROJECTPERMITLIMIT`
+must be at least `PERMITLIMIT`, or the host fails at boot naming the key; a deployment that raises the
+token budget past the default must raise the project budget with it. Both budgets are held per process,
+so the platform-wide burst a project may send is the project limit times the replica count; a deployment
+that needs one shared budget must move the counter to a shared store first.
 
 One more shape is a feature that stays **absent until it is configured**: the federated-login rows
 (`EVIDGATE__LOGIN__*`, `EVIDGATE__OIDC__GOOGLE__*`, 02.3.1-T1.1/T1.2, and `EVIDGATE__OAUTH__GITHUB__*`,

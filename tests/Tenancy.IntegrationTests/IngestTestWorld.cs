@@ -101,6 +101,7 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         int? planCount = null,
         IReadOnlyList<(int Parent, int Child)>? edges = null,
         Action<IServiceCollection>? services = null,
+        IReadOnlyDictionary<string, string?>? configuration = null,
         string? database = null)
     {
         database ??= await fixture.SharedDatabaseAsync();
@@ -116,8 +117,14 @@ internal sealed class IngestTestWorld : IAsyncDisposable
             project = await RegistryApi.CreateProjectAsync(setup, user, org, "checkout");
         }
 
+        // The events route keys its burst budget on the token's project scope, so a world's own
+        // writer always carries the project it writes into; another scope stays as the caller set it.
+        principal = principal is { Kind: PrincipalKind.ServicePrincipal, ProjectScope: null, CredentialId: { Length: > 0 } } unscoped
+            ? RequestPrincipal.Service(project, unscoped.ClaimedPermissions, unscoped.CredentialId, unscoped.CiRun)
+            : principal;
+
         var host = TenancyApiFactory.WithPrincipal(
-            fixture.AppConnectionString(database), org, project, principal, services: services);
+            fixture.AppConnectionString(database), org, project, principal, configuration, services);
 
         try
         {
