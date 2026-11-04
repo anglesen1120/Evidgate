@@ -37,6 +37,8 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'cancel-invite',
   'candidates',
   'cases',
+  'changes',
+  'changes:apply',
   'checklist-items',
   'ci',
   'ci-bindings',

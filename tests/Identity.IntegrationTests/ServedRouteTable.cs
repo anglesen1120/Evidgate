@@ -919,6 +919,30 @@ internal static class RouteRequests
             new(HttpMethod.Delete, $"/v1/projects/{ctx.ProjectId}/authoring/manual-cases/{ctx.ManualCaseId}/links/{Guid.NewGuid():D}",
                 IdempotencyKey: Key()));
 
+        // The pending-changes queue: every probe is a well-formed request, because the delegates read the body and
+        // `If-Match` before the permission stage — a malformed one would answer 422 and the denied case could not see
+        // the 403 it asserts. The change ids are fresh, so a granted call answers 404 like the entity ids above.
+        Add("GET", "/v1/projects/{p}/authoring/changes", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/changes"));
+        Add("POST", "/v1/projects/{p}/authoring/changes", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/changes",
+            new JsonObject
+            {
+                ["target_kind"] = "checklist_item",
+                ["target_id"] = ctx.ItemId.ToString(),
+                ["change_type"] = "comment",
+                ["payload"] = new JsonObject { ["body"] = "probe comment" },
+            },
+            IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/authoring/changes/{c}", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/authoring/changes/{Guid.NewGuid():D}"));
+        Add("POST", "/v1/projects/{p}/authoring/changes/{c}/discard", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/changes/{Guid.NewGuid():D}/discard",
+                IdempotencyKey: Key()));
+        Add("POST", "/v1/projects/{p}/authoring/changes:apply", ctx =>
+            new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/authoring/changes:apply",
+                new JsonObject { ["change_ids"] = new JsonArray(Guid.NewGuid().ToString("D")) },
+                IfMatch: "\"order:" + new string('0', 64) + "\"", IdempotencyKey: Key()));
+
         // 13.1.1-T5: route 25, the import/export pair. The import probe is a dry run of a valid one-row JSON document —
         // a body the readers refuse would answer 422 before the permission stage, so a denied probe could not observe
         // the 403 it asserts — and a dry run writes nothing even for a granted caller.

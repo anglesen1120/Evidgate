@@ -464,6 +464,29 @@ public static class IsolationRouteCases
             (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/versions/{id}/restore"), (_, _) => [],
             own: p => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/versions/{p.AuthoringVersionId}/restore")),
 
+        // The pending-changes queue. No world seeds a queued change, so the three object probes name a fresh id: it is
+        // foreign to every org, which is exactly what the case asserts (404, the same answer a random id gets). The
+        // queue body is a well-formed comment and the apply body a well-formed selection with an order-shaped tag, so a
+        // granted caller would reach the command instead of failing validation; neither can write when it does.
+        ProjectCase("GET", "/v1/projects/{p}/authoring/changes", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/authoring/changes?limit=1"), list: true, ownControl: true),
+        ProjectCase("POST", "/v1/projects/{p}/authoring/changes", p => new(HttpMethod.Post,
+            $"/v1/projects/{p}/authoring/changes", new JsonObject
+            {
+                ["target_kind"] = "checklist_item",
+                ["target_id"] = p,
+                ["change_type"] = "comment",
+                ["payload"] = new JsonObject { ["body"] = "intruder comment" },
+            })),
+        ObjectCaseWith("GET", "/v1/projects/{p}/authoring/changes/{c}", p => [("change", Guid.NewGuid())],
+            (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{id}"), (_, _) => []),
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/changes/{c}/discard", p => [("change", Guid.NewGuid())],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/changes/{id}/discard"), (_, _) => []),
+        ProjectCase("POST", "/v1/projects/{p}/authoring/changes:apply", p => new(HttpMethod.Post,
+            $"/v1/projects/{p}/authoring/changes:apply",
+            new JsonObject { ["change_ids"] = new JsonArray { Guid.NewGuid() } },
+            IfMatch: "\"order:" + new string('0', 64) + "\"")),
+
         // 13.2.1-T1: the project AI-settings edge. Every route names the project only, so the foreign-project probe is the
         // ordinary one; the save is a well-formed first save (If-Match "0" tags the default) and has no own control
         // because a granted probe would write. The history detail takes the project's version 1, which no project in the
