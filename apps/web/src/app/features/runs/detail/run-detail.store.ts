@@ -1,8 +1,9 @@
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
-import type { EvidenceRevision, RunAttemptSummary, RunStateDto } from '@evidgate/sdk';
+import type { EvidenceRevision, RunStateDto } from '@evidgate/sdk';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { ApiRequestError, isApiRequestError, type ApiError } from '../../../core/http/api-error';
+import { takeKeysetPage, type KeysetRefusals } from '../../../shared/keyset-walk';
 import { RunDataService } from '../data/run-data.service';
 import { toDecisionCandidate } from './decision/decision-mapper';
 import { refusesAccess } from './decision/decision-refusal';
@@ -12,11 +13,9 @@ import { toAttemptRow, type AttemptRow } from './attempts/attempt-summary';
 import { isCanonicalRevisionNo } from './revision-pin';
 import {
   newestRevision,
-  REVISIONS_CURSOR_REPEATED,
   REVISIONS_PAGE_LIMIT,
-  REVISIONS_PAGE_WITHOUT_NEW_ROWS,
+  REVISIONS_REFUSALS,
   REVISIONS_WALK_REFUSALS,
-  takeFreshRevisions,
   type RevisionsStatus,
 } from './revision-walk';
 
@@ -78,11 +77,9 @@ function toApiError(failure: unknown): ApiError {
 const UNAVAILABLE: DecisionViewModel = { kind: 'unavailable', cause: 'error' };
 
 /**
- * The two ways a keyset walk reads itself into a loop: the server hands back the cursor it was
- * given, or a follow-up page adds no attempt that is not already loaded. Both end the walk with
- * a TYPED failure — a plain `Error` would reach `toApiError` as `UNRESOLVED_FAILURE` and leave
- * the panel with empty copy — and neither is retryable, because the same request would be
- * refused the same way. The cursor is dropped with the failure, so Load more cannot re-request it.
+ * The two ways the attempts walk reads itself into a loop, refused typed rather than as a plain
+ * `Error`: `toApiError` would reduce that to the blank `UNRESOLVED_FAILURE`, and neither shape is
+ * retryable. The cursor is dropped with the failure, so Load more cannot re-request it.
  */
 const ATTEMPTS_CURSOR_REPEATED: ApiError = {
   kind: 'unexpected',
@@ -104,30 +101,15 @@ const ATTEMPTS_PAGE_WITHOUT_NEW_ROWS: ApiError = {
   details: [],
   retryAfterSeconds: null,
 };
+/** The pair one walk step refuses with, so a code and its copy are only ever authored here. */
+const ATTEMPTS_REFUSALS: KeysetRefusals = {
+  cursorRepeated: ATTEMPTS_CURSOR_REPEATED,
+  pageWithoutNewRows: ATTEMPTS_PAGE_WITHOUT_NEW_ROWS,
+};
 const ATTEMPTS_WALK_REFUSALS: ReadonlySet<string> = new Set([
-  ATTEMPTS_CURSOR_REPEATED.code,
-  ATTEMPTS_PAGE_WITHOUT_NEW_ROWS.code,
+  ATTEMPTS_REFUSALS.cursorRepeated.code,
+  ATTEMPTS_REFUSALS.pageWithoutNewRows.code,
 ]);
-
-/**
- * The incoming page without the attempts already loaded, in page order, with the first copy
- * kept. A write between two keyset reads shifts the window, and a server repeating an entry is
- * not forbidden, so a row can arrive twice; a cursor cycle (`A → B → A`) serves a whole earlier
- * page again. Rendering it twice would give one attempt two rows. Every attempt_id seen —
- * loaded before this read or new here — is added to `seen`, which the caller keeps for the walk.
- */
-function takeFreshAttempts(
-  seen: Set<string>,
-  incoming: readonly RunAttemptSummary[],
-): RunAttemptSummary[] {
-  const fresh: RunAttemptSummary[] = [];
-  for (const attempt of incoming) {
-    if (seen.has(attempt.attempt_id)) continue;
-    seen.add(attempt.attempt_id);
-    fresh.push(attempt);
-  }
-  return fresh;
-}
 
 /** Page-local, newest-read-wins. Neither a failed read nor route reuse retains old run data. */
 export const RunDetailStore = signalStore(
@@ -253,23 +235,21 @@ export const RunDetailStore = signalStore(
           ...(cursor === null ? {} : { cursor }),
         });
         if (read !== attemptsGeneration) return;
-        // A cursor the server repeats would loop forever: refuse it as a typed failure.
-        if (page.next_cursor !== null && page.next_cursor === cursor) {
-          throw new ApiRequestError(ATTEMPTS_CURSOR_REPEATED);
-        }
-        const seen = new Set(first ? [] : loadedAttemptIds);
-        const fresh = takeFreshAttempts(seen, page.items);
-        // A follow-up page that adds no attempt yet promises another page cannot advance the walk:
-        // refuse it the same way. An empty terminal page (no cursor) simply ends the walk.
-        if (!first && fresh.length === 0 && page.next_cursor !== null) {
-          throw new ApiRequestError(ATTEMPTS_PAGE_WITHOUT_NEW_ROWS);
-        }
-        loadedAttemptIds = seen;
-        const rows = fresh.map(toAttemptRow);
+        const step = takeKeysetPage({
+          cursor,
+          items: page.items,
+          nextCursor: page.next_cursor,
+          seen: loadedAttemptIds,
+          keyOf: (attempt) => attempt.attempt_id,
+          refusals: ATTEMPTS_REFUSALS,
+        });
+        if (step.outcome === 'refused') throw new ApiRequestError(step.error);
+        loadedAttemptIds = step.seen;
+        const rows = step.fresh.map(toAttemptRow);
         patchState(store, {
           attempts: first ? rows : [...(store.attempts() ?? []), ...rows],
           attemptsStatus: 'ready',
-          attemptsCursor: page.next_cursor,
+          attemptsCursor: step.nextCursor,
           attemptsLoadingMore: false,
         });
       } catch (failure: unknown) {
@@ -338,23 +318,20 @@ export const RunDetailStore = signalStore(
           ...(cursor === null ? {} : { cursor }),
         });
         if (read !== revisionsGeneration) return;
-        // The same two loop shapes the attempts walk refuses: a repeated cursor, and a follow-up
-        // page that adds no revision while promising another.
-        if (page.next_cursor !== null && page.next_cursor === cursor) {
-          throw new ApiRequestError(REVISIONS_CURSOR_REPEATED);
-        }
-        const seen = new Set(first ? [] : loadedRevisionNumbers);
-        const fresh = takeFreshRevisions(seen, page.items);
-        // A follow-up page that adds no revision yet promises another page cannot advance the walk:
-        // refuse it the same way. An empty terminal page (no cursor) simply ends the walk.
-        if (!first && fresh.length === 0 && page.next_cursor !== null) {
-          throw new ApiRequestError(REVISIONS_PAGE_WITHOUT_NEW_ROWS);
-        }
-        loadedRevisionNumbers = seen;
+        const step = takeKeysetPage({
+          cursor,
+          items: page.items,
+          nextCursor: page.next_cursor,
+          seen: loadedRevisionNumbers,
+          keyOf: (revision) => revision.revision_no,
+          refusals: REVISIONS_REFUSALS,
+        });
+        if (step.outcome === 'refused') throw new ApiRequestError(step.error);
+        loadedRevisionNumbers = step.seen;
         patchState(store, {
-          revisions: first ? fresh : [...(store.revisions() ?? []), ...fresh],
+          revisions: first ? step.fresh : [...(store.revisions() ?? []), ...step.fresh],
           revisionsStatus: 'ready',
-          revisionsCursor: page.next_cursor,
+          revisionsCursor: step.nextCursor,
           revisionsLoadingMore: false,
         });
         settleDefaultPin();
