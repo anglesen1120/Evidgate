@@ -30,6 +30,13 @@ describe('LoadingPatternComponent', () => {
     root = fixture.nativeElement as HTMLElement;
   });
 
+  it('uses Helm card and decorative skeleton while retaining one polite announcement', () => {
+    expect(root.querySelector('section')?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelector('[data-slot="skeleton"]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(root.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(root.querySelector('h2')?.getAttribute('data-slot')).toBe('card-title');
+  });
+
   for (const [state, contract] of rows) {
     describe(`${state}: ${contract}`, () => {
       it('keeps visible loading copy and never introduces an interactive or success mode', () => {

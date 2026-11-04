@@ -32,6 +32,8 @@ describe('HashChipComponent', () => {
     fixture.componentRef.setInput('value', state === 'empty' ? '' : HASH);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('[hlmBadge]')?.getAttribute('data-slot')).toBe('badge');
+    expect(root.querySelector('[hlmBadge]')?.classList.contains('font-mono')).toBe(true);
     expect(
       root.querySelector('[tabindex], [role], [aria-disabled], [aria-busy], button, a'),
     ).toBeNull();
@@ -47,6 +49,7 @@ describe('HashChipComponent', () => {
       expect(root.querySelector('[data-full-value]')?.getAttribute('data-full-value')).toBe(HASH);
       const fullValue = root.querySelector('.hash-chip__full-value');
       expect(fullValue?.textContent).toBe(HASH);
+      expect(fullValue?.classList.contains('sr-only')).toBe(true);
       expect(fullValue?.closest('[aria-hidden="true"], [hidden]')).toBeNull();
       expect(root.querySelector('.identity-chip__value')?.getAttribute('aria-hidden')).toBe('true');
     }

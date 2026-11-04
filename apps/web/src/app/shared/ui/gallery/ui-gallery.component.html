@@ -1,12 +1,40 @@
-<main class="gallery">
+<main
+  class="gallery grid gap-4 p-3 sm:p-6 wrap-anywhere [&>header>h1]:m-0 [&>header>h1]:mb-3 [&>header>h1]:text-2xl [&>section>h2]:m-0 [&>section>h2]:mb-3 [&>section>h2]:text-xl [&_.evaluation-grid_h3]:m-0 [&_.evaluation-grid_h3]:mb-2 [&_.evaluation-grid_h3]:text-lg [&>header>p]:m-0 [&>header>p]:mb-3 [&>header>p]:text-muted-foreground [&>section>p]:m-0 [&>section>p]:mb-3 [&>section>p]:text-muted-foreground"
+>
   <header>
     <h1 i18n="@@shared.gallery.title">Shared UI state gallery</h1>
     <p i18n="@@shared.gallery.introduction">
       Render-only examples of evidence, decisions and their independent states.
     </p>
+    <button
+      hlmBtn
+      [variant]="'outline'"
+      [hlmDropdownMenuTrigger]="examplesMenu"
+      [attr.data-demo]="'examples-menu'"
+      i18n="@@shared.gallery.request-patterns"
+    >
+      Request state replacements
+    </button>
+    <ng-template #examplesMenu>
+      <div hlmDropdownMenu>
+        <button
+          hlmDropdownMenuItem
+          (triggered)="openConflict()"
+          i18n="@@shared.gallery.conflict-open"
+        >
+          Review conflict example
+        </button>
+        <a hlmDropdownMenuItem [href]="'#gallery-retry-after'" i18n="@@shared.gallery.retry-after">
+          Retry eligibility
+        </a>
+      </div>
+    </ng-template>
   </header>
 
-  <section aria-labelledby="gallery-evaluations">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-evaluations'"
+  >
     <h2 id="gallery-evaluations" i18n="@@shared.gallery.evaluations">
       Independent evaluation fields
     </h2>
@@ -14,18 +42,24 @@
       Completeness, outcome and decision are separate fields. Missing evidence never implies
       approval.
     </p>
-    <div class="evaluation-grid">
-      <article>
+    <div class="evaluation-grid grid gap-3 md:grid-cols-2">
+      <article hlmCard class="min-w-0 p-3">
         <h3 i18n="@@shared.gallery.evaluation-pending">Incomplete evidence, pending decision</h3>
-        <div class="specimens" data-demo="evaluation-pending">
+        <div
+          class="specimens flex flex-wrap items-start gap-3 [&>*]:min-w-0 [&>*]:max-w-full"
+          [attr.data-demo]="'evaluation-pending'"
+        >
           <app-evidence-badge [completeness]="'incomplete'" />
           <app-outcome-pill [outcome]="'no_results'" />
           <app-decision-chip />
         </div>
       </article>
-      <article>
+      <article hlmCard class="min-w-0 p-3">
         <h3 i18n="@@shared.gallery.evaluation-fail">Complete evidence, failed evaluation</h3>
-        <div class="specimens" data-demo="evaluation-fail">
+        <div
+          class="specimens flex flex-wrap items-start gap-3 [&>*]:min-w-0 [&>*]:max-w-full"
+          [attr.data-demo]="'evaluation-fail'"
+        >
           <app-evidence-badge [completeness]="'complete'" />
           <app-outcome-pill [outcome]="'has_failures'" />
           <app-decision-chip [decision]="'FAIL'" />
@@ -34,18 +68,24 @@
     </div>
   </section>
 
-  <section aria-labelledby="gallery-evidence">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-evidence'"
+  >
     <h2 id="gallery-evidence" i18n="@@shared.gallery.evidence">Evidence completeness</h2>
-    <div class="specimens">
+    <div class="specimens flex flex-wrap items-start gap-3 [&>*]:min-w-0 [&>*]:max-w-full">
       <app-evidence-badge [completeness]="'complete'" />
       <app-evidence-badge [completeness]="'incomplete'" />
       <app-evidence-badge />
     </div>
   </section>
 
-  <section aria-labelledby="gallery-outcomes">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-outcomes'"
+  >
     <h2 id="gallery-outcomes" i18n="@@shared.gallery.outcomes">Test outcomes</h2>
-    <div class="specimens">
+    <div class="specimens flex flex-wrap items-start gap-3 [&>*]:min-w-0 [&>*]:max-w-full">
       <app-outcome-pill [outcome]="'all_passed'" />
       <app-outcome-pill [outcome]="'has_failures'" />
       <app-outcome-pill [outcome]="'no_results'" />
@@ -53,19 +93,25 @@
     </div>
   </section>
 
-  <section aria-labelledby="gallery-decisions">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-decisions'"
+  >
     <h2 id="gallery-decisions" i18n="@@shared.gallery.decisions">Release decisions</h2>
-    <div class="specimens">
-      <app-decision-chip [decision]="'PASS'" data-demo="decision-pass" />
+    <div class="specimens flex flex-wrap items-start gap-3 [&>*]:min-w-0 [&>*]:max-w-full">
+      <app-decision-chip [decision]="'PASS'" [attr.data-demo]="'decision-pass'" />
       <app-decision-chip [decision]="'FAIL'" />
       <app-decision-chip [decision]="'INCONCLUSIVE'" />
       <app-decision-chip />
     </div>
   </section>
 
-  <section aria-labelledby="gallery-status">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-status'"
+  >
     <h2 id="gallery-status" i18n="@@shared.gallery.status">Generic status tones</h2>
-    <div class="specimens">
+    <div class="specimens flex flex-wrap items-start gap-3 [&>*]:min-w-0 [&>*]:max-w-full">
       @for (sample of statusSamples; track sample.tone) {
         <app-status-pill
           [tone]="sample.tone"
@@ -77,9 +123,12 @@
     </div>
   </section>
 
-  <section aria-labelledby="gallery-runs">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-runs'"
+  >
     <h2 id="gallery-runs" i18n="@@shared.gallery.runs">Run lifecycle</h2>
-    <div class="specimens">
+    <div class="specimens flex flex-wrap items-start gap-3 [&>*]:min-w-0 [&>*]:max-w-full">
       @for (state of runStates; track state) {
         <app-run-state-pill [state]="state" />
       }
@@ -87,9 +136,12 @@
     </div>
   </section>
 
-  <section aria-labelledby="gallery-hashes">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-hashes'"
+  >
     <h2 id="gallery-hashes" i18n="@@shared.gallery.hashes">Evidence hashes</h2>
-    <div class="specimens">
+    <div class="specimens flex flex-wrap items-start gap-3 [&>*]:min-w-0 [&>*]:max-w-full">
       <app-hash-chip [value]="'a1b2c3'" />
       <app-hash-chip [value]="longHash" />
       <app-hash-chip [value]="longHash" [abbreviate]="0" />
@@ -97,24 +149,33 @@
     </div>
   </section>
 
-  <section aria-labelledby="gallery-revisions">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-revisions'"
+  >
     <h2 id="gallery-revisions" i18n="@@shared.gallery.revisions">Immutable revisions</h2>
-    <div class="specimens">
+    <div class="specimens flex flex-wrap items-start gap-3 [&>*]:min-w-0 [&>*]:max-w-full">
       <app-revision-chip [revision]="0" />
       <app-revision-chip [revision]="42" />
       <app-revision-chip [revision]="''" />
     </div>
   </section>
 
-  <section aria-labelledby="gallery-reasons">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-reasons'"
+  >
     <h2 id="gallery-reasons" i18n="@@shared.gallery.reasons">Missing evidence reasons</h2>
     <app-missing-reason-list [reasons]="reasons" />
     <app-missing-reason-list />
   </section>
 
-  <section aria-labelledby="gallery-waivers">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-waivers'"
+  >
     <h2 id="gallery-waivers" i18n="@@shared.gallery.waivers">Waiver metadata</h2>
-    <div class="stack">
+    <div class="stack grid gap-4">
       <app-waiver-banner
         [approver]="'Mai Nguyen'"
         [expiresAt]="'2026-12-01T12:00:00Z'"
@@ -134,9 +195,12 @@
     </div>
   </section>
 
-  <section aria-labelledby="gallery-labels">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-labels'"
+  >
     <h2 id="gallery-labels" i18n="@@shared.gallery.labels">Case labels and healing provenance</h2>
-    <div class="stack">
+    <div class="stack grid gap-4">
       <app-label-chip [kind]="'flaky'" [originalFailure]="originalFailure" />
       <app-label-chip
         [kind]="'healed'"
@@ -154,35 +218,47 @@
     </div>
   </section>
 
-  <section aria-labelledby="gallery-request-patterns">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-request-patterns'"
+  >
     <h2 id="gallery-request-patterns" i18n="@@shared.gallery.request-patterns">
       Request state replacements
     </h2>
-    <div class="stack">
-      <app-loading-pattern data-demo="loading" />
+    <div class="stack grid gap-4">
+      <app-loading-pattern [attr.data-demo]="'loading'" />
       <app-empty-pattern
         [title]="emptyTitle"
         [description]="emptyDescription"
         [actionLabel]="emptyActionLabel"
         [actionHref]="'#gallery-evidence'"
-        data-demo="empty"
+        [attr.data-demo]="'empty'"
       />
-      <app-error-pattern [error]="networkError" (retry)="recordRetry()" data-demo="error" />
-      <app-forbidden-pattern data-demo="forbidden" />
-      <app-not-found-pattern data-demo="not-found" />
+      <app-error-pattern
+        [error]="networkError"
+        (retry)="recordRetry()"
+        [attr.data-demo]="'error'"
+      />
+      <app-forbidden-pattern [attr.data-demo]="'forbidden'" />
+      <app-not-found-pattern [attr.data-demo]="'not-found'" />
     </div>
   </section>
 
-  <section aria-labelledby="gallery-conflict">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-conflict'"
+  >
     <h2 id="gallery-conflict" i18n="@@shared.gallery.conflict">412 conflict comparison</h2>
     <p i18n="@@shared.gallery.conflict-explanation">
       The draft stays local. Reload current compares a loaded example, not a live request.
     </p>
     <button
+      hlmBtn
+      [variant]="'outline'"
       class="gallery-action"
       type="button"
       (click)="openConflict()"
-      data-demo="conflict-opener"
+      [attr.data-demo]="'conflict-opener'"
       i18n="@@shared.gallery.conflict-open"
     >
       Review conflict example
@@ -193,20 +269,23 @@
       [currentRevision]="'requirement-r19'"
       (reload)="compareReloadedExample()"
       (keepEditing)="conflictOpen.set(false)"
-      data-demo="conflict"
+      [attr.data-demo]="'conflict'"
     />
   </section>
 
-  <section aria-labelledby="gallery-retry-after">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-retry-after'"
+  >
     <h2 id="gallery-retry-after" i18n="@@shared.gallery.retry-after">Retry eligibility</h2>
-    <div class="stack">
+    <div class="stack grid gap-4">
       <app-retry-after
         [retryAfterSeconds]="30"
         [retryEligible]="false"
         [code]="'rate_limited'"
         [requestId]="'req-gallery-waiting'"
         (retry)="recordRetry()"
-        data-demo="retry-after-waiting"
+        [attr.data-demo]="'retry-after-waiting'"
       />
       <app-retry-after
         [retryAfterSeconds]="30"
@@ -214,20 +293,23 @@
         [code]="'rate_limited'"
         [requestId]="'req-gallery-eligible'"
         (retry)="recordRetry()"
-        data-demo="retry-after-eligible"
+        [attr.data-demo]="'retry-after-eligible'"
       />
     </div>
     <p
       role="status"
       [attr.aria-live]="'polite'"
-      data-demo="retry-count"
+      [attr.data-demo]="'retry-count'"
       i18n="@@shared.gallery.retry-count"
     >
       Explicit retry requests in this example: {{ retryCount() }}
     </p>
   </section>
 
-  <section aria-labelledby="gallery-request-host">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-request-host'"
+  >
     <h2 id="gallery-request-host" i18n="@@shared.gallery.request-host">Route-level request host</h2>
     <app-request-state
       [status]="'ready'"
@@ -236,7 +318,7 @@
       [emptyDescription]="emptyDescription"
       [emptyActionLabel]="emptyActionLabel"
       [emptyActionHref]="'#gallery-evidence'"
-      data-demo="request-state"
+      [attr.data-demo]="'request-state'"
     >
       <p i18n="@@shared.gallery.projected-content">
         Current content appears only after a nonempty successful read.
@@ -244,22 +326,53 @@
     </app-request-state>
   </section>
 
-  <section aria-labelledby="gallery-tables">
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-reveal'"
+  >
+    <h2 [id]="'gallery-reveal'">{{ revealHeading }}</h2>
+    @if (reveal.current(); as entry) {
+      <app-connect-step-reveal
+        [heading]="revealHeading"
+        [value]="entry.value"
+        [warning]="revealWarning"
+        [copyLabel]="copyLabel"
+        [copiedLabel]="copiedLabel"
+        [dismissLabel]="dismissLabel"
+        (dismissed)="dismissReveal()"
+      />
+    } @else {
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        [attr.data-demo]="'reveal-opener'"
+        #revealOpener
+        (click)="showReveal()"
+      >
+        {{ revealHeading }}
+      </button>
+    }
+  </section>
+
+  <section
+    class="min-w-0 border-0 border-t border-solid border-border py-4"
+    [attr.aria-labelledby]="'gallery-tables'"
+  >
     <h2 id="gallery-tables" i18n="@@shared.gallery.tables">Read-only data tables</h2>
-    <div class="stack">
+    <div class="stack grid gap-4">
       <app-data-table
         [columns]="tableColumns"
         [rows]="smallRows"
         [rowId]="rowId"
         [caption]="smallCaption"
-        data-demo="table-small"
+        [attr.data-demo]="'table-small'"
       />
       <app-data-table
         [columns]="tableColumns"
         [rows]="virtualRows"
         [rowId]="rowId"
         [caption]="virtualCaption"
-        data-demo="table-virtual"
+        [attr.data-demo]="'table-virtual'"
       />
       <app-data-table
         [columns]="tableColumns"
@@ -267,7 +380,7 @@
         [rowId]="rowId"
         [caption]="emptyCaption"
         [rowHeight]="'compact'"
-        data-demo="table-empty"
+        [attr.data-demo]="'table-empty'"
       />
     </div>
   </section>

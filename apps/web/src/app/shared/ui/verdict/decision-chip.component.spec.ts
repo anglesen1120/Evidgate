@@ -33,6 +33,10 @@ describe('DecisionChipComponent', () => {
       const root = fixture.nativeElement as HTMLElement;
 
       expect(root.querySelector('span.verdict')?.getAttribute('data-tone')).toBe(tone);
+      const badge = root.querySelector('[hlmBadge]');
+      expect(badge?.getAttribute('data-slot')).toBe('badge');
+      expect(badge?.classList.contains(`bg-[var(--eg-${tone}-bg)]`)).toBe(true);
+      expect(badge?.classList.contains(`text-[var(--eg-${tone}-fg)]`)).toBe(true);
       expect(root.querySelector('.verdict__label')?.textContent).toBe('Decision:');
       expect(root.querySelector('.verdict__value')?.textContent).toBe(label);
       expect(
@@ -153,8 +157,29 @@ describe('DecisionChipComponent', () => {
     const value = root.querySelector<HTMLElement>('.verdict__value');
     expect(value).not.toBeNull();
     if (value) {
-      expect(getComputedStyle(value).whiteSpace).toBe('normal');
-      expect(getComputedStyle(value).overflowWrap).toBe('anywhere');
+      expect(value.classList.contains('whitespace-normal')).toBe(true);
+      expect(value.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
     }
+  });
+
+  it('keeps unavailable decisions out of the tab order while allowing hover explanation and Escape', async () => {
+    const fixture = TestBed.createComponent(DecisionChipComponent);
+    fixture.componentRef.setInput('decision', 'unavailable');
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const badge = root.querySelector<HTMLElement>('.verdict--decision');
+    expect(root.querySelector('[tabindex]')).toBeNull();
+    expect(badge?.getAttribute('title')).toBe(fixture.componentInstance.explanation());
+    badge?.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    await vi.waitFor(() => expect(document.querySelector('[role="tooltip"]')).not.toBeNull());
+    await fixture.whenStable();
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
+      'The decision could not be read. Try again.',
+    );
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    });
   });
 });

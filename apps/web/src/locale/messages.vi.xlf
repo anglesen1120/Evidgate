@@ -2241,6 +2241,26 @@
         <source>Dismiss secret</source>
         <target>Ẩn giá trị bí mật</target>
       </trans-unit>
+      <trans-unit id="shared.gallery.reveal-heading" datatype="html">
+        <source>Save your ingest token</source>
+        <target>Lưu mã nạp dữ liệu</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.reveal-warning" datatype="html">
+        <source>Shown only once. Save this value before leaving this step. If copying fails, select and copy the value manually.</source>
+        <target>Chỉ hiển thị một lần. Lưu giá trị này trước khi rời bước này. Nếu sao chép không thành công, hãy chọn và sao chép thủ công.</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.reveal-copy" datatype="html">
+        <source>Copy value</source>
+        <target>Sao chép giá trị</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.reveal-copied" datatype="html">
+        <source>Value copied.</source>
+        <target>Đã sao chép giá trị.</target>
+      </trans-unit>
+      <trans-unit id="shared.gallery.reveal-dismiss" datatype="html">
+        <source>Dismiss secret</source>
+        <target>Ẩn giá trị bí mật</target>
+      </trans-unit>
       <trans-unit id="onboarding.connect.refresh-failed" datatype="html">
         <source>The connection was saved, but progress could not be refreshed. Retry loading metadata; do not create the connection again.</source>
         <target>Đã lưu kết nối nhưng chưa tải lại được tiến độ. Hãy thử tải lại thông tin; không tạo lại kết nối.</target>
@@ -3046,6 +3066,7 @@
       <trans-unit id="runs.detail.incomplete-summary" datatype="html"><source>Collection is incomplete. Review the evidence panel for recorded missing reasons.</source><target>Thu thập chưa đầy đủ. Xem bảng bằng chứng để biết các lý do thiếu đã được ghi nhận.</target></trans-unit>
       <trans-unit id="runs.detail.view-evidence" datatype="html"><source>View evidence</source><target>Xem bằng chứng</target></trans-unit>
       <trans-unit id="runs.detail.evidence-completeness" datatype="html"><source>Evidence completeness</source><target>Độ đầy đủ của bằng chứng</target></trans-unit>
+      <trans-unit id="ui.close" datatype="html"><source>Close</source><target>Đóng</target></trans-unit>
     </body>
   </file>
 </xliff>

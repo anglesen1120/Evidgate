@@ -1,5 +1,4 @@
 // State sheet: docs/design/web/state-sheet.md#how-the-specs-link-here
-// 09.1.1-T7 AC8: independent verdict fields; AC9: zoneless gallery regression coverage.
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
@@ -58,7 +57,7 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
 
   it('renders every component group and both regular and virtual typed table fixtures', () => {
     expect(root.querySelectorAll('h1')).toHaveLength(1);
-    expect(root.querySelectorAll('main > section > h2')).toHaveLength(16);
+    expect(root.querySelectorAll('main > section > h2')).toHaveLength(17);
     expect(root.querySelectorAll('app-run-state-pill')).toHaveLength(8);
     expect(
       root
@@ -111,5 +110,63 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
     expect(
       root.querySelector('[data-demo="retry-after-waiting"] button')?.hasAttribute('disabled'),
     ).toBe(true);
+  });
+
+  it('demonstrates the one-time reveal through its unchanged public interface', async () => {
+    root.querySelector<HTMLButtonElement>('[data-demo="reveal-opener"]')?.click();
+    await fixture.whenStable();
+    const control = root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]');
+    expect(control?.value).toBe('example-value-not-a-credential');
+    expect(control?.readOnly).toBe(true);
+    root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
+    await fixture.whenStable();
+    expect(root.querySelector('app-connect-step-reveal')).toBeNull();
+    expect(root.querySelector('[data-demo="reveal-opener"]')).not.toBeNull();
+    expect(document.activeElement).toBe(root.querySelector('[data-demo="reveal-opener"]'));
+  });
+
+  it('opens the menu with ArrowDown, navigates both ways and restores focus on Escape', async () => {
+    const trigger = root.querySelector<HTMLButtonElement>('[data-demo="examples-menu"]');
+    if (!trigger) throw new Error('Expected examples menu trigger');
+    trigger.focus();
+    trigger.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', keyCode: 40, bubbles: true }),
+    );
+    await fixture.whenStable();
+    const items = document.querySelectorAll<HTMLElement>('[role="menuitem"]');
+    expect(items).toHaveLength(2);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(items[0]);
+    items[0]?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', keyCode: 40, bubbles: true }),
+    );
+    expect(document.activeElement).toBe(items[1]);
+    items[1]?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowUp', keyCode: 38, bubbles: true }),
+    );
+    expect(document.activeElement).toBe(items[0]);
+    items[0]?.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }),
+    );
+    await fixture.whenStable();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('activates the conflict menu item with Enter without a pointer click', async () => {
+    const trigger = root.querySelector<HTMLButtonElement>('[data-demo="examples-menu"]');
+    if (!trigger) throw new Error('Expected examples menu trigger');
+    trigger.focus();
+    trigger.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', keyCode: 40, bubbles: true }),
+    );
+    await fixture.whenStable();
+    const item = document.querySelector<HTMLElement>('[role="menuitem"]');
+    if (!item) throw new Error('Expected conflict menu item');
+    item.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+    await fixture.whenStable();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Review conflict');
   });
 });

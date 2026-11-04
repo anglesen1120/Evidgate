@@ -1,24 +1,38 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardDescription, HlmCardTitle } from '@evidgate/ui/card';
 
 @Component({
   selector: 'app-empty-pattern',
-  standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['./state-panel.css', './empty-pattern.component.css'],
+  imports: [HlmButton, HlmCard, HlmCardDescription, HlmCardTitle],
+  host: { class: 'block min-w-0' },
   template: `
-    <section class="state-panel state-panel--empty">
-      <h2 class="state-panel__title">{{ title() }}</h2>
+    <section
+      hlmCard
+      class="state-panel state-panel--empty min-w-0 min-h-[calc(var(--eg-space-12)*3+var(--eg-space-8))] items-center justify-center gap-(--eg-space-3) px-(--eg-space-5) py-(--eg-space-8) text-center wrap-anywhere"
+    >
+      <h2
+        hlmCardTitle
+        class="state-panel__title m-0 font-(family-name:--eg-font-display) text-lg"
+        [textContent]="title()"
+      ></h2>
       @if (description(); as description) {
-        <p class="state-panel__description">{{ description }}</p>
+        <p hlmCardDescription class="state-panel__description m-0 max-w-full">{{ description }}</p>
       }
       @if (actionLabel(); as actionLabel) {
         @if (actionHref(); as actionHref) {
-          <a class="state-panel__action state-panel__action--primary" [href]="actionHref">
+          <a
+            hlmBtn
+            class="state-panel__action state-panel__action--primary h-auto min-h-(--eg-control-md) max-w-full whitespace-normal py-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
+            [href]="actionHref"
+          >
             {{ actionLabel }}
           </a>
         } @else {
           <button
-            class="state-panel__action state-panel__action--primary"
+            hlmBtn
+            class="state-panel__action state-panel__action--primary h-auto min-h-(--eg-control-md) max-w-full whitespace-normal py-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
             type="button"
             (click)="action.emit()"
           >

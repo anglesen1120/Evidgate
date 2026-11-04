@@ -21,14 +21,7 @@ import {
   revealValue,
   shell,
 } from './onboarding-support';
-import {
-  activeElement,
-  currentTheme,
-  expectNoA11yViolations,
-  LOCALES,
-  seedStoredTheme,
-  THEMES,
-} from './support';
+import { currentTheme, expectNoA11yViolations, LOCALES, seedStoredTheme, THEMES } from './support';
 
 /** The token name the reveal cases type before submitting the token form. */
 const TOKEN_NAME = 'CI upload (a11y)';
@@ -115,9 +108,8 @@ test.describe('the reveal is keyboard-reachable in reading order (§8)', () => {
     await revealValue(page).focus();
     await page.keyboard.press('Tab');
     await expect(page.locator('[data-testid="reveal-copy"]')).toBeFocused();
-    expect((await activeElement(page)).className, 'the first Tab left the reveal').toContain(
-      'state-panel__action',
-    );
+    // Ordering, not styling: the first Tab must reach Copy, never skip it for Dismiss.
+    await expect(page.locator('[data-testid="reveal-dismiss"]')).not.toBeFocused();
 
     await page.keyboard.press('Tab');
     await expect(page.locator('[data-testid="reveal-dismiss"]')).toBeFocused();

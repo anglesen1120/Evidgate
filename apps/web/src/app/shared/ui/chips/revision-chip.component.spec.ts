@@ -30,6 +30,8 @@ describe('RevisionChipComponent', () => {
     fixture.componentRef.setInput('revision', state === 'empty' ? '' : 'ev-0003');
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('[hlmBadge]')?.getAttribute('data-slot')).toBe('badge');
+    expect(root.querySelector('[hlmBadge]')?.classList.contains('font-mono')).toBe(true);
     expect(
       root.querySelector('[tabindex], [role], [aria-disabled], [aria-busy], button, a'),
     ).toBeNull();

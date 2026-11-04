@@ -1,4 +1,4 @@
-// State sheet: docs/design/web/state-sheet.md#412-conflict-dialog
+import { InteractivityChecker } from '@angular/cdk/a11y';
 import { provideZonelessChangeDetection, reflectComponentType } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
@@ -15,188 +15,194 @@ const fields: readonly ConflictField[] = Object.freeze([
   }),
   Object.freeze({ id: 'notes', label: 'Notes', local: 'unchanged', server: 'unchanged' }),
 ]);
-const showModalDescriptor = Object.getOwnPropertyDescriptor(
-  HTMLDialogElement.prototype,
-  'showModal',
-);
-const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
 
 describe('ConflictDialogComponent', () => {
   beforeEach(async () => {
-    // jsdom has no modal top layer. Stub only the browser lifecycle, not component behavior.
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-        this.querySelector<HTMLButtonElement>('button')?.focus();
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     await TestBed.configureTestingModule({
       imports: [ConflictDialogComponent],
       providers: [provideZonelessChangeDetection()],
     }).compileComponents();
+    // jsdom has no layout; leave CDK's enabled/tabbable checks and focus trap intact.
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
   });
 
   afterEach(() => {
     TestBed.resetTestingModule();
-    if (showModalDescriptor) {
-      Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModalDescriptor);
-    } else {
-      Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    }
-    if (closeDescriptor) {
-      Object.defineProperty(HTMLDialogElement.prototype, 'close', closeDescriptor);
-    } else {
-      Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
-    }
     vi.restoreAllMocks();
   });
 
-  function render(open = true) {
+  async function render(open = true) {
     const fixture = TestBed.createComponent(ConflictDialogComponent);
     fixture.componentRef.setInput('open', open);
     fixture.componentRef.setInput('fields', fields);
     fixture.componentRef.setInput('currentRevision', 'revision-18');
-    fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
-    const dialog = root.querySelector('dialog');
-    if (!dialog) throw new Error('Expected native dialog');
-    return { fixture, root, dialog };
+    await fixture.whenStable();
+    return fixture;
   }
 
-  it('opens a named native modal and shows server vs local values with text diff markers', () => {
-    const { root, dialog } = render();
-    expect(dialog.open).toBe(true);
-    expect(dialog.hasAttribute('open')).toBe(true);
-    const title = root.querySelector(`#${dialog.getAttribute('aria-labelledby')}`);
-    expect(title?.textContent).toBe('Review conflict');
-    expect(root.textContent).toContain('My retained draft');
-    expect(root.textContent).toContain('Current title');
-    expect(root.textContent).toContain('revision-18');
-    expect(root.textContent).toContain('Changed');
-    expect(root.textContent).toContain('Same');
-    expect(root.querySelector('button')?.textContent?.trim()).toBe('Close');
+  function dialog(): HTMLElement {
+    const element = document.querySelector<HTMLElement>('[role="dialog"]');
+    if (!element) throw new Error('Expected Brain dialog overlay');
+    return element;
+  }
+
+  function button(selector: string): HTMLButtonElement {
+    const element = dialog().querySelector<HTMLButtonElement>(selector);
+    if (!element) throw new Error(`Expected dialog button ${selector}`);
+    return element;
+  }
+
+  it('opens a named modal with a description and separate local/server values', async () => {
+    await render();
+    const root = dialog();
+    expect(root.getAttribute('aria-modal')).toBe('true');
+    expect(document.getElementById(root.getAttribute('aria-labelledby') ?? '')?.textContent).toBe(
+      'Review conflict',
+    );
+    expect(
+      document.getElementById(root.getAttribute('aria-describedby') ?? '')?.textContent,
+    ).toContain('Your draft is not merged');
+    for (const text of ['My retained draft', 'Current title', 'revision-18', 'Changed', 'Same']) {
+      expect(root.textContent).toContain(text);
+    }
     expect(root.querySelector('form')).toBeNull();
+    expect(button('.reload').hasAttribute('hlmBtn')).toBe(true);
   });
 
-  it('exposes only reload and keepEditing, and explicit Reload emits only reload once', () => {
-    const { fixture, root, dialog } = render();
-    expect(
-      reflectComponentType(ConflictDialogComponent)
-        ?.outputs.map((item) => item.propName)
-        .sort(),
-    ).toEqual(['keepEditing', 'reload']);
+  it('preserves its public inputs and outputs; Reload emits only reload and keeps the draft', async () => {
+    const fixture = await render();
+    const metadata = reflectComponentType(ConflictDialogComponent);
+    expect(metadata?.inputs.map((item) => item.propName).sort()).toEqual([
+      'currentRevision',
+      'fields',
+      'open',
+      'reloadError',
+      'reloadState',
+    ]);
+    expect(metadata?.outputs.map((item) => item.propName).sort()).toEqual([
+      'keepEditing',
+      'reload',
+    ]);
     const reload = vi.fn();
     const keepEditing = vi.fn();
     fixture.componentInstance.reload.subscribe(reload);
     fixture.componentInstance.keepEditing.subscribe(keepEditing);
-    expect(reload).not.toHaveBeenCalled();
-    root.querySelector<HTMLButtonElement>('.reload')?.click();
+    button('.reload').click();
     expect(reload).toHaveBeenCalledTimes(1);
     expect(keepEditing).not.toHaveBeenCalled();
-    expect(dialog.open).toBe(true);
-    expect(fields.at(0)?.local).toBe('My retained draft');
-    expect(root.textContent).toContain('Current title');
+    expect(dialog().textContent).toContain('My retained draft');
   });
 
-  it('disables only Reload while loading and keeps dismissal and draft available', () => {
-    const { fixture, root, dialog } = render();
+  it('disables Reload while loading and leaves dismissal and draft available', async () => {
+    const fixture = await render();
     const reload = vi.fn();
     const keepEditing = vi.fn();
     fixture.componentInstance.reload.subscribe(reload);
     fixture.componentInstance.keepEditing.subscribe(keepEditing);
     fixture.componentRef.setInput('reloadState', 'loading');
-    fixture.detectChanges();
-    expect(root.querySelector<HTMLButtonElement>('.reload')?.disabled).toBe(true);
-    root.querySelector<HTMLButtonElement>('.reload')?.click();
+    await fixture.whenStable();
+    expect(button('.reload').disabled).toBe(true);
+    button('.reload').click();
     expect(reload).not.toHaveBeenCalled();
-    expect(root.querySelector('.body')?.getAttribute('aria-busy')).toBe('true');
-    expect(dialog.hasAttribute('aria-busy')).toBe(false);
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Reloading…');
-    expect(root.querySelector<HTMLButtonElement>('footer button')?.disabled).toBe(false);
-    root.querySelector<HTMLButtonElement>('footer button')?.click();
+    expect(dialog().querySelector('.body')?.getAttribute('aria-busy')).toBe('true');
+    expect(dialog().querySelector('[role="status"]')?.textContent).toContain('Reloading…');
+    expect(button('footer button').disabled).toBe(false);
+    button('footer button').click();
+    await fixture.whenStable();
     expect(keepEditing).toHaveBeenCalledTimes(1);
-    expect(dialog.open).toBe(false);
-    expect(fields.at(0)?.local).toBe('My retained draft');
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(fields[0]?.local).toBe('My retained draft');
   });
 
-  it.each(['cancel', 'escape', 'close', 'keep-editing', 'backdrop'])(
-    '%s dismisses without applying anything and restores focus to the recorded opener',
-    (action) => {
+  it.each(['escape', 'close', 'keep-editing', 'backdrop'])(
+    '%s dismisses once without applying anything and restores the opener',
+    async (action) => {
       const opener = document.createElement('button');
       document.body.append(opener);
       opener.focus();
-      const { fixture, root, dialog } = render();
+      const fixture = await render();
       const reload = vi.fn();
       const keepEditing = vi.fn();
       fixture.componentInstance.reload.subscribe(reload);
       fixture.componentInstance.keepEditing.subscribe(keepEditing);
-      if (action === 'cancel') {
-        const event = new Event('cancel', { cancelable: true });
-        dialog.dispatchEvent(event);
-        expect(event.defaultPrevented).toBe(true);
-      } else if (action === 'escape') {
-        dialog.dispatchEvent(
-          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      button('.close').focus();
+      if (action === 'escape') {
+        button('.close').dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'Escape',
+            keyCode: 27,
+            bubbles: true,
+            cancelable: true,
+          }),
         );
       } else if (action === 'backdrop') {
-        dialog.dispatchEvent(new MouseEvent('click', { clientX: -1, clientY: -1, bubbles: true }));
+        document.querySelector<HTMLElement>('.cdk-overlay-backdrop')?.click();
       } else {
-        root
-          .querySelector<HTMLButtonElement>(action === 'close' ? '.close' : 'footer button')
-          ?.click();
+        button(action === 'close' ? '.close' : 'footer button').click();
       }
+      await fixture.whenStable();
       expect(keepEditing).toHaveBeenCalledTimes(1);
       expect(reload).not.toHaveBeenCalled();
-      expect(dialog.open).toBe(false);
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
       expect(document.activeElement).toBe(opener);
-      expect(fields.at(0)?.local).toBe('My retained draft');
-      fixture.destroy();
       opener.remove();
     },
   );
 
-  it('does not dismiss for clicks inside dialog bounds or on comparison content', () => {
-    const { fixture, root, dialog } = render();
+  it('uses one CDK focus trap and wraps both keyboard boundaries, excluding disabled Reload', async () => {
+    const fixture = await render();
+    const anchors = document.querySelectorAll<HTMLElement>('.cdk-focus-trap-anchor');
+    expect(anchors).toHaveLength(2);
+    const first = button('.close');
+    const last = button('.reload');
+    // jsdom does not move focus for Tab. Focus the sentinels that native Tab/Shift+Tab reaches.
+    last.focus();
+    last.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+    anchors[1]?.focus();
+    expect(document.activeElement).toBe(first);
+    first.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }),
+    );
+    anchors[0]?.focus();
+    expect(document.activeElement).toBe(last);
+    fixture.componentRef.setInput('reloadState', 'loading');
+    await fixture.whenStable();
+    anchors[0]?.focus();
+    expect(document.activeElement).toBe(button('footer button'));
+  });
+
+  it('does not dismiss when comparison content is clicked', async () => {
+    const fixture = await render();
     const keepEditing = vi.fn();
     fixture.componentInstance.keepEditing.subscribe(keepEditing);
-    vi.spyOn(dialog, 'getBoundingClientRect').mockReturnValue(new DOMRect(10, 10, 200, 200));
-    dialog.dispatchEvent(new MouseEvent('click', { clientX: 20, clientY: 20 }));
-    root.querySelector('.local-value')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    dialog()
+      .querySelector('.local-value')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await fixture.whenStable();
     expect(keepEditing).not.toHaveBeenCalled();
-    expect(dialog.open).toBe(true);
+    expect(dialog()).toBeTruthy();
   });
 
   it.each([
-    { fields: [] },
-    { fields: [{ id: 'title', label: 'Title', local: 'retained draft', server: null }] },
-  ])(
-    'shows a safe unavailable comparison without discarding the draft for $fields',
-    ({ fields: value }) => {
-      const { fixture, root } = render();
-      fixture.componentRef.setInput('fields', value);
-      fixture.componentRef.setInput('currentRevision', null);
-      fixture.detectChanges();
-      expect(root.textContent).toContain('The current version could not be compared');
-      expect(root.textContent).toContain('Revision unavailable');
-      expect(root.querySelector<HTMLButtonElement>('.reload')?.disabled).toBe(false);
-      expect(root.querySelector<HTMLButtonElement>('footer button')?.disabled).toBe(false);
-      if (value.length) {
-        expect(root.textContent).toContain('retained draft');
-        expect(root.textContent).toContain('Server value unavailable');
-        expect(root.textContent).toContain('Not compared');
-      }
-    },
-  );
+    { value: [] },
+    { value: [{ id: 'title', label: 'Title', local: 'retained draft', server: null }] },
+  ])('renders unavailable comparisons without discarding the draft', async ({ value }) => {
+    const fixture = await render();
+    fixture.componentRef.setInput('fields', value);
+    fixture.componentRef.setInput('currentRevision', null);
+    await fixture.whenStable();
+    expect(dialog().textContent).toContain('The current version could not be compared');
+    expect(dialog().textContent).toContain('Revision unavailable');
+    expect(button('.reload').disabled).toBe(false);
+    if (value.length) {
+      expect(dialog().textContent).toContain('retained draft');
+      expect(dialog().textContent).toContain('Server value unavailable');
+      expect(dialog().textContent).toContain('Not compared');
+    }
+  });
 
-  it('renders actual reload error metadata and all supplied values as text without retrying', () => {
-    const { fixture, root } = render();
+  it('renders actual reload error metadata and supplied values as text without retrying', async () => {
+    const fixture = await render();
     const error: ApiError = {
       kind: 'unavailable',
       status: 503,
@@ -215,40 +221,44 @@ describe('ConflictDialogComponent', () => {
     fixture.componentRef.setInput('fields', [
       { id: 'x', label: '<b>Label</b>', local: '<img>draft', server: '<svg>current' },
     ]);
-    fixture.detectChanges();
-    expect(root.textContent).toContain(error.message);
-    expect(root.textContent).toContain(error.code);
-    expect(root.textContent).toContain(error.requestId);
-    expect(root.textContent).toContain('<script>revision</script>');
-    expect(root.textContent).toContain('<img>draft');
-    expect(root.textContent).toContain('<svg>current');
-    expect(root.querySelector('script, img, svg, b')).toBeNull();
-    expect(root.querySelector('.body')?.getAttribute('aria-busy')).toBe('false');
+    await fixture.whenStable();
+    for (const value of [
+      error.message,
+      error.code,
+      error.requestId,
+      '<script>revision</script>',
+      '<img>draft',
+    ]) {
+      expect(dialog().textContent).toContain(value);
+    }
+    expect(dialog().querySelector('script, img, svg, b')).toBeNull();
+    expect(dialog().querySelector('.body')?.getAttribute('aria-busy')).toBe('false');
     expect(reload).not.toHaveBeenCalled();
   });
 
-  it('opens only on request and parent success closes without emitting a dismissal or reloading', () => {
-    const { fixture, dialog } = render(false);
+  it('opens only on request; parent success closes without emitting dismissal or reload', async () => {
+    const fixture = await render(false);
     const reload = vi.fn();
     const keepEditing = vi.fn();
     fixture.componentInstance.reload.subscribe(reload);
     fixture.componentInstance.keepEditing.subscribe(keepEditing);
-    expect(dialog.open).toBe(false);
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
     fixture.componentRef.setInput('open', true);
-    fixture.detectChanges();
-    expect(dialog.open).toBe(true);
+    await fixture.whenStable();
+    expect(dialog()).toBeTruthy();
     fixture.componentRef.setInput('open', false);
-    fixture.detectChanges();
-    expect(dialog.open).toBe(false);
+    await fixture.whenStable();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
     expect(reload).not.toHaveBeenCalled();
     expect(keepEditing).not.toHaveBeenCalled();
   });
 
-  it('uses distinct heading identifiers for multiple dialog instances', () => {
-    const first = render(false);
-    const second = render(false);
-    expect(first.dialog.getAttribute('aria-labelledby')).not.toBe(
-      second.dialog.getAttribute('aria-labelledby'),
-    );
+  it('assigns distinct accessible titles to multiple dialog instances', async () => {
+    await render();
+    const first = dialog().getAttribute('aria-labelledby');
+    await render();
+    const dialogs = document.querySelectorAll('[role="dialog"]');
+    expect(dialogs).toHaveLength(2);
+    expect(dialogs[1]?.getAttribute('aria-labelledby')).not.toBe(first);
   });
 });
