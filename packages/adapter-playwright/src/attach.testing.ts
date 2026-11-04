@@ -26,6 +26,7 @@ import {
 import type { AttachmentRecord } from './attach.js';
 import type { PlaywrightAttachment } from './attachMap.js';
 import type { EventEnvelope } from './envelope.js';
+import { fake } from './fakes.testing.js';
 import { EvidgateReporter, type EvidgateReporterOptions } from './reporter.js';
 
 export const RUN_ID = 'run-attach-1';
@@ -135,9 +136,9 @@ export function gate(): { readonly opened: Promise<void>; open: () => void } {
 
 /** The `@evidgate/cli` surface as the pipeline sees it: only the uploader factory is used. */
 export function fakeCli(factory: () => AttachmentUploader): CliModule {
-  return {
+  return fake<CliModule>({
     createAttachmentUploader: () => factory(),
-  } as unknown as CliModule;
+  });
 }
 
 export interface Harness {
@@ -212,28 +213,28 @@ export function makeReporter(
 }
 
 export function configFor(root: string): FullConfig {
-  return {
+  return fake<FullConfig>({
     rootDir: root,
     projects: [{ outputDir: join(root, 'test-results') }],
-  } as unknown as FullConfig;
+  });
 }
 
 export function fakeTest(): Parameters<EvidgateReporter['onTestEnd']>[0] {
-  return {
+  return fake<Parameters<EvidgateReporter['onTestEnd']>[0]>({
     id: 'attach-test-1',
     title: 'attaches evidence',
     location: { file: 'tests/attach.spec.ts', line: 4, column: 1 },
     annotations: [],
     expectedStatus: 'passed',
     parent: { project: () => ({ name: 'chromium' }) },
-  } as unknown as Parameters<EvidgateReporter['onTestEnd']>[0];
+  });
 }
 
 export function fakeResult(
   attachments: readonly PlaywrightAttachment[],
   duration = 9,
 ): Parameters<EvidgateReporter['onTestEnd']>[1] {
-  return {
+  return fake<Parameters<EvidgateReporter['onTestEnd']>[1]>({
     status: 'passed',
     duration,
     retry: 0,
@@ -241,7 +242,7 @@ export function fakeResult(
     annotations: [],
     errors: [],
     attachments: [...attachments],
-  } as unknown as Parameters<EvidgateReporter['onTestEnd']>[1];
+  });
 }
 
 export function fullResult(): Parameters<EvidgateReporter['onEnd']>[0] {

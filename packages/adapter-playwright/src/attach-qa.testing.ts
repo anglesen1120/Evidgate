@@ -23,6 +23,7 @@ import {
 } from './attach.testing.js';
 import type { PlaywrightAttachment } from './attachMap.js';
 import type { EventEnvelope } from './envelope.js';
+import { fake } from './fakes.testing.js';
 import { EvidgateReporter, type EvidgateReporterOptions } from './reporter.js';
 
 export {
@@ -116,7 +117,7 @@ export function fakeUploader(options: FakeUploaderOptions = {}): FakeUploader {
 }
 
 export function fakeCli(factory: () => AttachmentUploader): CliModule {
-  return { createAttachmentUploader: () => factory() } as unknown as CliModule;
+  return fake<CliModule>({ createAttachmentUploader: () => factory() });
 }
 
 export interface Harness {
@@ -161,14 +162,14 @@ export function fakeTest(
   title: string,
   line: number,
 ): Parameters<EvidgateReporter['onTestEnd']>[0] {
-  return {
+  return fake<Parameters<EvidgateReporter['onTestEnd']>[0]>({
     id: `qa-${title}`,
     title,
     location: { file: 'tests/qa.spec.ts', line, column: 1 },
     annotations: [],
     expectedStatus: 'passed',
     parent: { project: () => ({ name: 'chromium' }) },
-  } as unknown as Parameters<EvidgateReporter['onTestEnd']>[0];
+  });
 }
 
 export interface ReporterHarness {

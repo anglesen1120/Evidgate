@@ -14,6 +14,7 @@ import ajvFormats from 'ajv-formats';
 import { afterEach, beforeEach } from 'vitest';
 
 import type { EventEnvelope } from './envelope.js';
+import { fake } from './fakes.testing.js';
 import type { WarningPayload } from './identity.js';
 import { EvidgateReporter, type EvidgateReporterOptions } from './reporter.js';
 import type { SidecarIndex, SidecarWarning } from './sidecar.js';
@@ -86,7 +87,7 @@ export interface FakeTestInput {
 
 export function fakeTest(input: FakeTestInput = {}): TestCase {
   const project = input.project ?? { name: 'chromium' };
-  return {
+  return fake<TestCase>({
     id: input.id ?? 'test-1',
     title: input.title ?? 'adds two numbers',
     location: {
@@ -96,21 +97,21 @@ export function fakeTest(input: FakeTestInput = {}): TestCase {
     },
     annotations: input.annotations ?? [],
     parent: { project: () => project },
-  } as unknown as TestCase;
+  });
 }
 
 export function fakeResult(overrides: Record<string, unknown> = {}): TestResult {
-  return {
+  return fake<TestResult>({
     status: 'passed',
     duration: 1,
     retry: 0,
     steps: [],
     ...overrides,
-  } as unknown as TestResult;
+  });
 }
 
 export function fakeSuite(tests: TestCase[]): Suite {
-  return { allTests: () => tests } as unknown as Suite;
+  return fake<Suite>({ allTests: () => tests });
 }
 
 /** A real temp directory holding the given files, so the sidecar loader's lstat sees them. */
