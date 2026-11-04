@@ -1,0 +1,12 @@
+{
+  "schema": "ai-settings.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/step_detail",
+      "reason": "required"
+    }
+  ],
+  "comment": "all eight members are required, so the hash input is fixed"
+}

@@ -134,6 +134,14 @@ internal static class SchemaConventionScan
             "public.evaluation",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "A stored verdict (migration 0059) is evidence, not state: the app role holds SELECT + INSERT only and the `evaluation_immutable` trigger refuses every UPDATE and DELETE, so the row keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs, closed token CHECKs and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.project_ai_settings",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only AI settings versions (13.2.1-T1; migration 0064): the `project_ai_settings_immutable` trigger refuses UPDATE for every role and DELETE for every role but `evidgate_owner`, so the row keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.ai_settings_template",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Read-only platform template catalogue (13.2.1-T1; migration 0064): rows are written only by the migration and are never updated, so they keep created_at only — no updated_at/version and no version trigger. The table carries no org_id, so it is not a business table; its RLS flags are still real (ENABLE + FORCE, the read policy and one denial per write command, plus the owner policy) and it is listed as `platform` in contracts/rls-exceptions.txt."),
     ];
 
     /// <summary>

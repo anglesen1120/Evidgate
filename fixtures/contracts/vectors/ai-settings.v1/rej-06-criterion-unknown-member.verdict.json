@@ -1,0 +1,12 @@
+{
+  "schema": "ai-settings.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/priority_criteria/extra",
+      "reason": "additional_properties"
+    }
+  ],
+  "comment": "priority_criteria is a closed four-member object"
+}

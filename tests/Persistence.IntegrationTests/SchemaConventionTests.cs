@@ -536,6 +536,8 @@ public sealed class SchemaConventionAllowListTests
                 ("public.role_permission", SchemaRule.CompositeForeignKey),
                 ("public.evidence_revision", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.evaluation", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+                ("public.project_ai_settings", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+                ("public.ai_settings_template", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
             ]);
 
         // Every exclusion carries its reason: an exemption without one is a silencer,

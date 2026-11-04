@@ -1,0 +1,15 @@
+{
+  "description": "Guidance for manual test cases and generated scripts on the web form flow: what to cover, how to word a step and what must never be automated.",
+  "environment_url": null,
+  "languages": ["en", "vi"],
+  "writing_style": "Write each step as one action in the imperative, name the control by its visible label, and state the expected result as something a tester can see.",
+  "coverage_strategy": "For every form, cover the happy path with the smallest valid input; each required field left empty; boundary values at the minimum and maximum length; the server-side validation a browser cannot reproduce; authorization, meaning a member without the permission is refused and a member of another tenant cannot reach the record; and every destructive action, including its confirmation, its cancel path and the state left behind when it fails.",
+  "priority_criteria": {
+    "critical": "A failure blocks the release: data loss, a cross-tenant read or write, a broken sign-in, or a payment charged twice.",
+    "high": "The main path is wrong or a permission check is missing, but a workaround exists.",
+    "medium": "A secondary path, a validation message or an empty state is wrong.",
+    "low": "Wording, spacing or a cosmetic difference that changes no behaviour."
+  },
+  "exclusion_rules": "Do not automate an action that destroys data a team cannot restore: dropping a production database, deleting a production project, revoking every administrator of an org, or rotating a live ingest token outside a test tenant. Test those manually in a disposable environment, or not at all.",
+  "step_detail": "One action and one expected result per step; add test data only when the value matters."
+}
