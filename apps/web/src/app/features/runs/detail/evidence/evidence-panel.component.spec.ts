@@ -222,6 +222,9 @@ describe('EvidencePanelComponent', () => {
     const banner = root.querySelector('[data-evidence-newer]');
     expect(banner?.textContent).toContain('A newer revision exists');
     expect(banner?.textContent).toContain('You are viewing revision 3. The newest revision is 4.');
+    // Informational: the page announces the revision change once, so this banner stays non-live.
+    expect(banner?.getAttribute('role')).toBe('note');
+    expect(banner?.hasAttribute('aria-live')).toBe(false);
     let latest = 0;
     fixture.componentInstance.viewLatest.subscribe(() => (latest += 1));
     (banner?.querySelector('button') as HTMLButtonElement).click();

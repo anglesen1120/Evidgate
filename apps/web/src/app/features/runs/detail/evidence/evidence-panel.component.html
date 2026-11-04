@@ -71,8 +71,11 @@
   }
 
   @if (newerRevisionExists()) {
+    <!-- Informational only: the page's polite region announces the same revision change, and the
+         alert role this directive carries would speak it twice. -->
     <div
       hlmAlert
+      role="note"
       class="grid gap-(--eg-space-3) bg-(--eg-neutral-bg) text-(--eg-neutral-fg)"
       data-evidence-newer
     >

@@ -70,10 +70,14 @@
             {{ copy.decision }}
           </button>
         </div>
-        <!-- Brain hides the inactive panel but hardcodes tabindex="0" on every panel. Both panels
-             hold focusable controls, so APG keeps the panel itself out of the tab order and the
-             page removes that stop; the panel's own controls stay the stops. -->
-        <div [hlmTabsContent]="'evidence'" [attr.tabindex]="null" class="min-w-0">
+        <!-- Brain hardcodes tabindex="0" on every panel and only hides the inactive one, so the
+             page binds the stop itself: the selected panel stays reachable when it renders no
+             control of its own, and the hidden panel leaves the Tab order. -->
+        <div
+          [hlmTabsContent]="'evidence'"
+          [attr.tabindex]="detailTab() === 'evidence' ? 0 : -1"
+          class="min-w-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
+        >
           <app-evidence-panel
             [decision]="store.decision()"
             [pinnedRevision]="store.pinnedRevision()"
@@ -92,7 +96,11 @@
             (retry)="retryRevisions()"
           />
         </div>
-        <div [hlmTabsContent]="'decision'" [attr.tabindex]="null" class="min-w-0">
+        <div
+          [hlmTabsContent]="'decision'"
+          [attr.tabindex]="detailTab() === 'decision' ? 0 : -1"
+          class="min-w-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
+        >
           <app-decision-view
             [decision]="store.decision()"
             [pinnedRevision]="store.pinnedRevision()"
