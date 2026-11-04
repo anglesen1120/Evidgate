@@ -1,5 +1,6 @@
 @import 'tailwindcss/utilities.css' source(none);
 
+@source '../app/app.ts';
 @source '../app/ui';
 @source '../app/shared/ui';
 @source '../app/shell';
