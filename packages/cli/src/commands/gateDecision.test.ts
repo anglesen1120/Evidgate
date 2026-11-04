@@ -18,7 +18,7 @@ import {
   pending,
   pendingOutcome,
   runId,
-} from './gate.kit.test.js';
+} from './gate.kit.testing.js';
 
 /** The closed `missing[]` list of 00 §8.5, in the wire order the server sends it. */
 const closedCodes = [

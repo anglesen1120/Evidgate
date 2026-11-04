@@ -15,8 +15,13 @@ import { join } from 'node:path';
 
 import { afterEach } from 'vitest';
 
-import type { Io } from '../redact.js';
-
+import {
+  capture,
+  jsonResponse,
+  stubFetch as sharedStubFetch,
+  type Captured,
+  type StubCall,
+} from './cliSpec.testing.js';
 import { devToken } from './devExchange.testing.js';
 
 /** The project slug the command scopes the upload to. */
@@ -28,28 +33,8 @@ export const manifestHash = `sha256:${'a'.repeat(64)}`;
 /** The exchange route a dev run posts to before its own request. */
 export const exchangePath = '/v1/ci/token';
 
-/** The streams a run wrote to, plus the arrays behind them. */
-export interface Captured {
-  readonly io: Io;
-  readonly stdout: string[];
-  readonly stderr: string[];
-}
-
-export function capture(): Captured {
-  const stdout: string[] = [];
-  const stderr: string[] = [];
-  return {
-    io: { stdout: (text) => stdout.push(text), stderr: (text) => stderr.push(text) },
-    stdout,
-    stderr,
-  };
-}
-
-/** One recorded request: the `Request` and the raw bytes it carried. */
-export interface StubCall {
-  readonly request: Request;
-  readonly body: Buffer;
-}
+export { capture, jsonResponse };
+export type { Captured, StubCall };
 
 /**
  * A `fetch` stub that records every request (URL, headers, raw body) and answers from
@@ -60,24 +45,7 @@ export function stubFetch(handler: (request: Request) => Response | Promise<Resp
   readonly fetchImpl: typeof fetch;
   readonly calls: StubCall[];
 } {
-  const calls: StubCall[] = [];
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    calls.push({ request, body: Buffer.from(await request.clone().arrayBuffer()) });
-    return handler(request);
-  };
-  return { fetchImpl, calls };
-}
-
-export function jsonResponse(
-  status: number,
-  body: unknown,
-  headers: Record<string, string> = {},
-): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json', ...headers },
-  });
+  return sharedStubFetch((call) => handler(call.request));
 }
 
 /** The 201 answer a valid upload receives: both ids the command prints. */
