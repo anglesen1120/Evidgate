@@ -585,6 +585,14 @@ internal sealed class TenantRowFactory
             ("public.authoring_version", "entity_kind") => "feature_node",
             ("public.authoring_version", "change_kind") => "create",
             ("public.authoring_version", "content_hash") => "sha256:" + new string('c', 64),
+            // authoring_change (0067) closes change_type to four tokens and wants a non-empty
+            // affected_versions object, so the generic text and '{}' candidates are both rejected before
+            // a composite FK under test is reached. A comment payload needs its body and no other member,
+            // and a comment is the one type whose pending row never takes the structural-overlap lock.
+            ("public.authoring_change", "change_type") => "comment",
+            ("public.authoring_change", "payload") => "{\"body\":\"probe\"}",
+            ("public.authoring_change", "affected_versions") =>
+                "{\"" + Guid.CreateVersion7().ToString("D", CultureInfo.InvariantCulture) + "\":1}",
             ("public.project", "case_prefix") =>
                 "P" + Interlocked.Increment(ref _casePrefix).ToString("D4", CultureInfo.InvariantCulture),
             ("public.producer_slot", "producer_id") => "shard-1",

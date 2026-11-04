@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-change.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/payload/body",
+      "reason": "min_length"
+    }
+  ],
+  "comment": "an empty comment says nothing"
+}

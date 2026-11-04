@@ -138,9 +138,8 @@ public sealed class ScheduleRunnerTests
     }
 
     /// <summary>
-    /// T6.2 (and 01.5.1 §7): the two sweeps this story owns are registered with the
-    /// values the plan fixes — the name doubles as the fire key, so it is part of the
-    /// contract rather than a label.
+    /// The sweeps <c>AddEvidgateTasks</c> registers are the ones the plans fix — the name doubles as
+    /// the fire key, so it is part of the contract rather than a label.
     /// </summary>
     [Fact]
     public async Task Schedule_Registry_Lists_Sweeps()
@@ -149,12 +148,17 @@ public sealed class ScheduleRunnerTests
         await using var host = TasksTestHost.Start(_fixture, database);
 
         var schedules = host.Schedules.Schedules;
-        schedules.Count.ShouldBe(3);
+        schedules.Count.ShouldBe(4);
 
         var purge = schedules.Single(schedule => schedule.Name == EvidgateSweeps.IdempotencyPurgeSchedule);
         purge.Cron.ShouldBe(EvidgateSweeps.IdempotencyPurgeCron);
         purge.Queue.ShouldBe(EvidgateSweeps.MaintenanceQueue);
         purge.TaskType.ShouldBe(EvidgateSweeps.IdempotencyPurgeTaskType);
+
+        var authoring = schedules.Single(schedule => schedule.Name == AuthoringChangeSweeps.TaskType);
+        authoring.Cron.ShouldBe(AuthoringChangeSweeps.Cron);
+        authoring.Queue.ShouldBe(EvidgateSweeps.MaintenanceQueue);
+        authoring.TaskType.ShouldBe(AuthoringChangeSweeps.TaskType);
 
         var sweep = schedules.Single(schedule => schedule.Name == EvidgateSweeps.TaskSweepSchedule);
         sweep.Cron.ShouldBe(EvidgateSweeps.TaskSweepCron);
@@ -164,7 +168,15 @@ public sealed class ScheduleRunnerTests
         // The registered schedules are exactly the types the worker has handlers for,
         // so a fire is always claimable by the worker that made it.
         host.Handlers.TaskTypes.ShouldBe(
-            [EvidgateSweeps.IdempotencyPurgeTaskType, EvidgateSweeps.TaskSweepTaskType, Evidgate.BuildingBlocks.Persistence.Audit.AuditSweeps.VerifyChainTaskType, TaskHandlerTypes.Recording, TaskHandlerTypes.Tenant, TaskHandlerTypes.Blocking],
+            [
+                EvidgateSweeps.IdempotencyPurgeTaskType,
+                AuthoringChangeSweeps.TaskType,
+                EvidgateSweeps.TaskSweepTaskType,
+                Evidgate.BuildingBlocks.Persistence.Audit.AuditSweeps.VerifyChainTaskType,
+                TaskHandlerTypes.Recording,
+                TaskHandlerTypes.Tenant,
+                TaskHandlerTypes.Blocking,
+            ],
             ignoreOrder: true);
     }
 

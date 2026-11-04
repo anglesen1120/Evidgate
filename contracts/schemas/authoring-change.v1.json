@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "authoring-change.v1.json",
+  "title": "Queued authoring change v1",
+  "description": "The body of POST /v1/projects/{p}/authoring/changes: one proposed change to the feature tree, waiting until a reviewer applies a selection of them in one transaction. A queued change never edits its target, so the same document is safe to submit twice while the queue is read. The four change types are closed and each payload has its own shape: a comment carries a body, a delete carries nothing, a merge names 2-50 source items of which one survives, and a split names 2-20 new items. Members are closed at every level, so a typo is refused rather than stored. Two rules are not expressible in JSON Schema and belong to the handler: for a merge `target_id` must equal `payload.survivor_item_id` and the survivor must be one of `payload.source_item_ids` (422 payload_invalid / survivor_not_in_sources). `reason` is the author's note, 1-500 code points like the version reason column it feeds.",
+  "x-max-bytes": 32768,
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["target_kind", "target_id", "change_type", "payload"],
+  "properties": {
+    "target_kind": {
+      "const": "checklist_item",
+      "description": "The only entity a queued change can target in this version of the queue; a wider kind set is a new schema file, never a loosened constant."
+    },
+    "target_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The item itself for comment, delete and split; the survivor for merge."
+    },
+    "change_type": {
+      "type": "string",
+      "enum": ["comment", "delete", "merge", "split"],
+      "description": "The proposal kind; `payload` must match it."
+    },
+    "payload": {
+      "type": "object",
+      "description": "The change document of `change_type`, closed to unknown members and at most 32 KiB once serialised."
+    },
+    "reason": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "Why the author proposes this change. Length is Unicode code points, the same unit as the column's char_length check."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "change_type": { "const": "comment" } },
+        "required": ["change_type"]
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["body"],
+            "properties": {
+              "body": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000,
+                "description": "The review note. 1-2000 code points, the plan's bound and the table's own check."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "change_type": { "const": "delete" } }, "required": ["change_type"] },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "maxProperties": 0,
+            "description": "A delete has nothing to carry: the target names the item. Unknown members are refused so a later shape cannot ride in unnoticed."
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "change_type": { "const": "merge" } }, "required": ["change_type"] },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source_item_ids", "survivor_item_id"],
+            "properties": {
+              "source_item_ids": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 50,
+                "uniqueItems": true,
+                "items": { "type": "string", "format": "uuid" },
+                "description": "Every merged item, the survivor included, in the author's order. 2-50 distinct ids; the survivor membership and target_id equality are handler checks."
+              },
+              "survivor_item_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The item the others merge into. It keeps its content and receives the moved cases."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "change_type": { "const": "split" } }, "required": ["change_type"] },
+      "then": {
+        "properties": {
+          "payload": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["new_items"],
+            "properties": {
+              "new_items": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 20,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["title"],
+                  "properties": {
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500,
+                      "description": "The new item's title, the same 1-500 bound the checklist item column carries."
+                    },
+                    "description": {
+                      "type": ["string", "null"],
+                      "maxLength": 4000,
+                      "description": "Optional detail of the new item, at most 4000 code points."
+                    },
+                    "priority": {
+                      "type": "string",
+                      "enum": ["critical", "high", "medium", "low"],
+                      "description": "The closed priority set of the checklist item; omitted takes the table default."
+                    }
+                  }
+                },
+                "description": "The replacement items, in display order. The first one receives the original's live cases unless case_assignments names another."
+              },
+              "case_assignments": {
+                "type": "array",
+                "maxItems": 200,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["case_id", "item_index"],
+                  "properties": {
+                    "case_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "A live manual test case of the item being split."
+                    },
+                    "item_index": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 19,
+                      "description": "Which entry of new_items the case moves to; 0 is the first, so the default assignment is expressible."
+                    }
+                  },
+                  "description": "One case's destination. A case named twice, or one that is not a live child of the target, is a handler refusal (422 payload_invalid)."
+                },
+                "description": "Where each existing case goes after the split; omitted assigns every case to the first new item."
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

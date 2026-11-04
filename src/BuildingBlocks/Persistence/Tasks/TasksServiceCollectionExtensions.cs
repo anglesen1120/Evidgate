@@ -98,12 +98,14 @@ public static class TasksServiceCollectionExtensions
         services.TryAddSingleton<OutboxDispatcher>();
 
         services.AddTaskHandler<IdempotencyPurgePayload, IdempotencyPurgeTaskHandler>();
+        services.AddTaskHandler<AuthoringChangePurgePayload, AuthoringChangePurgeTaskHandler>();
         services.AddTaskHandler<TaskSweepPayload, TaskSweepTaskHandler>();
         services.AddTaskHandler<Audit.VerifyAuditChainPayload, Audit.VerifyAuditChainTaskHandler>();
 
         // 01.5.1 §7: the two schedules this story owns. Registering them here means
         // every Worker fires them without a leader — the unique fire key decides.
         services.AddTaskSchedule(EvidgateSweeps.IdempotencyPurge);
+        services.AddTaskSchedule(AuthoringChangeSweeps.Purge);
         services.AddTaskSchedule(EvidgateSweeps.TaskSweep);
         services.AddTaskSchedule(Audit.AuditSweeps.VerifyChain);
 
