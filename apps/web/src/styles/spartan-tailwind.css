@@ -7,6 +7,7 @@
 @source '../app/features/onboarding';
 @source '../app/features/settings';
 @source '../app/features/suites';
+@source '../app/features/project';
 @source not '../app/**/*.spec.ts';
 @source not '../app/**/*.fixture.ts';
 @source not '../app/**/*.testing.ts';
