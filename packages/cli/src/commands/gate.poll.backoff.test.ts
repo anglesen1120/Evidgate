@@ -17,7 +17,7 @@ import {
   invoke,
   pendingOutcome,
   runId,
-} from './gate.kit.test.js';
+} from './gate.kit.testing.js';
 import { rateLimited } from './gate.poll.testing.js';
 import { pollDecision } from './gatePoll.js';
 
