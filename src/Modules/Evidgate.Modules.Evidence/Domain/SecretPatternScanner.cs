@@ -90,10 +90,17 @@ internal static class SecretPatternScanner
     /// Checked every few MiB of the pass, so a cancelled attempt stops instead of finishing a large object; the caller
     /// owns the retry.
     /// </param>
+    /// <param name="progress">
+    /// An in-pass checkpoint, called with the offset just before each cancellation check — once at the start and then
+    /// once per interval. It is the pass's only observation point from outside, which a cancellation test needs: it can
+    /// arm a token once the walk has provably begun instead of reading a scheduler delay as progress. Every caller
+    /// passes none.
+    /// </param>
     /// <returns>One entry per class that matched, in <see cref="SecretPatternClass.All"/> order; empty when none did.</returns>
     public static IReadOnlyList<SecretPatternHit> Scan(
         ReadOnlySpan<byte> content,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<int>? progress = null)
     {
         var aws = 0;
         var pem = 0;
@@ -103,11 +110,13 @@ internal static class SecretPatternScanner
 
         // Checked once before the walk as well: an attempt already cancelled must not scan even a small object.
         cancellationToken.ThrowIfCancellationRequested();
+        progress?.Invoke(0);
 
         while (index < content.Length)
         {
             if (index >= nextCancellationCheck)
             {
+                progress?.Invoke(index);
                 cancellationToken.ThrowIfCancellationRequested();
                 nextCancellationCheck = index <= content.Length - CancellationCheckInterval
                     ? index + CancellationCheckInterval
@@ -232,10 +241,12 @@ internal static class SecretPatternScanner
     }
 
     /// <summary>
-    /// The credential length a bearer scheme at <paramref name="index"/> introduces, or zero when the bytes there are
-    /// not <c>Bearer</c> followed by a bounded separator run and a credential of at least
-    /// <see cref="BearerTokenMinimum"/> token characters. The length is returned rather than counted so a test can pin
-    /// the boundary rule without a second implementation.
+    /// The credential length a bearer scheme at <paramref name="index"/> introduces, capped at
+    /// <see cref="BearerTokenMinimum"/>, or zero when the bytes there are not <c>Bearer</c> followed by a bounded
+    /// separator run and at least that many token characters. The walk stops once the minimum is reached, so the
+    /// lookahead costs a constant number of bytes whatever the credential's length and the pass reaches its own
+    /// cancellation check instead of walking the rest of a long run first. The length is returned rather than counted
+    /// so the boundary rule has one implementation.
     /// </summary>
     /// <param name="content">The bytes being scanned.</param>
     /// <param name="index">The offset to test.</param>
@@ -272,16 +283,15 @@ internal static class SecretPatternScanner
             return 0;
         }
 
-        var tokenStart = cursor;
+        var observed = 0;
 
-        while (cursor < content.Length && IsTokenByte(content[cursor]))
+        while (observed < BearerTokenMinimum && cursor < content.Length && IsTokenByte(content[cursor]))
         {
+            observed++;
             cursor++;
         }
 
-        var length = cursor - tokenStart;
-
-        return length >= BearerTokenMinimum ? length : 0;
+        return observed == BearerTokenMinimum ? BearerTokenMinimum : 0;
     }
 
     /// <summary>True for the characters an AWS access-key id's body may hold: <c>[0-9A-Z]</c>.</summary>

@@ -17,6 +17,12 @@ namespace Evidgate.Modules.Evidence.Application;
 /// keeps the sum of its entry counts.
 /// </para>
 /// <para>
+/// <b>The container is bytes too.</b> An entry's name and the archive's own comment live in the raw headers, and a
+/// stored (uncompressed) entry leaves its content readable there, so the decompressed entries are not the whole object.
+/// Both views are scanned and a class's count is their sum — a name the writer writes twice, in the local header and
+/// in the central directory, counts twice — so the count is a total over both views, never a deduplicated one.
+/// </para>
+/// <para>
 /// <b>The expanded budget is the object's own cap.</b> The entry count and the compression ratio are the profile's
 /// constants, and the cumulative expanded bytes may not exceed the cap the object was admitted under, so one artifact
 /// can never expand past the size its kind allows it to weigh.
@@ -36,8 +42,8 @@ internal static class ArtifactSecretScan
     private const string ZipMediaType = "application/zip";
 
     /// <summary>
-    /// Counts the classes of one stored object: in place when the object is a document, per entry when its declared
-    /// type says it is an archive.
+    /// Counts the classes of one stored object: in place when the object is a document, in place and per entry when
+    /// its declared type says it is an archive.
     /// </summary>
     /// <param name="parsing">The parser profile, the only arm that decompresses an untrusted archive.</param>
     /// <param name="mediaType">The artifact's declared media type.</param>
@@ -73,19 +79,29 @@ internal static class ArtifactSecretScan
         && string.Equals(mediaType.Split(';', 2)[0], ZipMediaType, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Decompresses every entry of one archive under the profile's caps and sums the classes across them.
+    /// Counts the classes of one archive: its own container bytes, then every entry decompressed under the profile's
+    /// caps, summed per class.
     /// </summary>
     /// <param name="parsing">The parser profile.</param>
     /// <param name="content">The archive's bytes.</param>
     /// <param name="maxBytes">The kind's cap, applied to the object and to the expanded total.</param>
     /// <param name="cancellationToken">Cancels the read and the scan.</param>
-    /// <returns>The summed hits, in <see cref="SecretPatternClass.All"/> order; empty when no entry matched.</returns>
+    /// <returns>The summed hits, in <see cref="SecretPatternClass.All"/> order; empty when nothing matched.</returns>
     private static List<SecretPatternHit> ScanArchive(
         IParsing parsing,
         ReadOnlyMemory<byte> content,
         long maxBytes,
         CancellationToken cancellationToken)
     {
+        var totals = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        // The container first, and before any decompression: it is already bounded by the kind's cap, and it is the
+        // only view holding an entry's name, the archive's comment and a stored entry's readable content.
+        foreach (var hit in SecretPatternScanner.Scan(content.Span, cancellationToken))
+        {
+            totals[hit.PatternClass] = hit.HitCount;
+        }
+
         var caps = new ArchiveCaps(ParsingLimits.MaxZipEntries, maxBytes, ParsingLimits.MaxCompressionRatio);
 
         // The stream reads the buffer the object store already handed over: no copy of the archive, and the profile
@@ -104,8 +120,6 @@ internal static class ArtifactSecretScan
             throw new InvalidOperationException(
                 $"the stored object is an archive the secret scan could not read ({ReasonOf(read.Error)}), so its bytes were not classified");
         }
-
-        var totals = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (var entry in read.Value.Entries)
         {

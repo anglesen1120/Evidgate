@@ -49,6 +49,62 @@ public sealed partial class EvidenceSecretScanTaskTests
             "a refused update writes nothing");
     }
 
+    /// <summary>
+    /// One verdict never turns into the other, whoever asks: the app's own <c>pending</c> to <c>clean</c> write is the
+    /// control, <c>clean</c> to <c>flagged</c> is refused, and the row keeps the verdict it had — so a caller cannot
+    /// overwrite a decision the scan made.
+    /// </summary>
+    [Fact]
+    public async Task Clean_Scan_Becoming_Flagged_Is_Refused_For_The_App()
+    {
+        await using var world = await StartAsync();
+        var seeded = await SeedReadyAsync(world, CleanBody);
+
+        await AppUpdateAsync(world, seeded.ArtifactId, "scan_state = 'clean'");
+        (await ColumnAsync(world, seeded.ArtifactId, "scan_state")).ShouldBe(ArtifactScanState.Clean);
+
+        (await AppUpdateErrorAsync(world, seeded.ArtifactId, "scan_state = 'flagged'")).SqlState.ShouldBe("23514");
+        (await ColumnAsync(world, seeded.ArtifactId, "scan_state")).ShouldBe(
+            ArtifactScanState.Clean,
+            "a refused update writes nothing");
+    }
+
+    /// <summary>
+    /// The other direction of the same rule: <c>flagged</c> to <c>clean</c> is the write that would hide a finding, so
+    /// it is refused with the verdict kept. <c>pending</c> to <c>flagged</c> is the control the refusal is measured
+    /// against.
+    /// </summary>
+    [Fact]
+    public async Task Flagged_Scan_Returning_To_Clean_Is_Refused_For_The_App()
+    {
+        await using var world = await StartAsync();
+        var seeded = await SeedReadyAsync(world, CleanBody);
+
+        await AppUpdateAsync(world, seeded.ArtifactId, "scan_state = 'flagged'");
+        (await ColumnAsync(world, seeded.ArtifactId, "scan_state")).ShouldBe(ArtifactScanState.Flagged);
+
+        (await AppUpdateErrorAsync(world, seeded.ArtifactId, "scan_state = 'clean'")).SqlState.ShouldBe("23514");
+        (await ColumnAsync(world, seeded.ArtifactId, "scan_state")).ShouldBe(
+            ArtifactScanState.Flagged,
+            "a refused update writes nothing");
+    }
+
+    /// <summary>
+    /// Writing the verdict a row already holds is not a transition, so the guard lets it through: a retried or
+    /// replayed write that sets the same value stays a successful no-op rather than a failure the queue dead-letters.
+    /// </summary>
+    [Fact]
+    public async Task Rewriting_The_Verdict_A_Row_Holds_Is_Allowed_For_The_App()
+    {
+        await using var world = await StartAsync();
+        var seeded = await SeedReadyAsync(world, CleanBody);
+
+        await AppUpdateAsync(world, seeded.ArtifactId, "scan_state = 'clean'");
+        await AppUpdateAsync(world, seeded.ArtifactId, "scan_state = 'clean'");
+
+        (await ColumnAsync(world, seeded.ArtifactId, "scan_state")).ShouldBe(ArtifactScanState.Clean);
+    }
+
     /// <summary>One committed UPDATE of the row as <c>evidgate_app</c>, inside its own tenant scope.</summary>
     /// <param name="world">The tenant the artifact belongs to.</param>
     /// <param name="artifactId">The row to update.</param>

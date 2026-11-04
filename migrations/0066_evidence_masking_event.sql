@@ -29,8 +29,9 @@
 -- (0028's posture). The scheduler role holds nothing.
 --
 -- GUARD: the scan is the first writer of `sensitivity`, so this migration adds the `artifact_scan_guard` trigger
--- (D2): `sensitive` never returns to `normal` and a decided `scan_state` never returns to `pending`, whatever role
--- writes. Raising sensitivity and moving `pending` to a verdict stay allowed, and the trigger only judges those two
+-- (D2): `sensitive` never returns to `normal`, and a decided `scan_state` never changes again — neither back to
+-- `pending` nor from one verdict to the other, whatever role writes. Raising sensitivity and moving `pending` to a
+-- verdict stay allowed (and so does re-writing the value a row already holds), and the trigger only judges those two
 -- columns, so the lifecycle writes 0028 grants are untouched.
 --
 -- LOCKS: `set local lock_timeout` bounds the DDL's waits and turns a busy table into a failed migration the operator
@@ -84,9 +85,10 @@ revoke update, delete, truncate on public.masking_event from evidgate_app;
 grant select on public.masking_event to evidgate_operator;
 revoke all on public.masking_event from evidgate_worker_sched;
 
--- The two columns the app may now move encode one-way facts: a secret found once stays found, and a decided scan
--- is not re-queued. The guard is an invoker, so it refuses an owner write too without needing a definer grant, and
--- its name sorts before `artifact_set_updated_at_and_version`, so a refused update never bumps the bookkeeping.
+-- The two columns the app may now move encode one-way facts: a secret found once stays found, and a decided scan is
+-- neither re-queued nor re-decided. The guard is an invoker, so it refuses an owner write too without needing a
+-- definer grant, and its name sorts before `artifact_set_updated_at_and_version`, so a refused update never bumps the
+-- bookkeeping.
 create or replace function evidgate.artifact_scan_guard() returns trigger
   language plpgsql
   set search_path = ''
@@ -97,8 +99,10 @@ create or replace function evidgate.artifact_scan_guard() returns trigger
         using errcode = '23514';
     end if;
 
-    if old.scan_state in ('clean', 'flagged') and new.scan_state = 'pending' then
-      raise exception 'artifact_scan_state_invalid: a completed scan cannot become pending'
+    -- A verdict is a fact about the bytes, so a decided row keeps it: `pending` is the only state that may leave
+    -- itself, and only for a verdict. Re-writing the value a row already holds is not a change and stays allowed.
+    if old.scan_state in ('clean', 'flagged') and new.scan_state is distinct from old.scan_state then
+      raise exception 'artifact_scan_state_invalid: a completed scan cannot change'
         using errcode = '23514';
     end if;
 

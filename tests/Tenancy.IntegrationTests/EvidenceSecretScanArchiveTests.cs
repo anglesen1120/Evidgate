@@ -1,6 +1,7 @@
 // The archive arm of the masking scan: a trace or report bundle is a deflated zip, so the compressed bytes a byte
-// scan sees hold no readable prefix of any entry and always answer clean. These cases prove the arm decompresses each
-// entry through the parser profile, sums the counts across entries, and refuses a bundle it cannot read instead of
+// scan sees hold no readable prefix of any entry and always answer clean. These cases prove the arm scans both views
+// of the object — the container's own headers (entry names, the archive comment, a stored entry) and each entry
+// decompressed through the parser profile — sums the counts per class, and refuses a bundle it cannot read instead of
 // answering clean. Every archive is generated in memory and the planted key is assembled at run time, so this file
 // carries no credential-shaped literal. No container, no database: the profile and the scan are pure.
 using System.IO.Compression;
@@ -48,6 +49,63 @@ public sealed class EvidenceSecretScanArchiveTests
 
         hit.PatternClass.ShouldBe(SecretPatternClass.AwsAccessKey);
         hit.HitCount.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A secret in an entry's own name is flagged: the name lives in the container's headers, never in the decompressed
+    /// entry, so scanning entries alone answers clean about a bundle that names a key. The name is written twice — in
+    /// the local header and in the central directory — and the count is the sum over the container's bytes.
+    /// </summary>
+    [Fact]
+    public void Scan_Zip_With_A_Secret_In_An_Entry_Name_Is_Flagged()
+    {
+        var zipped = Zip(("logs/key-" + PlantedKey + ".xml", Encoding.UTF8.GetBytes("<report/>")));
+
+        var hit = ArtifactSecretScan
+            .Scan(Parsing, "application/zip", zipped, MaxBytes, Token)
+            .ShouldHaveSingleItem();
+
+        hit.PatternClass.ShouldBe(SecretPatternClass.AwsAccessKey);
+        hit.HitCount.ShouldBe(2);
+    }
+
+    /// <summary>
+    /// A secret only in the archive's own comment is flagged: the comment sits in the end record, outside every entry,
+    /// so no amount of decompression reaches it. The positive control is the same bundle whose comment is clean.
+    /// </summary>
+    [Fact]
+    public void Scan_Zip_With_A_Secret_Only_In_The_Archive_Comment_Is_Flagged()
+    {
+        var entries = new[] { ("run/report.xml", Encoding.UTF8.GetBytes("<report/>")) };
+
+        var hit = ArtifactSecretScan
+            .Scan(Parsing, "application/zip", ZipWithComment("built from key-" + PlantedKey, entries), MaxBytes, Token)
+            .ShouldHaveSingleItem();
+
+        hit.PatternClass.ShouldBe(SecretPatternClass.AwsAccessKey);
+        hit.HitCount.ShouldBe(1);
+
+        ArtifactSecretScan
+            .Scan(Parsing, "application/zip", ZipWithComment("built from a clean tree", entries), MaxBytes, Token)
+            .ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The two views are summed per class, so one class still reports one row: a key in an entry's name and in the
+    /// entry's content is one row whose count is the total over both views, not a second class or a second row.
+    /// </summary>
+    [Fact]
+    public void Scan_Zip_Sums_The_Container_And_The_Entry_Content_Per_Class()
+    {
+        var zipped = Zip(
+            ("logs/key-" + PlantedKey + ".xml", Encoding.UTF8.GetBytes("<report>" + PlantedKey + "</report>")));
+
+        var hit = ArtifactSecretScan
+            .Scan(Parsing, "application/zip", zipped, MaxBytes, Token)
+            .ShouldHaveSingleItem();
+
+        hit.PatternClass.ShouldBe(SecretPatternClass.AwsAccessKey);
+        hit.HitCount.ShouldBe(3);
     }
 
     /// <summary>
@@ -199,12 +257,30 @@ public sealed class EvidenceSecretScanArchiveTests
     /// </summary>
     /// <param name="entries">The entry name and content of each part, in archive order.</param>
     /// <returns>The archive's bytes.</returns>
-    private static byte[] Zip(params (string Name, byte[] Content)[] entries)
+    private static byte[] Zip(params (string Name, byte[] Content)[] entries) => Zip(null, entries);
+
+    /// <summary>
+    /// The same bundle with the archive's own comment in the end record: text the container carries outside every
+    /// entry.
+    /// </summary>
+    /// <param name="comment">The comment to store.</param>
+    /// <param name="entries">The entry name and content of each part, in archive order.</param>
+    /// <returns>The archive's bytes.</returns>
+    private static byte[] ZipWithComment(string comment, params (string Name, byte[] Content)[] entries) =>
+        Zip(comment, entries);
+
+    /// <summary>The one archive builder both helpers above forward to.</summary>
+    /// <param name="comment">The archive's comment, or null for none.</param>
+    /// <param name="entries">The entry name and content of each part, in archive order.</param>
+    /// <returns>The archive's bytes.</returns>
+    private static byte[] Zip(string? comment, (string Name, byte[] Content)[] entries)
     {
         using var buffer = new MemoryStream();
 
         using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
         {
+            archive.Comment = comment ?? string.Empty;
+
             foreach (var (name, content) in entries)
             {
                 using var entry = archive.CreateEntry(name, CompressionLevel.SmallestSize).Open();

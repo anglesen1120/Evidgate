@@ -47,13 +47,15 @@ internal sealed record RunArtifactSecretScanPayload(Guid ArtifactId);
 /// events are written in the same transaction as the transition.
 /// </para>
 /// <para>
-/// <b>An archive is scanned through the parser profile, not as raw bytes.</b> A trace or report bundle is a deflated
-/// zip, and its entries' secrets do not appear in the compressed bytes at all, so scanning the object in place would
-/// always answer clean. When the artifact's declared type is <c>application/zip</c> — the type the completion sniffed
-/// the stored bytes against — every entry is decompressed by <see cref="IParsing.ReadArchiveEntries"/> and scanned,
-/// and the counts are summed per class. The expanded budget is the same cap the object was admitted under, so one
-/// artifact can never expand past the size its kind allows. An archive the profile refuses is thrown, never read as
-/// clean: the queue retries and finally dead-letters while <c>scan_state</c> stays <c>pending</c>.
+/// <b>An archive is scanned through the parser profile, and its container too.</b> A trace or report bundle is a
+/// deflated zip, and its entries' secrets do not appear in the compressed bytes at all, so scanning the object in
+/// place alone would always answer clean. When the artifact's declared type is <c>application/zip</c> — the type the
+/// completion sniffed the stored bytes against — every entry is decompressed by <see cref="IParsing.ReadArchiveEntries"/>
+/// and scanned, and the counts are summed per class. The container's own bytes are scanned as well, because an entry
+/// name and the archive comment live in the headers and a stored entry is readable there. The expanded budget is the
+/// same cap the object was admitted under, so one artifact can never expand past the size its kind allows. An archive
+/// the profile refuses is thrown, never read as clean: the queue retries and finally dead-letters while
+/// <c>scan_state</c> stays <c>pending</c>.
 /// </para>
 /// <para>
 /// <b>Nothing here fails into a verdict.</b> A missing or unreadable object throws, so the queue retries and finally

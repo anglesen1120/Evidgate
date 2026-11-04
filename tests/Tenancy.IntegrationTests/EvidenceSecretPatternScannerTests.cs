@@ -349,11 +349,11 @@ public sealed class EvidenceSecretPatternScannerTests
     }
 
     /// <summary>
-    /// A cancelled attempt stops instead of finishing a large object: the pass checks the token at a fixed interval,
-    /// and the same buffer with a live token still answers, so the throw is the cancellation and not the input.
+    /// An attempt whose token is already cancelled scans nothing: the pre-pass check throws before the walk, and the
+    /// same buffer with a live token still answers, so the throw is the cancellation and not the input.
     /// </summary>
     [Fact]
-    public async Task Scan_Honours_Cancellation_During_A_Large_Pass()
+    public async Task Scan_Refuses_An_Attempt_Cancelled_Before_It_Starts()
     {
         var content = new byte[16 * 1024 * 1024];
 
@@ -366,6 +366,76 @@ public sealed class EvidenceSecretPatternScannerTests
 
         hits.ShouldBeEmpty();
     }
+
+    /// <summary>
+    /// A cancelled attempt stops instead of finishing the object, including the worst shape for the bearer arm: one
+    /// unbroken token run from the first byte to the last. The pass has to reach its own cancellation check inside that
+    /// run instead of walking the run to its end first, so the walk from the pass's first byte to its first check may
+    /// cost no more than the same bytes scanned on their own — that scan is also the positive control, because the
+    /// shape matches one credential.
+    /// </summary>
+    [Fact]
+    public async Task Scan_Honours_Cancellation_During_A_Large_Pass()
+    {
+        // The platform's own object cap: the token run is longer than any artifact the pass can be handed.
+        var content = new byte[256 * 1024 * 1024];
+        "Bearer "u8.CopyTo(content);
+        content.AsSpan(7).Fill((byte)'Q');
+
+        var walk = content.AsSpan(0, 4 * 1024 * 1024).ToArray();
+        var referenceWatch = System.Diagnostics.Stopwatch.GetTimestamp();
+        Scan(walk).ShouldHaveSingleItem().PatternClass.ShouldBe(SecretPatternClass.GenericBearerToken);
+        var reference = System.Diagnostics.Stopwatch.GetElapsedTime(referenceWatch);
+
+        using var cancellation = new CancellationTokenSource();
+        var armed = false;
+        var walked = TimeSpan.Zero;
+
+        // Both timestamps are taken on the scan thread inside the pass: the checkpoint at offset zero proves the walk
+        // began, and the first interval checkpoint is where the token is armed, so no scheduling delay outside the
+        // pass can pass for work.
+        var pass = Task.Run(
+            () =>
+            {
+                var start = 0L;
+
+                Should.Throw<OperationCanceledException>(() => SecretPatternScanner.Scan(
+                    content,
+                    cancellation.Token,
+                    offset =>
+                    {
+                        if (offset == 0)
+                        {
+                            start = System.Diagnostics.Stopwatch.GetTimestamp();
+                            return;
+                        }
+
+                        if (armed)
+                        {
+                            return;
+                        }
+
+                        armed = true;
+                        walked = System.Diagnostics.Stopwatch.GetElapsedTime(start);
+                        Arm(cancellation);
+                    }));
+            },
+            Token);
+
+        await pass;
+
+        walked.ShouldBeGreaterThan(TimeSpan.Zero, "the pass never reached its first check");
+        walked.ShouldBeLessThan(
+            reference * 2,
+            "the walk to the first check must cost one interval, not the rest of the token run");
+    }
+
+    /// <summary>
+    /// Cancels a source from inside the pass's own checkpoint, where no await is available; kept out of the test body
+    /// so the call is not read as an async block of the test.
+    /// </summary>
+    /// <param name="source">The source whose token the pass holds.</param>
+    private static void Arm(CancellationTokenSource source) => source.Cancel();
 
     /// <summary>
     /// The scanner over one sample, under the test's own cancellation: a scan never runs without a token, so every
