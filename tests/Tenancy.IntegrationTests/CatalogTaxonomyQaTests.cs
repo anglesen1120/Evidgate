@@ -92,7 +92,8 @@ public sealed class CatalogTaxonomyQaTests(PostgresTenancyFixture fixture)
         report.Registered.ShouldBe(1);
         report.Conflicts.ShouldBe(0);
         report.Warnings.ShouldBe(1);
-        report.Entries.Single().Path.ShouldBe("tests/checkout.spec.ts");
+        report.Entries.Single(entry => entry.Code == CaseSyncCodes.InvalidSidecarEntry)
+            .Path.ShouldBe("tests/checkout.spec.ts");
         (await fixture.ScalarAsync<string?>(world.Database,
             $"select requirement_ref from public.test_case where project_id = '{world.Project}'")).ShouldBeNull();
         var caseId = await fixture.ScalarAsync<Guid>(world.Database,
@@ -160,10 +161,10 @@ public sealed class CatalogTaxonomyQaTests(PostgresTenancyFixture fixture)
     }
 
     [Theory]
-    [InlineData("platform", "desktop", "web")]
-    [InlineData("level", "weekly", "e2e")]
-    [InlineData("purpose", "gate", "regression")]
-    public async Task Taxonomy_UnknownEnum_RejectsCreateRevisionAndFilter(string field, string invalid, string valid)
+    [InlineData("platform", "desktop", "web", "Platform")]
+    [InlineData("level", "weekly", "e2e", "Level")]
+    [InlineData("purpose", "gate", "regression", "Purpose")]
+    public async Task Taxonomy_UnknownEnum_RejectsCreateRevisionAndFilter(string field, string invalid, string valid, string validationField)
     {
         await using var world = await StartAsync();
         var body = new Dictionary<string, object> { ["name"] = "Taxonomy", ["slug"] = "taxonomy", [field] = invalid };
@@ -171,7 +172,7 @@ public sealed class CatalogTaxonomyQaTests(PostgresTenancyFixture fixture)
         rejected.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         rejected.ErrorCode.ShouldBe("request_invalid");
         rejected.Body.GetProperty("error").GetProperty("details").EnumerateArray()
-            .Select(detail => detail.GetProperty("path").GetString()).ShouldContain(path => path != null && path.TrimStart('/') == field);
+            .Select(detail => detail.GetProperty("path").GetString()).ShouldContain(validationField);
         rejected.Body.GetProperty("error").GetProperty("details").EnumerateArray()
             .Select(detail => detail.GetProperty("reason").GetString()).ShouldContain(reason => reason == "invalid_value");
         body[field] = valid;
@@ -215,7 +216,7 @@ public sealed class CatalogTaxonomyQaTests(PostgresTenancyFixture fixture)
     }
 
     [Fact]
-    public async Task Taxonomy_ProjectScopedCredential_CannotReadOrWriteSiblingProject()
+    public async Task Taxonomy_ServiceClaimsOutsideCeiling_RefuseOwnAndSiblingProjects()
     {
         await using var world = await StartAsync();
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, "sibling");
@@ -227,9 +228,11 @@ public sealed class CatalogTaxonomyQaTests(PostgresTenancyFixture fixture)
         (await world.Client.SendAsync(HttpMethod.Post, $"/v1/suites/{suite.Id()}/revisions", scoped, new { purpose = "smoke" }, NewKey()))
             .Status.ShouldBe(HttpStatusCode.Forbidden);
         var own = TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: world.Project, servicePermissions: ["suite:read", "suite:write"]);
-        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/suites/{suite.Id()}", own)).Status.ShouldBe(HttpStatusCode.OK);
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/suites/{suite.Id()}", own)).Status.ShouldBe(HttpStatusCode.Forbidden);
         (await world.Client.SendAsync(HttpMethod.Post, $"/v1/suites/{suite.Id()}/revisions", own, new { purpose = "smoke" }, NewKey()))
-            .Status.ShouldBe(HttpStatusCode.Created);
+            .Status.ShouldBe(HttpStatusCode.Forbidden);
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/suites/{suite.Id()}", world.Admin)).Status.ShouldBe(HttpStatusCode.OK);
+        (await RevisionAsync(world, suite.Id(), new { purpose = "smoke" })).Status.ShouldBe(HttpStatusCode.Created);
     }
 
     [Theory]

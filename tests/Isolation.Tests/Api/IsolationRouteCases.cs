@@ -773,6 +773,9 @@ public static class IsolationRouteCases
         ObjectCase("GET", "/v1/cases/{c}", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}"), ownControl: true),
         ObjectCase("PATCH", "/v1/cases/{c}", p => Indexed("case", p.CaseIds), id =>
             new(HttpMethod.Patch, $"/v1/cases/{id}", new JsonObject { ["name"] = "intruder" }, "\"1\"")),
+        ObjectCaseWith("PATCH", "/v1/projects/{p}/cases/{c}", p => Indexed("case", p.CaseIds),
+            (id, p) => new(HttpMethod.Patch, $"/v1/projects/{p.Id}/cases/{id}",
+                new JsonObject { ["requirement_ref"] = "REQ-isolation" }), (_, _) => []),
         ObjectCase("GET", "/v1/cases/{c}/revisions", p => Indexed("case", p.CaseIds), id => new(HttpMethod.Get, $"/v1/cases/{id}/revisions"), ownControl: true),
         ProjectCase("POST", "/v1/projects/{p}/suites", p => new(HttpMethod.Post, $"/v1/projects/{p}/suites", new JsonObject { ["name"] = "intruder", ["slug"] = "intruder" })),
         ProjectCase("GET", "/v1/projects/{p}/suites", p => new(HttpMethod.Get, $"/v1/projects/{p}/suites"), list: true),
