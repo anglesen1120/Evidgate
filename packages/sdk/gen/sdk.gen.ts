@@ -1302,7 +1302,7 @@ export const listCases = <ThrowOnError extends boolean = false>(options: Options
 /**
  * Set or clear a case's external requirement reference (03.1.4)
  *
- * The only member is `requirement_ref`: a trimmed 1..200 character text naming an external requirement, or `null` to clear it. Metadata only — no `test_revision` is created and no `revision_hash` changes. A case outside `{p}`, of another org, or an unknown id is the same 404 as a missing one.
+ * The only member is `requirement_ref`: a trimmed 1..128 character text of `A-Z a-z 0-9 . _ : / # -` naming an external requirement (D-A6), or `null` to clear it. Metadata only — no `test_revision` is created and no `revision_hash` changes. A case outside `{p}`, of another org, or an unknown id is the same 404 as a missing one.
  */
 export const setCaseRequirementRef = <ThrowOnError extends boolean = false>(options: Options<SetCaseRequirementRefData, ThrowOnError>): RequestResult<SetCaseRequirementRefResponses, SetCaseRequirementRefErrors, ThrowOnError> => (options.client ?? client).patch<SetCaseRequirementRefResponses, SetCaseRequirementRefErrors, ThrowOnError>({
     security: [{

@@ -93,9 +93,36 @@ internal sealed class CreateSuiteCommandHandler(
         }
 
         var id = Guid.CreateVersion7();
-        var platform = Taxonomy.Canonical(command.Platform, Taxonomy.Platforms) ?? Taxonomy.Default.Platform;
-        var level = Taxonomy.Canonical(command.Level, Taxonomy.Levels) ?? Taxonomy.DefaultLevelFor(platform);
-        var purpose = Taxonomy.Canonical(command.Purpose, Taxonomy.Purposes) ?? Taxonomy.Default.Purpose;
+        var platform = command.Platform is null ? Taxonomy.Default.Platform : Taxonomy.Canonical(command.Platform, Taxonomy.Platforms);
+        if (platform is null)
+        {
+            return Result.Failure<SuiteDto>(SuiteErrors.Invalid(
+                "platform must be one of web, api, unit or mobile", [new ErrorDetail("/platform", "invalid_value")]));
+        }
+
+        // A new suite has no members, so it carries no variant that could name a native mobile platform: `mobile` here
+        // would be a promise no runner can keep. The rule is the revision rule (AC4), decided on evidence this request
+        // does not have, so the answer and the reason are the same.
+        if (platform == "mobile")
+        {
+            return Result.Failure<SuiteDto>(SuiteErrors.Invalid(
+                "a mobile suite needs a member whose variant names a native mobile platform (android, ios); a browser variant is device emulation and belongs to a web suite",
+                [new ErrorDetail("/platform", "mobile_capability_required")]));
+        }
+
+        var level = command.Level is null ? Taxonomy.DefaultLevelFor(platform) : Taxonomy.Canonical(command.Level, Taxonomy.Levels);
+        if (level is null)
+        {
+            return Result.Failure<SuiteDto>(SuiteErrors.Invalid(
+                "level must be one of unit, integration, e2e or smoke", [new ErrorDetail("/level", "invalid_value")]));
+        }
+
+        var purpose = command.Purpose is null ? Taxonomy.Default.Purpose : Taxonomy.Canonical(command.Purpose, Taxonomy.Purposes);
+        if (purpose is null)
+        {
+            return Result.Failure<SuiteDto>(SuiteErrors.Invalid(
+                "purpose must be one of regression, smoke, release_gate or exploratory", [new ErrorDetail("/purpose", "invalid_value")]));
+        }
 
         try
         {
@@ -173,25 +200,17 @@ internal sealed class CreateSuiteRevisionCommandHandler(
             return Result.Failure<SuiteRevisionHead>(SuiteErrors.SuiteNotFound);
         }
 
-        var planned = await planner.PlanAsync(db, peek.ProjectId, command.Body, peek.AsTaxonomy(), cancellationToken).ConfigureAwait(false);
+        // The taxonomy the suite held at the peek. A request that omits a member inherits it, so it must inherit from
+        // the row the write commits against, not from a row a concurrent revision may have replaced (see the re-plan).
+        var peekedTaxonomy = peek.AsTaxonomy();
+        var planned = await planner.PlanAsync(db, peek.ProjectId, command.Body, peekedTaxonomy, cancellationToken).ConfigureAwait(false);
         if (!planned.IsSuccess)
         {
             return Result.Failure<SuiteRevisionHead>(planned.Error!);
         }
 
         var plan = planned.Value;
-        var variantsJson = plan.Members.Count == 0
-            ? null
-            : Json(plan.Members.Select(member => member.Variant).DistinctBy(variant => variant.Hash)
-                .OrderBy(variant => variant.Hash, StringComparer.Ordinal) // one global order, or two suites inserting shared variants could deadlock
-                .Select(variant => new VariantRow(Guid.CreateVersion7(), variant.Hash, JsonSerializer.Deserialize<JsonElement>(variant.ParamsJson))));
-        var memberIds = plan.Members.Select(_ => Guid.CreateVersion7()).ToArray();
-        var membersJson = plan.Members.Count == 0
-            ? null
-            : Json(plan.Members.Select((member, ordinal) => new MemberRow(memberIds[ordinal], member.CaseRevisionId, member.Variant.Hash, ordinal, member.Required)));
-        var edgesJson = plan.Edges.Count == 0
-            ? null
-            : Json(plan.Edges.Select(edge => new EdgeRow(Guid.CreateVersion7(), memberIds[edge.Parent], memberIds[edge.Child])));
+        var payloads = BuildPayloads(plan);
 
         // ---- under the lock: numbering, dedupe, the inserts, the head.
         // A bounded wait: a stuck holder surfaces as 503 and a retry, not as a pile of waiting requests.
@@ -214,6 +233,21 @@ internal sealed class CreateSuiteRevisionCommandHandler(
         if (suite.Status != "active")
         {
             return Result.Failure<SuiteRevisionHead>(SuiteErrors.Archived);
+        }
+
+        // A concurrent revision may have moved the head (and the taxonomy with it) between the peek and this lock, so
+        // the inherited values planned above can be stale: re-plan against the row that is now locked, or an omitted
+        // `purpose` would silently revert the newer value and the hash would pin the reverted taxonomy.
+        if (suite.AsTaxonomy() != peekedTaxonomy)
+        {
+            var replanned = await planner.PlanAsync(db, suite.ProjectId, command.Body, suite.AsTaxonomy(), cancellationToken).ConfigureAwait(false);
+            if (!replanned.IsSuccess)
+            {
+                return Result.Failure<SuiteRevisionHead>(replanned.Error!);
+            }
+
+            plan = replanned.Value;
+            payloads = BuildPayloads(plan);
         }
 
         var existing = await db.QuerySingleOrDefaultAsync<ExistingRevision>(
@@ -244,9 +278,9 @@ internal sealed class CreateSuiteRevisionCommandHandler(
         var revisionNo = await db.ScalarAsync<int>(SuiteReadSql.NextRevisionNo, new { org_id = orgId, suite_id = command.SuiteId }, cancellationToken).ConfigureAwait(false);
         var revisionId = Guid.CreateVersion7();
 
-        if (variantsJson is not null)
+        if (payloads.Variants is not null)
         {
-            await db.ExecuteAsync(SuiteReadSql.InsertVariants, new { org_id = orgId, project_id = suite.ProjectId, rows = variantsJson }, cancellationToken).ConfigureAwait(false);
+            await db.ExecuteAsync(SuiteReadSql.InsertVariants, new { org_id = orgId, project_id = suite.ProjectId, rows = payloads.Variants }, cancellationToken).ConfigureAwait(false);
         }
 
         await db.ExecuteAsync(
@@ -268,11 +302,11 @@ internal sealed class CreateSuiteRevisionCommandHandler(
             },
             cancellationToken).ConfigureAwait(false);
 
-        if (membersJson is not null)
+        if (payloads.Members is not null)
         {
             var inserted = await db.ExecuteAsync(
                 SuiteReadSql.InsertMembers,
-                new { org_id = orgId, revision_id = revisionId, project_id = suite.ProjectId, rows = membersJson },
+                new { org_id = orgId, revision_id = revisionId, project_id = suite.ProjectId, rows = payloads.Members },
                 cancellationToken).ConfigureAwait(false);
             if (inserted != plan.Members.Count)
             {
@@ -280,9 +314,9 @@ internal sealed class CreateSuiteRevisionCommandHandler(
             }
         }
 
-        if (edgesJson is not null)
+        if (payloads.Edges is not null)
         {
-            await db.ExecuteAsync(SuiteReadSql.InsertEdges, new { org_id = orgId, revision_id = revisionId, rows = edgesJson }, cancellationToken).ConfigureAwait(false);
+            await db.ExecuteAsync(SuiteReadSql.InsertEdges, new { org_id = orgId, revision_id = revisionId, rows = payloads.Edges }, cancellationToken).ConfigureAwait(false);
         }
 
         await db.ExecuteAsync(
@@ -298,6 +332,28 @@ internal sealed class CreateSuiteRevisionCommandHandler(
     }
 
     private static string Json<T>(IEnumerable<T> rows) => JsonSerializer.Serialize(rows, Snake);
+
+    /// <summary>The set-based payloads of one plan; rebuilt when the plan is re-made under the lock.</summary>
+    /// <param name="plan">The plan whose members and edges are written.</param>
+    private static Payloads BuildPayloads(SuiteRevisionPlan plan)
+    {
+        var variants = plan.Members.Count == 0
+            ? null
+            : Json(plan.Members.Select(member => member.Variant).DistinctBy(variant => variant.Hash)
+                .OrderBy(variant => variant.Hash, StringComparer.Ordinal) // one global order, or two suites inserting shared variants could deadlock
+                .Select(variant => new VariantRow(Guid.CreateVersion7(), variant.Hash, JsonSerializer.Deserialize<JsonElement>(variant.ParamsJson))));
+        var memberIds = plan.Members.Select(_ => Guid.CreateVersion7()).ToArray();
+        var members = plan.Members.Count == 0
+            ? null
+            : Json(plan.Members.Select((member, ordinal) => new MemberRow(memberIds[ordinal], member.CaseRevisionId, member.Variant.Hash, ordinal, member.Required)));
+        var edges = plan.Edges.Count == 0
+            ? null
+            : Json(plan.Edges.Select(edge => new EdgeRow(Guid.CreateVersion7(), memberIds[edge.Parent], memberIds[edge.Child])));
+
+        return new Payloads(variants, members, edges);
+    }
+
+    private sealed record Payloads(string? Variants, string? Members, string? Edges);
 
     private sealed record VariantRow(Guid Id, string VariantHash, JsonElement Params);
 

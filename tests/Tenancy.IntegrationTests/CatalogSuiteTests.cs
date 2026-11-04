@@ -859,12 +859,76 @@ public sealed class CatalogSuiteTests
         older.Text("purpose").ShouldBe("regression");
         older.Body.GetProperty("revision_hash").GetString().ShouldBe(first.Body.GetProperty("revision_hash").GetString());
 
-        // Re-submitting the older content moves the head and the taxonomy back with it.
-        var again = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) } });
+        // Re-submitting the older content, taxonomy included, moves the head and the taxonomy back with it. The taxonomy
+        // is part of the hash, so the revert is only the same revision when the request names the old taxonomy too.
+        var again = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) }, purpose = "regression" });
         again.Status.ShouldBe(HttpStatusCode.OK, again.ErrorMessage);
         again.Body.GetProperty("created").GetBoolean().ShouldBeFalse();
         again.Body.GetProperty("head_moved").GetBoolean().ShouldBeTrue();
         (await world.Client.SendAsync(HttpMethod.Get, $"/v1/suites/{world.Suite}", world.Admin)).Text("purpose").ShouldBe("regression");
+
+        // The taxonomy moved, so the diff between the new head and the revision before it says so.
+        var diff = await world.Client.SendAsync(
+            HttpMethod.Get, $"/v1/suite-revisions/{again.Id("suite_revision_id")}/diff?against={second.Id("suite_revision_id")}", world.Admin);
+        diff.Status.ShouldBe(HttpStatusCode.OK, diff.ErrorMessage);
+        diff.Body.GetProperty("taxonomy").GetProperty("from").GetProperty("purpose").GetString().ShouldBe("release_gate");
+        diff.Body.GetProperty("taxonomy").GetProperty("to").GetProperty("purpose").GetString().ShouldBe("regression");
+        diff.Body.GetProperty("members_added").GetArrayLength().ShouldBe(0);
+        diff.Body.GetProperty("shard_strategy").ValueKind.ShouldBe(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task SuiteTaxonomy_OmittedMember_KeepsTheCurrentValue()
+    {
+        await using var world = await StartAsync(2);
+        var first = await CreateRevisionAsync(world, new { members = new[] { Member(world.Revisions[0]) }, purpose = "release_gate", level = "smoke" });
+        first.Status.ShouldBe(HttpStatusCode.Created, first.ErrorMessage);
+
+        // A request that names no taxonomy at all inherits all three: an omitted member is not a reset to the default.
+        var inherited = await CreateRevisionAsync(world, new
+        {
+            members = new[] { Member(world.Revisions[0]), Member(world.Revisions[1]) },
+        });
+        inherited.Status.ShouldBe(HttpStatusCode.Created, inherited.ErrorMessage);
+        inherited.Text("purpose").ShouldBe("release_gate");
+        inherited.Text("level").ShouldBe("smoke");
+        inherited.Text("platform").ShouldBe("web");
+
+        // Naming only the purpose keeps the level the suite holds.
+        var partly = await CreateRevisionAsync(world, new
+        {
+            members = new[] { Member(world.Revisions[0]), Member(world.Revisions[1]) },
+            purpose = "exploratory",
+            shard_strategy = new { kind = "count", count = 3 },
+        });
+        partly.Status.ShouldBe(HttpStatusCode.Created, partly.ErrorMessage);
+        partly.Text("purpose").ShouldBe("exploratory");
+        partly.Text("level").ShouldBe("smoke");
+        partly.Text("platform").ShouldBe("web");
+    }
+
+    [Fact]
+    public async Task CreateSuite_MobileWithoutCapability_422()
+    {
+        await using var world = await StartAsync();
+
+        // A new suite has no member whose variant could name a native platform: `mobile` would be unexecutable.
+        var mobile = await world.Client.SendAsync(
+            HttpMethod.Post, $"/v1/projects/{world.Project}/suites", world.Admin, new { name = "mob", slug = "mob-suite", platform = "mobile" }, NewKey());
+        mobile.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        DetailPaths(mobile).ShouldContain("/platform");
+        mobile.Body.GetProperty("error").GetProperty("details").EnumerateArray()
+            .Select(detail => detail.GetProperty("reason").GetString()).ShouldContain("mobile_capability_required");
+
+        // The other three platforms are accepted and keep their catalogue defaults.
+        foreach (var (platform, level) in new[] { ("web", "e2e"), ("api", "integration"), ("unit", "unit") })
+        {
+            var created = await world.Client.SendAsync(
+                HttpMethod.Post, $"/v1/projects/{world.Project}/suites", world.Admin, new { name = platform, slug = $"{platform}-suite", platform }, NewKey());
+            created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
+            created.Text("level").ShouldBe(level);
+            created.Text("purpose").ShouldBe("regression");
+        }
     }
 
     [Fact]
@@ -896,6 +960,27 @@ public sealed class CatalogSuiteTests
         });
         native.Status.ShouldBe(HttpStatusCode.Created, native.ErrorMessage);
         native.Text("platform").ShouldBe("mobile");
+    }
+
+    [Fact]
+    public async Task MobilePlatform_MixedVariants_StayMobile()
+    {
+        await using var world = await StartAsync(2);
+
+        // One native variant is enough: the suite is not device emulation just because another member uses a browser.
+        var mixed = await CreateRevisionAsync(world, new
+        {
+            members = new[]
+            {
+                Member(world.Revisions[0], new { platform = "android" }),
+                Member(world.Revisions[1], new { browser = "chromium", viewport = "390x844" }),
+            },
+            platform = "mobile",
+        });
+        mixed.Status.ShouldBe(HttpStatusCode.Created, mixed.ErrorMessage);
+        mixed.Text("platform").ShouldBe("mobile");
+        mixed.Body.GetProperty("warnings").EnumerateArray().Select(warning => warning.GetString())
+            .ShouldNotContain(warning => warning!.Contains("device emulation", StringComparison.Ordinal));
     }
 
     [Fact]

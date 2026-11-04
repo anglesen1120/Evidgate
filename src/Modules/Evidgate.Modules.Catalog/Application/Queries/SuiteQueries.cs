@@ -239,6 +239,15 @@ internal static class SuiteRevisions
         static SuiteDelta? Delta(JsonElement to, JsonElement from) =>
             JsonSerializer.Serialize(to) == JsonSerializer.Serialize(from) ? null : new SuiteDelta(from, to);
 
+        // The taxonomy a revision was authored under is content (it is in the hash), so a taxonomy-only change is a
+        // difference like any other and must be visible here; the shape is the three members, not a free-form object.
+        static SuiteDelta? TaxonomyDelta(SuiteRevisionDto to, SuiteRevisionDto from) =>
+            to.Platform == from.Platform && to.Level == from.Level && to.Purpose == from.Purpose
+                ? null
+                : new SuiteDelta(
+                    JsonSerializer.SerializeToElement(new TaxonomyBody(from.Platform, from.Level, from.Purpose), Snake),
+                    JsonSerializer.SerializeToElement(new TaxonomyBody(to.Platform, to.Level, to.Purpose), Snake));
+
         return new SuiteRevisionDiff(
             current.Id,
             against.Id,
@@ -252,8 +261,11 @@ internal static class SuiteRevisions
                 .ThenBy(edge => edge.Parent.VariantHash, StringComparer.Ordinal).ThenBy(edge => edge.Child.VariantHash, StringComparer.Ordinal)],
             Delta(current.ShardStrategy, against.ShardStrategy),
             Delta(current.RetryPolicy, against.RetryPolicy),
-            Delta(current.EnvironmentRequirements, against.EnvironmentRequirements));
+            Delta(current.EnvironmentRequirements, against.EnvironmentRequirements),
+            TaxonomyDelta(current, against));
     }
+
+    private sealed record TaxonomyBody(string Platform, string Level, string Purpose);
 
     private sealed class DetailRow
     {

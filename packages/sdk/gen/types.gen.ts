@@ -607,7 +607,7 @@ export type CaseDto = {
      */
     version: number;
     /**
-     * External requirement id or URL this case protects, trimmed and control-free, or null. Metadata only: it is not part of any revision content or hash (00 §7).
+     * External requirement id or URL this case protects (D-A6: trimmed, 1..128 characters of `A-Z a-z 0-9 . _ : / # -`), or null. Metadata only: it is not part of any revision content or hash (00 §7).
      */
     requirement_ref: string | null;
 };
@@ -654,7 +654,7 @@ export type UpdateCaseRequest = {
 };
 
 /**
- * The requirement pointer of one case. `requirement_ref` is required: send `null` to clear it, or a trimmed 1..200 character value. Any other member is 422 `schema_invalid`.
+ * The requirement pointer of one case. `requirement_ref` is required: send `null` to clear it, or a value that is trimmed to 1..128 characters of `A-Z a-z 0-9 . _ : / # -` (D-A6). Any other member or a value outside that rule is 422 `schema_invalid`.
  */
 export type SetCaseRequirementRequest = {
     requirement_ref: string | null;
@@ -796,7 +796,7 @@ export type SuiteDto = {
     slug: string;
     status: 'active' | 'archived';
     /**
-     * Platform of the head revision (03.1.4); a mobile suite with browser variants is stored as web.
+     * Platform of the head revision (03.1.4); a mobile suite whose every variant names a browser engine is device emulation and is stored as web.
      */
     platform: Platform;
     level: Level;
@@ -817,7 +817,7 @@ export type CreateSuiteRequest = {
     name: string;
     slug: string;
     /**
-     * Taxonomy of the suite (03.1.4); default web.
+     * Taxonomy of the suite (03.1.4); default web. `mobile` is refused here with `mobile_capability_required` — a suite carries the evidence only once a revision has a member whose variant names a native mobile platform.
      */
     platform?: Platform;
     /**
@@ -968,6 +968,7 @@ export type SuiteRevisionDiff = {
     shard_strategy?: SuiteDelta | null;
     retry_policy?: SuiteDelta | null;
     environment_requirements?: SuiteDelta | null;
+    taxonomy?: SuiteDelta | null;
 };
 
 /**

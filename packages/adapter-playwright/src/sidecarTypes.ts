@@ -34,8 +34,12 @@ export interface SidecarCase {
   file: string;
   'evidgate.id': string;
   name?: string;
-  /** Optional external requirement pointer; the reporter resolves ids only, the server stores and validates it. */
-  requirement?: string;
+  /**
+   * Optional external requirement pointer: a string or a number (read as its digits), trimmed to 1..128 characters of
+   * `A-Z a-z 0-9 . _ : / # -`. A bare true/false or anything outside that set is refused by the server with a warning
+   * on the entry, never with a conflict.
+   */
+  requirement?: string | number | boolean | null;
 }
 
 /** A sidecar document that passed the sidecar.v1 schema. */

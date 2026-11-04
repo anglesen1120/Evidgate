@@ -173,6 +173,7 @@ public sealed record SuiteDelta(JsonElement From, JsonElement To);
 /// <param name="ShardStrategy">Set when the strategy changed.</param>
 /// <param name="RetryPolicy">Set when the policy changed.</param>
 /// <param name="EnvironmentRequirements">Set when the requirements changed.</param>
+/// <param name="Taxonomy">Set when <c>platform</c>, <c>level</c> or <c>purpose</c> changed, as <c>{platform, level, purpose}</c>.</param>
 public sealed record SuiteRevisionDiff(
     Guid RevisionId,
     Guid AgainstId,
@@ -183,4 +184,5 @@ public sealed record SuiteRevisionDiff(
     IReadOnlyList<SuiteEdgeKey> EdgesRemoved,
     SuiteDelta? ShardStrategy,
     SuiteDelta? RetryPolicy,
-    SuiteDelta? EnvironmentRequirements);
+    SuiteDelta? EnvironmentRequirements,
+    SuiteDelta? Taxonomy);

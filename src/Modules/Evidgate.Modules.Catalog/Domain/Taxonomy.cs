@@ -26,7 +26,7 @@ internal sealed record PlatformDecision(string? Stored, bool Emulated, bool Need
 internal static class Taxonomy
 {
     /// <summary>The longest requirement pointer a case may carry (D-A6 §8.1).</summary>
-    internal const int MaxRequirementRefLength = 200;
+    internal const int MaxRequirementRefLength = 128;
 
     /// <summary>The suite behaviour the product has today: a browser suite, run end to end, for regressions.</summary>
     internal static SuiteTaxonomy Default { get; } = new("web", "e2e", "regression");
@@ -87,8 +87,10 @@ internal static class Taxonomy
     };
 
     /// <summary>
-    /// Accepts a requirement pointer: trimmed, 1..200 characters, clean text (no control or format characters). The
-    /// empty string is not a pointer — a caller that wants the value cleared sends <c>null</c>.
+    /// Accepts a requirement pointer (D-A6 §8.1): trimmed, 1..128 characters of <c>[A-Za-z0-9._:/#-]</c>. The empty
+    /// string is not a pointer — a caller that wants the value cleared sends <c>null</c>. The character set is ASCII,
+    /// so its length is also the code-point length PostgreSQL <c>char_length</c> counts and it cannot hold a control
+    /// or format character; the same two predicates are the migration's check, so the route and the database agree.
     /// </summary>
     /// <param name="raw">The value as sent.</param>
     /// <param name="value">The trimmed value, or null when it was not accepted.</param>
@@ -101,7 +103,7 @@ internal static class Taxonomy
         }
 
         var trimmed = raw.Trim();
-        if (trimmed.Length is 0 or > MaxRequirementRefLength || !TextRules.IsClean(trimmed))
+        if (trimmed.Length is 0 or > MaxRequirementRefLength || !IsRequirementCharset(trimmed))
         {
             return false;
         }
@@ -111,23 +113,37 @@ internal static class Taxonomy
         return true;
     }
 
+    private static bool IsRequirementCharset(string text)
+    {
+        foreach (var character in text)
+        {
+            if (!char.IsAsciiLetterOrDigit(character) && character is not ('.' or '_' or ':' or '/' or '#' or '-'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// The platform rule of AC4: <c>web</c>, <c>api</c> and <c>unit</c> are stored as asked, and <c>mobile</c> is
-    /// stored only when a variant declares a native mobile platform. A <c>mobile</c> suite whose variants all run a
-    /// browser engine is device emulation — the same case in a mobile viewport — so it is stored as <c>web</c>;
-    /// without either evidence there is no runner that could execute it and the request is refused.
+    /// stored only when a variant declares a native mobile platform. A <c>mobile</c> suite whose variants every one
+    /// run a browser engine is device emulation — the same case in a mobile viewport — so it is stored as <c>web</c>;
+    /// one native variant is enough to keep it <c>mobile</c>, and without either evidence there is no runner that
+    /// could execute it and the request is refused.
     /// </summary>
     /// <param name="requested">A canonical requested platform.</param>
-    /// <param name="browserDriven">True when at least one member's variant names a browser engine.</param>
+    /// <param name="allBrowserDriven">True when every member's variant names a browser engine.</param>
     /// <param name="nativeMobile">True when at least one member's variant names a mobile platform.</param>
-    public static PlatformDecision ResolvePlatform(string requested, bool browserDriven, bool nativeMobile)
+    public static PlatformDecision ResolvePlatform(string requested, bool allBrowserDriven, bool nativeMobile)
     {
         if (requested != "mobile")
         {
             return new PlatformDecision(requested, false, false);
         }
 
-        if (browserDriven)
+        if (allBrowserDriven)
         {
             return new PlatformDecision("web", true, false);
         }

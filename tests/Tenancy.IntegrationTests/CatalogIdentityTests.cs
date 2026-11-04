@@ -884,7 +884,7 @@ public sealed class CatalogIdentityTests
     // ------------------------------------------------------------------ requirement pointer (03.1.4)
 
     [Fact]
-    public async Task RequirementRef_IsNullByDefault_IsTrimmed_AndRejectsOver200Chars()
+    public async Task RequirementRef_IsNullByDefault_IsTrimmed_AndRejectsOver128Chars()
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
@@ -901,12 +901,18 @@ public sealed class CatalogIdentityTests
         padded.Body.GetProperty("version").GetInt32().ShouldBe(2);
         (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case")).ShouldBe("REQ-1042");
 
-        // 200 characters is the limit, and it is measured after trimming.
-        var longest = await PatchRequirementAsync(world, caseId, new { requirement_ref = " " + new string('r', 200) + " " });
+        // 128 characters is the limit (D-A6), and it is measured after trimming.
+        var longest = await PatchRequirementAsync(world, caseId, new { requirement_ref = " " + new string('r', 128) + " " });
         longest.Status.ShouldBe(HttpStatusCode.OK);
-        longest.Body.GetProperty("requirement_ref").GetString().ShouldBe(new string('r', 200));
+        longest.Body.GetProperty("requirement_ref").GetString().ShouldBe(new string('r', 128));
 
-        var tooLong = await PatchRequirementAsync(world, caseId, new { requirement_ref = new string('r', 201) });
+        // A full requirement URL survives the character set, but a query string does not: '?' is not a member.
+        var url = await PatchRequirementAsync(
+            world, caseId, new { requirement_ref = "https://jira.example.com/browse/PROJ-1#criteria" });
+        url.Status.ShouldBe(HttpStatusCode.OK);
+        url.Body.GetProperty("requirement_ref").GetString().ShouldBe("https://jira.example.com/browse/PROJ-1#criteria");
+
+        var tooLong = await PatchRequirementAsync(world, caseId, new { requirement_ref = new string('r', 129) });
         tooLong.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         tooLong.ErrorCode.ShouldBe("schema_invalid");
         tooLong.Body.GetProperty("error").GetProperty("details").EnumerateArray()
@@ -914,16 +920,20 @@ public sealed class CatalogIdentityTests
 
         // The refused value changed nothing, so the accepted one is still stored.
         (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case"))
-            .ShouldBe(new string('r', 200));
-        (await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case")).ShouldBe(3);
+            .ShouldBe("https://jira.example.com/browse/PROJ-1#criteria");
+        (await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case")).ShouldBe(4);
     }
 
     [Theory]
     [InlineData("   ")]
+    [InlineData("REQ 1042")]
+    [InlineData("https://jira.example.com/browse/PROJ-1?focused=1")]
     [InlineData("REQ\u0001")]
     [InlineData("REQ\u200b")]
     [InlineData("REQ\n1042")]
-    public async Task RequirementRef_RefusesBlankAndControlBearingValues(string value)
+    [InlineData("\uD800")]
+    [InlineData("REQ\uD800")]
+    public async Task RequirementRef_RefusesBlankCharsetAndControlBearingValues(string value)
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
@@ -1058,29 +1068,60 @@ public sealed class CatalogIdentityTests
         (await CountAsync(world, "test_case")).ShouldBe(1);
     }
 
-    [Theory]
-    [InlineData("   ")]
-    [InlineData("REQ\u0001")]
-    [InlineData("REQ-TOO-LONG-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
-    public async Task Register_SidecarRequirementInvalid_IsAWarning_AndTheCaseStillRegisters(string requirement)
+    [Fact]
+    public async Task Register_SidecarBooleanRequirement_IsAWarning_AndTheCaseStillRegisters()
     {
         await using var world = await StartAsync();
-
-        // JSON is a valid YAML double-quoted scalar, so a control character reaches the reader as a character
-        // rather than invalidating the document before the pointer rule can judge it.
         var sidecar = new SourceFile(
             "tests/evidgate.cases.yaml",
-            $"version: 1\ncases:\n  - file: checkout.spec.ts\n    evidgate.id: {IdA}\n    requirement: {JsonSerializer.Serialize(requirement)}\n");
+            $"version: 1\ncases:\n  - file: checkout.spec.ts\n    evidgate.id: {IdA}\n    requirement: true\n");
 
         var report = await RegisterAsync(world, Commit1, new SourceFile("tests/checkout.spec.ts", "test('x')", "playwright", "typescript"), sidecar);
 
-        // Metadata never conflicts and never holds the directory: the id is still the case's, the pointer is null.
+        // A bare true/false is a scalar the schema accepts but no requirement id: warning, no conflict, id kept.
         report.Warnings.ShouldBe(1);
         report.Conflicts.ShouldBe(0);
         report.Registered.ShouldBe(1);
         report.Entries.Single().Code.ShouldBe(CaseSyncCodes.InvalidSidecarEntry);
         (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
         (await CountAsync(world, "test_case")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Register_SidecarNumericRequirement_IsStoredAsItsDigits()
+    {
+        await using var world = await StartAsync();
+        var sidecar = new SourceFile(
+            "tests/evidgate.cases.yaml",
+            $"version: 1\ncases:\n  - file: checkout.spec.ts\n    evidgate.id: {IdA}\n    requirement: 1042\n");
+
+        var report = await RegisterAsync(world, Commit1, new SourceFile("tests/checkout.spec.ts", "test('x')", "playwright", "typescript"), sidecar);
+
+        report.Warnings.ShouldBe(0);
+        report.Registered.ShouldBe(1);
+        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case")).ShouldBe("1042");
+    }
+
+    [Theory]
+    [InlineData("REQ 1042")]
+    [InlineData("REQ?focused=1")]
+    [InlineData("   ")]
+    [InlineData("REQ-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    public async Task Register_SidecarRequirementOutsideTheRule_IsRefusedWithTheManifest_AndNoCaseIsWritten(string requirement)
+    {
+        await using var world = await StartAsync();
+        var sidecar = new SourceFile(
+            "tests/evidgate.cases.yaml",
+            $"version: 1\ncases:\n  - file: checkout.spec.ts\n    evidgate.id: {IdA}\n    requirement: {JsonSerializer.Serialize(requirement)}\n");
+
+        var report = await RegisterAsync(world, Commit1, new SourceFile("tests/checkout.spec.ts", "test('x')", "playwright", "typescript"), sidecar);
+
+        // The schema is the first gate (D-A6): a value the rule cannot hold is a manifest warning, never a conflict,
+        // and the directory's cases keep their state instead of being created or marked missing.
+        report.Warnings.ShouldBe(1);
+        report.Conflicts.ShouldBe(0);
+        report.Registered.ShouldBe(0);
+        (await CountAsync(world, "test_case")).ShouldBe(0);
     }
 
     [Fact]

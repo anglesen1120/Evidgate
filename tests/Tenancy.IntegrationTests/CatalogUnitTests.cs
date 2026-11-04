@@ -162,7 +162,11 @@ public sealed class CatalogUnitTests
     [InlineData("version: 1\ncases:\n  - file: a.ts\n")]
     [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: nope\n")]
     [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    extra: 1\n")]
-    [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: 42\n")]
+    [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: \"REQ 1042\"\n")]
+    [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: \"REQ?focused=1\"\n")]
+    [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: \"\"\n")]
+    [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: \"   \"\n")]
+    [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: [1042]\n")]
     [InlineData("- just\n- a list\n")]
     [InlineData("just a string\n")]
     [InlineData("")]
@@ -238,25 +242,23 @@ public sealed class CatalogUnitTests
         result.Warnings.ShouldBeEmpty();
         result.Entries.Select(entry => entry.RequirementRef).ShouldBe(["REQ-1042", null]);
 
-        // 200 characters after trimming is the limit.
-        Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: \"{new string('r', 200)}\"\n")
+        // 128 characters after trimming is the limit, and a number is read as its digits.
+        Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: \"{new string('r', 128)}\"\n")
             .Warnings.ShouldBeEmpty();
+
+        var numeric = Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: 1042\n  - file: b.ts\n    evidgate.id: {IdB}\n    requirement: null\n");
+        numeric.Problems.ShouldBeEmpty();
+        numeric.Warnings.ShouldBeEmpty();
+        numeric.Entries.Select(entry => entry.RequirementRef).ShouldBe(["1042", null]);
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    [InlineData("REQ\u0001")]
-    [InlineData("REQ\u200b")]
-    [InlineData("REQ\n1042")]
-    public void Sidecar_UnusableRequirement_IsAWarning_AndTheEntryStillReads(string requirement)
+    [Fact]
+    public void Sidecar_BooleanRequirement_IsAWarning_AndTheEntryStillReads()
     {
-        // The scalar is written as JSON (a valid YAML double-quoted scalar), so the escapes arrive as characters
-        // instead of invalidating the document before the reader can judge the value.
-        var scalar = JsonSerializer.Serialize(requirement);
-        var result = Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: {scalar}\n");
+        // A bare true/false is the one scalar the schema accepts but no requirement id can use: it drops the value
+        // with a warning instead of costing the entry its id.
+        var result = Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: true\n");
 
-        // The pointer is metadata: it never becomes a conflict and never costs the entry its id.
         result.Problems.ShouldBeEmpty();
         result.Warnings.Single().Path.ShouldBe("tests/a.ts");
         result.Entries.Single().Id.ShouldBe(Guid.Parse(IdA));
@@ -264,13 +266,13 @@ public sealed class CatalogUnitTests
     }
 
     [Fact]
-    public void Sidecar_OverlongRequirement_IsAWarning()
+    public void Sidecar_OverlongRequirement_IsRefusedWithTheDocument()
     {
-        var result = Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: \"{new string('r', 201)}\"\n");
+        var result = Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: \"{new string('r', 129)}\"\n");
 
-        result.Problems.ShouldBeEmpty();
-        result.Warnings.Count.ShouldBe(1);
-        result.Entries.Single().RequirementRef.ShouldBeNull();
+        result.Entries.ShouldBeEmpty();
+        result.Warnings.ShouldBeEmpty();
+        result.Problems.Single().Path.ShouldBe("tests/evidgate.cases.yaml");
     }
 
     // ------------------------------------------------------------------ CaseDiscovery

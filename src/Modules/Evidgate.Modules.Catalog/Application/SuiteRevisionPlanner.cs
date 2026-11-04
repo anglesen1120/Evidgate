@@ -285,9 +285,9 @@ internal sealed class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schemaSet)
             return InvalidTaxonomy("purpose", "purpose must be one of regression, smoke, release_gate or exploratory");
         }
 
-        var browserDriven = members.Any(member => member is not null && Taxonomy.IsBrowserDriven(member.Params));
+        var allBrowserDriven = members.Count > 0 && members.All(member => member is not null && Taxonomy.IsBrowserDriven(member.Params));
         var nativeMobile = members.Any(member => member is not null && Taxonomy.DeclaresNativeMobile(member.Params));
-        var decision = Taxonomy.ResolvePlatform(platform, browserDriven, nativeMobile);
+        var decision = Taxonomy.ResolvePlatform(platform, allBrowserDriven, nativeMobile);
         if (decision.NeedsCapability)
         {
             return InvalidTaxonomy(

@@ -120,13 +120,7 @@ internal sealed class SidecarManifestReader(Lazy<ContractSchemaSet> schemaSet)
 
             // The pointer is metadata: an unusable value drops that one value and warns, while the entry still
             // identifies its case, so a typo can never freeze the directory's cases or change an id.
-            var requirement = item["requirement"]?.GetValue<string>();
-            if (requirement is not null && !Taxonomy.TryRequirementRef(requirement, out requirement))
-            {
-                warnings.Add(new SidecarProblem(
-                    full,
-                    "the requirement of this entry is not a trimmed 1..200 character value free of control characters"));
-            }
+            var requirement = Requirement(item["requirement"], full, warnings);
 
             entries.Add(new SidecarEntry(full, guid, name, file, requirement));
         }
@@ -136,6 +130,37 @@ internal sealed class SidecarManifestReader(Lazy<ContractSchemaSet> schemaSet)
 
     private static SidecarReadResult Refused(string manifestPath, string message) =>
         new([], [new SidecarProblem(manifestPath, message)], []);
+
+    /// <summary>
+    /// Reads the optional requirement pointer. A string is used as written and a number as its canonical digits, so
+    /// an unquoted <c>requirement: 1042</c> still names the requirement; a bare true/false, and defensively any value
+    /// the pointer rule refuses, drops the value with a warning on the entry. Null and absent both mean "no pointer".
+    /// </summary>
+    private static string? Requirement(JsonNode? node, string path, List<SidecarProblem> warnings)
+    {
+        if (node is null)
+        {
+            return null;
+        }
+
+        string? text = node.GetValueKind() switch
+        {
+            JsonValueKind.String => node.GetValue<string>(),
+            JsonValueKind.Number => node.ToJsonString(),
+            _ => null,
+        };
+
+        if (text is not null && Taxonomy.TryRequirementRef(text, out var value))
+        {
+            return value;
+        }
+
+        warnings.Add(new SidecarProblem(
+            path,
+            "the requirement of this entry is not usable: it must be 1..128 characters of A-Z a-z 0-9 . _ : / # - (a number is read as its digits)"));
+
+        return null;
+    }
 
     private static string Brief(string text) => TextRules.Brief(text);
 

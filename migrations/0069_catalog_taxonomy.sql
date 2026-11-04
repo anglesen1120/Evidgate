@@ -7,9 +7,8 @@
 -- taxonomy is authored content, so it is pinned on the immutable revision that first carried it and copied to the
 -- suite row only as the current reading of its head.
 --
--- SHAPE: `test_case.requirement_ref` is nullable text, trimmed, 1..200 characters and control-free; the database
--- check is the cheap half of the rule (the .NET side additionally refuses format characters, which PostgreSQL text
--- accepts). `suite` and `suite_revision` carry the same three closed lists, `platform` (web, api, unit, mobile),
+-- SHAPE: `test_case.requirement_ref` is nullable text, trimmed, 1..128 characters of `[A-Za-z0-9._:/#-]`; the
+-- database check is the cheap half of the rule and the .NET side applies the same two predicates. `suite` and `suite_revision` carry the same three closed lists, `platform` (web, api, unit, mobile),
 -- `level` (unit, integration, e2e, smoke) and `purpose` (regression, smoke, release_gate, exploratory); a new value is
 -- a migration, like every other enum-like text column (D4). The row defaults are the suite behaviour the product has
 -- today: a suite is a browser suite at `e2e` for `regression`. Existing rows take those defaults — a backfill is not a
@@ -41,14 +40,15 @@ alter table public.test_case
 alter table public.test_case
   drop constraint if exists test_case_requirement_ref_check;
 
--- NULL passes (a case need not point at a requirement). Anything else must already be trimmed, be 1..200 characters
--- and hold no control character: a writer that skips the route cannot store a pointer no screen can render.
+-- NULL passes (a case need not point at a requirement). Anything else must already be trimmed, be 1..128 characters
+-- and match `[A-Za-z0-9._:/#-]`: a writer that skips the route cannot store a pointer no screen can render or one no
+-- requirement id can look like.
 alter table public.test_case
   add constraint test_case_requirement_ref_check
   check (requirement_ref is null
          or (requirement_ref = btrim(requirement_ref)
-             and char_length(requirement_ref) between 1 and 200
-             and requirement_ref !~ '[[:cntrl:]]'));
+             and char_length(requirement_ref) between 1 and 128
+             and requirement_ref ~ '^[A-Za-z0-9._:/#-]+$'));
 
 -- ---------------------------------------------------------------- the suite taxonomy (03.1.4 AC3, AC5)
 

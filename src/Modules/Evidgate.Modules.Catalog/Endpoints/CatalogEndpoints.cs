@@ -283,7 +283,17 @@ public static class CatalogEndpoints
         }
         else if (member.ValueKind is JsonValueKind.String)
         {
-            requirementRef = member.GetString();
+            try
+            {
+                requirementRef = member.GetString();
+            }
+            catch (InvalidOperationException)
+            {
+                // A lone surrogate escape parses as JSON but has no UTF-16 text: refuse it as the 422, never a 500.
+                return Result.Failure<CaseDto>(Error.Invalid(
+                    "requirement_ref must be well-formed Unicode text",
+                    [new ErrorDetail("requirement_ref", "schema_invalid")]));
+            }
         }
         else
         {
