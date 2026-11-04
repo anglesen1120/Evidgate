@@ -192,7 +192,7 @@ public sealed class IngestUsageMeterTests
     // ------------------------------------------------------------------ AC4
 
     [Fact]
-    public async Task MeterBatch_RetryFailThenPass_SingleMeterEvent()
+    public async Task MeterBatch_LedgerThrowsOnFirstAttempt_SingleMeterEvent()
     {
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
         var failures = new LedgerFailures(failuresLeft: 1);
@@ -222,6 +222,74 @@ public sealed class IngestUsageMeterTests
 
         (await TaskStateAsync(world.Database)).ShouldBe("done");
         (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1, "two attempts metered the accepted batch once");
+    }
+
+    [Fact]
+    public async Task MeterBatch_ExecutionRetriedThenPassed_MeteredOnce()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(owned.Name);
+
+        // One execution ran twice: attempt 1 failed, attempt 2 passed. The batch accepts both events, so the batch's own
+        // accepted count is what bills the executor's retry — once, not once per attempt.
+        var executionKey = world.Plan.Executions[0].ExecutionKey;
+        var body = IngestEventBatchTests.Batch(
+            IngestEventBatchTests.Event(
+                Guid.CreateVersion7(), executionKey, sequence: 1, attemptNo: 1, status: "failed"),
+            IngestEventBatchTests.Event(
+                Guid.CreateVersion7(), executionKey, sequence: 2, attemptNo: 2, status: "passed"));
+
+        var answer = await IngestEventBatchTests.PostEventsAsync(world, body);
+        answer.Status.ShouldBe(System.Net.HttpStatusCode.OK, answer.ErrorMessage);
+        answer.Body.GetProperty("accepted").GetInt32().ShouldBe(2);
+        var batchId = answer.Body.GetProperty("batch_id").GetGuid();
+
+        await DispatchAndRunAsync(world);
+
+        (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1, "a retried execution is still one accepted batch");
+        (await LedgerColumnAsync(world.Database, world.Org, batchId, "quantity::text")).ShouldBe("2");
+        (await LedgerColumnAsync(world.Database, world.Org, batchId, "metric")).ShouldBe("results");
+
+        // A resend of the same two envelopes accepts nothing: nothing is dispatched and nothing bills a second time.
+        var resend = await IngestEventBatchTests.PostEventsAsync(world, body);
+        resend.Status.ShouldBe(System.Net.HttpStatusCode.OK, resend.ErrorMessage);
+        resend.Body.GetProperty("accepted").GetInt32().ShouldBe(0);
+        (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(0);
+        (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task MeterBatch_LedgerWritesThenThrows_RowRolledBackAndRetryMetersOnce()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        var failures = new LedgerFailures(failuresLeft: 1);
+        await using var world = await StartAsync(
+            owned.Name,
+            services =>
+            {
+                // The real ledger behind a wrapper that writes the row and then fails: the attempt's transaction is what
+                // makes the row disappear, so the retry is the first surviving write.
+                services.AddScoped<UsageContracts>();
+                services.AddScoped<IUsageLedger>(provider => new WriteThenThrowLedger(
+                    provider.GetRequiredService<UsageContracts>(), failures));
+            });
+
+        var batchId = await PostBatchAsync(world, events: 2);
+
+        (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
+
+        var consumer = Consumer(world);
+        (await consumer.PollOnceAsync(Queue, Token)).ShouldBe(1);
+        (await TaskStateAsync(world.Database)).ShouldBe("retry", "the failure after the write still fails the attempt");
+        (await LedgerCountAsync(world.Database, world.Org))
+            .ShouldBe(0, "the attempt's transaction rolled the insert back with it");
+
+        await MakeRunnableAsync(world.Database);
+        (await consumer.PollOnceAsync(Queue, Token)).ShouldBe(1);
+
+        (await TaskStateAsync(world.Database)).ShouldBe("done");
+        (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1);
+        (await LedgerColumnAsync(world.Database, world.Org, batchId, "quantity::text")).ShouldBe("2");
     }
 
     // ------------------------------------------------------------------ AC5
@@ -369,5 +437,20 @@ public sealed class IngestUsageMeterTests
             failures.TryConsume()
                 ? throw new InvalidOperationException("the usage ledger is unavailable")
                 : inner.RecordAsync(request, cancellationToken);
+    }
+
+    /// <summary>The real ledger, failing once only after the inner call returned: the write happened, then the attempt died.</summary>
+    private sealed class WriteThenThrowLedger(IUsageLedger inner, LedgerFailures failures) : IUsageLedger
+    {
+        public async Task<UsageBatchResult> RecordAsync(
+            RecordUsageBatchRequest request,
+            CancellationToken cancellationToken)
+        {
+            var result = await inner.RecordAsync(request, cancellationToken).ConfigureAwait(false);
+
+            return failures.TryConsume()
+                ? throw new InvalidOperationException("the usage ledger lost its connection after the write")
+                : result;
+        }
     }
 }

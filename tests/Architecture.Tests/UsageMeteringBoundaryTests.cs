@@ -85,6 +85,48 @@ public class UsageMeteringBoundaryTests
         violation.ShouldContain("ReprocessReportTask.cs");
     }
 
+    [Fact]
+    public void No_Http_Surface_Calls_The_Ledger_Directly()
+    {
+        var files = SourceFiles();
+
+        // Non-vacuity: the scan really sees the modules' endpoint files, so an empty result means "no route meters",
+        // not "no endpoints were read".
+        files.ShouldContain(file => UsageMeteringRules.IsEndpoint(file.Path, file.Text));
+
+        UsageMeteringRules.FindEndpointMeteringViolations(files)
+            .ShouldBeEmpty(string.Join(Environment.NewLine, UsageMeteringRules.FindEndpointMeteringViolations(files)));
+    }
+
+    [Theory]
+    [InlineData("src/Modules/Evidgate.Modules.Ingestion/Endpoints/UsageEndpoints.cs", "IUsageLedger ledger;")]
+    [InlineData("src/Modules/Evidgate.Modules.Usage/Endpoints/UsageRoutes.cs", "IUsageLedger ledger;")]
+    [InlineData(
+        "src/Modules/Evidgate.Modules.Usage/Application/RecordUsageBatch.cs",
+        "routes.MapPost(\"/v1/usage\", async (IUsageLedger ledger) => await ledger.RecordAsync(null!, default));")]
+    public void Endpoint_Metering_Is_A_Violation_Even_Inside_The_Allowed_Modules(string path, string text)
+    {
+        // Both modules may hold the ledger, but neither may expose it over HTTP: the rule fires on the endpoint shape,
+        // not on the module.
+        var violation = UsageMeteringRules.FindEndpointMeteringViolations([(path, text)]).ShouldHaveSingleItem();
+
+        violation.ShouldContain(path);
+        violation.ShouldContain("HTTP surface");
+    }
+
+    [Fact]
+    public void Usage_Module_Route_File_That_Only_Enqueues_A_Command_Is_Clean()
+    {
+        // The shape the real usage route has: the endpoint builds the command and the command calls the ledger.
+        (string Path, string Text)[] files =
+        [
+            ("src/Modules/Evidgate.Modules.Usage/Endpoints/UsageEndpoints.cs", "group.MapPost(\"/v1/usage\", RecordAsync);"),
+            ("src/Modules/Evidgate.Modules.Usage/Application/Commands/RecordUsageBatch.cs", "IUsageLedger ledger;"),
+        ];
+
+        UsageMeteringRules.FindEndpointMeteringViolations(files).ShouldBeEmpty();
+    }
+
     /// <summary>Every hand-written <c>src/**/*.cs</c> file, repo-relative with '/'.</summary>
     private static List<(string Path, string Text)> SourceFiles()
     {

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry;
 using OpenTelemetry.Logs;
@@ -30,8 +31,8 @@ namespace Tenancy.IntegrationTests;
 /// <remarks>
 /// The two halves the Api host does not run by itself are driven explicitly with the production classes: the
 /// dispatcher (<see cref="OutboxDispatcher.DispatchBatchAsync"/>, the Worker's loop body) and the consumer
-/// (<see cref="TaskConsumer.PollOnceAsync"/>). The task's own handler is a probe, because the 04.8.1 usage handler is
-/// another story — the mechanism and its correlation are what this test is about.
+/// (<see cref="TaskConsumer.PollOnceAsync"/>). The task's own handler is a probe that replaces 04.8.1's production
+/// meter handler, because what this test reads is the queue's correlation, not what the handler bills.
 /// <para>
 /// The span capture is an <see cref="ActivityListener"/> over this request's trace only, and the log capture a
 /// processor on the host's own OpenTelemetry logging pipeline (the one <c>AddEvidgateTelemetry</c> builds), so what
@@ -85,7 +86,10 @@ public sealed class IngestTraceCorrelationTests
                 .AddTaskHandler<UsageTaskPayload, TraceUsageHandler>()
                 .AddSingleton(probe)
                 .AddSingleton<IStartupFilter>(new IngestTraceProbeStartupFilter())
-                .Configure<OpenTelemetryLoggerOptions>(options => options.AddProcessor(logs)));
+                .Configure<OpenTelemetryLoggerOptions>(options => options.AddProcessor(logs))
+                // The Api host now registers the production meter handler for this task type (04.8.1), and the registry
+                // rejects a second handler for one type: drop the production adapter so the probe is the only one.
+                .ReplaceUsageTaskHandlerWithProbe());
 
         var answer = await IngestQaRequests.PostAsync(
             world.Client,
@@ -288,7 +292,7 @@ internal sealed class TraceConsumerProbe
 }
 
 /// <summary>
-/// Stands in for the 04.8.1 usage handler (another story): it records the correlation of the span the consumer opened
+/// Stands in for 04.8.1's production meter handler: it records the correlation of the span the consumer opened
 /// around it and logs one line, so both the span and the exported record can be checked against the request.
 /// </summary>
 internal sealed class TraceUsageHandler(TraceConsumerProbe probe, ILogger<TraceUsageHandler> logger)
@@ -316,6 +320,33 @@ internal sealed class TraceUsageHandler(TraceConsumerProbe probe, ILogger<TraceU
 
         return ValueTask.CompletedTask;
     }
+}
+
+/// <summary>
+/// Keeps the probe as the only handler of the usage task type: the Api host now registers 04.8.1's production meter
+/// handler, and <see cref="TaskHandlerRegistry"/> fails a duplicate rather than dispatching to an arbitrary one.
+/// </summary>
+internal static class TraceUsageHandlerRegistration
+{
+    private const string UsageTaskType = "usage.batch_accepted";
+
+    /// <summary>Replaces the registry with one built from every adapter but the production usage one.</summary>
+    public static IServiceCollection ReplaceUsageTaskHandlerWithProbe(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.RemoveAll<ITaskHandlerRegistry>();
+        services.AddSingleton<ITaskHandlerRegistry>(provider => new TaskHandlerRegistry(
+            provider.GetServices<ITaskHandlerInvoker>()
+                .Where(invoker => invoker.TaskType != UsageTaskType || IsProbeAdapter(invoker))));
+
+        return services;
+    }
+
+    /// <summary>The adapter is parameterised by the payload it binds, which is how the probe's own registration is told apart.</summary>
+    private static bool IsProbeAdapter(ITaskHandlerInvoker invoker) =>
+        invoker.GetType().IsGenericType
+        && invoker.GetType().GetGenericArguments()[0] == typeof(UsageTaskPayload);
 }
 
 /// <summary>One exported log record, flattened to the category and attribute pairs a collector would receive.</summary>

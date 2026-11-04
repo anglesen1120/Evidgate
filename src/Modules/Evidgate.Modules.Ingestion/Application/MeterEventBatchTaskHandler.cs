@@ -62,8 +62,9 @@ internal sealed class MeterEventBatchTaskHandler(IServiceScopeFactory scopeFacto
 
         if (!string.Equals(payload.Metric, IngestEventBatchHandler.UsageMetric, StringComparison.Ordinal))
         {
+            // The payload's metric is untrusted text: the message names no value from it, only the fact.
             throw new InvalidOperationException(
-                $"the usage.batch_accepted payload names the unsupported metric '{payload.Metric}'");
+                "the usage.batch_accepted payload names a metric this build does not meter");
         }
 
         // Task handlers are singletons, so the scoped services are resolved from this attempt's scope; the tenant scope

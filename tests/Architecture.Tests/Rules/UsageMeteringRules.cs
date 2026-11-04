@@ -44,6 +44,27 @@ public static class UsageMeteringRules
     /// <summary>The HTTP references the metering step may never carry (00 §5.7 P5).</summary>
     private static readonly string[] HttpClientTokens = ["HttpClient", "System.Net.Http"];
 
+    /// <summary>Minimal-API route registrations: a file carrying one exposes an HTTP surface.</summary>
+    private static readonly string[] RouteMappings =
+        ["MapGet(", "MapPost(", "MapPut(", "MapPatch(", "MapDelete(", "MapGroup("];
+
+    /// <summary>
+    /// Files that name the ledger from an HTTP surface, one violation each. This holds inside the allowed modules too:
+    /// metering is an internal module call (00 §9.1), so a route that billed directly would be a second, unguarded path.
+    /// </summary>
+    public static IReadOnlyList<string> FindEndpointMeteringViolations(IEnumerable<(string Path, string Text)> files) =>
+        [.. files
+            .Where(file => InSourceRoot(file.Path))
+            .Where(file => Code(file.Text).Contains("IUsageLedger", StringComparison.Ordinal))
+            .Where(file => IsEndpoint(file.Path, Code(file.Text)))
+            .Select(file =>
+                $"{file.Path} names IUsageLedger from an HTTP surface: metering is an internal module call, never a route")];
+
+    /// <summary>True for a file in an <c>Endpoints</c> directory or one that registers a route itself.</summary>
+    public static bool IsEndpoint(string path, string text) =>
+        path.Contains("/Endpoints/", StringComparison.Ordinal)
+        || RouteMappings.Any(mapping => text.Contains(mapping, StringComparison.Ordinal));
+
     /// <summary>Files that name the ledger outside the modules that own or call it, one violation each.</summary>
     public static IReadOnlyList<string> FindLedgerReferenceViolations(IEnumerable<(string Path, string Text)> files) =>
         [.. files
