@@ -2721,6 +2721,7 @@
       <trans-unit id="onboarding.enable.previous-revision" datatype="html"><source>Revision this replaced</source></trans-unit>
       <trans-unit id="onboarding.enable.unavailable" datatype="html"><source>Unavailable</source></trans-unit>
       <trans-unit id="runs.detail.title" datatype="html"><source>Run detail</source></trans-unit>
+      <trans-unit id="runs.detail.sections" datatype="html"><source>Run sections</source></trans-unit>
       <trans-unit id="runs.detail.back" datatype="html"><source>Back to runs</source></trans-unit>
       <trans-unit id="runs.detail.id" datatype="html"><source>Run id</source></trans-unit>
       <trans-unit id="runs.detail.state" datatype="html"><source>Collection state</source></trans-unit>

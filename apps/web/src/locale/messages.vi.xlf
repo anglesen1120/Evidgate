@@ -2734,6 +2734,7 @@
       <trans-unit id="onboarding.enable.previous-revision" datatype="html"><source>Revision this replaced</source><target>Bản sửa đã bị thay thế</target></trans-unit>
       <trans-unit id="onboarding.enable.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
       <trans-unit id="runs.detail.title" datatype="html"><source>Run detail</source><target>Chi tiết lượt chạy</target></trans-unit>
+      <trans-unit id="runs.detail.sections" datatype="html"><source>Run sections</source><target>Các mục của lượt chạy</target></trans-unit>
       <trans-unit id="runs.detail.back" datatype="html"><source>Back to runs</source><target>Quay lại danh sách lượt chạy</target></trans-unit>
       <trans-unit id="runs.detail.id" datatype="html"><source>Run id</source><target>Mã lượt chạy</target></trans-unit>
       <trans-unit id="runs.detail.state" datatype="html"><source>Collection state</source><target>Trạng thái thu thập</target></trans-unit>

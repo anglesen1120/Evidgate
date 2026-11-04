@@ -11,6 +11,9 @@ import {
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import type { EvidenceRevision } from '@evidgate/sdk';
+import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCardImports } from '@evidgate/ui/card';
 import { map, startWith } from 'rxjs';
 import type { ApiError } from '../../../../core/http/api-error';
 import {
@@ -41,6 +44,9 @@ import { resolveEvidenceAnchor } from './run-evidence-anchors';
 @Component({
   selector: 'app-evidence-panel',
   imports: [
+    HlmAlertImports,
+    HlmButton,
+    HlmCardImports,
     EvidenceBadgeComponent,
     EvidenceRevisionSelectorComponent,
     LoadingPatternComponent,
@@ -49,9 +55,8 @@ import { resolveEvidenceAnchor } from './run-evidence-anchors';
     MissingReasonList,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '(click)': 'onReasonLinkClick($event)' },
+  host: { class: 'block min-w-0', '(click)': 'onReasonLinkClick($event)' },
   templateUrl: './evidence-panel.component.html',
-  styleUrl: './evidence-panel.component.css',
 })
 export class EvidencePanelComponent {
   /** `null` while the decision read has not answered: the panel shows its own revision state. */

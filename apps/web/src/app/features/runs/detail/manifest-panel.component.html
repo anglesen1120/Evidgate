@@ -1,16 +1,23 @@
-<section aria-labelledby="manifest-title" class="metadata-panel">
-  <h2 id="manifest-title">{{ copy.title }}</h2>
+<section hlmCard aria-labelledby="manifest-title" class="gap-(--eg-space-5) p-(--eg-space-5)">
+  <h2 hlmCardTitle id="manifest-title" class="m-0">{{ copy.title }}</h2>
   <dl>
     <div>
       <dt>{{ copy.hash }}</dt>
       <dd data-manifest-hash>
-        @if (summary().manifestHash !== null) {
-          <bdi class="identifier">{{ display(summary().manifestHash!) }}</bdi>
-          <!-- Never disabled for the copy in flight: a disabled element cannot hold focus, so the
-               visitor's place would drop to `body` while the result is announced elsewhere. The
-               click handler refuses a second copy instead (`copying()`), so the button keeps its
-               focus and the live region below announces the outcome. -->
-          <button type="button" (click)="copyHash()">{{ copy.copyHash }}</button>
+        @let hash = summary().manifestHash;
+        @if (hash !== null) {
+          <bdi>{{ display(hash) }}</bdi>
+          <!-- Keep the in-flight control focusable; the handler refuses duplicate copies. -->
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            type="button"
+            class="min-h-(--eg-control-touch) h-auto whitespace-normal text-start transition-none"
+            [attr.aria-busy]="copying()"
+            (click)="copyHash()"
+          >
+            {{ copy.copyHash }}
+          </button>
         } @else {
           <app-status-pill [tone]="'neutral'" label="" />
         }
@@ -19,8 +26,9 @@
     <div>
       <dt>{{ copy.suite }}</dt>
       <dd data-manifest-suite>
-        @if (summary().suiteRevisionId !== null) {
-          <bdi class="identifier">{{ display(summary().suiteRevisionId!) }}</bdi>
+        @let suite = summary().suiteRevisionId;
+        @if (suite !== null) {
+          <bdi>{{ display(suite) }}</bdi>
         } @else {
           <app-status-pill [tone]="'neutral'" label="" />
         }
@@ -29,8 +37,9 @@
     <div>
       <dt>{{ copy.policy }}</dt>
       <dd data-manifest-policy>
-        @if (summary().policyRevisionId !== null) {
-          <bdi class="identifier">{{ display(summary().policyRevisionId!) }}</bdi>
+        @let policy = summary().policyRevisionId;
+        @if (policy !== null) {
+          <bdi>{{ display(policy) }}</bdi>
         } @else {
           <app-status-pill [tone]="'neutral'" label="" />
         }
@@ -53,7 +62,7 @@
           @if (producers.length === 0) {
             {{ copy.noProducers }}
           } @else {
-            <ul>
+            <ul class="m-0 ps-(--eg-space-5)">
               @for (producer of producers; track $index) {
                 <li>
                   <bdi>{{ producerLabel(producer) }}</bdi>
@@ -67,5 +76,10 @@
       </dd>
     </div>
   </dl>
-  <p role="status" [attr.aria-live]="'polite'">{{ copyStatus() }}</p>
+  <p
+    class="m-0 min-h-(--eg-leading-sm) text-muted-foreground"
+    role="status"
+    [attr.aria-live]="'polite'"
+    [textContent]="copyStatus()"
+  ></p>
 </section>

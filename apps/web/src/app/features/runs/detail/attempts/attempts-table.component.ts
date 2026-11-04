@@ -14,6 +14,10 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { HlmAlert } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
+import { HlmTableImports } from '@evidgate/ui/table';
 import type { ApiError } from '../../../../core/http/api-error';
 import {
   StatusPillComponent,
@@ -34,10 +38,15 @@ import type { AttemptRow } from './attempt-summary';
     EmptyPatternComponent,
     ErrorPatternComponent,
     LoadingPatternComponent,
+    HlmAlert,
+    HlmButton,
+    HlmCard,
+    HlmCardTitle,
+    HlmTableImports,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './attempts-table.component.html',
-  styleUrl: './attempts-table.component.css',
+  host: { class: 'block min-w-0 text-foreground wrap-anywhere [&_p]:m-0' },
 })
 export class AttemptsTableComponent {
   readonly attempts = input.required<AttemptRow[] | null>();

@@ -1,3 +1,4 @@
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { Location } from '@angular/common';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -16,6 +17,8 @@ import {
 } from '../run-detail-store.fixtures';
 import { routes } from '../../runs.routes';
 import { RunDetailPage } from '../run-detail.page';
+import { stubScopeBrowserApis } from '../../../../shell/layout/scope.fixture';
+import { EvidenceRevisionSelectorHarness } from './evidence-revision-selector.test-support';
 
 const newest = revision({
   revision_no: 4,
@@ -42,8 +45,10 @@ describe('Run detail evidence revision', () => {
   const listEvidenceRevisions =
     vi.fn<(id: string, query?: object) => Promise<EvidenceRevisionPage>>();
   const getDecision = vi.fn<(id: string) => Promise<unknown>>();
+  let restoreBrowserApis: () => void;
 
   beforeEach(() => {
+    restoreBrowserApis = stubScopeBrowserApis();
     get.mockReset().mockResolvedValue(run);
     listAttempts.mockReset().mockResolvedValue(attemptPage);
     listEvidenceRevisions.mockReset().mockResolvedValue(revisionPage([newest, older, oldest]));
@@ -57,7 +62,11 @@ describe('Run detail evidence revision', () => {
       ],
     });
   });
-  afterEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    restoreBrowserApis();
+    vi.unstubAllGlobals();
+  });
 
   async function open(query = '') {
     const harness = await RouterTestingHarness.create();
@@ -78,12 +87,11 @@ describe('Run detail evidence revision', () => {
     return root.querySelector('app-evidence-panel')!;
   }
 
-  function selectRevision(harness: RouterTestingHarness, revisionNo: number): void {
-    const select = panel(harness.routeNativeElement!).querySelector(
-      '[data-evidence-revision-select]',
-    ) as HTMLSelectElement;
-    select.value = String(revisionNo);
-    select.dispatchEvent(new Event('change'));
+  async function selectRevision(harness: RouterTestingHarness, revisionNo: number): Promise<void> {
+    const selector = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      EvidenceRevisionSelectorHarness,
+    );
+    await selector.choose(revisionNo);
   }
 
   it('selecting an older revision shows the banner and keeps that revision on screen', async () => {
@@ -92,7 +100,7 @@ describe('Run detail evidence revision', () => {
     expect(panel(root).textContent).toContain('Selected evidence revision: 4');
     expect(TestBed.inject(Location).path()).toContain('evidence_revision=4');
 
-    selectRevision(harness, 3);
+    await selectRevision(harness, 3);
     await settle(harness);
 
     expect(TestBed.inject(Location).path()).toContain('evidence_revision=3');

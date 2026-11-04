@@ -79,6 +79,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // list and the template catalogue are scanned.
         "/v1/projects/{p}/ai-settings/versions/{version_no}",
 
+        // The pending-changes detail: it only answers for a change id this suite does not have (a change exists only
+        // after a queue write, and those rows are Tenancy.IntegrationTests' subject). The queue's list is scanned.
+        "/v1/projects/{p}/authoring/changes/{c}",
+
         // 02.3.1-T1.1's pre-tenant login routes answer no resource body: `start` is a 302 to the
         // provider or a 503 `unavailable` envelope (no credential is configured in this host), and
         // `callback` without a pending-login cookie is a 401 `token_invalid` envelope. Neither
@@ -485,6 +489,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // document, so the call takes the JSON format rather than the CSV default: the permission, the projection
             // and the file itself are the same on the route, and the CSV bytes are not a document the scanner can read.
             ["/v1/projects/{p}/authoring/export"] = $"/v1/projects/{project}/authoring/export?format=json",
+            // The pending-changes list: a project with no queued change answers an empty page, and a page of changes
+            // carries ids, states, type labels and the payload document the queue accepted — no secret among them.
+            ["/v1/projects/{p}/authoring/changes"] = $"/v1/projects/{project}/authoring/changes",
             ["/v1/cases/{c}"] = $"/v1/cases/{seeded.CaseId}",
             ["/v1/cases/{c}/revisions"] = $"/v1/cases/{seeded.CaseId}/revisions",
             ["/v1/suites/{s}"] = $"/v1/suites/{seeded.SuiteId}",

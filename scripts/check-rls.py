@@ -78,6 +78,12 @@ from rls_policy_lint import Finding, collect, lint_embedded, lint_policies, lint
 DEFINER_AUDIT_EXEMPT = {
     "evidgate.purge_expired_idempotency": "T80 sweep: bounded delete of expired rows, observed via the task row",
     "evidgate.purge_expired_ci_token_issue": "T7 sweep: bounded delete of expired replay-cache rows, observed via the task row",
+    "evidgate.purge_expired_authoring_changes": (
+        "created 0067_authoring_authoring_change.sql (integer): tenancy-free retention sweep — it deletes "
+        "discarded authoring proposals after their window across every org, in bounded batches, and the "
+        "scheduled task row is where the fire and its row count are observed, exactly like "
+        "purge_expired_idempotency; an audit row per call would have to pick one org for a cross-tenant delete"
+    ),
     "evidgate.expire_pending_invites": "T80 sweep: bounded expiry of past-due pending invites, observed via the task row",
     "evidgate.audit_org_ids": "T80 sweep: lists org ids for the chain-verification task, which records its own findings",
     "evidgate.reconcile_overdue_runs": (

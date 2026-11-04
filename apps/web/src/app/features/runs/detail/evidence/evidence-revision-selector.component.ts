@@ -9,17 +9,19 @@ import {
   output,
 } from '@angular/core';
 import type { EvidenceRevision } from '@evidgate/sdk';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmIcon } from '@evidgate/ui/icon';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmSelectImports } from '@evidgate/ui/select';
+import { BrnSelectTrigger } from '@spartan-ng/brain/select';
 
-/**
- * The native revision picker: one labelled `<select>`, the pin guidance, and the explicit older-page
- * action. It renders loaded rows only and never decides which revision is authoritative; selection
- * and pagination are emitted as intents the page turns into store calls.
- */
+/** Selection and pagination are intents; only the page decides which revision is authoritative. */
 @Component({
   selector: 'app-evidence-revision-selector',
+  imports: [HlmButton, HlmIcon, HlmLabel, HlmSelectImports, BrnSelectTrigger],
+  host: { class: 'block min-w-0' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './evidence-revision-selector.component.html',
-  styleUrl: './evidence-revision-selector.component.css',
 })
 export class EvidenceRevisionSelectorComponent {
   readonly revisions = input.required<readonly EvidenceRevision[]>();
@@ -64,9 +66,15 @@ export class EvidenceRevisionSelectorComponent {
     return $localize`:@@runs.evidence.revision-option:Revision ${revision.revision_no}:revision: · ${createdAt}:createdAt: UTC`;
   }
 
-  protected choose(event: Event): void {
-    if (!(event.target instanceof HTMLSelectElement)) return;
-    const revision = Number(event.target.value);
-    if (Number.isInteger(revision) && revision > 0) this.selectRevision.emit(revision);
+  protected readonly selectedLabel = computed(() => {
+    const selected = this.revisions().find((row) => row.revision_no === this.selectedRevision());
+    return selected ? this.optionLabel(selected) : this.notLoadedLabel();
+  });
+
+  protected choose(value: unknown): void {
+    const revision = Number(value);
+    if (this.revisions().some((row) => row.revision_no === revision)) {
+      this.selectRevision.emit(revision);
+    }
   }
 }

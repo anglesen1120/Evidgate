@@ -172,8 +172,9 @@ public sealed class RouteCoverageTests
     }
 
     /// <summary>
-    /// The twenty-six authoring operations of 13.1.1 §5 (13.1.1-T2.4, 13.1.1-T3, 13.1.1-T4 and 13.1.1-T5), with the permission
-    /// each documents: reads carry <c>authoring:read</c>, every write <c>authoring:write</c>.
+    /// The thirty-one authoring operations of 13.1.1 §5 and the pending-changes queue (13.1.1-T2.4, 13.1.1-T3,
+    /// 13.1.1-T4, 13.1.1-T5 and 13.1.2), with the permission each documents: reads carry <c>authoring:read</c>,
+    /// every write <c>authoring:write</c>.
     /// </summary>
     private static readonly (string Method, string Template, string Permission)[] AuthoringOperations =
     [
@@ -206,12 +207,21 @@ public sealed class RouteCoverageTests
         // 13.1.1-T4: routes 20 and 21, the manual-case link pair.
         ("POST", "/v1/projects/{p}/authoring/manual-cases/{m}/links", "authoring:write"),
         ("DELETE", "/v1/projects/{p}/authoring/manual-cases/{m}/links/{c}", "authoring:write"),
+        // The pending-changes queue: the page and one change as reads, and queueing, discarding and the
+        // batched apply as writes — the apply route's custom-method spelling carries the colon inside
+        // its last segment, so it is also the fixture the inventory's path-key reader must accept.
+        ("GET", "/v1/projects/{p}/authoring/changes", "authoring:read"),
+        ("POST", "/v1/projects/{p}/authoring/changes", "authoring:write"),
+        ("GET", "/v1/projects/{p}/authoring/changes/{c}", "authoring:read"),
+        ("POST", "/v1/projects/{p}/authoring/changes/{c}/discard", "authoring:write"),
+        ("POST", "/v1/projects/{p}/authoring/changes:apply", "authoring:write"),
     ];
 
     /// <summary>
     /// 13.1.1-T2.4: every operation of <c>contracts/openapi.yaml</c> declares the <c>x-permission</c> that gates it, and
-    /// the twenty-six authoring operations of 13.1.1 §5 are in the inventory with the permission §5 assigns — so an
-    /// authoring route can never ship without its gate, and a spec addition cannot slip in without one.
+    /// the thirty-one authoring operations of §5 and the changes queue are in the inventory with the permission
+    /// they assign — so an authoring route can never ship without its gate, and a spec addition cannot slip in
+    /// without one.
     /// </summary>
     [Fact]
     public void EveryOperationDeclaresXPermission()

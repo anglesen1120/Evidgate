@@ -1,0 +1,9 @@
+{
+  "target_kind": "checklist_item",
+  "target_id": "018f5c1a-0000-7000-8000-000000000001",
+  "change_type": "comment",
+  "payload": {
+    "body": "Please split this step: the upload and the confirmation are two actions."
+  },
+  "reason": "Reviewer note from the walkthrough"
+}

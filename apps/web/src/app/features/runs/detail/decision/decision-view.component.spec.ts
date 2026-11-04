@@ -77,6 +77,7 @@ describe('DecisionViewComponent', () => {
     const { root } = render({ decision: EVALUATED });
     const region = root.querySelector('section#decision-panel')!;
     expect(region.getAttribute('aria-labelledby')).toBe('decision-title');
+    expect(region.hasAttribute('hlmCard')).toBe(true);
     expect(root.querySelectorAll('h2')).toHaveLength(1);
     expect(text(root, '#decision-title')).toBe('Latest live decision');
   });
@@ -245,12 +246,29 @@ describe('DecisionViewComponent', () => {
   it('raises a revision mismatch with an action that asks for the decision evidence', () => {
     const { fixture, root } = render({ decision: EVALUATED, pinnedRevision: 3 });
     const notice = root.querySelector('[data-decision-mismatch]')!;
+    expect(notice.getAttribute('role')).toBe('status');
+    const action = notice.querySelector<HTMLButtonElement>('button');
+    expect(action?.hasAttribute('hlmBtn')).toBe(true);
+    expect(action?.classList.contains('transition-none')).toBe(true);
+    expect(action?.getAttribute('type')).toBe('button');
     expect(notice.textContent).toContain('evaluated at evidence revision 4');
     expect(notice.textContent).toContain('selected evidence revision is 3');
     const seen: number[] = [];
     fixture.componentInstance.viewDecisionEvidence.subscribe((revision) => seen.push(revision));
     (notice.querySelector('button') as HTMLButtonElement).click();
     expect(seen).toEqual([4]);
+  });
+
+  it('preserves long raw reasons and full provenance in wrap-capable regions', () => {
+    const reason = 'server_reason_'.repeat(40);
+    const hash = 'sha256:' + 'a'.repeat(64);
+    const { root } = render({
+      decision: { ...EVALUATED, reasons: [reason], policyHash: hash },
+    });
+    expect(text(root, '.decision-reason-list bdi')).toBe(reason);
+    expect(text(root, '[data-decision-policy] bdi')).toBe(hash);
+    expect(root.querySelector('#decision-panel')?.classList.contains('wrap-anywhere')).toBe(true);
+    expect(root.querySelectorAll('.decision-reason-list li')).toHaveLength(1);
   });
 
   it.each([
