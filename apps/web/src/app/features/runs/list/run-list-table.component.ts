@@ -44,7 +44,6 @@ import { escapeFormatChars, escapeFormatLabel } from './ref-name-display';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-list-table.component.html',
-  styleUrl: './run-list-table.component.css',
   host: { class: 'block min-w-0' },
 })
 export class RunListTableComponent {
@@ -58,6 +57,13 @@ export class RunListTableComponent {
     'min-w-0 h-auto box-border p-[var(--eg-space-3)] whitespace-normal text-start font-(weight:--eg-weight-regular) [overflow-wrap:anywhere] max-[767px]:grid max-[767px]:gap-[var(--eg-space-2)] max-[767px]:p-0 before:content-[attr(data-label)] before:text-muted-foreground before:font-[family-name:var(--eg-font-body)] before:font-(weight:--eg-weight-semibold) min-[768px]:before:hidden';
   protected readonly columnClasses =
     'h-auto min-w-0 whitespace-normal p-[var(--eg-space-3)] text-xs font-(weight:--eg-weight-semibold) text-muted-foreground';
+  /**
+   * Header and body rows sit in detached tables, so all three need one identical track template;
+   * character floors keep ids and refs readable before horizontal scrolling. The mobile query is
+   * written exactly because Tailwind's `max-[767px]` compiles to `width < 767px`, not `max-width`.
+   */
+  protected readonly rowClasses =
+    'run-row grid grid-cols-[minmax(calc(19ch_+_var(--eg-space-3)*2),1.2fr)_minmax(0,.8fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(19ch,1fr)_minmax(0,1fr)_minmax(0,1.1fr)] [@media(max-width:767px)]:grid-cols-[minmax(0,1fr)]';
   /**
    * The same escaping for `rerun_label` / `reprocess_label`. Both are caller-written strings shown
    * in the row, so neither may reach the cell as a raw value (a U+202E label would reorder the rest
