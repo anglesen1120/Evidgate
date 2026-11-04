@@ -2008,26 +2008,9 @@ export type AiSettingsDocument = AiSettingsV1 & {
 };
 
 /**
- * One criterion per checklist priority level, so the same word means the same thing in every item of the project — the settings document's nested `priority_criteria` member (`contracts/schemas/ai-settings.v1.json`, which remains the single source of the wire shape and of the runtime validation). It is declared as its own component because the served document names the member's type, and every served schema name must exist here (01.3.2-T3.2 AC4). Unknown members are refused, and each criterion is at most 250 code points.
+ * One criterion per checklist priority level, so the same word means the same thing in every item of the project. This component is an alias, not a second definition: it points at the member of `contracts/schemas/ai-settings.v1.json`, which stays the single source of the wire shape, of the limits and of the runtime validation. The name exists because the served document carries the nested member type as its own schema, and every served schema name must exist here (01.3.2-T3.2 AC4).
  */
-export type AiSettingsPriorityCriteria = {
-    /**
-     * What makes a failure critical: the release-blocking class of defect.
-     */
-    critical: string;
-    /**
-     * What makes a failure high: a wrong main path or a missing check that still has a workaround.
-     */
-    high: string;
-    /**
-     * What makes a failure medium: a secondary path, a validation message or an empty state.
-     */
-    medium: string;
-    /**
-     * What makes a failure low: wording, spacing or cosmetics that change no behaviour.
-     */
-    low: string;
-};
+export type AiSettingsPriorityCriteria = PriorityCriteria;
 
 /**
  * The 200/201 body of the settings read and save routes (13.2.1-T1): the effective document with its version, origin and provenance. Before the first save the answer is the platform default template's document with `version_no` 0, `source` `default_template`, `settings_id` and `created_at` null, and `ETag: "0"`; version 0 is never a stored row.
@@ -2300,6 +2283,28 @@ export type AiSettingsV1 = {
      * How much detail a single step carries (contractual cap: 200 code points).
      */
     step_detail: string;
+};
+
+/**
+ * One criterion per checklist priority level, so the same word means the same thing in every item of the project.
+ */
+export type PriorityCriteria = {
+    /**
+     * What makes a failure critical: the release-blocking class of defect.
+     */
+    critical: string;
+    /**
+     * What makes a failure high: a wrong main path or a missing check that still has a workaround.
+     */
+    high: string;
+    /**
+     * What makes a failure medium: a secondary path, a validation message or an empty state.
+     */
+    medium: string;
+    /**
+     * What makes a failure low: wording, spacing or cosmetics that change no behaviour.
+     */
+    low: string;
 };
 
 /**
