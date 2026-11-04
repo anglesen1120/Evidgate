@@ -12,7 +12,8 @@ namespace Evidgate.Modules.Catalog.Domain;
 /// <param name="Id">The <c>evidgate.id</c>.</param>
 /// <param name="Name">The optional display name.</param>
 /// <param name="RawKey">The entry as written (<c>file</c>), for the identity trail.</param>
-internal sealed record SidecarEntry(string FullPath, Guid Id, string? Name, string RawKey);
+/// <param name="RequirementRef">The optional external requirement, trimmed, or null.</param>
+internal sealed record SidecarEntry(string FullPath, Guid Id, string? Name, string RawKey, string? RequirementRef);
 
 /// <summary>A problem found while reading a sidecar.</summary>
 /// <param name="Path">The offending path: the described file for an entry, the manifest itself otherwise.</param>
@@ -21,8 +22,12 @@ internal sealed record SidecarProblem(string Path, string Message);
 
 /// <summary>The read of one <c>evidgate.cases.yaml</c>.</summary>
 /// <param name="Entries">The usable entries.</param>
-/// <param name="Problems">What was refused.</param>
-internal sealed record SidecarReadResult(IReadOnlyList<SidecarEntry> Entries, IReadOnlyList<SidecarProblem> Problems);
+/// <param name="Problems">What was refused; each one also holds the sidecar's directory.</param>
+/// <param name="Warnings">Entry-level metadata that was dropped; the entry itself is still used and its directory is not held.</param>
+internal sealed record SidecarReadResult(
+    IReadOnlyList<SidecarEntry> Entries,
+    IReadOnlyList<SidecarProblem> Problems,
+    IReadOnlyList<SidecarProblem> Warnings);
 
 /// <summary>
 /// Reads a per-directory <c>evidgate.cases.yaml</c> (03.1.1-T1.3, TL T55). The file is untrusted input from a
@@ -85,6 +90,7 @@ internal sealed class SidecarManifestReader(Lazy<ContractSchemaSet> schemaSet)
         var directory = RepoPath.DirectoryOf(manifestPath);
         var entries = new List<SidecarEntry>();
         var problems = new List<SidecarProblem>();
+        var warnings = new List<SidecarProblem>();
 
         foreach (var node in document["cases"]!.AsArray())
         {
@@ -112,14 +118,24 @@ internal sealed class SidecarManifestReader(Lazy<ContractSchemaSet> schemaSet)
                 continue;
             }
 
-            entries.Add(new SidecarEntry(full, guid, name, file));
+            // The pointer is metadata: an unusable value drops that one value and warns, while the entry still
+            // identifies its case, so a typo can never freeze the directory's cases or change an id.
+            var requirement = item["requirement"]?.GetValue<string>();
+            if (requirement is not null && !Taxonomy.TryRequirementRef(requirement, out requirement))
+            {
+                warnings.Add(new SidecarProblem(
+                    full,
+                    "the requirement of this entry is not a trimmed 1..200 character value free of control characters"));
+            }
+
+            entries.Add(new SidecarEntry(full, guid, name, file, requirement));
         }
 
-        return new SidecarReadResult(entries, problems);
+        return new SidecarReadResult(entries, problems, warnings);
     }
 
     private static SidecarReadResult Refused(string manifestPath, string message) =>
-        new([], [new SidecarProblem(manifestPath, message)]);
+        new([], [new SidecarProblem(manifestPath, message)], []);
 
     private static string Brief(string text) => TextRules.Brief(text);
 

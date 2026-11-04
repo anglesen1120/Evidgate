@@ -21,6 +21,7 @@ namespace Evidgate.Modules.Catalog.Contracts;
 /// <param name="CreatedAt">Row creation, UTC.</param>
 /// <param name="UpdatedAt">Last write, UTC.</param>
 /// <param name="Version">Optimistic concurrency token (ETag source, 00 §9.1).</param>
+/// <param name="RequirementRef">External requirement the case protects, or null; metadata only (00 §7).</param>
 public sealed record CaseDto(
     Guid Id,
     Guid OrgId,
@@ -37,7 +38,8 @@ public sealed record CaseDto(
     string? LastSeenCommit,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
-    int Version);
+    int Version,
+    string? RequirementRef);
 
 /// <summary>One recorded origin of a case's id (03.1.1 <c>case_identity_source</c>): why it is the same case.</summary>
 /// <param name="Source"><c>annotation</c>, <c>sidecar</c> or <c>imported</c>.</param>
@@ -76,6 +78,13 @@ public sealed record CaseListResponse(IReadOnlyList<CaseDto> Items, string? Next
 /// <param name="Status"><c>active</c> or <c>archived</c>.</param>
 /// <param name="Labels">Replacement labels, at most 32.</param>
 public sealed record UpdateCaseRequest(string? Name, Guid? OwnerMembershipId, string? Status, IReadOnlyList<string>? Labels);
+
+/// <summary>
+/// Body of <c>PATCH /v1/projects/{p}/cases/{c}</c>: the case's external requirement pointer.
+/// <c>null</c> clears it; a blank, over-long or control-bearing value is refused, never repaired.
+/// </summary>
+/// <param name="RequirementRef">The trimmed pointer to store, or null to clear.</param>
+public sealed record SetCaseRequirementRequest(string? RequirementRef);
 
 /// <summary>One stored version of a test (03.1.3), newest first in <c>GET /v1/cases/{c}/revisions</c>.</summary>
 /// <param name="Id">Revision id.</param>

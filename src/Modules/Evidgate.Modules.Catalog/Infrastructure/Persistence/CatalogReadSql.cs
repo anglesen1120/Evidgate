@@ -9,7 +9,8 @@ internal static class CatalogReadSql
 {
     private const string CaseColumns = """
                id, org_id, project_id, annotation_id, name, framework, language, file_path, status,
-               owner_membership_id, labels, first_seen_commit, last_seen_commit, created_at, updated_at, version
+               owner_membership_id, labels, first_seen_commit, last_seen_commit, created_at, updated_at, version,
+               requirement_ref
         """;
 
     /// <summary>One case by id.</summary>

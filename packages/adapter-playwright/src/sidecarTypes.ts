@@ -34,6 +34,8 @@ export interface SidecarCase {
   file: string;
   'evidgate.id': string;
   name?: string;
+  /** Optional external requirement pointer; the reporter resolves ids only, the server stores and validates it. */
+  requirement?: string;
 }
 
 /** A sidecar document that passed the sidecar.v1 schema. */

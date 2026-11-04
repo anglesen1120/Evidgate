@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Catalog.Contracts;
 using Microsoft.Extensions.DependencyInjection;
@@ -879,4 +880,229 @@ public sealed class CatalogIdentityTests
         (await Send("{not json")).ShouldBe(HttpStatusCode.BadRequest);
         (await Send("{\"name\":\"" + new string('x', 16 * 1024) + "\"}")).ShouldBe(HttpStatusCode.RequestEntityTooLarge);
     }
+
+    // ------------------------------------------------------------------ requirement pointer (03.1.4)
+
+    [Fact]
+    public async Task RequirementRef_IsNullByDefault_IsTrimmed_AndRejectsOver200Chars()
+    {
+        await using var world = await StartAsync();
+        await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+
+        var initial = await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseId}", world.Admin);
+        initial.Status.ShouldBe(HttpStatusCode.OK);
+        initial.Body.GetProperty("case").GetProperty("requirement_ref").ValueKind.ShouldBe(JsonValueKind.Null);
+        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
+
+        var padded = await PatchRequirementAsync(world, caseId, new { requirement_ref = "  REQ-1042  " });
+        padded.Status.ShouldBe(HttpStatusCode.OK);
+        padded.Body.GetProperty("requirement_ref").GetString().ShouldBe("REQ-1042");
+        padded.Body.GetProperty("version").GetInt32().ShouldBe(2);
+        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case")).ShouldBe("REQ-1042");
+
+        // 200 characters is the limit, and it is measured after trimming.
+        var longest = await PatchRequirementAsync(world, caseId, new { requirement_ref = " " + new string('r', 200) + " " });
+        longest.Status.ShouldBe(HttpStatusCode.OK);
+        longest.Body.GetProperty("requirement_ref").GetString().ShouldBe(new string('r', 200));
+
+        var tooLong = await PatchRequirementAsync(world, caseId, new { requirement_ref = new string('r', 201) });
+        tooLong.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        tooLong.ErrorCode.ShouldBe("schema_invalid");
+        tooLong.Body.GetProperty("error").GetProperty("details").EnumerateArray()
+            .Single().GetProperty("path").GetString().ShouldBe("requirement_ref");
+
+        // The refused value changed nothing, so the accepted one is still stored.
+        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case"))
+            .ShouldBe(new string('r', 200));
+        (await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case")).ShouldBe(3);
+    }
+
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("REQ\u0001")]
+    [InlineData("REQ\u200b")]
+    [InlineData("REQ\n1042")]
+    public async Task RequirementRef_RefusesBlankAndControlBearingValues(string value)
+    {
+        await using var world = await StartAsync();
+        await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+
+        var answer = await PatchRequirementAsync(world, caseId, new { requirement_ref = value });
+
+        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        answer.ErrorCode.ShouldBe("schema_invalid");
+        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
+        (await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task RequirementRef_RefusesAbsentNonNullStringAndExtraMembers()
+    {
+        await using var world = await StartAsync();
+        await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+
+        var absent = await PatchRequirementAsync(world, caseId, new { });
+        absent.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        absent.ErrorCode.ShouldBe("schema_invalid");
+        absent.Body.GetProperty("error").GetProperty("details").EnumerateArray()
+            .Single().GetProperty("reason").GetString().ShouldBe("required");
+
+        var notAString = await PatchRequirementAsync(world, caseId, new { requirement_ref = 42 });
+        notAString.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        notAString.ErrorCode.ShouldBe("schema_invalid");
+
+        var extra = await PatchRequirementAsync(world, caseId, new { requirement_ref = "REQ-1", name = "sneaky" });
+        extra.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        extra.ErrorCode.ShouldBe("schema_invalid");
+        extra.Body.GetProperty("error").GetProperty("details").EnumerateArray()
+            .Single().GetProperty("path").GetString().ShouldBe("name");
+
+        // The name the extra member tried to change is untouched: this route writes the pointer only.
+        (await _fixture.ScalarAsync<string>(world.Database, "select name from public.test_case")).ShouldBe("a.spec");
+        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task RequirementRefChange_IsMetadataOnly_NoRevisionNoHashChange()
+    {
+        await using var world = await StartAsync();
+        await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var before = await _fixture.ScalarAsync<string>(
+            world.Database,
+            "select string_agg(revision_hash || '|' || assertion_hash || '|' || content_sha256, ',' order by created_at) from public.test_revision");
+        var revisions = await CountAsync(world, "test_revision");
+        revisions.ShouldBeGreaterThan(0);
+
+        var set = await PatchRequirementAsync(world, caseId, new { requirement_ref = "REQ-1042" });
+        set.Status.ShouldBe(HttpStatusCode.OK);
+
+        // Replaying the same value is a no-op, and clearing it is another metadata write.
+        (await PatchRequirementAsync(world, caseId, new { requirement_ref = "REQ-1042" })).Status.ShouldBe(HttpStatusCode.OK);
+        (await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case")).ShouldBe(2);
+        var cleared = await PatchRequirementAsync(world, caseId, new { requirement_ref = (string?)null });
+        cleared.Status.ShouldBe(HttpStatusCode.OK);
+        cleared.Body.GetProperty("requirement_ref").ValueKind.ShouldBe(JsonValueKind.Null);
+
+        (await CountAsync(world, "test_revision")).ShouldBe(revisions);
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            "select string_agg(revision_hash || '|' || assertion_hash || '|' || content_sha256, ',' order by created_at) from public.test_revision"))
+            .ShouldBe(before);
+        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task RequirementRefPatch_NeedsCaseWrite_ForeignProjectAndOrgAre404()
+    {
+        await using var world = await StartAsync();
+        var otherUser = Guid.CreateVersion7();
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
+        var siblingProject = await CreateProjectAsync(world.Client, world.User, world.Org, "returns");
+        await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
+        await RegisterAsync(world.Api, otherOrg, otherProject, Commit1, Annotated("a.spec.ts", IdA));
+        var mine = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{world.Org}'");
+        var theirs = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{otherOrg}'");
+
+        var stranger = TenancyApiFactory.Resolved(user: Guid.CreateVersion7(), orgHeader: world.Org);
+        (await world.Client.SendAsync(HttpMethod.Patch, $"/v1/projects/{world.Project}/cases/{mine}", stranger, new { requirement_ref = "REQ-1" }, NewKey()))
+            .Status.ShouldBe(HttpStatusCode.Forbidden);
+        (await world.Client.SendAsync(HttpMethod.Patch, $"/v1/projects/{world.Project}/cases/{theirs}", world.Admin, new { requirement_ref = "REQ-1" }, NewKey()))
+            .Status.ShouldBe(HttpStatusCode.NotFound);
+
+        // Same org, other project: the route's project scopes the case, so this is a 404 and never a write.
+        var wrongProject = await world.Client.SendAsync(
+            HttpMethod.Patch, $"/v1/projects/{siblingProject}/cases/{mine}", world.Admin, new { requirement_ref = "REQ-1" }, NewKey());
+        wrongProject.Status.ShouldBe(HttpStatusCode.NotFound);
+        wrongProject.ErrorCode.ShouldBe("not_found");
+
+        (await _fixture.ScalarAsync<string?>(world.Database, $"select requirement_ref from public.test_case where id = '{mine}'")).ShouldBeNull();
+        (await _fixture.ScalarAsync<string?>(world.Database, $"select requirement_ref from public.test_case where id = '{theirs}'")).ShouldBeNull();
+        (await _fixture.ScalarAsync<int>(world.Database, $"select version from public.test_case where id = '{mine}'")).ShouldBe(1);
+
+        // The owner still can, and the other org's row stays invisible to every read of this tenant.
+        var stored = await PatchRequirementAsync(world, mine, new { requirement_ref = "REQ-1" });
+        stored.Status.ShouldBe(HttpStatusCode.OK);
+        (await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{theirs}", world.Admin)).Status.ShouldBe(HttpStatusCode.NotFound);
+        (await _fixture.ScalarAsync<string>(world.Database, $"select requirement_ref from public.test_case where id = '{theirs}'"))
+            .ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Register_SidecarRequirement_IsStoredOnce_AndALaterSyncNeverRewritesIt()
+    {
+        await using var world = await StartAsync();
+        SourceFile Sidecar(string? requirement) =>
+            new(
+                "tests/evidgate.cases.yaml",
+                "version: 1\ncases:\n"
+                + $"  - file: checkout.spec.ts\n    evidgate.id: {IdA}\n"
+                + (requirement is null ? string.Empty : $"    requirement: {requirement}\n"));
+
+        var source = new SourceFile("tests/checkout.spec.ts", "test('x')", "playwright", "typescript");
+        await RegisterAsync(world, Commit1, source, Sidecar("\" REQ-1042 \""));
+
+        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case")).ShouldBe("REQ-1042");
+
+        // A later sync with another value, and then with none, leaves the stored pointer alone: after
+        // registration the explicit route is its only writer, so a sidecar edit cannot silently re-point a case.
+        await RegisterAsync(world, Commit2, source, Sidecar("REQ-9999"));
+        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case")).ShouldBe("REQ-1042");
+
+        await RegisterAsync(world, Commit3, source, Sidecar(null));
+        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case")).ShouldBe("REQ-1042");
+        (await CountAsync(world, "test_case")).ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("REQ\u0001")]
+    [InlineData("REQ-TOO-LONG-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    public async Task Register_SidecarRequirementInvalid_IsAWarning_AndTheCaseStillRegisters(string requirement)
+    {
+        await using var world = await StartAsync();
+
+        // JSON is a valid YAML double-quoted scalar, so a control character reaches the reader as a character
+        // rather than invalidating the document before the pointer rule can judge it.
+        var sidecar = new SourceFile(
+            "tests/evidgate.cases.yaml",
+            $"version: 1\ncases:\n  - file: checkout.spec.ts\n    evidgate.id: {IdA}\n    requirement: {JsonSerializer.Serialize(requirement)}\n");
+
+        var report = await RegisterAsync(world, Commit1, new SourceFile("tests/checkout.spec.ts", "test('x')", "playwright", "typescript"), sidecar);
+
+        // Metadata never conflicts and never holds the directory: the id is still the case's, the pointer is null.
+        report.Warnings.ShouldBe(1);
+        report.Conflicts.ShouldBe(0);
+        report.Registered.ShouldBe(1);
+        report.Entries.Single().Code.ShouldBe(CaseSyncCodes.InvalidSidecarEntry);
+        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
+        (await CountAsync(world, "test_case")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Register_SidecarRequirementInMalformedManifest_IsAWarning_AndNoCaseIsWritten()
+    {
+        await using var world = await StartAsync();
+        var sidecar = new SourceFile(
+            "tests/evidgate.cases.yaml",
+            $"version: 1\ncases:\n  - file: checkout.spec.ts\n    evidgate.id: {IdA}\n    requirement: \"REQ-1\"\n  - file: [\n");
+
+        var report = await RegisterAsync(world, Commit1, new SourceFile("tests/checkout.spec.ts", "test('x')", "playwright", "typescript"), sidecar);
+
+        report.Warnings.ShouldBe(1);
+        report.Conflicts.ShouldBe(0);
+        report.Registered.ShouldBe(0);
+        (await CountAsync(world, "test_case")).ShouldBe(0);
+        var answer = await world.Client.SendAsync(
+            HttpMethod.Get, $"/v1/projects/{world.Project}/cases", world.Admin);
+        answer.Status.ShouldBe(HttpStatusCode.OK);
+    }
+
+    private static Task<ApiAnswer> PatchRequirementAsync(World world, Guid caseId, object body) =>
+        world.Client.SendAsync(
+            HttpMethod.Patch, $"/v1/projects/{world.Project}/cases/{caseId}", world.Admin, body, NewKey());
 }

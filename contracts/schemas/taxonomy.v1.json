@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evidgate.dev/contracts/schemas/taxonomy.v1.json",
+  "title": "Suite taxonomy catalogue v1",
+  "description": "The closed taxonomy a suite is authored under (03.1.4, D-A7 §8.1), as one selection document: which platform runs it, how wide it is, and why it exists. The three lists are closed — a fourth platform or a renamed purpose is a contract change and a migration, never a new string (D4, 00 §7 lower_snake wire values). A request naming a platform and no level takes that platform's default level (web -> e2e, api -> integration, unit -> unit, mobile -> e2e); purpose defaults to regression and platform to web, which is the suite behaviour the product has today. A mobile suite is stored as mobile only when a member's variant names a native mobile platform (android, ios, ipados): a suite whose variants all name a browser engine is device emulation and is stored as web (AC4).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["platform", "level", "purpose"],
+  "properties": {
+    "platform": { "$ref": "#/$defs/platform" },
+    "level": { "$ref": "#/$defs/level" },
+    "purpose": { "$ref": "#/$defs/purpose" }
+  },
+  "$defs": {
+    "platform": {
+      "type": "string",
+      "enum": ["web", "api", "unit", "mobile"],
+      "description": "What executes the suite: a browser (web), an HTTP surface (api), the unit-test host (unit) or a native device (mobile)."
+    },
+    "level": {
+      "type": "string",
+      "enum": ["unit", "integration", "e2e", "smoke"],
+      "description": "How much of the system one run covers. The default follows the platform: api -> integration, unit -> unit, web and mobile -> e2e."
+    },
+    "purpose": {
+      "type": "string",
+      "enum": ["regression", "smoke", "release_gate", "exploratory"],
+      "description": "Why the suite exists; a release decision reads this to pick the suites that gate a release. Defaults to regression."
+    }
+  }
+}

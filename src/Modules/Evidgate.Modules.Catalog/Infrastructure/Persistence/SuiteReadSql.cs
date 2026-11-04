@@ -4,7 +4,7 @@ namespace Evidgate.Modules.Catalog.Infrastructure.Persistence;
 internal static class SuiteReadSql
 {
     private const string SuiteColumns = """
-               s.id, s.org_id, s.project_id, s.name, s.slug, s.status, s.head_revision_id,
+               s.id, s.org_id, s.project_id, s.name, s.slug, s.status, s.platform, s.level, s.purpose, s.head_revision_id,
                h.revision_no as head_revision_no, s.created_at, s.updated_at, s.version
         """;
 
@@ -22,6 +22,9 @@ internal static class SuiteReadSql
           left join public.suite_revision h on h.org_id = s.org_id and h.id = s.head_revision_id
          where s.org_id = @org_id
            and s.project_id = @project_id
+           and (@platform::text is null or s.platform = @platform)
+           and (@level::text is null or s.level = @level)
+           and (@purpose::text is null or s.purpose = @purpose)
          order by s.created_at,
                   s.id
          limit @limit
@@ -33,6 +36,9 @@ internal static class SuiteReadSql
           left join public.suite_revision h on h.org_id = s.org_id and h.id = s.head_revision_id
          where s.org_id = @org_id
            and s.project_id = @project_id
+           and (@platform::text is null or s.platform = @platform)
+           and (@level::text is null or s.level = @level)
+           and (@purpose::text is null or s.purpose = @purpose)
            and (s.created_at, s.id) > (@cursor_created_at::timestamptz, @cursor_id::uuid)
          order by s.created_at,
                   s.id
@@ -41,13 +47,13 @@ internal static class SuiteReadSql
 
     /// <summary>The suite row a revision write locks (serialising revision_no allocation).</summary>
     internal const string SuiteForUpdate = """
-        select id, project_id, status, head_revision_id
+        select id, project_id, status, head_revision_id, platform, level, purpose
           from public.suite
          where id = @suite_id
            for update
         """;
 
-    internal const string SuiteForRead = "select id, project_id, status, head_revision_id from public.suite where id = @suite_id";
+    internal const string SuiteForRead = "select id, project_id, status, head_revision_id, platform, level, purpose from public.suite where id = @suite_id";
 
     /// <summary>The cheap pre-read of a revision: its hash (the ETag) and the project of its suite, no members or edges.</summary>
     internal const string RevisionHash = """
@@ -81,8 +87,10 @@ internal static class SuiteReadSql
 
     internal const string InsertRevision = """
         insert into public.suite_revision
-               (id, org_id, suite_id, revision_no, revision_hash, shard_strategy, retry_policy, environment_requirements, created_by)
-        values (@id, @org_id, @suite_id, @revision_no, @revision_hash, @shard::jsonb, @retry::jsonb, @environment::jsonb, @created_by)
+               (id, org_id, suite_id, revision_no, revision_hash, platform, level, purpose,
+                shard_strategy, retry_policy, environment_requirements, created_by)
+        values (@id, @org_id, @suite_id, @revision_no, @revision_hash, @platform, @level, @purpose,
+                @shard::jsonb, @retry::jsonb, @environment::jsonb, @created_by)
         """;
 
     internal const string InsertMembers = """
@@ -98,15 +106,23 @@ internal static class SuiteReadSql
           from jsonb_to_recordset(@rows::jsonb) as r(id uuid, parent uuid, child uuid)
         """;
 
-    internal const string SetHead = """
+    /// <summary>
+    /// Moves the head and the suite's taxonomy in one statement: the suite row's taxonomy is the head revision's, and
+    /// <c>evidgate.catalog_suite_guard</c> refuses a taxonomy change that does not move the head.
+    /// </summary>
+    internal const string SetHeadAndTaxonomy = """
         update public.suite
-           set head_revision_id = @revision_id
+           set head_revision_id = @revision_id,
+               platform = @platform,
+               level = @level,
+               purpose = @purpose
          where id = @suite_id
         """;
 
     /// <summary>A revision with its members and edges as JSON text, in one statement; the suite row supplies the project for the scope rule.</summary>
     internal const string RevisionDetail = """
         select r.id, r.suite_id, s.project_id, r.revision_no, r.revision_hash, r.status,
+               r.platform, r.level, r.purpose,
                r.shard_strategy::text as shard_strategy, r.retry_policy::text as retry_policy,
                r.environment_requirements::text as environment_requirements, r.created_at,
                (select coalesce(jsonb_agg(jsonb_build_object(
@@ -136,8 +152,8 @@ internal static class SuiteReadSql
         """;
 
     internal const string InsertSuite = """
-        insert into public.suite (id, org_id, project_id, name, slug)
-        values (@id, @org_id, @project_id, @name, @slug)
+        insert into public.suite (id, org_id, project_id, name, slug, platform, level, purpose)
+        values (@id, @org_id, @project_id, @name, @slug, @platform, @level, @purpose)
         """;
 
     /// <summary>

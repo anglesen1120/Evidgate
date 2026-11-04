@@ -9,6 +9,9 @@ namespace Evidgate.Modules.Catalog.Contracts;
 /// <param name="Name">Display name.</param>
 /// <param name="Slug">Slug unique inside the project.</param>
 /// <param name="Status"><c>active</c> or <c>archived</c>.</param>
+/// <param name="Platform">The platform of the head revision: <c>web</c>, <c>api</c>, <c>unit</c> or <c>mobile</c> (03.1.4).</param>
+/// <param name="Level">Its level: <c>unit</c>, <c>integration</c>, <c>e2e</c> or <c>smoke</c>.</param>
+/// <param name="Purpose">Its purpose: <c>regression</c>, <c>smoke</c>, <c>release_gate</c> or <c>exploratory</c>.</param>
 /// <param name="HeadRevisionId">The newest revision, or null before the first.</param>
 /// <param name="HeadRevisionNo">Its number, or null.</param>
 /// <param name="CreatedAt">Creation, UTC.</param>
@@ -21,6 +24,9 @@ public sealed record SuiteDto(
     string Name,
     string Slug,
     string Status,
+    string Platform,
+    string Level,
+    string Purpose,
     Guid? HeadRevisionId,
     int? HeadRevisionNo,
     DateTimeOffset CreatedAt,
@@ -35,7 +41,10 @@ public sealed record SuiteListResponse(IReadOnlyList<SuiteDto> Items, string? Ne
 /// <summary>Body of <c>POST /v1/projects/{p}/suites</c>.</summary>
 /// <param name="Name">Display name, 1–128 characters.</param>
 /// <param name="Slug">Slug, D-A1 grammar, unique in the project.</param>
-public sealed record CreateSuiteRequest(string Name, string Slug);
+/// <param name="Platform">Taxonomy of the suite (03.1.4); default <c>web</c>.</param>
+/// <param name="Level">Level of the suite; default follows the platform (<c>api</c> → <c>integration</c>, <c>unit</c> → <c>unit</c>, otherwise <c>e2e</c>).</param>
+/// <param name="Purpose">Purpose of the suite; default <c>regression</c>.</param>
+public sealed record CreateSuiteRequest(string Name, string Slug, string? Platform = null, string? Level = null, string? Purpose = null);
 
 /// <summary>One member of a suite revision as authored: a case revision under a variant.</summary>
 /// <param name="Ref">A name unique inside the request that <see cref="SuiteEdgeInput"/> uses; defaults to <c>m&lt;index&gt;</c>.</param>
@@ -55,12 +64,18 @@ public sealed record SuiteEdgeInput(string Parent, string Child);
 /// <param name="ShardStrategy">See <c>contracts/catalog/shard-strategy.v1.json</c>; default <c>{"kind":"none"}</c>.</param>
 /// <param name="RetryPolicy">See <c>contracts/catalog/retry-policy.v1.json</c>; default <c>{"max_retries":0}</c>.</param>
 /// <param name="EnvironmentRequirements">See <c>contracts/catalog/environment-requirements.v1.json</c>; default <c>{}</c>.</param>
+/// <param name="Platform">Taxonomy this revision is authored under; default the suite's current platform.</param>
+/// <param name="Level">Its level; default the suite's current level, or the platform's default level when the request names a platform.</param>
+/// <param name="Purpose">Its purpose; default the suite's current purpose.</param>
 public sealed record CreateSuiteRevisionRequest(
     IReadOnlyList<SuiteMemberInput>? Members,
     IReadOnlyList<SuiteEdgeInput>? Edges,
     JsonElement? ShardStrategy,
     JsonElement? RetryPolicy,
-    JsonElement? EnvironmentRequirements);
+    JsonElement? EnvironmentRequirements,
+    string? Platform = null,
+    string? Level = null,
+    string? Purpose = null);
 
 /// <summary>Result of creating (or previewing) a suite revision.</summary>
 /// <param name="SuiteRevisionId">The revision; null in a preview of content that does not exist yet.</param>
@@ -70,6 +85,9 @@ public sealed record CreateSuiteRevisionRequest(
 /// <param name="Created">True only when this call inserted the revision; identical content returns the existing one.</param>
 /// <param name="Warnings">Non-blocking observations (an empty revision, …).</param>
 /// <param name="HeadMoved">True when the suite's head now points at this revision because of this call (a new revision, or a revert to older content).</param>
+/// <param name="Platform">The platform stored with the revision (03.1.4).</param>
+/// <param name="Level">Its level.</param>
+/// <param name="Purpose">Its purpose.</param>
 public sealed record SuiteRevisionHead(
     Guid? SuiteRevisionId,
     int RevisionNo,
@@ -77,7 +95,10 @@ public sealed record SuiteRevisionHead(
     string Status,
     bool Created,
     IReadOnlyList<string> Warnings,
-    bool HeadMoved = false);
+    bool HeadMoved = false,
+    string Platform = "web",
+    string Level = "e2e",
+    string Purpose = "regression");
 
 /// <summary>A member of a stored revision.</summary>
 /// <param name="Id">Member id (the edge endpoints).</param>
@@ -99,6 +120,9 @@ public sealed record SuiteEdgeDto(Guid ParentMemberId, Guid ChildMemberId);
 /// <param name="RevisionNo">Its number.</param>
 /// <param name="RevisionHash">Its content identity.</param>
 /// <param name="Status"><c>draft</c> or <c>published</c>.</param>
+/// <param name="Platform">The platform this revision was authored under (03.1.4).</param>
+/// <param name="Level">Its level.</param>
+/// <param name="Purpose">Its purpose.</param>
 /// <param name="ShardStrategy">The shard strategy.</param>
 /// <param name="RetryPolicy">The retry policy.</param>
 /// <param name="EnvironmentRequirements">The secret-free environment requirements.</param>
@@ -111,6 +135,9 @@ public sealed record SuiteRevisionDto(
     int RevisionNo,
     string RevisionHash,
     string Status,
+    string Platform,
+    string Level,
+    string Purpose,
     JsonElement ShardStrategy,
     JsonElement RetryPolicy,
     JsonElement EnvironmentRequirements,

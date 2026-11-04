@@ -606,6 +606,10 @@ export type CaseDto = {
      * Optimistic-concurrency token; the response `ETag` and the `If-Match` value (00 §9.1).
      */
     version: number;
+    /**
+     * External requirement id or URL this case protects, trimmed and control-free, or null. Metadata only: it is not part of any revision content or hash (00 §7).
+     */
+    requirement_ref: string | null;
 };
 
 export type CaseIdentitySourceDto = {
@@ -647,6 +651,13 @@ export type UpdateCaseRequest = {
     owner_membership_id?: string;
     status?: 'active' | 'archived';
     labels?: Array<string>;
+};
+
+/**
+ * The requirement pointer of one case. `requirement_ref` is required: send `null` to clear it, or a trimmed 1..200 character value. Any other member is 422 `schema_invalid`.
+ */
+export type SetCaseRequirementRequest = {
+    requirement_ref: string | null;
 };
 
 export type CaseRevisionDto = {
@@ -784,6 +795,12 @@ export type SuiteDto = {
     name: string;
     slug: string;
     status: 'active' | 'archived';
+    /**
+     * Platform of the head revision (03.1.4); a mobile suite with browser variants is stored as web.
+     */
+    platform: Platform;
+    level: Level;
+    purpose: Purpose;
     head_revision_id?: string | null;
     head_revision_no?: number | null;
     created_at: string;
@@ -799,6 +816,18 @@ export type SuiteListResponse = {
 export type CreateSuiteRequest = {
     name: string;
     slug: string;
+    /**
+     * Taxonomy of the suite (03.1.4); default web.
+     */
+    platform?: Platform;
+    /**
+     * Default: the platform's level (api -> integration, unit -> unit, otherwise e2e).
+     */
+    level?: Level;
+    /**
+     * Default regression.
+     */
+    purpose?: Purpose;
 };
 
 export type SuiteMemberInput = {
@@ -842,6 +871,15 @@ export type CreateSuiteRevisionRequest = {
     environment_requirements?: {
         [key: string]: unknown;
     };
+    /**
+     * Taxonomy this revision is authored under (03.1.4); default the suite's current platform. A mobile suite is stored as web when every variant names a browser engine (device emulation), and refused when no variant names a native mobile platform.
+     */
+    platform?: Platform;
+    /**
+     * Default: the suite's current level, or the platform's level when this request names a platform.
+     */
+    level?: Level;
+    purpose?: Purpose;
 };
 
 export type SuiteRevisionHead = {
@@ -850,6 +888,12 @@ export type SuiteRevisionHead = {
     revision_hash: string;
     status: 'draft' | 'published' | 'preview';
     created: boolean;
+    /**
+     * The platform stored with the revision; web when a mobile request was device emulation.
+     */
+    platform: Platform;
+    level: Level;
+    purpose: Purpose;
     /**
      * True when the call moved the suite head (a new revision, or the content of an older one re-submitted).
      */
@@ -877,6 +921,9 @@ export type SuiteRevisionDto = {
     revision_no: number;
     revision_hash: string;
     status: 'draft' | 'published';
+    platform: Platform;
+    level: Level;
+    purpose: Purpose;
     shard_strategy: {
         [key: string]: unknown;
     };
@@ -2601,6 +2648,21 @@ export type PolicyRevisionV1 = {
     };
 };
 
+/**
+ * How much of the system one run covers. The default follows the platform: api -> integration, unit -> unit, web and mobile -> e2e.
+ */
+export type Level = 'unit' | 'integration' | 'e2e' | 'smoke';
+
+/**
+ * What executes the suite: a browser (web), an HTTP surface (api), the unit-test host (unit) or a native device (mobile).
+ */
+export type Platform = 'web' | 'api' | 'unit' | 'mobile';
+
+/**
+ * Why the suite exists; a release decision reads this to pick the suites that gate a release. Defaults to regression.
+ */
+export type Purpose = 'regression' | 'smoke' | 'release_gate' | 'exploratory';
+
 export type BindingId = string;
 
 export type IngestTokenId = string;
@@ -2692,6 +2754,21 @@ export type SecurityEventTo = string;
  * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
  */
 export type Cursor = string;
+
+/**
+ * Only suites of this platform (03.1.4 AC3); an unknown value is a 422.
+ */
+export type PlatformFilter = Platform;
+
+/**
+ * Only suites of this level; an unknown value is a 422.
+ */
+export type LevelFilter = Level;
+
+/**
+ * Only suites of this purpose; an unknown value is a 422.
+ */
+export type PurposeFilter = Purpose;
 
 /**
  * Opaque cursor from `next_cursor`; ordering `(revision_no, id)` (07.1.1-T3, 00 §9.1).
@@ -7397,6 +7474,72 @@ export type ListCasesResponses = {
 
 export type ListCasesResponse = ListCasesResponses[keyof ListCasesResponses];
 
+export type SetCaseRequirementRefData = {
+    body: SetCaseRequirementRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        c: string;
+    };
+    query?: never;
+    url: '/projects/{p}/cases/{c}';
+};
+
+export type SetCaseRequirementRefErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type SetCaseRequirementRefError = SetCaseRequirementRefErrors[keyof SetCaseRequirementRefErrors];
+
+export type SetCaseRequirementRefResponses = {
+    /**
+     * The case with its new requirement reference
+     */
+    200: CaseDto;
+};
+
+export type SetCaseRequirementRefResponse = SetCaseRequirementRefResponses[keyof SetCaseRequirementRefResponses];
+
 export type GetCaseData = {
     body?: never;
     path: {
@@ -7573,6 +7716,18 @@ export type ListSuitesData = {
          */
         cursor?: string;
         limit?: number;
+        /**
+         * Only suites of this platform (03.1.4 AC3); an unknown value is a 422.
+         */
+        platform?: Platform;
+        /**
+         * Only suites of this level; an unknown value is a 422.
+         */
+        level?: Level;
+        /**
+         * Only suites of this purpose; an unknown value is a 422.
+         */
+        purpose?: Purpose;
     };
     url: '/projects/{p}/suites';
 };

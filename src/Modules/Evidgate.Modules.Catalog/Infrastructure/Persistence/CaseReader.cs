@@ -29,6 +29,8 @@ internal class CaseRow
 
     public string[] Labels { get; set; } = [];
 
+    public string? RequirementRef { get; set; }
+
     public string FirstSeenCommit { get; set; } = string.Empty;
 
     public string? LastSeenCommit { get; set; }
@@ -41,7 +43,7 @@ internal class CaseRow
 
     public CaseDto ToDto() => new(
         Id, OrgId, ProjectId, AnnotationId, Name, Framework, Language, FilePath, Status,
-        OwnerMembershipId, Labels, FirstSeenCommit, LastSeenCommit, CreatedAt, UpdatedAt, Version);
+        OwnerMembershipId, Labels, FirstSeenCommit, LastSeenCommit, CreatedAt, UpdatedAt, Version, RequirementRef);
 }
 
 /// <summary><see cref="CaseRow"/> plus the two JSON trails of <see cref="CatalogReadSql.CaseDetail"/>.</summary>

@@ -42,6 +42,11 @@ internal sealed class TestCase
 
     public string[] Labels { get; set; } = [];
 
+    /// <summary>
+    /// The external requirement this case protects, or null. Mutable metadata: no revision or hash reads it.
+    /// </summary>
+    public string? RequirementRef { get; set; }
+
     public string FirstSeenCommit { get; set; } = string.Empty;
 
     public string? LastSeenCommit { get; set; }

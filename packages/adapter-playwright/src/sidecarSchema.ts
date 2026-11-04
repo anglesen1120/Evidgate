@@ -36,6 +36,11 @@ export const SIDECAR_SCHEMA_V1: Record<string, unknown> = {
             minLength: 1,
             maxLength: 512,
           },
+          requirement: {
+            type: 'string',
+            description:
+              'Optional external requirement id or URL this file protects. The reader trims it and requires 1..200 characters free of control and format characters; a value outside that rule is a warning on this entry, and the case keeps a null reference rather than losing its id.',
+          },
         },
       },
     },

@@ -8,6 +8,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Catalog.Contracts;
+using Evidgate.Modules.Catalog.Domain;
 using Evidgate.Modules.Catalog.Infrastructure.Persistence;
 using Mediator;
 
@@ -17,7 +18,11 @@ namespace Evidgate.Modules.Catalog.Application.Queries;
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="Cursor">Opaque cursor, or null.</param>
 /// <param name="Limit">Page size, 1–200.</param>
-internal sealed record ListSuitesQuery(Guid ProjectId, string? Cursor, int Limit) : IQuery<Result<SuiteListResponse>>;
+/// <param name="Platform">Only suites of this platform, or null (03.1.4 AC3).</param>
+/// <param name="Level">Only suites of this level, or null.</param>
+/// <param name="Purpose">Only suites of this purpose, or null.</param>
+internal sealed record ListSuitesQuery(Guid ProjectId, string? Cursor, int Limit, string? Platform = null, string? Level = null, string? Purpose = null)
+    : IQuery<Result<SuiteListResponse>>;
 
 /// <summary>Handler of <see cref="ListSuitesQuery"/>: project check, then one keyset statement (one extra row decides the next page).</summary>
 [Permission(Permissions.Suite.Read)]
@@ -45,12 +50,32 @@ internal sealed class ListSuitesQueryHandler(
         }
 
         var orgId = scopes.Require().OrgId;
+
+        // A filter is part of the closed taxonomy, so an unknown value is a 422 naming the member, never an empty page.
+        var platform = query.Platform is null ? null : Taxonomy.Canonical(query.Platform, Taxonomy.Platforms);
+        if (query.Platform is not null && platform is null)
+        {
+            return Result.Failure<SuiteListResponse>(SuiteErrors.Invalid("platform must be one of web, api, unit or mobile", [new ErrorDetail("platform", "invalid_value")]));
+        }
+
+        var level = query.Level is null ? null : Taxonomy.Canonical(query.Level, Taxonomy.Levels);
+        if (query.Level is not null && level is null)
+        {
+            return Result.Failure<SuiteListResponse>(SuiteErrors.Invalid("level must be one of unit, integration, e2e or smoke", [new ErrorDetail("level", "invalid_value")]));
+        }
+
+        var purpose = query.Purpose is null ? null : Taxonomy.Canonical(query.Purpose, Taxonomy.Purposes);
+        if (query.Purpose is not null && purpose is null)
+        {
+            return Result.Failure<SuiteListResponse>(SuiteErrors.Invalid("purpose must be one of regression, smoke, release_gate or exploratory", [new ErrorDetail("purpose", "invalid_value")]));
+        }
+
         IReadOnlyList<SuiteDto> rows;
         if (query.Cursor is null)
         {
             rows = await db.QueryAsync<SuiteDto>(
                 SuiteReadSql.SuitesFirstPage,
-                new { org_id = orgId, project_id = query.ProjectId, limit = query.Limit + 1 },
+                new { org_id = orgId, project_id = query.ProjectId, platform, level, purpose, limit = query.Limit + 1 },
                 cancellationToken).ConfigureAwait(false);
         }
         else
@@ -62,7 +87,7 @@ internal sealed class ListSuitesQueryHandler(
 
             rows = await db.QueryAsync<SuiteDto>(
                 SuiteReadSql.SuitesNextPage,
-                new { org_id = orgId, project_id = query.ProjectId, cursor_created_at = createdAt, cursor_id = id, limit = query.Limit + 1 },
+                new { org_id = orgId, project_id = query.ProjectId, platform, level, purpose, cursor_created_at = createdAt, cursor_id = id, limit = query.Limit + 1 },
                 cancellationToken).ConfigureAwait(false);
         }
 
@@ -180,6 +205,9 @@ internal static class SuiteRevisions
             row.RevisionNo,
             row.RevisionHash,
             row.Status,
+            row.Platform,
+            row.Level,
+            row.Purpose,
             JsonSerializer.Deserialize<JsonElement>(row.ShardStrategy),
             JsonSerializer.Deserialize<JsonElement>(row.RetryPolicy),
             JsonSerializer.Deserialize<JsonElement>(row.EnvironmentRequirements),
@@ -241,6 +269,12 @@ internal static class SuiteRevisions
 
         public string Status { get; set; } = string.Empty;
 
+        public string Platform { get; set; } = "web";
+
+        public string Level { get; set; } = "e2e";
+
+        public string Purpose { get; set; } = "regression";
+
         public string ShardStrategy { get; set; } = "{}";
 
         public string RetryPolicy { get; set; } = "{}";
@@ -291,7 +325,7 @@ internal sealed class PreviewSuiteRevisionQueryHandler(
             return Result.Failure<SuiteRevisionHead>(SuiteErrors.Archived);
         }
 
-        var planned = await planner.PlanAsync(db, suite.ProjectId, query.Body, cancellationToken).ConfigureAwait(false);
+        var planned = await planner.PlanAsync(db, suite.ProjectId, query.Body, suite.AsTaxonomy(), cancellationToken).ConfigureAwait(false);
         if (!planned.IsSuccess)
         {
             return Result.Failure<SuiteRevisionHead>(planned.Error!);
@@ -304,12 +338,16 @@ internal sealed class PreviewSuiteRevisionQueryHandler(
             cancellationToken).ConfigureAwait(false);
         if (existing is not null)
         {
-            return Result.Success(new SuiteRevisionHead(existing.Id, existing.RevisionNo, plan.RevisionHash, existing.Status, false, plan.Warnings));
+            return Result.Success(new SuiteRevisionHead(
+                existing.Id, existing.RevisionNo, plan.RevisionHash, existing.Status, false, plan.Warnings, false,
+                plan.Taxonomy.Platform, plan.Taxonomy.Level, plan.Taxonomy.Purpose));
         }
 
         var next = await db.ScalarAsync<int>(SuiteReadSql.NextRevisionNo, new { org_id = orgId, suite_id = query.SuiteId }, cancellationToken).ConfigureAwait(false);
 
-        return Result.Success(new SuiteRevisionHead(null, next, plan.RevisionHash, "preview", false, plan.Warnings));
+        return Result.Success(new SuiteRevisionHead(
+            null, next, plan.RevisionHash, "preview", false, plan.Warnings, false,
+            plan.Taxonomy.Platform, plan.Taxonomy.Level, plan.Taxonomy.Purpose));
     }
 
     private sealed class SuiteStub
@@ -319,6 +357,14 @@ internal sealed class PreviewSuiteRevisionQueryHandler(
         public Guid ProjectId { get; set; }
 
         public string Status { get; set; } = string.Empty;
+
+        public string Platform { get; set; } = "web";
+
+        public string Level { get; set; } = "e2e";
+
+        public string Purpose { get; set; } = "regression";
+
+        public SuiteTaxonomy AsTaxonomy() => new(Platform, Level, Purpose);
     }
 
     private sealed class ExistingStub

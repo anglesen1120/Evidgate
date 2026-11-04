@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.Modules.Catalog.Contracts;
 using Evidgate.Modules.Catalog.Domain;
@@ -161,6 +162,7 @@ public sealed class CatalogUnitTests
     [InlineData("version: 1\ncases:\n  - file: a.ts\n")]
     [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: nope\n")]
     [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    extra: 1\n")]
+    [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: 42\n")]
     [InlineData("- just\n- a list\n")]
     [InlineData("just a string\n")]
     [InlineData("")]
@@ -227,6 +229,50 @@ public sealed class CatalogUnitTests
         result.Entries.Single().FullPath.ShouldBe("a.ts");
     }
 
+    [Fact]
+    public void Sidecar_Requirement_PresentIsTrimmed_AbsentIsNull()
+    {
+        var result = Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: \" REQ-1042 \"\n  - file: b.ts\n    evidgate.id: {IdB}\n");
+
+        result.Problems.ShouldBeEmpty();
+        result.Warnings.ShouldBeEmpty();
+        result.Entries.Select(entry => entry.RequirementRef).ShouldBe(["REQ-1042", null]);
+
+        // 200 characters after trimming is the limit.
+        Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: \"{new string('r', 200)}\"\n")
+            .Warnings.ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("REQ\u0001")]
+    [InlineData("REQ\u200b")]
+    [InlineData("REQ\n1042")]
+    public void Sidecar_UnusableRequirement_IsAWarning_AndTheEntryStillReads(string requirement)
+    {
+        // The scalar is written as JSON (a valid YAML double-quoted scalar), so the escapes arrive as characters
+        // instead of invalidating the document before the reader can judge the value.
+        var scalar = JsonSerializer.Serialize(requirement);
+        var result = Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: {scalar}\n");
+
+        // The pointer is metadata: it never becomes a conflict and never costs the entry its id.
+        result.Problems.ShouldBeEmpty();
+        result.Warnings.Single().Path.ShouldBe("tests/a.ts");
+        result.Entries.Single().Id.ShouldBe(Guid.Parse(IdA));
+        result.Entries.Single().RequirementRef.ShouldBeNull();
+    }
+
+    [Fact]
+    public void Sidecar_OverlongRequirement_IsAWarning()
+    {
+        var result = Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: \"{new string('r', 201)}\"\n");
+
+        result.Problems.ShouldBeEmpty();
+        result.Warnings.Count.ShouldBe(1);
+        result.Entries.Single().RequirementRef.ShouldBeNull();
+    }
+
     // ------------------------------------------------------------------ CaseDiscovery
 
     private static SourceFile Test(string path, string content = "") => new(path, content, "playwright", "typescript");
@@ -260,6 +306,35 @@ public sealed class CatalogUnitTests
         var found = result.Cases.Single();
         (found.Path, found.Id, found.Source).ShouldBe(("tests/a.spec.ts", Guid.Parse(IdA), "sidecar"));
         result.Problems.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void Discovery_SidecarRequirement_ReachesTheCase()
+    {
+        var sidecar = new SourceFile(
+            "tests/evidgate.cases.yaml",
+            $"version: 1\ncases:\n  - file: a.spec.ts\n    evidgate.id: {IdA}\n    requirement: REQ-1042\n");
+
+        var found = Discover(Test("tests/a.spec.ts"), sidecar).Cases.Single();
+
+        found.RequirementRef.ShouldBe("REQ-1042");
+    }
+
+    [Fact]
+    public void Discovery_UnusableSidecarRequirement_WarnsOnTheCase_AndHoldsNoDirectory()
+    {
+        var sidecar = new SourceFile(
+            "tests/evidgate.cases.yaml",
+            $"version: 1\ncases:\n  - file: a.spec.ts\n    evidgate.id: {IdA}\n    requirement: \"REQ\\u0001\"\n");
+
+        var result = Discover(Test("tests/a.spec.ts"), sidecar);
+
+        // Unlike a refused entry, a dropped pointer leaves the id usable: the case still resolves, unpointed.
+        result.Cases.Single().RequirementRef.ShouldBeNull();
+        result.HeldIds.ShouldBeEmpty();
+        result.HeldDirectories.ShouldBeEmpty();
+        result.Problems.Single().Path.ShouldBe("tests/a.spec.ts");
+        result.Problems.Single().Code.ShouldBe(CaseSyncCodes.InvalidSidecarEntry);
     }
 
     [Fact]

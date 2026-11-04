@@ -25,7 +25,17 @@ namespace Evidgate.Modules.Catalog.Application.Commands;
 /// <param name="Name">Display name.</param>
 /// <param name="Slug">Slug, unique in the project.</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c>.</param>
-internal sealed record CreateSuiteCommand(Guid ProjectId, string Name, string Slug, string IdempotencyKey)
+/// <param name="Platform">Taxonomy of the suite (03.1.4); null means <c>web</c>.</param>
+/// <param name="Level">Its level; null means the platform's default level.</param>
+/// <param name="Purpose">Its purpose; null means <c>regression</c>.</param>
+internal sealed record CreateSuiteCommand(
+    Guid ProjectId,
+    string Name,
+    string Slug,
+    string IdempotencyKey,
+    string? Platform = null,
+    string? Level = null,
+    string? Purpose = null)
     : ICommand<Result<SuiteDto>>, IIdempotentCommand;
 
 /// <summary>Shape validation of <see cref="CreateSuiteCommand"/>.</summary>
@@ -40,6 +50,18 @@ internal sealed class CreateSuiteCommandValidator : AbstractValidator<CreateSuit
         RuleFor(command => command.Slug)
             .Must(slug => slug is not null && AsciiShape.IsMatch(slug, 2, 63, AsciiShape.LowerAlnum, AsciiShape.LowerAlnumDash, AsciiShape.LowerAlnum))
             .WithErrorCode("invalid_format");
+        RuleFor(command => command.Platform)
+            .Must(platform => Taxonomy.Canonical(platform, Taxonomy.Platforms) is not null)
+            .WithErrorCode("invalid_value")
+            .When(command => command.Platform is not null);
+        RuleFor(command => command.Level)
+            .Must(level => Taxonomy.Canonical(level, Taxonomy.Levels) is not null)
+            .WithErrorCode("invalid_value")
+            .When(command => command.Level is not null);
+        RuleFor(command => command.Purpose)
+            .Must(purpose => Taxonomy.Canonical(purpose, Taxonomy.Purposes) is not null)
+            .WithErrorCode("invalid_value")
+            .When(command => command.Purpose is not null);
     }
 }
 
@@ -71,11 +93,25 @@ internal sealed class CreateSuiteCommandHandler(
         }
 
         var id = Guid.CreateVersion7();
+        var platform = Taxonomy.Canonical(command.Platform, Taxonomy.Platforms) ?? Taxonomy.Default.Platform;
+        var level = Taxonomy.Canonical(command.Level, Taxonomy.Levels) ?? Taxonomy.DefaultLevelFor(platform);
+        var purpose = Taxonomy.Canonical(command.Purpose, Taxonomy.Purposes) ?? Taxonomy.Default.Purpose;
+
         try
         {
             await db.ExecuteAsync(
                 SuiteReadSql.InsertSuite,
-                new { id, org_id = scopes.Require().OrgId, project_id = command.ProjectId, name = command.Name.Trim(), slug = command.Slug },
+                new
+                {
+                    id,
+                    org_id = scopes.Require().OrgId,
+                    project_id = command.ProjectId,
+                    name = command.Name.Trim(),
+                    slug = command.Slug,
+                    platform,
+                    level,
+                    purpose,
+                },
                 cancellationToken).ConfigureAwait(false);
         }
         catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation && exception.ConstraintName == "suite_project_slug_key")
@@ -137,7 +173,7 @@ internal sealed class CreateSuiteRevisionCommandHandler(
             return Result.Failure<SuiteRevisionHead>(SuiteErrors.SuiteNotFound);
         }
 
-        var planned = await planner.PlanAsync(db, peek.ProjectId, command.Body, cancellationToken).ConfigureAwait(false);
+        var planned = await planner.PlanAsync(db, peek.ProjectId, command.Body, peek.AsTaxonomy(), cancellationToken).ConfigureAwait(false);
         if (!planned.IsSuccess)
         {
             return Result.Failure<SuiteRevisionHead>(planned.Error!);
@@ -187,16 +223,22 @@ internal sealed class CreateSuiteRevisionCommandHandler(
         if (existing is not null)
         {
             // Re-submitting the content of an older revision makes it the current definition again: the head follows the
-            // content, so a revert is visible as a head move and not silently ignored.
-            var moved = suite.HeadRevisionId != existing.Id;
+            // content, so a revert is visible as a head move and not silently ignored. The suite's taxonomy follows the
+            // head in the same statement, because the hash pins the taxonomy the revision was written under.
+            var moved = suite.HeadRevisionId != existing.Id || suite.AsTaxonomy() != plan.Taxonomy;
             if (moved)
             {
-                await db.ExecuteAsync(SuiteReadSql.SetHead, new { suite_id = command.SuiteId, revision_id = existing.Id }, cancellationToken).ConfigureAwait(false);
+                await db.ExecuteAsync(
+                    SuiteReadSql.SetHeadAndTaxonomy,
+                    new { suite_id = command.SuiteId, revision_id = existing.Id, platform = plan.Taxonomy.Platform, level = plan.Taxonomy.Level, purpose = plan.Taxonomy.Purpose },
+                    cancellationToken).ConfigureAwait(false);
             }
 
             audit.Describe(new AuditObject("suite_revision", existing.Id.ToString("D")));
 
-            return Result.Success(new SuiteRevisionHead(existing.Id, existing.RevisionNo, plan.RevisionHash, existing.Status, false, plan.Warnings, moved));
+            return Result.Success(new SuiteRevisionHead(
+                existing.Id, existing.RevisionNo, plan.RevisionHash, existing.Status, false, plan.Warnings, moved,
+                plan.Taxonomy.Platform, plan.Taxonomy.Level, plan.Taxonomy.Purpose));
         }
 
         var revisionNo = await db.ScalarAsync<int>(SuiteReadSql.NextRevisionNo, new { org_id = orgId, suite_id = command.SuiteId }, cancellationToken).ConfigureAwait(false);
@@ -216,6 +258,9 @@ internal sealed class CreateSuiteRevisionCommandHandler(
                 suite_id = command.SuiteId,
                 revision_no = revisionNo,
                 revision_hash = plan.RevisionHash,
+                platform = plan.Taxonomy.Platform,
+                level = plan.Taxonomy.Level,
+                purpose = plan.Taxonomy.Purpose,
                 shard = plan.ShardJson,
                 retry = plan.RetryJson,
                 environment = plan.EnvironmentJson,
@@ -240,11 +285,16 @@ internal sealed class CreateSuiteRevisionCommandHandler(
             await db.ExecuteAsync(SuiteReadSql.InsertEdges, new { org_id = orgId, revision_id = revisionId, rows = edgesJson }, cancellationToken).ConfigureAwait(false);
         }
 
-        await db.ExecuteAsync(SuiteReadSql.SetHead, new { suite_id = command.SuiteId, revision_id = revisionId }, cancellationToken).ConfigureAwait(false);
+        await db.ExecuteAsync(
+            SuiteReadSql.SetHeadAndTaxonomy,
+            new { suite_id = command.SuiteId, revision_id = revisionId, platform = plan.Taxonomy.Platform, level = plan.Taxonomy.Level, purpose = plan.Taxonomy.Purpose },
+            cancellationToken).ConfigureAwait(false);
 
         audit.Describe(new AuditObject("suite_revision", revisionId.ToString("D")));
 
-        return Result.Success(new SuiteRevisionHead(revisionId, revisionNo, plan.RevisionHash, "draft", true, plan.Warnings, true), 201);
+        return Result.Success(new SuiteRevisionHead(
+            revisionId, revisionNo, plan.RevisionHash, "draft", true, plan.Warnings, true,
+            plan.Taxonomy.Platform, plan.Taxonomy.Level, plan.Taxonomy.Purpose), 201);
     }
 
     private static string Json<T>(IEnumerable<T> rows) => JsonSerializer.Serialize(rows, Snake);
@@ -264,6 +314,15 @@ internal sealed class CreateSuiteRevisionCommandHandler(
         public string Status { get; set; } = string.Empty;
 
         public Guid? HeadRevisionId { get; set; }
+
+        public string Platform { get; set; } = "web";
+
+        public string Level { get; set; } = "e2e";
+
+        public string Purpose { get; set; } = "regression";
+
+        /// <summary>The three columns as one value; named as a method so it never shadows the <see cref="Domain.Taxonomy"/> catalogue.</summary>
+        public SuiteTaxonomy AsTaxonomy() => new(Platform, Level, Purpose);
     }
 
     private sealed class ExistingRevision

@@ -25,6 +25,7 @@ internal sealed record PlannedMember(string Ref, Guid CaseRevisionId, Normalized
 /// <param name="RetryJson">The retry policy as stored.</param>
 /// <param name="EnvironmentJson">The environment requirements as stored.</param>
 /// <param name="RevisionHash">The content identity.</param>
+/// <param name="Taxonomy">The taxonomy this revision is authored under (03.1.4).</param>
 /// <param name="Warnings">Non-blocking observations.</param>
 internal sealed record SuiteRevisionPlan(
     IReadOnlyList<PlannedMember> Members,
@@ -33,6 +34,7 @@ internal sealed record SuiteRevisionPlan(
     string RetryJson,
     string EnvironmentJson,
     string RevisionHash,
+    SuiteTaxonomy Taxonomy,
     IReadOnlyList<string> Warnings);
 
 /// <summary>
@@ -64,13 +66,17 @@ internal sealed class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schemaSet)
     /// <param name="db">The tenant read path.</param>
     /// <param name="projectId">The suite's project.</param>
     /// <param name="request">The authored revision.</param>
+    /// <param name="current">The taxonomy the suite holds today; a member of the request overrides it.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     public async Task<Result<SuiteRevisionPlan>> PlanAsync(
         ITenantDb db,
         Guid projectId,
         CreateSuiteRevisionRequest request,
+        SuiteTaxonomy current,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(current);
+
         var members = request.Members ?? [];
         var edges = request.Edges ?? [];
 
@@ -85,6 +91,15 @@ internal sealed class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schemaSet)
                 $"a revision holds at most {MaxMembers} members and {MaxEdges} edges",
                 new ErrorDetail(members.Count > MaxMembers ? "/members" : "/edges", "too_many")));
         }
+
+        // ---- taxonomy (03.1.4 AC3, AC4): the closed lists, then the rule that decides what a mobile suite really is.
+        var resolved = ResolveTaxonomy(request, current, members);
+        if (!resolved.IsSuccess)
+        {
+            return Fail(resolved.Error!);
+        }
+
+        var taxonomy = resolved.Value;
 
         // ---- strategies: schema first, then the secret-shape rules on the environment requirements.
         var shard = request.ShardStrategy ?? JsonSerializer.Deserialize<JsonElement>("{\"kind\":\"none\"}");
@@ -218,10 +233,15 @@ internal sealed class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schemaSet)
             warnings.Add("the revision has no members");
         }
 
+        if (taxonomy.Emulated)
+        {
+            warnings.Add("a mobile suite whose variants run a browser engine is stored as a web suite (device emulation)");
+        }
+
         string revisionHash;
         try
         {
-            revisionHash = Hash(ordered, edgeList, shardJson, retryJson, environmentJson);
+            revisionHash = Hash(ordered, edgeList, shardJson, retryJson, environmentJson, taxonomy.Taxonomy);
         }
         catch (JsonCanonicalizationException)
         {
@@ -229,25 +249,84 @@ internal sealed class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schemaSet)
             return Fail(SuiteErrors.Invalid("a strategy document cannot be canonicalised (duplicate member names or an unrepresentable number)", new ErrorDetail("/", "not_canonicalisable")));
         }
 
-        return Result.Success(new SuiteRevisionPlan(ordered, edgeList, shardJson, retryJson, environmentJson, revisionHash, warnings));
+        return Result.Success(new SuiteRevisionPlan(ordered, edgeList, shardJson, retryJson, environmentJson, revisionHash, taxonomy.Taxonomy, warnings));
     }
 
     /// <summary>
+    /// The taxonomy a revision is authored under: the request's values where it names them, the suite's current values
+    /// otherwise, and the platform rule of AC4 on top. A request that names a platform but no level gets the level that
+    /// platform defaults to, so <c>platform = api</c> alone is an integration suite.
+    /// </summary>
+    /// <param name="request">The authored revision.</param>
+    /// <param name="current">The suite's current taxonomy.</param>
+    /// <param name="members">The authored members, for the platform evidence their variants carry.</param>
+    private static Result<(SuiteTaxonomy Taxonomy, bool Emulated)> ResolveTaxonomy(
+        CreateSuiteRevisionRequest request,
+        SuiteTaxonomy current,
+        IReadOnlyList<SuiteMemberInput> members)
+    {
+        var platform = request.Platform is null ? current.Platform : Taxonomy.Canonical(request.Platform, Taxonomy.Platforms);
+        if (platform is null)
+        {
+            return InvalidTaxonomy("platform", "platform must be one of web, api, unit or mobile");
+        }
+
+        var level = request.Level is null
+            ? (request.Platform is null ? current.Level : Taxonomy.DefaultLevelFor(platform))
+            : Taxonomy.Canonical(request.Level, Taxonomy.Levels);
+        if (level is null)
+        {
+            return InvalidTaxonomy("level", "level must be one of unit, integration, e2e or smoke");
+        }
+
+        var purpose = request.Purpose is null ? current.Purpose : Taxonomy.Canonical(request.Purpose, Taxonomy.Purposes);
+        if (purpose is null)
+        {
+            return InvalidTaxonomy("purpose", "purpose must be one of regression, smoke, release_gate or exploratory");
+        }
+
+        var browserDriven = members.Any(member => member is not null && Taxonomy.IsBrowserDriven(member.Params));
+        var nativeMobile = members.Any(member => member is not null && Taxonomy.DeclaresNativeMobile(member.Params));
+        var decision = Taxonomy.ResolvePlatform(platform, browserDriven, nativeMobile);
+        if (decision.NeedsCapability)
+        {
+            return InvalidTaxonomy(
+                "platform",
+                "a mobile suite needs a member whose variant names a native mobile platform (android, ios); a browser variant is device emulation and belongs to a web suite",
+                "mobile_capability_required");
+        }
+
+        return Result.Success((new SuiteTaxonomy(decision.Stored!, level, purpose), decision.Emulated));
+    }
+
+    private static Result<(SuiteTaxonomy Taxonomy, bool Emulated)> InvalidTaxonomy(string field, string message, string reason = "invalid_value") =>
+        Result.Failure<(SuiteTaxonomy Taxonomy, bool Emulated)>(SuiteErrors.Invalid(message, [new ErrorDetail($"/{field}", reason)]));
+
+    /// <summary>
     /// The content identity: the members in canonical order (case revision, required flag, variant hash), the edges as pairs of
-    /// indexes into that order (the order is itself content, so the pairs are unambiguous and the document stays small), and the
-    /// three strategy documents. The suite id, row ids and ordinals are not part of it.
+    /// indexes into that order (the order is itself content, so the pairs are unambiguous and the document stays small), the
+    /// three strategy documents and the taxonomy the revision is authored under. The suite id, row ids and ordinals are not
+    /// part of it. <c>hash_input_version</c> names this shape: a revision stored before the taxonomy joined the input keeps
+    /// the hash it was written with, and nothing ever recomputes it (03.1.4 AC7).
     /// </summary>
     internal static string Hash(
         IReadOnlyList<PlannedMember> members,
         IReadOnlyList<(int Parent, int Child)> edges,
         string shardJson,
         string retryJson,
-        string environmentJson)
+        string environmentJson,
+        SuiteTaxonomy taxonomy)
     {
         var buffer = new System.Buffers.ArrayBufferWriter<byte>(members.Count * 160 + edges.Count * 14 + 512);
         using (var writer = new Utf8JsonWriter(buffer))
         {
             writer.WriteStartObject();
+            writer.WriteNumber("hash_input_version", 2);
+            writer.WriteStartObject("taxonomy");
+            writer.WriteString("platform", taxonomy.Platform);
+            writer.WriteString("level", taxonomy.Level);
+            writer.WriteString("purpose", taxonomy.Purpose);
+            writer.WriteEndObject();
             writer.WriteStartArray("members");
             foreach (var member in members)
             {
