@@ -205,6 +205,13 @@ const EXPECTED = [
   // `covered` filter and the two coverage members without changing shape, so it keeps its T2 row above.
   ['/projects/{p}/authoring/manual-cases/{m}/links', 'post', 'authoring:write', 'v1'],
   ['/projects/{p}/authoring/manual-cases/{m}/links/{c}', 'delete', 'authoring:write', 'v1'],
+  // The pending-changes queue of 00 §9.3's authoring block row: the two reads are `authoring:read`, the
+  // queue/discard/apply writes `authoring:write`.
+  ['/projects/{p}/authoring/changes', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/changes', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/changes/{c}', 'get', 'authoring:read', 'v1'],
+  ['/projects/{p}/authoring/changes/{c}/discard', 'post', 'authoring:write', 'v1'],
+  ['/projects/{p}/authoring/changes:apply', 'post', 'authoring:write', 'v1'],
 ];
 
 const byKey = new Map(ops.map((o) => [`${o.method} ${o.path}`, o]));

@@ -588,6 +588,21 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("project_id", projectId));
+        // The 13.1.2 authoring queue (migration 0067): a pending comment on the item above, authored by
+        // the same membership the AI-settings row names. `affected_versions` is the target's version map
+        // the apply locks, so it names the item and nothing else.
+        await scope.ExecuteAsync(
+            """
+            insert into public.authoring_change
+                (id, org_id, project_id, target_id, change_type, payload, base_version, affected_versions, author_membership_id)
+            values (@id, @org_id, @project_id, @target_id, 'comment', '{"body":"probe"}'::jsonb, 1,
+                    jsonb_build_object(@target_id::text, 1), @author_membership_id)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("target_id", checklistItemId),
+            ("author_membership_id", aiMembership));
         await scope.ExecuteAsync(
             """
             insert into public.authoring_version

@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-change.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/payload/source_item_ids",
+      "reason": "min_items"
+    }
+  ],
+  "comment": "a merge of one item is not a merge"
+}

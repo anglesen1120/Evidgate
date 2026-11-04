@@ -406,8 +406,8 @@ public static class OpenApiRouteInventory
             return false;
         }
 
-        var colon = line.IndexOf(':', indent);
-        if (colon < 0 || (colon + 1 < line.Length && line[colon + 1] != ' '))
+        var colon = KeyColon(line, indent);
+        if (colon < 0)
         {
             return false;
         }
@@ -424,9 +424,27 @@ public static class OpenApiRouteInventory
     /// <summary>The text after a key's colon, without a trailing comment.</summary>
     private static string InlineValue(string line)
     {
-        var colon = line.IndexOf(':', IndentOf(line));
+        var colon = KeyColon(line, IndentOf(line));
         var value = colon < 0 ? string.Empty : line[(colon + 1)..].Trim();
         return value.StartsWith('#') ? string.Empty : value;
+    }
+
+    /// <summary>
+    /// Index of the colon that ends the key of a mapping line: the first one followed by a space or the line end.
+    /// A custom-method path key such as <c>/x/changes:apply:</c> carries a colon inside the key itself, so a plain
+    /// <see cref="string.IndexOf(char)"/> would split it there and lose the path.
+    /// </summary>
+    private static int KeyColon(string line, int indent)
+    {
+        for (var at = line.IndexOf(':', indent); at >= 0; at = line.IndexOf(':', at + 1))
+        {
+            if (at + 1 >= line.Length || line[at + 1] == ' ')
+            {
+                return at;
+            }
+        }
+
+        return -1;
     }
 
     private static int IndentOf(string line)

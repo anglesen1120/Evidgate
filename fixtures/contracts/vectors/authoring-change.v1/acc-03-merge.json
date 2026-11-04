@@ -1,0 +1,14 @@
+{
+  "target_kind": "checklist_item",
+  "target_id": "018f5c1a-0000-7000-8000-000000000010",
+  "change_type": "merge",
+  "payload": {
+    "source_item_ids": [
+      "018f5c1a-0000-7000-8000-000000000010",
+      "018f5c1a-0000-7000-8000-000000000011",
+      "018f5c1a-0000-7000-8000-000000000012"
+    ],
+    "survivor_item_id": "018f5c1a-0000-7000-8000-000000000010"
+  },
+  "reason": "Three duplicates of the same login check"
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-change.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/payload/new_items",
+      "reason": "max_items"
+    }
+  ],
+  "comment": "21 new items exceeds the split bound"
+}

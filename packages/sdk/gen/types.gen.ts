@@ -1716,6 +1716,115 @@ export type MoveManualCaseResponse = {
 };
 
 /**
+ * One row of a list or detail answer (13.1.2-T1). `stale` is present only on an `ids` selection read: true when an item of `affected_versions` has moved since the change was queued. `payload` is the stored document echoed, capped at 32 KiB by its own schema.
+ */
+export type AuthoringChangeListItem = {
+    change_id: string;
+    target_kind: 'checklist_item';
+    target_id: string;
+    change_type: 'comment' | 'delete' | 'merge' | 'split';
+    payload: {
+        [key: string]: unknown;
+    };
+    state: 'pending' | 'applied' | 'discarded';
+    source: 'manual' | 'ai' | 'import';
+    base_version: number;
+    author_membership_id: string;
+    reason?: string | null;
+    created_at: string;
+    applied_at?: string | null;
+    applied_batch_id?: string | null;
+    discarded_at?: string | null;
+    stale?: boolean;
+};
+
+/**
+ * 00 §9.1 keyset page of `AuthoringChangeListItem`, ordered `(created_at, id)` (13.1.2-T1). A response built from an `ids` selection also carries `ETag: "<batch-etag>"`.
+ */
+export type AuthoringChangePageResponse = {
+    items: Array<AuthoringChangeListItem>;
+    next_cursor: string | null;
+};
+
+/**
+ * The 200 body of the detail read (13.1.2-T1): the list item plus the row `version` the `ETag` header carries.
+ */
+export type AuthoringChangeDetailResponse = {
+    change_id: string;
+    target_kind: 'checklist_item';
+    target_id: string;
+    change_type: 'comment' | 'delete' | 'merge' | 'split';
+    payload: {
+        [key: string]: unknown;
+    };
+    state: 'pending' | 'applied' | 'discarded';
+    source: 'manual' | 'ai' | 'import';
+    base_version: number;
+    author_membership_id: string;
+    reason?: string | null;
+    created_at: string;
+    applied_at?: string | null;
+    applied_batch_id?: string | null;
+    discarded_at?: string | null;
+    version: number;
+};
+
+/**
+ * The 201 body of the queue route (13.1.2-T1): the new change, its state and the version of its target the server read. The change row's own version rides in the `ETag` header only, never in the body.
+ */
+export type QueuedAuthoringChangeResponse = {
+    change_id: string;
+    state: 'pending';
+    base_version: number;
+    created_at: string;
+};
+
+/**
+ * The 200 body of the discard route (13.1.2-T1): the change and the instant it was discarded.
+ */
+export type DiscardedAuthoringChangeResponse = {
+    change_id: string;
+    state: 'discarded';
+    discarded_at: string;
+};
+
+/**
+ * Body of the apply route (13.1.2-T1): the selected pending changes, 1..200. More is 422 `request_invalid` with `details[].reason = too_many_changes`.
+ */
+export type ApplyAuthoringChangesRequest = {
+    change_ids: Array<string>;
+};
+
+/**
+ * One `authoring_version` row the batch wrote (13.1.2-T1).
+ */
+export type AppliedAuthoringVersionDto = {
+    entity_kind: 'feature_node' | 'checklist_item' | 'manual_test_case';
+    entity_id: string;
+    version_no: number;
+};
+
+/**
+ * One merge or split relation the batch wrote (13.1.2-T1); a comment or delete batch writes none.
+ */
+export type AppliedAuthoringLineageDto = {
+    from_item_id: string;
+    to_item_id: string;
+    relation: 'merged_into' | 'split_from';
+};
+
+/**
+ * The 200 body of the apply route (13.1.2-T1): the batch id, the change ids it flipped and every version and lineage row it wrote. `versions` is empty for a comment-only batch.
+ */
+export type ApplyAuthoringChangesResponse = {
+    batch_id: string;
+    applied_change_ids: Array<string>;
+    versions: Array<AppliedAuthoringVersionDto>;
+    lineage: Array<AppliedAuthoringLineageDto>;
+    committed_at: string;
+};
+
+/**
  * Body of route 20 (13.1.1-T4): the catalog case this manual case is asserted to be proven by. The case must be live and in the same project; an archived one is 422 `request_invalid` with `details[].path = /test_case_id` and `reason = case_archived`, an unknown or other-project one the same 422 with `reason = case_not_found`.
  */
 export type LinkManualCaseRequest = {
@@ -2308,6 +2417,36 @@ export type PriorityCriteria = {
 };
 
 /**
+ * Queued authoring change v1
+ *
+ * The body of POST /v1/projects/{p}/authoring/changes: one proposed change to the feature tree, waiting until a reviewer applies a selection of them in one transaction. A queued change never edits its target, so the same document is safe to submit twice while the queue is read. The four change types are closed and each payload has its own shape: a comment carries a body, a delete carries nothing, a merge names 2-50 source items of which one survives, and a split names 2-20 new items. Members are closed at every level, so a typo is refused rather than stored. Two rules are not expressible in JSON Schema and belong to the handler: for a merge `target_id` must equal `payload.survivor_item_id` and the survivor must be one of `payload.source_item_ids` (422 payload_invalid / survivor_not_in_sources). `reason` is the author's note, 1-500 code points like the version reason column it feeds.
+ */
+export type AuthoringChangeV1 = unknown & {
+    /**
+     * The only entity a queued change can target in this version of the queue; a wider kind set is a new schema file, never a loosened constant.
+     */
+    target_kind: 'checklist_item';
+    /**
+     * The item itself for comment, delete and split; the survivor for merge.
+     */
+    target_id: string;
+    /**
+     * The proposal kind; `payload` must match it.
+     */
+    change_type: 'comment' | 'delete' | 'merge' | 'split';
+    /**
+     * The change document of `change_type`, closed to unknown members and at most 32 KiB once serialised.
+     */
+    payload: {
+        [key: string]: unknown;
+    };
+    /**
+     * Why the author proposes this change. Length is Unicode code points, the same unit as the column's char_length check.
+     */
+    reason?: string | null;
+};
+
+/**
  * Feature tree import document v1
  *
  * The import/export table of 13.1.1-T5 (route 25, AC13/AC14/AC15): one flat row set that carries the whole feature tree — nodes, their checklist items and each item's manual test cases — in a single document. The same table is what the CSV and XLSX readers produce and what every exporter writes, so the three formats validate against one contract; the CSV/XLSX column order is the CSV header (kind,key,parent_key,item_key,node_kind,title,description,precondition,steps,priority,state,code,position) and a JSON member of a row is that column name. Rows are ordered parent-first: a node's parent_key names a node row above it, an item's parent_key names its node, a case's item_key names its item. 'steps' is the stored {"steps":[…]} document of contracts/schemas/authoring-steps.v1.json, inlined here as $defs.steps because a row member is not a reference to another contract file: the two shapes must stay identical (1..100 steps, 2000 characters per field, closed members), which ContractSchemaRegistryTests.AuthoringImportSchema_IsDiscovered asserts field by field. Bounds: 1..5000 rows — the same 5000-row cap the route enforces with 413 payload_too_large (plan 13.1.1 §5 route 25, AC16) — a node title of 1..200 and an item/case title of 1..500 code points, a description and a precondition of at most 4000, and the priority/state/node_kind sets of plan 13.1.1 §4. No member is ever evaluated as a formula: the JSON format is never neutralised, because a JSON consumer does not evaluate cell text (AC16 covers CSV and XLSX only).
@@ -2852,6 +2991,31 @@ export type AuthoringChecklistItemId = string;
  * Manual test case id (13.1.1).
  */
 export type AuthoringManualCaseId = string;
+
+/**
+ * The queued authoring change id (13.1.2 §5).
+ */
+export type AuthoringChangeId = string;
+
+/**
+ * Queued-change state filter (13.1.2 §5): `pending`, `applied` or `discarded`. Anything else is 422 `request_invalid` with `details[].path = /state`.
+ */
+export type AuthoringChangeStateFilter = 'pending' | 'applied' | 'discarded';
+
+/**
+ * The kind of change to keep (13.1.2 §5): `comment`, `delete`, `merge` or `split`. Anything else is 422 `request_invalid` with `details[].path = /change_type`.
+ */
+export type AuthoringChangeTypeFilter = 'comment' | 'delete' | 'merge' | 'split';
+
+/**
+ * The exact checklist item whose change history is listed (13.1.2 §5).
+ */
+export type AuthoringChangeTargetIdFilter = string;
+
+/**
+ * The caller's selection, 1..200 change ids (13.1.2 §5), sent as one comma-separated value. The response then carries `ETag: "<batch-etag>"` and each item `stale`. Combined with any other filter it is 422 `request_invalid` with `details[].reason = ids_with_filters`.
+ */
+export type AuthoringChangeIdsFilter = Array<string>;
 
 /**
  * List the live children of this node instead of the roots (13.1.1 §5 route 1). An unknown, soft-deleted or other-project id is 404 `not_found`.
@@ -9977,6 +10141,337 @@ export type RestoreChecklistItemResponses = {
 };
 
 export type RestoreChecklistItemResponse = RestoreChecklistItemResponses[keyof RestoreChecklistItemResponses];
+
+export type ListAuthoringChangesData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Queued-change state filter (13.1.2 §5): `pending`, `applied` or `discarded`. Anything else is 422 `request_invalid` with `details[].path = /state`.
+         */
+        state?: 'pending' | 'applied' | 'discarded';
+        /**
+         * The kind of change to keep (13.1.2 §5): `comment`, `delete`, `merge` or `split`. Anything else is 422 `request_invalid` with `details[].path = /change_type`.
+         */
+        change_type?: 'comment' | 'delete' | 'merge' | 'split';
+        /**
+         * The exact checklist item whose change history is listed (13.1.2 §5).
+         */
+        target_id?: string;
+        /**
+         * The caller's selection, 1..200 change ids (13.1.2 §5), sent as one comma-separated value. The response then carries `ETag: "<batch-etag>"` and each item `stale`. Combined with any other filter it is 422 `request_invalid` with `details[].reason = ids_with_filters`.
+         */
+        ids?: Array<string>;
+        /**
+         * Opaque cursor from `next_cursor`; the order is the one the route declares (`(position, id)` for tree and checklist pages, `(code, id)` for manual cases, 00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/authoring/changes';
+};
+
+export type ListAuthoringChangesErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListAuthoringChangesError = ListAuthoringChangesErrors[keyof ListAuthoringChangesErrors];
+
+export type ListAuthoringChangesResponses = {
+    /**
+     * Page of queued changes; an `ids` selection also carries `ETag: "<batch-etag>"`
+     */
+    200: AuthoringChangePageResponse;
+};
+
+export type ListAuthoringChangesResponse = ListAuthoringChangesResponses[keyof ListAuthoringChangesResponses];
+
+export type QueueAuthoringChangeData = {
+    body: AuthoringChangeV1;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/changes';
+};
+
+export type QueueAuthoringChangeErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type QueueAuthoringChangeError = QueueAuthoringChangeErrors[keyof QueueAuthoringChangeErrors];
+
+export type QueueAuthoringChangeResponses = {
+    /**
+     * The queued change, its state, the target version it read, and `ETag: "<version>"`
+     */
+    201: QueuedAuthoringChangeResponse;
+};
+
+export type QueueAuthoringChangeResponse = QueueAuthoringChangeResponses[keyof QueueAuthoringChangeResponses];
+
+export type GetAuthoringChangeData = {
+    body?: never;
+    path: {
+        p: string;
+        /**
+         * The queued authoring change id (13.1.2 §5).
+         */
+        c: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/changes/{c}';
+};
+
+export type GetAuthoringChangeErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetAuthoringChangeError = GetAuthoringChangeErrors[keyof GetAuthoringChangeErrors];
+
+export type GetAuthoringChangeResponses = {
+    /**
+     * The change, its payload, and `ETag: "<version>"`
+     */
+    200: AuthoringChangeDetailResponse;
+};
+
+export type GetAuthoringChangeResponse = GetAuthoringChangeResponses[keyof GetAuthoringChangeResponses];
+
+export type DiscardAuthoringChangeData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+        /**
+         * The queued authoring change id (13.1.2 §5).
+         */
+        c: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/changes/{c}/discard';
+};
+
+export type DiscardAuthoringChangeErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type DiscardAuthoringChangeError = DiscardAuthoringChangeErrors[keyof DiscardAuthoringChangeErrors];
+
+export type DiscardAuthoringChangeResponses = {
+    /**
+     * The discarded change and the instant it was discarded
+     */
+    200: DiscardedAuthoringChangeResponse;
+};
+
+export type DiscardAuthoringChangeResponse = DiscardAuthoringChangeResponses[keyof DiscardAuthoringChangeResponses];
+
+export type ApplyAuthoringChangesData = {
+    body: ApplyAuthoringChangesRequest;
+    headers: {
+        /**
+         * ETag for optimistic concurrency; stale → 412 (00 §9.1).
+         */
+        'If-Match': string;
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/authoring/changes:apply';
+};
+
+export type ApplyAuthoringChangesErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
+    /**
+     * 413 too large (00 §9.2)
+     */
+    413: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ApplyAuthoringChangesError = ApplyAuthoringChangesErrors[keyof ApplyAuthoringChangesErrors];
+
+export type ApplyAuthoringChangesResponses = {
+    /**
+     * The batch, the applied change ids, the versions it wrote and its lineage
+     */
+    200: ApplyAuthoringChangesResponse;
+};
+
+export type ApplyAuthoringChangesResponse2 = ApplyAuthoringChangesResponses[keyof ApplyAuthoringChangesResponses];
 
 export type ListManualCasesData = {
     body?: never;

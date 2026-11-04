@@ -1,0 +1,5 @@
+{
+  "schema": "authoring-change.v1",
+  "valid": true,
+  "comment": "an explicit null reason is the same as omitting it"
+}

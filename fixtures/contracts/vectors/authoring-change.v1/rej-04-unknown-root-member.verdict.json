@@ -1,0 +1,12 @@
+{
+  "schema": "authoring-change.v1",
+  "valid": false,
+  "errors": [
+    {
+      "index": null,
+      "path": "/snapshot",
+      "reason": "additional_properties"
+    }
+  ],
+  "comment": "the queue body is closed; a tree snapshot is not part of it"
+}

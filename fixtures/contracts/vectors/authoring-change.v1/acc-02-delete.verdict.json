@@ -1,0 +1,5 @@
+{
+  "schema": "authoring-change.v1",
+  "valid": true,
+  "comment": "a delete carries an empty payload"
+}

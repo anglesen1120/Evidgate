@@ -142,6 +142,12 @@ public sealed class IsolationProject
     public required Guid AuthoringVersionId { get; init; }
 
     /// <summary>
+    /// The project's queued change: a pending comment on <see cref="AuthoringItemId"/>, produced through the queue
+    /// route — <c>{c}</c> of <c>…/authoring/changes/{c}</c> and of <c>…/changes/{c}/discard</c>.
+    /// </summary>
+    public required Guid AuthoringChangeId { get; init; }
+
+    /// <summary>
     /// A soft-deleted leaf <c>sub_category</c> node under <see cref="AuthoringChildNodeId"/> — the tombstone route 6
     /// restores (13.1.1-T3).
     /// </summary>
@@ -835,6 +841,24 @@ public sealed class IsolationWorld
                 body: null,
                 HttpStatusCode.OK).ConfigureAwait(false)).GetProperty("items")[0].GetProperty("version_id").GetGuid();
 
+            // One queued comment per project, through the queue route like every other row here. The change
+            // routes' isolation probes name it, so a scope that forgot the project would answer with this row
+            // instead of the random-id control's 404.
+            var authoringChange = (await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/authoring/changes",
+                admin,
+                org,
+                new
+                {
+                    target_kind = "checklist_item",
+                    target_id = authoringItem,
+                    change_type = "comment",
+                    payload = new { body = "isolation queued change" },
+                    reason = "isolation seed",
+                },
+                HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("change_id").GetGuid();
+
             return new IsolationProject
             {
                 Id = project,
@@ -868,6 +892,7 @@ public sealed class IsolationWorld
                 AuthoringSecondItemId = authoringSecondItem,
                 AuthoringSecondManualCaseId = authoringSecondCase,
                 AuthoringVersionId = authoringVersion,
+                AuthoringChangeId = authoringChange,
                 AuthoringDeletedNodeId = authoringRestorableNode,
                 AuthoringDeletedNodeVersion = authoringRestorableNodeVersion,
                 AuthoringDeletedItemId = authoringRestorableItem,

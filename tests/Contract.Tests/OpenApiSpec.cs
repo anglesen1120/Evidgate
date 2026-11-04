@@ -234,10 +234,21 @@ internal sealed class OpenApiSpec
             return false;
         }
 
-        // A mapping entry: the first colon after the indent, followed by a space
-        // (or ending the line). 'key:value' is a plain scalar, not an entry.
-        var colon = line.IndexOf(':', indent);
-        if (colon < 0 || (colon + 1 < line.Length && line[colon + 1] != ' '))
+        // A mapping entry: the first colon after the indent that is followed by a space (or ends the
+        // line). 'key:value' is a plain scalar, not an entry, but a custom-method path key such as
+        // `/projects/{p}/authoring/changes:apply:` carries a colon inside the key itself, so the entry
+        // cannot end at the first colon found.
+        var colon = -1;
+        for (var at = line.IndexOf(':', indent); at >= 0; at = line.IndexOf(':', at + 1))
+        {
+            if (at + 1 >= line.Length || line[at + 1] == ' ')
+            {
+                colon = at;
+                break;
+            }
+        }
+
+        if (colon < 0)
         {
             return false;
         }
