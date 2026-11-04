@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { HlmBadge } from '@evidgate/ui/badge';
+import { HlmButton } from '@evidgate/ui/button';
 
 /** Presentation data, not a wire response: href exists only when the caller has a real target. */
 export type MissingReason = {
@@ -9,22 +11,35 @@ export type MissingReason = {
 
 @Component({
   selector: 'app-missing-reason-list',
-  standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './missing-reason-list.component.css',
+  imports: [HlmBadge, HlmButton],
+  host: { class: 'block min-w-0 font-sans text-sm text-foreground wrap-anywhere' },
   template: `
     @if (heading(); as title) {
-      <h3>{{ title }}</h3>
+      <h3 class="mt-0 mb-(--eg-space-3) text-sm font-semibold">{{ title }}</h3>
     }
     @if (reasons().length) {
-      <ul class="reason-list" [attr.aria-label]="heading() || listLabel">
+      <ul
+        class="reason-list m-0 flex flex-col gap-(--eg-space-3) ps-(--eg-space-5)"
+        [attr.aria-label]="heading() || listLabel"
+      >
         @for (reason of safeReasons(); track $index) {
-          <li class="reason">
-            <code class="reason-code">{{ reason.code }}</code>
+          <li class="reason min-w-0 whitespace-normal wrap-anywhere">
+            <code
+              hlmBadge
+              [variant]="'outline'"
+              class="reason-code me-(--eg-space-3) max-w-full font-mono text-xs whitespace-normal"
+              >{{ reason.code }}</code
+            >
             @if (reason.href) {
-              <a class="reason-link" [href]="reason.href" [attr.rel]="reason.rel">{{
-                reason.text
-              }}</a>
+              <a
+                hlmBtn
+                [variant]="'link'"
+                class="reason-link h-auto min-h-(--eg-control-sm) min-w-(--eg-control-sm) max-w-full p-0 text-start text-foreground whitespace-normal underline wrap-anywhere pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
+                [href]="reason.href"
+                [attr.rel]="reason.rel"
+                >{{ reason.text }}</a
+              >
             } @else {
               <span class="reason-text">{{ reason.text }}</span>
             }
@@ -32,7 +47,7 @@ export type MissingReason = {
         }
       </ul>
     } @else {
-      <p class="reason-empty" i18n="@@shared.missing-reason-list.empty">
+      <p class="reason-empty m-0 text-muted-foreground" i18n="@@shared.missing-reason-list.empty">
         No missing evidence reasons reported
       </p>
     }

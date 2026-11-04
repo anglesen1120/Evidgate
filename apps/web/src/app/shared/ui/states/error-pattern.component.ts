@@ -1,50 +1,89 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { HlmAlert, HlmAlertTitle } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardDescription, HlmCardTitle } from '@evidgate/ui/card';
 
 import type { ApiError } from '../../../core/http/api-error';
 
 @Component({
   selector: 'app-error-pattern',
-  standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['./state-panel.css', './error-pattern.component.css'],
+  imports: [HlmAlert, HlmAlertTitle, HlmButton, HlmCard, HlmCardDescription, HlmCardTitle],
+  host: { class: 'block min-w-0' },
   template: `
-    <section class="state-panel state-panel--error">
+    <section
+      hlmCard
+      class="state-panel state-panel--error min-w-0 min-h-[calc(var(--eg-space-12)*3+var(--eg-space-8))] items-center justify-center gap-(--eg-space-3) px-(--eg-space-5) py-(--eg-space-8) text-center wrap-anywhere"
+    >
       @for (failure of failures(); track failure) {
-        <div role="alert" aria-atomic="true">
+        <div
+          hlmAlert
+          [variant]="'destructive'"
+          class="w-auto max-w-full border-0 bg-transparent p-0 text-center"
+          aria-atomic="true"
+        >
           @switch (headingLevel()) {
             @case (3) {
-              <h3 class="state-panel__title">{{ heading() }}</h3>
+              <h3
+                hlmAlertTitle
+                class="state-panel__title m-0 font-(family-name:--eg-font-display) text-lg"
+                [textContent]="heading()"
+              ></h3>
             }
             @case (4) {
-              <h4 class="state-panel__title">{{ heading() }}</h4>
+              <h4
+                hlmAlertTitle
+                class="state-panel__title m-0 font-(family-name:--eg-font-display) text-lg"
+                [textContent]="heading()"
+              ></h4>
             }
             @default {
-              <h2 class="state-panel__title">{{ heading() }}</h2>
+              <h2
+                hlmAlertTitle
+                class="state-panel__title m-0 font-(family-name:--eg-font-display) text-lg"
+                [textContent]="heading()"
+              ></h2>
             }
           }
         </div>
       } @empty {
         @switch (headingLevel()) {
           @case (3) {
-            <h3 class="state-panel__title">{{ heading() }}</h3>
+            <h3
+              hlmCardTitle
+              class="state-panel__title m-0 font-(family-name:--eg-font-display) text-lg"
+              [textContent]="heading()"
+            ></h3>
           }
           @case (4) {
-            <h4 class="state-panel__title">{{ heading() }}</h4>
+            <h4
+              hlmCardTitle
+              class="state-panel__title m-0 font-(family-name:--eg-font-display) text-lg"
+              [textContent]="heading()"
+            ></h4>
           }
           @default {
-            <h2 class="state-panel__title">{{ heading() }}</h2>
+            <h2
+              hlmCardTitle
+              class="state-panel__title m-0 font-(family-name:--eg-font-display) text-lg"
+              [textContent]="heading()"
+            ></h2>
           }
         }
       }
       @if (error(); as failure) {
-        <p class="state-panel__description">{{ failure.message }}</p>
-        <p class="state-panel__metadata">
-          <code>{{ failure.code }}</code>
+        <p
+          hlmCardDescription
+          class="state-panel__description m-0 max-w-full"
+          [textContent]="failure.message"
+        ></p>
+        <p class="state-panel__metadata m-0 max-w-full text-muted-foreground">
+          <code class="font-mono text-xs select-text">{{ failure.code }}</code>
         </p>
         @if (failure.requestId; as requestId) {
           <p
-            class="state-panel__metadata error-pattern__request-id"
-            data-testid="error-request-id"
+            class="state-panel__metadata error-pattern__request-id m-0 max-w-full font-mono text-xs text-muted-foreground select-text"
+            [attr.data-testid]="'error-request-id'"
             i18n="@@shared.states.error.request-id"
           >
             Request ID: {{ requestId }}
@@ -52,7 +91,9 @@ import type { ApiError } from '../../../core/http/api-error';
         }
         @if (failure.retryable) {
           <button
-            class="state-panel__action"
+            hlmBtn
+            [variant]="'outline'"
+            class="state-panel__action h-auto min-h-(--eg-control-md) max-w-full whitespace-normal py-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
             type="button"
             [disabled]="retryDisabled()"
             (click)="retry.emit()"

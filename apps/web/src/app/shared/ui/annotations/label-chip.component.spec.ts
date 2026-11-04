@@ -30,6 +30,20 @@ describe('LabelChip (FR-09-2/3/4)', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
+  it('uses noninteractive Helm badges without clipping long healed metadata', () => {
+    const fixture = TestBed.createComponent(LabelChip);
+    fixture.componentRef.setInput('kind', 'healed');
+    fixture.componentRef.setInput('candidateHash', hash.repeat(3));
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('.label-healed')?.getAttribute('data-slot')).toBe('badge');
+    const candidate = root.querySelector('.candidate-hash');
+    expect(candidate?.getAttribute('data-variant')).toBe('outline');
+    expect(candidate?.classList.contains('whitespace-pre-wrap')).toBe(true);
+    expect(candidate?.classList.contains('max-w-full')).toBe(true);
+    expect(root.querySelector('[tabindex], [role="button"], [role="alert"]')).toBeNull();
+  });
+
   describe.each<LabelKind>(['flaky', 'healed'])('%s label', (kind) => {
     it.each(states)('covers the %s state without changing the original outcome', (state) => {
       const fixture = TestBed.createComponent(LabelChip);
