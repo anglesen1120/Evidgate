@@ -207,7 +207,7 @@ test('the selected tab panel is a stop of its own when the decision has no contr
   await expect(page.getByRole('button', { name: 'Copy full manifest hash' })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(panel).toBeFocused();
-  await expectNoA11yViolations(page);
+  await expectNoA11yViolations(page, 'run detail, decision panel without controls');
 });
 
 test('a filter change keeps the focus that asked for it, and Clear restores the table order', async ({
