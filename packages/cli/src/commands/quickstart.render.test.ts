@@ -209,7 +209,7 @@ describe('quickstart', () => {
   });
 
   // The id/hash reach the command: the GitHub template through masked step outputs
-  // (per R4), the generic one through shell variables from the captured `--json` output.
+  // (so they stay out of logs), the generic one through shell variables from the captured `--json` output.
   // `run_id` is captured the same way because the spool steps take it as `--run`.
   it('renders the pinned runs create step and no runs-create placeholder', () => {
     const npxPin = `npx --yes --package @evidgate/cli@${version}`;
@@ -242,7 +242,7 @@ describe('quickstart', () => {
   });
 
   // The spool steps are real commands in that order, and both read the same
-  // EVIDGATE_SPOOL_DIR the reporter writes (contracts/cli.md §11/§10).
+  // EVIDGATE_SPOOL_DIR the reporter writes.
   it('renders the pinned events send and runs finalize steps', () => {
     const npxPin = `npx --yes --package @evidgate/cli@${version}`;
     const github = renderQuickstart({ format: 'github', project: sampleProject, version });
