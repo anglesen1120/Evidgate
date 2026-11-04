@@ -41,5 +41,8 @@ describe('App', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('router-outlet')).not.toBeNull();
     expect(root.querySelector('h1')).toBeNull();
+    // The page-filling box is a host class now, not a component stylesheet.
+    expect(root.classList.contains('block')).toBe(true);
+    expect(root.classList.contains('min-h-full')).toBe(true);
   });
 });

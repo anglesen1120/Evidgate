@@ -87,10 +87,10 @@ let nextTableId = 0;
     HlmTr,
   ],
   templateUrl: './data-table.component.html',
-  styleUrl: './data-table.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    class: 'block min-w-0 bg-card font-sans text-sm text-foreground',
+    class:
+      'block min-w-0 bg-card font-sans text-sm text-foreground [--eg-table-row:var(--eg-row-default)] [--eg-table-inset:var(--eg-space-3)] [&.compact]:[--eg-table-row:var(--eg-row-compact)] [&.compact]:[--eg-table-inset:var(--eg-space-2)] pointer-coarse:[&.compact]:[--eg-table-row:var(--eg-row-default)]',
     '[class.compact]': 'rowHeight() === "compact"',
     '[class.virtual]': 'virtual()',
   },

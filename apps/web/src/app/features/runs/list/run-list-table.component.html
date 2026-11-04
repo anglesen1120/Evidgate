@@ -29,7 +29,13 @@
   >
     <table hlmTable role="presentation" class="block border-collapse max-[767px]:sr-only">
       <thead hlmTHead role="rowgroup" class="block">
-        <tr hlmTr class="run-row bg-secondary hover:bg-secondary" role="row" aria-rowindex="1">
+        <tr
+          hlmTr
+          class="bg-secondary hover:bg-secondary"
+          [class]="rowClasses"
+          role="row"
+          aria-rowindex="1"
+        >
           <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.id }}</th>
           <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.state }}</th>
           <th hlmTh scope="col" role="columnheader" [class]="columnClasses">{{ copy.evidence }}</th>
@@ -53,7 +59,8 @@
             <tr
               hlmTr
               *cdkVirtualFor="let row of rows(); let index = index; trackBy: trackRow"
-              class="run-row virtual-row box-border h-[calc(var(--eg-control-touch)*3)] max-[767px]:h-[calc(var(--eg-control-touch)*18)] max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)] [&>*]:overflow-hidden"
+              class="virtual-row box-border h-[calc(var(--eg-control-touch)*3)] max-[767px]:h-[calc(var(--eg-control-touch)*18)] max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)] [&>*]:overflow-hidden"
+              [class]="rowClasses"
               role="row"
               data-run-row
               [attr.data-run-id]="row.run_id"
@@ -73,7 +80,8 @@
           @for (row of rows(); track row.run_id; let index = $index) {
             <tr
               hlmTr
-              class="run-row max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)]"
+              class="max-[767px]:gap-[var(--eg-space-3)] max-[767px]:p-[var(--eg-space-3)]"
+              [class]="rowClasses"
               role="row"
               data-run-row
               [attr.data-run-id]="row.run_id"

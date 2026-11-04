@@ -222,6 +222,9 @@ describe('EvidencePanelComponent', () => {
     const banner = root.querySelector('[data-evidence-newer]');
     expect(banner?.textContent).toContain('A newer revision exists');
     expect(banner?.textContent).toContain('You are viewing revision 3. The newest revision is 4.');
+    // Informational: the page announces the revision change once, so this banner stays non-live.
+    expect(banner?.getAttribute('role')).toBe('note');
+    expect(banner?.hasAttribute('aria-live')).toBe(false);
     let latest = 0;
     fixture.componentInstance.viewLatest.subscribe(() => (latest += 1));
     (banner?.querySelector('button') as HTMLButtonElement).click();
@@ -364,37 +367,6 @@ describe('EvidencePanelComponent', () => {
       revisionsLoadingMore: true,
     });
     expect(root.querySelector('#evidence-panel')?.getAttribute('aria-busy')).toBe('true');
-  });
-
-  it('announces a revision change politely, silently on the first paint and once per state', async () => {
-    const { fixture, root } = await render({
-      pinnedRevision: 3,
-      pinned: revision({ revision_no: 3 }),
-      revisions: [revision({ revision_no: 4 }), revision({ revision_no: 3 })],
-      revisionsStatus: 'ready',
-    });
-    const region = root.querySelector('[data-evidence-announcement]')!;
-    expect(region.getAttribute('role')).toBe('status');
-    expect(region.textContent?.trim()).toBe('');
-
-    const ref = fixture.componentRef;
-    ref.setInput('pinnedRevision', 4);
-    ref.setInput('pinned', revision({ revision_no: 4 }));
-    await fixture.whenStable();
-    expect(region.textContent).toContain('Viewing evidence revision 4');
-
-    // An unrelated render of the same state does not repeat the announcement.
-    ref.setInput('retryEligible', true);
-    await fixture.whenStable();
-    expect(region.textContent).toContain('Viewing evidence revision 4');
-
-    ref.setInput('pinnedRevision', 3);
-    ref.setInput('pinned', revision({ revision_no: 3 }));
-    ref.setInput('newerRevisionExists', true);
-    ref.setInput('latestRevisionNo', 4);
-    await fixture.whenStable();
-    expect(region.textContent).toContain('Viewing evidence revision 3');
-    expect(region.textContent).toContain('Newer revision 4 is available');
   });
 
   it('handles a reason link as an in-page landing, keeping its href for a new tab', async () => {

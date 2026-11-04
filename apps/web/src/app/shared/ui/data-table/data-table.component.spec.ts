@@ -8,15 +8,6 @@ import { DATA_TABLE_FIXTURE_COLUMNS, dataTableFixtureRows } from './data-table.f
 import type { DataTableFixtureRow } from './data-table.fixture';
 import type { Mock } from 'vitest';
 
-function tableStyles(): string {
-  // Read Angular's compiled, encapsulated CSS rather than duplicating the source.
-  return (
-    Array.from(document.querySelectorAll('style'))
-      .map((style) => style.textContent ?? '')
-      .find((css) => css.includes('--eg-table-row:') && css.includes('--eg-table-inset:')) ?? ''
-  );
-}
-
 /**
  * F56: `CdkVirtualScrollViewport.setRenderedRange` publishes the new range synchronously but
  * schedules the re-render from a microtask, so a single `whenStable()` can resolve before the
@@ -286,9 +277,17 @@ describe('DataTableComponent', () => {
     fixture.componentRef.setInput('rowHeight', 'default');
     await fixture.whenStable();
     expect(fixture.componentInstance.itemSize()).toBe(44);
-    expect(tableStyles()).toContain('--eg-table-row: var(--eg-row-compact)');
-    expect(tableStyles()).toContain('--eg-table-row: var(--eg-row-default)');
-    expect(tableStyles()).toContain('@media (pointer: coarse)');
+    // Density is a host-utility contract; jsdom resolves no cascade, so the declared token
+    // utilities are the observable evidence that compact and coarse-pointer rows survive.
+    for (const utility of [
+      '[--eg-table-row:var(--eg-row-default)]',
+      '[--eg-table-inset:var(--eg-space-3)]',
+      '[&.compact]:[--eg-table-row:var(--eg-row-compact)]',
+      '[&.compact]:[--eg-table-inset:var(--eg-space-2)]',
+      'pointer-coarse:[&.compact]:[--eg-table-row:var(--eg-row-default)]',
+    ]) {
+      expect(root.classList.contains(utility)).toBe(true);
+    }
     fixture.componentRef.setInput('rows', dataTableFixtureRows(201));
     await fixture.whenStable();
     const cell = root.querySelector('.body-table .cell');

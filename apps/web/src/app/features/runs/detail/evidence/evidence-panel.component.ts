@@ -1,13 +1,5 @@
 import { DOCUMENT, Location } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  input,
-  linkedSignal,
-  output,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import type { EvidenceRevision } from '@evidgate/sdk';
@@ -221,31 +213,6 @@ export class EvidencePanelComponent {
   protected readonly pinUnavailable = computed(
     () => this.pinNotLoaded() && !this.revisionsHasMore() && this.revisionsStatus() === 'ready',
   );
-
-  /**
-   * The selected/newer revision announced after an update. The first paint sets the baseline
-   * silently and an unchanged state stays silent, so polling never repeats an announcement.
-   */
-  private readonly announcedState = linkedSignal<
-    { readonly selected: number | null; readonly newer: number | null },
-    string | null
-  >({
-    source: () => ({
-      selected: this.pinnedRevision(),
-      newer: this.newerRevisionExists() ? this.latestRevisionNo() : null,
-    }),
-    computation: (state, previous) => {
-      const before = previous?.source;
-      // A first paint is not an update, and a null pin is not a selection to announce.
-      if (before === undefined || before.selected === null || state.selected === null) return null;
-      if (before.selected === state.selected && before.newer === state.newer) return null;
-      return state.newer === null
-        ? $localize`:@@runs.evidence.announcement-selected:Viewing evidence revision ${state.selected}:SELECTED:`
-        : $localize`:@@runs.evidence.announcement-newer:Viewing evidence revision ${state.selected}:SELECTED:. Newer revision ${state.newer}:NEWER: is available.`;
-    },
-  });
-
-  protected readonly announcement = computed(() => this.announcedState() ?? '');
 
   protected selectedLabel(revision: number): string {
     return $localize`:@@runs.evidence.selected-revision:Selected evidence revision: ${revision}:revision:`;

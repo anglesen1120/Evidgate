@@ -82,6 +82,128 @@ describe('RunDetailPage evidence and decision tabs', () => {
     expect(getDecision).toHaveBeenCalledTimes(1);
   });
 
+  it('announces an evidence change once, outside the hidden panel, while the decision tab is active', async () => {
+    const { root, harness, evidence, decision } = await open();
+    decision.click();
+    await harness.fixture.whenStable();
+    const regions = [...root.querySelectorAll<HTMLElement>('[data-evidence-announcement]')];
+    expect(regions).toHaveLength(1);
+    const region = regions[0];
+    if (!region) throw new Error('Evidence announcement region was not rendered');
+    expect(region.getAttribute('role')).toBe('status');
+    expect(region.getAttribute('aria-live')).toBe('polite');
+    // Outside both panels: a live region inside the hidden evidence panel is never spoken.
+    expect(region.closest('[role="tabpanel"]')).toBeNull();
+    expect(region.closest('[hidden]')).toBeNull();
+    expect(region.textContent?.trim()).toBe('');
+
+    await harness.navigateByUrl(
+      `/projects/project-1/runs/${run.run_id}?evidence_revision=4`,
+      RunDetailPage,
+    );
+    await harness.fixture.whenStable();
+    expect(
+      root.querySelector('app-evidence-panel')?.closest<HTMLElement>('[role="tabpanel"]')?.hidden,
+    ).toBe(true);
+    expect(region.textContent).toContain('Viewing evidence revision 4');
+    const spoken = [...root.querySelectorAll<HTMLElement>('[role="status"]')].filter((entry) =>
+      entry.textContent?.includes('Viewing evidence revision'),
+    );
+    expect(spoken).toEqual([region]);
+
+    // Showing the panel neither adds a second region nor repeats the message in the panel.
+    evidence.click();
+    await harness.fixture.whenStable();
+    expect(root.querySelectorAll('[data-evidence-announcement]')).toHaveLength(1);
+    expect(root.querySelector('app-evidence-panel')?.textContent).not.toContain(
+      'Viewing evidence revision',
+    );
+    expect(region.textContent).toContain('Viewing evidence revision 4');
+  });
+
+  it('speaks a newer revision once while the evidence panel is visible', async () => {
+    const { root, harness } = await open();
+    // The fixture's newest revision is 4, so pinning back to 3 brings the newer-revision banner in
+    // while the evidence panel is the visible one: the banner must not speak over the page region.
+    await harness.navigateByUrl(
+      `/projects/project-1/runs/${run.run_id}?evidence_revision=4`,
+      RunDetailPage,
+    );
+    await harness.fixture.whenStable();
+    const region = root.querySelector<HTMLElement>('[data-evidence-announcement]');
+    if (!region) throw new Error('Evidence announcement region was not rendered');
+    expect(region.textContent).toContain('Viewing evidence revision 4');
+    expect(root.querySelector('[data-evidence-newer]')).toBeNull();
+
+    await harness.navigateByUrl(
+      `/projects/project-1/runs/${run.run_id}?evidence_revision=3`,
+      RunDetailPage,
+    );
+    await harness.fixture.whenStable();
+    const banner = root.querySelector<HTMLElement>('[data-evidence-newer]');
+    expect(banner?.closest<HTMLElement>('[role="tabpanel"]')?.hidden).toBe(false);
+    expect(banner?.getAttribute('role')).toBe('note');
+    expect(region.textContent).toContain('Viewing evidence revision 3');
+    expect(region.textContent).toContain('Newer revision 4 is available');
+    const speaking = [
+      ...root.querySelectorAll<HTMLElement>('[role="status"], [role="alert"]'),
+    ].filter((entry) => /newest revision is|A newer revision exists/.test(entry.textContent ?? ''));
+    expect(speaking).toEqual([]);
+  });
+
+  it('keeps the selected panel a Tab stop and the hidden one out of the order', async () => {
+    const { root, harness, decision } = await open();
+    const panels = [...root.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+    expect(panels).toHaveLength(2);
+    const evidencePanel = panels.find(
+      (panel) => panel.querySelector('app-evidence-panel') !== null,
+    );
+    const decisionPanel = panels.find((panel) => panel.querySelector('app-decision-view') !== null);
+    if (!evidencePanel || !decisionPanel) throw new Error('Detail panels were not rendered');
+    // Brain hardcodes tabindex="0" on every panel and only hides the inactive one; the page binds
+    // the stop to the selected panel so the panel stays reachable when it has no control.
+    expect(evidencePanel.getAttribute('tabindex')).toBe('0');
+    expect(evidencePanel.tabIndex).toBe(0);
+    expect(decisionPanel.getAttribute('tabindex')).toBe('-1');
+    expect(decisionPanel.tabIndex).toBe(-1);
+    expect(evidencePanel.hidden).toBe(false);
+    expect(decisionPanel.hidden).toBe(true);
+    expect(evidencePanel.querySelector('[role="combobox"]')).not.toBeNull();
+    for (const panel of [evidencePanel, decisionPanel]) {
+      expect(panel.className).toContain('focus-visible:outline-solid');
+      expect(panel.className).toContain('focus-visible:outline-(length:--eg-focus-width)');
+      expect(panel.className).toContain('focus-visible:outline-offset-(--eg-focus-offset)');
+    }
+
+    decision.click();
+    await harness.fixture.whenStable();
+    expect(evidencePanel.hidden).toBe(true);
+    expect(evidencePanel.getAttribute('tabindex')).toBe('-1');
+    expect(evidencePanel.tabIndex).toBe(-1);
+    expect(decisionPanel.hidden).toBe(false);
+    expect(decisionPanel.getAttribute('tabindex')).toBe('0');
+    expect(decisionPanel.tabIndex).toBe(0);
+    expect(root.querySelectorAll('[role="tabpanel"][hidden]')).toHaveLength(1);
+    expect(root.querySelector<HTMLElement>('[role="tabpanel"][hidden]')).toBe(evidencePanel);
+  });
+
+  it('keeps the decision panel a Tab stop when the decision renders no control', async () => {
+    getDecision.mockResolvedValue(liveBody({ evidence_revision: 3 }));
+    const { root, harness, decision } = await open();
+    decision.click();
+    await harness.fixture.whenStable();
+    const decisionPanel = root
+      .querySelector('app-decision-view')
+      ?.closest<HTMLElement>('[role="tabpanel"]');
+    if (!decisionPanel) throw new Error('Decision panel was not rendered');
+    expect(root.querySelector('[data-decision-mismatch]')).toBeNull();
+    expect(decisionPanel.querySelector('a[href], button, select, textarea')).toBeNull();
+    expect(decisionPanel.hidden).toBe(false);
+    expect(decisionPanel.getAttribute('tabindex')).toBe('0');
+    expect(decisionPanel.tabIndex).toBe(0);
+    expect(root.querySelector<HTMLElement>('[role="tabpanel"][hidden]')).not.toBe(decisionPanel);
+  });
+
   it('supports arrow, Home and End keyboard selection with roving focus', async () => {
     const { harness, evidence, decision } = await open();
     evidence.focus();
