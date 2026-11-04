@@ -64,7 +64,7 @@ public sealed class AiSettingsInputBoundaryTests(PostgresTenancyFixture fixture)
             "sk-live-0123456789ABCDEFGHIJabcdefghij",
             AiSettingsCalls.Secrets.PasswordAssignment(),
             "Bearer example-test-credential",
-            AiSettingsCalls.Secrets.PemPrivateKey(),
+            "-----BEGIN" + " PRIVATE KEY-----",
             "0123456789abcdef0123456789abcdef",
             AiSettingsCalls.Secrets.Jwt(),
         ];
