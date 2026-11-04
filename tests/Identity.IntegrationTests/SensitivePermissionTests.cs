@@ -66,6 +66,11 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // list is scanned.
         "/v1/projects/{p}/authoring/versions/{v}",
 
+        // 13.2.1-T1's AI settings version detail: it only answers for a version number this suite has no row for (a
+        // version exists only after a save, and those rows are Tenancy.IntegrationTests' subject). The head, the history
+        // list and the template catalogue are scanned.
+        "/v1/projects/{p}/ai-settings/versions/{version_no}",
+
         // 02.3.1-T1.1's pre-tenant login routes answer no resource body: `start` is a 302 to the
         // provider or a 503 `unavailable` envelope (no credential is configured in this host), and
         // `callback` without a pending-login cookie is a 401 `token_invalid` envelope. Neither
@@ -461,6 +466,12 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/projects/{p}/authoring/checklist-items"] = $"/v1/projects/{project}/authoring/checklist-items",
             ["/v1/projects/{p}/authoring/manual-cases"] = $"/v1/projects/{project}/authoring/manual-cases",
             ["/v1/projects/{p}/authoring/versions"] = $"/v1/projects/{project}/authoring/versions",
+            // 13.2.1-T1's AI settings reads: a project with no saved version answers the platform default document, an
+            // empty history page and the platform template catalogue — bytes a member may read, no secret among them.
+            // The version detail is the skipped entry above.
+            ["/v1/projects/{p}/ai-settings"] = $"/v1/projects/{project}/ai-settings",
+            ["/v1/projects/{p}/ai-settings/versions"] = $"/v1/projects/{project}/ai-settings/versions",
+            ["/v1/projects/{p}/ai-settings/templates"] = $"/v1/projects/{project}/ai-settings/templates",
             // 13.1.1-T5's export: a project with no authoring rows exports an empty rows array, so the download is
             // callable here like the lists above (no seeded tree, no secret in the file). The scan reads a JSON
             // document, so the call takes the JSON format rather than the CSV default: the permission, the projection

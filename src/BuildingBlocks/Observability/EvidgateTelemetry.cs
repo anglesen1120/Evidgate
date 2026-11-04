@@ -350,6 +350,23 @@ public static class EvidgateTelemetry
     /// <summary>The decision-latency histogram's name (the frozen→decided latency the reliability SLI reads).</summary>
     public const string EvaluationDecisionLatencyMetricName = "evidgate_evaluation_decision_latency_seconds";
 
+    /// <summary>Counter of project AI settings saves, tagged by outcome.</summary>
+    public const string AiSettingsWriteMetricName = "evidgate_authoring_ai_settings_write_total";
+
+    private static readonly Counter<long> AiSettingsWrites = Meter.CreateCounter<long>(
+        AiSettingsWriteMetricName,
+        unit: "{save}",
+        description: "Project AI settings saves by outcome (created, noop, stale, invalid). No labels beyond the closed outcome vocabulary: never a settings value, a URL or a hash.");
+
+    /// <summary>
+    /// Counts one project AI settings save, tagged by the closed outcome vocabulary: <c>created</c> (a new
+    /// version appended), <c>noop</c> (identical content), <c>stale</c> (the precondition lost) or
+    /// <c>invalid</c> (the request was refused).
+    /// </summary>
+    /// <param name="outcome">One of <c>created</c>, <c>noop</c>, <c>stale</c> or <c>invalid</c>.</param>
+    public static void RecordAiSettingsWrite(string outcome) =>
+        AiSettingsWrites.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
+
     private static readonly Histogram<double> EvaluationDecisionLatencies = Meter.CreateHistogram<double>(
         EvaluationDecisionLatencyMetricName,
         unit: "s",
