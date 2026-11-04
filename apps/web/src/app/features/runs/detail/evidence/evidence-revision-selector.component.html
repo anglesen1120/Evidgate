@@ -1,30 +1,51 @@
-<div class="revision-selector">
-  <label class="revision-label" for="evidence-revision-select">{{ copy.revisionLabel }}</label>
-  <select
-    id="evidence-revision-select"
-    class="revision-select"
-    data-evidence-revision-select
-    [attr.aria-describedby]="'evidence-pin-help'"
+<div class="grid min-w-0 gap-(--eg-space-3)">
+  <label hlmLabel for="evidence-revision-select">{{ copy.revisionLabel }}</label>
+  <hlm-select
     [value]="selectedValue()"
-    (change)="choose($event)"
+    [disabled]="revisions().length === 0"
+    (valueChange)="choose($event)"
   >
-    @if (pinnedMissing()) {
-      <!-- The pin is not on a loaded page: it still names itself, never the row that follows it. -->
-      <option [value]="selectedValue()" [selected]="true" disabled>{{ notLoadedLabel() }}</option>
-    }
-    @for (revision of revisions(); track revision.revision_no) {
-      <option
-        [value]="revision.revision_no"
-        [selected]="revision.revision_no === selectedRevision()"
-      >
-        {{ optionLabel(revision) }}
-      </option>
-    }
-  </select>
-  <p class="revision-help" id="evidence-pin-help">{{ copy.pinHelp }}</p>
+    <!-- Compose the Brain trigger so its actual button owns the pin description. -->
+    <button
+      hlmBtn
+      brnSelectTrigger
+      [variant]="'outline'"
+      [disabled]="revisions().length === 0"
+      type="button"
+      id="evidence-revision-select"
+      data-evidence-revision-select
+      [attr.aria-describedby]="'evidence-pin-help'"
+      class="flex h-auto min-h-(--eg-control-touch) w-full min-w-0 justify-between gap-(--eg-space-3) whitespace-normal text-start wrap-anywhere transition-none"
+    >
+      <span class="min-w-0">{{ selectedLabel() || copy.revisionLabel }}</span>
+      <hlm-icon [name]="'lucideChevronDown'" class="shrink-0" />
+    </button>
+    <hlm-select-content *hlmSelectPortal [aria-label]="copy.revisionLabel" class="animate-none">
+      @if (pinnedMissing()) {
+        <hlm-select-item
+          [value]="selectedValue()"
+          [disabled]="true"
+          class="whitespace-normal wrap-anywhere"
+        >
+          {{ notLoadedLabel() }}
+        </hlm-select-item>
+      }
+      @for (revision of revisions(); track revision.revision_no) {
+        <hlm-select-item
+          [value]="'' + revision.revision_no"
+          class="min-h-(--eg-control-touch) whitespace-normal wrap-anywhere"
+        >
+          {{ optionLabel(revision) }}
+        </hlm-select-item>
+      }
+    </hlm-select-content>
+  </hlm-select>
+  <p class="m-0 text-(--eg-text-muted)" id="evidence-pin-help">{{ copy.pinHelp }}</p>
   @if (hasMore()) {
     <button
-      class="revision-load-older"
+      hlmBtn
+      [variant]="'outline'"
+      class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere transition-none"
       type="button"
       data-evidence-load-older
       [disabled]="loadingMore()"

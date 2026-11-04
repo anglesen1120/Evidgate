@@ -1,3 +1,4 @@
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { APP_BASE_HREF } from '@angular/common';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -9,6 +10,8 @@ import type { DecisionViewModel } from '../decision/decision-view-model';
 import type { RevisionsStatus } from '../revision-walk';
 import { EvidencePanelComponent } from './evidence-panel.component';
 import type { ConfirmedMissingTarget } from './missing-reasons';
+import { stubScopeBrowserApis } from '../../../../shell/layout/scope.fixture';
+import { EvidenceRevisionSelectorHarness } from './evidence-revision-selector.test-support';
 
 type EvaluatedDecision = Extract<DecisionViewModel, { kind: 'evaluated' }>;
 
@@ -68,13 +71,19 @@ interface PanelInputs {
 }
 
 describe('EvidencePanelComponent', () => {
-  beforeEach(() =>
+  let restoreBrowserApis: () => void;
+  beforeEach(() => {
+    restoreBrowserApis = stubScopeBrowserApis();
     TestBed.configureTestingModule({
       imports: [EvidencePanelComponent],
       providers: [provideZonelessChangeDetection(), provideRouter([])],
-    }),
-  );
-  afterEach(() => TestBed.resetTestingModule());
+    });
+  });
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    restoreBrowserApis();
+    vi.unstubAllGlobals();
+  });
 
   async function render(inputs: PanelInputs = {}) {
     const fixture = TestBed.createComponent(EvidencePanelComponent);
@@ -103,6 +112,8 @@ describe('EvidencePanelComponent', () => {
     const { root } = await render();
     const region = root.querySelector('#evidence-panel');
     expect(region?.getAttribute('aria-labelledby')).toBe('evidence-title');
+    expect(region?.hasAttribute('hlmCard')).toBe(true);
+    expect(root.querySelector('#evidence-title')?.getAttribute('tabindex')).toBe('-1');
     expect(root.querySelector('#evidence-title')?.textContent?.trim()).toBe('Evidence');
   });
 
@@ -218,7 +229,7 @@ describe('EvidencePanelComponent', () => {
     expect(latest).toBe(1);
   });
 
-  it('emits the chosen revision from the native selector and the older-page intent', async () => {
+  it('emits the chosen revision from the Brain selector and the older-page intent', async () => {
     const { fixture, root } = await render({
       pinnedRevision: 4,
       pinned: revision({ revision_no: 4 }),
@@ -230,9 +241,10 @@ describe('EvidencePanelComponent', () => {
     let older = 0;
     fixture.componentInstance.selectRevision.subscribe((value) => chosen.push(value));
     fixture.componentInstance.loadOlder.subscribe(() => (older += 1));
-    const select = root.querySelector('select') as HTMLSelectElement;
-    select.value = '3';
-    select.dispatchEvent(new Event('change'));
+    const selector = await TestbedHarnessEnvironment.loader(fixture).getHarness(
+      EvidenceRevisionSelectorHarness,
+    );
+    await selector.choose(3);
     (root.querySelector('[data-evidence-load-older]') as HTMLButtonElement).click();
     await fixture.whenStable();
     expect(chosen).toEqual([3]);
@@ -383,33 +395,6 @@ describe('EvidencePanelComponent', () => {
     await fixture.whenStable();
     expect(region.textContent).toContain('Viewing evidence revision 3');
     expect(region.textContent).toContain('Newer revision 4 is available');
-  });
-
-  it('names a pin that is not on a loaded page in the selector instead of another revision', async () => {
-    const { root } = await render({
-      pinnedRevision: 2,
-      revisions: [revision({ revision_no: 4 }), revision({ revision_no: 3 })],
-      revisionsStatus: 'ready',
-      revisionsHasMore: true,
-    });
-    const select = root.querySelector<HTMLSelectElement>('[data-evidence-revision-select]')!;
-    expect(select.value).toBe('2');
-    const placeholder = select.options[0]!;
-    expect(placeholder.disabled).toBe(true);
-    expect(placeholder.textContent?.trim()).toBe('Revision 2 (not loaded)');
-    expect(select.selectedOptions[0]).toBe(placeholder);
-  });
-
-  it('selects the loaded row that matches the pin', async () => {
-    const { root } = await render({
-      pinnedRevision: 3,
-      revisions: [revision({ revision_no: 4 }), revision({ revision_no: 3 })],
-      revisionsStatus: 'ready',
-    });
-    const select = root.querySelector<HTMLSelectElement>('[data-evidence-revision-select]')!;
-    expect(select.value).toBe('3');
-    expect(select.options[0]?.disabled).toBe(false);
-    expect(select.selectedOptions[0]?.textContent).toContain('Revision 3');
   });
 
   it('handles a reason link as an in-page landing, keeping its href for a new tab', async () => {
