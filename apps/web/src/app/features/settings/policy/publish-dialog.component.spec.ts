@@ -26,6 +26,12 @@ describe('PublishDialogComponent', () => {
     TestBed.resetTestingModule();
     vi.restoreAllMocks();
   });
+  it('describes the editor with the rendered byte count before validation', async () => {
+    const { root, textarea } = await render();
+    expect(textarea.getAttribute('aria-describedby')).toBe('policy-body-size');
+    expect(root.querySelector('#policy-body-size')?.textContent).toContain('/ 65536');
+    expect(root.querySelector('#policy-local-error')).toBeNull();
+  });
   it.each(['{broken', '[]', 'null', '1', '"string"'])(
     'rejects invalid JSON object %s locally without publishing',
     async (text) => {
@@ -37,6 +43,10 @@ describe('PublishDialogComponent', () => {
       expect(root.querySelector('[data-policy-publish-local-error]')?.textContent).toMatch(/\S/);
       expect(textarea.value).toBe(text);
       expect(textarea.getAttribute('aria-invalid')).toBe('true');
+      expect(textarea.getAttribute('aria-describedby')).toBe('policy-body-size policy-local-error');
+      for (const id of ['policy-body-size', 'policy-local-error']) {
+        expect(root.querySelector(`#${id}`)?.textContent).toMatch(/\S/);
+      }
     },
   );
   it('refuses 65537 UTF-8 bytes locally and shows the byte count versus the limit', async () => {

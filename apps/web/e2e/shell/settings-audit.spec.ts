@@ -443,6 +443,21 @@ test.describe('at 360px the page does not scroll sideways', () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(0);
+    const caption = region.locator('caption');
+    await expect(caption).toHaveCSS('display', 'block');
+    const captionBox = await caption.boundingBox();
+    const tableBox = await region.locator('table').boundingBox();
+    expect(captionBox).not.toBeNull();
+    expect(tableBox).not.toBeNull();
+    expect(captionBox!.width).toBeCloseTo(tableBox!.width, 0);
+    for (const row of FLAGGED_ROWS) {
+      const supportRow = page.locator(AUDIT_ROWS, {
+        has: page.locator(`time[datetime="${row.created_at}"]`),
+      });
+      const description = supportRow.locator('.support-access + span');
+      await expect(description).toBeVisible();
+      await expect(description).toContainText(supportMarker(row)!.grantId!);
+    }
 
     // Keyboard users can still reach the overflow: the region is focusable and reports itself as a
     // named region (its `aria-label` is the table caption).

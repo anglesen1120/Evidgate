@@ -83,7 +83,7 @@
         step="1"
         [(ngModel)]="draft.from"
         [attr.aria-invalid]="invalidRange()"
-        [attr.aria-describedby]="
+        [aria-describedby]="
           invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
         "
       />
@@ -99,7 +99,7 @@
         step="1"
         [(ngModel)]="draft.to"
         [attr.aria-invalid]="invalidRange()"
-        [attr.aria-describedby]="
+        [aria-describedby]="
           invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
         "
       />

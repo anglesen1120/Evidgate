@@ -34,7 +34,7 @@ describe('RotateRevealDialogComponent', () => {
     return { fixture, slot, opener, root: revealRoot() };
   }
 
-  it.each(['dismiss', 'escape', 'backdrop', 'destroy'])(
+  it.each(['dismiss', 'escape', 'close', 'destroy'])(
     'clears slot and live input on %s',
     async (action) => {
       const { fixture, slot, opener, root } = await render();
@@ -53,8 +53,8 @@ describe('RotateRevealDialogComponent', () => {
             cancelable: true,
           }),
         );
-      } else if (action === 'backdrop') {
-        document.querySelector<HTMLElement>('.cdk-overlay-backdrop')?.click();
+      } else if (action === 'close') {
+        fixture.componentInstance.close();
       } else root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
       expect(slot.current()).toBeNull();
       expect(input?.value).toBe('');
@@ -67,6 +67,28 @@ describe('RotateRevealDialogComponent', () => {
       opener.remove();
     },
   );
+
+  it('keeps the dialog and one-time credential available after a backdrop click', async () => {
+    const { fixture, slot, opener, root } = await render();
+    const input = root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]');
+    const backdrop = document.querySelector<HTMLElement>('.cdk-overlay-backdrop');
+    if (!backdrop || !input) throw new Error('Expected backdrop and reveal input');
+
+    backdrop.click();
+    await fixture.whenStable();
+
+    expect(revealRoot()).toBe(root);
+    expect(slot.current()?.value).toBe('one-time-rotation-value');
+    expect(input.value).toBe('one-time-rotation-value');
+    expect(root.querySelector('[data-testid="reveal-copy"]')).not.toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
+    expect(slot.current()).toBeNull();
+    expect(input.value).toBe('');
+    await fixture.whenStable();
+    expect(document.querySelector('[data-testid="reveal-value"]')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
 
   it('uses one Brain focus trap for both keyboard boundaries', async () => {
     const { root, opener } = await render();

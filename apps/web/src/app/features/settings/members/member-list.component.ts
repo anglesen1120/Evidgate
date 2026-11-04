@@ -88,45 +88,62 @@ export const MEMBERS_COPY = {
     >
       <table
         hlmTable
-        class="caption-top border-collapse max-md:block [&_tbody]:max-md:block [&_tr]:max-md:block [&_thead]:max-md:sr-only [&_th]:break-normal [&_td]:break-normal [&_tbody_th]:max-md:grid [&_tbody_td]:max-md:grid [&_tbody_th]:max-md:gap-1 [&_tbody_td]:max-md:gap-1 [&_tbody_th]:max-md:whitespace-normal [&_tbody_td]:max-md:whitespace-normal [&_tbody_th]:max-md:wrap-anywhere [&_tbody_td]:max-md:wrap-anywhere [&_tbody_th]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_td]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_tr]:max-md:border-t"
+        role="table"
+        class="w-full table-fixed caption-top border-collapse max-md:block [&_tbody]:max-md:block [&_tr]:max-md:block [&_thead]:max-md:sr-only [&_th]:break-normal [&_td]:break-normal [&_th]:whitespace-normal [&_td]:whitespace-normal [&_tbody_th]:wrap-anywhere [&_tbody_th]:max-md:grid [&_tbody_td]:max-md:grid [&_tbody_th]:max-md:gap-1 [&_tbody_td]:max-md:gap-1 [&_tbody_th]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_td]:max-md:min-h-[var(--eg-control-touch)] [&_tbody_tr]:max-md:border-t"
       >
         <caption hlmCaption class="m-0 p-3 text-start font-semibold text-foreground max-md:block">
           {{
             copy.directory
           }}
         </caption>
-        <thead hlmTHead class="bg-secondary">
-          <tr hlmTr>
-            <th hlmTh scope="col" id="members-member">{{ copy.member }}</th>
-            <th hlmTh scope="col" id="members-status">{{ copy.status }}</th>
-            <th hlmTh scope="col" id="members-roles">{{ copy.roles }}</th>
+        <thead hlmTHead role="rowgroup" class="bg-secondary">
+          <tr hlmTr role="row">
+            <th hlmTh role="columnheader" scope="col" id="members-member" class="w-1/4">
+              {{ copy.member }}
+            </th>
+            <th hlmTh role="columnheader" scope="col" id="members-status" class="w-1/6">
+              {{ copy.status }}
+            </th>
+            <th hlmTh role="columnheader" scope="col" id="members-roles" class="w-1/4">
+              {{ copy.roles }}
+            </th>
             @if (canWrite()) {
-              <th hlmTh scope="col" class="mutation max-md:hidden! md:table-cell">
+              <th
+                hlmTh
+                role="columnheader"
+                scope="col"
+                class="mutation max-md:hidden! md:table-cell"
+              >
                 {{ copy.actions }}
               </th>
             }
           </tr>
         </thead>
-        <tbody hlmTBody>
+        <tbody hlmTBody role="rowgroup">
           @for (member of members(); track member.id) {
             <tr
               hlmTr
+              role="row"
               data-members-row
               [attr.data-membership-id]="member.id"
               [attr.data-members-status]="member.status"
             >
-              <th hlmTh scope="row" class="member-identity px-3 py-2" [id]="'member-' + member.id">
+              <th
+                hlmTh
+                role="rowheader"
+                scope="row"
+                class="member-identity px-3 py-2"
+                [id]="'member-' + member.id"
+              >
                 <span
                   class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
-                  aria-hidden="true"
                   >{{ copy.member }}</span
                 >
                 <span>{{ member.invited_email }}</span>
               </th>
-              <td hlmTd [attr.headers]="'member-' + member.id + ' members-status'">
+              <td hlmTd role="cell" [attr.headers]="'member-' + member.id + ' members-status'">
                 <span
                   class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
-                  aria-hidden="true"
                   >{{ copy.status }}</span
                 >
                 <app-status-pill
@@ -134,18 +151,17 @@ export const MEMBERS_COPY = {
                   [label]="statusLabel(member.status)"
                 />
               </td>
-              <td hlmTd [attr.headers]="'member-' + member.id + ' members-roles'">
+              <td hlmTd role="cell" [attr.headers]="'member-' + member.id + ' members-roles'">
                 <span
                   class="record-label block text-xs font-medium text-muted-foreground whitespace-normal md:hidden"
-                  aria-hidden="true"
                   >{{ copy.roles }}</span
                 >
-                <span>
+                <span class="flex min-w-0 flex-wrap items-center gap-2">
                   @for (role of member.roles; track role.id) {
                     <span
                       hlmBadge
                       [variant]="'secondary'"
-                      class="role-name m-1 whitespace-normal"
+                      class="role-name max-w-full whitespace-normal wrap-anywhere"
                       >{{ role.name }}</span
                     >
                   } @empty {
@@ -154,53 +170,55 @@ export const MEMBERS_COPY = {
                 </span>
               </td>
               @if (canWrite()) {
-                <td hlmTd class="mutation max-md:hidden! md:table-cell">
-                  @if (member.status === 'active' || member.status === 'pending') {
-                    <button
-                      hlmBtn
-                      [variant]="'outline'"
-                      class="m-1 min-h-[var(--eg-control-touch)]"
-                      type="button"
-                      data-members-edit-open
-                      (click)="requestEditRoles(member, $event)"
-                    >
-                      {{ copy.editRoles }}
-                    </button>
-                  }
-                  @if (member.status === 'pending') {
-                    <button
-                      hlmBtn
-                      [variant]="'outline'"
-                      class="m-1 min-h-[var(--eg-control-touch)]"
-                      type="button"
-                      data-members-resend-open
-                      (click)="requestResend(member, $event)"
-                    >
-                      {{ copy.resend }}
-                    </button>
-                    <button
-                      hlmBtn
-                      [variant]="'outline'"
-                      class="m-1 min-h-[var(--eg-control-touch)]"
-                      type="button"
-                      data-members-cancel-invite-open
-                      (click)="requestCancelInvite(member, $event)"
-                    >
-                      {{ copy.cancelInvite }}
-                    </button>
-                  }
-                  @if (member.status !== 'removed') {
-                    <button
-                      hlmBtn
-                      [variant]="'outline'"
-                      class="m-1 min-h-[var(--eg-control-touch)]"
-                      type="button"
-                      data-members-remove
-                      (click)="requestRemove(member, $event)"
-                    >
-                      {{ copy.remove }}
-                    </button>
-                  }
+                <td hlmTd role="cell" class="mutation max-md:hidden! md:table-cell">
+                  <div class="flex min-w-0 flex-wrap items-center gap-2">
+                    @if (member.status === 'active' || member.status === 'pending') {
+                      <button
+                        hlmBtn
+                        [variant]="'outline'"
+                        class="h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal wrap-anywhere"
+                        type="button"
+                        data-members-edit-open
+                        (click)="requestEditRoles(member, $event)"
+                      >
+                        {{ copy.editRoles }}
+                      </button>
+                    }
+                    @if (member.status === 'pending') {
+                      <button
+                        hlmBtn
+                        [variant]="'outline'"
+                        class="h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal wrap-anywhere"
+                        type="button"
+                        data-members-resend-open
+                        (click)="requestResend(member, $event)"
+                      >
+                        {{ copy.resend }}
+                      </button>
+                      <button
+                        hlmBtn
+                        [variant]="'outline'"
+                        class="h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal wrap-anywhere"
+                        type="button"
+                        data-members-cancel-invite-open
+                        (click)="requestCancelInvite(member, $event)"
+                      >
+                        {{ copy.cancelInvite }}
+                      </button>
+                    }
+                    @if (member.status !== 'removed') {
+                      <button
+                        hlmBtn
+                        [variant]="'outline'"
+                        class="h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal wrap-anywhere"
+                        type="button"
+                        data-members-remove
+                        (click)="requestRemove(member, $event)"
+                      >
+                        {{ copy.remove }}
+                      </button>
+                    }
+                  </div>
                 </td>
               }
             </tr>

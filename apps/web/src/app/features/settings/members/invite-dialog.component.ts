@@ -78,7 +78,7 @@ import { InviteRevealComponent } from './invite-reveal.component';
                 autocomplete="email"
                 [value]="email()"
                 [disabled]="locked()"
-                [attr.aria-describedby]="store.inviteState().error ? 'members-invite-error' : null"
+                [aria-describedby]="store.inviteState().error ? 'members-invite-error' : null"
                 (input)="updateEmail($event)"
               />
               <fieldset

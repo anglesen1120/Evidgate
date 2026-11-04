@@ -91,6 +91,26 @@ describe('MemberListComponent status labels (09.7.1-T2 F3)', () => {
     expect(region?.getAttribute('aria-label')).toBe('Members and invitations');
   });
 
+  it('wraps roles and actions inside their cells and reserves room for status words', () => {
+    const membership = member('pending');
+    fixture.componentRef.setInput('canWrite', true);
+    fixture.componentRef.setInput('members', [membership]);
+    fixture.detectChanges();
+    expect(root.querySelector('table')?.classList.contains('table-fixed')).toBe(true);
+    expect(root.querySelector('#members-status')?.classList.contains('w-1/6')).toBe(true);
+    const actions = root.querySelector('[data-members-edit-open]')?.parentElement;
+    expect(actions?.classList.contains('flex-wrap')).toBe(true);
+    expect(actions?.parentElement?.tagName).toBe('TD');
+    expect(actions?.querySelectorAll('button')).toHaveLength(4);
+    for (const button of actions!.querySelectorAll('button')) {
+      expect(button.classList.contains('whitespace-normal')).toBe(true);
+      expect(button.classList.contains('max-w-full')).toBe(true);
+    }
+    const roles = root.querySelector('td[headers$="members-roles"] > span:last-child');
+    expect(roles?.classList.contains('flex-wrap')).toBe(true);
+    expect(roles?.textContent?.trim()).toBe('No roles assigned');
+  });
+
   it.each(['active', 'pending'] as const)(
     'offers editing for a writable %s member and emits its opener',
     (status) => {

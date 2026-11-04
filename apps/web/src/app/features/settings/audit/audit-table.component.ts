@@ -21,7 +21,7 @@ import { supportAccessOf } from './support-access';
       [attr.aria-label]="copy.caption"
     >
       <table hlmTable role="table" class="w-full table-fixed max-md:block">
-        <caption hlmCaption class="m-0 p-3 text-start text-foreground">
+        <caption hlmCaption class="m-0 p-3 text-start text-foreground max-md:block max-md:w-full">
           {{
             copy.caption
           }}
@@ -92,6 +92,9 @@ import { supportAccessOf } from './support-access';
                   >
                     <app-status-pill [tone]="'warning'" [label]="copy.support" />
                   </button>
+                  <span class="block wrap-anywhere text-xs text-muted-foreground md:hidden">
+                    {{ supportDescription(access.grantId) }}
+                  </span>
                 } @else {
                   {{ copy.absent }}
                 }

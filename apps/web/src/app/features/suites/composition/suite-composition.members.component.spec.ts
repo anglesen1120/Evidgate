@@ -131,9 +131,52 @@ describe('SuiteCompositionComponent members', () => {
     expect(root.querySelector('[data-testid="suite-members-flat"]')).not.toBeNull();
     expect(root.querySelector('[data-testid="suite-duplicate-members"]')).toBeNull();
   });
+
+  it('preserves flat-table roles and accessible cell labels in the mobile card layout', async () => {
+    getRevision.mockResolvedValue(sparseGridRevision(61, 41, 201));
+    const { root } = await open();
+    const table = root.querySelector('[data-testid="suite-members-flat"]');
+    if (!table) throw new Error('Expected the flat member table');
+
+    expect(table.getAttribute('role')).toBe('table');
+    expect(table.getAttribute('aria-labelledby')).toBe('suite-matrix-heading');
+    expect(table.querySelectorAll('[role="rowgroup"]')).toHaveLength(2);
+    expect(table.querySelector('thead')?.classList.contains('max-md:sr-only')).toBe(true);
+    const headers = [...table.querySelectorAll('thead th')];
+    expect(headers).toHaveLength(5);
+    for (const header of headers) {
+      expect(header.getAttribute('role')).toBe('columnheader');
+      expect(header.getAttribute('scope')).toBe('col');
+      expect(header.closest('[aria-hidden="true"], [hidden]')).toBeNull();
+    }
+    expect(table.querySelector('thead tr')?.getAttribute('role')).toBe('row');
+    const rows = [...table.querySelectorAll('tbody tr')];
+    expect(rows).toHaveLength(200);
+    for (const row of rows) {
+      expect(row.getAttribute('role')).toBe('row');
+      const cells = [...row.children];
+      expect(cells.map((cell) => cell.getAttribute('role'))).toEqual([
+        'rowheader',
+        'cell',
+        'cell',
+        'cell',
+        'cell',
+      ]);
+      expect(cells[0]?.getAttribute('scope')).toBe('row');
+      for (const index of [0, 1, 3, 4]) {
+        const label = cells[index]?.querySelector('span');
+        expect(label?.textContent?.trim()).toBe(headers[index]?.textContent?.trim());
+        expect(label?.classList.contains('md:hidden')).toBe(true);
+        expect(label?.closest('[aria-hidden="true"], [hidden]')).toBeNull();
+      }
+      expect(cells[2]?.textContent?.trim()).toMatch(/^(Required|Optional)$/);
+    }
+  });
+
   it('provides labelled mobile records with the complete supplied variant hashes', async () => {
     const { root } = await open();
     const mobile = root.querySelector('[data-testid="suite-members-mobile"]');
+    expect(mobile?.getAttribute('role')).toBe('list');
     expect(mobile?.classList.contains('md:hidden')).toBe(true);
     expect(mobile?.querySelectorAll('li')).toHaveLength(revision.members.length);
     for (const member of revision.members) {
@@ -142,6 +185,15 @@ describe('SuiteCompositionComponent members', () => {
       expect(mobile?.textContent).toContain(member.variant_hash);
     }
     expect(mobile?.textContent).toContain('Variant hash');
+    for (const record of mobile?.querySelectorAll('li') ?? []) {
+      const terms = [...record.querySelectorAll('dt')];
+      expect(terms).toHaveLength(5);
+      for (const term of terms) {
+        expect(term.textContent?.trim()).not.toBe('');
+        expect(term.closest('[aria-hidden="true"], [hidden]')).toBeNull();
+        expect(term.nextElementSibling?.tagName).toBe('DD');
+      }
+    }
     expect(root.querySelector('[data-testid="suite-matrix"]')?.getAttribute('data-slot')).toBe(
       'table',
     );

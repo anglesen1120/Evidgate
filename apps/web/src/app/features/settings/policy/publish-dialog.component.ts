@@ -75,7 +75,7 @@ const MAX_CONFLICT_FIELDS = 100;
             (input)="edit($event)"
             [disabled]="busy() || !session.has('policy:write')"
             [attr.aria-invalid]="localError() ? 'true' : null"
-            [attr.aria-describedby]="
+            [aria-describedby]="
               localError() ? 'policy-body-size policy-local-error' : 'policy-body-size'
             "
           ></textarea>

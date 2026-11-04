@@ -10,3 +10,5 @@
 @source not '../app/**/*.spec.ts';
 @source not '../app/**/*.fixture.ts';
 @source not '../app/**/*.testing.ts';
+@source not '../app/**/*.test-fixtures.ts';
+@source not '../app/**/*.test-support.ts';

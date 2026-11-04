@@ -122,6 +122,11 @@ describe('AuditTableComponent', () => {
     if (!chip) throw new Error('Expected support trigger');
     expect(chip.textContent).toContain('Support access');
     expect(chip.tabIndex).toBe(0);
+    const mobileDescription = chip.nextElementSibling;
+    expect(mobileDescription?.textContent).toContain(
+      'Platform staff access under support grant grant-42',
+    );
+    expect(mobileDescription?.classList.contains('md:hidden')).toBe(true);
     chip.focus();
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -135,6 +140,9 @@ describe('AuditTableComponent', () => {
   it('flags an operator without a grant key without inventing a grant or expiry', async () => {
     const { fixture, root } = await render([row('operator', { actor_type: 'platform_operator' })]);
     expect(root.querySelector('[data-audit-support="true"]')).not.toBeNull();
+    expect(root.querySelector('.support-access')?.nextElementSibling?.textContent).toContain(
+      'Platform staff access (grant id not recorded on this row)',
+    );
     root.querySelector<HTMLButtonElement>('.support-access')?.focus();
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -163,6 +171,8 @@ describe('AuditTableComponent', () => {
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-25T00:00:00Z');
     expect(root.querySelector('time')?.textContent).toBe('2026-10-25T00:00:00Z');
     expect(root.querySelector('caption')?.textContent).toContain('Audit activity');
+    expect(root.querySelector('caption')?.classList.contains('max-md:block')).toBe(true);
+    expect(root.querySelector('caption')?.classList.contains('max-md:w-full')).toBe(true);
     expect(root.querySelectorAll('thead th[scope="col"]')).toHaveLength(6);
     expect(root.querySelector<HTMLElement>('[role="region"]')?.tabIndex).toBe(0);
     expect(root.querySelector('table')?.getAttribute('role')).toBe('table');

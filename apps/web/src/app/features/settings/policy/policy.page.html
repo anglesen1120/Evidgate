@@ -9,7 +9,11 @@
   </h2>
   <p class="text-muted-foreground">{{ copy.description }}</p>
 </header>
-<form hlmCard class="mb-4 flex flex-wrap items-end gap-3 p-4" (submit)="openRevision($event)">
+<form
+  hlmCard
+  class="mb-4 flex flex-row flex-wrap items-end gap-3 p-4"
+  (submit)="openRevision($event)"
+>
   <div class="grid min-w-0 flex-1 basis-[var(--eg-rail-width)] gap-2">
     <label hlmLabel for="policy-revision-id">{{ copy.revisionId }}</label>
     <input

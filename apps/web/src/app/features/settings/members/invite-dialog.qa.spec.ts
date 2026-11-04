@@ -397,12 +397,23 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
       Promise.reject(refusal('validation', 422, 'invalid_email', 'Use a valid <email>.', false)),
     );
     await open();
+    expect(input().getAttribute('aria-describedby')).toBeNull();
     setEmail('new@example.test');
     submitButton().click();
     await fixture.whenStable();
     fixture.detectChanges();
     expect(root.querySelector('[data-members-error] p')?.textContent).toBe('Use a valid <email>.');
     expect(root.querySelector('[data-members-error-code]')?.textContent).toBe('invalid_email');
+    const descriptionId = input().getAttribute('aria-describedby');
+    expect(descriptionId).toBe('members-invite-error');
+    expect(document.getElementById(descriptionId!)).toBe(
+      root.querySelector('[data-members-error]'),
+    );
+    fixture.componentInstance.close();
+    await fixture.whenStable();
+    await open();
+    expect(input().getAttribute('aria-describedby')).toBeNull();
+    expect(document.getElementById('members-invite-error')).toBeNull();
     expect(root.querySelector('app-connect-step-reveal')).toBeNull();
   });
 });

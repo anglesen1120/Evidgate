@@ -19,6 +19,7 @@ import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
     <hlm-dialog
       [state]="opened() ? 'open' : 'closed'"
       [restoreFocus]="false"
+      [closeOnOutsidePointerEvents]="false"
       (stateChanged)="stateChanged($event)"
       (closed)="restoreFocus()"
     >
@@ -97,7 +98,7 @@ export class RotateRevealDialogComponent {
   }
   protected restoreFocus(): void {
     if (this.opened()) return;
-    // Restore only after CDK removes the trap; backdrop dismissal can otherwise reclaim focus.
+    // Restore only after CDK removes the trap so it cannot reclaim focus.
     if (this.opener?.isConnected && !this.opener.matches(':disabled')) this.opener.focus();
     else this.fallback?.();
     this.opener = null;

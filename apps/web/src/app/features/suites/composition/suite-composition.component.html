@@ -83,27 +83,31 @@
         >
           <table
             hlmTable
+            role="table"
+            aria-labelledby="suite-matrix-heading"
             class="max-md:block [&_th]:whitespace-normal [&_td]:whitespace-normal"
             data-testid="suite-members-flat"
           >
-            <thead hlmTHead class="max-md:sr-only">
-              <tr hlmTr>
-                <th hlmTh scope="col">{{ copy.caseRevision }}</th>
-                <th hlmTh scope="col">{{ copy.variantParams }}</th>
-                <th hlmTh scope="col">{{ copy.required }}</th>
-                <th hlmTh scope="col">{{ copy.ordinal }}</th>
-                <th hlmTh scope="col">{{ copy.member }}</th>
+            <thead hlmTHead role="rowgroup" class="max-md:sr-only">
+              <tr hlmTr role="row">
+                <th hlmTh role="columnheader" scope="col">{{ copy.caseRevision }}</th>
+                <th hlmTh role="columnheader" scope="col">{{ copy.variantParams }}</th>
+                <th hlmTh role="columnheader" scope="col">{{ copy.required }}</th>
+                <th hlmTh role="columnheader" scope="col">{{ copy.ordinal }}</th>
+                <th hlmTh role="columnheader" scope="col">{{ copy.member }}</th>
               </tr>
             </thead>
-            <tbody hlmTBody class="max-md:grid max-md:gap-3">
+            <tbody hlmTBody role="rowgroup" class="max-md:grid max-md:gap-3">
               @for (member of visibleMembers(); track member.memberId) {
                 <tr
                   hlmTr
+                  role="row"
                   class="max-md:grid max-md:min-w-0 max-md:gap-2 max-md:rounded-md max-md:border max-md:border-solid max-md:border-border max-md:p-3"
                   data-suite-flat-member
                 >
                   <th
                     hlmTh
+                    role="rowheader"
                     scope="row"
                     class="min-w-0 whitespace-normal align-top max-md:h-auto max-md:p-0"
                   >
@@ -112,7 +116,7 @@
                     }}</span>
                     <bdi class="identifier font-mono">{{ member.caseRevisionId }}</bdi>
                   </th>
-                  <td hlmTd class="min-w-0 align-top max-md:p-0">
+                  <td hlmTd role="cell" class="min-w-0 align-top max-md:p-0">
                     <span class="block text-xs text-muted-foreground md:hidden">{{
                       copy.variantParams
                     }}</span>
@@ -128,14 +132,14 @@
                       </ul>
                     }
                   </td>
-                  <td hlmTd class="min-w-0 align-top max-md:p-0">
+                  <td hlmTd role="cell" class="min-w-0 align-top max-md:p-0">
                     {{ member.required ? copy.required : copy.optional }}
                   </td>
-                  <td hlmTd class="min-w-0 align-top max-md:p-0">
+                  <td hlmTd role="cell" class="min-w-0 align-top max-md:p-0">
                     <span class="text-xs text-muted-foreground md:hidden">{{ copy.ordinal }} </span
                     >{{ member.ordinal }}
                   </td>
-                  <td hlmTd class="min-w-0 align-top max-md:p-0">
+                  <td hlmTd role="cell" class="min-w-0 align-top max-md:p-0">
                     <span class="block text-xs text-muted-foreground md:hidden">{{
                       copy.member
                     }}</span>
@@ -232,6 +236,7 @@
           </table>
         </div>
         <ul
+          role="list"
           class="m-0 grid min-w-0 list-none gap-3 p-0 md:hidden"
           data-testid="suite-members-mobile"
         >
