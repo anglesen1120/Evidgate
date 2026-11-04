@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRedactingIo, redact, redacted, registerSecret, resetSecrets } from './redact.js';
 
@@ -456,10 +456,42 @@ describe('URL credential spellings', () => {
     ({ unit, stripped, repeats }) => {
       const text = unit.repeat(repeats);
       const expected = (stripped === '' ? unit : unit.replace(stripped, '')).repeat(repeats);
-      const started = performance.now();
+      const matchAll = RegExp.prototype[Symbol.matchAll];
+      let lastStart = -1;
+      let starts = 0;
 
-      expect(redact(text)).toBe(expected);
-      expect(performance.now() - started).toBeLessThan(200);
+      // Counted progress, not elapsed time: load cannot change the order of matches, while a
+      // rescan that restarts at an earlier authority start repeats one. Throwing there stops a
+      // regression at once instead of letting it walk the text quadratically.
+      const countStarts = vi.spyOn(RegExp.prototype, Symbol.matchAll).mockImplementation(function (
+        this: RegExp,
+        input: string,
+      ) {
+        const matches = matchAll.call(this, input);
+        const step = matches.next.bind(matches);
+        matches.next = () => {
+          const result = step();
+          if (!result.done) {
+            const start = result.value.index;
+            if (start <= lastStart) {
+              throw new Error('authority scan restarted over an earlier authority start');
+            }
+            lastStart = start;
+            starts += 1;
+          }
+          return result;
+        };
+        return matches;
+      });
+      let output: string;
+      try {
+        output = redact(text);
+      } finally {
+        countStarts.mockRestore();
+      }
+
+      expect(output).toBe(expected);
+      expect(starts).toBeGreaterThan(0);
     },
   );
 });
