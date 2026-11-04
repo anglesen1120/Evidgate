@@ -70,20 +70,26 @@ describe('AttemptsTableComponent', () => {
     }),
   );
   afterEach(() => TestBed.resetTestingModule());
-  it('keeps explicit table semantics and localized field labels for stacked mobile records', async () => {
+  it('keeps explicit table semantics and names every stacked field after its column', async () => {
     const { root } = await render([row({ executionKey: 'long-'.repeat(100) })]);
     const table = root.querySelector('table');
     expect(table?.getAttribute('role')).toBe('table');
-    expect(table?.classList.contains('max-[767px]:block')).toBe(true);
+    const headers = [...root.querySelectorAll('thead [role="columnheader"]')].map((node) =>
+      node.textContent?.trim(),
+    );
     const attempt = rows(root)[0];
     expect(attempt?.getAttribute('role')).toBe('row');
     expect(attempt?.querySelector('[role="rowheader"]')?.getAttribute('scope')).toBe('row');
     expect(attempt?.querySelectorAll('[role="cell"]')).toHaveLength(4);
-    expect(
-      [...root.querySelectorAll('tbody [aria-hidden="true"]')]
-        .filter((node) => node.classList.contains('min-[768px]:hidden'))
-        .map((node) => node.textContent),
-    ).toEqual(['Execution', 'Raw status', 'Normalised status', 'Duration', 'Artifacts']);
+    // The stacked layout drops the header row and labels each field above its own value, so each
+    // field's first element has to name its column and stay hidden from screen readers.
+    const fieldCells = [
+      attempt?.querySelector('[role="rowheader"]'),
+      ...(attempt?.querySelectorAll('[role="cell"]') ?? []),
+    ];
+    const labels = fieldCells.map((cell) => cell?.firstElementChild);
+    expect(labels.map((label) => label?.textContent?.trim())).toEqual(headers);
+    expect(labels.every((label) => label?.getAttribute('aria-hidden') === 'true')).toBe(true);
     expect(root.querySelector('th[scope="row"] bdi')?.textContent).toBe('long-'.repeat(100));
   });
 

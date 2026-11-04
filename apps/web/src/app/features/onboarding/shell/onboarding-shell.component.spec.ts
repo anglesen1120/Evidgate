@@ -1,9 +1,9 @@
-import { Component, input, output, provideZonelessChangeDetection } from '@angular/core';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router, type ParamMap } from '@angular/router';
-import type { PolicyActivationStateDto, ProjectDto } from '@evidgate/sdk';
+import type { ProjectDto } from '@evidgate/sdk';
 import { By } from '@angular/platform-browser';
-import { BehaviorSubject, Subject } from 'rxjs';
+import { BehaviorSubject } from 'rxjs';
 
 import { SessionStore } from '../../../core/session/session.store';
 import {
@@ -15,39 +15,16 @@ import { CreateProjectPage } from '../steps/create-project.page';
 import { ConnectCiPage } from '../steps/connect-ci.page';
 import { EnableCollectionPage } from '../steps/enable-collection.page';
 import { OnboardingShellComponent } from './onboarding-shell.component';
-import { shellStore, type ShellStore, type StubScope } from './onboarding-shell.spec-support';
-
-@Component({ selector: 'app-onboarding-create-project', template: '' })
-class CreateProjectStub {
-  readonly orgId = input.required<string>();
-}
-
-@Component({
-  selector: 'app-onboarding-connect-ci',
-  template: '<div data-testid="connect-ci-page">{{ orgId() }} {{ projectId() }}</div>',
-})
-class ConnectCiStub {
-  readonly orgId = input.required<string>();
-  readonly projectId = input.required<string>();
-}
-
-@Component({
-  selector: 'app-onboarding-enable-collection',
-  template: '<div data-testid="enable-collection-page">{{ orgId() }} {{ projectId() }}</div>',
-})
-class EnableCollectionStub {
-  readonly orgId = input.required<string>();
-  readonly projectId = input.required<string>();
-  readonly activationConfirmed = output<PolicyActivationStateDto>();
-}
-
-/**
- * The router the shell reads for its navigation handoff. These cases arrive with the navigation
- * already finished, so no event is in flight and none waits for the created step's handoff.
- */
-function finishedRouter(): { events: Subject<unknown>; currentNavigation: () => unknown } {
-  return { events: new Subject<unknown>(), currentNavigation: () => null };
-}
+import {
+  ConnectCiStub,
+  CreateProjectStub,
+  EnableCollectionStub,
+  finishedRouter,
+  mountShell,
+  shellStore,
+  type MountOptions,
+  type ShellStore,
+} from './onboarding-shell.spec-support';
 
 describe('OnboardingShellComponent', () => {
   let fixture: ComponentFixture<OnboardingShellComponent>;
@@ -56,53 +33,9 @@ describe('OnboardingShellComponent', () => {
   let orgParams: BehaviorSubject<ParamMap>;
   let childParams: BehaviorSubject<ParamMap>;
 
-  interface SetupOptions {
-    /** The scope the stub store reports as the one-shot create marker; nothing by default. */
-    created?: () => StubScope | null;
-    /** The project address the route carries; the org root by default. */
-    projectId?: string;
-    /**
-     * The focus token the store already carries when the shell is built — a revisit inheriting a
-     * step moved in an earlier activation.
-     */
-    focusToken?: number;
-  }
-
-  /**
-   * Build the shell over a fresh store. A case that changes what the store holds or what the
-   * route carries must go through here: the shell consults the create marker once, when its route
-   * subscription first answers, so the state has to be in place before the component exists.
-   */
-  async function setup(options: SetupOptions = {}): Promise<void> {
-    TestBed.resetTestingModule();
-    store = shellStore({
-      createdScope: options.created ?? (() => null),
-      focusToken: options.focusToken ?? 0,
-    });
-    orgParams = new BehaviorSubject(convertToParamMap({ orgId: 'org-1' }));
-    childParams = new BehaviorSubject(
-      convertToParamMap(options.projectId === undefined ? {} : { projectId: options.projectId }),
-    );
-    await TestBed.configureTestingModule({
-      imports: [OnboardingShellComponent],
-      providers: [
-        provideZonelessChangeDetection(),
-        { provide: OnboardingStore, useValue: store },
-        { provide: Router, useValue: finishedRouter() },
-        {
-          provide: ActivatedRoute,
-          useValue: { pathFromRoot: [{ paramMap: orgParams }, { paramMap: childParams }] },
-        },
-      ],
-    })
-      .overrideComponent(OnboardingShellComponent, {
-        remove: { imports: [CreateProjectPage, ConnectCiPage, EnableCollectionPage] },
-        add: { imports: [CreateProjectStub, ConnectCiStub, EnableCollectionStub] },
-      })
-      .compileComponents();
-    fixture = TestBed.createComponent(OnboardingShellComponent);
-    root = fixture.nativeElement as HTMLElement;
-    await fixture.whenStable();
+  /** Rebuilds the shell for a case that needs a different store or route before it exists. */
+  async function setup(options: MountOptions = {}): Promise<void> {
+    ({ fixture, root, store, orgParams, childParams } = await mountShell(options));
   }
 
   beforeEach(async () => {
