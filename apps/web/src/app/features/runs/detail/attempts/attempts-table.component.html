@@ -18,10 +18,13 @@
         <app-status-pill [tone]="'neutral'" [label]="''" />
       </p>
     }
+    <!-- Tailwind's strict max-width variant on the 767 px boundary compiles to `width < 767px`,
+         which left a 767 px viewport with the column layout while the per-cell field labels
+         stayed visible. The explicit media queries below keep one layout per width. -->
     <div
       hlmTableContainer
       #tableRegion
-      class="table-scroll min-w-0 max-w-full rounded-(--eg-radius-md) border border-border focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset) max-[767px]:overflow-visible"
+      class="table-scroll min-w-0 max-w-full rounded-(--eg-radius-md) border border-border focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset) [@media(max-width:767px)]:overflow-visible"
       tabindex="0"
       role="region"
       [attr.aria-label]="copy.scrollRegion"
@@ -30,14 +33,14 @@
       <table
         hlmTable
         role="table"
-        class="w-full table-fixed border-collapse max-[767px]:block [&_th]:whitespace-normal [&_th]:wrap-anywhere [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_th]:align-top [&_td]:align-top [&_bdi]:block"
+        class="w-full table-fixed border-collapse [@media(max-width:767px)]:block [&_th]:whitespace-normal [&_th]:wrap-anywhere [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_th]:align-top [&_td]:align-top [&_bdi]:block"
       >
         <caption hlmCaption class="sr-only">
           {{
             copy.title
           }}
         </caption>
-        <thead hlmTHead role="rowgroup" class="max-[767px]:sr-only">
+        <thead hlmTHead role="rowgroup" class="[@media(max-width:767px)]:sr-only">
           <tr hlmTr role="row">
             <th hlmTh role="columnheader" scope="col">{{ copy.execution }}</th>
             <th hlmTh role="columnheader" scope="col">{{ copy.raw }}</th>
@@ -50,13 +53,13 @@
           <tbody
             hlmTBody
             role="rowgroup"
-            class="max-[767px]:block [&+tbody]:border-t [&+tbody]:border-border"
+            class="[@media(max-width:767px)]:block [&+tbody]:border-t [&+tbody]:border-border"
           >
             @for (attempt of group.attempts; track $index) {
               <tr
                 hlmTr
                 role="row"
-                class="max-[767px]:block max-[767px]:p-(--eg-space-3)"
+                class="[@media(max-width:767px)]:block [@media(max-width:767px)]:p-(--eg-space-3)"
                 data-attempt-row
                 [attr.data-pre-healing]="attempt === group.preHealingFailure ? '' : null"
               >
@@ -64,13 +67,13 @@
                   hlmTh
                   role="rowheader"
                   scope="row"
-                  class="h-auto text-start font-(weight:--eg-weight-regular) scroll-mt-[calc(2*var(--eg-space-12))] target:outline-(length:--eg-focus-width) target:outline-(--eg-focus) max-[767px]:block"
+                  class="h-auto text-start font-(weight:--eg-weight-regular) scroll-mt-[calc(2*var(--eg-space-12))] target:outline-(length:--eg-focus-width) target:outline-(--eg-focus) [@media(max-width:767px)]:block"
                   [id]="attemptAnchorId(attempt.executionKey, attempt.attemptNo)"
                   tabindex="-1"
                 >
                   <span
                     aria-hidden="true"
-                    class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground min-[768px]:hidden"
+                    class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground [@media(min-width:768px)]:hidden"
                     >{{ copy.execution }}</span
                   >
                   <bdi class="font-mono">{{ display(attempt.executionKey) }}</bdi>
@@ -96,18 +99,23 @@
                     </div>
                   }
                 </th>
-                <td hlmTd role="cell" class="max-[767px]:block" data-attempt-raw>
+                <td hlmTd role="cell" class="[@media(max-width:767px)]:block" data-attempt-raw>
                   <span
                     aria-hidden="true"
-                    class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground min-[768px]:hidden"
+                    class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground [@media(min-width:768px)]:hidden"
                     >{{ copy.raw }}</span
                   >
                   <bdi>{{ display(attempt.rawStatus) }}</bdi>
                 </td>
-                <td hlmTd role="cell" class="max-[767px]:block" data-attempt-normalised>
+                <td
+                  hlmTd
+                  role="cell"
+                  class="[@media(max-width:767px)]:block"
+                  data-attempt-normalised
+                >
                   <span
                     aria-hidden="true"
-                    class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground min-[768px]:hidden"
+                    class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground [@media(min-width:768px)]:hidden"
                     >{{ copy.normalised }}</span
                   >
                   @if (knownStatus(attempt.normalisedStatus)) {
@@ -121,10 +129,15 @@
                     <bdi>{{ display(attempt.normalisedStatus) }}</bdi>
                   }
                 </td>
-                <td hlmTd role="cell" class="tabular-nums max-[767px]:block" data-attempt-duration>
+                <td
+                  hlmTd
+                  role="cell"
+                  class="tabular-nums [@media(max-width:767px)]:block"
+                  data-attempt-duration
+                >
                   <span
                     aria-hidden="true"
-                    class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground min-[768px]:hidden"
+                    class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground [@media(min-width:768px)]:hidden"
                     >{{ copy.duration }}</span
                   >
                   <span data-attempt-value>
@@ -135,10 +148,15 @@
                     }
                   </span>
                 </td>
-                <td hlmTd role="cell" class="tabular-nums max-[767px]:block" data-attempt-artifacts>
+                <td
+                  hlmTd
+                  role="cell"
+                  class="tabular-nums [@media(max-width:767px)]:block"
+                  data-attempt-artifacts
+                >
                   <span
                     aria-hidden="true"
-                    class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground min-[768px]:hidden"
+                    class="mb-(--eg-space-2) block font-(weight:--eg-weight-semibold) text-muted-foreground [@media(min-width:768px)]:hidden"
                     >{{ copy.artifacts }}</span
                   >
                   <span data-attempt-value>
