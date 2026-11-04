@@ -96,11 +96,16 @@ internal static class SecretPatternScanner
     /// arm a token once the walk has provably begun instead of reading a scheduler delay as progress. Every caller
     /// passes none.
     /// </param>
+    /// <param name="awsIdentifierBoundaries">
+    /// False only for an archive's raw container, where an entry name or comment sits directly against the format's
+    /// own header bytes, so a key at the edge of a name is flanked by identifier bytes that are not part of it.
+    /// </param>
     /// <returns>One entry per class that matched, in <see cref="SecretPatternClass.All"/> order; empty when none did.</returns>
     public static IReadOnlyList<SecretPatternHit> Scan(
         ReadOnlySpan<byte> content,
         CancellationToken cancellationToken,
-        Action<int>? progress = null)
+        Action<int>? progress = null,
+        bool awsIdentifierBoundaries = true)
     {
         var aws = 0;
         var pem = 0;
@@ -125,7 +130,7 @@ internal static class SecretPatternScanner
 
             // The three arms are tried at each offset and the cursor then moves past the longest arm's match, so a
             // literal that sits inside another arm's match is never counted twice.
-            if (IsAwsAccessKeyAt(content, index))
+            if (IsAwsAccessKeyAt(content, index, awsIdentifierBoundaries))
             {
                 aws++;
                 index += AwsKeyPrefix.Length + 16;
@@ -181,7 +186,8 @@ internal static class SecretPatternScanner
     /// </summary>
     /// <param name="content">The bytes being scanned.</param>
     /// <param name="index">The offset to test.</param>
-    private static bool IsAwsAccessKeyAt(ReadOnlySpan<byte> content, int index)
+    /// <param name="boundaries">Whether identifier bytes on either side veto the match.</param>
+    private static bool IsAwsAccessKeyAt(ReadOnlySpan<byte> content, int index, bool boundaries)
     {
         const int bodyLength = 16;
 
@@ -195,7 +201,7 @@ internal static class SecretPatternScanner
             return false;
         }
 
-        if (index > 0 && IsIdentifierByte(content[index - 1]))
+        if (boundaries && index > 0 && IsIdentifierByte(content[index - 1]))
         {
             return false;
         }
@@ -210,7 +216,7 @@ internal static class SecretPatternScanner
 
         var end = index + AwsKeyPrefix.Length + bodyLength;
 
-        return end == content.Length || !IsIdentifierByte(content[end]);
+        return !boundaries || end == content.Length || !IsIdentifierByte(content[end]);
     }
 
     /// <summary>

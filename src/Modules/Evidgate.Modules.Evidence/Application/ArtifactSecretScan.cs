@@ -97,7 +97,7 @@ internal static class ArtifactSecretScan
 
         // The container first, and before any decompression: it is already bounded by the kind's cap, and it is the
         // only view holding an entry's name, the archive's comment and a stored entry's readable content.
-        foreach (var hit in SecretPatternScanner.Scan(content.Span, cancellationToken))
+        foreach (var hit in SecretPatternScanner.Scan(content.Span, cancellationToken, awsIdentifierBoundaries: false))
         {
             totals[hit.PatternClass] = hit.HitCount;
         }

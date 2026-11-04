@@ -91,6 +91,27 @@ public sealed class EvidenceSecretScanArchiveTests
     }
 
     /// <summary>
+    /// A key that ends exactly at the end of an entry's name, or starts exactly at the start of the archive comment,
+    /// is flanked by the format's own header bytes. Those are identifier bytes, so the boundary rule that protects a
+    /// text scan must not veto the container view, or the key is reported clean.
+    /// </summary>
+    [Fact]
+    public void Scan_Zip_With_A_Key_Flush_Against_The_Header_Bytes_Is_Flagged()
+    {
+        var entries = new[] { (PlantedKey, Encoding.UTF8.GetBytes("K<report/>")) };
+
+        ArtifactSecretScan
+            .Scan(Parsing, "application/zip", ZipWithComment("clean", entries), MaxBytes, Token)
+            .ShouldHaveSingleItem()
+            .HitCount.ShouldBe(2);
+
+        ArtifactSecretScan
+            .Scan(Parsing, "application/zip", ZipWithComment(PlantedKey, new[] { ("run/report.xml", Encoding.UTF8.GetBytes("<report/>")) }), MaxBytes, Token)
+            .ShouldHaveSingleItem()
+            .HitCount.ShouldBe(1);
+    }
+
+    /// <summary>
     /// The two views are summed per class, so one class still reports one row: a key in an entry's name and in the
     /// entry's content is one row whose count is the total over both views, not a second class or a second row.
     /// </summary>
