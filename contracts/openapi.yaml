@@ -2795,6 +2795,7 @@ paths:
                 patch,
                 ui_hierarchy,
               ]
+        - $ref: '#/components/parameters/XsrfToken'
       requestBody:
         required: true
         content:

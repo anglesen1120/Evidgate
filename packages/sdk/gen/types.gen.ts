@@ -5362,6 +5362,12 @@ export type GetArtifactDownloadUrlResponse = GetArtifactDownloadUrlResponses[key
 
 export type SetArtifactKindPolicyOverrideData = {
     body: ArtifactKindPolicy;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
     path: {
         p: string;
         /**
