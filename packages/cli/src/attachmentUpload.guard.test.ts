@@ -1,8 +1,7 @@
 // The guard in front of every request: the engine exposes the artifact-kind cap table the
 // refusal itself uses, and a file outside the allow-listed directories or over its kind's cap
 // is refused BEFORE any request — not even a token exchange — with a filtered reason.
-import { mkdtemp, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -25,7 +24,7 @@ import { artifactKindMaxBytes } from './uploadPaths.js';
 
 describe('createAttachmentUploader', () => {
   let root = '';
-  const { directories, env, uploader } = useAttachmentUploadSpec((directory) => {
+  const { env, tempRoot, uploader } = useAttachmentUploadSpec((directory) => {
     root = directory;
   });
 
@@ -41,8 +40,7 @@ describe('createAttachmentUploader', () => {
   // the ingest surface proves the refusal precedes the token exchange (there is no cache
   // entry, so a token fetch would have to hit the network first).
   it('refuses_a_file_outside_the_allowed_directories_before_any_request', async () => {
-    const outside = await mkdtemp(join(tmpdir(), 'evidgate-attach-outside-'));
-    directories.push(outside);
+    const outside = await tempRoot('evidgate-attach-outside-');
     const path = join(outside, 'trace.zip');
     await writeFile(path, 'trace-bytes');
     const store = harness(() => json(200, {}));

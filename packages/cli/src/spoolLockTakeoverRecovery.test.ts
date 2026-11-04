@@ -10,13 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CliError } from './errors.js';
 import { withSpoolLock } from './spoolLock.js';
-import {
-  deadPid,
-  expectError,
-  failureOf,
-  fixedNow,
-  writerLockRecord as lockText,
-} from './spoolLock.kit.test.js';
+import { deadPid, fixedNow, writerLockRecord as lockText } from './spoolLock.testing.js';
+import { expectError, failureOf } from './spool.testing.js';
 import {
   spoolLockFileName,
   spoolLockFileMode,

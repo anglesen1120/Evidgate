@@ -9,13 +9,8 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { withSpoolLock } from './spoolLock.js';
-import {
-  deadPid,
-  expectError,
-  failureOf,
-  fixedNow,
-  writerLockRecord as lockText,
-} from './spoolLock.kit.test.js';
+import { deadPid, fixedNow, writerLockRecord as lockText } from './spoolLock.testing.js';
+import { expectError, failureOf } from './spool.testing.js';
 import {
   spoolLockFileName,
   spoolLockFileMode,

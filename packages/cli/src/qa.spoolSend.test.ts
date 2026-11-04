@@ -9,7 +9,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   ackNothing,
   chunkFile,
-  collect,
   envelopeText,
   exactBytes,
   linesFrom,
@@ -19,6 +18,7 @@ import {
   useTempRoots,
 } from './qa.spoolSend.testing.js';
 import { SpoolCapExceededError, SpoolCorruptError, runDirBytes } from './spool.js';
+import { collect } from './spool.testing.js';
 import { SpoolLockedError, withSpoolLock } from './spoolLock.js';
 
 const { tempDir } = useTempRoots();
