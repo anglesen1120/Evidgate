@@ -10,6 +10,9 @@ import {
   viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
+import { HlmAlert, HlmAlertDescription } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardHeader, HlmCardTitle, HlmCardDescription } from '@evidgate/ui/card';
 
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { ThemeService } from '../../../shell/layout/theme.service';
@@ -20,20 +23,38 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
   selector: 'app-login-page',
   // The flow belongs to this visit so callback and expiry notices cannot retain an earlier query.
   providers: [AuthFlow],
-  imports: [NgComponentOutlet, ShellIconComponent],
+  imports: [
+    NgComponentOutlet,
+    ShellIconComponent,
+    HlmAlert,
+    HlmAlertDescription,
+    HlmButton,
+    HlmCard,
+    HlmCardHeader,
+    HlmCardTitle,
+    HlmCardDescription,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['../../../shell/layout/shell-page.css', './login.page.css'],
+  host: {
+    class: 'box-border flex min-h-dvh min-w-0 flex-col bg-background font-sans text-foreground',
+  },
   template: `
-    <header class="login-topbar">
-      <div class="login-brand">
-        <app-shell-icon name="shield-check" />
+    <header
+      class="login-topbar box-border flex min-h-(--eg-space-12) flex-wrap items-center justify-between gap-(--eg-space-4) border-0 border-b-(length:--eg-border-width) border-solid border-border bg-card px-(--eg-space-4) py-(--eg-space-3) min-[421px]:px-(--eg-space-7)"
+    >
+      <div
+        class="login-brand flex items-center gap-(--eg-space-3) font-(family-name:--eg-font-display) text-lg font-(weight:--eg-weight-bold)"
+      >
+        <app-shell-icon class="text-primary" [name]="'shield-check'" />
         <span i18n="@@shell.layout.brand">Evidgate</span>
       </div>
-      <div class="login-preferences">
+      <div class="login-preferences flex items-center gap-(--eg-space-3)">
         @if (canSwitchLocale) {
           <button
             type="button"
-            class="locale-toggle"
+            hlmBtn
+            [variant]="'outline'"
+            class="locale-toggle min-h-(--eg-control-touch)"
             [disabled]="auth.redirecting()"
             [attr.aria-label]="localeLabel"
             (click)="switchLocale()"
@@ -45,7 +66,10 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
         }
         <button
           type="button"
-          class="theme-toggle"
+          hlmBtn
+          [variant]="'outline'"
+          [size]="'icon'"
+          class="theme-toggle min-h-(--eg-control-touch) min-w-(--eg-control-touch) aria-pressed:bg-accent aria-pressed:text-accent-foreground"
           [attr.aria-label]="darkLabel"
           [attr.aria-pressed]="theme.isDark()"
           (click)="theme.toggle()"
@@ -54,73 +78,132 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
         </button>
       </div>
     </header>
-    <main aria-labelledby="login-heading">
-      <header class="login-intro">
-        <h1 #loginHeading id="login-heading" tabindex="-1">{{ heading }}</h1>
-        <p>{{ introduction }}</p>
+    <main
+      class="box-border mx-auto grid w-full min-w-0 max-w-[calc(2*var(--eg-rail-width))] grid-cols-1 items-start gap-(--eg-space-7) p-(--eg-space-4) min-[421px]:p-(--eg-space-7) min-[900px]:my-auto min-[900px]:max-w-[calc(18*var(--eg-space-12))] min-[900px]:grid-cols-2 min-[900px]:gap-(--eg-space-8) min-[900px]:py-(--eg-space-10)"
+      aria-labelledby="login-heading"
+    >
+      <header
+        class="login-intro grid gap-(--eg-space-5) [overflow-wrap:anywhere] min-[900px]:py-(--eg-space-7)"
+      >
+        <h1
+          #loginHeading
+          class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-(--eg-focus-offset) focus-visible:outline-ring min-[900px]:text-2xl"
+          id="login-heading"
+          tabindex="-1"
+        >
+          {{ heading }}
+        </h1>
+        <p class="m-0 text-sm text-muted-foreground">{{ introduction }}</p>
       </header>
-      <section class="login-card" aria-labelledby="provider-heading">
-        <header>
-          <h2 id="provider-heading">{{ welcome }}</h2>
-          <p>{{ explanation }}</p>
+      <section
+        hlmCard
+        class="login-card min-w-0 gap-(--eg-space-5) p-(--eg-space-4) [overflow-wrap:anywhere] min-[421px]:p-(--eg-space-7) min-[900px]:col-start-2 min-[900px]:row-span-2"
+        aria-labelledby="provider-heading"
+      >
+        <header hlmCardHeader class="gap-(--eg-space-3) p-0">
+          <h2
+            hlmCardTitle
+            class="m-0 font-(family-name:--eg-font-display) text-lg"
+            id="provider-heading"
+          >
+            {{ welcome }}
+          </h2>
+          <p hlmCardDescription class="m-0">{{ explanation }}</p>
         </header>
 
         <!-- Keep the live region mounted and outside the busy controls. -->
         <div
-          class="login-notice"
-          [class.login-notice--info]="auth.redirecting() || auth.reason() === 'expired'"
-          [class.login-notice--success]="!auth.redirecting() && auth.reason() === 'signed-out'"
-          [class.login-notice--error]="
-            !auth.redirecting() && (auth.reason() === 'failed' || auth.reason() === 'unavailable')
-          "
+          class="login-notice min-h-(--eg-leading-sm) min-w-0"
           role="status"
           [attr.aria-live]="'polite'"
           aria-atomic="true"
         >
-          @if (auth.redirecting()) {
-            <p>{{ redirecting }}</p>
-          } @else {
-            @switch (auth.reason()) {
-              @case ('expired') {
-                <p>{{ expired }}</p>
-              }
-              @case ('signed-out') {
-                <p>{{ signedOut }}</p>
-                <p>{{ signedOutDetail }}</p>
-              }
-              @case ('unavailable') {
-                <p>{{ unavailable }}</p>
-              }
-              @case ('failed') {
-                <p>{{ failed }}</p>
-              }
-            }
+          @if (auth.redirecting() || auth.reason() !== 'none') {
+            <div
+              hlmAlert
+              [variant]="
+                !auth.redirecting() &&
+                (auth.reason() === 'failed' || auth.reason() === 'unavailable')
+                  ? 'destructive'
+                  : 'default'
+              "
+              [attr.role]="null"
+            >
+              <div hlmAlertDescription class="gap-(--eg-space-3) [&>p]:m-0">
+                @if (auth.redirecting()) {
+                  <p>{{ redirecting }}</p>
+                } @else {
+                  @switch (auth.reason()) {
+                    @case ('expired') {
+                      <p>{{ expired }}</p>
+                    }
+                    @case ('signed-out') {
+                      <p>{{ signedOut }}</p>
+                      <p>{{ signedOutDetail }}</p>
+                    }
+                    @case ('unavailable') {
+                      <p>{{ unavailable }}</p>
+                    }
+                    @case ('failed') {
+                      <p>{{ failed }}</p>
+                    }
+                  }
+                }
+              </div>
+            </div>
           }
         </div>
 
-        <div class="login-providers" [attr.aria-busy]="auth.redirecting()">
+        <div
+          class="login-providers grid min-w-0 gap-(--eg-space-4)"
+          [attr.aria-busy]="auth.redirecting()"
+        >
           <button
-            class="primary-provider"
+            hlmBtn
+            class="primary-provider h-auto min-h-(--eg-control-touch) w-full whitespace-normal"
             type="button"
             [disabled]="auth.redirecting()"
             (click)="auth.start('google')"
           >
             {{ google }}
           </button>
-          <button type="button" [disabled]="auth.redirecting()" (click)="auth.start('github')">
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            class="h-auto min-h-(--eg-control-touch) w-full whitespace-normal"
+            type="button"
+            [disabled]="auth.redirecting()"
+            (click)="auth.start('github')"
+          >
             {{ github }}
           </button>
         </div>
 
-        <p class="login-credential-note">{{ credentialNote }}</p>
+        <p
+          class="login-credential-note m-0 border-0 border-t-(length:--eg-border-width) border-solid border-border pt-(--eg-space-3) text-sm text-muted-foreground"
+        >
+          {{ credentialNote }}
+        </p>
         @if (extension.value(); as component) {
           <ng-container *ngComponentOutlet="component" />
         }
       </section>
-      <section class="login-destination" aria-labelledby="destination-heading">
-        <h2 id="destination-heading">{{ destinationHeading }}</h2>
-        <p>{{ auth.returnUrl() === '/' ? defaultDestination : savedDestination }}</p>
-        <p>{{ destinationPrivacy }}</p>
+      <section
+        hlmCard
+        class="login-destination min-w-0 gap-(--eg-space-5) p-(--eg-space-4) [overflow-wrap:anywhere] min-[421px]:p-(--eg-space-7) min-[900px]:col-start-1"
+        aria-labelledby="destination-heading"
+      >
+        <h2
+          hlmCardTitle
+          class="m-0 font-(family-name:--eg-font-display) text-lg"
+          id="destination-heading"
+        >
+          {{ destinationHeading }}
+        </h2>
+        <p class="m-0 text-sm text-muted-foreground">
+          {{ auth.returnUrl() === '/' ? defaultDestination : savedDestination }}
+        </p>
+        <p class="m-0 text-sm text-muted-foreground">{{ destinationPrivacy }}</p>
       </section>
     </main>
   `,

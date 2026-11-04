@@ -1,40 +1,64 @@
-<label>
-  <span i18n="@@shell.switcher.organization">Organization</span>
-  <select
-    #org
+<div class="grid min-w-0 gap-(--eg-space-1)">
+  <label
+    hlmLabel
+    [id]="orgId + '-label'"
+    [for]="orgId"
+    class="text-xs text-muted-foreground group-data-[compact=true]/scope:sr-only"
+    i18n="@@shell.switcher.organization"
+    >Organization</label
+  >
+  <hlm-select
+    class="min-w-0"
+    [attr.data-value]="currentOrg()?.id ?? ''"
     [value]="currentOrg()?.id ?? ''"
     [disabled]="organizations().length === 0"
-    (keydown)="onKeydown('org', org.value, $event)"
-    (change)="onChange('org', org.value)"
-    (blur)="onBlur('org', org.value)"
-    (pointerdown)="onPointerDown()"
+    (valueChange)="select('org', $event)"
   >
-    <option value="" disabled i18n="@@shell.switcher.choose-organization">
-      Choose an organization
-    </option>
-    @for (organization of organizations(); track organization.id) {
-      <option [value]="organization.id">{{ organization.name }}</option>
-    }
-  </select>
-</label>
-<label>
-  <span i18n="@@shell.switcher.project">Project</span>
-  <select
-    #project
+    <hlm-select-trigger [buttonId]="orgId" class="min-h-(--eg-control-touch) w-full min-w-0">
+      <span class="truncate">{{ currentOrg()?.name || chooseOrganization }}</span>
+    </hlm-select-trigger>
+    <hlm-select-content *hlmSelectPortal [aria-labelledby]="orgId + '-label'">
+      @for (organization of organizations(); track organization.id) {
+        <hlm-select-item
+          [value]="organization.id"
+          [attr.data-value]="organization.id"
+          class="min-h-(--eg-control-touch) whitespace-normal [overflow-wrap:anywhere]"
+          >{{ organization.name }}</hlm-select-item
+        >
+      }
+    </hlm-select-content>
+  </hlm-select>
+</div>
+<div class="grid min-w-0 gap-(--eg-space-1)">
+  <label
+    hlmLabel
+    [id]="projectId + '-label'"
+    [for]="projectId"
+    class="text-xs text-muted-foreground group-data-[compact=true]/scope:sr-only"
+    i18n="@@shell.switcher.project"
+    >Project</label
+  >
+  <hlm-select
+    class="min-w-0"
+    [attr.data-value]="currentProject()?.id ?? ''"
     [value]="currentProject()?.id ?? ''"
     [disabled]="projects().length === 0 || !currentOrg()"
-    (keydown)="onKeydown('project', project.value, $event)"
-    (change)="onChange('project', project.value)"
-    (blur)="onBlur('project', project.value)"
-    (pointerdown)="onPointerDown()"
+    (valueChange)="select('project', $event)"
   >
-    @if (projects().length === 0) {
-      <option value="" disabled i18n="@@shell.switcher.no-projects">No projects</option>
-    } @else {
-      <option value="" disabled i18n="@@shell.switcher.choose-project">Choose a project</option>
-    }
-    @for (item of projects(); track item.id) {
-      <option [value]="item.id">{{ item.name }}</option>
-    }
-  </select>
-</label>
+    <hlm-select-trigger [buttonId]="projectId" class="min-h-(--eg-control-touch) w-full min-w-0">
+      <span class="truncate">{{
+        currentProject()?.name || (projects().length === 0 ? noProjects : chooseProject)
+      }}</span>
+    </hlm-select-trigger>
+    <hlm-select-content *hlmSelectPortal [aria-labelledby]="projectId + '-label'">
+      @for (item of projects(); track item.id) {
+        <hlm-select-item
+          [value]="item.id"
+          [attr.data-value]="item.id"
+          class="min-h-(--eg-control-touch) whitespace-normal [overflow-wrap:anywhere]"
+          >{{ item.name }}</hlm-select-item
+        >
+      }
+    </hlm-select-content>
+  </hlm-select>
+</div>

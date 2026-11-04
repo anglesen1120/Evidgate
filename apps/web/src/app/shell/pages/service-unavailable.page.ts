@@ -1,18 +1,40 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardTitle, HlmCardDescription } from '@evidgate/ui/card';
 import { SessionStore } from '../../core/session/session.store';
 
 @Component({
   selector: 'app-service-unavailable-page',
+  imports: [HlmButton, HlmCard, HlmCardTitle, HlmCardDescription],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: '../layout/shell-page.css',
-  template: `<section [attr.aria-busy]="retrying()">
-    <h1>{{ heading }}</h1>
-    <p>{{ explanation }}</p>
-    <button type="button" [disabled]="retrying()" (click)="retry()">
+  host: { class: 'block min-w-0 font-sans text-foreground' },
+  template: `<section
+    hlmCard
+    class="min-w-0 items-start gap-(--eg-space-4) px-(--eg-space-4) py-(--eg-space-8) [overflow-wrap:anywhere] min-[768px]:px-(--eg-space-5)"
+    [attr.aria-busy]="retrying()"
+    aria-labelledby="unavailable-heading"
+  >
+    <h1
+      hlmCardTitle
+      class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
+      id="unavailable-heading"
+    >
+      {{ heading }}
+    </h1>
+    <p hlmCardDescription class="m-0">{{ explanation }}</p>
+    <button
+      hlmBtn
+      class="h-auto min-h-(--eg-control-touch) max-w-full whitespace-normal"
+      type="button"
+      [disabled]="retrying()"
+      (click)="retry()"
+    >
       {{ retrying() ? pendingLabel : action }}
     </button>
-    <p role="status">{{ failed() ? failureLabel : '' }}</p>
+    <p class="m-0 min-h-(--eg-leading-sm) text-sm text-muted-foreground" role="status">
+      {{ failed() ? failureLabel : '' }}
+    </p>
   </section>`,
 })
 export class ServiceUnavailablePage {

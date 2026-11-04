@@ -14,6 +14,7 @@
 // active org. The history cases cover navigation cleanup only: select Lumen, Back, reveal, Forward.
 // An active-org switch during reveal cannot be claimed from these fixtures.
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { chooseScope, expectScopeValue, scopeControl } from './scope-controls';
 
 import createOk from '../../../../fixtures/web-api/membership-create-ok/input.json';
 import cancelNotPending from '../../../../fixtures/web-api/membership-cancel-not-pending/input.json';
@@ -391,16 +392,16 @@ for (const flow of ['invite', 'resend'] as const) {
   // AC3 + §10 F12: leaving the route destroys an open reveal, including property-held values.
   test(`${flow} reveal is cleared when browser history leaves Members`, async ({ page }) => {
     await openMembers(page, 'en', [MEMBERS_RESEND_OK]);
-    const organization = page.locator('app-scope-switcher select').first();
+    const organization = scopeControl(page, 0);
     await expect(organization).toBeEnabled();
-    await expect(organization).toHaveValue(ORG_ACME);
-    await organization.selectOption(ORG_LUMEN);
-    await expect(organization).toHaveValue(ORG_LUMEN);
+    await expectScopeValue(organization, ORG_ACME);
+    await chooseScope(page, organization, ORG_LUMEN);
+    await expectScopeValue(organization, ORG_LUMEN);
     // The only second org of orgs-list is suspended: the real switcher refuses its destination.
     await expect(page).toHaveURL(/\/forbidden$/);
     await page.goBack();
     await expect(page.locator('app-members-page')).toHaveAttribute('data-members-phase', 'ready');
-    await expect(organization).toHaveValue(ORG_ACME);
+    await expectScopeValue(organization, ORG_ACME);
     const dialog = await issueInvite(page, flow);
     await expectFocusInside(dialog);
     // Native browser history is reachable while a modal is open; the inert select is not.

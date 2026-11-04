@@ -1,5 +1,6 @@
 <a
-  class="skip-link"
+  hlmBtn
+  class="skip-link fixed start-(--eg-space-3) top-(--eg-space-3) z-(--eg-z-dialog) max-w-[calc(100%-var(--eg-space-5))] -translate-y-[200%] focus:translate-y-0"
   href="#main-content"
   [attr.inert]="drawerOpen() ? '' : null"
   (click)="skipToMain($event)"
@@ -7,14 +8,14 @@
   >Skip to main content</a
 >
 <div
-  class="shell"
+  class="shell group/shell grid min-h-dvh grid-cols-[var(--eg-nav-width)_minmax(0,1fr)] [&.rail]:grid-cols-[var(--eg-nav-rail)_minmax(0,1fr)] [&.mobile]:grid-cols-[minmax(0,1fr)] [&.drawer-open]:h-dvh [&.drawer-open]:overflow-clip"
   [class.rail]="collapsed()"
   [class.mobile]="mobile()"
   [class.drawer-open]="drawerOpen()"
 >
   @if (mobile() && drawerOpen()) {
     <button
-      class="scrim"
+      class="scrim fixed inset-0 z-(--eg-z-menu) border-0 bg-scrim"
       type="button"
       tabindex="-1"
       [attr.aria-label]="closeLabel"
@@ -24,7 +25,10 @@
   <aside
     #navigation
     id="shell-navigation"
-    class="navigation"
+    class="navigation box-border sticky top-0 z-(--eg-z-sticky) flex h-dvh min-w-0 flex-col border-0 border-r-(length:--eg-border-width) border-solid border-border bg-card group-[.mobile]/shell:fixed group-[.mobile]/shell:inset-y-0 group-[.mobile]/shell:start-0 group-[.mobile]/shell:z-(--eg-z-drawer) group-[.mobile]/shell:w-[min(84vw,var(--eg-rail-width))] group-[.mobile]/shell:overflow-y-auto group-[.mobile]/shell:max-[420px]:w-dvw"
+    [class.invisible]="mobile() && !drawerOpen()"
+    [class.-translate-x-full]="mobile() && !drawerOpen()"
+    [cdkTrapFocus]="mobile() && drawerOpen()"
     tabindex="-1"
     [attr.role]="mobile() && drawerOpen() ? 'dialog' : null"
     [attr.aria-modal]="mobile() && drawerOpen() ? true : null"
@@ -36,28 +40,38 @@
       <button
         #closeButton
         type="button"
-        class="icon-button close-button"
+        hlmBtn
+        [variant]="'ghost'"
+        [size]="'icon'"
+        class="icon-button close-button absolute end-(--eg-space-3) top-(--eg-space-3) min-h-(--eg-control-touch) min-w-(--eg-control-touch)"
         [attr.aria-label]="closeLabel"
         (click)="closeDrawer()"
       >
         <app-shell-icon [name]="'close'" />
       </button>
     }
-    <a class="brand" routerLink="/" [attr.aria-label]="brandLabel">
-      <app-shell-icon [name]="'shield-check'" />
-      <span i18n="@@shell.layout.brand">Evidgate</span>
+    <a
+      class="brand box-border flex min-h-(--eg-space-12) shrink-0 items-center gap-(--eg-space-3) border-0 border-b-(length:--eg-border-width) border-solid border-border px-(--eg-space-5) font-(family-name:--eg-font-display) text-lg font-(weight:--eg-weight-bold) text-foreground no-underline focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring group-[.rail]/shell:justify-center group-[.rail]/shell:px-0 group-[.mobile]/shell:pe-(--eg-space-12)"
+      routerLink="/"
+      [attr.aria-label]="brandLabel"
+    >
+      <app-shell-icon class="text-primary" [name]="'shield-check'" />
+      <span class="group-[.rail]/shell:hidden" i18n="@@shell.layout.brand">Evidgate</span>
     </a>
     @if (!collapsed() && !mobile()) {
-      <div class="nav-scope">
+      <div
+        hlmCard
+        class="nav-scope m-(--eg-space-4) grid gap-(--eg-space-1) bg-secondary p-(--eg-space-3) text-xs text-muted-foreground [overflow-wrap:anywhere]"
+      >
         <span i18n="@@shell.layout.organization">Organization</span>
-        <strong>{{ session.currentOrg()?.name }}</strong>
+        <strong class="text-sm text-foreground">{{ session.currentOrg()?.name }}</strong>
         <span i18n="@@shell.layout.project">Project</span>
-        <strong>{{ session.currentProject()?.name }}</strong>
+        <strong class="text-sm text-foreground">{{ session.currentProject()?.name }}</strong>
       </div>
     }
     @if (mobile()) {
       <app-scope-switcher
-        class="drawer-scope"
+        class="drawer-scope box-border border-0 border-b-(length:--eg-border-width) border-solid border-border p-(--eg-space-4)"
         [organizations]="session.organizations()"
         [projects]="session.projects()"
         [currentOrg]="session.currentOrg()"
@@ -67,17 +81,23 @@
       />
     }
     <app-shell-nav
+      class="flex-1"
       [groups]="nav.groups()"
       [collapsed]="collapsed()"
       (itemSelected)="mobile() && closeDrawer()"
     />
   </aside>
-  <div class="main-stack" [attr.inert]="mobile() && drawerOpen() ? '' : null">
-    <header class="topbar">
+  <div class="main-stack flex min-w-0 flex-col" [attr.inert]="mobile() && drawerOpen() ? '' : null">
+    <header
+      class="topbar box-border sticky top-0 z-(--eg-z-sticky) flex min-h-(--eg-space-12) flex-wrap items-center gap-(--eg-space-4) border-0 border-b-(length:--eg-border-width) border-solid border-border bg-card px-(--eg-space-4) py-(--eg-space-3) min-[768px]:px-(--eg-space-5)"
+    >
       <button
         #toggleButton
         type="button"
-        class="icon-button nav-toggle"
+        hlmBtn
+        [variant]="'ghost'"
+        [size]="'icon'"
+        class="icon-button nav-toggle min-h-(--eg-control-touch) min-w-(--eg-control-touch)"
         [attr.aria-controls]="'shell-navigation'"
         [attr.aria-expanded]="mobile() ? drawerOpen() : !collapsed()"
         [attr.aria-label]="mobile() ? openLabel : collapsed() ? expandLabel : collapseLabel"
@@ -87,7 +107,7 @@
       </button>
       @if (!mobile()) {
         <app-scope-switcher
-          class="topbar-scope"
+          class="topbar-scope min-w-0 grid-cols-2 basis-[calc(1.5*var(--eg-rail-width))] shrink"
           [compact]="true"
           [organizations]="session.organizations()"
           [projects]="session.projects()"
@@ -99,7 +119,10 @@
       }
       <button
         type="button"
-        class="icon-button theme-toggle"
+        hlmBtn
+        [variant]="'ghost'"
+        [size]="'icon'"
+        class="icon-button theme-toggle ms-auto min-h-(--eg-control-touch) min-w-(--eg-control-touch) aria-pressed:bg-accent aria-pressed:text-accent-foreground"
         [attr.aria-label]="darkLabel"
         [attr.aria-pressed]="theme.isDark()"
         (click)="theme.toggle()"
@@ -107,7 +130,12 @@
         <app-shell-icon [name]="theme.isDark() ? 'moon' : 'sun'" />
       </button>
     </header>
-    <main #mainContent id="main-content" tabindex="-1">
+    <main
+      #mainContent
+      id="main-content"
+      class="box-border flex w-full min-w-0 max-w-[calc(22.5*var(--eg-space-12))] flex-col gap-(--eg-space-5) p-(--eg-space-4) [overflow-wrap:anywhere] scroll-mt-[calc(2*var(--eg-space-12))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring min-[421px]:p-(--eg-space-5) min-[768px]:gap-(--eg-space-7) min-[768px]:p-(--eg-space-6) min-[1280px]:p-(--eg-space-7)"
+      tabindex="-1"
+    >
       <router-outlet />
     </main>
   </div>

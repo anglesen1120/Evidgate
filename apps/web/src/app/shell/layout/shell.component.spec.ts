@@ -3,6 +3,9 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { ComponentFixture } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { ScopeSwitcherComponent } from './scope-switcher.component';
 import { NavigationEnd, Router, provideRouter } from '@angular/router';
 import axe from 'axe-core';
 import { SessionStore } from '../../core/session/session.store';
@@ -10,7 +13,7 @@ import { NavViewService } from '../nav/nav-view';
 import type { NavGroupView } from '../nav/nav.models';
 import { NotFoundPage } from '../pages/not-found.page';
 import { ShellComponent } from './shell.component';
-import { SCOPE_ORGANIZATIONS, SCOPE_PROJECTS } from './scope.fixture';
+import { SCOPE_ORGANIZATIONS, SCOPE_PROJECTS, stubScopeBrowserApis } from './scope.fixture';
 
 const groups: readonly NavGroupView[] = [
   {
@@ -30,6 +33,7 @@ const groups: readonly NavGroupView[] = [
 describe('ShellComponent', () => {
   let fixture: ComponentFixture<ShellComponent>;
   let root: HTMLElement;
+  let restoreBrowserApis: () => void;
   const session = {
     organizations: signal(SCOPE_ORGANIZATIONS),
     projects: signal(SCOPE_PROJECTS),
@@ -38,6 +42,7 @@ describe('ShellComponent', () => {
   };
 
   beforeEach(async () => {
+    restoreBrowserApis = stubScopeBrowserApis();
     vi.stubGlobal('innerWidth', 1440);
     await TestBed.configureTestingModule({
       imports: [ShellComponent],
@@ -57,6 +62,7 @@ describe('ShellComponent', () => {
   afterEach(() => {
     fixture.destroy();
     root.remove();
+    restoreBrowserApis();
     vi.unstubAllGlobals();
     document.documentElement.removeAttribute('data-theme');
     localStorage.removeItem('evidgate-theme');
@@ -72,15 +78,12 @@ describe('ShellComponent', () => {
 
   it('keeps the topbar keyboard stops in the order the header reads', () => {
     const topbar = root.querySelector<HTMLElement>('header.topbar')!;
-    const stops = Array.from(topbar.querySelectorAll<HTMLElement>('button, select')).map(
-      (element) => element.className || element.tagName.toLowerCase(),
-    );
-    expect(stops).toEqual([
-      'icon-button nav-toggle',
-      'select',
-      'select',
-      'icon-button theme-toggle',
-    ]);
+    const stops = Array.from(topbar.querySelectorAll<HTMLElement>('button'));
+    expect(stops).toHaveLength(4);
+    expect(stops[0]?.classList.contains('nav-toggle')).toBe(true);
+    expect(stops[1]?.getAttribute('role')).toBe('combobox');
+    expect(stops[2]?.getAttribute('role')).toBe('combobox');
+    expect(stops[3]?.classList.contains('theme-toggle')).toBe(true);
 
     const theme = topbar.querySelector<HTMLElement>('button.theme-toggle')!;
     const scope = topbar.querySelector<HTMLElement>('app-scope-switcher')!;
@@ -93,21 +96,21 @@ describe('ShellComponent', () => {
     window.dispatchEvent(new Event('resize'));
     await fixture.whenStable();
     const topbar = root.querySelector('header.topbar');
-    expect(topbar?.querySelectorAll('select')).toHaveLength(0);
+    expect(topbar?.querySelectorAll('[role="combobox"]')).toHaveLength(0);
     expect(topbar?.querySelectorAll('button')).toHaveLength(2);
     expect(root.querySelectorAll('app-scope-switcher')).toHaveLength(1);
     const aside = root.querySelector<HTMLElement>('aside');
-    expect(aside?.querySelectorAll('select')).toHaveLength(2);
+    expect(aside?.querySelectorAll('[role="combobox"]')).toHaveLength(2);
     expect(aside?.hasAttribute('inert')).toBe(true);
     root.querySelector<HTMLButtonElement>('.nav-toggle')?.click();
     await fixture.whenStable();
     expect(aside?.hasAttribute('inert')).toBe(false);
     const router = TestBed.inject(Router);
     const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
-    const organization = aside?.querySelector('select');
-    if (!organization) throw new Error('Missing drawer organization selector');
-    organization.value = 'org-two';
-    organization.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.debugElement
+      .query(By.directive(ScopeSwitcherComponent))
+      .injector.get(ScopeSwitcherComponent)
+      .orgSelected.emit('org-two');
     expect(navigate).toHaveBeenCalledWith(['/orgs', 'org-two']);
   });
 
@@ -119,7 +122,7 @@ describe('ShellComponent', () => {
     window.dispatchEvent(new Event('resize'));
     await fixture.whenStable();
     expect(root.querySelector('aside app-scope-switcher')).toBeNull();
-    expect(root.querySelectorAll('header.topbar select')).toHaveLength(2);
+    expect(root.querySelectorAll('header.topbar [role="combobox"]')).toHaveLength(2);
     expect(root.querySelectorAll('app-scope-switcher')).toHaveLength(1);
   });
 
@@ -156,15 +159,9 @@ describe('ShellComponent', () => {
     expect(aside.getAttribute('aria-label')).toBe('Navigation drawer');
     expect(aside.querySelector('nav')?.getAttribute('aria-label')).toBe('Primary navigation');
     expect(root.querySelector('.main-stack')?.hasAttribute('inert')).toBe(true);
-    const last = Array.from(aside.querySelectorAll<HTMLAnchorElement>('a')).at(-1)!;
-    close.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
-    );
-    expect(document.activeElement).toBe(last);
-    last.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
-    );
-    expect(document.activeElement).toBe(close);
+    const trap = fixture.debugElement.query(By.directive(CdkTrapFocus)).injector.get(CdkTrapFocus);
+    expect(trap.enabled).toBe(true);
+    expect(root.querySelectorAll('.cdk-focus-trap-anchor')).toHaveLength(2);
     close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await fixture.whenStable();
     expect(fixture.componentInstance.drawerOpen()).toBe(false);

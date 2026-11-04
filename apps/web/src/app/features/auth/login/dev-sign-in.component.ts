@@ -1,5 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmInput } from '@evidgate/ui/input';
+import { HlmLabel } from '@evidgate/ui/label';
 
 import { DevSession } from './dev-session';
 
@@ -8,16 +11,32 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable';
 @Component({
   selector: 'app-dev-sign-in',
   providers: [DevSession],
+  imports: [HlmButton, HlmInput, HlmLabel],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['../../../shell/layout/shell-page.css', './dev-sign-in.component.css'],
+  host: {
+    class:
+      'block min-w-0 border-0 border-t-(length:--eg-border-width) border-solid border-border pt-(--eg-space-5)',
+  },
   template: `
     <details #disclosure (toggle)="expanded.set(disclosure.open)">
-      <summary id="dev-sign-in-heading">{{ heading }}</summary>
+      <summary
+        id="dev-sign-in-heading"
+        class="min-h-(--eg-control-touch) cursor-pointer content-center text-base font-(weight:--eg-weight-semibold) [overflow-wrap:anywhere] hover:underline focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring active:text-primary"
+      >
+        {{ heading }}
+      </summary>
       @if (expanded()) {
-        <form (submit)="submit($event, secret)" aria-labelledby="dev-sign-in-heading">
-          <p id="dev-sign-in-note">{{ note }}</p>
-          <label for="dev-sign-in-secret">{{ secretLabel }}</label>
+        <form
+          class="grid min-w-0 gap-(--eg-space-3) pt-(--eg-space-3)"
+          (submit)="submit($event, secret)"
+          aria-labelledby="dev-sign-in-heading"
+          [attr.aria-busy]="state() === 'submitting'"
+        >
+          <p class="m-0 text-sm text-muted-foreground" id="dev-sign-in-note">{{ note }}</p>
+          <label hlmLabel for="dev-sign-in-secret">{{ secretLabel }}</label>
           <input
+            hlmInput
+            class="min-h-(--eg-control-touch) w-full min-w-0 read-only:bg-muted"
             #secret
             id="dev-sign-in-secret"
             type="password"
@@ -31,11 +50,29 @@ type SignInState = 'idle' | 'submitting' | 'wrong-secret' | 'unavailable';
                 : 'dev-sign-in-note'
             "
           />
-          <button type="submit" [disabled]="state() === 'submitting'">{{ heading }}</button>
-          <p role="status" [attr.aria-live]="'polite'" aria-atomic="true">
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            class="h-auto min-h-(--eg-control-touch) whitespace-normal"
+            type="submit"
+            [disabled]="state() === 'submitting'"
+          >
+            {{ heading }}
+          </button>
+          <p
+            class="m-0 min-h-(--eg-leading-sm) text-sm text-muted-foreground"
+            role="status"
+            [attr.aria-live]="'polite'"
+            aria-atomic="true"
+          >
             {{ state() === 'submitting' ? submitting : '' }}
           </p>
-          <p id="dev-sign-in-error" class="error" role="alert" aria-atomic="true">
+          <p
+            id="dev-sign-in-error"
+            class="error m-0 min-h-(--eg-leading-sm) rounded-sm text-sm not-empty:bg-(--eg-danger-bg) not-empty:p-(--eg-space-4) not-empty:text-(--eg-danger-fg)"
+            role="alert"
+            aria-atomic="true"
+          >
             {{
               state() === 'wrong-secret'
                 ? wrongSecret

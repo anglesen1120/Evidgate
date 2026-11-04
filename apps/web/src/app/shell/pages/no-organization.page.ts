@@ -1,15 +1,32 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardTitle, HlmCardDescription } from '@evidgate/ui/card';
 
 @Component({
   selector: 'app-no-organization-page',
-  imports: [RouterLink],
+  imports: [RouterLink, HlmButton, HlmCard, HlmCardTitle, HlmCardDescription],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: '../layout/shell-page.css',
-  template: `<section>
-    <h1>{{ heading }}</h1>
-    <p>{{ explanation }}</p>
-    <a routerLink="/">{{ action }}</a>
+  host: { class: 'block min-w-0 font-sans text-foreground' },
+  template: `<section
+    hlmCard
+    class="min-w-0 items-start gap-(--eg-space-4) px-(--eg-space-4) py-(--eg-space-8) [overflow-wrap:anywhere] min-[768px]:px-(--eg-space-5)"
+    aria-labelledby="no-organization-heading"
+  >
+    <h1
+      hlmCardTitle
+      class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
+      id="no-organization-heading"
+    >
+      {{ heading }}
+    </h1>
+    <p hlmCardDescription class="m-0">{{ explanation }}</p>
+    <a
+      hlmBtn
+      class="h-auto min-h-(--eg-control-touch) max-w-full whitespace-normal"
+      routerLink="/"
+      >{{ action }}</a
+    >
   </section>`,
 })
 export class NoOrganizationPage {

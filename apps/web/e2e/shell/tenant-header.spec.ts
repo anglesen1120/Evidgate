@@ -4,6 +4,7 @@
 // handled instead (`fixture-request-log.ts`), which is also downstream of the whole interceptor
 // chain — the stronger place to read the header.
 import { expect, test, type Page } from '@playwright/test';
+import { chooseScope, expectScopeValue, scopeControl } from './scope-controls';
 
 import type { FixtureCallRecord } from '../../src/app/core/dev-fixtures/fixture-request-log';
 import {
@@ -68,10 +69,10 @@ test.describe('tenant header on the shell bootstrap', () => {
     await expect(page.locator('#main-content h1')).toBeVisible();
     const before = (await recordedRequests(page)).length;
 
-    const orgSelect = page.locator('app-scope-switcher select').first();
+    const orgSelect = scopeControl(page, 0);
     await expect(orgSelect).toBeEnabled();
-    await expect(orgSelect).toHaveValue(ORG_ACME);
-    await orgSelect.selectOption(ORG_LUMEN);
+    await expectScopeValue(orgSelect, ORG_ACME);
+    await chooseScope(page, orgSelect, ORG_LUMEN);
 
     // The scope moved, and the documented destination of that move is the 403 pattern: the landing
     // an org with no attributed project gets needs `project:create`, which this grant set lacks.
@@ -79,7 +80,7 @@ test.describe('tenant header on the shell bootstrap', () => {
       .poll(() => new URL(page.url()).pathname, { timeout: 15_000 })
       .toBe('/en/forbidden');
     await expect(page.locator('#main-content h1')).toHaveText('Not authorized');
-    await expect(orgSelect).toHaveValue(ORG_LUMEN);
+    await expectScopeValue(orgSelect, ORG_LUMEN);
 
     // The grants are per tenant, so the store reloads them under the new one. Waiting on the record
     // keeps the assertion independent of how many permission reads the switch needs.

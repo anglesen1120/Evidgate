@@ -2,3 +2,6 @@
 
 @source '../app/ui';
 @source '../app/shared/ui';
+@source '../app/shell';
+@source '../app/features/auth';
+@source '../app/features/onboarding';

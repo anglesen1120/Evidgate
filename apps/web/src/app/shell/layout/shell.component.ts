@@ -1,4 +1,7 @@
 import { DOCUMENT } from '@angular/common';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard } from '@evidgate/ui/card';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -29,11 +32,22 @@ import { ThemeService } from './theme.service';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, NavComponent, ScopeSwitcherComponent, ShellIconComponent],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    NavComponent,
+    ScopeSwitcherComponent,
+    ShellIconComponent,
+    HlmButton,
+    HlmCard,
+    CdkTrapFocus,
+  ],
   templateUrl: './shell.component.html',
-  styleUrl: './shell.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '(window:resize)': 'onResize()' },
+  host: {
+    class: 'block bg-background font-sans text-sm text-foreground',
+    '(window:resize)': 'onResize()',
+  },
 })
 export class ShellComponent {
   readonly session = inject(SessionStore);
@@ -164,26 +178,13 @@ export class ShellComponent {
   }
 
   onDrawerKeydown(event: KeyboardEvent): void {
-    if (!this.mobile() || !this.drawerOpen()) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.closeDrawer();
-    } else if (event.key === 'Tab') {
-      const controls = Array.from(
-        this.aside()?.nativeElement.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), a[href], select:not(:disabled), [tabindex="0"]',
-        ) ?? [],
-      );
-      const first = controls[0];
-      const last = controls.at(-1);
-      if (event.shiftKey && this.document.activeElement === first) {
-        event.preventDefault();
-        last?.focus();
-      } else if (!event.shiftKey && this.document.activeElement === last) {
-        event.preventDefault();
-        first?.focus();
-      }
-    }
+    if (!this.mobile() || !this.drawerOpen() || event.key !== 'Escape' || event.defaultPrevented)
+      return;
+    // The scope popup owns Escape before the containing navigation drawer does.
+    if (this.aside()?.nativeElement.querySelector('[role="combobox"][aria-expanded="true"]'))
+      return;
+    event.preventDefault();
+    this.closeDrawer();
   }
 
   /**

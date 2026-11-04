@@ -93,6 +93,9 @@ describe('DevSignInComponent', () => {
     expect(input.required).toBe(true);
     expect(element('label').getAttribute('for')).toBe(input.id);
     expect(element('form').getAttribute('aria-labelledby')).toBe('dev-sign-in-heading');
+    expect(input.hasAttribute('hlmInput')).toBe(true);
+    expect(element('label').hasAttribute('hlmLabel')).toBe(true);
+    expect(element('button').hasAttribute('hlmBtn')).toBe(true);
     expect(element<HTMLButtonElement>('button').disabled).toBe(false);
     expect(element('[role="alert"]').textContent?.trim()).toBe('');
   });
@@ -114,6 +117,7 @@ describe('DevSignInComponent', () => {
     expect(input.readOnly).toBe(true);
     expect(document.activeElement).toBe(input);
     expect(element<HTMLButtonElement>('button').disabled).toBe(true);
+    expect(element('form').getAttribute('aria-busy')).toBe('true');
     expect(element('[role="status"]').textContent).toContain(fixture.componentInstance.submitting);
     expect(element('[role="status"]').getAttribute('aria-live')).toBe('polite');
     expect(element('[role="status"]').getAttribute('aria-atomic')).toBe('true');
