@@ -128,6 +128,25 @@ public static class TasksServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Registers one typed handler that opens and commits its own short tenant transactions, so the attempt can make
+    /// the network call (object store, HTTP) the platform forbids inside a database transaction (00 §5.7 P5). The
+    /// consumer supplies the row's tenant and marks the row's outcome exactly as it does for a scoped handler.
+    /// </summary>
+    /// <typeparam name="TPayload">Payload type the handler binds the row's JSON to.</typeparam>
+    /// <typeparam name="THandler">Handler implementation.</typeparam>
+    public static IServiceCollection AddTransactionlessTaskHandler<TPayload, THandler>(this IServiceCollection services)
+        where THandler : class, ITransactionlessTaskHandler<TPayload>
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        services.AddSingleton<THandler>();
+        services.AddSingleton<ITaskHandlerInvoker>(provider =>
+            new TransactionlessTaskHandlerAdapter<TPayload>(provider.GetRequiredService<THandler>()));
+
+        return services;
+    }
+
     /// <summary>Registers one cron schedule.</summary>
     public static IServiceCollection AddTaskSchedule(this IServiceCollection services, ScheduleDefinition schedule)
     {
