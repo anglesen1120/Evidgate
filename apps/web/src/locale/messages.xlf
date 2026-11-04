@@ -1516,7 +1516,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="shared.decision-chip.pending" datatype="html">
-        <source>pending</source>
+        <source>Not evaluated</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
           <context context-type="linenumber">55</context>
@@ -2640,11 +2640,12 @@
       <trans-unit id="settings.secrets.ci.more" datatype="html"><source>Load more CI bindings</source></trans-unit>
       <trans-unit id="settings.secrets.ci.loading-more" datatype="html"><source>Loading more CI bindings…</source></trans-unit>
       <trans-unit id="runs.list.title" datatype="html"><source>Runs</source></trans-unit>
-      <trans-unit id="runs.list.description" datatype="html"><source>Review collection state. Open a run for its stored decision and evidence completeness.</source></trans-unit>
-      <trans-unit id="runs.list.filters" datatype="html"><source>Filter loaded runs</source></trans-unit>
-      <trans-unit id="runs.list.filter-hint" datatype="html"><source>State, decision and run scope filter loaded runs only. Ref name filters the server list. Load more to search older runs.</source></trans-unit>
+      <trans-unit id="runs.list.description" datatype="html"><source>Review collection state and the latest stored decision. Open a run for evidence completeness.</source></trans-unit>
+      <trans-unit id="runs.list.filters" datatype="html"><source>Filter runs</source></trans-unit>
+      <trans-unit id="runs.list.filter-hint" datatype="html"><source>Decision and ref name filter the server list. State and run scope filter loaded runs only. Load more to search older runs.</source></trans-unit>
       <trans-unit id="runs.list.state-filter" datatype="html"><source>State in loaded runs</source></trans-unit>
-      <trans-unit id="runs.list.decision-filter" datatype="html"><source>Decision in loaded runs</source></trans-unit>
+      <trans-unit id="runs.list.decision-filter" datatype="html"><source>Decision</source></trans-unit>
+      <trans-unit id="runs.list.decision-hint" datatype="html"><source>The latest live evaluation determines the decision. Not evaluated means no live evaluation yet.</source></trans-unit>
       <trans-unit id="runs.list.scope-filter" datatype="html"><source>Scope in loaded runs</source></trans-unit>
       <trans-unit id="runs.list.ref-filter" datatype="html"><source>Ref name (exact match)</source></trans-unit>
       <trans-unit id="runs.list.any" datatype="html"><source>All</source></trans-unit>
@@ -2656,7 +2657,7 @@
       <trans-unit id="runs.list.empty-title" datatype="html"><source>No runs recorded</source></trans-unit>
       <trans-unit id="runs.list.empty-description" datatype="html"><source>Runs will appear here when a producer creates them.</source></trans-unit>
       <trans-unit id="runs.list.filtered-title" datatype="html"><source>No matching runs in the loaded rows</source></trans-unit>
-      <trans-unit id="runs.list.filtered-description" datatype="html"><source>These filters apply to loaded runs, not the entire project. Load more when available, or clear filters.</source></trans-unit>
+      <trans-unit id="runs.list.filtered-description" datatype="html"><source>No loaded runs match these filters. Load more when available, or clear filters.</source></trans-unit>
       <trans-unit id="runs.list.pagination" datatype="html"><source>More runs</source></trans-unit>
       <trans-unit id="runs.list.more" datatype="html"><source>Load more</source></trans-unit>
       <trans-unit id="runs.list.loading-more" datatype="html"><source>Loading more runs…</source></trans-unit>
@@ -2884,7 +2885,7 @@
       <trans-unit id="auth.dev.submitting" datatype="html"><source>Signing in and checking your session…</source></trans-unit>
       <trans-unit id="auth.dev.wrong-secret" datatype="html"><source>The dev-login secret is incorrect. Try again.</source></trans-unit>
       <trans-unit id="auth.dev.unavailable" datatype="html"><source>Dev sign-in is not enabled. Check the development server configuration.</source></trans-unit>
-      <trans-unit id="shared.decision-chip.list-unavailable" datatype="html"><source>The run list does not carry decisions. Open the run for its stored decision.</source></trans-unit>
+      <trans-unit id="shared.decision-chip.read-unavailable" datatype="html"><source>The decision could not be read. Try again.</source></trans-unit>
       <trans-unit id="runs.detail.incomplete-summary" datatype="html"><source>Collection is incomplete. Review the evidence panel for recorded missing reasons.</source></trans-unit>
       <trans-unit id="runs.detail.view-evidence" datatype="html"><source>View evidence</source></trans-unit>
       <trans-unit id="runs.detail.evidence-completeness" datatype="html"><source>Evidence completeness</source></trans-unit>

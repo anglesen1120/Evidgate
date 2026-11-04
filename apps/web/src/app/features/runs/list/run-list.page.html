@@ -33,6 +33,7 @@
         [attr.aria-describedby]="'run-decision-hint'"
       >
         <option value="">{{ copy.any }}</option>
+        <option value="pending">{{ copy.pending }}</option>
         @for (decision of ['PASS', 'FAIL', 'INCONCLUSIVE']; track decision) {
           <option [value]="decision">{{ decision }}</option>
         }

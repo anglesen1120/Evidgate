@@ -470,8 +470,9 @@ public static class OrchestratorEndpoints
 
         // F43 (S143): the four further exact-match filters. Each value is checked against the closed vocabulary its
         // column admits, so a present-but-invalid value is 422 with details[].path = the parameter — never a silently
-        // narrowed (or widened) page. `decision` accepts only `pending` today (no `evaluation` row exists until
-        // 07.2.2), and `parent_run_id` is the one filter only this binding can refuse, because it binds to a Guid.
+        // narrowed (or widened) page. `decision` is `pending` plus `pass`/`fail`/`inconclusive` — filter tokens in
+        // lower snake that the handler maps to the stored verdict, never the stored value itself — and
+        // `parent_run_id` is the one filter only this binding can refuse, because it binds to a Guid.
         string? state = null;
         if (Present(query, "state", out var rawState))
         {

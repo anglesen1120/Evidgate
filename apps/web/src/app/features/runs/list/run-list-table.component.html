@@ -81,7 +81,8 @@
     ><app-evidence-badge
   /></span>
   <span role="cell" data-run-decision [attr.data-label]="copy.decision"
-    ><app-decision-chip [decision]="row.decision ?? 'unavailable'"
+    ><app-decision-chip
+      [decision]="row.decision === null ? 'pending' : (row.decision ?? 'unavailable')"
   /></span>
   <span role="cell" class="ref-cell" [attr.data-label]="copy.ref">
     <bdi

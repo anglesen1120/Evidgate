@@ -12,6 +12,28 @@ namespace Evidgate.Modules.Policy.Infrastructure.Persistence;
 internal static class RunDecisionSql
 {
     /// <summary>
+    /// One latest live verdict per requested run, driven from the id array: each run probes its newest live row
+    /// through the partial <c>evaluation_live_key</c> (org, run, revision), so a page costs one index descent per
+    /// run rather than a scan of the org's evaluations followed by a sort. A run without a live row yields no row.
+    /// </summary>
+    internal const string LatestLiveBatch = """
+        select v.run_id as "RunId",
+               v.decision as "DecisionValue",
+               v.evidence_revision as "EvidenceRevision",
+               v.id as "EvaluationId"
+          from unnest(@ids::uuid[]) as u(run_id)
+          cross join lateral (
+              select e.id, e.run_id, e.decision, e.evidence_revision
+                from public.evaluation e
+               where e.org_id = @org_id
+                 and e.run_id = u.run_id
+                 and e.mode = 'live'
+               order by e.evidence_revision desc
+               limit 1
+          ) v
+        """;
+
+    /// <summary>
     /// The run's newest <c>live</c> evaluation: every member of the response is copied from this one row, whatever the size
     /// of its <c>missing</c>/<c>reasons</c> arrays, so the route costs one statement and never N+1. The ordering needs no
     /// tie-break because <c>(org_id, run_id, evidence_revision)</c> is unique for <c>live</c> rows, and a run with no live

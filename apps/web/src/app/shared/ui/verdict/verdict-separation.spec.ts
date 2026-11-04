@@ -54,9 +54,9 @@ const decisionCases = [
   { value: 'PASS', tone: 'success', text: 'PASS' },
   { value: 'FAIL', tone: 'danger', text: 'FAIL' },
   { value: 'INCONCLUSIVE', tone: 'warning', text: 'INCONCLUSIVE' },
-  { value: undefined, tone: 'pending', text: 'pending' },
-  { value: null, tone: 'pending', text: 'pending' },
-  { value: 'pending', tone: 'pending', text: 'pending' },
+  { value: undefined, tone: 'pending', text: 'Not evaluated' },
+  { value: null, tone: 'pending', text: 'Not evaluated' },
+  { value: 'pending', tone: 'pending', text: 'Not evaluated' },
   { value: 'unknown', tone: 'neutral', text: 'Decision unavailable' },
 ] as const;
 
