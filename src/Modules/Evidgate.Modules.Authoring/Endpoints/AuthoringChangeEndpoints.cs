@@ -1,8 +1,11 @@
+using System.Globalization;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Authoring.Application;
 using Evidgate.Modules.Authoring.Application.Changes;
 using Evidgate.Modules.Authoring.Application.Queries;
+using Evidgate.Modules.Authoring.Domain.Changes;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -20,8 +23,8 @@ namespace Evidgate.Modules.Authoring.Endpoints;
 /// <para>
 /// The queue and apply bodies are read as a <see cref="JsonElement"/> through
 /// <see cref="AuthoringEndpointSupport.ReadBodyAsync(HttpContext, int, CancellationToken)"/>: the queue body is
-/// capped at the 32 KiB its schema declares, and the member <em>values</em> are the command's job, because the
-/// payload is validated against its own contract there.
+/// capped at the 32 KiB its schema declares, and the queue's members are validated and projected by the command,
+/// against <c>authoring-change.v1</c>, so a document the schema refuses never reaches the database.
 /// </para>
 /// <para>
 /// The apply route passes the <c>If-Match</c> header through <b>unparsed</b> (quotes and <c>W/</c> preserved, empty
@@ -143,11 +146,7 @@ internal static class AuthoringChangeEndpoints
         var result = await mediator.Send(
             new QueueAuthoringChangeCommand(
                 p,
-                Text(body, "target_kind"),
-                Id(body, "target_id"),
-                Text(body, "change_type"),
-                Payload(body),
-                Text(body, "reason"),
+                body,
                 AuthoringEndpointSupport.IdempotencyKey(context)),
             cancellationToken).ConfigureAwait(false);
 
@@ -213,11 +212,17 @@ internal static class AuthoringChangeEndpoints
         // The header is passed through as sent: the command owns the tag grammar, the 422 `/If-Match` and the 412,
         // so an endpoint that parsed it here could refuse a tag the contract accepts (or accept one it refuses).
         var ifMatch = AuthoringEndpointSupport.Blank(context.Request.Headers.IfMatch.ToString());
+        var (changeIds, selectionError) = ChangeIds(body);
+
+        if (selectionError is not null)
+        {
+            return Result.Failure<ApplyAuthoringChangesResult>(selectionError);
+        }
 
         return await mediator.Send(
             new ApplyAuthoringChangesCommand(
                 p,
-                ChangeIds(body),
+                changeIds ?? [],
                 ifMatch,
                 AuthoringEndpointSupport.IdempotencyKey(context)),
             cancellationToken).ConfigureAwait(false);
@@ -263,43 +268,51 @@ internal static class AuthoringChangeEndpoints
         return null;
     }
 
-    /// <summary>A string member, or <c>null</c> when it is absent or of another kind.</summary>
-    private static string? Text(JsonElement body, string name) =>
-        body.ValueKind == JsonValueKind.Object
-        && body.TryGetProperty(name, out var value)
-        && value.ValueKind == JsonValueKind.String
-            ? value.GetString()
-            : null;
-
-    /// <summary>A uuid member, or <see cref="Guid.Empty"/> so the command can name <c>/target_id</c> itself.</summary>
-    private static Guid Id(JsonElement body, string name) =>
-        Text(body, name) is { } raw && Guid.TryParse(raw, out var id) ? id : Guid.Empty;
-
-    /// <summary>The payload member as sent; an absent one is <see cref="JsonValueKind.Undefined"/> for the command.</summary>
-    private static JsonElement Payload(JsonElement body) =>
-        body.ValueKind == JsonValueKind.Object && body.TryGetProperty("payload", out var payload) ? payload : default;
-
-    /// <summary>The <c>change_ids</c> members that are uuids; the command counts and reports the rest.</summary>
-    private static List<Guid> ChangeIds(JsonElement body)
+    /// <summary>
+    /// The <c>change_ids</c> selection, or the 422 that names the member it refused: every member must be a uuid string,
+    /// and the 200 limit is read from the raw array so an oversized selection is refused as oversized even when one of
+    /// its members is malformed too. A member that no longer parses is never dropped silently — the command's ETag covers
+    /// the selection the caller sent, not the one the server could make of it.
+    /// </summary>
+    /// <param name="body">The apply body.</param>
+    private static (List<Guid>? Ids, Error? Refusal) ChangeIds(JsonElement body)
     {
         if (body.ValueKind != JsonValueKind.Object
             || !body.TryGetProperty("change_ids", out var members)
             || members.ValueKind != JsonValueKind.Array)
         {
-            return [];
+            return ([], null);
+        }
+
+        if (members.GetArrayLength() > AuthoringChangeLimits.SelectionMax)
+        {
+            return (null, AuthoringErrors.Invalid(
+                "/change_ids",
+                "too_many_changes",
+                string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"at most {AuthoringChangeLimits.SelectionMax} changes can be applied at once")));
         }
 
         var ids = new List<Guid>(members.GetArrayLength());
+        var index = 0;
 
         foreach (var member in members.EnumerateArray())
         {
-            if (member.ValueKind == JsonValueKind.String && Guid.TryParse(member.GetString(), out var id))
+            if (member.ValueKind != JsonValueKind.String
+                || !Guid.TryParse(member.GetString(), out var id))
             {
-                ids.Add(id);
+                return (null, AuthoringErrors.Invalid(
+                    string.Create(CultureInfo.InvariantCulture, $"/change_ids/{index}"),
+                    "payload_invalid",
+                    "change_ids must be uuids"));
             }
+
+            ids.Add(id);
+            index++;
         }
 
-        return ids;
+        return (ids, null);
     }
 
     /// <summary>Writes the response validator, quoting a bare value so the header stays syntactically valid.</summary>

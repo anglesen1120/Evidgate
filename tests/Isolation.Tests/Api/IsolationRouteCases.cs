@@ -464,28 +464,25 @@ public static class IsolationRouteCases
             (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/versions/{id}/restore"), (_, _) => [],
             own: p => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/versions/{p.AuthoringVersionId}/restore")),
 
-        // The pending-changes queue. No world seeds a queued change, so the three object probes name a fresh id: it is
-        // foreign to every org, which is exactly what the case asserts (404, the same answer a random id gets). The
-        // queue body is a well-formed comment and the apply body a well-formed selection with an order-shaped tag, so a
-        // granted caller would reach the command instead of failing validation; neither can write when it does.
+        // The pending-changes queue names a project in {p} and a real object of that project in its body: the queue
+        // names an item, the detail and discard name a queued change, and the apply selection names that change.
+        // A probe whose body carried the project id as its target would be refused by request validation rather
+        // than by tenancy and would prove nothing. The two write routes have no own control: a granted probe would
+        // queue a change or apply one.
         ProjectCase("GET", "/v1/projects/{p}/authoring/changes", p => new(HttpMethod.Get,
             $"/v1/projects/{p}/authoring/changes?limit=1"), list: true, ownControl: true),
-        ProjectCase("POST", "/v1/projects/{p}/authoring/changes", p => new(HttpMethod.Post,
-            $"/v1/projects/{p}/authoring/changes", new JsonObject
-            {
-                ["target_kind"] = "checklist_item",
-                ["target_id"] = p,
-                ["change_type"] = "comment",
-                ["payload"] = new JsonObject { ["body"] = "intruder comment" },
-            })),
-        ObjectCaseWith("GET", "/v1/projects/{p}/authoring/changes/{c}", p => [("change", Guid.NewGuid())],
-            (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{id}"), (_, _) => []),
-        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/changes/{c}/discard", p => [("change", Guid.NewGuid())],
-            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/changes/{id}/discard"), (_, _) => []),
-        ProjectCase("POST", "/v1/projects/{p}/authoring/changes:apply", p => new(HttpMethod.Post,
-            $"/v1/projects/{p}/authoring/changes:apply",
-            new JsonObject { ["change_ids"] = new JsonArray { Guid.NewGuid() } },
-            IfMatch: "\"order:" + new string('0', 64) + "\"")),
+        ProjectBodyCase("POST", "/v1/projects/{p}/authoring/changes",
+            p => QueueBody(p.Id, p.AuthoringItemId),
+            () => QueueBody(Guid.CreateVersion7(), Guid.CreateVersion7())),
+        ObjectCaseWith("GET", "/v1/projects/{p}/authoring/changes/{c}", p => [("queued change", p.AuthoringChangeId)],
+            (id, p) => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{id}"), (_, _) => [],
+            own: p => new(HttpMethod.Get, $"/v1/projects/{p.Id}/authoring/changes/{p.AuthoringChangeId}")),
+        ObjectCaseWith("POST", "/v1/projects/{p}/authoring/changes/{c}/discard", p => [("queued change", p.AuthoringChangeId)],
+            (id, p) => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/changes/{id}/discard"), (_, _) => [],
+            own: p => new(HttpMethod.Post, $"/v1/projects/{p.Id}/authoring/changes/{p.AuthoringChangeId}/discard")),
+        ProjectBodyCase("POST", "/v1/projects/{p}/authoring/changes:apply",
+            p => ApplyBody(p.Id, p.AuthoringChangeId),
+            () => ApplyBody(Guid.CreateVersion7(), Guid.CreateVersion7())),
 
         // 13.2.1-T1: the project AI-settings edge. Every route names the project only, so the foreign-project probe is the
         // ordinary one; the save is a well-formed first save (If-Match "0" tags the default) and has no own control
@@ -1066,6 +1063,62 @@ public static class IsolationRouteCases
                     requireScopeCode: route.Template.EndsWith("/manifests", StringComparison.Ordinal))),
                 Pair(route, "org A project web in {p} (OIDC token)", ProbeExpect.ServiceRefused, OrgBServiceOidc(w), request(w.Acme.Projects[0].Id), request(Guid.CreateVersion7())),
             ]);
+
+    /// <summary>
+    /// A project route whose body names a real object of the project in <c>{p}</c>: <paramref name="own"/> builds that
+    /// request and <paramref name="random"/> the control whose project and object are both fresh. <see cref="ProjectCase"/>
+    /// cannot express it, because its request builder sees only a project id and a body would therefore have to name
+    /// the project itself — refused by request validation rather than by tenancy.
+    /// </summary>
+    private static RouteCase ProjectBodyCase(
+        string method,
+        string template,
+        Func<IsolationProject, ProbeRequest> own,
+        Func<ProbeRequest> random) =>
+        Case(
+            method,
+            template,
+            (route, w) =>
+            {
+                var probes = new List<RouteProbe>();
+                probes.AddRange(w.Acme.Projects.Select(p => Pair(route, $"org A project {p.Slug} in {{p}}",
+                    ProbeExpect.NotFound, OrgBAdmin(w), own(p), random())));
+                probes.Add(new(route, "X-Evidgate-Org: A with an org-A project id", runner => runner.CallerPairAsync(
+                    route, "X-Evidgate-Org: A with an org-A project id", ForeignHeaderCaller(w), RandomHeaderCaller(w),
+                    own(w.Acme.Projects[0]))));
+                return probes;
+            },
+            (route, w) =>
+            [
+                new(route, "sibling project api of the token's org", runner => runner.ScopeMismatchAsync(
+                    route, "sibling project api of the token's org", OrgBService(w), own(w.Acme2.Projects[1]),
+                    requireScopeCode: false)),
+                Pair(route, "org A project web in {p}", ProbeExpect.ServiceRefused, OrgBService(w), own(w.Acme.Projects[0]), random()),
+                new(route, "sibling project api of the OIDC token's org", runner => runner.ScopeMismatchAsync(
+                    route, "sibling project api of the OIDC token's org", OrgBServiceOidc(w), own(w.Acme2.Projects[1]),
+                    requireScopeCode: false)),
+                Pair(route, "org A project web in {p} (OIDC token)", ProbeExpect.ServiceRefused, OrgBServiceOidc(w), own(w.Acme.Projects[0]), random()),
+            ]);
+
+    /// <summary>The queue body: a well-formed comment on the item of the project in the path.</summary>
+    private static ProbeRequest QueueBody(Guid project, Guid item) =>
+        new(HttpMethod.Post, $"/v1/projects/{project}/authoring/changes", new JsonObject
+        {
+            ["target_kind"] = "checklist_item",
+            ["target_id"] = item,
+            ["change_type"] = "comment",
+            ["payload"] = new JsonObject { ["body"] = "intruder comment" },
+            ["reason"] = "isolation probe",
+        });
+
+    /// <summary>
+    /// The apply selection: one change of the project in the path, under an <c>If-Match</c> shaped like the order tag
+    /// the route declares, so a granted caller reaches the command instead of failing validation.
+    /// </summary>
+    private static ProbeRequest ApplyBody(Guid project, Guid change) =>
+        new(HttpMethod.Post, $"/v1/projects/{project}/authoring/changes:apply",
+            new JsonObject { ["change_ids"] = new JsonArray { change } },
+            IfMatch: "\"order:" + new string('0', 64) + "\"");
 
     /// <summary>
     /// A route naming an object id: as an org-B member, every org-A object the selector yields (both projects)

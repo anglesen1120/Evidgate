@@ -287,8 +287,43 @@ internal sealed class TenantRowFactory
         }
 
         // The columns of the foreign key the caller corrupts, so the collision guard below never moves
-        // a value that is the corruption itself.
+        // a value that is the corruption itself. The key itself is resolved after every other one (see
+        // below), because a key that shares a column with another key of the row
+        // (authoring_change_target_fk carries project_id) would otherwise have that column resolved a
+        // second time from the row's own org and the corruption would be repaired before the insert,
+        // making a row the suite expects rejected look valid.
         string[] corruptedColumns = [];
+        (ScannedForeignKey Key, GeneratedRow Parent)? corruption = null;
+
+        void Assign(ScannedForeignKey foreignKey, GeneratedRow parent, Guid parentOrg, bool onlyUnset, ref bool assigned)
+        {
+            for (var index = 0; index < foreignKey.Columns.Length; index++)
+            {
+                var column = foreignKey.Columns[index];
+
+                if (string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal))
+                {
+                    // Already the row's own org (set above); the corruption is that the
+                    // rest of the composite key still points at the other org's parent.
+                    continue;
+                }
+
+                if (onlyUnset && values.ContainsKey(column))
+                {
+                    continue;
+                }
+
+                if (!parent.Values.TryGetValue(foreignKey.PrincipalColumns[index], out var parentValue))
+                {
+                    throw new InvalidOperationException(
+                        $"the generated {foreignKey.PrincipalTable} row for org {parentOrg} has no value for "
+                        + $"'{foreignKey.PrincipalColumns[index]}', which {table}.{column} ({foreignKey.Name}) references");
+                }
+
+                values[column] = parentValue;
+                assigned = true;
+            }
+        }
 
         foreach (var foreignKey in _schema.ForeignKeysOf(table))
         {
@@ -330,25 +365,28 @@ internal sealed class TenantRowFactory
                 createMissingParents,
                 cancellationToken);
 
-            for (var index = 0; index < foreignKey.Columns.Length; index++)
+            if (corrupted && corruptedForeignKey is not null)
             {
-                var column = foreignKey.Columns[index];
+                // Its parent is kept and written after the loop; see the comment above.
+                corruption = (foreignKey, parent);
+                continue;
+            }
 
-                if (string.Equals(column, TenantFkScan.TenantColumn, StringComparison.Ordinal))
-                {
-                    // Already the row's own org (set above); the corruption is that the
-                    // rest of the composite key still points at the other org's parent.
-                    continue;
-                }
+            var assigned = false;
+            Assign(foreignKey, parent, parentOrg, onlyUnset: false, ref assigned);
+        }
 
-                if (!parent.Values.TryGetValue(foreignKey.PrincipalColumns[index], out var parentValue))
-                {
-                    throw new InvalidOperationException(
-                        $"the generated {foreignKey.PrincipalTable} row for org {parentOrg} has no value for "
-                        + $"'{foreignKey.PrincipalColumns[index]}', which {table}.{column} ({foreignKey.Name}) references");
-                }
-
-                values[column] = parentValue;
+        if (corruption is { } deferred)
+        {
+            // The corruption takes only the columns no other key filled, so the keys it shares a column
+            // with keep their own org's parent and stay satisfied. When every one of its columns was
+            // already filled the corruption would vanish and the row would be inserted, so it then takes
+            // all of them and the foreign key is the rejection the caller asserts.
+            var assigned = false;
+            Assign(deferred.Key, deferred.Parent, tenantParentOrg, onlyUnset: true, ref assigned);
+            if (!assigned)
+            {
+                Assign(deferred.Key, deferred.Parent, tenantParentOrg, onlyUnset: false, ref assigned);
             }
         }
 

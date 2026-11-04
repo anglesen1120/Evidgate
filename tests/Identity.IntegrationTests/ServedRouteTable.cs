@@ -409,8 +409,19 @@ internal static class ServedRouteTable
             return false;
         }
 
-        var colon = line.IndexOf(':', indent);
-        if (colon < 0 || (colon + 1 < line.Length && line[colon + 1] != ' '))
+        // A key ends at the first colon followed by a space or the line end: a custom-method
+        // path such as `/x/changes:apply:` carries a colon inside the key itself.
+        var colon = -1;
+        for (var at = line.IndexOf(':', indent); at >= 0; at = line.IndexOf(':', at + 1))
+        {
+            if (at + 1 >= line.Length || line[at + 1] == ' ')
+            {
+                colon = at;
+                break;
+            }
+        }
+
+        if (colon < 0)
         {
             return false;
         }

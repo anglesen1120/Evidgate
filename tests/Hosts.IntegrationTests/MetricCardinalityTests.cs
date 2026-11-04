@@ -259,6 +259,12 @@ public sealed class MetricCardinalityTests
             return 2L;
         }
 
+        // The apply batch-size histogram counts changes rather than tagging them; 2 is inside its 1..200 range.
+        if (type == typeof(int))
+        {
+            return 2;
+        }
+
         if (type == typeof(int?))
         {
             return 3;

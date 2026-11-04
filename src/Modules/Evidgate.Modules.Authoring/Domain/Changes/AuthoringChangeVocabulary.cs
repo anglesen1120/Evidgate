@@ -70,6 +70,12 @@ internal static class AuthoringChangeLimits
     /// <summary>A split creates at most 20 new items.</summary>
     internal const int SplitItemsMax = 20;
 
+    /// <summary>
+    /// A split's <c>case_assignments</c> names at most 200 cases: an item's live case list is unbounded, and one array
+    /// entry per case has to stay inside the payload's jsonb size cap rather than rely on the column CHECK to refuse it.
+    /// </summary>
+    internal const int CaseAssignmentsMax = 200;
+
     /// <summary>The payload object cap the table CHECK also enforces (bytes of its JSON text).</summary>
     internal const int PayloadMaxBytes = 32768;
 

@@ -48,6 +48,20 @@ internal static class AuthoringChangeSql
         """;
 
     /// <summary>
+    /// The live cases of one item that are among the given ids: a split's <c>case_assignments</c> may only name cases of
+    /// the item being split, and this read answers which of the named ones are exactly that (the rest is the refusal).
+    /// </summary>
+    internal const string LiveCaseIds = """
+        select m.id
+          from public.manual_test_case m
+         where m.org_id = @org_id
+           and m.project_id = @project_id
+           and m.checklist_item_id = @item_id
+           and m.deleted_at is null
+           and m.id = any(@case_ids)
+        """;
+
+    /// <summary>
     /// The project's queue lock, keyed exactly as the guard trigger keys it. Taken before any pending count so the
     /// cap holds under READ COMMITTED: a count alone lets two requests both read 499.
     /// </summary>
@@ -71,7 +85,8 @@ internal static class AuthoringChangeSql
     /// <summary>
     /// The unlocked pre-check of the affected-set guard: any pending structural change whose stamped item set shares
     /// one item with the new change. It gives the caller a clean 409 before the insert; the guard trigger answers the
-    /// same refusal for a racing insert, so this statement is never the guarantee.
+    /// same refusal for a racing insert, so this statement is never the guarantee. <c>@keys</c> is a <c>text[]</c>
+    /// because jsonb's <c>?|</c> takes one, so it binds through the module's array parameter, never as a plain array.
     /// </summary>
     internal const string PendingStructuralOverlap = """
         select 1

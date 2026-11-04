@@ -34,7 +34,7 @@
 set local lock_timeout = '5s';
 
 -- A CHECK is evaluated per inserted row and cannot carry a subquery or a set-returning call, so the
--- 1..50-entry bound of §4 needs one immutable counter. It stays a plain invoker function: it reads
+-- 1..50-entry bound needs one immutable counter. It stays a plain invoker function: it reads
 -- only its argument, and the app role (which evaluates the CHECK) needs EXECUTE on it.
 create or replace function evidgate.jsonb_key_count(p_value jsonb) returns integer
   language sql
@@ -93,6 +93,9 @@ create table if not exists public.authoring_change (
            and evidgate.jsonb_key_count(affected_versions) between 1 and 50
            and octet_length(affected_versions::text) <= 8192),
   constraint authoring_change_payload_size_check
+    -- Measured on the stored `jsonb` text, which is what the column holds: it spells one space after every
+    -- `:` and `,`, so it is longer than the minified request body. A route-level raw cap must therefore sit
+    -- below this bound (a one-member payload already loses one byte to its colon), never equal it.
     check (jsonb_typeof(payload) = 'object' and octet_length(payload::text) <= 32768),
   constraint authoring_change_comment_body_check
     check (change_type <> 'comment'
@@ -105,12 +108,14 @@ create table if not exists public.authoring_change (
     check (state <> 'discarded' or (discarded_at is not null and discarded_by_membership_id is not null))
 );
 
--- The pending list: state filter first, then the keyset order the list query walks.
+-- Five indexes, the number the plan fixes. The two list shapes lead with the keyset order, never with a
+-- filter: the default page has no `state`/`change_type`, and leading with either would make that page sort
+-- the project's whole history. Those two stay residual predicates, so a filter needed no second copy of a page.
 create index if not exists authoring_change_list_idx
-  on public.authoring_change (org_id, project_id, state, created_at, id);
--- One item's change history and the comment panel read.
+  on public.authoring_change (org_id, project_id, created_at, id);
+-- One item's change history and the comment panel read, in the same keyset order.
 create index if not exists authoring_change_target_idx
-  on public.authoring_change (org_id, project_id, target_id, change_type, created_at, id);
+  on public.authoring_change (org_id, project_id, target_id, created_at, id);
 -- The 500-pending limit is one index-only count.
 create index if not exists authoring_change_pending_idx
   on public.authoring_change (org_id, project_id) where state = 'pending';
@@ -118,9 +123,10 @@ create index if not exists authoring_change_pending_idx
 create unique index if not exists authoring_change_pending_structural_uq
   on public.authoring_change (org_id, target_id, change_type)
   where state = 'pending' and change_type in ('delete', 'merge', 'split');
--- The purge scan: discarded rows by age.
+-- The purge scan is tenant-free: `discarded_at` leads because the sweep orders by it across every
+-- organization, so an `org_id` prefix would make the ordered batch a sort of the whole backlog.
 create index if not exists authoring_change_discarded_idx
-  on public.authoring_change (org_id, discarded_at)
+  on public.authoring_change (discarded_at)
   where state = 'discarded';
 
 -- One row per statement, so `jsonb_object_keys` is evaluated once for each side of the overlap

@@ -52,9 +52,11 @@ public sealed class AuthoringChangePayloadTests
         accepted.ShouldNotBeNull();
         accepted.AffectedItemIds.ShouldBe([Target]);
 
+        // A delete carries nothing: the reader refuses at the payload, which is where an unknown member of an object
+        // that must be empty is named (the schema's own additionalProperties answer is the same path).
         AssertRefusal(
             Read(AuthoringChangeTypes.Delete, Target, """{"item_id":"00000000-0000-0000-0000-000000000000"}"""),
-            "/payload/item_id",
+            "/payload",
             "payload_invalid");
     }
 
@@ -171,6 +173,17 @@ public sealed class AuthoringChangePayloadTests
                  "case_assignments":[{"case_id":"{{caseId}}","item_index":0},{"case_id":"{{caseId}}","item_index":1}]}
                 """),
             "/payload/case_assignments/1/case_id",
+            "payload_invalid");
+
+        // The array's own bound comes before the jsonb column's size fence: 201 distinct cases is a caller error the
+        // schema and the reader both refuse, never a payload that only the table CHECK could catch.
+        var crowded = string.Join(
+            ',',
+            Enumerable.Range(0, AuthoringChangeLimits.CaseAssignmentsMax + 1)
+                .Select(_ => $$"""{"case_id":"{{Guid.CreateVersion7()}}","item_index":0}"""));
+        AssertRefusal(
+            Read(AuthoringChangeTypes.Split, Target, $$"""{"new_items":[{"title":"A"},{"title":"B"}],"case_assignments":[{{crowded}}]}"""),
+            "/payload/case_assignments",
             "payload_invalid");
     }
 

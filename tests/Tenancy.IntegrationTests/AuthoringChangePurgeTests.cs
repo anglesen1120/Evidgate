@@ -76,6 +76,31 @@ public sealed class AuthoringChangePurgeTests
         (await PurgeAsWorkerAsync(database, limit: -5)).ShouldBe(0);
     }
 
+    /// <summary>
+    /// The batch takes the stalest discards first whatever organization they belong to: the sweep orders by
+    /// <c>discarded_at</c> across the whole table, so a limit below the backlog drains the oldest rows and keeps
+    /// the rest for later calls.
+    /// </summary>
+    [Fact]
+    public async Task Purge_TakesTheOldestAcrossOrganizations()
+    {
+        // The sweep is tenant-free, so the two tenants share one private database and the order is observable
+        // through the limit rather than through a per-tenant filter.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
+        var older = await SeedTenantAsync(database);
+        var newer = await SeedTenantAsync(database);
+
+        var olderRow = await SeedChangeAsync(database, older, "discarded", RetentionDays + 3, RetentionDays + 3);
+        var newerRow = await SeedChangeAsync(database, newer, "discarded", RetentionDays + 2, RetentionDays + 2);
+
+        (await PurgeAsWorkerAsync(database, limit: 1)).ShouldBe(1, "one call takes the single stalest row");
+
+        (await ExistingAsync(database, olderRow))
+            .ShouldBeFalse("the older discard of the other organization goes first");
+        (await ExistingAsync(database, newerRow)).ShouldBeTrue("the younger discard waits for the next batch");
+    }
+
     [Fact]
     public async Task Purge_IsAnOwnerDefinerAndOnlyTheSweepMayExecute()
     {

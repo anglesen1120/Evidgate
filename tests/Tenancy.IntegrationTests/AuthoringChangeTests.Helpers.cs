@@ -14,6 +14,9 @@ namespace Tenancy.IntegrationTests;
 /// <summary>The seed, caller and probe helpers of the queue suite, split out to keep each file under the size cap.</summary>
 public sealed partial class AuthoringChangeTests
 {
+    /// <summary>The bound a race test waits on an observable condition for (a parked backend, never a fixed sleep).</summary>
+    private static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(15);
+
     private async Task<World> StartAsync(int itemCount)
     {
         var database = await fixture.SharedDatabaseAsync();
@@ -60,6 +63,17 @@ public sealed partial class AuthoringChangeTests
             },
             key ?? NewKey());
 
+    /// <summary>
+    /// The queue route with a body built by the caller: the shape a projection cannot produce (an absent
+    /// <c>payload</c>, a numeric <c>reason</c>, an unknown root member) needs its own object.
+    /// </summary>
+    private static Task<ApiAnswer> QueueObjectAsync(World world, object body, string? key = null) =>
+        world.Client.SendAsync(HttpMethod.Post, world.ChangesPath, world.Caller, body, key ?? NewKey());
+
+    /// <summary>The apply route with a body built by the caller, so a malformed selection reaches the endpoint.</summary>
+    private static Task<ApiAnswer> ApplyAsync(World world, object body, string? ifMatch = null) =>
+        world.Client.SendAsync(HttpMethod.Post, world.ApplyPath, world.Caller, body, NewKey(), ifMatch);
+
     private static Task<ApiAnswer> ListAsync(World world, string query) =>
         world.Client.SendAsync(HttpMethod.Get, world.ChangesPath + query, world.Caller);
 
@@ -104,6 +118,84 @@ public sealed partial class AuthoringChangeTests
 
     private static string SplitJson(string first, string second) =>
         $$"""{"new_items":[{"title":"{{first}}"},{"title":"{{second}}"}]}""";
+
+    /// <summary>A split whose one assignment sends <paramref name="caseId"/> to the first new item.</summary>
+    private static string SplitWithAssignment(Guid caseId) =>
+        $$"""
+        {"new_items":[{"title":"First half"},{"title":"Second half"}],
+         "case_assignments":[{"case_id":"{{caseId:D}}","item_index":0}]}
+        """;
+
+    /// <summary>
+    /// Holds one superuser transaction open so a request under test can be proven parked on the lock it took: the
+    /// advisory key every queue writer meets, or an uncommitted pending structural change whose visibility is the point.
+    /// </summary>
+    private async Task<Holder> OpenHolderAsync(World world)
+    {
+        var connection = await fixture.OpenSuperuserAsync(world.Database);
+        var transaction = await connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        var holder = new Holder(connection, transaction);
+
+        await holder.ExecuteAsync("select set_config('application_name', 'authoring-change-race', true)");
+
+        return holder;
+    }
+
+    /// <summary>Takes the project's queue lock in the holder's transaction, the key the handler and the trigger share.</summary>
+    private static Task<int> LockProjectAsync(World world, Holder holder) =>
+        holder.ExecuteAsync($"""
+            select pg_advisory_xact_lock(
+                hashtextextended('authoring_change:' || '{world.Org:D}' || ':' || '{world.Project:D}', 0))
+            """);
+
+    /// <summary>
+    /// Writes one uncommitted pending structural change for <paramref name="itemId"/>, which takes the project's queue
+    /// lock through the guard trigger; whichever writer comes next parks until the holder commits.
+    /// </summary>
+    private static Task<int> InsertPendingStructuralAsync(World world, Holder holder, Guid itemId, string changeType = "delete") =>
+        holder.ExecuteAsync($$"""
+            insert into public.authoring_change
+                (id, org_id, project_id, target_id, change_type, payload, base_version, affected_versions,
+                 author_membership_id)
+            values ('{{Guid.CreateVersion7():D}}', '{{world.Org:D}}', '{{world.Project:D}}', '{{itemId:D}}',
+                '{{changeType}}', '{}'::jsonb, 1, jsonb_build_object('{{itemId:D}}', 1), '{{world.Membership:D}}')
+            """);
+
+    /// <summary>
+    /// Waits until a backend is parked on the project's queue lock — the observed condition, not a timer: the split
+    /// project key lands in <c>pg_locks</c> as its two 32-bit halves, which is how both the handler's lock statement and
+    /// the guard trigger's appear.
+    /// </summary>
+    private async Task AwaitProjectLockWaiterAsync(World world)
+    {
+        var deadline = DateTime.UtcNow + WaitLimit;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var waiting = await ProjectLockWaiterCountAsync(world);
+            if (waiting > 0)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(25), TestContext.Current.CancellationToken);
+        }
+
+        throw new TimeoutException("no backend parked on the project's authoring-change lock");
+    }
+
+    private Task<int> ProjectLockWaiterCountAsync(World world) => fixture.ScalarAsync<int>(world.Database, $"""
+        select count(*)::int
+          from pg_locks l
+         where l.locktype = 'advisory'
+           and not l.granted
+           and l.classid::bigint
+               = ((hashtextextended('authoring_change:' || '{world.Org:D}' || ':' || '{world.Project:D}', 0) >> 32)
+                  & 4294967295)
+           and l.objid::bigint
+               = (hashtextextended('authoring_change:' || '{world.Org:D}' || ':' || '{world.Project:D}', 0)
+                  & 4294967295)
+        """);
 
     private Task<int> ChangeCountAsync(World world) => fixture.ScalarAsync<int>(world.Database,
         $"select count(*)::int from public.authoring_change where org_id = '{world.Org}'");
@@ -156,10 +248,33 @@ public sealed partial class AuthoringChangeTests
 
         internal string ChangePath(Guid change) => $"{ChangesPath}/{change:D}";
 
+        internal string ApplyPath => $"{ChangesPath}:apply";
+
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
             await Api.DisposeAsync();
+        }
+    }
+
+    /// <summary>One superuser transaction a race test holds open; disposing it without committing rolls it back.</summary>
+    private sealed class Holder(NpgsqlConnection connection, NpgsqlTransaction transaction) : IAsyncDisposable
+    {
+        internal async Task<int> ExecuteAsync(string sql)
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = sql;
+
+            return await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken).ConfigureAwait(false);
+        }
+
+        internal Task CommitAsync() => transaction.CommitAsync(TestContext.Current.CancellationToken);
+
+        public async ValueTask DisposeAsync()
+        {
+            await transaction.DisposeAsync().ConfigureAwait(false);
+            await connection.DisposeAsync().ConfigureAwait(false);
         }
     }
 }

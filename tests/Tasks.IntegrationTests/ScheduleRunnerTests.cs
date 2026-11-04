@@ -180,6 +180,45 @@ public sealed class ScheduleRunnerTests
             ignoreOrder: true);
     }
 
+    /// <summary>
+    /// The 03:30 UTC pass turns the authoring-change sweep into one queued platform task carrying the schedule's
+    /// own name, queue and payload, so the sweep the registry lists is one a worker can claim and run.
+    /// </summary>
+    [Fact]
+    public async Task Schedule_AuthoringChangePurge_FiresItsTask()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        var owner = _fixture.OwnerConnectionString(database);
+        await using var host = TasksTestHost.Start(_fixture, database);
+
+        // Only the authoring schedule is inside the five-minute lookback window at 03:30:10 UTC.
+        (await host.Runner.RunOnceAsync(new DateTimeOffset(2026, 9, 26, 3, 30, 10, TimeSpan.Zero), Token))
+            .ShouldBe(1);
+
+        (await TaskSql.ScalarAsync<string>(
+            owner,
+            "select task_type from public.task where schedule_name = @name",
+            ("name", AuthoringChangeSweeps.TaskType))).ShouldBe(AuthoringChangeSweeps.TaskType);
+
+        (await TaskSql.ScalarAsync<string>(
+            owner,
+            "select queue from public.task where schedule_name = @name",
+            ("name", AuthoringChangeSweeps.TaskType))).ShouldBe(EvidgateSweeps.MaintenanceQueue);
+
+        // A sweep is a platform task: it spans every tenant, so it carries no org.
+        (await TaskSql.ScalarAsync<bool>(
+            owner,
+            "select org_id is null from public.task where schedule_name = @name",
+            ("name", AuthoringChangeSweeps.TaskType))).ShouldBeTrue();
+
+        var payload = await TaskSql.ScalarAsync<string>(
+            owner,
+            "select payload::text from public.task where schedule_name = @name",
+            ("name", AuthoringChangeSweeps.TaskType));
+        payload.ShouldNotBeNull()
+            .ShouldContain(AuthoringChangeSweeps.BatchSize.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
     private TasksTestHost StartHost(string database, string cron) =>
         TasksTestHost.Start(
             _fixture,

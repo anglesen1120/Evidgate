@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Domain;
 using Evidgate.Modules.Authoring.Domain.Changes;
@@ -8,13 +10,21 @@ using Evidgate.Modules.Authoring.Domain.Changes;
 namespace Evidgate.Modules.Authoring.Application.Changes;
 
 /// <summary>
-/// A validated queue payload: the raw document the table stores unchanged, and the server-derived affected set the
-/// queue handler stamps into <c>affected_versions</c>. Nothing here is taken from a client-supplied version map.
+/// A validated queue payload: the raw document the table stores unchanged, the server-derived affected set the queue
+/// handler stamps into <c>affected_versions</c>, and the split's case assignments the handler checks against the target.
+/// Nothing here is taken from a client-supplied version map.
 /// </summary>
 /// <param name="ChangeType">One of <see cref="AuthoringChangeTypes"/>.</param>
 /// <param name="AffectedItemIds">The target for comment/delete/split, the merge's sources (survivor included).</param>
+/// <param name="CaseAssignments">
+/// The split's <c>case_assignments</c> entries with their payload indexes, in payload order; empty for the other types.
+/// </param>
 /// <param name="RawJson">The payload as the caller sent it, already size-capped.</param>
-internal sealed record AuthoringChangePayload(string ChangeType, IReadOnlyList<Guid> AffectedItemIds, string RawJson)
+internal sealed record AuthoringChangePayload(
+    string ChangeType,
+    IReadOnlyList<Guid> AffectedItemIds,
+    IReadOnlyList<(int Index, Guid CaseId)> CaseAssignments,
+    string RawJson)
 {
     /// <summary>True for delete/merge/split, the types the pending-overlap rule covers.</summary>
     internal bool IsStructural => AuthoringChangeTypes.IsStructural(ChangeType);
@@ -57,12 +67,14 @@ internal static class AuthoringChangePayloadReader
             return (null, AuthoringChangeErrors.PayloadInvalid("/payload"));
         }
 
+        var assignments = new List<(int Index, Guid CaseId)>();
+
         var refusal = changeType switch
         {
             AuthoringChangeTypes.Comment => ReadComment(payload),
             AuthoringChangeTypes.Delete => NoMembers(payload),
             AuthoringChangeTypes.Merge => ReadMerge(payload, targetId),
-            _ => ReadSplit(payload),
+            _ => ReadSplit(payload, assignments),
         };
 
         if (refusal is not null)
@@ -74,10 +86,13 @@ internal static class AuthoringChangePayloadReader
             ? SourceItemIds(payload)
             : [targetId];
 
-        return (new AuthoringChangePayload(changeType!, affected, payload.GetRawText()), null);
+        return (new AuthoringChangePayload(changeType!, affected, assignments, payload.GetRawText()), null);
     }
 
-    /// <summary>A comment is a closed object with one body of 1..2 000 characters.</summary>
+    /// <summary>
+    /// A comment is a closed object with one body of 1..2 000 characters. A missing, mistyped, empty or over-long body is
+    /// the <c>comment_body_invalid</c> reason the review panel renders; any other shape defect stays <c>payload_invalid</c>.
+    /// </summary>
     private static Error? ReadComment(JsonElement payload)
     {
         if (UnknownMember(payload, "/payload", "body") is { } unknown)
@@ -85,14 +100,13 @@ internal static class AuthoringChangePayloadReader
             return unknown;
         }
 
-        if (!payload.TryGetProperty("body", out var body) || body.ValueKind != JsonValueKind.String)
+        if (!payload.TryGetProperty("body", out var body)
+            || body.ValueKind != JsonValueKind.String
+            || body.GetString() is not { } text
+            || !HasLength(text, AuthoringChangeLimits.CommentBodyMin, AuthoringChangeLimits.CommentBodyMax))
         {
-            return AuthoringChangeErrors.PayloadInvalid("/payload/body");
-        }
-
-        if (body.GetString() is not { } text || !HasLength(text, AuthoringChangeLimits.CommentBodyMin, AuthoringChangeLimits.CommentBodyMax))
-        {
-            return AuthoringChangeErrors.PayloadInvalid("/payload/body");
+            return AuthoringErrors.Invalid(
+                "/payload/body", "comment_body_invalid", "a comment body must be 1..2000 characters");
         }
 
         return null;
@@ -165,7 +179,9 @@ internal static class AuthoringChangePayloadReader
     /// A split names 2..20 new items and, optionally, a 0-based new-item index per existing case. The index is
     /// checked against the array it indexes, which the schema's 0..19 bound alone cannot do.
     /// </summary>
-    private static Error? ReadSplit(JsonElement payload)
+    private static Error? ReadSplit(
+        JsonElement payload,
+        List<(int Index, Guid CaseId)> assignmentsInto)
     {
         if (UnknownMember(payload, "/payload", "new_items", "case_assignments") is { } unknown)
         {
@@ -201,7 +217,7 @@ internal static class AuthoringChangePayloadReader
         }
 
         return payload.TryGetProperty("case_assignments", out var assignments)
-            ? ReadCaseAssignments(assignments, count)
+            ? ReadCaseAssignments(assignments, count, assignmentsInto)
             : null;
     }
 
@@ -246,13 +262,17 @@ internal static class AuthoringChangePayloadReader
     }
 
     /// <summary>
-    /// The optional case assignments: each names a distinct existing case and one of the new items by 0-based
-    /// index; whether the case belongs to the split target is the queue handler's read, because only it holds the
-    /// tenant scope.
+    /// The optional case assignments: at most 200, each naming a distinct case and one of the new items by 0-based index.
+    /// Whether that case is a live child of the split target needs a tenant read, so the queue handler answers it; the
+    /// bound here is what a 200-entry array means before the payload's own jsonb size fence can refuse it.
     /// </summary>
-    private static Error? ReadCaseAssignments(JsonElement assignments, int newItemCount)
+    private static Error? ReadCaseAssignments(
+        JsonElement assignments,
+        int newItemCount,
+        List<(int Index, Guid CaseId)> into)
     {
-        if (assignments.ValueKind != JsonValueKind.Array)
+        if (assignments.ValueKind != JsonValueKind.Array
+            || assignments.GetArrayLength() > AuthoringChangeLimits.CaseAssignmentsMax)
         {
             return AuthoringChangeErrors.PayloadInvalid("/payload/case_assignments");
         }
@@ -289,6 +309,7 @@ internal static class AuthoringChangePayloadReader
                 return AuthoringChangeErrors.PayloadInvalid(path + "/item_index");
             }
 
+            into.Add((index, caseId));
             index++;
         }
 
@@ -350,4 +371,36 @@ internal static class AuthoringChangeRanges
 {
     /// <summary>True when <paramref name="value"/> is within the inclusive bounds.</summary>
     internal static bool IsBetween(this int value, int min, int max) => value >= min && value <= max;
+}
+
+/// <summary>
+/// The queue body's whole-document check: <c>contracts/schemas/authoring-change.v1.json</c> through the compiled contract
+/// set, so every root member the route accepts is one the schema declares.
+/// </summary>
+/// <remarks>
+/// It runs after <see cref="AuthoringChangePayloadReader"/> so the reader's own reasons stay the ones a caller sees — a
+/// merge of 51 sources is <c>merge_sources_max</c>, not the schema's <c>max_items</c>. What is left for this check is
+/// exactly what a projection cannot report: an absent <c>payload</c>, an unknown root member, a mistyped or over-long
+/// <c>reason</c>.
+/// </remarks>
+internal static class AuthoringChangeDocument
+{
+    /// <summary>The key of <c>contracts/schemas/authoring-change.v1.json</c> in the compiled set.</summary>
+    internal const string SchemaKey = "authoring-change.v1";
+
+    /// <summary>Validates one whole queue body, or answers the 422 the schema's own detail rows produce.</summary>
+    /// <param name="body">The request body as the edge parsed it.</param>
+    /// <param name="schemas">The compiled contract set of the host.</param>
+    internal static Error? Validate(JsonElement body, ContractSchemaSet schemas)
+    {
+        ArgumentNullException.ThrowIfNull(schemas);
+
+        var verdict = schemas.Validate(SchemaKey, body);
+
+        return verdict.IsValid
+            ? null
+            : AuthoringErrors.InvalidMany(
+                "the request body does not match authoring-change.v1",
+                [.. verdict.Errors.Select(error => new ErrorDetail(error.Path, error.Reason, error.Index))]);
+    }
 }

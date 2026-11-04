@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Modules.Authoring.Domain.Changes;
 using Evidgate.Modules.Authoring.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -125,20 +126,33 @@ public sealed partial class AuthoringChangeTests(PostgresTenancyFixture fixture)
         (await PendingCountAsync(world)).ShouldBe(1);
     }
 
+    /// <summary>
+    /// The apply selection is read from the raw array: a member that is not a uuid is refused at its own index rather
+    /// than dropped (which would apply a selection the caller never sent), and the 200 bound is the array's own length,
+    /// so an oversized selection with a malformed member is still refused as oversized.
+    /// </summary>
     [Fact]
-    public async Task Queue_TwoOverlappingSessions_OneWinsAndOneSees409()
+    public async Task Apply_RefusesANonUuidMemberAtIndexAndAnOversizedRawSelection()
     {
-        await using var world = await StartAsync(2);
+        await using var world = await StartAsync(1);
 
-        var answers = await Task.WhenAll(
-            QueueAsync(world, world.Items[0], "delete", "{}"),
-            QueueAsync(world, world.Items[0], "merge", MergeJson(world.Items[0], world.Items[1])));
+        var nonUuid = await ApplyAsync(world, new
+        {
+            change_ids = new object[] { Guid.CreateVersion7(), "not-a-uuid" },
+        });
+        AssertInvalid(nonUuid, "/change_ids/1", "payload_invalid");
 
-        answers.Count(answer => answer.Status == HttpStatusCode.Created).ShouldBe(1);
-        var refused = answers.Single(answer => answer.Status == HttpStatusCode.Conflict);
-        refused.ErrorCode.ShouldBe("invalid_transition");
-        (await PendingCountAsync(world)).ShouldBe(1);
-        (await ChangeCountAsync(world)).ShouldBe(1);
+        var tooMany = Enumerable.Range(0, AuthoringChangeLimits.SelectionMax + 1)
+            .Select(_ => Guid.CreateVersion7())
+            .ToArray();
+        AssertInvalid(await ApplyAsync(world, new { change_ids = tooMany }), "/change_ids", "too_many_changes");
+
+        var oversizedWithJunk = await ApplyAsync(world, new
+        {
+            change_ids = new object[] { "not-a-uuid" }.Concat(tooMany.Cast<object>()).ToArray(),
+        });
+        AssertInvalid(oversizedWithJunk, "/change_ids", "too_many_changes");
+        (await ChangeCountAsync(world)).ShouldBe(0);
     }
 
     [Fact]
@@ -274,7 +288,8 @@ public sealed partial class AuthoringChangeTests(PostgresTenancyFixture fixture)
         var before = await ListAsync(world, url);
 
         before.Status.ShouldBe(HttpStatusCode.OK, before.ErrorMessage);
-        (before.ETag ?? string.Empty).ShouldMatch("^\"order:[0-9a-f]{64}\"$");
+        // The tag names the hash's algorithm: `order:sha256:<hex>`, the same grammar the apply route parses.
+        (before.ETag ?? string.Empty).ShouldMatch("^\"order:sha256:[0-9a-f]{64}\"$");
         before.Body.GetProperty("items").EnumerateArray().All(item => !item.GetProperty("stale").GetBoolean())
             .ShouldBeTrue();
 
@@ -397,7 +412,7 @@ public sealed partial class AuthoringChangeTests(PostgresTenancyFixture fixture)
 
         var single = await db.QuerySingleOrDefaultAsync<AuthoringChangeSql.ChangeRow>(
             AuthoringChangeSql.Get,
-            new { org_id = world.Org, project_id = world.Project, id = queued },
+            new { org_id = world.Org, project_id = world.Project, change_id = queued },
             TestContext.Current.CancellationToken);
         single.ShouldNotBeNull();
 
