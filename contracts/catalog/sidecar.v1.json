@@ -33,7 +33,7 @@
           },
           "requirement": {
             "type": ["string", "number", "boolean", "null"],
-            "description": "Optional external requirement this file protects (D-A6): trimmed to 1..128 characters of A-Z a-z 0-9 . _ : / # -. A string is used as written and a number as its digits; a bare true/false is a warning on this entry and the case keeps a null reference. A string or number outside the length or charset rule fails this schema, so the manifest is refused as invalid."
+            "description": "Optional external requirement this file protects (D-A6): trimmed to 1..128 characters of A-Z a-z 0-9 . _ : / # -. A string is used as written and a number as its digits; a bare true/false, or a string or number outside the length or charset rule, is a warning on that entry, never a schema failure: the manifest stays valid and the case keeps its id with a null reference."
           }
         }
       }

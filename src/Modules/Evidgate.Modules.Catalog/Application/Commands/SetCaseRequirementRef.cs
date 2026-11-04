@@ -39,9 +39,17 @@ internal sealed class SetCaseRequirementRefCommandValidator : AbstractValidator<
     /// <summary>Builds the rules; null means "clear", any other value must be a usable pointer.</summary>
     public SetCaseRequirementRefCommandValidator()
     {
+        // One refusal reason per value: the size rule and the character rule are mutually exclusive because
+        // Taxonomy.RequirementRefRefusal names a single reason for any value, so a 422 carries exactly one detail.
         RuleFor(command => command.RequirementRef)
-            .Must(raw => Taxonomy.TryRequirementRef(raw, out _))
-            .WithErrorCode("schema_invalid")
+            .Must(raw => Taxonomy.RequirementRefRefusal(raw!) != "invalid_length")
+            .WithErrorCode("invalid_length")
+            .OverridePropertyName("requirement_ref")
+            .When(command => command.RequirementRef is not null);
+
+        RuleFor(command => command.RequirementRef)
+            .Must(raw => Taxonomy.RequirementRefRefusal(raw!) != "invalid_value")
+            .WithErrorCode("invalid_value")
             .OverridePropertyName("requirement_ref")
             .When(command => command.RequirementRef is not null);
     }
@@ -72,7 +80,7 @@ internal sealed class SetCaseRequirementRefCommandHandler(
         {
             return Result.Failure<CaseDto>(Error.Invalid(
                 "the requirement reference is not a trimmed 1..128 character value of A-Z a-z 0-9 . _ : / # -",
-                [new ErrorDetail("requirement_ref", "schema_invalid")]));
+                [new ErrorDetail("requirement_ref", Taxonomy.RequirementRefRefusal(command.RequirementRef) ?? "invalid_value")]));
         }
 
         await using var context = contexts.Create();

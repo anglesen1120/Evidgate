@@ -9525,8 +9525,11 @@ components:
       type: object
       description: >-
         The requirement pointer of one case. `requirement_ref` is required: send `null` to clear it, or a value
-        that is trimmed to 1..128 characters of `A-Z a-z 0-9 . _ : / # -` (D-A6). Any other member or a value
-        outside that rule is 422 `schema_invalid`.
+        that is trimmed to 1..128 characters of `A-Z a-z 0-9 . _ : / # -` (D-A6). Any other member, a missing
+        member or a value outside that rule is 422 `request_invalid` with `requirement_ref` (or the offending
+        member) in `details[]` and a field-level reason: `invalid_length` or `invalid_value` for the pointer
+        itself, `invalid_type` for a non-string non-null value, `unknown_field` for another member, `required`
+        for a missing one.
       additionalProperties: false
       required: [requirement_ref]
       properties:

@@ -914,9 +914,13 @@ public sealed class CatalogIdentityTests
 
         var tooLong = await PatchRequirementAsync(world, caseId, new { requirement_ref = new string('r', 129) });
         tooLong.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        tooLong.ErrorCode.ShouldBe("schema_invalid");
-        tooLong.Body.GetProperty("error").GetProperty("details").EnumerateArray()
-            .Single().GetProperty("path").GetString().ShouldBe("requirement_ref");
+
+        // The envelope's top-level code is the shared 422 `request_invalid` (00 §9.2); the field-level verdict lives
+        // in `details[]`, exactly as every other validation failure in this API reports itself.
+        tooLong.ErrorCode.ShouldBe("request_invalid");
+        var tooLongDetail = tooLong.Body.GetProperty("error").GetProperty("details").EnumerateArray().Single();
+        tooLongDetail.GetProperty("path").GetString().ShouldBe("requirement_ref");
+        tooLongDetail.GetProperty("reason").GetString().ShouldBe("invalid_length");
 
         // The refused value changed nothing, so the accepted one is still stored.
         (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case"))
@@ -925,17 +929,19 @@ public sealed class CatalogIdentityTests
     }
 
     [Theory]
-    [InlineData("   ")]
-    [InlineData("REQ 1042")]
-    [InlineData("https://jira.example.com/browse/PROJ-1?focused=1")]
-    [InlineData("REQ\u0001")]
-    [InlineData("REQ\u200b")]
-    [InlineData("REQ\n1042")]
-    [InlineData("\tREQ-1")]
-    [InlineData("REQ-1\n")]
-    [InlineData("\uD800")]
-    [InlineData("REQ\uD800")]
-    public async Task RequirementRef_RefusesBlankCharsetAndControlBearingValues(string value)
+    // Blank trims to nothing, so it is a length refusal; every other row holds a character the set does not carry
+    // (or, for a lone surrogate, not text at all), which is a value refusal.
+    [InlineData("   ", "invalid_length")]
+    [InlineData("REQ 1042", "invalid_value")]
+    [InlineData("https://jira.example.com/browse/PROJ-1?focused=1", "invalid_value")]
+    [InlineData("REQ\u0001", "invalid_value")]
+    [InlineData("REQ\u200b", "invalid_value")]
+    [InlineData("REQ\n1042", "invalid_value")]
+    [InlineData("\tREQ-1", "invalid_value")]
+    [InlineData("REQ-1\n", "invalid_value")]
+    [InlineData("\uD800", "invalid_value")]
+    [InlineData("REQ\uD800", "invalid_value")]
+    public async Task RequirementRef_RefusesBlankCharsetAndControlBearingValues(string value, string reason)
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
@@ -944,7 +950,9 @@ public sealed class CatalogIdentityTests
         var answer = await PatchRequirementAsync(world, caseId, new { requirement_ref = value });
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        answer.ErrorCode.ShouldBe("schema_invalid");
+        answer.ErrorCode.ShouldBe("request_invalid");
+        answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().Single()
+            .GetProperty("reason").GetString().ShouldBe(reason);
         (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
         (await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case")).ShouldBe(1);
     }
@@ -958,17 +966,17 @@ public sealed class CatalogIdentityTests
 
         var absent = await PatchRequirementAsync(world, caseId, new { });
         absent.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        absent.ErrorCode.ShouldBe("schema_invalid");
+        absent.ErrorCode.ShouldBe("request_invalid");
         absent.Body.GetProperty("error").GetProperty("details").EnumerateArray()
             .Single().GetProperty("reason").GetString().ShouldBe("required");
 
         var notAString = await PatchRequirementAsync(world, caseId, new { requirement_ref = 42 });
         notAString.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        notAString.ErrorCode.ShouldBe("schema_invalid");
+        notAString.ErrorCode.ShouldBe("request_invalid");
 
         var extra = await PatchRequirementAsync(world, caseId, new { requirement_ref = "REQ-1", name = "sneaky" });
         extra.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        extra.ErrorCode.ShouldBe("schema_invalid");
+        extra.ErrorCode.ShouldBe("request_invalid");
         extra.Body.GetProperty("error").GetProperty("details").EnumerateArray()
             .Single().GetProperty("path").GetString().ShouldBe("name");
 
@@ -1081,10 +1089,12 @@ public sealed class CatalogIdentityTests
         var report = await RegisterAsync(world, Commit1, new SourceFile("tests/checkout.spec.ts", "test('x')", "playwright", "typescript"), sidecar);
 
         // A bare true/false is a scalar the schema accepts but no requirement id: warning, no conflict, id kept.
+        // The report carries both entries for this one file: the warning about its dropped pointer and the
+        // registration that still gave it its id.
         report.Warnings.ShouldBe(1);
         report.Conflicts.ShouldBe(0);
         report.Registered.ShouldBe(1);
-        report.Entries.Single().Code.ShouldBe(CaseSyncCodes.InvalidSidecarEntry);
+        report.Entries.Single(entry => entry.Result == CaseSyncResults.Warning).Code.ShouldBe(CaseSyncCodes.InvalidSidecarEntry);
         (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
         (await CountAsync(world, "test_case")).ShouldBe(1);
     }

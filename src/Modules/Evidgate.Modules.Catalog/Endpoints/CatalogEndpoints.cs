@@ -292,14 +292,14 @@ public static class CatalogEndpoints
                 // A lone surrogate escape parses as JSON but has no UTF-16 text: refuse it as the 422, never a 500.
                 return Result.Failure<CaseDto>(Error.Invalid(
                     "requirement_ref must be well-formed Unicode text",
-                    [new ErrorDetail("requirement_ref", "schema_invalid")]));
+                    [new ErrorDetail("requirement_ref", "invalid_value")]));
             }
         }
         else
         {
             return Result.Failure<CaseDto>(Error.Invalid(
                 "requirement_ref must be a string or null",
-                [new ErrorDetail("requirement_ref", "schema_invalid")]));
+                [new ErrorDetail("requirement_ref", "invalid_type")]));
         }
 
         var result = await mediator.Send(

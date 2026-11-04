@@ -131,7 +131,9 @@ public sealed class CatalogTaxonomyQaTests(PostgresTenancyFixture fixture)
         accepted.Text("requirement_ref").ShouldBe(maximum);
         var refused = await PatchAsync(world, caseId, new string('r', length));
         refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        refused.ErrorCode.ShouldBe("schema_invalid");
+        refused.ErrorCode.ShouldBe("request_invalid");
+        refused.Body.GetProperty("error").GetProperty("details").EnumerateArray().Single()
+            .GetProperty("reason").GetString().ShouldBe("invalid_length");
         (await fixture.ScalarAsync<string>(world.Database,
             $"select requirement_ref from public.test_case where id = '{caseId}'")).ShouldBe(maximum);
     }
@@ -150,7 +152,9 @@ public sealed class CatalogTaxonomyQaTests(PostgresTenancyFixture fixture)
         (await PatchAsync(world, caseId, " REQ-2 ")).Status.ShouldBe(HttpStatusCode.OK);
         var refused = await PatchAsync(world, caseId, value);
         refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        refused.ErrorCode.ShouldBe("schema_invalid");
+        refused.ErrorCode.ShouldBe("request_invalid");
+        refused.Body.GetProperty("error").GetProperty("details").EnumerateArray().Single()
+            .GetProperty("reason").GetString().ShouldBe("invalid_value");
         (await fixture.ScalarAsync<string>(world.Database,
             $"select requirement_ref from public.test_case where id = '{caseId}'")).ShouldBe("REQ-2");
     }
@@ -165,20 +169,22 @@ public sealed class CatalogTaxonomyQaTests(PostgresTenancyFixture fixture)
         var body = new Dictionary<string, object> { ["name"] = "Taxonomy", ["slug"] = "taxonomy", [field] = invalid };
         var rejected = await CreateSuiteAsync(world, body);
         rejected.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        rejected.ErrorCode.ShouldBe("schema_invalid");
+        rejected.ErrorCode.ShouldBe("request_invalid");
         rejected.Body.GetProperty("error").GetProperty("details").EnumerateArray()
             .Select(detail => detail.GetProperty("path").GetString()).ShouldContain(path => path != null && path.TrimStart('/') == field);
+        rejected.Body.GetProperty("error").GetProperty("details").EnumerateArray()
+            .Select(detail => detail.GetProperty("reason").GetString()).ShouldContain(reason => reason == "invalid_value");
         body[field] = valid;
         var created = await CreateSuiteAsync(world, body);
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var revision = await RevisionAsync(world, created.Id(), new Dictionary<string, object> { [field] = invalid });
         revision.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        revision.ErrorCode.ShouldBe("schema_invalid");
+        revision.ErrorCode.ShouldBe("request_invalid");
         (await RevisionAsync(world, created.Id(), new Dictionary<string, object> { [field] = valid }))
             .Status.ShouldBe(HttpStatusCode.Created);
         var filter = await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/suites?{field}={invalid}", world.Admin);
         filter.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        filter.ErrorCode.ShouldBe("schema_invalid");
+        filter.ErrorCode.ShouldBe("request_invalid");
         (await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/suites?{field}={valid}", world.Admin))
             .Body.GetProperty("items").GetArrayLength().ShouldBe(1);
     }

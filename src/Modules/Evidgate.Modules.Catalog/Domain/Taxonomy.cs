@@ -98,21 +98,33 @@ internal static class Taxonomy
     /// <param name="value">The trimmed value, or null when it was not accepted.</param>
     public static bool TryRequirementRef(string? raw, out string? value)
     {
-        value = null;
-        if (raw is null || !TextRules.IsClean(raw))
+        value = raw is null || RequirementRefRefusal(raw) is not null ? null : raw.Trim();
+
+        return value is not null;
+    }
+
+    /// <summary>
+    /// Why a non-null pointer is refused, as the field-level reason the 422 carries: <c>invalid_length</c> for a
+    /// value outside 1..128 characters once trimmed, <c>invalid_value</c> for a character the set does not hold
+    /// (a control or format character included, refused where it stands rather than trimmed away). Null means the
+    /// value is a usable pointer. The reasons are the ones the other Catalog validators use, so one refusal shape
+    /// serves the module and <c>TryRequirementRef</c> has no second opinion.
+    /// </summary>
+    /// <param name="raw">The value as sent, non-null.</param>
+    internal static string? RequirementRefRefusal(string raw)
+    {
+        if (!TextRules.IsClean(raw))
         {
-            return false;
+            return "invalid_value";
         }
 
         var trimmed = raw.Trim();
-        if (trimmed.Length is 0 or > MaxRequirementRefLength || !IsRequirementCharset(trimmed))
+        if (trimmed.Length is 0 or > MaxRequirementRefLength)
         {
-            return false;
+            return "invalid_length";
         }
 
-        value = trimmed;
-
-        return true;
+        return IsRequirementCharset(trimmed) ? null : "invalid_value";
     }
 
     private static bool IsRequirementCharset(string text)
