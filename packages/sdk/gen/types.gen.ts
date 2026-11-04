@@ -69,7 +69,7 @@ export type RunStateDto = {
 };
 
 /**
- * One row of `GET /v1/projects/{p}/runs` (05.2.2 §5). Since 05.2.2-T2 the list serves the run's state, `created_at`, the recorded identity `ref` and `unverified_ref`; since F43 (S143) it also serves `completeness` (from the run's current evidence revision), `parent_run_id` and `rerun_scope`, while `decision`, `rerun_label` and `reprocess_label` stay `null` until 07.5.2 and 05.5.1/05.5.2 serve them — every value of the row comes from a stored column, never from a placeholder.
+ * One row of `GET /v1/projects/{p}/runs` (05.2.2 §5). Since 05.2.2-T2 the list serves the run's state, `created_at`, the recorded identity `ref` and `unverified_ref`; since F43 (S143) it also serves `completeness` (from the run's current evidence revision), `parent_run_id`, `rerun_scope` and `decision`, the verdict of the run's newest `live` evaluation, while `rerun_label` and `reprocess_label` stay `null` until 05.5.1/05.5.2 serve them — every value of the row comes from a stored row, never from a placeholder.
  */
 export type RunSummary = {
     run_id: string;
@@ -96,7 +96,7 @@ export type RunSummary = {
      */
     rerun_scope: 'full' | 'failed_subset' | null;
     /**
-     * null while pending (00 §9.3); UPPER per 00 §7. Every item is `null` today — no `evaluation` row exists until 07.2.2 stores one (07.5.2 serves the read).
+     * The verdict of the run's newest `live` evaluation (highest evidence revision), `null` while the run has none (00 §9.3), UPPER per 00 §7. A `shadow` evaluation never decides this value.
      */
     decision?: 'PASS' | 'FAIL' | 'INCONCLUSIVE' | null;
     /**
@@ -2736,9 +2736,9 @@ export type RunIsFork = boolean;
 export type RunState = 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
 
 /**
- * The run's evaluation decision (F43, S143). Only `pending` is accepted today, and that value stores nothing: no `evaluation` row exists until 07.2.2 persists one, so there is no stored decision to narrow the page with and `pending` matches every run in it, while the `RunSummary.decision` member stays `null` in every item until the evaluator stores one (07.2.2 stores it, 07.5.2 serves the read). Any other value — including `PASS`, `FAIL` and `INCONCLUSIVE` — is 422 `request_invalid` (`details[].path` = `decision`, reason `invalid_value`) rather than an empty page. Receiver: 07.2.2 (stored decision) with 07.5.2 (the read), which widens this enum.
+ * The run's evaluation decision (F43, S143): `pending` for a run whose newest `live` evaluation does not exist, otherwise `pass`, `fail` or `inconclusive` for that evaluation's verdict `PASS`, `FAIL` or `INCONCLUSIVE` — filter tokens are lower snake, because a filter is not the stored value it selects. Case-exact and AND-combined with every other present filter. A `shadow` evaluation never matches a verdict here. Any other value is 422 `request_invalid` (`details[].path` = `decision`, reason `invalid_value`) rather than an empty page, and that includes the upper-case verdict itself (`decision=PASS`). The verdict lives in Policy rather than in the run's own rows, so this filter is a bounded scan of the keyset order: a page may hold fewer than `limit` items while `next_cursor` is present.
  */
-export type RunDecision = 'pending';
+export type RunDecision = 'pending' | 'pass' | 'fail' | 'inconclusive';
 
 /**
  * Exact `run.rerun_scope` (0031; F43, S143): `full` or `failed_subset`. A plain run stores `null` and never matches. A present but invalid value is 422 `request_invalid` (`details[].path` = `rerun_scope`).
@@ -3735,9 +3735,9 @@ export type ListRunsData = {
          */
         state?: 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
         /**
-         * The run's evaluation decision (F43, S143). Only `pending` is accepted today, and that value stores nothing: no `evaluation` row exists until 07.2.2 persists one, so there is no stored decision to narrow the page with and `pending` matches every run in it, while the `RunSummary.decision` member stays `null` in every item until the evaluator stores one (07.2.2 stores it, 07.5.2 serves the read). Any other value — including `PASS`, `FAIL` and `INCONCLUSIVE` — is 422 `request_invalid` (`details[].path` = `decision`, reason `invalid_value`) rather than an empty page. Receiver: 07.2.2 (stored decision) with 07.5.2 (the read), which widens this enum.
+         * The run's evaluation decision (F43, S143): `pending` for a run whose newest `live` evaluation does not exist, otherwise `pass`, `fail` or `inconclusive` for that evaluation's verdict `PASS`, `FAIL` or `INCONCLUSIVE` — filter tokens are lower snake, because a filter is not the stored value it selects. Case-exact and AND-combined with every other present filter. A `shadow` evaluation never matches a verdict here. Any other value is 422 `request_invalid` (`details[].path` = `decision`, reason `invalid_value`) rather than an empty page, and that includes the upper-case verdict itself (`decision=PASS`). The verdict lives in Policy rather than in the run's own rows, so this filter is a bounded scan of the keyset order: a page may hold fewer than `limit` items while `next_cursor` is present.
          */
-        decision?: 'pending';
+        decision?: 'pending' | 'pass' | 'fail' | 'inconclusive';
         /**
          * Exact `run.rerun_scope` (0031; F43, S143): `full` or `failed_subset`. A plain run stores `null` and never matches. A present but invalid value is 422 `request_invalid` (`details[].path` = `rerun_scope`).
          */

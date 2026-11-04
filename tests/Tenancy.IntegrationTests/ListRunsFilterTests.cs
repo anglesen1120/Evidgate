@@ -51,9 +51,8 @@ public sealed class ListRunsFilterTests
     }
 
     /// <summary>
-    /// F43: <c>decision=pending</c> matches every run, because no <c>evaluation</c> row exists — no decision is
-    /// stored, so every item's <c>decision</c> member is <c>null</c> —
-    /// and it therefore narrows nothing: the page is the unfiltered one, in the same order.
+    /// F43: <c>decision=pending</c> matches every run of a project whose runs store no evaluation, so every item's
+    /// <c>decision</c> member is <c>null</c> and the page is the unfiltered one, in the same order.
     /// </summary>
     [Fact]
     public async Task ListRunsFilter_DecisionPending_ReturnsEveryRun()
@@ -72,20 +71,22 @@ public sealed class ListRunsFilterTests
         OrderedIds(pending).Length.ShouldBe(3);
         OrderedIds(pending).ShouldBe(OrderedIds(unfiltered), ignoreOrder: false);
         pending.Body.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.Null);
+        Items(pending).ShouldAllBe(item => item.GetProperty("decision").ValueKind == JsonValueKind.Null);
     }
 
     /// <summary>
-    /// F43, openapi <c>RunDecision</c>: only <c>pending</c> is an accepted value today, so every other value is
-    /// 422 <c>request_invalid</c> (<c>decision</c>, <c>invalid_value</c>) — never an empty page, which would read as
+    /// F43, openapi <c>RunDecision</c>: the vocabulary is <c>pending</c> plus the three lower-snake verdict tokens,
+    /// matched case-exactly, so every other value — including the stored upper-case verdict itself — is 422
+    /// <c>request_invalid</c> (<c>decision</c>, <c>invalid_value</c>), never an empty page, which would read as
     /// "no run has that verdict".
     /// </summary>
     [Fact]
-    public async Task ListRunsFilter_DecisionOtherThanPending_422()
+    public async Task ListRunsFilter_Decision_OutOfVocabulary_422()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
         await CreateRunAsync(world);
 
-        foreach (var value in new[] { "PASS", "FAIL", "INCONCLUSIVE", "pass", "fail", "Pending", "pendingly", string.Empty })
+        foreach (var value in new[] { "PASS", "Fail", "Inconclusive", "Pending", "pendingly", "unknown", "pass ", string.Empty })
         {
             var answer = await ListAsync(world, "decision=" + Uri.EscapeDataString(value));
             answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, value);
@@ -95,8 +96,13 @@ public sealed class ListRunsFilterTests
                 && detail.GetProperty("reason").GetString() == "invalid_value");
         }
 
-        // The one accepted value still answers 200, so the loop above is not passing on a broken route.
-        (await ListAsync(world, "decision=pending")).Status.ShouldBe(HttpStatusCode.OK);
+        // Every admitted value answers 200, so the loop above is not passing on a broken route; this world stores no
+        // evaluation, so the verdict filters answer empty pages rather than 422.
+        foreach (var value in new[] { "pending", "pass", "fail", "inconclusive" })
+        {
+            var answer = await ListAsync(world, "decision=" + value);
+            answer.Status.ShouldBe(HttpStatusCode.OK, value);
+        }
     }
 
     /// <summary>

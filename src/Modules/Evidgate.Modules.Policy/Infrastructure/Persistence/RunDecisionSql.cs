@@ -11,6 +11,20 @@ namespace Evidgate.Modules.Policy.Infrastructure.Persistence;
 /// </remarks>
 internal static class RunDecisionSql
 {
+    /// <summary>One latest live verdict per requested run; the live unique key makes revision ordering unambiguous.</summary>
+    internal const string LatestLiveBatch = """
+        select distinct on (e.run_id)
+               e.run_id as "RunId",
+               e.decision as "DecisionValue",
+               e.evidence_revision as "EvidenceRevision",
+               e.id as "EvaluationId"
+          from public.evaluation e
+         where e.org_id = @org_id
+           and e.run_id = any(@ids::uuid[])
+           and e.mode = 'live'
+         order by e.run_id, e.evidence_revision desc
+        """;
+
     /// <summary>
     /// The run's newest <c>live</c> evaluation: every member of the response is copied from this one row, whatever the size
     /// of its <c>missing</c>/<c>reasons</c> arrays, so the route costs one statement and never N+1. The ordering needs no
