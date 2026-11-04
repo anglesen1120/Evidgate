@@ -28,3 +28,23 @@ body {
   margin: 0;
   padding: 0;
 }
+
+@layer layout {
+  /*
+   * WCAG 2.4.11 (focus not obscured): the shell's topbar is sticky, so a control that scrolls into
+   * view would otherwise come to rest under it. `--eg-topbar-height` is the bar's measured height,
+   * published by the shell because the bar wraps; the fallback is the two rows the layout allows
+   * for, so a first focus scroll before the measurement lands still clears the bar.
+   *
+   * Tab stops only: an element that is a programmatic target instead (a fragment target such as a
+   * table row header) keeps the offset its own component states.
+   *
+   * `scroll-margin-top` on the focused control itself, not `scroll-padding-top` on the scroller:
+   * padding on <html> also applies to the controls *inside* the sticky bar, and focusing one of
+   * those then scrolls the page up by the bar's height (Chromium 374034263).
+   */
+  #main-content
+    :is(a[href], button, input, select, textarea, summary, [tabindex]):not([tabindex='-1']) {
+    scroll-margin-top: var(--eg-topbar-height, calc(2 * var(--eg-space-12)));
+  }
+}

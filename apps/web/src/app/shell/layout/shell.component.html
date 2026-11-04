@@ -109,6 +109,7 @@
   </aside>
   <div class="main-stack flex min-w-0 flex-col" [attr.inert]="mobile() && drawerOpen() ? '' : null">
     <header
+      #topbar
       class="topbar box-border sticky top-0 z-(--eg-z-sticky) flex min-h-(--eg-space-12) flex-wrap items-center gap-(--eg-space-4) border-0 border-b-(length:--eg-border-width) border-solid border-border bg-card px-(--eg-space-4) py-(--eg-space-3) min-[768px]:px-(--eg-space-5)"
     >
       <button
