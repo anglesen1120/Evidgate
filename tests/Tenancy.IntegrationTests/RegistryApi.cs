@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Shouldly;
 using Xunit;
@@ -64,6 +65,30 @@ internal static class RegistryApi
 
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var document = JsonDocument.Parse(string.IsNullOrEmpty(text) ? "{}" : text);
+
+        return new ApiAnswer(response.StatusCode, document.RootElement.Clone(), response.Headers);
+    }
+
+    /// <summary>
+    /// Sends one request with a caller and a body spelled as JSON text — the form a member name the reader cannot
+    /// decode, or a repeated member, needs and a serialised object cannot produce.
+    /// </summary>
+    internal static async Task<ApiAnswer> SendRawAsync(
+        this HttpClient client,
+        HttpMethod method,
+        string url,
+        Action<HttpRequestHeaders> caller,
+        string json)
+    {
+        using var request = new HttpRequestMessage(method, url)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json"),
+        };
+        caller(request.Headers);
+
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken).ConfigureAwait(false);
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken).ConfigureAwait(false);
         using var document = JsonDocument.Parse(string.IsNullOrEmpty(text) ? "{}" : text);
 
         return new ApiAnswer(response.StatusCode, document.RootElement.Clone(), response.Headers);

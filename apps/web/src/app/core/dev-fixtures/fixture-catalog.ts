@@ -112,6 +112,11 @@ import projectDetailOnboardingProjectNotFound from '../../../../../../fixtures/w
 import projectDetailOnboardingProject from '../../../../../../fixtures/web-api/project-detail-onboarding-project/input.json';
 import projectDetailOnboardingRun from '../../../../../../fixtures/web-api/project-detail-onboarding-run/input.json';
 import projectUpdatePreconditionFailed from '../../../../../../fixtures/web-api/project-update-precondition-failed/input.json';
+import retentionPutOk from '../../../../../../fixtures/web-api/retention-put-ok/input.json';
+import retentionPutOutOfRange from '../../../../../../fixtures/web-api/retention-put-out-of-range/input.json';
+import retentionReadForbidden from '../../../../../../fixtures/web-api/retention-read-forbidden/input.json';
+import retentionReadNotFound from '../../../../../../fixtures/web-api/retention-read-not-found/input.json';
+import retentionReadOk from '../../../../../../fixtures/web-api/retention-read-ok/input.json';
 import projectsList from '../../../../../../fixtures/web-api/projects-list/input.json';
 import projectsListOnboardingEmpty from '../../../../../../fixtures/web-api/projects-list-onboarding-empty/input.json';
 import projectsListOnboardingForbidden from '../../../../../../fixtures/web-api/projects-list-onboarding-forbidden/input.json';
@@ -784,6 +789,13 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   },
   { name: 'project-detail-onboarding-run', document: projectDetailOnboardingRun },
   { name: 'project-update-precondition-failed', document: projectUpdatePreconditionFailed },
+  // The evidence retention pair: the read's stored windows plus the two refusals a review can
+  // select, and the upsert's stored windows plus its out-of-range 422 (body closed, `RetentionPolicy`).
+  { name: 'retention-read-ok', document: retentionReadOk },
+  { name: 'retention-read-forbidden', document: retentionReadForbidden },
+  { name: 'retention-read-not-found', document: retentionReadNotFound },
+  { name: 'retention-put-ok', document: retentionPutOk },
+  { name: 'retention-put-out-of-range', document: retentionPutOutOfRange },
   { name: 'projects-list', document: projectsList },
   { name: 'projects-list-onboarding-empty', document: projectsListOnboardingEmpty },
   { name: 'projects-list-onboarding-forbidden', document: projectsListOnboardingForbidden },
