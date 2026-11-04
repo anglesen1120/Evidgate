@@ -11,6 +11,7 @@ import onboardingGrants from '../../../../fixtures/web-api/permissions-list-onbo
 import adminGrants from '../../../../fixtures/web-api/permissions-list-settings-admin/input.json';
 import policyGrants from '../../../../fixtures/web-api/permissions-list-settings-policy-readonly/input.json';
 import secretsGrants from '../../../../fixtures/web-api/permissions-list-settings-secrets-write/input.json';
+import noTabGrants from '../../../../fixtures/web-api/permissions-list-settings-no-tab/input.json';
 import runFixture from '../../../../fixtures/web-api/run-detail/input.json';
 import suiteFixture from '../../../../fixtures/web-api/suite-revision/input.json';
 
@@ -25,6 +26,7 @@ import {
   PROJECT_STOREFRONT,
   SECRETS_LIST,
   SETTINGS_ADMIN_GRANTS,
+  SETTINGS_NO_TAB_GRANTS,
   localePath,
   overviewPath,
   withVariants,
@@ -74,7 +76,9 @@ const READY: Readonly<Record<string, string>> = {
   MembersPage: 'app-members-page[data-members-phase="ready"]',
   AuditPage: 'app-audit-page[data-audit-phase="ready"]',
   SettingsTabPlaceholderPage: 'app-settings-tab-placeholder',
-  SecretsPage: 'app-secrets-page [data-secret-reference]',
+  // The list renders one row per reference, so the first row is the surface's unique ready target.
+  SecretsPage: 'app-secrets-page app-secret-reference-list [data-secret-reference]:first-child',
+  SettingsNoTabsPage: 'app-settings-no-tabs',
   PolicyPage: 'app-policy-page[data-policy-phase="ready"]',
   RunListPage: 'app-run-list-page[data-run-list-status="ready"]',
   RunDetailPage: 'app-run-detail-page[data-run-detail-status="ready"]',
@@ -115,6 +119,15 @@ const GRANTS: readonly GrantSet[] = [
 
 const SURFACES: readonly Surface[] = surfacesInRouteTable();
 
+/**
+ * The Settings index renders only for a caller with `organization:read` and no tab, so it cannot
+ * take any session that satisfies the entry guard: a broader one redirects to a tab first.
+ */
+const NO_TAB_SESSION: GrantSet = {
+  query: SETTINGS_NO_TAB_GRANTS,
+  codes: grantedCodes(noTabGrants),
+};
+
 /** The ids a route needs, from the corpus: the same rows the sibling specs open. */
 const IDS: Readonly<Record<string, string>> = {
   orgId: ORG_ACME,
@@ -134,6 +147,15 @@ function grantOf(permissions: readonly string[]): GrantSet | undefined {
   const preferred = permissions.length === 0 ? GRANTS : GRANTS.filter(({ query }) => query !== '');
   return preferred.find(covers) ?? GRANTS.find(covers);
 }
+
+/** The session that reaches a surface: the index's own, every other surface's narrowest match. */
+const WALK: readonly { surface: Surface; grant: GrantSet | undefined }[] = SURFACES.map(
+  (surface) => ({
+    surface,
+    grant:
+      surface.component === 'SettingsNoTabsPage' ? NO_TAB_SESSION : grantOf(surface.permissions),
+  }),
+);
 
 /** The server state a surface needs beyond its grant to reach the ready contract. */
 function dataVariants(surface: Surface): readonly string[] {
@@ -225,13 +247,16 @@ test('the walk covers the route table and names every surface', () => {
   }
   // One entry's code no corpus session holds, so it can only be asserted as a refusal. A second
   // uncovered entry must fail here rather than drop out of the walk.
-  const uncovered = SURFACES.filter(({ permissions }) => grantOf(permissions) === undefined);
-  expect(uncovered.map(({ path }) => path)).toEqual(['/orgs/:orgId/usage']);
+  const uncovered = WALK.filter(({ grant }) => grant === undefined);
+  expect(uncovered.map(({ surface }) => surface.path)).toEqual(['/orgs/:orgId/usage']);
+  // The Settings index is a surface of its own when the session holds no tab, and it is the one
+  // surface whose session cannot be derived from its guards.
+  const noTabs = WALK.filter(({ surface }) => surface.component === 'SettingsNoTabsPage');
+  expect(noTabs.map(({ grant }) => grant?.query)).toEqual([SETTINGS_NO_TAB_GRANTS]);
 });
 
 for (const locale of LOCALES) {
-  for (const surface of SURFACES) {
-    const grant = grantOf(surface.permissions);
+  for (const { surface, grant } of WALK) {
     test(`the policy allows ${surface.path} (${locale})`, async ({ page }) => {
       const errors = await installProbe(page);
       const path = withVariants(localePath(locale, fillParams(surface.path, IDS)), [

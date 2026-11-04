@@ -223,8 +223,6 @@ function routeSurfaces(
   const component = property(node, 'component');
   const lazy = property(node, 'loadComponent');
   if (component === undefined && lazy === undefined) return [];
-  // The Settings index guard answers with a tab redirect, so that address is never a surface.
-  if (text(component) === 'SettingsNoTabsPage') return [];
   const mounted = lazy === undefined ? text(component) : lazyComponent(lazy);
   return [{ path, component: mounted, permissions }];
 }

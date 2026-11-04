@@ -16,7 +16,11 @@ function topbarOf(height: number): { element: HTMLElement; measure: (next: numbe
   };
 }
 
-/** The observer the helper constructs, with the callback it published, for one test. */
+/**
+ * The observer the helper constructs, with the callback it published, for one test. A real one
+ * delivers nothing after `disconnect()`, so this one stops too: a fake that keeps delivering would
+ * let a teardown case pass on its own delivery rather than on the helper's behaviour.
+ */
 class FakeResizeObserver {
   static instances: FakeResizeObserver[] = [];
   readonly observed: Element[] = [];
@@ -30,6 +34,11 @@ class FakeResizeObserver {
   unobserve(): void {}
   disconnect(): void {
     this.disconnected = true;
+  }
+  /** One notification, dropped exactly as the platform drops it once disconnected. */
+  deliver(): void {
+    if (this.disconnected) return;
+    this.callback([], this);
   }
 }
 
@@ -58,7 +67,7 @@ describe('trackTopbarHeight', () => {
 
     // A second row (the wrapped topbar) is what the observer exists for.
     bar.measure(128);
-    FakeResizeObserver.instances[0]?.callback([], FakeResizeObserver.instances[0]);
+    FakeResizeObserver.instances[0]?.deliver();
     expect(publishedHeight()).toBe('128px');
   });
 
@@ -69,7 +78,7 @@ describe('trackTopbarHeight', () => {
 
     // The first real measurement still lands, so a shell rendered while hidden recovers.
     bar.measure(65);
-    FakeResizeObserver.instances[0]?.callback([], FakeResizeObserver.instances[0]);
+    FakeResizeObserver.instances[0]?.deliver();
     expect(publishedHeight()).toBe('65px');
   });
 
@@ -92,9 +101,9 @@ describe('trackTopbarHeight', () => {
     expect(observer.disconnected).toBe(true);
     expect(publishedHeight()).toBe('');
 
-    // A late notification after teardown must not resurrect the property.
+    // A resize after teardown never reaches the helper again, so the property stays removed.
     bar.measure(128);
-    observer.callback([], observer);
-    expect(publishedHeight()).toBe('128px');
+    observer.deliver();
+    expect(publishedHeight()).toBe('');
   });
 });

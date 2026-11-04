@@ -9,32 +9,24 @@
 // asserted separately.
 import { expect, test, type Page } from '@playwright/test';
 import { EVIDENCE_REVISIONS_PAGE } from '../../src/app/core/dev-fixtures/evidence-revision-fixtures';
-import runDetail from '../../../../fixtures/web-api/run-detail/input.json';
+import {
+  runDetailPath,
+  type RunDecisionVariant,
+  type RunRevisionsVariant,
+} from './run-detail.support';
 import {
   expectNoA11yViolations,
-  localePath,
   LOCALES,
-  ORG_ACME,
-  PROJECT_STOREFRONT,
   seedStoredTheme,
   THEMES,
-  withVariants,
   type ShellLocale,
 } from './support';
 
-const RUN = runDetail.body;
 /** Revisions arrive newest first: the newest is the default pin, the incomplete one is 2. */
 const REVISIONS = EVIDENCE_REVISIONS_PAGE.items;
 const NEWEST_REVISION = REVISIONS[0]!;
 const INCOMPLETE_REVISION = REVISIONS[1]!;
 const OLDEST_REVISION = REVISIONS[2]!;
-
-const GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
-
-type DecisionVariant =
-  'ok' | 'evaluated-fail-missing-shard' | 'evaluated-pass' | 'shadow-refused' | 'unavailable';
-
-type RevisionsVariant = 'ok' | 'empty' | 'unavailable';
 
 const BANNER_TITLE: Record<ShellLocale, string> = {
   en: 'A newer revision exists',
@@ -77,23 +69,17 @@ async function chooseRevision(page: Page, locale: ShellLocale, revisionNo: numbe
 /** One review address: the review route, the run, and one variant per operation it reads. */
 function detailPath(
   locale: ShellLocale,
-  decision: DecisionVariant = 'ok',
-  revisions: RevisionsVariant = 'ok',
-  search = '',
+  decision: RunDecisionVariant = 'ok',
+  revisions: RunRevisionsVariant = 'ok',
+  evidenceRevision?: number,
 ): string {
-  return withVariants(
-    localePath(
-      locale,
-      `/dev/run-detail/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/runs/${RUN.run_id}${search}`,
-    ),
-    [
-      GRANT,
-      '?fixture.variant.getRun=detail-ready',
-      '?fixture.variant.listRunAttempts=ok',
-      `?fixture.variant.getRunDecision=${decision}`,
-      `?fixture.variant.listEvidenceRevisions=${revisions}`,
-    ],
-  );
+  return runDetailPath({
+    locale,
+    decision,
+    attempts: 'ok',
+    revisions,
+    evidenceRevision,
+  });
 }
 
 async function ready(page: Page): Promise<void> {
@@ -275,12 +261,7 @@ for (const locale of LOCALES) {
     page,
   }) => {
     await page.goto(
-      detailPath(
-        locale,
-        'evaluated-fail-missing-shard',
-        'ok',
-        `?evidence_revision=${OLDEST_REVISION.revision_no}`,
-      ),
+      detailPath(locale, 'evaluated-fail-missing-shard', 'ok', OLDEST_REVISION.revision_no),
     );
     await ready(page);
 

@@ -8,28 +8,15 @@
 // the document has scrolled past), because the browser's own focus scroll is what has to clear the
 // bar; `focus()` alone would only prove what a scripted call does.
 import { expect, test, type Page } from '@playwright/test';
-import runDetail from '../../../../fixtures/web-api/run-detail/input.json';
-import { localePath, ORG_ACME, PROJECT_STOREFRONT, withVariants } from './support';
-
-const GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
+import { runDetailPath } from './run-detail.support';
 
 /** A run-detail page: long enough that its early controls scroll far above the viewport. */
-function detailPath(): string {
-  return withVariants(
-    localePath(
-      'en',
-      `/dev/run-detail/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/runs/${runDetail.body.run_id}`,
-    ),
-    [
-      GRANT,
-      '?fixture.variant.getRun=detail-ready',
-      '?fixture.variant.listRunAttempts=ok',
-      '?fixture.variant.getRunDecision=evaluated-fail-missing-shard',
-      '?fixture.variant.listEvidenceRevisions=ok',
-      '?evidence_revision=3',
-    ],
-  );
-}
+const LONG_RUN = runDetailPath({
+  decision: 'evaluated-fail-missing-shard',
+  attempts: 'ok',
+  revisions: 'ok',
+  evidenceRevision: 3,
+});
 
 interface BarMetrics {
   /** The sticky bar's bottom edge, in viewport pixels. */
@@ -59,7 +46,7 @@ async function barMetrics(page: Page): Promise<BarMetrics> {
 
 /** Opens the run detail page and proves the document really scrolls, so the cases are not vacuous. */
 async function openLongPage(page: Page): Promise<void> {
-  await page.goto(detailPath());
+  await page.goto(LONG_RUN);
   await expect(page.locator('#main-content h1')).toBeVisible();
   // A focus scroll is only observable on a document that can scroll past its own content.
   expect((await barMetrics(page)).maxScroll).toBeGreaterThan(600);
@@ -108,6 +95,66 @@ async function expectShiftTabBackClearsBar(page: Page): Promise<void> {
   expect(measured.marginTop).toBeLessThanOrEqual(Math.ceil(measured.barHeight));
 }
 
+/**
+ * The other pre-state: the tab is inside the viewport but wholly under the bar, so only the margin
+ * box the offset adds can ask for a reveal. With the offset removed, the geometry assertion below is
+ * the line that should fail.
+ */
+async function expectCoveredStopClearsBar(page: Page): Promise<void> {
+  const panel = page.locator('#main-content [role="tabpanel"][tabindex="0"]').first();
+  await expect(panel).toBeAttached();
+  await panel.evaluate((element) => (element as HTMLElement).focus({ preventScroll: true }));
+
+  const placed = await page.evaluate(() => {
+    const tab = document.querySelector('[role="tab"][aria-selected="true"]');
+    const bar = document.querySelector<HTMLElement>('header.topbar');
+    const scroller = document.scrollingElement;
+    if (tab === null || bar === null || scroller === null) {
+      throw new Error('the selected tab, the bar or the scroller is missing');
+    }
+    const barBox = bar.getBoundingClientRect();
+    // Rest the tab wholly behind the bar: its bottom edge a few pixels above the bar's bottom.
+    const goal = barBox.bottom - tab.getBoundingClientRect().height - 4;
+    scroller.scrollTop += tab.getBoundingClientRect().top - goal;
+    const rect = tab.getBoundingClientRect();
+    return {
+      top: rect.top,
+      bottom: rect.bottom,
+      barBottom: barBox.bottom,
+      barHeight: barBox.height,
+      marginTop: Number.parseFloat(getComputedStyle(tab).scrollMarginTop),
+      scrollY: scroller.scrollTop,
+    };
+  });
+  // The case is only meaningful if the target really is on screen and really is behind the bar.
+  expect(placed.top).toBeGreaterThanOrEqual(0);
+  expect(placed.bottom, JSON.stringify(placed)).toBeLessThanOrEqual(placed.barBottom - 1);
+  // And the stop must carry the offset this case is about, else the reveal could not come from it.
+  expect(placed.marginTop).toBeGreaterThanOrEqual(placed.barHeight - 0.5);
+
+  await page.keyboard.press('Shift+Tab');
+  const measured = await page.evaluate(() => {
+    const tab = document.querySelector('[role="tab"][aria-selected="true"]');
+    const bar = document.querySelector<HTMLElement>('header.topbar');
+    const scroller = document.scrollingElement;
+    if (tab === null || bar === null || scroller === null) {
+      throw new Error('the selected tab, the bar or the scroller is missing');
+    }
+    return {
+      focused: document.activeElement === tab,
+      top: tab.getBoundingClientRect().top,
+      barBottom: bar.getBoundingClientRect().bottom,
+      scrollY: scroller.scrollTop,
+    };
+  });
+
+  expect(measured.focused).toBe(true);
+  // The reveal is a scroll of the document, not only a geometry read.
+  expect(measured.scrollY).not.toBe(placed.scrollY);
+  // Geometric clearance: the revealed tab's top edge sits at or below the bar's bottom edge.
+  expect(measured.top).toBeGreaterThanOrEqual(measured.barBottom - 0.5);
+}
+
 test.describe('focus scrolls clear of the sticky topbar (WCAG 2.4.11)', () => {
   test.use({ viewport: { width: 1280, height: 480 } });
 
@@ -118,6 +165,11 @@ test.describe('focus scrolls clear of the sticky topbar (WCAG 2.4.11)', () => {
     expect(Number.parseFloat(published)).toBe(Math.ceil(bottom));
 
     await expectShiftTabBackClearsBar(page);
+  });
+
+  test('a keyboard stop the viewport shows under the bar is scrolled clear', async ({ page }) => {
+    await openLongPage(page);
+    await expectCoveredStopClearsBar(page);
   });
 
   test('the offset follows a topbar that wraps to a second row', async ({ page }) => {

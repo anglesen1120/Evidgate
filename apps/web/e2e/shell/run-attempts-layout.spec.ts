@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import attemptsFixture from '../../../../fixtures/web-api/run-attempts/input.json';
-import runDetail from '../../../../fixtures/web-api/run-detail/input.json';
-import { localePath, ORG_ACME, PROJECT_STOREFRONT, seedStoredTheme, withVariants } from './support';
+import { runDetailPath } from './run-detail.support';
+import { seedStoredTheme } from './support';
 
 // The attempts table stacks up to and including 767 px and keeps its columns from 768 px. Both
 // neighbouring widths are covered because the strict max-width utility stops at 766 px, which
@@ -9,20 +9,7 @@ import { localePath, ORG_ACME, PROJECT_STOREFRONT, seedStoredTheme, withVariants
 const WIDTHS = [766, 767, 768] as const;
 const STACKED_MAX = 767;
 
-const GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
-
-const ATTEMPTS_PATH = withVariants(
-  localePath(
-    'en',
-    `/dev/run-detail/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}/runs/${runDetail.body.run_id}`,
-  ),
-  [
-    GRANT,
-    '?fixture.variant.getRun=detail-ready',
-    '?fixture.variant.listRunAttempts=ok',
-    '?fixture.variant.listEvidenceRevisions=ok',
-  ],
-);
+const ATTEMPTS_PATH = runDetailPath({ attempts: 'ok', revisions: 'ok' });
 
 /** A measured rectangle, in CSS pixels, relative to the viewport. */
 interface Box {

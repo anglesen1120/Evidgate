@@ -289,7 +289,7 @@ describe('buildQuickstartSnippet', () => {
     expect([...text].filter((char) => char !== '\n' && /[\p{Cc}\p{Cf}]/u.test(char))).toEqual([]);
   });
 
-  it('pins both npx commands to the published CLI package version', () => {
+  it('pins both npx commands to the version in packages/cli/package.json', () => {
     expect(cliManifest.version).toMatch(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/);
     const text = buildQuickstartSnippet({ projectRef: 'widgets', token, binding });
     const commands = text.split('\n').filter((line) => line.startsWith('npx '));
