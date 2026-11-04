@@ -47,6 +47,22 @@ const ROWS = 'app-run-list-table [data-run-row]';
  * sends every case to `/forbidden`.
  */
 const RUN_READ_GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
+/** The filters are Helm comboboxes now: the trigger shows the selected label, not a value. */
+const FILTER_LABEL = {
+  any: { en: 'All', vi: 'Tất cả' },
+  running: { en: 'Running', vi: 'Đang chạy' },
+  complete: { en: 'Complete', vi: 'Hoàn tất' },
+  pending: { en: 'Not evaluated', vi: 'Chưa đánh giá' },
+  fail: { en: 'FAIL', vi: 'FAIL' },
+  rerun: { en: 'Rerun', vi: 'Chạy lại' },
+} satisfies Record<string, Record<ShellLocale, string>>;
+
+/** A combobox commits on an option click; it exposes no form value to read back. */
+async function chooseFilter(page: Page, trigger: string, label: string): Promise<void> {
+  await page.locator(trigger).click();
+  await page.getByRole('option', { name: label, exact: true }).click();
+}
+
 /** `/dev/run-list/orgs/:orgId/projects/:projectId` — the review address, without a query. */
 function reviewPath(locale: ShellLocale) {
   return localePath(locale, `/dev/run-list/orgs/${ORG_ACME}/projects/${PROJECT_STOREFRONT}`);
@@ -78,8 +94,14 @@ for (const locale of LOCALES) {
     await expect(page.locator('app-outcome-pill')).toHaveCount(0);
     for (const row of runList.body.items) {
       const rendered = page.locator(`${ROWS}[data-run-id="${row.run_id}"]`);
+      // An omitted decision is unavailable; only an explicit null means not evaluated.
+      const decision = 'decision' in row ? row.decision : undefined;
       await expect(rendered.locator('[data-run-decision]')).toContainText(
-        row.decision ?? (locale === 'vi' ? 'Chưa đánh giá' : 'Not evaluated'),
+        decision === undefined
+          ? locale === 'vi'
+            ? 'Quyết định chưa khả dụng'
+            : 'Decision unavailable'
+          : (decision ?? (locale === 'vi' ? 'Chưa đánh giá' : 'Not evaluated')),
       );
       await expect(rendered.locator('time')).toHaveAttribute('datetime', row.created_at);
       await expect(rendered.locator('[data-run-unverified]')).toHaveCount(
@@ -121,14 +143,14 @@ for (const locale of LOCALES) {
     await ready(page);
     const expected = runList.body.items.filter((row) => row.decision === null);
     expect(expected.length).toBeGreaterThan(0);
-    await expect(page.locator('#run-decision')).toHaveValue('pending');
+    await expect(page.locator('#run-decision')).toContainText(FILTER_LABEL.pending[locale]);
     await expect(page.locator(ROWS)).toHaveCount(expected.length);
     await expect(page.locator(`${ROWS} [data-run-decision] [data-tone="pending"]`)).toHaveCount(
       expected.length,
     );
     await page.reload();
     await ready(page);
-    await expect(page.locator('#run-decision')).toHaveValue('pending');
+    await expect(page.locator('#run-decision')).toContainText(FILTER_LABEL.pending[locale]);
     await expect(page.locator(ROWS)).toHaveCount(expected.length);
     await page.locator('[data-run-clear]').click();
     await expect(page.locator(ROWS)).toHaveCount(runList.body.items.length);
@@ -138,7 +160,7 @@ for (const locale of LOCALES) {
   test(`filter URL survives reload and back/forward (${locale})`, async ({ page }) => {
     await page.goto(withVariants(path(locale), [VARIANTS.runs]));
     await ready(page);
-    await page.locator('#run-state').selectOption('running');
+    await chooseFilter(page, '#run-state', FILTER_LABEL.running[locale]);
     await page.locator('[data-run-apply]').click();
     await expect(page).toHaveURL(/state=running/);
     // The filter navigation is relative to the page's own route, so the review address survives it
@@ -149,10 +171,10 @@ for (const locale of LOCALES) {
     );
     await page.reload();
     await ready(page);
-    await expect(page.locator('#run-state')).toHaveValue('running');
-    await page.locator('#run-state').selectOption('complete');
-    await page.locator('#run-decision').selectOption('FAIL');
-    await page.locator('#run-scope').selectOption('rerun');
+    await expect(page.locator('#run-state')).toContainText(FILTER_LABEL.running[locale]);
+    await chooseFilter(page, '#run-state', FILTER_LABEL.complete[locale]);
+    await chooseFilter(page, '#run-decision', FILTER_LABEL.fail[locale]);
+    await chooseFilter(page, '#run-scope', FILTER_LABEL.rerun[locale]);
     await page.locator('[data-run-apply]').click();
     await expect(page).toHaveURL(/decision=FAIL/);
     await expect(page.locator(ROWS)).toHaveCount(1);
@@ -168,14 +190,14 @@ for (const locale of LOCALES) {
     );
     await page.goBack();
     await ready(page);
-    await expect(page.locator('#run-state')).toHaveValue('running');
-    await expect(page.locator('#run-decision')).toHaveValue('');
-    await expect(page.locator('#run-scope')).toHaveValue('');
+    await expect(page.locator('#run-state')).toContainText(FILTER_LABEL.running[locale]);
+    await expect(page.locator('#run-decision')).toContainText(FILTER_LABEL.any[locale]);
+    await expect(page.locator('#run-scope')).toContainText(FILTER_LABEL.any[locale]);
     await page.goForward();
     await ready(page);
-    await expect(page.locator('#run-state')).toHaveValue('complete');
-    await expect(page.locator('#run-decision')).toHaveValue('FAIL');
-    await expect(page.locator('#run-scope')).toHaveValue('rerun');
+    await expect(page.locator('#run-state')).toContainText(FILTER_LABEL.complete[locale]);
+    await expect(page.locator('#run-decision')).toContainText(FILTER_LABEL.fail[locale]);
+    await expect(page.locator('#run-scope')).toContainText(FILTER_LABEL.rerun[locale]);
     await page.locator('[data-run-clear]').click();
     await expect(page.locator(ROWS)).toHaveCount(runList.body.items.length);
     const query = new URL(page.url()).searchParams;
@@ -232,6 +254,61 @@ for (const locale of LOCALES) {
     await expect(page.locator(`${ROWS}[data-run-id="${last.run_id}"]`)).toBeVisible();
     expect(await page.locator(ROWS).count()).toBeLessThan(100);
   });
+
+  for (const mode of ['runs', 'large'] as const) {
+    test(`run identifiers stay unwrapped and columns align at tablet widths (${locale}, ${mode})`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 768, height: 800 });
+      await page.goto(withVariants(path(locale), [VARIANTS[mode]]));
+      await ready(page);
+      const row = page.locator(ROWS).first();
+      await expect(row).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      for (const width of [768, 800, 900]) {
+        await page.setViewportSize({ width, height: 800 });
+        const geometry = await row.evaluate((element) => {
+          const cell = element.querySelector<HTMLElement>('.identifier');
+          const id = cell?.querySelector('abbr');
+          const header = element.closest('[role="table"]')?.querySelector('thead tr');
+          if (!cell || !id || !header) throw new Error('Run table geometry is unavailable');
+          const range = document.createRange();
+          range.selectNodeContents(id);
+          const text = range.getBoundingClientRect();
+          const bounds = cell.getBoundingClientRect();
+          const style = getComputedStyle(cell);
+          const headings = [...header.children].map((entry) => entry.getBoundingClientRect());
+          return {
+            lines: range.getClientRects().length,
+            fits:
+              text.left >= bounds.left + parseFloat(style.paddingLeft) - 1 &&
+              text.right <= bounds.right - parseFloat(style.paddingRight) + 1,
+            alignment: [...element.children].map((entry, index) => {
+              const body = entry.getBoundingClientRect();
+              const heading = headings[index];
+              if (!heading) throw new Error('Run column heading is missing');
+              return Math.max(Math.abs(body.x - heading.x), Math.abs(body.width - heading.width));
+            }),
+          };
+        });
+        expect(geometry.lines, `${width}px identifier line count`).toBe(1);
+        expect(geometry.fits, `${width}px identifier fits inside cell padding`).toBe(true);
+        expect(geometry.alignment).toHaveLength(7);
+        for (const difference of geometry.alignment) expect(difference).toBeLessThanOrEqual(1);
+      }
+      await page.setViewportSize({ width: 767, height: 800 });
+      expect(
+        await row.evaluate((element) => {
+          const first = element.children[0]?.getBoundingClientRect();
+          const second = element.children[1]?.getBoundingClientRect();
+          return first !== undefined && second !== undefined && second.top >= first.bottom;
+        }),
+      ).toBe(true);
+      expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true,
+      );
+    });
+  }
 }
 
 test('cursor pages preserve server ordering and append without offset pagination', async ({
@@ -315,7 +392,7 @@ for (const locale of LOCALES) {
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
-      const table = page.locator('app-run-list-table .run-table');
+      const table = page.locator('app-run-list-table').getByRole('table');
       expect(await table.evaluate((element) => getComputedStyle(element).minInlineSize)).toBe(
         '0px',
       );
@@ -330,7 +407,15 @@ for (const locale of LOCALES) {
           .first()
           .evaluate((element) => getComputedStyle(element, '::before').content),
       ).not.toBe('none');
-      await expect(page.locator('#run-decision option[value="pending"]')).toHaveCount(1);
+      // The option list is a portaled overlay that exists only while the combobox is open; the
+      // keyboard opens it and Tab dismisses it without committing.
+      await page.locator('#run-decision').focus();
+      await page.keyboard.press('ArrowDown');
+      await expect(
+        page.getByRole('option', { name: FILTER_LABEL.pending[locale], exact: true }),
+      ).toBeVisible();
+      await page.keyboard.press('Tab');
+      await expect(page.locator('#run-decision')).toHaveAttribute('aria-expanded', 'false');
       await expectNoA11yViolations(page, `run list ${locale}/${theme}/390px`);
       await page.setViewportSize({ width: 1440, height: 900 });
       expect(

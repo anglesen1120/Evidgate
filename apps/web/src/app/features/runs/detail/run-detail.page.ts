@@ -14,6 +14,8 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmTabsImports } from '@evidgate/ui/tabs';
 import { combineLatest } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
@@ -36,15 +38,21 @@ import { RunDetailStore } from './run-detail.store';
     EvidencePanelComponent,
     DecisionViewComponent,
     AttemptsTableComponent,
+    HlmButton,
+    HlmTabsImports,
   ],
   providers: [RunDetailStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-detail.page.html',
-  styleUrl: './run-detail.page.css',
-  host: { '[attr.data-run-detail-status]': 'store.status()' },
+  host: {
+    '[attr.data-run-detail-status]': 'store.status()',
+    class:
+      'block min-w-0 font-sans text-sm leading-(--eg-leading-sm) text-foreground wrap-anywhere',
+  },
 })
 export class RunDetailPage {
   protected readonly store = inject(RunDetailStore);
+  protected readonly detailTab = signal('evidence');
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
@@ -79,12 +87,16 @@ export class RunDetailPage {
   });
   protected readonly copy = {
     title: $localize`:@@runs.detail.title:Run detail`,
+    sections: $localize`:@@runs.detail.sections:Run sections`,
     back: $localize`:@@runs.detail.back:Back to runs`,
+    evidence: $localize`:@@runs.evidence.title:Evidence`,
+    decision: $localize`:@@runs.decision.title:Latest live decision`,
   };
   constructor() {
     this.route.fragment.pipe(takeUntilDestroyed()).subscribe((fragment) => {
       this.fragment.set(fragment);
       this.landed = false;
+      if (fragment?.startsWith('producer-')) this.detailTab.set('evidence');
     });
     combineLatest([this.route.paramMap, this.route.queryParamMap])
       .pipe(takeUntilDestroyed())
@@ -175,12 +187,20 @@ export class RunDetailPage {
   /** The decision region's mismatch action pins the revision that decision was evaluated at. */
   protected viewDecisionEvidence(revision: number): void {
     this.store.pinRevision(revision);
-    // The mismatch notice disappears once the pin matches the decision, taking its action with it.
-    this.handoffEvidenceFocus('[data-decision-mismatch] .decision-mismatch__action');
+    this.showEvidence();
   }
   protected showEvidence(): void {
-    const target = this.host.nativeElement.querySelector<HTMLElement>('#evidence-title');
-    if (target) this.focusEvidenceTarget(target);
+    const focus = () => {
+      const target = this.host.nativeElement.querySelector<HTMLElement>('#evidence-title');
+      if (target) this.focusEvidenceTarget(target);
+    };
+    if (this.detailTab() === 'evidence') {
+      focus();
+      return;
+    }
+    this.detailTab.set('evidence');
+    // The destination must be visible before focus leaves the now-hidden decision panel.
+    afterNextRender(focus, { injector: this.injector });
   }
   /**
    * Moves focus to the evidence heading after the render that removed `controlSelector`, and only

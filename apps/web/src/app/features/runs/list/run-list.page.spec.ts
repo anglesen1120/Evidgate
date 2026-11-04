@@ -1,5 +1,5 @@
 import { computed, provideZonelessChangeDetection, signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import {
   ActivatedRoute,
   Router,
@@ -10,6 +10,7 @@ import {
 import type { RunSummary } from '@evidgate/sdk';
 import { BehaviorSubject } from 'rxjs';
 import type { ApiError } from '../../../core/http/api-error';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { RunListPage } from './run-list.page';
 import { RunListStore, type RunListFilters } from './run-list.store';
 
@@ -88,6 +89,7 @@ function pageStore() {
 }
 
 describe('RunListPage', () => {
+  provideLayoutTestStubs();
   let store = pageStore();
   let query: BehaviorSubject<ParamMap>;
   let project: BehaviorSubject<ParamMap>;
@@ -132,11 +134,23 @@ describe('RunListPage', () => {
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
   function change(root: HTMLElement, name: string, value: string) {
-    const field = root.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${name}"]`)!;
+    const field = root.querySelector<HTMLInputElement>(`input[name="${name}"]`);
+    if (!field) throw new Error(`Missing input ${name}`);
     field.value = value;
-    field.dispatchEvent(
-      new Event(field instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }),
-    );
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  async function choose(
+    fixture: ComponentFixture<RunListPage>,
+    root: HTMLElement,
+    name: string,
+    value: string,
+  ) {
+    root.querySelector<HTMLButtonElement>(`[name="${name}"] button`)?.click();
+    await fixture.whenStable();
+    const option = document.querySelector<HTMLElement>(`[role="option"][data-value="${value}"]`);
+    if (!option) throw new Error(`Missing ${name} option ${value}`);
+    option.click();
+    await fixture.whenStable();
   }
   it('initializes from ancestor project context and URL filters with one page h1', async () => {
     query.next(
@@ -163,10 +177,15 @@ describe('RunListPage', () => {
     expect(root.querySelector('[name="completeness"]')).toBeNull();
   });
   it('offers not evaluated separately from verdicts and explains server filtering', async () => {
-    const { root } = await render();
-    expect(root.querySelector('#run-decision option[value="pending"]')?.textContent).toBe(
-      'Not evaluated',
-    );
+    const { fixture, root } = await render();
+    root.querySelector<HTMLButtonElement>('#run-decision')?.click();
+    await fixture.whenStable();
+    expect(
+      document.querySelector('[role="option"][data-value="pending"]')?.textContent?.trim(),
+    ).toBe('Not evaluated');
+    expect(document.querySelector('[role="listbox"]')?.getAttribute('aria-label')).toBe('Decision');
+    root.querySelector<HTMLButtonElement>('#run-decision')?.click();
+    await fixture.whenStable();
     expect(root.querySelector('#run-decision')?.getAttribute('aria-describedby')).toBe(
       'run-decision-hint',
     );
@@ -180,16 +199,19 @@ describe('RunListPage', () => {
     const title = root.querySelector('h1');
     expect(title).not.toBeNull();
     if (title) {
-      expect(getComputedStyle(title).fontSize).toBe(
-        'clamp(var(--eg-text-xl), 2vw, var(--eg-text-2xl))',
-      );
-      expect(getComputedStyle(title).lineHeight).toBe('var(--eg-leading-2xl)');
+      expect(
+        title.classList.contains('text-[length:clamp(var(--eg-text-xl),2vw,var(--eg-text-2xl))]'),
+      ).toBe(true);
+      expect(title.classList.contains('leading-[var(--eg-leading-2xl)]')).toBe(true);
+      expect(title.textContent).toBe('Runs');
     }
   });
   it('restores a pending filter from the URL without rewriting its context', async () => {
     query.next(convertToParamMap({ decision: 'pending', ref: 'main' }));
     const { root } = await render();
-    expect(root.querySelector<HTMLSelectElement>('#run-decision')?.value).toBe('pending');
+    expect(root.querySelector('#run-decision hlm-select-value')?.textContent).toContain(
+      'Not evaluated',
+    );
     expect(navigate).not.toHaveBeenCalled();
     expect(store.init).toHaveBeenCalledWith(
       'project-1',
@@ -248,8 +270,10 @@ describe('RunListPage', () => {
   it('applies filters to the store and merges URL state while clearing obsolete filter keys', async () => {
     query.next(convertToParamMap({ decision: 'pending' }));
     const { fixture, root } = await render();
-    change(root, 'state', 'running');
-    change(root, 'scope', 'original');
+    await choose(fixture, root, 'state', 'running');
+    await choose(fixture, root, 'scope', 'original');
+    await choose(fixture, root, 'decision', 'PASS');
+    expect(store.setFilters).not.toHaveBeenCalled();
     change(root, 'refName', 'main');
     root
       .querySelector('form')!
@@ -257,7 +281,7 @@ describe('RunListPage', () => {
     await fixture.whenStable();
     expect(store.setFilters).toHaveBeenLastCalledWith({
       state: 'running',
-      decision: 'pending',
+      decision: 'PASS',
       scope: 'original',
       refName: 'main',
     });
@@ -265,12 +289,12 @@ describe('RunListPage', () => {
       [],
       expect.objectContaining({
         queryParamsHandling: 'merge',
-        queryParams: { state: 'running', decision: 'pending', scope: 'original', ref: 'main' },
+        queryParams: { state: 'running', decision: 'PASS', scope: 'original', ref: 'main' },
       }),
     );
     const calls = store.init.mock.calls.length;
     query.next(
-      convertToParamMap({ state: 'running', decision: 'pending', scope: 'original', ref: 'main' }),
+      convertToParamMap({ state: 'running', decision: 'PASS', scope: 'original', ref: 'main' }),
     );
     await fixture.whenStable();
     expect(store.init).toHaveBeenCalledTimes(calls);
@@ -287,10 +311,10 @@ describe('RunListPage', () => {
     const { fixture, root } = await render();
     query.next(convertToParamMap({ decision: 'FAIL' }));
     await fixture.whenStable();
-    expect((root.querySelector('#run-decision') as HTMLSelectElement).value).toBe('FAIL');
+    expect(root.querySelector('#run-decision hlm-select-value')?.textContent).toContain('FAIL');
     query.next(convertToParamMap({}));
     await fixture.whenStable();
-    expect((root.querySelector('#run-decision') as HTMLSelectElement).value).toBe('');
+    expect(root.querySelector('#run-decision hlm-select-value')?.textContent).toContain('All');
     project.next(convertToParamMap({ projectId: 'project-2' }));
     await fixture.whenStable();
     expect(store.init).toHaveBeenLastCalledWith('project-2', {

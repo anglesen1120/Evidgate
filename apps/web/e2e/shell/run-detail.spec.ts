@@ -198,7 +198,9 @@ for (const locale of LOCALES) {
       'ready',
     );
     expect(page.url()).toBe(before);
-    await expect(page.locator('#run-state')).toHaveValue('complete');
+    await expect(page.locator('#run-state')).toContainText(
+      locale === 'vi' ? 'Hoàn tất' : 'Complete',
+    );
     await expect(page.locator('#run-ref')).toHaveValue('main');
   });
 }

@@ -8,6 +8,7 @@ import ready from '../../../../../../../fixtures/web-api/run-detail/input.json';
 import formatted from '../../../../../../../fixtures/web-api/run-detail-ref-format/input.json';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { RunDataService } from '../data/run-data.service';
 import { RunDetailPage } from './run-detail.page';
 import { revision, revisionPage, deferred } from './run-detail-store.fixtures';
@@ -54,6 +55,7 @@ function liveBody() {
   };
 }
 describe('RunDetailPage', () => {
+  provideLayoutTestStubs();
   const get = vi.fn<(id: string) => Promise<RunStateDto>>();
   const listAttempts = vi.fn<(id: string, query?: object) => Promise<RunAttemptPage>>();
   const listEvidenceRevisions =
@@ -142,12 +144,11 @@ describe('RunDetailPage', () => {
     const { root } = await open();
     const title = root.querySelector('h1');
     expect(title).not.toBeNull();
-    if (title) {
-      expect(getComputedStyle(title).fontSize).toBe(
-        'clamp(var(--eg-text-xl), 2vw, var(--eg-text-2xl))',
-      );
-      expect(getComputedStyle(title).lineHeight).toBe('var(--eg-leading-2xl)');
-    }
+    expect(
+      title?.classList.contains('text-[clamp(var(--eg-text-xl),2vw,var(--eg-text-2xl))]'),
+    ).toBe(true);
+    expect(title?.classList.contains('leading-(--eg-leading-2xl)')).toBe(true);
+    expect(title?.textContent).toBe('Run detail');
   });
   it('explains incomplete collection before attempts without inventing a missing reason', async () => {
     get.mockResolvedValue({ ...run, state: 'incomplete' });
@@ -481,6 +482,10 @@ describe('RunDetailPage', () => {
     );
     getDecision.mockResolvedValue(liveBody());
     const { harness, root } = await open(run.run_id, '', '?evidence_revision=3');
+    root
+      .querySelector<HTMLButtonElement>('[role="tab"][aria-controls="brn-tabs-content-decision"]')
+      ?.click();
+    await settle(harness);
     const action = root.querySelector<HTMLButtonElement>('[data-decision-mismatch] button');
     expect(action).not.toBeNull();
     action!.focus();

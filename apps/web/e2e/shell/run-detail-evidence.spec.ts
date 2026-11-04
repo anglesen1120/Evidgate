@@ -41,6 +41,39 @@ const BANNER_TITLE: Record<ShellLocale, string> = {
   vi: 'Đã có phiên bản mới hơn',
 };
 
+/** Both regions stay mounted; the selected tab decides which panel is visible. */
+const EVIDENCE_TAB: Record<ShellLocale, string> = {
+  en: 'Evidence',
+  vi: 'Bằng chứng',
+};
+
+const DECISION_TAB: Record<ShellLocale, string> = {
+  en: 'Latest live decision',
+  vi: 'Quyết định chính thức mới nhất',
+};
+
+/** `Revision N · <timestamp> UTC` is the trigger and the option text; the number is the key. */
+function revisionText(locale: ShellLocale, revisionNo: number): RegExp {
+  return new RegExp(`^${locale === 'vi' ? 'Phiên bản' : 'Revision'} ${revisionNo} · `);
+}
+
+async function showTab(page: Page, name: string): Promise<void> {
+  await page.locator('app-run-detail-page').getByRole('tab', { name }).click();
+}
+
+async function showDecision(page: Page, locale: ShellLocale): Promise<void> {
+  await showTab(page, DECISION_TAB[locale]);
+}
+
+async function showEvidence(page: Page, locale: ShellLocale): Promise<void> {
+  await showTab(page, EVIDENCE_TAB[locale]);
+}
+
+async function chooseRevision(page: Page, locale: ShellLocale, revisionNo: number): Promise<void> {
+  await page.locator('[data-evidence-revision-select]').click();
+  await page.getByRole('option', { name: revisionText(locale, revisionNo) }).click();
+}
+
 /** One review address: the review route, the run, and one variant per operation it reads. */
 function detailPath(
   locale: ShellLocale,
@@ -83,6 +116,7 @@ for (const locale of LOCALES) {
   test(`a pending decision states pending and carries no verdict (${locale})`, async ({ page }) => {
     await page.goto(detailPath(locale));
     await ready(page);
+    await showDecision(page, locale);
 
     const decision = page.locator('#decision-panel');
     await expect(decision.locator('[data-decision-pending]')).toBeVisible();
@@ -96,6 +130,7 @@ for (const locale of LOCALES) {
     await expect(decision.locator('[data-decision-shadow]')).toHaveCount(0);
 
     // The evidence badge is collection completeness of a revision row, not a decision verdict.
+    await showEvidence(page, locale);
     await expect(page.locator('#evidence-panel app-evidence-badge [data-tone]')).toHaveAttribute(
       'data-tone',
       'success',
@@ -117,6 +152,7 @@ for (const locale of LOCALES) {
   }) => {
     await page.goto(detailPath(locale, 'evaluated-fail-missing-shard'));
     await ready(page);
+    await showDecision(page, locale);
 
     const decision = page.locator('#decision-panel');
     await expect(decision.locator('app-decision-chip [data-tone]')).toHaveAttribute(
@@ -133,6 +169,7 @@ for (const locale of LOCALES) {
     );
     await expect(decision.locator('[data-decision-mismatch]')).toHaveCount(0);
 
+    await showEvidence(page, locale);
     await expect(page.locator('#evidence-panel app-evidence-badge [data-tone]')).toHaveAttribute(
       'data-tone',
       'warning',
@@ -154,6 +191,7 @@ for (const locale of LOCALES) {
   }) => {
     await page.goto(detailPath(locale, 'evaluated-pass'));
     await ready(page);
+    await showDecision(page, locale);
 
     const decision = page.locator('#decision-panel');
     await expect(decision.locator('app-decision-chip [data-tone]')).toHaveAttribute(
@@ -172,6 +210,7 @@ for (const locale of LOCALES) {
     );
 
     // The decision pins the revision it was evaluated at, and the banner names the newer one.
+    await showEvidence(page, locale);
     await expect(page.locator('#evidence-panel [data-evidence-newer]')).toBeVisible();
     await expect(page.locator('#evidence-panel [data-evidence-newer]')).toContainText(
       BANNER_TITLE[locale],
@@ -181,6 +220,7 @@ for (const locale of LOCALES) {
   test(`a shadow decision never fills the live slot (${locale})`, async ({ page }) => {
     await page.goto(detailPath(locale, 'shadow-refused'));
     await ready(page);
+    await showDecision(page, locale);
 
     const decision = page.locator('#decision-panel');
     await expect(decision.locator('[data-decision-shadow]')).toBeVisible();
@@ -199,10 +239,10 @@ for (const locale of LOCALES) {
     await ready(page);
 
     const select = page.locator('[data-evidence-revision-select]');
-    await expect(select).toHaveValue(String(NEWEST_REVISION.revision_no));
+    await expect(select).toContainText(revisionText(locale, NEWEST_REVISION.revision_no));
     await expect(page.locator('#evidence-panel [data-evidence-newer]')).toHaveCount(0);
 
-    await select.selectOption(String(INCOMPLETE_REVISION.revision_no));
+    await chooseRevision(page, locale, INCOMPLETE_REVISION.revision_no);
 
     await expect(page.locator('#evidence-panel [data-evidence-newer]')).toBeVisible();
     await expect(page.locator('#evidence-panel [data-evidence-newer]')).toContainText(
@@ -211,7 +251,7 @@ for (const locale of LOCALES) {
     await expect(page.locator('#evidence-panel [data-evidence-selected]')).toContainText(
       String(INCOMPLETE_REVISION.revision_no),
     );
-    await expect(select).toHaveValue(String(INCOMPLETE_REVISION.revision_no));
+    await expect(select).toContainText(revisionText(locale, INCOMPLETE_REVISION.revision_no));
     await expect.poll(() => pinnedRevision(page)).toBe(String(INCOMPLETE_REVISION.revision_no));
 
     // The pinned row's own completeness, missing reason and evaluation reference stay on screen,
@@ -226,6 +266,7 @@ for (const locale of LOCALES) {
     await expect(page.locator('#evidence-panel [data-evidence-evaluation]')).toContainText(
       String(INCOMPLETE_REVISION.evaluation_id),
     );
+    await showDecision(page, locale);
     await expect(page.locator('#decision-panel [data-decision-pending]')).toBeVisible();
     expect(new URL(page.url()).searchParams.get('fixture.variant.getRunDecision')).toBe('ok');
   });
@@ -244,20 +285,22 @@ for (const locale of LOCALES) {
     await ready(page);
 
     const select = page.locator('[data-evidence-revision-select]');
-    await expect(select).toHaveValue(String(OLDEST_REVISION.revision_no));
+    await expect(select).toContainText(revisionText(locale, OLDEST_REVISION.revision_no));
     await expect(page.locator('#evidence-panel [data-evidence-newer]')).toBeVisible();
     await expect(page.locator('#evidence-panel [data-evidence-historical]')).toBeVisible();
     await expect(page.locator('#evidence-panel [data-evidence-selected]')).toContainText(
       String(OLDEST_REVISION.revision_no),
     );
     // The decision is still the accepted body, clearly scoped to its own revision.
+    await showDecision(page, locale);
     await expect(page.locator('#decision-panel app-decision-chip')).toContainText('FAIL');
     await expect(page.locator('#decision-panel [data-decision-mismatch]')).toBeVisible();
 
     await page.reload();
     await ready(page);
-    await expect(select).toHaveValue(String(OLDEST_REVISION.revision_no));
+    await expect(select).toContainText(revisionText(locale, OLDEST_REVISION.revision_no));
     await expect(page.locator('#evidence-panel [data-evidence-newer]')).toBeVisible();
+    await showDecision(page, locale);
     await expect(page.locator('#decision-panel [data-decision-mismatch]')).toBeVisible();
     expect(pinnedRevision(page)).toBe(String(OLDEST_REVISION.revision_no));
   });
@@ -282,6 +325,7 @@ for (const locale of LOCALES) {
 
     await expect(page.locator('#evidence-panel [data-evidence-empty]')).toBeVisible();
     await expect(page.locator('[data-evidence-revision-select]')).toHaveCount(0);
+    await showDecision(page, locale);
     await expect(page.locator('#decision-panel [data-decision-pending]')).toBeVisible();
     expect(pinnedRevision(page)).toBeNull();
     expect(await pageText(page)).not.toContain('PASS');
@@ -294,17 +338,19 @@ for (const locale of LOCALES) {
     await ready(page);
     // The decision region owns its failure (the corpus answers a retryable 503 with Retry-After,
     // so the region renders the refusal window); the revision list still answers.
+    await expect(page.locator('[data-evidence-revision-select]')).toContainText(
+      revisionText(locale, NEWEST_REVISION.revision_no),
+    );
+    await showDecision(page, locale);
     await expect(page.locator('#decision-panel app-retry-after')).toBeVisible();
     await expect(page.locator('#decision-panel app-decision-chip')).toHaveCount(0);
-    await expect(page.locator('[data-evidence-revision-select]')).toHaveValue(
-      String(NEWEST_REVISION.revision_no),
-    );
 
     await page.goto(detailPath(locale, 'ok', 'unavailable'));
     await ready(page);
     // The reverse: the evidence panel owns its failure and the pending decision stays.
     await expect(page.locator('#evidence-panel app-error-pattern')).toBeVisible();
     await expect(page.locator('[data-evidence-revision-select]')).toHaveCount(0);
+    await showDecision(page, locale);
     await expect(page.locator('#decision-panel [data-decision-pending]')).toBeVisible();
     await expect(page.locator('app-run-header .run-summary')).toBeVisible();
   });
@@ -319,6 +365,7 @@ for (const locale of LOCALES) {
 
       await page.goto(detailPath(locale));
       await ready(page);
+      await showDecision(page, locale);
       await expect(page.locator('#decision-panel [data-decision-pending]')).toBeVisible();
       await expectNoA11yViolations(page, `run detail pending ${locale}/${theme}`);
 
@@ -348,6 +395,7 @@ for (const locale of LOCALES) {
 
       await page.goto(detailPath(locale, 'unavailable', 'empty'));
       await ready(page);
+      await showDecision(page, locale);
       await expect(page.locator('#decision-panel app-retry-after')).toBeVisible();
       await expectNoA11yViolations(page, `run detail decision error ${locale}/${theme}`);
     });
