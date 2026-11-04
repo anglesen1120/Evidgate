@@ -31,14 +31,14 @@ public sealed class EvidenceSecretPatternScannerTests
     /// <summary>The plan's named unit case (06.2.3 §9): the AWS arm reports the key it is given.</summary>
     [Fact]
     public void SecretPatternScanner_DetectsAwsKey() =>
-        SecretPatternScanner.Scan(Encoding.ASCII.GetBytes(Compose(AwsPrefix, AwsBody)))
+        Scan(Encoding.ASCII.GetBytes(Compose(AwsPrefix, AwsBody)))
             .ShouldHaveSingleItem()
             .PatternClass.ShouldBe(SecretPatternClass.AwsAccessKey);
 
     /// <summary>The plan's named unit case (06.2.3 §9): the PEM arm reports a private-key header.</summary>
     [Fact]
     public void SecretPatternScanner_DetectsPrivateKeyPem() =>
-        SecretPatternScanner.Scan(Encoding.ASCII.GetBytes(PemBegin + "EC " + PemPrivateSuffix))
+        Scan(Encoding.ASCII.GetBytes(PemBegin + "EC " + PemPrivateSuffix))
             .ShouldHaveSingleItem()
             .PatternClass.ShouldBe(SecretPatternClass.PrivateKeyPem);
 
@@ -52,7 +52,7 @@ public sealed class EvidenceSecretPatternScannerTests
         var hex = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
         var content = Encoding.ASCII.GetBytes($"commit={hex} checksum=sha256:{hex} digest {hex}");
 
-        SecretPatternScanner.Scan(content).ShouldBeEmpty();
+        Scan(content).ShouldBeEmpty();
     }
 
     /// <summary>AC4: ordinary prose carries no class, and the answer is the empty list rather than a zero-count row.</summary>
@@ -62,7 +62,7 @@ public sealed class EvidenceSecretPatternScannerTests
         var content = Encoding.UTF8.GetBytes(
             "The deploy finished; see the changelog for the module's own notes and the policy review.");
 
-        SecretPatternScanner.Scan(content).ShouldBeEmpty();
+        Scan(content).ShouldBeEmpty();
     }
 
     /// <summary>AC2: each class the plan names is reported once with its count, in the scanner's own class order.</summary>
@@ -78,7 +78,7 @@ public sealed class EvidenceSecretPatternScannerTests
             PemBegin + "RSA " + PemPrivateSuffix,
             "Authorization: Bearer " + new string('a', 24));
 
-        var hits = SecretPatternScanner.Scan(Encoding.UTF8.GetBytes(text));
+        var hits = Scan(Encoding.UTF8.GetBytes(text));
 
         hits.Select(hit => hit.PatternClass).ShouldBe(
             [SecretPatternClass.AwsAccessKey, SecretPatternClass.PrivateKeyPem, SecretPatternClass.GenericBearerToken]);
@@ -98,7 +98,7 @@ public sealed class EvidenceSecretPatternScannerTests
         var longerIdentifier = "x" + Compose(AwsPrefix, AwsBody);
         var text = string.Join(' ', AwsPrefix.ToLowerInvariant() + AwsBody, Compose(AwsPrefix, shortBody), longerIdentifier);
 
-        SecretPatternScanner.Scan(Encoding.UTF8.GetBytes(text)).ShouldBeEmpty();
+        Scan(Encoding.UTF8.GetBytes(text)).ShouldBeEmpty();
     }
 
     /// <summary>
@@ -124,14 +124,14 @@ public sealed class EvidenceSecretPatternScannerTests
 
         foreach (var header in privateKeys)
         {
-            SecretPatternScanner.Scan(Encoding.UTF8.GetBytes(header))
+            Scan(Encoding.UTF8.GetBytes(header))
                 .ShouldHaveSingleItem()
                 .PatternClass.ShouldBe(SecretPatternClass.PrivateKeyPem);
         }
 
         foreach (var header in publicKeys)
         {
-            SecretPatternScanner.Scan(Encoding.UTF8.GetBytes(header)).ShouldBeEmpty();
+            Scan(Encoding.UTF8.GetBytes(header)).ShouldBeEmpty();
         }
     }
 
@@ -159,14 +159,14 @@ public sealed class EvidenceSecretPatternScannerTests
 
         foreach (var sample in accepted)
         {
-            SecretPatternScanner.Scan(Encoding.UTF8.GetBytes(sample))
+            Scan(Encoding.UTF8.GetBytes(sample))
                 .ShouldHaveSingleItem()
                 .PatternClass.ShouldBe(SecretPatternClass.GenericBearerToken);
         }
 
         foreach (var sample in refused)
         {
-            SecretPatternScanner.Scan(Encoding.UTF8.GetBytes(sample)).ShouldBeEmpty();
+            Scan(Encoding.UTF8.GetBytes(sample)).ShouldBeEmpty();
         }
     }
 
@@ -183,7 +183,7 @@ public sealed class EvidenceSecretPatternScannerTests
         Array.Fill(content, (byte)'.');
         Encoding.ASCII.GetBytes(key).CopyTo(content, boundary - 10);
 
-        var hits = SecretPatternScanner.Scan(content);
+        var hits = Scan(content);
 
         hits.ShouldHaveSingleItem().HitCount.ShouldBe(1);
     }
@@ -199,10 +199,10 @@ public sealed class EvidenceSecretPatternScannerTests
         var adjacent = key + " " + key;
         var repeatedPrefix = Compose(AwsPrefix, AwsBody[..^1] + AwsPrefix[..1]);
 
-        SecretPatternScanner.Scan(Encoding.UTF8.GetBytes(adjacent))
+        Scan(Encoding.UTF8.GetBytes(adjacent))
             .ShouldHaveSingleItem()
             .HitCount.ShouldBe(2);
-        SecretPatternScanner.Scan(Encoding.UTF8.GetBytes(repeatedPrefix))
+        Scan(Encoding.UTF8.GetBytes(repeatedPrefix))
             .ShouldHaveSingleItem()
             .HitCount.ShouldBe(1);
     }
@@ -217,25 +217,25 @@ public sealed class EvidenceSecretPatternScannerTests
         var random = new byte[64 * 1024];
         new Random(20261104).NextBytes(random);
 
-        SecretPatternScanner.Scan(random).ShouldBeEmpty();
+        Scan(random).ShouldBeEmpty();
 
         Encoding.ASCII.GetBytes(Compose(AwsPrefix, AwsBody)).CopyTo(random, 32 * 1024);
-        SecretPatternScanner.Scan(random).ShouldHaveSingleItem().PatternClass.ShouldBe(SecretPatternClass.AwsAccessKey);
+        Scan(random).ShouldHaveSingleItem().PatternClass.ShouldBe(SecretPatternClass.AwsAccessKey);
     }
 
     /// <summary>
-    /// A large object is scanned in one bounded pass and still answers: 8 MiB of ordinary text with one key at the end
-    /// costs no allocation proportional to the input and finishes well inside the generous wall clock.
+    /// A large object is scanned in one bounded pass and still answers: 8 MiB of ordinary text with one delimited key
+    /// at the end costs no allocation proportional to the input and finishes well inside the generous wall clock.
     /// </summary>
     [Fact]
     public async Task Scan_Large_Input_Is_Bounded_And_Complete()
     {
         var content = new byte[(8 * 1024 * 1024) + 64];
         Array.Fill(content, (byte)'a');
-        Encoding.ASCII.GetBytes(" " + Compose(AwsPrefix, AwsBody)).CopyTo(content, 8 * 1024 * 1024);
+        Encoding.ASCII.GetBytes(" " + Compose(AwsPrefix, AwsBody) + " ").CopyTo(content, 8 * 1024 * 1024);
 
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
-        var hits = await Task.Run(() => SecretPatternScanner.Scan(content), Token);
+        var hits = await Task.Run(() => Scan(content), Token);
         var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
 
         hits.ShouldHaveSingleItem().HitCount.ShouldBe(1);
@@ -254,12 +254,127 @@ public sealed class EvidenceSecretPatternScannerTests
         var content = Encoding.ASCII.GetBytes(string.Concat(Enumerable.Repeat(AwsPrefix, 250_000)));
 
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
-        var hits = await Task.Run(() => SecretPatternScanner.Scan(content), Token);
+        var hits = await Task.Run(() => Scan(content), Token);
         var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
 
         hits.ShouldBeEmpty();
         elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(20));
     }
+
+    /// <summary>
+    /// The scheme is case-insensitive whatever its spelling, and the byte before it decides whether it is a scheme:
+    /// an alphanumeric neighbour makes it part of a longer word, while the punctuation a header line or query string
+    /// puts there (<c>=</c>, <c>:</c>, <c>.</c>) is a delimiter.
+    /// </summary>
+    [Fact]
+    public void Scan_Bearer_Scheme_Is_Case_Insensitive_And_Needs_Only_A_Non_Alphanumeric_Left_Byte()
+    {
+        var token = new string('Q', 20);
+        var accepted = new[]
+        {
+            "bEaReR " + token,
+            "authorization=Bearer " + token,
+            "\"Bearer " + token,
+            "value.Bearer " + token,
+        };
+
+        var refused = new[]
+        {
+            "9Bearer " + token,
+            "zBearer " + token,
+        };
+
+        foreach (var sample in accepted)
+        {
+            Scan(Encoding.UTF8.GetBytes(sample))
+                .ShouldHaveSingleItem()
+                .PatternClass.ShouldBe(SecretPatternClass.GenericBearerToken);
+        }
+
+        foreach (var sample in refused)
+        {
+            Scan(Encoding.UTF8.GetBytes(sample)).ShouldBeEmpty();
+        }
+    }
+
+    /// <summary>
+    /// A header value folded across lines still carries its credential, so a line break counts as the separator; the
+    /// separator run stays bounded, and twenty spaces are refused where one space and the token are accepted.
+    /// </summary>
+    [Fact]
+    public void Scan_Bearer_Accepts_Line_Breaks_Between_Scheme_And_Token_Within_The_Separator_Limit()
+    {
+        var token = new string('Q', 20);
+
+        foreach (var separator in new[] { "\r\n", "\n", "\r", " \r\n\t" })
+        {
+            Scan(Encoding.UTF8.GetBytes("Bearer" + separator + token))
+                .ShouldHaveSingleItem()
+                .PatternClass.ShouldBe(SecretPatternClass.GenericBearerToken);
+        }
+
+        Scan(Encoding.UTF8.GetBytes("Bearer " + new string(' ', 20) + token)).ShouldBeEmpty();
+        Scan(Encoding.UTF8.GetBytes("Bearer " + token)).ShouldHaveSingleItem();
+    }
+
+    /// <summary>
+    /// An OpenPGP private-key block is a private key, and its public counterpart is not: the two headers differ by one
+    /// word, so the arm has to name the private one rather than the block shape.
+    /// </summary>
+    [Fact]
+    public void Scan_Pgp_Private_Key_Block_Is_Reported_And_The_Public_Block_Is_Not()
+    {
+        var privateBlock = PemBegin + "PGP " + "PRIVATE KEY BLOCK" + "-----";
+        var publicBlock = PemBegin + "PGP " + "PUBLIC KEY BLOCK" + "-----";
+
+        Scan(Encoding.UTF8.GetBytes(privateBlock))
+            .ShouldHaveSingleItem()
+            .PatternClass.ShouldBe(SecretPatternClass.PrivateKeyPem);
+
+        Scan(Encoding.UTF8.GetBytes(publicBlock)).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The AWS arm needs a delimiter on both sides: a key-shaped body followed by another word character belongs to a
+    /// longer identifier, while the same bytes between two spaces are reported.
+    /// </summary>
+    [Fact]
+    public void Scan_Aws_Key_Needs_A_Right_Boundary()
+    {
+        var key = Compose(AwsPrefix, AwsBody);
+
+        Scan(Encoding.UTF8.GetBytes(key + "a")).ShouldBeEmpty();
+        Scan(Encoding.UTF8.GetBytes(key + "=")).ShouldHaveSingleItem();
+        Scan(Encoding.UTF8.GetBytes(" " + key + " ")).ShouldHaveSingleItem();
+    }
+
+    /// <summary>
+    /// A cancelled attempt stops instead of finishing a large object: the pass checks the token at a fixed interval,
+    /// and the same buffer with a live token still answers, so the throw is the cancellation and not the input.
+    /// </summary>
+    [Fact]
+    public async Task Scan_Honours_Cancellation_During_A_Large_Pass()
+    {
+        var content = new byte[16 * 1024 * 1024];
+
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        Should.Throw<OperationCanceledException>(() => SecretPatternScanner.Scan(content, cancelled.Token));
+
+        var hits = await Task.Run(() => Scan(content), Token);
+
+        hits.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The scanner over one sample, under the test's own cancellation: a scan never runs without a token, so every
+    /// case here states the one the test context owns.
+    /// </summary>
+    /// <param name="content">The bytes to scan.</param>
+    /// <returns>One entry per class that matched.</returns>
+    private static IReadOnlyList<SecretPatternHit> Scan(ReadOnlySpan<byte> content) =>
+        SecretPatternScanner.Scan(content, Token);
 
     /// <summary>The sample the AWS arm matches, assembled here so the file carries no credential-shaped literal.</summary>
     /// <param name="prefix">The arm's literal prefix.</param>

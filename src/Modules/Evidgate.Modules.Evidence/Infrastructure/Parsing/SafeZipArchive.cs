@@ -800,8 +800,15 @@ internal static class SafeZipArchive
             or UnicodeCategory.ParagraphSeparator
             or UnicodeCategory.PrivateUse;
 
-    /// <summary>True when the leading bytes are a zip signature (local header, or an empty/spanned archive).</summary>
-    private static bool IsZipMagic(ReadOnlySpan<byte> prefix) =>
+    /// <summary>
+    /// True when the leading bytes are a zip signature (local header, or an empty/spanned archive). The recognition is
+    /// the content's own magic, never the name, so an entry called <c>report.xml</c> that is a zip is still seen as
+    /// one. It is <c>internal</c> because the masking scan tests an entry's content with the same rule before it
+    /// calls those bytes a document: one recognizer decides what a nested archive is, here and there.
+    /// </summary>
+    /// <param name="prefix">The entry's bytes, read from its start.</param>
+    /// <returns>True when the content begins a zip archive.</returns>
+    internal static bool IsZipMagic(ReadOnlySpan<byte> prefix) =>
         prefix.Length >= ZipMagicBytes
         && prefix[0] == (byte)'P'
         && prefix[1] == (byte)'K'

@@ -28,6 +28,11 @@
 -- a grant: it holds no policy on this table, so until 02.8.1's grant-gated operator policy lands it reads zero rows
 -- (0028's posture). The scheduler role holds nothing.
 --
+-- GUARD: the scan is the first writer of `sensitivity`, so this migration adds the `artifact_scan_guard` trigger
+-- (D2): `sensitive` never returns to `normal` and a decided `scan_state` never returns to `pending`, whatever role
+-- writes. Raising sensitivity and moving `pending` to a verdict stay allowed, and the trigger only judges those two
+-- columns, so the lifecycle writes 0028 grants are untouched.
+--
 -- LOCKS: `set local lock_timeout` bounds the DDL's waits and turns a busy table into a failed migration the operator
 -- retries, rather than a stall.
 --
@@ -79,8 +84,37 @@ revoke update, delete, truncate on public.masking_event from evidgate_app;
 grant select on public.masking_event to evidgate_operator;
 revoke all on public.masking_event from evidgate_worker_sched;
 
--- 0028 granted the app role UPDATE on the artifact's lifecycle columns only, and `sensitivity` was not one of them
--- because nothing changed it: the scan is the first writer that must raise a row to `sensitive` when it flags it
--- (06.2.3 AC2), and without this column grant that write fails with 42501. The grant adds one column to the same
--- append-nothing audit posture — no new statement is possible, only the one transition the scan owns.
+-- The two columns the app may now move encode one-way facts: a secret found once stays found, and a decided scan
+-- is not re-queued. The guard is an invoker, so it refuses an owner write too without needing a definer grant, and
+-- its name sorts before `artifact_set_updated_at_and_version`, so a refused update never bumps the bookkeeping.
+create or replace function evidgate.artifact_scan_guard() returns trigger
+  language plpgsql
+  set search_path = ''
+  as $$
+  begin
+    if old.sensitivity = 'sensitive' and new.sensitivity = 'normal' then
+      raise exception 'artifact_sensitivity_invalid: sensitive cannot become normal'
+        using errcode = '23514';
+    end if;
+
+    if old.scan_state in ('clean', 'flagged') and new.scan_state = 'pending' then
+      raise exception 'artifact_scan_state_invalid: a completed scan cannot become pending'
+        using errcode = '23514';
+    end if;
+
+    return new;
+  end;
+  $$;
+
+revoke all on function evidgate.artifact_scan_guard() from public;
+
+-- The migration role owns it; stated so a re-run over a function some other role once created ends owner-owned too.
+alter function evidgate.artifact_scan_guard() owner to evidgate_owner;
+
+drop trigger if exists artifact_scan_guard on public.artifact;
+create trigger artifact_scan_guard
+  before update on public.artifact
+  for each row execute function evidgate.artifact_scan_guard();
+
+-- The existing lifecycle-column grants exclude sensitivity; the scan needs only this additional column.
 grant update (sensitivity) on public.artifact to evidgate_app;

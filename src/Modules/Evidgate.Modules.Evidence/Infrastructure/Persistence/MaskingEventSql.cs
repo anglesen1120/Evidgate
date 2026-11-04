@@ -12,6 +12,11 @@ internal static class MaskingEventSql
     /// Writes one event per pattern class the scan matched, and nothing for a class that already has one: the natural
     /// key <c>(org_id, artifact_id, pattern_class)</c> is the replay guard the plan fixes (AC6), so a retried attempt
     /// that reaches this statement after a committed one adds no second row and never rewrites the first finding.
+    /// <para>
+    /// <c>on conflict do nothing</c> makes a dropped row silent, so the caller compares the affected count with the
+    /// number of classes it sent and refuses the transaction on a shortfall: a flagged artifact whose event set is
+    /// missing a class would claim a finding nothing can explain.
+    /// </para>
     /// </summary>
     internal const string InsertEvents = """
         insert into public.masking_event (id, org_id, artifact_id, pattern_class, hit_count, action)

@@ -10,6 +10,7 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.Modules.Evidence.Application;
+using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,17 +24,16 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// The <c>artifact_secret_scan</c> task handler against the shared migrated database and one SeaweedFS container: a
 /// clean artifact becomes <c>clean</c>, a flagged one becomes <c>flagged</c> and <c>sensitive</c>, a rejecting project
-/// moves it to <c>pending_delete</c> with <c>secret_rejected</c>, a replay writes no second event, a fetch failure is
-/// retried rather than judged, an artifact of another tenant is not scanned at all, and neither a row nor a log line
-/// carries the matched value.
+/// moves it to <c>pending_delete</c> with <c>secret_rejected</c>, a replay writes no second event, an artifact of
+/// another tenant is not scanned at all, and neither a row nor a log line carries the matched value.
 /// </summary>
 /// <remarks>
-/// The bytes the scan reads are real objects in the store, so the read is the adapter's own and its absence is the
-/// absence the handler must treat as a retry. The read also asserts, on the storage seam, that no tenant scope is open
-/// while it runs (00 §5.7 P5): the handler is registered transactionless for exactly that reason.
+/// The scan reads real objects from the store, and the storage seam asserts that no tenant scope is open while it does
+/// (00 §5.7 P5): the handler is registered transactionless for exactly that reason. What the queue does with a throwing
+/// handler is the consumer's own half, in <c>EvidenceSecretScanTaskTests.Consumer.cs</c>.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class EvidenceSecretScanTaskTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
+public sealed partial class EvidenceSecretScanTaskTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>
 {
     /// <summary>The task's wire name (06.2.3 §4).</summary>
@@ -204,30 +204,6 @@ public sealed class EvidenceSecretScanTaskTests(PostgresTenancyFixture fixture, 
     }
 
     /// <summary>
-    /// The store's failure is not a verdict: an artifact whose object the store does not hold throws, and the artifact
-    /// is still <c>pending</c> with no event.
-    /// <para>
-    /// This test owns the handler's half of AC7 only. The row's own <c>retry</c> → <c>dead_letter</c> states are the
-    /// consumer's mapping of a throwing handler, asserted by the queue's suites
-    /// (<c>Tasks.IntegrationTests</c>), so the claim here is "the attempt fails without a verdict", which is exactly
-    /// what drives that mapping.
-    /// </para>
-    /// </summary>
-    [Fact]
-    public async Task Scan_ObjectMissing_RetriesThenDeadLetters()
-    {
-        await using var world = await StartAsync();
-        var seeded = await SeedReadyAsync(world, CleanBody, storeBody: false);
-
-        await Should.ThrowAsync<InvalidOperationException>(() => InvokeAsync(world, seeded.ArtifactId));
-
-        (await ColumnAsync(world, seeded.ArtifactId, "scan_state")).ShouldBe(
-            ArtifactScanState.Pending, "a store failure is retried, never read as clean");
-        (await ColumnAsync(world, seeded.ArtifactId, "sensitivity")).ShouldBe(ArtifactSensitivity.Normal);
-        (await EventCountAsync(world, seeded.ArtifactId)).ShouldBe(0);
-    }
-
-    /// <summary>
     /// An artifact that is not <c>ready</c> is not this task's work: a row still uploading has no final object, and a
     /// row already leaving evidence is not scanned for bytes that are about to be deleted.
     /// </summary>
@@ -310,13 +286,18 @@ public sealed class EvidenceSecretScanTaskTests(PostgresTenancyFixture fixture, 
             + $"{SecretPatternClass.PrivateKeyPem}:1:{MaskingEventAction.Flagged}");
     }
 
-    // ---------------------------------------------------------------------------------------------------------------
-    // Harness
-    // ---------------------------------------------------------------------------------------------------------------
+    // Harness: the tenant, the artifact row and the object behind it.
 
-    private async Task<World> StartAsync()
+    /// <summary>
+    /// One tenant on the shared database, or on <paramref name="database"/> when a test needs a database of its own, with
+    /// <paramref name="services"/> applied to the host: the queue mechanism is composed that way by the test that drives
+    /// the real consumer, and by no other, because a consumer claims rows of every type in the database it polls.
+    /// </summary>
+    /// <param name="database">The database to use; the shared one when null.</param>
+    /// <param name="services">Extra registrations for this host, such as the task queue.</param>
+    private async Task<World> StartAsync(string? database = null, Action<IServiceCollection>? services = null)
     {
-        var database = await _fixture.SharedDatabaseAsync();
+        database ??= await _fixture.SharedDatabaseAsync();
         var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
@@ -334,7 +315,8 @@ public sealed class EvidenceSecretScanTaskTests(PostgresTenancyFixture fixture, 
             org,
             project,
             RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-scan-1"),
-            _store.Configuration());
+            _store.Configuration(),
+            services);
 
         var runId = await RunRowSeeder.SeedRunAsync(_fixture, database, org);
 
@@ -404,6 +386,7 @@ public sealed class EvidenceSecretScanTaskTests(PostgresTenancyFixture fixture, 
             world.Host.Services.GetRequiredService<ITenantDbContextFactory<EvidenceDbContext>>(),
             world.Host.Services.GetRequiredService<ITenantDb>(),
             storage ?? world.Host.Services.GetRequiredService<IObjectStorage>(),
+            world.Host.Services.GetRequiredService<IParsing>(),
             logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<RunArtifactSecretScanHandler>.Instance);
 
         var invoker = new TransactionlessTaskHandlerAdapter<RunArtifactSecretScanPayload>(handler);

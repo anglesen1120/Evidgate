@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -46,6 +47,15 @@ internal sealed record RunArtifactSecretScanPayload(Guid ArtifactId);
 /// events are written in the same transaction as the transition.
 /// </para>
 /// <para>
+/// <b>An archive is scanned through the parser profile, not as raw bytes.</b> A trace or report bundle is a deflated
+/// zip, and its entries' secrets do not appear in the compressed bytes at all, so scanning the object in place would
+/// always answer clean. When the artifact's declared type is <c>application/zip</c> — the type the completion sniffed
+/// the stored bytes against — every entry is decompressed by <see cref="IParsing.ReadArchiveEntries"/> and scanned,
+/// and the counts are summed per class. The expanded budget is the same cap the object was admitted under, so one
+/// artifact can never expand past the size its kind allows. An archive the profile refuses is thrown, never read as
+/// clean: the queue retries and finally dead-letters while <c>scan_state</c> stays <c>pending</c>.
+/// </para>
+/// <para>
 /// <b>Nothing here fails into a verdict.</b> A missing or unreadable object throws, so the queue retries and finally
 /// dead-letters the row while <c>scan_state</c> stays <c>pending</c> — a store hiccup must never look like a clean
 /// artifact. An object above the kind's cap throws for the same reason: the cap the artifact was admitted under is
@@ -61,12 +71,14 @@ internal sealed record RunArtifactSecretScanPayload(Guid ArtifactId);
 /// <param name="contexts">The tenant write model the artifact and its kind policy are read through.</param>
 /// <param name="db">The Dapper path that writes the events inside the write scope's transaction.</param>
 /// <param name="storage">The object store the artifact's bytes are read from, capped by the kind policy.</param>
+/// <param name="parsing">The untrusted-parser profile, the only arm that decompresses an archive for the scan.</param>
 /// <param name="logger">The one structured line each decided or skipped attempt writes.</param>
 internal sealed partial class RunArtifactSecretScanHandler(
     ITenantScopeFactory scopes,
     ITenantDbContextFactory<EvidenceDbContext> contexts,
     ITenantDb db,
     IObjectStorage storage,
+    IParsing parsing,
     ILogger<RunArtifactSecretScanHandler> logger) : ITransactionlessTaskHandler<RunArtifactSecretScanPayload>
 {
     /// <inheritdoc />
@@ -99,7 +111,7 @@ internal sealed partial class RunArtifactSecretScanHandler(
             ?? throw new InvalidOperationException(
                 $"the stored object of artifact {artifact.Id} is absent, so no scan verdict exists");
 
-        var hits = SecretPatternScanner.Scan(content);
+        var hits = ArtifactSecretScan.Scan(parsing, artifact.MediaType, content, settings.MaxBytes, cancellationToken);
 
         await WriteAsync(orgId, artifact.Id, hits, settings.RejectOnSecret, cancellationToken)
             .ConfigureAwait(false);
@@ -197,10 +209,11 @@ internal sealed partial class RunArtifactSecretScanHandler(
         }
 
         var reject = rejectOnSecret && hits.Count > 0;
+        var inserted = 0;
 
         if (hits.Count > 0)
         {
-            await db.ExecuteAsync(
+            inserted = await db.ExecuteAsync(
                     MaskingEventSql.InsertEvents,
                     new
                     {
@@ -229,6 +242,16 @@ internal sealed partial class RunArtifactSecretScanHandler(
         {
             await HandleLostRaceAsync(context, artifactId, cancellationToken).ConfigureAwait(false);
             return;
+        }
+
+        // Checked only after the transition has written: a shortfall now means the statement dropped a class this
+        // attempt counted (a surviving row of the same class from a scan whose transition never committed, or a
+        // parameter that reached the statement incomplete). The artifact would then be flagged with an event set that
+        // does not explain it, so the transaction is refused and the violation rolls back with it.
+        if (inserted != hits.Count)
+        {
+            throw new InvalidOperationException(
+                $"the masking events of artifact {artifactId} could not be written: {hits.Count} class(es) matched but {inserted} event row(s) were inserted");
         }
 
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -317,3 +340,4 @@ internal sealed partial class RunArtifactSecretScanHandler(
         [property: JsonPropertyName("hit_count")] int HitCount,
         [property: JsonPropertyName("action")] string Action);
 }
+

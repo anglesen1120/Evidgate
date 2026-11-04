@@ -57,11 +57,26 @@ internal static class SecretPatternScanner
     /// <summary>The words that make a PEM block a private key rather than a certificate or a public key.</summary>
     private static readonly byte[] PemPrivateKeySuffix = "PRIVATE KEY-----"u8.ToArray();
 
-    /// <summary>The scheme a bearer credential follows; compared case-insensitively.</summary>
-    private static readonly byte[] BearerScheme = "Bearer"u8.ToArray();
+    /// <summary>
+    /// The words that make an OpenPGP block a private key: its header spells <c>PRIVATE KEY BLOCK</c>, so the PEM
+    /// suffix above does not occur in it.
+    /// </summary>
+    private static readonly byte[] PgpPrivateKeySuffix = "PRIVATE KEY BLOCK-----"u8.ToArray();
+
+    /// <summary>
+    /// The scheme a bearer credential follows. Lower case because the comparison folds both sides before comparing,
+    /// so the stored spelling and the scanned spelling can never disagree on case alone.
+    /// </summary>
+    private static readonly byte[] BearerScheme = "bearer"u8.ToArray();
 
     /// <summary>The longest algorithm name a PEM private-key header carries, plus its trailing dashes.</summary>
     private const int PemAlgorithmWindow = 40;
+
+    /// <summary>
+    /// How far the scan walks between cancellation checks. One check per few MiB keeps a large object responsive to
+    /// a lease loss without turning the pass into a per-byte call.
+    /// </summary>
+    private const int CancellationCheckInterval = 4 * 1024 * 1024;
 
     /// <summary>The most separator bytes a bearer scheme may be followed by before its credential.</summary>
     private const int BearerSeparatorLimit = 8;
@@ -71,16 +86,34 @@ internal static class SecretPatternScanner
 
     /// <summary>Counts every class in one forward pass over <paramref name="content"/>.</summary>
     /// <param name="content">The bytes to scan.</param>
+    /// <param name="cancellationToken">
+    /// Checked every few MiB of the pass, so a cancelled attempt stops instead of finishing a large object; the caller
+    /// owns the retry.
+    /// </param>
     /// <returns>One entry per class that matched, in <see cref="SecretPatternClass.All"/> order; empty when none did.</returns>
-    public static IReadOnlyList<SecretPatternHit> Scan(ReadOnlySpan<byte> content)
+    public static IReadOnlyList<SecretPatternHit> Scan(
+        ReadOnlySpan<byte> content,
+        CancellationToken cancellationToken)
     {
         var aws = 0;
         var pem = 0;
         var bearer = 0;
         var index = 0;
+        var nextCancellationCheck = CancellationCheckInterval;
+
+        // Checked once before the walk as well: an attempt already cancelled must not scan even a small object.
+        cancellationToken.ThrowIfCancellationRequested();
 
         while (index < content.Length)
         {
+            if (index >= nextCancellationCheck)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                nextCancellationCheck = index <= content.Length - CancellationCheckInterval
+                    ? index + CancellationCheckInterval
+                    : int.MaxValue;
+            }
+
             // The three arms are tried at each offset and the cursor then moves past the longest arm's match, so a
             // literal that sits inside another arm's match is never counted twice.
             if (IsAwsAccessKeyAt(content, index))
@@ -172,9 +205,10 @@ internal static class SecretPatternScanner
     }
 
     /// <summary>
-    /// True when a PEM private-key header starts at <paramref name="index"/>: <c>-----BEGIN </c> followed, within the
-    /// algorithm window, by <c>PRIVATE KEY-----</c>. The window is what admits every algorithm spelling (<c>RSA</c>,
-    /// <c>EC</c>, <c>OPENSSH</c>, <c>ENCRYPTED</c>) without a pattern per variant.
+    /// True when a private-key header starts at <paramref name="index"/>: <c>-----BEGIN </c> followed, within the
+    /// algorithm window, by the PEM <c>PRIVATE KEY-----</c> suffix or the OpenPGP <c>PRIVATE KEY BLOCK-----</c> one.
+    /// The window admits every algorithm spelling (<c>RSA</c>, <c>EC</c>, <c>OPENSSH</c>, <c>ENCRYPTED</c>,
+    /// <c>PGP</c>) without a pattern per variant.
     /// </summary>
     /// <param name="content">The bytes being scanned.</param>
     /// <param name="index">The offset to test.</param>
@@ -192,8 +226,9 @@ internal static class SecretPatternScanner
 
         var windowStart = index + PemPrefix.Length;
         var windowLength = Math.Min(PemAlgorithmWindow, content.Length - windowStart);
+        var window = content.Slice(windowStart, windowLength);
 
-        return content.Slice(windowStart, windowLength).IndexOf(PemPrivateKeySuffix) >= 0;
+        return window.IndexOf(PemPrivateKeySuffix) >= 0 || window.IndexOf(PgpPrivateKeySuffix) >= 0;
     }
 
     /// <summary>
@@ -216,9 +251,10 @@ internal static class SecretPatternScanner
             return 0;
         }
 
-        if (index > 0 && IsTokenByte(content[index - 1]))
+        if (index > 0 && IsIdentifierByte(content[index - 1]))
         {
-            // `XBearer` is one identifier, not a scheme.
+            // `XBearer` is one identifier, not a scheme. Every non-alphanumeric byte is a delimiter, so the scheme is
+            // still found after `=`, `.`, `;`, a quote or a slash, which is where a header or query string puts it.
             return 0;
         }
 
@@ -252,7 +288,10 @@ internal static class SecretPatternScanner
     /// <param name="value">The byte to test.</param>
     private static bool IsUpperAlphanumeric(byte value) => value is >= (byte)'0' and <= (byte)'9' or >= (byte)'A' and <= (byte)'Z';
 
-    /// <summary>True for the bytes that continue an identifier around an AWS key id.</summary>
+    /// <summary>
+    /// True for the bytes that continue an identifier: it is the AWS key's boundary on both sides and the bearer
+    /// scheme's left boundary, so a scheme is only found where a non-alphanumeric byte (or the start) precedes it.
+    /// </summary>
     /// <param name="value">The byte to test.</param>
     private static bool IsIdentifierByte(byte value) => IsUpperAlphanumeric(value) || value is >= (byte)'a' and <= (byte)'z';
 
@@ -264,16 +303,20 @@ internal static class SecretPatternScanner
             or >= (byte)'a' and <= (byte)'z'
             or (byte)'.' or (byte)'_' or (byte)'-' or (byte)'+' or (byte)'/' or (byte)'=' or (byte)'~';
 
-    /// <summary>True for the separator a scheme may be followed by before its credential.</summary>
+    /// <summary>
+    /// True for the whitespace a scheme may be followed by before its credential. A line break counts because a header
+    /// value can be folded across lines and a log or transcript can wrap between the two.
+    /// </summary>
     /// <param name="value">The byte to test.</param>
-    private static bool IsBearerSeparator(byte value) => value is (byte)' ' or (byte)'\t';
+    private static bool IsBearerSeparator(byte value) => value is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
 
     /// <summary>
     /// Compares ASCII bytes ignoring case for the letters, which is how the scheme of a bearer credential is matched:
-    /// the scheme is case-insensitive, and every other byte must be equal.
+    /// the scheme is case-insensitive, and every other byte must be equal. Both sides are folded, so neither the
+    /// stored literal's spelling nor the scanned spelling can decide the answer on case alone.
     /// </summary>
     /// <param name="value">The bytes being scanned.</param>
-    /// <param name="expected">The lower-case ASCII literal to compare against.</param>
+    /// <param name="expected">The ASCII literal to compare against.</param>
     private static bool EqualsAsciiIgnoreCase(ReadOnlySpan<byte> value, ReadOnlySpan<byte> expected)
     {
         if (value.Length != expected.Length)
@@ -283,7 +326,7 @@ internal static class SecretPatternScanner
 
         for (var offset = 0; offset < value.Length; offset++)
         {
-            if (ToLowerAscii(value[offset]) != expected[offset])
+            if (ToLowerAscii(value[offset]) != ToLowerAscii(expected[offset]))
             {
                 return false;
             }
