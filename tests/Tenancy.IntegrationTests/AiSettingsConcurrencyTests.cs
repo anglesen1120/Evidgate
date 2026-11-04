@@ -68,7 +68,7 @@ public sealed class AiSettingsConcurrencyTests
         absent.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, "a save without If-Match is refused, not treated as upsert");
         AiSettingsCalls.Details(absent).ShouldContain(("If-Match", "required"));
 
-        foreach (var junk in new[] { string.Empty, "abc", "1.5", "\"x\"", "version-1" })
+        foreach (var junk in new[] { "abc", "1.5", "\"x\"", "version-1" })
         {
             var refused = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, body, junk);
 

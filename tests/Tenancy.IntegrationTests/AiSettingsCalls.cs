@@ -278,7 +278,7 @@ internal static class AiSettingsCalls
     internal static async Task<long> HeadVersionAsync(PostgresTenancyFixture fixture, World world) =>
         await fixture.ScalarAsync<long>(
             world.Database,
-            $"select coalesce(max(version_no), 0) from public.project_ai_settings where org_id = '{world.Org}' and project_id = '{world.Project}'");
+            $"select coalesce(max(version_no), 0)::bigint from public.project_ai_settings where org_id = '{world.Org}' and project_id = '{world.Project}'");
 
     /// <summary>The org's idempotency rows (a refused save must leave none).</summary>
     /// <param name="fixture">The fixture.</param>
