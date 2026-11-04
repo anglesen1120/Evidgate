@@ -12,6 +12,7 @@ using Evidgate.Modules.Orchestrator.Contracts;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -39,6 +40,12 @@ public static class OrchestratorEndpoints
     /// body before it is buffered whole — the same bound-the-edge rule <see cref="MaxRunBytes"/> follows.
     /// </summary>
     internal const int MaxFinalizeBytes = 8 * 1024;
+
+    /// <summary>
+    /// The cancel transport cap (05.4.1 §5): the body is one optional string of at most 1000 characters, so 4 KiB
+    /// refuses an oversized body before it is buffered — the same bound-the-edge rule <see cref="MaxRunBytes"/> follows.
+    /// </summary>
+    internal const int MaxCancelBytes = 4 * 1024;
 
     /// <summary>Default page size of the run list (00 §9.1, as every other cursor list).</summary>
     internal const int DefaultLimit = 50;
@@ -85,6 +92,22 @@ public static class OrchestratorEndpoints
         group.MapGet("/runs/{run_id}/evidence-revisions", ListEvidenceRevisionsAsync)
             .Produces<EvidenceRevisionPage>(StatusCodes.Status200OK)
             .WithSummary("Cursor list of a run's evidence revisions, newest first, with their live evaluation id (05.3.2)");
+
+        // Cancel answers 202 on an accepted request and on a terminal no-op alike. The body is optional and is read as
+        // raw bytes by the handler, so the accepted media type is declared with its own metadata (`isOptional`) instead
+        // of a bound parameter — and the bodiless 200 pins the slot the framework would otherwise infer with the shared
+        // Result schema, which the spec does not declare (ServedDocumentTests' invariant, the finalize route's note).
+        group.MapPost("/runs/{r}/cancel", CancelRunAsync)
+            .WithMetadata(new AcceptsMetadata(["application/json"], typeof(CancelRunRequest), isOptional: true))
+            .Produces(StatusCodes.Status202Accepted)
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .Produces(StatusCodes.Status413PayloadTooLarge)
+            .Produces(StatusCodes.Status422UnprocessableEntity)
+            .WithSummary("Record a cancel request: the run turns canceled now, execution stops on the configured windows (05.4.1)");
 
         // The route answers 202 only, but the framework infers a 200 from the bodiless Result the delegate returns
         // (the shared-kernel type, whose Error/SuccessValue members would then appear as contract schemas the spec does
@@ -213,6 +236,34 @@ public static class OrchestratorEndpoints
         StatusCodes.Status401Unauthorized);
 
     private static string Sha256(ReadOnlyMemory<byte> bytes) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes.Span));
+
+    /// <summary>
+    /// <c>POST /v1/runs/{r}/cancel</c> (05.4.1 §5): binds the path, the capped body and the caller's
+    /// <c>Idempotency-Key</c>, then sends the one command — the handler owns the edge, the durable request row and the
+    /// audit. A caller with no principal at all is 401 here, before a byte of the body is read; the C2 pipeline's
+    /// <c>run:cancel</c> check answers a resolved member without it (403, 00 §9.2).
+    /// </summary>
+    private static async Task<Result> CancelRunAsync(
+        Guid r,
+        HttpContext context,
+        IRequestPrincipalAccessor principals,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (principals.Current is null)
+        {
+            return Result.Failure(Unauthenticated);
+        }
+
+        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxCancelBytes, cancellationToken).ConfigureAwait(false);
+        if (tooLarge is not null)
+        {
+            return Result.Failure(tooLarge);
+        }
+
+        return await mediator.Send(new CancelRunCommand(r, bytes, IdempotencyKey(context)), cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     private static async Task<Result> GetEnvironmentRevisionAsync(
         Guid id,

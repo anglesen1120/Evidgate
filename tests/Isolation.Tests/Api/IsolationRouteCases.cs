@@ -821,6 +821,15 @@ public static class IsolationRouteCases
         // control answers 200 with the pending body because the world stores no evaluation.
         ObjectCase("GET", "/v1/runs/{r}/decision", p => [("run", p.RunId)], id =>
             new(HttpMethod.Get, $"/v1/runs/{id}/decision"), ownControl: true),
+        // 05.4.1-T1: the cancel request names the run in its path, so the run — not the body — decides the
+        // tenant. Another org's run is the 404 not_found of GET /v1/runs/{r} (never a 403 leaking existence), and
+        // run:cancel sits outside the service-role ceiling, so the app and sibling-project service probes below are
+        // refused before the handler (ProbeExpect.ServiceRefused / allowed: [403, 404]). No own control, the
+        // 13.2.1-T1 AI-settings precedent: a granted cancel would write a request row and move the run, which
+        // would leave this suite's world mutated for every later probe (the accepted 202 is covered by
+        // CancelRunEndpointTests instead).
+        ObjectCase("POST", "/v1/runs/{r}/cancel", p => [("run", p.RunId)], id =>
+            new(HttpMethod.Post, $"/v1/runs/{id}/cancel", new JsonObject { ["reason"] = "isolation probe" })),
         // 05.2.2-T2: the project-scoped run list. As a list, its positive control is the full-pagination walk
         // (Lists); the extra probes pin the ref_name filter, which must not widen tenancy.
         ProjectCase("GET", "/v1/projects/{p}/runs", p => new(HttpMethod.Get, $"/v1/projects/{p}/runs"), list: true,

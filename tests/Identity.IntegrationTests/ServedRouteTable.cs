@@ -756,6 +756,12 @@ internal static class RouteRequests
             },
             IdempotencyKey: Key()));
 
+        // 05.4.1-T1: cancel is a command on the run named in the path. Like finalize, the recipe uses a fresh run
+        // id so nothing is created, and a key because the route is an idempotent command; a ci_producer can never
+        // hold run:cancel (outside the service-role ceiling), so the target run is never resolved.
+        Add("POST", "/v1/runs/{r}/cancel", _ => new(HttpMethod.Post, $"/v1/runs/{Guid.CreateVersion7()}/cancel",
+            new JsonObject { ["reason"] = "probe" }, IdempotencyKey: Key()));
+
         // ---- Policy ------------------------------------------------------------------------------------------
         Add("POST", "/v1/projects/{p}/policies", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/policies",
             new JsonObject { ["flaky_budget"] = 0 }, IdempotencyKey: Key()));
