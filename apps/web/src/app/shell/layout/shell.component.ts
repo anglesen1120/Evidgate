@@ -162,9 +162,8 @@ export class ShellComponent {
 
   /**
    * Focus after the inert boundary has rendered, with bounded frame retries if the browser
-   * has not made the control focusable yet. The close button disables Helm's transition-all:
-   * otherwise inherited visibility remains hidden at the start of its reveal transition.
-   * Navigation and newer drawer actions invalidate pending retries instead of stealing focus.
+   * has not made the control focusable yet. Navigation and newer drawer actions invalidate pending
+   * retries instead of stealing focus.
    */
   private focusWhenUnblocked(target: 'drawer' | 'opener'): void {
     const request = ++this.focusRequest;
