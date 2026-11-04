@@ -81,6 +81,7 @@ import permissionsListSettingsNoTab from '../../../../../../fixtures/web-api/per
 import permissionsListSettingsPolicyReadonly from '../../../../../../fixtures/web-api/permissions-list-settings-policy-readonly/input.json';
 import permissionsListSettingsPolicyWrite from '../../../../../../fixtures/web-api/permissions-list-settings-policy-write/input.json';
 import permissionsListSettingsSecretsWrite from '../../../../../../fixtures/web-api/permissions-list-settings-secrets-write/input.json';
+import permissionsListUsageRead from '../../../../../../fixtures/web-api/permissions-list-usage-read/input.json';
 import policyActivationForbidden from '../../../../../../fixtures/web-api/policy-activation-forbidden/input.json';
 import policyActivationInvalidTransition from '../../../../../../fixtures/web-api/policy-activation-invalid-transition/input.json';
 import policyActivationOk from '../../../../../../fixtures/web-api/policy-activation-ok/input.json';
@@ -388,6 +389,9 @@ export interface FixtureCatalogRow {
  * `unknown-role`) rather than the wire code, and each refusal text is the server's current one: the
  * revoke row spells `tenant_admin` with the underscore, unlike the older `membership-remove-*` rows,
  * which are left as they were instead of being rewritten behind their own suite.
+ *
+ * `permissions-list-usage-read` (`?fixture.variant.listPermissions=usage-read`) holds `organization:read`
+ * and `usage:read` alone, the one grant the Usage page needs, so it is reachable as a rendered surface.
  *
  * 09.7.1-T3 (with `F12`) adds the Settings area's own pages. `permissions-list-settings-secrets-write`
  * (`?fixture.variant.listPermissions=settings-secrets-write`) is `permissions-list-settings-admin`
@@ -740,6 +744,7 @@ export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
     name: 'permissions-list-settings-secrets-write',
     document: permissionsListSettingsSecretsWrite,
   },
+  { name: 'permissions-list-usage-read', document: permissionsListUsageRead },
   { name: 'policy-activation-forbidden', document: policyActivationForbidden },
   { name: 'policy-activation-invalid-transition', document: policyActivationInvalidTransition },
   { name: 'policy-activation-ok', document: policyActivationOk },
