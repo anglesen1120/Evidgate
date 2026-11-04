@@ -162,10 +162,6 @@ public sealed class CatalogUnitTests
     [InlineData("version: 1\ncases:\n  - file: a.ts\n")]
     [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: nope\n")]
     [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    extra: 1\n")]
-    [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: \"REQ 1042\"\n")]
-    [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: \"REQ?focused=1\"\n")]
-    [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: \"\"\n")]
-    [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: \"   \"\n")]
     [InlineData("version: 1\ncases:\n  - file: a.ts\n    evidgate.id: 018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f\n    requirement: [1042]\n")]
     [InlineData("- just\n- a list\n")]
     [InlineData("just a string\n")]
@@ -252,27 +248,56 @@ public sealed class CatalogUnitTests
         numeric.Entries.Select(entry => entry.RequirementRef).ShouldBe(["1042", null]);
     }
 
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("REQ 1042")]
+    [InlineData("REQ?focused=1")]
+    [InlineData("\tREQ-1")]
+    public void Sidecar_UnusableRequirement_WarnsOnThatEntry_AndTheOtherEntryKeepsItsId(string bad)
+    {
+        // Two entries: the document stays valid, the good id is untouched, and only the bad entry is reported.
+        var yaml = $"version: 1\ncases:\n"
+            + $"  - file: a.ts\n    evidgate.id: {IdA}\n"
+            + $"  - file: b.ts\n    evidgate.id: {IdB}\n    requirement: {JsonSerializer.Serialize(bad)}\n";
+
+        var result = Read(yaml);
+
+        result.Problems.ShouldBeEmpty();
+        result.Warnings.Single().Path.ShouldBe("tests/b.ts");
+        result.Entries.Select(entry => (entry.FullPath, entry.Id, entry.RequirementRef)).ShouldBe(
+        [
+            ("tests/a.ts", Guid.Parse(IdA), (string?)null),
+            ("tests/b.ts", Guid.Parse(IdB), (string?)null),
+        ]);
+    }
+
+    [Fact]
+    public void Sidecar_OverlongRequirement_WarnsOnThatEntry_AndBothIdsSurvive()
+    {
+        var yaml = $"version: 1\ncases:\n"
+            + $"  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: REQ-1\n"
+            + $"  - file: b.ts\n    evidgate.id: {IdB}\n    requirement: \"{new string('r', 129)}\"\n";
+
+        var result = Read(yaml);
+
+        result.Problems.ShouldBeEmpty();
+        result.Warnings.Single().Path.ShouldBe("tests/b.ts");
+        result.Entries.Select(entry => (entry.Id, entry.RequirementRef)).ShouldBe(
+        [
+            (Guid.Parse(IdA), (string?)"REQ-1"),
+            (Guid.Parse(IdB), (string?)null),
+        ]);
+    }
+
     [Fact]
     public void Sidecar_BooleanRequirement_IsAWarning_AndTheEntryStillReads()
     {
-        // A bare true/false is the one scalar the schema accepts but no requirement id can use: it drops the value
-        // with a warning instead of costing the entry its id.
         var result = Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: true\n");
 
         result.Problems.ShouldBeEmpty();
         result.Warnings.Single().Path.ShouldBe("tests/a.ts");
         result.Entries.Single().Id.ShouldBe(Guid.Parse(IdA));
         result.Entries.Single().RequirementRef.ShouldBeNull();
-    }
-
-    [Fact]
-    public void Sidecar_OverlongRequirement_IsRefusedWithTheDocument()
-    {
-        var result = Read($"version: 1\ncases:\n  - file: a.ts\n    evidgate.id: {IdA}\n    requirement: \"{new string('r', 129)}\"\n");
-
-        result.Entries.ShouldBeEmpty();
-        result.Warnings.ShouldBeEmpty();
-        result.Problems.Single().Path.ShouldBe("tests/evidgate.cases.yaml");
     }
 
     // ------------------------------------------------------------------ CaseDiscovery

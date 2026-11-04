@@ -931,6 +931,8 @@ public sealed class CatalogIdentityTests
     [InlineData("REQ\u0001")]
     [InlineData("REQ\u200b")]
     [InlineData("REQ\n1042")]
+    [InlineData("\tREQ-1")]
+    [InlineData("REQ-1\n")]
     [InlineData("\uD800")]
     [InlineData("REQ\uD800")]
     public async Task RequirementRef_RefusesBlankCharsetAndControlBearingValues(string value)
@@ -1107,21 +1109,31 @@ public sealed class CatalogIdentityTests
     [InlineData("REQ?focused=1")]
     [InlineData("   ")]
     [InlineData("REQ-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
-    public async Task Register_SidecarRequirementOutsideTheRule_IsRefusedWithTheManifest_AndNoCaseIsWritten(string requirement)
+    public async Task Register_SidecarRequirementOutsideTheRule_WarnsOnThatEntry_AndBothCasesAreWritten(string requirement)
     {
         await using var world = await StartAsync();
         var sidecar = new SourceFile(
             "tests/evidgate.cases.yaml",
-            $"version: 1\ncases:\n  - file: checkout.spec.ts\n    evidgate.id: {IdA}\n    requirement: {JsonSerializer.Serialize(requirement)}\n");
+            $"version: 1\ncases:\n"
+            + $"  - file: good.spec.ts\n    evidgate.id: {IdA}\n    requirement: REQ-1042\n"
+            + $"  - file: bad.spec.ts\n    evidgate.id: {IdB}\n    requirement: {JsonSerializer.Serialize(requirement)}\n");
 
-        var report = await RegisterAsync(world, Commit1, new SourceFile("tests/checkout.spec.ts", "test('x')", "playwright", "typescript"), sidecar);
+        var report = await RegisterAsync(
+            world,
+            Commit1,
+            new SourceFile("tests/good.spec.ts", "test('x')", "playwright", "typescript"),
+            new SourceFile("tests/bad.spec.ts", "test('y')", "playwright", "typescript"),
+            sidecar);
 
-        // The schema is the first gate (D-A6): a value the rule cannot hold is a manifest warning, never a conflict,
-        // and the directory's cases keep their state instead of being created or marked missing.
+        // One unusable pointer is metadata about one entry: it warns there and neither case loses its id, because
+        // document validation runs before per-entry semantics and keeps the value's shape unconstrained.
         report.Warnings.ShouldBe(1);
         report.Conflicts.ShouldBe(0);
-        report.Registered.ShouldBe(0);
-        (await CountAsync(world, "test_case")).ShouldBe(0);
+        report.Registered.ShouldBe(2);
+        report.Entries.Single(entry => entry.Result == CaseSyncResults.Warning).Path.ShouldBe("tests/bad.spec.ts");
+        (await CountAsync(world, "test_case")).ShouldBe(2);
+        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case where file_path = 'tests/good.spec.ts'")).ShouldBe("REQ-1042");
+        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case where file_path = 'tests/bad.spec.ts'")).ShouldBeNull();
     }
 
     [Fact]

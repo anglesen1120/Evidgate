@@ -91,13 +91,15 @@ internal static class Taxonomy
     /// string is not a pointer — a caller that wants the value cleared sends <c>null</c>. The character set is ASCII,
     /// so its length is also the code-point length PostgreSQL <c>char_length</c> counts and it cannot hold a control
     /// or format character; the same two predicates are the migration's check, so the route and the database agree.
+    /// Control and format characters are refused where they stand rather than trimmed away; only the whitespace
+    /// around the value is trimmed, so a value can never lose a tab or a newline to reach the accepted set.
     /// </summary>
     /// <param name="raw">The value as sent.</param>
     /// <param name="value">The trimmed value, or null when it was not accepted.</param>
     public static bool TryRequirementRef(string? raw, out string? value)
     {
         value = null;
-        if (raw is null)
+        if (raw is null || !TextRules.IsClean(raw))
         {
             return false;
         }

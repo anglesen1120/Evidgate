@@ -38,10 +38,8 @@ export const SIDECAR_SCHEMA_V1: Record<string, unknown> = {
           },
           requirement: {
             type: ['string', 'number', 'boolean', 'null'],
-            maxLength: 128,
-            pattern: '^[A-Za-z0-9._:/#-]+$',
             description:
-              'Optional external requirement this file protects (D-A6): trimmed to 1..128 characters of A-Z a-z 0-9 . _ : / # -. A string is used as written and a number as its digits; anything else (a bare true/false) and any value outside that rule is a warning on this entry, and the case keeps a null reference rather than losing its id, so a typo here never freezes the directory.',
+              'Optional external requirement this file protects (D-A6): trimmed to 1..128 characters of A-Z a-z 0-9 . _ : / # -. A string is used as written and a number as its digits; a bare true/false is a warning on this entry and the case keeps a null reference. A string or number outside the length or charset rule fails this schema, so the manifest is refused as invalid.',
           },
         },
       },

@@ -71,7 +71,7 @@ internal sealed class SetCaseRequirementRefCommandHandler(
         if (command.RequirementRef is not null && !Taxonomy.TryRequirementRef(command.RequirementRef, out value))
         {
             return Result.Failure<CaseDto>(Error.Invalid(
-                "the requirement reference is not a trimmed 1..200 character value free of control characters",
+                "the requirement reference is not a trimmed 1..128 character value of A-Z a-z 0-9 . _ : / # -",
                 [new ErrorDetail("requirement_ref", "schema_invalid")]));
         }
 
