@@ -521,8 +521,10 @@ public sealed class EvidenceArtifactSchemaTests
             (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", table, "TRUNCATE")).ShouldBeFalse(table);
         }
 
+        // 0066 added `sensitivity` to the artifact's updatable set: the masking scan is the one writer that raises a
+        // flagged row to `sensitive` (06.2.3 AC2), and the scan's own transition is the fifth of the lifecycle writes.
         (await UpdateColumnsAsync(database, "artifact")).ShouldBe(
-            ["attempt_id", "bytes", "expires_at", "failure_code", "scan_state", "state"]);
+            ["attempt_id", "bytes", "expires_at", "failure_code", "scan_state", "sensitivity", "state"]);
         (await UpdateColumnsAsync(database, "artifact_kind_policy")).ShouldBe(
             ["capture_enabled", "default_sensitivity", "max_bytes", "media_types", "reject_on_secret"]);
     }

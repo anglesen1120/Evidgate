@@ -671,6 +671,11 @@ internal sealed class TenantRowFactory
             // differs from the valid one in its org and parent, never only in the version.
             ("public.project_ai_settings", "content_hash") => "sha256:" + new string('d', 64),
             ("public.project_ai_settings", "languages") => new[] { "en" },
+            // masking_event (0066) closes `pattern_class` to the scanner's three classes and `action` to the scan's
+            // two decisions, so the generic text candidate satisfies neither CHECK; `hit_count`'s generic 1 already
+            // satisfies `hit_count > 0`. The composite FK fills `artifact_id` from the parent's tenant.
+            ("public.masking_event", "pattern_class") => "aws_access_key",
+            ("public.masking_event", "action") => "flagged",
             _ => (object?)null,
         };
 

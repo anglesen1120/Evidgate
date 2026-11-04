@@ -488,6 +488,15 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("project_id", projectId));
+        // 0066's masking_event: one event naming the artifact above, so the discovered tenant set is never empty.
+        await scope.ExecuteAsync(
+            """
+            insert into public.masking_event (id, org_id, artifact_id, pattern_class, hit_count, action)
+            values (@id, @org_id, @artifact_id, 'aws_access_key', 1, 'flagged')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("artifact_id", artifactId));
         await scope.ExecuteAsync(
             """
             insert into public.producer_slot (id, org_id, run_id, shard_index, producer_id)

@@ -279,14 +279,24 @@ public sealed partial class TaskConsumer
 
             if (claim.OrgId is { } orgId)
             {
-                await using var scope = await _scopes
-                    .BeginAsync(orgId, projectId: null, readOnlyTransaction: false, handlerToken)
-                    .ConfigureAwait(false);
+                if (invoker.OpensOwnTransactions)
+                {
+                    // The handler owns the transactions of this attempt because it makes a network call between its
+                    // reads and its writes (00 §5.7 P5), so nothing here opens one around it: the tenant comes from
+                    // the row, and its last statement is committed when this returns.
+                    await invoker.InvokeWithoutScopeAsync(claim.Payload, orgId, handlerToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    await using var scope = await _scopes
+                        .BeginAsync(orgId, projectId: null, readOnlyTransaction: false, handlerToken)
+                        .ConfigureAwait(false);
 
-                await invoker.InvokeAsync(claim.Payload, scope, handlerToken).ConfigureAwait(false);
+                    await invoker.InvokeAsync(claim.Payload, scope, handlerToken).ConfigureAwait(false);
 
-                // The handler's work is durable before the mechanism says `done`.
-                await scope.CommitAsync(handlerToken).ConfigureAwait(false);
+                    // The handler's work is durable before the mechanism says `done`.
+                    await scope.CommitAsync(handlerToken).ConfigureAwait(false);
+                }
             }
             else
             {
