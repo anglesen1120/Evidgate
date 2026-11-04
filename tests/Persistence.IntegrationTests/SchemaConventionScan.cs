@@ -145,6 +145,10 @@ internal static class SchemaConventionScan
             "public.manual_case_link",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "A link is insert-or-delete and never edited (13.1.1-T4; migration 0063): the app role holds SELECT, INSERT and DELETE but UPDATE is revoked, so the row keeps created_at only — no updated_at/version and no version trigger. A repeat link is answered by `manual_case_link_uq` rather than by a version bump. Its tenant key, composite FKs, the same-project trigger and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.masking_event",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only scan findings (06.2.3-T1; migration 0066): the app role holds SELECT + INSERT and UPDATE/DELETE/TRUNCATE are revoked, so a finding is written once and never rewritten — the row keeps created_at only, with no updated_at/version and no version trigger. A replayed scan is answered by `masking_event_artifact_pattern_key` (on conflict do nothing) rather than by a version bump. Its tenant key, composite FK, closed CHECKs and RLS are NOT exempt."),
     ];
 
     /// <summary>

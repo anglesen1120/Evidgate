@@ -71,9 +71,11 @@ describe('LoginPage', () => {
     expect(root.querySelector('.login-destination')?.textContent).toContain(
       fixture.componentInstance.savedDestination,
     );
-    expect(root.querySelector('main')?.children[0]?.className).toBe('login-intro');
-    expect(root.querySelector('main')?.children[1]?.className).toBe('login-card');
-    expect(root.querySelector('main')?.children[2]?.className).toBe('login-destination');
+    expect(root.querySelector('main')?.children[0]?.classList.contains('login-intro')).toBe(true);
+    expect(root.querySelector('main')?.children[1]?.getAttribute('data-slot')).toBe('card');
+    expect(root.querySelector('main')?.children[2]?.classList.contains('login-destination')).toBe(
+      true,
+    );
     flow.returnUrl.set('/');
     fixture.detectChanges();
     expect(root.querySelector('.login-destination')?.textContent).toContain(
@@ -251,7 +253,7 @@ describe('LoginPage', () => {
     expect(notice().getAttribute('aria-atomic')).toBe('true');
     const busy = root.querySelector('[aria-busy="true"]')!;
     expect(busy.contains(notice())).toBe(false);
-    expect(notice().classList.contains('login-notice--error')).toBe(false);
+    expect(notice().querySelector('.spartan-alert-variant-destructive')).toBeNull();
     expect(root.textContent).not.toContain(fixture.componentInstance.failed);
   });
 
@@ -267,7 +269,7 @@ describe('LoginPage', () => {
       flow.reason.set(reason);
       fixture.detectChanges();
       expect(notice().textContent?.trim()).toBe(fixture.componentInstance[reason]);
-      expect(notice().classList.contains('login-notice--error')).toBe(true);
+      expect(notice().querySelector('.spartan-alert-variant-destructive')).not.toBeNull();
       expect(notice().getAttribute('aria-live')).toBe('polite');
       expect(buttons().every((button) => !button.disabled)).toBe(true);
       buttons()[0]?.click();
@@ -282,7 +284,7 @@ describe('LoginPage', () => {
     const copy = fixture.componentInstance;
     expect(notice().textContent).toContain(copy.signedOut);
     expect(notice().textContent).toContain(copy.signedOutDetail);
-    expect(notice().classList.contains('login-notice--success')).toBe(true);
+    expect(notice().querySelector('[hlmAlert]')).not.toBeNull();
     expect(buttons().every((button) => !button.disabled)).toBe(true);
     expect(notice().textContent).not.toMatch(/session has ended|signed out everywhere/i);
   });
@@ -291,7 +293,7 @@ describe('LoginPage', () => {
     flow.reason.set('expired');
     fixture.detectChanges();
     expect(notice().textContent?.trim()).toBe(fixture.componentInstance.expired);
-    expect(notice().classList.contains('login-notice--info')).toBe(true);
+    expect(notice().querySelector('.spartan-alert-variant-destructive')).toBeNull();
     expect(notice().getAttribute('aria-live')).toBe('polite');
     expect(buttons().every((button) => !button.disabled)).toBe(true);
   });

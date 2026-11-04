@@ -1,8 +1,11 @@
 // 09.1.1-T4.1/T4.2; docs/design/web/layout.md#breakpoints-and-navigation.
 // Real 360px overflow, computed contrast and screen-reader evidence belong to browser QA.
 import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { TestBed } from '@angular/core/testing';
+import { DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import type { ComponentFixture } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { ScopeSwitcherComponent } from './scope-switcher.component';
 import { NavigationEnd, Router, provideRouter } from '@angular/router';
 import axe from 'axe-core';
 import { SessionStore } from '../../core/session/session.store';
@@ -10,7 +13,7 @@ import { NavViewService } from '../nav/nav-view';
 import type { NavGroupView } from '../nav/nav.models';
 import { NotFoundPage } from '../pages/not-found.page';
 import { ShellComponent } from './shell.component';
-import { SCOPE_ORGANIZATIONS, SCOPE_PROJECTS } from './scope.fixture';
+import { SCOPE_ORGANIZATIONS, SCOPE_PROJECTS, stubScopeBrowserApis } from './scope.fixture';
 
 const groups: readonly NavGroupView[] = [
   {
@@ -30,6 +33,7 @@ const groups: readonly NavGroupView[] = [
 describe('ShellComponent', () => {
   let fixture: ComponentFixture<ShellComponent>;
   let root: HTMLElement;
+  let restoreBrowserApis: () => void;
   const session = {
     organizations: signal(SCOPE_ORGANIZATIONS),
     projects: signal(SCOPE_PROJECTS),
@@ -38,9 +42,11 @@ describe('ShellComponent', () => {
   };
 
   beforeEach(async () => {
+    restoreBrowserApis = stubScopeBrowserApis();
     vi.stubGlobal('innerWidth', 1440);
     await TestBed.configureTestingModule({
       imports: [ShellComponent],
+      deferBlockBehavior: DeferBlockBehavior.Manual,
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([{ path: '**', component: NotFoundPage }]),
@@ -52,18 +58,28 @@ describe('ShellComponent', () => {
     root = fixture.nativeElement as HTMLElement;
     document.body.append(root);
     await fixture.whenStable();
+    await renderScope();
   });
 
   afterEach(() => {
     fixture.destroy();
     root.remove();
+    restoreBrowserApis();
     vi.unstubAllGlobals();
     document.documentElement.removeAttribute('data-theme');
     localStorage.removeItem('evidgate-theme');
   });
 
+  async function renderScope(): Promise<void> {
+    for (const block of await fixture.getDeferBlocks()) {
+      await block.render(DeferBlockState.Complete);
+    }
+    await fixture.whenStable();
+  }
+
   it('provides the skip target, main landmark, named nav and router outlet', () => {
     expect(root.querySelector('a.skip-link')?.getAttribute('href')).toBe('#main-content');
+    expect(root.querySelector('a.skip-link')?.classList.contains('transition-none')).toBe(true);
     expect(root.querySelector('main#main-content')?.getAttribute('tabindex')).toBe('-1');
     expect(root.querySelector('nav[aria-label="Primary navigation"]')).not.toBeNull();
     expect(root.querySelector('router-outlet')).not.toBeNull();
@@ -72,15 +88,12 @@ describe('ShellComponent', () => {
 
   it('keeps the topbar keyboard stops in the order the header reads', () => {
     const topbar = root.querySelector<HTMLElement>('header.topbar')!;
-    const stops = Array.from(topbar.querySelectorAll<HTMLElement>('button, select')).map(
-      (element) => element.className || element.tagName.toLowerCase(),
-    );
-    expect(stops).toEqual([
-      'icon-button nav-toggle',
-      'select',
-      'select',
-      'icon-button theme-toggle',
-    ]);
+    const stops = Array.from(topbar.querySelectorAll<HTMLElement>('button'));
+    expect(stops).toHaveLength(4);
+    expect(stops[0]?.classList.contains('nav-toggle')).toBe(true);
+    expect(stops[1]?.getAttribute('role')).toBe('combobox');
+    expect(stops[2]?.getAttribute('role')).toBe('combobox');
+    expect(stops[3]?.classList.contains('theme-toggle')).toBe(true);
 
     const theme = topbar.querySelector<HTMLElement>('button.theme-toggle')!;
     const scope = topbar.querySelector<HTMLElement>('app-scope-switcher')!;
@@ -92,22 +105,23 @@ describe('ShellComponent', () => {
     vi.stubGlobal('innerWidth', width);
     window.dispatchEvent(new Event('resize'));
     await fixture.whenStable();
+    await renderScope();
     const topbar = root.querySelector('header.topbar');
-    expect(topbar?.querySelectorAll('select')).toHaveLength(0);
+    expect(topbar?.querySelectorAll('[role="combobox"]')).toHaveLength(0);
     expect(topbar?.querySelectorAll('button')).toHaveLength(2);
     expect(root.querySelectorAll('app-scope-switcher')).toHaveLength(1);
     const aside = root.querySelector<HTMLElement>('aside');
-    expect(aside?.querySelectorAll('select')).toHaveLength(2);
+    expect(aside?.querySelectorAll('[role="combobox"]')).toHaveLength(2);
     expect(aside?.hasAttribute('inert')).toBe(true);
     root.querySelector<HTMLButtonElement>('.nav-toggle')?.click();
     await fixture.whenStable();
     expect(aside?.hasAttribute('inert')).toBe(false);
     const router = TestBed.inject(Router);
     const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
-    const organization = aside?.querySelector('select');
-    if (!organization) throw new Error('Missing drawer organization selector');
-    organization.value = 'org-two';
-    organization.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.debugElement
+      .query(By.directive(ScopeSwitcherComponent))
+      .injector.get(ScopeSwitcherComponent)
+      .orgSelected.emit('org-two');
     expect(navigate).toHaveBeenCalledWith(['/orgs', 'org-two']);
   });
 
@@ -118,8 +132,9 @@ describe('ShellComponent', () => {
     vi.stubGlobal('innerWidth', 1440);
     window.dispatchEvent(new Event('resize'));
     await fixture.whenStable();
+    await renderScope();
     expect(root.querySelector('aside app-scope-switcher')).toBeNull();
-    expect(root.querySelectorAll('header.topbar select')).toHaveLength(2);
+    expect(root.querySelectorAll('header.topbar [role="combobox"]')).toHaveLength(2);
     expect(root.querySelectorAll('app-scope-switcher')).toHaveLength(1);
   });
 
@@ -156,21 +171,138 @@ describe('ShellComponent', () => {
     expect(aside.getAttribute('aria-label')).toBe('Navigation drawer');
     expect(aside.querySelector('nav')?.getAttribute('aria-label')).toBe('Primary navigation');
     expect(root.querySelector('.main-stack')?.hasAttribute('inert')).toBe(true);
-    const last = Array.from(aside.querySelectorAll<HTMLAnchorElement>('a')).at(-1)!;
-    close.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
-    );
-    expect(document.activeElement).toBe(last);
-    last.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
-    );
-    expect(document.activeElement).toBe(close);
+    const trap = fixture.debugElement.query(By.directive(CdkTrapFocus)).injector.get(CdkTrapFocus);
+    expect(trap.enabled).toBe(true);
+    expect(root.querySelectorAll('.cdk-focus-trap-anchor')).toHaveLength(2);
     close.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     await fixture.whenStable();
     expect(fixture.componentInstance.drawerOpen()).toBe(false);
     expect(root.querySelector('.main-stack')?.hasAttribute('inert')).toBe(false);
     expect(aside.hasAttribute('inert')).toBe(true);
     expect(document.activeElement).toBe(toggle);
+  });
+
+  it('waits for the visible, non-inert drawer before focusing its close button', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const aside = root.querySelector<HTMLElement>('aside')!;
+    const close = root.querySelector<HTMLButtonElement>('.close-button')!;
+    expect(close.classList.contains('transition-none')).toBe(true);
+    const nativeFocus = close.focus.bind(close);
+    const focus = vi.spyOn(close, 'focus').mockImplementation(() => {
+      expect(aside.hasAttribute('inert')).toBe(false);
+      expect(aside.classList.contains('invisible')).toBe(false);
+      nativeFocus();
+    });
+
+    fixture.componentInstance.toggleNavigation();
+    expect(focus).not.toHaveBeenCalled();
+    await fixture.whenStable();
+    expect(focus).toHaveBeenCalledOnce();
+  });
+
+  it('does not focus the close button if the drawer closes before its render', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const close = root.querySelector<HTMLButtonElement>('.close-button')!;
+    const focus = vi.spyOn(close, 'focus');
+    fixture.componentInstance.toggleNavigation();
+    fixture.componentInstance.closeDrawer();
+    await fixture.whenStable();
+    expect(focus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(root.querySelector('.nav-toggle'));
+  });
+
+  it('retries a refused focus on a frame and stops after the control receives focus', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const frames: FrameRequestCallback[] = [];
+    const close = root.querySelector<HTMLButtonElement>('.close-button')!;
+    const nativeFocus = close.focus.bind(close);
+    const focus = vi.spyOn(close, 'focus').mockImplementationOnce(() => undefined);
+    fixture.componentInstance.toggleNavigation();
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback),
+    );
+    await fixture.whenStable();
+    expect(focus).toHaveBeenCalledOnce();
+    expect(frames).toHaveLength(1);
+    focus.mockImplementation(nativeFocus);
+    frames.shift()!(0);
+    expect(document.activeElement).toBe(close);
+    expect(frames).toHaveLength(0);
+  });
+
+  it('bounds refused focus retries to three frames', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const frames: FrameRequestCallback[] = [];
+    const focus = vi
+      .spyOn(root.querySelector<HTMLButtonElement>('.close-button')!, 'focus')
+      .mockImplementation(() => undefined);
+    fixture.componentInstance.toggleNavigation();
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback),
+    );
+    await fixture.whenStable();
+    for (let frame = 0; frame < 3; frame++) frames.shift()!(frame);
+    expect(focus).toHaveBeenCalledTimes(4);
+    expect(frames).toHaveLength(0);
+  });
+
+  it('keeps focus on main when a drawer link revisits an already-loaded destination', async () => {
+    const router = TestBed.inject(Router);
+    const destination = '/orgs/org-one/projects/project-one/overview';
+    await router.navigateByUrl(destination);
+    await router.navigateByUrl('/other');
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    fixture.componentInstance.toggleNavigation();
+    await fixture.whenStable();
+    const link = root.querySelector<HTMLAnchorElement>('aside nav a')!;
+    link.click();
+    await fixture.whenStable();
+    expect(router.url).toBe(destination);
+    expect(fixture.componentInstance.drawerOpen()).toBe(false);
+    expect(document.activeElement).toBe(root.querySelector('#main-content'));
+  });
+
+  it.each(['', '?filter=recent#details'])(
+    'restores opener focus when a drawer link selects the current path from suffix "%s"',
+    async (suffix) => {
+      const router = TestBed.inject(Router);
+      const destination = '/orgs/org-one/projects/project-one/overview';
+      await router.navigateByUrl(destination + suffix);
+      vi.stubGlobal('innerWidth', 360);
+      window.dispatchEvent(new Event('resize'));
+      await fixture.whenStable();
+      fixture.componentInstance.toggleNavigation();
+      await fixture.whenStable();
+      const link = root.querySelector<HTMLAnchorElement>('aside nav a')!;
+      link.focus();
+      link.click();
+      await fixture.whenStable();
+      expect(router.url).toBe(destination);
+      expect(fixture.componentInstance.drawerOpen()).toBe(false);
+      expect(document.activeElement).toBe(root.querySelector('.nav-toggle'));
+    },
+  );
+
+  it('keeps a scope placeholder until the deferred mobile switcher is ready', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const aside = root.querySelector<HTMLElement>('aside')!;
+    expect(aside.querySelector('app-scope-switcher')).toBeNull();
+    expect(aside.querySelector('.drawer-scope[aria-hidden="true"]')).not.toBeNull();
+    await renderScope();
+    expect(aside.querySelector('.drawer-scope[aria-hidden="true"]')).toBeNull();
+    expect(aside.querySelectorAll('[role="combobox"]')).toHaveLength(2);
   });
 
   it('closes the modal on resize beyond the drawer boundary', async () => {

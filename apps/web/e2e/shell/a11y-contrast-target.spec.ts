@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { chooseScope, expectScopeValue, scopeControl } from './scope-controls';
 import readyFixture from '../../../../fixtures/web-api/run-detail/input.json';
 import {
   expectCurrentStep,
@@ -53,12 +54,14 @@ const FLOWS: readonly Flow[] = [
     name: 'project switch',
     async open(page, locale) {
       await page.goto(withVariant(overviewPath(locale), LIMITED_GRANTS));
-      await expect(page.locator('app-scope-switcher select')).toHaveCount(2);
-      const project = page.locator('app-scope-switcher select').nth(1);
-      await expect(project).toHaveValue(PROJECT_STOREFRONT);
-      await project.selectOption(PROJECT_CHECKOUT);
+      const project = scopeControl(page, 1);
+      await expectScopeValue(project, PROJECT_STOREFRONT);
+      if ((await page.locator('#shell-navigation').getAttribute('inert')) !== null) {
+        await page.locator('.nav-toggle').click();
+      }
+      await chooseScope(page, project, PROJECT_CHECKOUT);
       await expect(page).toHaveURL(new RegExp(`/projects/${PROJECT_CHECKOUT}/overview`));
-      await expect(project).toHaveValue(PROJECT_CHECKOUT);
+      await expectScopeValue(project, PROJECT_CHECKOUT);
       await expect(page.locator('#main-content h1')).toBeVisible();
     },
   },
