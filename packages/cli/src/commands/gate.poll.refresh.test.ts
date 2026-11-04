@@ -19,7 +19,7 @@ import {
   refusal,
   runId,
   stubFetch,
-} from './gate.kit.test.js';
+} from './gate.kit.testing.js';
 
 describe('gate --wait', () => {
   const dirs = cacheDirs();

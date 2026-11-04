@@ -17,8 +17,16 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach } from 'vitest';
 
-import { resetSecrets, type Io } from '../redact.js';
+import { resetSecrets } from '../redact.js';
 
+import {
+  capture,
+  jsonResponse,
+  stubFetch as sharedStubFetch,
+  type Captured,
+  type StubCall,
+  type StubHarness,
+} from './cliSpec.testing.js';
 import { devToken, exchangeBody, isDevExchange, mintedToken } from './devExchange.testing.js';
 
 /** The `project_id` a token-exchange answer carries (openapi `format: uuid`). */
@@ -32,30 +40,8 @@ export const artifactId = '7d1f9a52-3c4e-4b6a-9f01-2b3c4d5e6f70';
 /** The project slug the command scopes the upload to. */
 export const project = 'proj-1';
 
-/** The streams a run wrote to, plus the arrays behind them. */
-export interface Captured {
-  readonly io: Io;
-  readonly stdout: string[];
-  readonly stderr: string[];
-}
-
-export function capture(): Captured {
-  const stdout: string[] = [];
-  const stderr: string[] = [];
-  return {
-    io: { stdout: (text) => stdout.push(text), stderr: (text) => stderr.push(text) },
-    stdout,
-    stderr,
-  };
-}
-
-/** One recorded request: the method, the URL, the headers and the parsed body. */
-export interface StubCall {
-  readonly method: string;
-  readonly url: string;
-  readonly headers: Headers;
-  readonly json: unknown;
-}
+export { capture, jsonResponse };
+export type { Captured, StubCall };
 
 export type Responder = (call: StubCall) => Response | Promise<Response>;
 
@@ -64,61 +50,26 @@ export type Responder = (call: StubCall) => Response | Promise<Response>;
  * credential now, so `POST /v1/ci/token` is answered here and kept in `exchanges`: `calls`
  * then holds exactly the artifact route's own requests, which is what each case asserts.
  */
-export function stubFetch(respond: Responder): {
-  readonly fetchImpl: typeof fetch;
-  readonly calls: StubCall[];
-  readonly exchanges: StubCall[];
-} {
-  const calls: StubCall[] = [];
-  const exchanges: StubCall[] = [];
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    const method = request.method.toUpperCase();
-    // A PUT body is a stream: read it directly instead of cloning (a `clone()` on a
-    // half-duplex body would tee it and stall until the other branch is drained).
-    const body =
-      method === 'PUT' && request.body !== null
-        ? Buffer.from(await new Response(request.body).arrayBuffer())
-        : Buffer.from(await request.clone().arrayBuffer());
-    const call: StubCall = {
-      method,
-      url: request.url,
-      headers: new Headers(request.headers),
-      json: method === 'PUT' || body.length === 0 ? undefined : JSON.parse(body.toString('utf8')),
-    };
-    if (isDevExchange(request)) {
-      exchanges.push(call);
-      return jsonResponse(200, exchangeBody(mintedToken, { projectId: projectUuid }));
-    }
-    calls.push(call);
-    return respond(call);
-  };
-  return { fetchImpl, calls, exchanges };
-}
-
-export function jsonResponse(
-  status: number,
-  body: unknown,
-  headers: Record<string, string> = {},
-): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json', ...headers },
+export function stubFetch(respond: Responder): StubHarness {
+  return sharedStubFetch((call) => respond(call), {
+    exchange: (call) =>
+      isDevExchange(call)
+        ? jsonResponse(200, exchangeBody(mintedToken, { projectId: projectUuid }))
+        : undefined,
   });
 }
 
 /**
  * Registers the per-test temp root, its cleanup hook and the `resetSecrets()` reset, and
- * returns the factories the specs drive the command with. `prefix` names the root, so a
- * spec file keeps the one it already used.
+ * returns the factories the specs drive the command with.
  */
-export function useArtifactsUploadSpec(prefix = 'evidgate-artifacts-') {
+export function useArtifactsUploadSpec() {
   const dirs: string[] = [];
   let root: string;
 
   beforeEach(async () => {
     resetSecrets();
-    root = await mkdtemp(join(tmpdir(), prefix));
+    root = await mkdtemp(join(tmpdir(), 'evidgate-artifacts-'));
     dirs.push(root);
   });
 

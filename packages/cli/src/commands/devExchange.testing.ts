@@ -6,6 +6,8 @@
 // This file is not a spec: the shared Vitest base collects `src/**/*.test.ts` only. It is
 // also excluded from the emitting project in tsconfig.json, so it never reaches `dist` — the
 // no-emit tsconfig.spec.json is the project that type-checks it.
+import { stubFetch, type StubCall, type StubHarness } from './cliSpec.testing.js';
+
 /** A valid `project_id`, as a token-exchange answer carries it. */
 const projectId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 /** The `EVIDGATE_DEV_TOKEN` value: an ingest credential the exchange presents, never a bearer. */
@@ -20,19 +22,10 @@ export const mintedToken = 'egt_minted_ci_token';
 const exchangePath = '/v1/ci/token';
 
 /** One recorded request: the `Request` and the raw bytes it carried. */
-export interface DevStubCall {
-  readonly request: Request;
-  readonly body: Buffer;
-}
+export type DevStubCall = StubCall;
 
 /** The stub's transport and the two request lists it keeps apart. */
-export interface DevStub {
-  readonly fetchImpl: typeof fetch;
-  /** The command's own requests; the dev token's exchange is never one of them. */
-  readonly calls: DevStubCall[];
-  /** The `POST /v1/ci/token` requests the command made, in order. */
-  readonly exchanges: DevStubCall[];
-}
+export type DevStub = StubHarness;
 
 /**
  * The fixed expiry most exchange answers carry. It is deliberately beyond the cache's
@@ -111,21 +104,7 @@ export function devStubFetch(
   handler: (request: Request, index: number) => Response | Promise<Response>,
   token: string = mintedToken,
 ): DevStub {
-  const calls: DevStubCall[] = [];
-  const exchanges: DevStubCall[] = [];
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    const call: DevStubCall = {
-      request,
-      body: Buffer.from(await request.clone().arrayBuffer()),
-    };
-    const exchange = devExchangeAnswer(request, { token });
-    if (exchange !== undefined) {
-      exchanges.push(call);
-      return exchange;
-    }
-    calls.push(call);
-    return handler(request, calls.length - 1);
-  };
-  return { fetchImpl, calls, exchanges };
+  return stubFetch((call, index) => handler(call.request, index), {
+    exchange: (call) => devExchangeAnswer(call, { token }),
+  });
 }

@@ -14,9 +14,16 @@ import { join, relative } from 'node:path';
 import { afterEach, beforeEach } from 'vitest';
 
 import { main } from '../main.js';
-import { resetSecrets, type Io } from '../redact.js';
+import { resetSecrets } from '../redact.js';
 import { defaultSpoolMaxBytes, ProducerSpool } from '../spool.js';
 
+import {
+  capture,
+  jsonResponse,
+  stubFetch as sharedStubFetch,
+  type Captured,
+  type StubCall,
+} from './cliSpec.testing.js';
 import { devExchangeAnswer, devToken, isDevExchange } from './devExchange.testing.js';
 
 /** The project slug the command scopes the finalize to. */
@@ -32,39 +39,15 @@ export const manifestHash = `sha256:${'a'.repeat(64)}`;
 /** The namespace of the documented derived-key pre-image. */
 export const keyVersion = 'evidgate.finalize-key.v1';
 
-export interface Captured {
-  readonly io: Io;
-  readonly stdout: string[];
-  readonly stderr: string[];
-}
-
-export function capture(): Captured {
-  const stdout: string[] = [];
-  const stderr: string[] = [];
-  return {
-    io: { stdout: (text) => stdout.push(text), stderr: (text) => stderr.push(text) },
-    stdout,
-    stderr,
-  };
-}
-
-export interface StubCall {
-  readonly request: Request;
-  readonly body: Buffer;
-}
+export { capture, jsonResponse };
+export type { Captured, StubCall };
 
 /** A `fetch` stub that records every request (URL, headers, raw body) and answers from `handler`. */
 export function stubFetch(handler: (request: Request) => Response | Promise<Response>): {
   readonly fetchImpl: typeof fetch;
   readonly calls: StubCall[];
 } {
-  const calls: StubCall[] = [];
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    calls.push({ request, body: Buffer.from(await request.clone().arrayBuffer()) });
-    return handler(request);
-  };
-  return { fetchImpl, calls };
+  return sharedStubFetch((call) => handler(call.request));
 }
 
 /**
@@ -81,17 +64,6 @@ export function invoke(
     fetch: fetchImpl,
     sleep: () => Promise.resolve(),
     random: () => 0,
-  });
-}
-
-export function jsonResponse(
-  status: number,
-  body: unknown,
-  headers: Record<string, string> = {},
-): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json', ...headers },
   });
 }
 

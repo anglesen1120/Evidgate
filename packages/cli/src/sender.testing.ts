@@ -2,6 +2,7 @@
 // `sleep`/`now`, and the request, batch and ack builders the specs answer with. Nothing here
 // touches the network or waits on a real timer, so the specs stay deterministic.
 import type { Batch } from './batcher.js';
+import { jsonResponse } from './commands/cliSpec.testing.js';
 import { resolveConfig } from './config.js';
 import { SendFailedError, type SendDeps, type SendOptions } from './sender.js';
 import type { SpoolEvent } from './spool.js';
@@ -88,16 +89,7 @@ export function sendOptions(
   };
 }
 
-export function jsonResponse(
-  status: number,
-  body: unknown,
-  headers: Record<string, string> = {},
-): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json', ...headers },
-  });
-}
+export { jsonResponse };
 
 /** An error envelope: `code`/`request_id` must reach the caller verbatim. */
 export function refusal(

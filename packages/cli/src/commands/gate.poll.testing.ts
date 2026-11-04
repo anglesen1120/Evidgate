@@ -4,7 +4,7 @@
 //
 // This file is not a spec: the shared Vitest base collects `src/**/*.test.ts` only, and
 // tsconfig.json excludes it from the emitting project. tsconfig.spec.json type-checks it.
-import { jsonResponse } from './gate.kit.test.js';
+import { jsonResponse } from './gate.kit.testing.js';
 
 export function rateLimited(retryAfterSeconds: string): Response {
   return jsonResponse(

@@ -17,7 +17,7 @@ import {
   invoke,
   pending,
   runId,
-} from './gate.kit.test.js';
+} from './gate.kit.testing.js';
 
 const keys = [
   'decision',

@@ -16,7 +16,7 @@ import {
   invoke,
   runId,
   type StubCall,
-} from './gate.kit.test.js';
+} from './gate.kit.testing.js';
 
 describe('gate flags', () => {
   const dirs = cacheDirs();

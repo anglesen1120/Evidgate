@@ -21,7 +21,7 @@ import {
   refusal,
   runId,
   stubFetch,
-} from './gate.kit.test.js';
+} from './gate.kit.testing.js';
 
 describe('gate token refresh', () => {
   const dirs = cacheDirs();
