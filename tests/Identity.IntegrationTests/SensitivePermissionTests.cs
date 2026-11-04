@@ -51,6 +51,14 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     /// </summary>
     private static readonly string[] SkippedGetRoutes =
     [
+        // The artifact reads of the sensitivity surface: an artifact row is minted only by
+        // `POST /v1/artifacts/upload-url`, which presigns through the object storage this host does not configure, so
+        // no id exists here for either route to answer 200 with — the scan requires a readable body and would report
+        // the 404 instead. Their refusals and the conditional `artifact:read_sensitive` escalation are asserted in
+        // Tenancy.IntegrationTests' evidence sensitivity suite against a real database and real presigning.
+        "/v1/artifacts/{a}",
+        "/v1/artifacts/{a}/download-url",
+
         // 13.1.1-T2's manual case detail: it only answers for a case this suite does not create
         // (authoring rows are Tenancy.IntegrationTests' subject, and a seeded case here would
         // assert a state the writer never produced). The three authoring lists are scanned.

@@ -21,6 +21,9 @@ namespace Evidgate.Modules.Evidence.Endpoints;
 /// </summary>
 public static class EvidenceEndpoints
 {
+    /// <summary>The header every per-caller, credential-bearing answer carries: no cache may store it.</summary>
+    private const string NoStore = "no-store";
+
     /// <summary>Maps the routes and returns the <c>/v1</c> group so the host can apply its filters (00 §5.5 C8).</summary>
     public static RouteGroupBuilder MapEvidenceEndpoints(this IEndpointRouteBuilder routes)
     {
@@ -35,6 +38,14 @@ public static class EvidenceEndpoints
         group.MapPost("/artifacts/{a:guid}/complete", CompleteArtifactAsync)
             .Produces<CompleteResponse>(StatusCodes.Status200OK)
             .WithSummary("Verify an uploaded artifact and complete its upload (06.1.2)");
+
+        group.MapGet("/artifacts/{a:guid}", GetArtifactMetadataAsync)
+            .Produces<ArtifactMetadataView>(StatusCodes.Status200OK)
+            .WithSummary("Read one artifact's metadata; content-bearing members are gated when it is sensitive");
+
+        group.MapGet("/artifacts/{a:guid}/download-url", IssueDownloadUrlAsync)
+            .Produces<DownloadUrlResponse>(StatusCodes.Status200OK)
+            .WithSummary("Issue a short-lived presigned download URL for one artifact");
 
         return group;
     }
@@ -112,7 +123,7 @@ public static class EvidenceEndpoints
         // BodySizeLimitStream below.
         if (context.Request.ContentLength is { } declared && declared > UploadUrlLimits.MaxBodyBytes)
         {
-            return Result.Failure<UploadUrlResponse>(BodyTooLarge);
+            return Result.Failure<UploadUrlResponse>(CappedRequestBody.TooLarge);
         }
 
         // The body is read explicitly rather than bound by the request-delegate factory: the spec declares this
@@ -124,16 +135,12 @@ public static class EvidenceEndpoints
         var body = context.Request.Body;
         try
         {
-            context.Request.Body = new BodySizeLimitStream(body, UploadUrlLimits.MaxBodyBytes);
+            context.Request.Body = new CappedBodyStream(body, UploadUrlLimits.MaxBodyBytes);
             request = await context.Request.ReadFromJsonAsync<UploadUrlRequest>(cancellationToken).ConfigureAwait(false);
         }
         catch (BadHttpRequestException exception)
         {
-            var status = exception.StatusCode;
-            return Result.Failure<UploadUrlResponse>(new Error(
-                status == StatusCodes.Status413PayloadTooLarge ? ApiErrorCode.PayloadTooLarge : ApiErrorCode.RequestInvalid,
-                "the request body could not be read",
-                status));
+            return Result.Failure<UploadUrlResponse>(CappedRequestBody.Unreadable(exception));
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
         {
@@ -167,129 +174,56 @@ public static class EvidenceEndpoints
             cancellationToken).ConfigureAwait(false);
     }
 
-    private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
-
     /// <summary>
-    /// 413 for a body over <see cref="UploadUrlLimits.MaxBodyBytes"/>: the same 00 §9.2 shape the other
-    /// body-bounded routes use (<c>PolicyEndpoints</c>, <c>OrchestratorEndpoints</c>, the contract-validation
-    /// filter), and the same one the catch below derives from a streamed oversize. It echoes nothing of the body.
+    /// <c>GET /v1/artifacts/{a}</c>: the metadata of one artifact. The pipeline authorizes <c>artifact:read</c>; the
+    /// shared read model decides whether the caller also holds <c>artifact:read_sensitive</c> and masks the content
+    /// when it does not, so a gated answer is a 200 with <c>content_gated: true</c> and never a 403.
     /// </summary>
-    private static Error BodyTooLarge => new(
-        ApiErrorCode.PayloadTooLarge,
-        "the request body is too large",
-        StatusCodes.Status413PayloadTooLarge);
-
-    /// <summary>
-    /// The body reader of <c>POST /v1/artifacts/upload-url</c> (06.1.2-T3.1): every byte the host reads is counted,
-    /// and the first byte PAST <paramref name="limit"/> raises the same <see cref="BadHttpRequestException"/> with
-    /// <c>413</c> that Kestrel raises for its own body-size limit, so the endpoint's existing catch maps it to the
-    /// identical 00 §9.2 <c>payload_too_large</c> envelope. It bounds a chunked or length-less body, which the
-    /// declared <c>Content-Length</c> check cannot see, without buffering anything: a body of exactly the limit is
-    /// read whole (one byte past it is always requested, so only the byte that passes the limit refuses), and no
-    /// body byte is ever copied out, logged or echoed.
-    /// </summary>
-    /// <param name="inner">The request body Kestrel hands the endpoint.</param>
-    /// <param name="limit">The largest body the route accepts, in bytes.</param>
-    private sealed class BodySizeLimitStream(Stream inner, int limit) : Stream
+    private static ValueTask<Result<ArtifactMetadataView>> GetArtifactMetadataAsync(
+        HttpContext context,
+        Guid a,
+        IMediator mediator,
+        CancellationToken cancellationToken)
     {
-        /// <summary>The bytes read through this stream so far; never above <paramref name="limit"/> when a read returns.</summary>
-        private long read;
-
-        /// <inheritdoc />
-        public override bool CanRead => true;
-
-        /// <inheritdoc />
-        public override bool CanSeek => false;
-
-        /// <inheritdoc />
-        public override bool CanWrite => false;
-
-        /// <inheritdoc />
-        public override long Length => throw new NotSupportedException();
-
-        /// <inheritdoc />
-        public override long Position
-        {
-            get => read;
-            set => throw new NotSupportedException();
-        }
-
-        /// <inheritdoc />
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            ArgumentNullException.ThrowIfNull(buffer);
-
-            var taken = inner.Read(buffer, offset, Room(count));
-            Count(taken);
-            return taken;
-        }
-
-        /// <inheritdoc />
-        public override int Read(Span<byte> buffer)
-        {
-            var taken = inner.Read(buffer[..Room(buffer.Length)]);
-            Count(taken);
-            return taken;
-        }
-
-        /// <inheritdoc />
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
-            ReadCoreAsync(buffer, cancellationToken);
-
-        /// <inheritdoc />
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-        {
-            ArgumentNullException.ThrowIfNull(buffer);
-
-            return ReadCoreAsync(buffer.AsMemory(offset, Room(count)), cancellationToken).AsTask();
-        }
-
-        /// <inheritdoc />
-        public override void Flush()
-        {
-            // Read-only stream: nothing to flush.
-        }
-
-        /// <inheritdoc />
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-
-        /// <inheritdoc />
-        public override void SetLength(long value) => throw new NotSupportedException();
-
-        /// <inheritdoc />
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-
-        /// <summary>
-        /// How many bytes this read may take without passing the limit: the requested count, capped at the one byte
-        /// that would prove the body is over it. A body of exactly the limit therefore ends in a normal
-        /// end-of-stream read instead of a refusal.
-        /// </summary>
-        /// <param name="requested">The count the caller asked for.</param>
-        private int Room(int requested)
-        {
-            var room = (limit + 1) - read;
-            return requested < room ? requested : (int)room;
-        }
-
-        /// <summary>Counts a completed read and refuses the moment it passes the limit.</summary>
-        /// <param name="taken">The bytes the inner stream returned.</param>
-        private void Count(int taken)
-        {
-            read += taken;
-
-            if (read > limit)
-            {
-                throw new BadHttpRequestException("the request body is too large", StatusCodes.Status413PayloadTooLarge);
-            }
-        }
-
-        private async ValueTask<int> ReadCoreAsync(Memory<byte> buffer, CancellationToken cancellationToken)
-        {
-            var taken = await inner.ReadAsync(buffer[..Room(buffer.Length)], cancellationToken).ConfigureAwait(false);
-            Count(taken);
-            return taken;
-        }
+        context.Response.Headers.CacheControl = NoStore;
+        return mediator.Send(new Application.Artifacts.GetArtifactMetadata(a), cancellationToken);
     }
+
+    /// <summary>
+    /// <c>GET /v1/artifacts/{a}/download-url</c>: the gate decides first — it is the only place the
+    /// <c>artifact:read_sensitive</c> answer and the row are read together, and the only place a denial's audit row
+    /// is written and committed before the command transaction exists. The command then presigns the GET the gate
+    /// cleared.
+    /// </summary>
+    private static async Task<Result<DownloadUrlResponse>> IssueDownloadUrlAsync(
+        HttpContext context,
+        Guid a,
+        IRequestPrincipalAccessor principals,
+        Application.Artifacts.ArtifactDownloadGate gate,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        context.Response.Headers.CacheControl = NoStore;
+
+        if (principals.Current is not { } principal)
+        {
+            return Result.Failure<DownloadUrlResponse>(Unauthenticated);
+        }
+
+        var authorized = await gate.AuthorizeAsync(a, principal, cancellationToken).ConfigureAwait(false);
+        if (!authorized.IsSuccess)
+        {
+            return Result.Failure<DownloadUrlResponse>(authorized.Error!);
+        }
+
+        var row = authorized.Value;
+
+        return await mediator.Send(
+            new Application.Artifacts.IssueArtifactDownloadUrl(a),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
 
     /// <summary>00 §7 / the <c>idempotency_record</c> key column: the C2 idempotency stage's own bound (T92).</summary>
     private const int MaxIdempotencyKeyLength = 128;
@@ -383,3 +317,109 @@ public sealed record CompleteResponse(
     [property: JsonPropertyName("bytes")] long? Bytes,
     [property: JsonPropertyName("scan_state")] string? ScanState,
     [property: JsonPropertyName("failure_code")] string? FailureCode);
+
+/// <summary>
+/// 200 body of <c>GET /v1/artifacts/{a}</c>: the artifact's descriptive metadata. <see cref="Sensitivity"/> is the
+/// effective classification every read path enforces (raised by the project's kind policy and by an unfinished or
+/// flagged scan, never lowered by reading), and <see cref="ContentGated"/> is true when the caller holds only
+/// <c>artifact:read</c>: the storage key, the checksum and the byte count are then absent from the document, not
+/// null-ed in place, so no client can mistake a redacted field for a value.
+/// </summary>
+/// <param name="ArtifactId">The artifact id.</param>
+/// <param name="ProjectId">The owning project.</param>
+/// <param name="RunId">The run the artifact belongs to.</param>
+/// <param name="Kind">One of the eight contract kinds.</param>
+/// <param name="MediaType">The stored media type.</param>
+/// <param name="State">The artifact's lifecycle state.</param>
+/// <param name="Sensitivity"><c>normal</c> or <c>sensitive</c>, as resolved for this read.</param>
+/// <param name="ScanState">The secret-scan state, or null when the row carries none.</param>
+/// <param name="Bytes">The stored length, or null when the content is gated.</param>
+/// <param name="Checksum">The content address, or null when the content is gated.</param>
+/// <param name="ObjectKey">The storage key, or null when the content is gated.</param>
+/// <param name="ContentGated">True when the content-bearing members were withheld from this caller, either because
+/// it may not read sensitive content or because the row's bytes are being deleted.</param>
+/// <param name="CreatedAt">When the row was created.</param>
+public sealed record ArtifactMetadataView(
+    [property: JsonPropertyName("artifact_id")] Guid ArtifactId,
+    [property: JsonPropertyName("project_id")] Guid ProjectId,
+    [property: JsonPropertyName("run_id")] Guid RunId,
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("media_type")] string MediaType,
+    [property: JsonPropertyName("state")] string State,
+    [property: JsonPropertyName("sensitivity")] string Sensitivity,
+    [property: JsonPropertyName("scan_state")] string? ScanState,
+    [property: JsonPropertyName("bytes"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? Bytes,
+    [property: JsonPropertyName("checksum"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Checksum,
+    [property: JsonPropertyName("object_key"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ObjectKey,
+    [property: JsonPropertyName("content_gated")] bool ContentGated,
+    [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt)
+{
+    /// <summary>Renders one row of the shared read model; the masking already happened in its statement.</summary>
+    internal static ArtifactMetadataView From(Application.Artifacts.ArtifactReadRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        return new ArtifactMetadataView(
+            row.Id,
+            row.ProjectId,
+            row.RunId,
+            row.Kind,
+            row.MediaType,
+            row.State,
+            row.EffectiveSensitivity,
+            row.ScanState,
+            row.Bytes,
+            row.Checksum,
+            row.ObjectKey,
+            row.ContentGated,
+            row.CreatedAt);
+    }
+}
+
+/// <summary>
+/// 200 body of <c>GET /v1/artifacts/{a}/download-url</c>: a short-lived presigned <c>GET</c> for the artifact's
+/// bytes. The URL is a bearer credential, so it is returned once, never logged and never audited; the audit row
+/// names the artifact, its run and the outcome only.
+/// </summary>
+/// <param name="ArtifactId">The artifact the URL serves.</param>
+/// <param name="DownloadUrl">The presigned <c>GET</c> URL.</param>
+/// <param name="ExpiresAt">When the URL stops being valid.</param>
+public sealed record DownloadUrlResponse(
+    [property: JsonPropertyName("artifact_id")] Guid ArtifactId,
+    [property: JsonPropertyName("download_url")] Uri DownloadUrl,
+    [property: JsonPropertyName("expires_at")] DateTimeOffset ExpiresAt);
+
+/// <summary>
+/// Body of <c>PUT /v1/projects/{p}/artifact-kind-policy/{kind}</c> and its 200 answer: the stored capture policy of
+/// one kind in one project. Every member is required — the row's five knobs are written as a whole, so a caller
+/// never leaves one to a stale value.
+/// </summary>
+/// <param name="MaxBytes">The largest artifact of the kind the project accepts, greater than zero.</param>
+/// <param name="MediaTypes">The accepted media types, between one and 64.</param>
+/// <param name="DefaultSensitivity"><c>normal</c> or <c>sensitive</c>.</param>
+/// <param name="CaptureEnabled">False switches capture of the kind off for the project.</param>
+/// <param name="RejectOnSecret">True makes the project reject an artifact whose scan flags a secret.</param>
+public sealed record ArtifactKindPolicyBody(
+    [property: JsonRequired, JsonPropertyName("max_bytes")] long MaxBytes,
+    [property: JsonRequired, JsonPropertyName("media_types")] string[] MediaTypes,
+    [property: JsonRequired, JsonPropertyName("default_sensitivity")] string DefaultSensitivity,
+    [property: JsonRequired, JsonPropertyName("capture_enabled")] bool CaptureEnabled,
+    [property: JsonRequired, JsonPropertyName("reject_on_secret")] bool RejectOnSecret);
+
+/// <summary>
+/// 200 body of the kind-policy override: the stored policy, including the kind the path named. It repeats the
+/// request's members so a client can render what the server committed without a second read.
+/// </summary>
+/// <param name="Kind">The kind the row belongs to.</param>
+/// <param name="MaxBytes">The stored size cap.</param>
+/// <param name="MediaTypes">The stored media-type allowlist.</param>
+/// <param name="DefaultSensitivity">The stored default sensitivity.</param>
+/// <param name="CaptureEnabled">The stored capture switch.</param>
+/// <param name="RejectOnSecret">The stored secret-rejection switch.</param>
+public sealed record ArtifactKindPolicyView(
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("max_bytes")] long MaxBytes,
+    [property: JsonPropertyName("media_types")] string[] MediaTypes,
+    [property: JsonPropertyName("default_sensitivity")] string DefaultSensitivity,
+    [property: JsonPropertyName("capture_enabled")] bool CaptureEnabled,
+    [property: JsonPropertyName("reject_on_secret")] bool RejectOnSecret);

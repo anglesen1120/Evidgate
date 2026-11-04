@@ -520,6 +520,8 @@ internal sealed class FaultInjectingObjectStorage : IObjectStorage, IDisposable
     /// <inheritdoc />
     public PresignedPut PresignPut(PresignPutRequest request) => Inner().PresignPut(request);
 
+    public PresignedGet PresignGet(string objectKey) => Inner().PresignGet(objectKey);
+
     /// <inheritdoc />
     public async Task<ObjectHead?> HeadAsync(string objectKey, CancellationToken cancellationToken)
     {

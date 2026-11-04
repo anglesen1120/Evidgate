@@ -114,6 +114,19 @@ internal static class EvidenceErrors
         StatusCodes.Status404NotFound);
 
     /// <summary>
+    /// 403: the artifact is served as <c>sensitive</c> (its stored classification, the project's kind policy, or a
+    /// scan that has not proved it clean) and the caller holds no <c>artifact:read_sensitive</c>. Only content is
+    /// gated — the metadata route answers a masked 200 instead — and the refusal writes its own audit row before any
+    /// command transaction opens, so the denial survives the rollback a failing command would cause.
+    /// </summary>
+    internal static Error SensitivityForbidden => Error.Denied(
+        ApiErrorCode.SensitivityForbidden,
+        "the artifact is sensitive, so reading its content requires artifact:read_sensitive");
+
+    /// <summary>404: the project named by the route is unknown to this organization, or soft-deleted out of sight.</summary>
+    internal static Error ProjectNotFound => Error.NotFound("the project does not exist in this organization");
+
+    /// <summary>
     /// 409: the artifact is in a state that allows no completion (06.1.2-T2 §6) — neither the
     /// <c>pending_upload</c>/<c>uploaded</c> pair nor the replayable <c>ready</c>/<c>rejected</c> outcome, e.g.
     /// <c>pending_delete</c> or <c>deleted</c>.
