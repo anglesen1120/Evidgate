@@ -110,7 +110,7 @@ export class EnableCollectionPage {
   protected readonly reading = computed(() => this.activationRead().kind === 'loading');
   protected readonly busy = computed(() => this.activation.status() === 'running');
   protected readonly failure = this.activation.error;
-  protected readonly enabled = computed(() => {
+  readonly enabled = computed(() => {
     const read = this.activationRead();
     return this.activation.result() ?? (read.kind === 'active' ? read.state : null);
   });

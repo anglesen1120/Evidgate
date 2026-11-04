@@ -4,6 +4,7 @@ import {
   Injector,
   afterNextRender,
   afterRenderEffect,
+  computed,
   inject,
   signal,
   viewChild,
@@ -26,6 +27,7 @@ import {
   NotFoundPatternComponent,
 } from '../../../shared/ui/states';
 import type { StepNumber } from '../data/step-derivation';
+import type { OnboardingProgress } from '../data/onboarding-progress.service';
 import { OnboardingStore } from '../onboarding.store';
 import { CreateProjectPage } from '../steps/create-project.page';
 import { ConnectCiPage } from '../steps/connect-ci.page';
@@ -56,6 +58,14 @@ export class OnboardingShellComponent {
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
   private readonly heading = viewChild<ElementRef<HTMLHeadingElement>>('stepHeading');
+  private readonly activationStep = viewChild(EnableCollectionPage);
+  protected readonly evidenceProgress = computed<OnboardingProgress | null>(() => {
+    const progress = this.store.progress();
+    const activation = this.activationStep()?.enabled();
+    return progress && activation
+      ? { ...progress, activation: { kind: 'active', state: activation } }
+      : progress;
+  });
 
   /**
    * How far the handoff for the step a create opened has got.

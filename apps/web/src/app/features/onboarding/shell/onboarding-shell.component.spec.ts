@@ -1,7 +1,14 @@
-import { Component, input, provideZonelessChangeDetection } from '@angular/core';
+import {
+  Component,
+  forwardRef,
+  input,
+  provideZonelessChangeDetection,
+  signal,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, Router, type ParamMap } from '@angular/router';
-import type { ProjectDto } from '@evidgate/sdk';
+import type { PolicyActivationStateDto, ProjectDto } from '@evidgate/sdk';
+import { By } from '@angular/platform-browser';
 import { BehaviorSubject, Subject } from 'rxjs';
 
 import { SessionStore } from '../../../core/session/session.store';
@@ -33,10 +40,14 @@ class ConnectCiStub {
 @Component({
   selector: 'app-onboarding-enable-collection',
   template: '<div data-testid="enable-collection-page">{{ orgId() }} {{ projectId() }}</div>',
+  providers: [
+    { provide: EnableCollectionPage, useExisting: forwardRef(() => EnableCollectionStub) },
+  ],
 })
 class EnableCollectionStub {
   readonly orgId = input.required<string>();
   readonly projectId = input.required<string>();
+  readonly enabled = signal<PolicyActivationStateDto | null>(null);
 }
 
 /**
@@ -418,6 +429,31 @@ describe('OnboardingShellComponent over the real store', () => {
     };
     return { progressLoad, childParams, activate, store: TestBed.inject(OnboardingStore) };
   }
+
+  it('updates the resource ledger when the active step confirms an activation', async () => {
+    const { progressLoad, activate } = await setupRealShell();
+    progressLoad.mockResolvedValue({
+      ...CREATED,
+      done: { 1: true, 2: true, 3: true, 4: true, 5: false },
+      currentStep: 5,
+    });
+    const fixture = await activate();
+    const step = fixture.debugElement.query(By.directive(EnableCollectionStub))
+      .componentInstance as EnableCollectionStub;
+    step.enabled.set({
+      project_id: PROJECT.id,
+      policy_revision_id: 'newly-confirmed-policy',
+      hash: 'sha256:confirmed',
+      mode: 'advisory',
+      activated_by: 'member-1',
+      activated_at: '2026-11-04T12:00:00Z',
+    });
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const panel = root.querySelector('[data-testid="onboarding-evidence-panel"]');
+    expect(panel?.textContent).toContain('newly-confirmed-policy');
+    expect(panel?.querySelector('[data-resource-state="empty"]')).toBeNull();
+  });
 
   it('reads once for the page and once for the create, and reads again on the next visit', async () => {
     const { progressLoad, childParams, activate, store } = await setupRealShell();

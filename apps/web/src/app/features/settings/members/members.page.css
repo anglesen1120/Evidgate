@@ -102,6 +102,7 @@ table {
   border-collapse: collapse;
   width: 100%;
   background: var(--eg-surface);
+  table-layout: auto;
 }
 caption {
   text-align: start;
@@ -115,6 +116,15 @@ td {
   border-block-start: var(--eg-border-width) solid var(--eg-border);
   overflow-wrap: anywhere;
   min-width: var(--eg-control-touch);
+}
+thead th,
+.member-identity {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.record-label {
+  display: none;
 }
 thead {
   background: var(--eg-surface-raised);
@@ -230,8 +240,51 @@ code {
     display: block;
     margin-block-end: var(--eg-space-4);
   }
-  th,
-  td {
-    padding: var(--eg-space-3);
+  .table-scroll {
+    overflow: visible;
+  }
+  table,
+  caption,
+  tbody,
+  tr {
+    display: block;
+    min-inline-size: var(--eg-space-0);
+  }
+  thead {
+    position: absolute;
+    inline-size: var(--eg-border-width);
+    block-size: var(--eg-border-width);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  tbody tr {
+    border-block-start: var(--eg-border-width) solid var(--eg-border);
+  }
+  tbody th,
+  tbody td {
+    display: grid;
+    gap: var(--eg-space-2);
+    min-inline-size: var(--eg-space-0);
+    min-block-size: var(--eg-control-touch);
+    box-sizing: border-box;
+    border: 0;
+    padding: var(--eg-space-3) var(--eg-space-4);
+  }
+  .record-label {
+    display: block;
+    color: var(--eg-text-muted);
+    font-size: var(--eg-text-xs);
+    line-height: var(--eg-leading-xs);
+    font-weight: var(--eg-weight-medium);
+    white-space: normal;
+    overflow-wrap: normal;
+  }
+  .member-identity {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  tbody .mutation {
+    display: none;
   }
 }

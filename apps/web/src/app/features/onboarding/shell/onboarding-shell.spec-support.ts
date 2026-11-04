@@ -5,6 +5,7 @@ import { computed, signal, type Signal, type WritableSignal } from '@angular/cor
 import { vi, type Mock } from 'vitest';
 
 import type { StepNumber } from '../data/step-derivation';
+import type { OnboardingProgress } from '../data/onboarding-progress.service';
 
 /** The scope a stub store reports as the one-shot create marker. */
 export interface StubScope {
@@ -26,6 +27,8 @@ export interface ShellStoreOptions {
 export interface ShellStore {
   readonly status: WritableSignal<'loading' | 'ready' | 'error'>;
   readonly failure: WritableSignal<'forbidden' | 'not-found' | 'unavailable' | null>;
+  readonly progress: WritableSignal<OnboardingProgress | null>;
+  readonly refreshFailure: WritableSignal<'forbidden' | 'not-found' | 'unavailable' | null>;
   readonly viewStep: WritableSignal<StepNumber>;
   readonly currentStep: WritableSignal<StepNumber | 'enabled'>;
   readonly done: WritableSignal<Readonly<Record<StepNumber, boolean>>>;
@@ -66,6 +69,8 @@ export function shellStore(options: ShellStoreOptions = {}): ShellStore {
   return {
     status: signal<'loading' | 'ready' | 'error'>('ready'),
     failure: signal<'forbidden' | 'not-found' | 'unavailable' | null>(null),
+    progress: signal<OnboardingProgress | null>(null),
+    refreshFailure: signal<'forbidden' | 'not-found' | 'unavailable' | null>(null),
     viewStep,
     currentStep,
     done,

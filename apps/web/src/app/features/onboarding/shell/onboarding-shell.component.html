@@ -115,7 +115,10 @@
             </div>
           </footer>
         </section>
-        <app-onboarding-evidence-panel [step]="store.viewStep()" [project]="store.project()" />
+        <app-onboarding-evidence-panel
+          [progress]="evidenceProgress()"
+          [refreshFailed]="store.refreshFailure() !== null"
+        />
       </div>
     }
   }
