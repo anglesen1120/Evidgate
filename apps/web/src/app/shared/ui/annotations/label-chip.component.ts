@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { hlm } from '@evidgate/ui/utils';
 
-import { IDENTITY_BADGE_CLASSES } from '../chips/badge-classes';
+import { BADGE_CLASSES, IDENTITY_BADGE_CLASSES } from '../chips/badge-classes';
 
 export type LabelKind = 'flaky' | 'healed';
 export type HealingMode = 'shadow' | 'official';
@@ -20,7 +20,8 @@ export type HealingMode = 'shadow' | 'official';
       <span
         hlmBadge
         [variant]="'secondary'"
-        class="label label-flaky max-w-full whitespace-normal bg-(--eg-warning-bg) text-(--eg-warning-fg)"
+        class="label label-flaky"
+        [class]="flakyBadgeClasses"
         i18n="@@shared.label-chip.flaky"
         >Flaky</span
       >
@@ -57,7 +58,8 @@ export type HealingMode = 'shadow' | 'official';
           <span
             hlmBadge
             [variant]="'secondary'"
-            class="label label-healed max-w-full whitespace-normal bg-(--eg-info-bg) text-(--eg-info-fg)"
+            class="label label-healed"
+            [class]="healedBadgeClasses"
             i18n="@@shared.label-chip.healed"
             >Healed with candidate</span
           >
@@ -72,7 +74,8 @@ export type HealingMode = 'shadow' | 'official';
           <span
             hlmBadge
             [variant]="'secondary'"
-            class="label label-unavailable max-w-full whitespace-normal"
+            class="label label-unavailable"
+            [class]="unavailableBadgeClasses"
             i18n="@@shared.label-chip.hash-unavailable"
             >Candidate hash unavailable</span
           >
@@ -99,7 +102,8 @@ export type HealingMode = 'shadow' | 'official';
       <span
         hlmBadge
         [variant]="'secondary'"
-        class="label label-unavailable max-w-full whitespace-normal"
+        class="label label-unavailable"
+        [class]="unavailableBadgeClasses"
         i18n="@@shared.label-chip.unavailable"
         >Label unavailable</span
       >
@@ -113,6 +117,15 @@ export class LabelChip {
   readonly mode = input<HealingMode>();
   /** Raw pre-healing failure, never rewritten or inferred from the candidate. */
   readonly originalFailure = input('');
+  protected readonly flakyBadgeClasses = hlm(
+    BADGE_CLASSES,
+    'bg-(--eg-warning-bg) text-(--eg-warning-fg)',
+  );
+  protected readonly healedBadgeClasses = hlm(
+    BADGE_CLASSES,
+    'bg-(--eg-info-bg) text-(--eg-info-fg)',
+  );
+  protected readonly unavailableBadgeClasses = hlm(BADGE_CLASSES);
   protected readonly candidateBadgeClasses = hlm(
     IDENTITY_BADGE_CLASSES,
     'text-xs whitespace-pre-wrap',
