@@ -5,6 +5,7 @@ import { HlmCard } from '@evidgate/ui/card';
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   Injector,
   afterNextRender,
@@ -29,6 +30,7 @@ import { NavComponent } from './nav.component';
 import { ScopeSwitcherComponent } from './scope-switcher.component';
 import { ShellIconComponent } from './shell-icon.component';
 import { ThemeService } from './theme.service';
+import { trackTopbarHeight } from './topbar-height';
 
 @Component({
   selector: 'app-shell',
@@ -56,7 +58,9 @@ export class ShellComponent {
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly aside = viewChild<ElementRef<HTMLElement>>('navigation');
+  private readonly topbar = viewChild<ElementRef<HTMLElement>>('topbar');
   private readonly closeButton = viewChild<ElementRef<HTMLButtonElement>>('closeButton');
   private readonly toggleButton = viewChild<ElementRef<HTMLButtonElement>>('toggleButton');
   private readonly main = viewChild<ElementRef<HTMLElement>>('mainContent');
@@ -85,6 +89,16 @@ export class ShellComponent {
   private focusRequest = 0;
 
   constructor() {
+    // The bar is a wrapping flex row, so its height only exists after layout: measure it once the
+    // shell has rendered and follow every later resize of the bar itself.
+    afterNextRender(
+      () => {
+        const topbar = this.topbar()?.nativeElement;
+        if (topbar === undefined) return;
+        this.destroyRef.onDestroy(trackTopbarHeight(this.document, topbar));
+      },
+      { injector: this.injector },
+    );
     this.router.events
       .pipe(
         filter((event): event is NavigationEnd => event instanceof NavigationEnd),

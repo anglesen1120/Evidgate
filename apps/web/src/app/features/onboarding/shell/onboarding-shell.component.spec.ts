@@ -244,6 +244,27 @@ describe('OnboardingShellComponent', () => {
     expect(root.querySelector('[data-testid="onboarding-evidence-panel"]')).not.toBeNull();
   });
 
+  it('marks exactly the viewed step with aria-current="step"', async () => {
+    // One active step and no marker on the other four: a second `aria-current` (or a stale one
+    // after a move) would tell a screen reader that two steps of one process are current.
+    const currentSteps = (): (string | null)[] =>
+      Array.from(root.querySelectorAll('[data-testid="onboarding-stepper"] > li'))
+        .filter((step) => step.hasAttribute('aria-current'))
+        .map((step) => step.getAttribute('data-testid'));
+
+    expect(currentSteps()).toEqual(['onboarding-step-1']);
+    expect(
+      root.querySelector('[data-testid="onboarding-step-1"]')?.getAttribute('aria-current'),
+    ).toBe('step');
+
+    store.viewStep.set(3);
+    await fixture.whenStable();
+    expect(currentSteps()).toEqual(['onboarding-step-3']);
+    expect(
+      root.querySelector('[data-testid="onboarding-step-1"]')?.hasAttribute('aria-current'),
+    ).toBe(false);
+  });
+
   it.each([
     ['forbidden', 'app-forbidden-pattern'],
     ['not-found', 'app-not-found-pattern'],
