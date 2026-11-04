@@ -851,6 +851,15 @@ public static class IsolationRouteCases
         // every probe, but a foreign project is refused before the validation, so the windows never matter there.
         ProjectCase("GET", "/v1/projects/{p}/retention", p => new(HttpMethod.Get, $"/v1/projects/{p}/retention"), ownControl: true),
         ProjectCase("PUT", "/v1/projects/{p}/retention", p => new(HttpMethod.Put, $"/v1/projects/{p}/retention", Retention())),
+        // The kind-policy upsert names its project in {p}, so it takes the project case — org A's project is
+        // the same 404 an unknown one gets, and a token scoped to the sibling project is refused. The body is sent by
+        // every probe because a foreign project is refused before the validator runs.
+        ProjectCase("PUT", "/v1/projects/{p}/artifact-kind-policy/{kind}", p => new(HttpMethod.Put,
+            $"/v1/projects/{p}/artifact-kind-policy/screenshot", KindPolicy())),
+        // The two artifact reads name no project: their project comes from the credential, so they are covered by
+        // the case below rather than by ProjectCase.
+        ArtifactReadCase("GET", "/v1/artifacts/{a}", a => new(HttpMethod.Get, $"/v1/artifacts/{a}")),
+        ArtifactReadCase("GET", "/v1/artifacts/{a}/download-url", a => new(HttpMethod.Get, $"/v1/artifacts/{a}/download-url")),
 
     ];
 
@@ -1421,6 +1430,41 @@ public static class IsolationRouteCases
     }
 
     /// <summary>
+    /// <c>GET /v1/artifacts/{a}</c> and <c>GET /v1/artifacts/{a}/download-url</c>: the artifact id is in the path and
+    /// the route names no project, so the row's own project decides the scope. A member in this host is org-scoped
+    /// (<c>TenantResolver.cs:69</c>) and another org's row is invisible to row level security, so both routes answer
+    /// the one 404 <c>artifact_not_found</c> for an org-A id and a random one alike and no existence oracle exists;
+    /// org B's <c>ci_producer</c> is project-scoped but holds <c>artifact:write</c> and not <c>artifact:read</c>, so
+    /// the C2 pipeline refuses it 403 as well. The row-level half (a real artifact, its project and its
+    /// classification) needs a seeded artifact this host cannot mint, so it is asserted by the evidence suite against
+    /// a real database instead.
+    /// </summary>
+    private static RouteCase ArtifactReadCase(string method, string template, Func<Guid, ProbeRequest> request)
+    {
+        var route = new ApiRoute(method, template);
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    Pair(route, "an org A id in {a}", ProbeExpect.NotSuccess, OrgBAdmin(w),
+                        request(w.Acme.Projects[0].ManifestId), request(Guid.CreateVersion7())),
+                ];
+            },
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    Pair(route, "an org A id in {a}", ProbeExpect.ServiceRefused, OrgBService(w),
+                        request(w.Acme.Projects[0].ManifestId), request(Guid.CreateVersion7())),
+                ];
+            });
+    }
+
+    /// <summary>
     /// <c>POST /v1/waivers</c>: the project is named in the body, the org in <c>X-Evidgate-Org</c>. Org A's
     /// project against a random project id (404, no row written), plus the header naming org A.
     /// </summary>
@@ -1826,6 +1870,19 @@ public static class IsolationRouteCases
 
     /// <summary>The retention body a probe sends (06.4.1-T1): both windows inside the configured range.</summary>
     private static JsonObject Retention() => new() { ["artifact_days"] = 14, ["metadata_days"] = 90 };
+
+    /// <summary>
+    /// The <c>artifact_kind_policy</c> body a probe sends: all five members, because a body that omits one is
+    /// a 400 before the handler and the probe would test the reader instead of tenancy.
+    /// </summary>
+    private static JsonObject KindPolicy() => new()
+    {
+        ["max_bytes"] = 1_048_576,
+        ["media_types"] = new JsonArray("image/png"),
+        ["default_sensitivity"] = "normal",
+        ["capture_enabled"] = true,
+        ["reject_on_secret"] = true,
+    };
 
     /// <summary>The activation body a probe sends (07.1.1-T4): an unknown revision id, so the route answers 404 to every tenant.</summary>
     private static JsonObject Activation(Guid revisionId) => new() { ["policy_revision_id"] = revisionId.ToString("D") };
