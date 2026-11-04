@@ -2,3 +2,5 @@
 
 @source '../app/ui';
 @source '../app/shared/ui';
+@source '../app/features/settings';
+@source '../app/features/suites';

@@ -13,6 +13,10 @@ import {
   viewChild,
 } from '@angular/core';
 import type { CiBindingView } from '@evidgate/sdk';
+import { HlmAlert } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard } from '@evidgate/ui/card';
+import { HlmSkeleton } from '@evidgate/ui/skeleton';
 import type { ApiError } from '../../../core/http/api-error';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import type { CiBindingsPhase } from './secrets.store';
@@ -46,32 +50,56 @@ export const CI_BINDINGS_COPY = {
 /** Read-only projection: bind named CiBindingView metadata, never enumerate/spread API fields. */
 @Component({
   selector: 'app-ci-binding-list',
-  imports: [StatusPillComponent],
+  imports: [StatusPillComponent, HlmAlert, HlmButton, HlmCard, HlmSkeleton],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrls: ['./secrets.page.css', './ci-binding-list.component.css'],
+  host: {
+    class:
+      'mt-8 block min-w-0 text-sm text-foreground wrap-anywhere [&_p]:m-0 [&_h2]:m-0 [&_h3]:m-0 [&_dd]:m-0 [&_dt]:text-xs [&_dt]:text-muted-foreground [&_code]:font-mono',
+  },
   template: `
     <section
       data-ci-bindings
       aria-labelledby="ci-bindings-heading"
       [attr.aria-busy]="loading() || loadingMore()"
     >
-      <header class="page-header">
-        <h2 #heading id="ci-bindings-heading" tabindex="-1">{{ copy.title }}</h2>
-        <p>{{ copy.description }}</p>
+      <header class="mb-4 grid min-w-0 gap-2">
+        <h2
+          #heading
+          id="ci-bindings-heading"
+          tabindex="-1"
+          class="font-[family-name:var(--eg-font-display)] text-lg focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+        >
+          {{ copy.title }}
+        </h2>
+        <p class="text-muted-foreground">{{ copy.description }}</p>
       </header>
       @if (forbidden()) {
-        <p class="failure" role="status" data-ci-forbidden>{{ copy.forbidden }}</p>
+        <p
+          hlmAlert
+          [variant]="'destructive'"
+          class="bg-[var(--eg-danger-bg)]"
+          role="status"
+          data-ci-forbidden
+        >
+          {{ copy.forbidden }}
+        </p>
       } @else {
         @if (loading()) {
           <p role="status">{{ copy.loading }}</p>
-          <div class="binding-skeleton" aria-hidden="true">
-            <span></span><span></span><span></span>
+          <div hlmCard class="binding-skeleton gap-3 p-4" aria-hidden="true">
+            <span hlmSkeleton class="h-6"></span><span hlmSkeleton class="h-6"></span
+            ><span hlmSkeleton class="h-6"></span>
           </div>
         } @else if (phase() === 'empty' || (phase() === 'ready' && rows().length === 0)) {
           <p role="status" data-ci-empty>{{ copy.empty }}</p>
         }
         @if (error() || phase() === 'error' || phase() === 'unavailable' || pagingFailure()) {
-          <div class="failure" role="alert">
+          <div
+            hlmAlert
+            [variant]="'destructive'"
+            class="my-2 bg-[var(--eg-danger-bg)]"
+            role="alert"
+          >
             @if (error(); as failure) {
               <p>{{ failure.message }}</p>
               <code>{{ failure.code }}</code>
@@ -79,6 +107,9 @@ export const CI_BINDINGS_COPY = {
               <p>{{ copy.unavailable }}</p>
             }
             <button
+              hlmBtn
+              [variant]="'outline'"
+              class="mt-2"
               type="button"
               data-ci-retry
               [disabled]="loading() || loadingMore()"
@@ -89,11 +120,16 @@ export const CI_BINDINGS_COPY = {
           </div>
         }
         @if (rows().length > 0) {
-          <ul class="references" [attr.aria-label]="copy.title">
+          <ul class="m-0 grid list-none gap-3 p-0" [attr.aria-label]="copy.title">
             @for (row of rows(); track row.id) {
-              <li data-ci-binding>
-                <div class="reference-heading">
-                  <h3 [title]="row.repository_full_name">{{ row.repository_full_name }}</h3>
+              <li hlmCard class="min-w-0 gap-3 p-3 md:p-4" data-ci-binding>
+                <div class="flex flex-wrap items-start gap-2 md:items-center">
+                  <h3
+                    class="min-w-0 basis-full text-base md:basis-auto md:grow"
+                    [title]="row.repository_full_name"
+                  >
+                    {{ row.repository_full_name }}
+                  </h3>
                   <app-status-pill
                     [tone]="row.status === 'active' ? 'success' : 'neutral'"
                     [dimension]="copy.status"
@@ -103,7 +139,7 @@ export const CI_BINDINGS_COPY = {
                 @if (row.status === 'pending_verification') {
                   <p>{{ copy.pendingHint }}</p>
                 }
-                <dl class="metadata">
+                <dl class="m-0 grid gap-3 md:grid-cols-2 [&>div]:min-w-0">
                   <div>
                     <dt>{{ copy.provider }}</dt>
                     <dd>{{ row.provider }}</dd>
@@ -125,15 +161,19 @@ export const CI_BINDINGS_COPY = {
                     </dd>
                   </div>
                   @for (group of ['refs', 'workflows']; track group) {
-                    <div class="allowlist">
+                    <div class="col-span-full">
                       <dt [id]="'ci-label-' + row.id + '-' + group">
                         {{ group === 'refs' ? copy.refs : copy.workflows }}
                       </dt>
                       <dd>
                         <ul
-                          class="patterns"
+                          class="patterns m-0 grid min-w-0 list-none gap-1 p-0 focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
                           [id]="'ci-patterns-' + row.id + '-' + group"
-                          [class.patterns-expanded]="isExpanded(row.id, group)"
+                          [class]="
+                            isExpanded(row.id, group)
+                              ? 'max-h-[calc(var(--eg-space-12)*3)] overflow-y-auto'
+                              : ''
+                          "
                           [attr.tabindex]="isExpanded(row.id, group) ? 0 : null"
                           [attr.aria-labelledby]="'ci-label-' + row.id + '-' + group"
                         >
@@ -145,7 +185,10 @@ export const CI_BINDINGS_COPY = {
                             track $index
                           ) {
                             <li>
-                              <code>{{ pattern }}</code>
+                              <code
+                                class="inline-block max-w-full rounded-sm bg-muted px-1 py-[var(--eg-space-1)] text-muted-foreground"
+                                >{{ pattern }}</code
+                              >
                             </li>
                           } @empty {
                             <li>{{ copy.none }}</li>
@@ -153,6 +196,9 @@ export const CI_BINDINGS_COPY = {
                         </ul>
                         @if (patterns(row, group).length > 3) {
                           <button
+                            hlmBtn
+                            [variant]="'outline'"
+                            class="mt-2"
                             type="button"
                             data-ci-show-all
                             [attr.aria-expanded]="isExpanded(row.id, group)"
@@ -172,8 +218,10 @@ export const CI_BINDINGS_COPY = {
           </ul>
         }
         @if (hasMore() && !error() && !pagingFailure()) {
-          <div class="pagination">
+          <div class="mt-3 flex flex-wrap items-center gap-2">
             <button
+              hlmBtn
+              [variant]="'outline'"
               type="button"
               data-ci-load-more
               [disabled]="loading() || loadingMore()"
@@ -186,7 +234,7 @@ export const CI_BINDINGS_COPY = {
         }
       }
       <!-- Outside the state branch: the live region must exist in every phase, forbidden included. -->
-      <p class="binding-status" role="status">{{ loadingMore() ? copy.loadingMore : '' }}</p>
+      <p class="empty:hidden" role="status">{{ loadingMore() ? copy.loadingMore : '' }}</p>
     </section>
   `,
 })

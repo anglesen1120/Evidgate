@@ -34,6 +34,7 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     expect(root.querySelector('section')?.getAttribute('aria-busy')).toBe('true');
     expect(root.querySelector('[role="status"]')?.textContent).toContain('Loading CI bindings');
     expect(root.querySelector('.binding-skeleton')?.getAttribute('aria-hidden')).toBe('true');
+    expect(root.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(3);
     expect(root.querySelector('[data-ci-empty]')).toBeNull();
   });
 
@@ -77,6 +78,10 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     expect(lists[0]?.children).toHaveLength(3);
     expect(lists[1]?.children).toHaveLength(3);
     expect(toggles).toHaveLength(2);
+    expect(toggles[0]?.getAttribute('data-slot')).toBe('button');
+    expect(toggles[0]?.type).toBe('button');
+    toggles[0]?.focus();
+    expect(document.activeElement).toBe(toggles[0]);
     expect(toggles[0]?.getAttribute('aria-expanded')).toBe('false');
     toggles[0]?.click();
     fixture.detectChanges();
@@ -84,7 +89,7 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     expect(lists[1]?.children).toHaveLength(3);
     expect(toggles[0]?.getAttribute('aria-expanded')).toBe('true');
     expect(toggles[0]?.textContent).toContain('Show fewer');
-    expect(lists[0]?.classList.contains('patterns-expanded')).toBe(true);
+    expect(lists[0]?.classList.contains('overflow-y-auto')).toBe(true);
     expect(toggles[0]?.getAttribute('aria-controls')).toBe(lists[0]?.id);
     toggles[0]?.click();
     fixture.detectChanges();
@@ -264,7 +269,7 @@ describe('CiBindingListComponent (09.7.1-F15)', () => {
     'keeps the role=status live region mounted in the %s phase',
     async (phase) => {
       const { root } = await render(phase, phase === 'ready' ? rows : []);
-      const region = root.querySelector<HTMLElement>('.binding-status');
+      const region = root.querySelector<HTMLElement>('[data-ci-bindings] > p:last-child');
       expect(region?.getAttribute('role')).toBe('status');
       expect(region?.closest('[data-ci-bindings]')).not.toBeNull();
     },

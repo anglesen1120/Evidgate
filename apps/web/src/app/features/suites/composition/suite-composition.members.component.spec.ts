@@ -10,7 +10,11 @@ import type { SuiteRevisionDto } from '@evidgate/sdk';
 import { SuitesDataService } from '../../../core/data/suites-data.service';
 import { routes } from '../suites.routes';
 import { SuiteCompositionComponent } from './suite-composition.component';
-import { readyRevision as revision, sparseGridRevision } from './suite-composition.testing';
+import {
+  gridRevision,
+  readyRevision as revision,
+  sparseGridRevision,
+} from './suite-composition.testing';
 
 describe('SuiteCompositionComponent members', () => {
   const getRevision = vi.fn<(id: string) => Promise<SuiteRevisionDto>>();
@@ -126,5 +130,38 @@ describe('SuiteCompositionComponent members', () => {
     // note saying the matrix keeps the first would be the only place the second member is missing.
     expect(root.querySelector('[data-testid="suite-members-flat"]')).not.toBeNull();
     expect(root.querySelector('[data-testid="suite-duplicate-members"]')).toBeNull();
+  });
+  it('provides labelled mobile records with the complete supplied variant hashes', async () => {
+    const { root } = await open();
+    const mobile = root.querySelector('[data-testid="suite-members-mobile"]');
+    expect(mobile?.classList.contains('md:hidden')).toBe(true);
+    expect(mobile?.querySelectorAll('li')).toHaveLength(revision.members.length);
+    for (const member of revision.members) {
+      expect(mobile?.textContent).toContain(member.id);
+      expect(mobile?.textContent).toContain(member.case_revision_id);
+      expect(mobile?.textContent).toContain(member.variant_hash);
+    }
+    expect(mobile?.textContent).toContain('Variant hash');
+    expect(root.querySelector('[data-testid="suite-matrix"]')?.getAttribute('data-slot')).toBe(
+      'table',
+    );
+  });
+
+  it('pages mobile records without losing focus or repeating the final page', async () => {
+    getRevision.mockResolvedValue(gridRevision(15, 15));
+    const { root, harness } = await open();
+    const mobile = root.querySelector('[data-testid="suite-members-mobile"]');
+    const more = root.querySelector<HTMLButtonElement>('[data-testid="suite-mobile-more"]');
+    expect(mobile?.querySelectorAll('li')).toHaveLength(200);
+    expect(more?.getAttribute('data-slot')).toBe('button');
+    more?.focus();
+    more?.click();
+    harness.fixture.detectChanges();
+    expect(mobile?.querySelectorAll('li')).toHaveLength(225);
+    expect(more?.getAttribute('aria-disabled')).toBe('true');
+    expect(document.activeElement).toBe(more);
+    more?.click();
+    harness.fixture.detectChanges();
+    expect(mobile?.querySelectorAll('li')).toHaveLength(225);
   });
 });

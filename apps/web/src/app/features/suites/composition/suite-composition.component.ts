@@ -12,24 +12,41 @@ import {
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
+import { HlmAlert } from '@evidgate/ui/alert';
+import { HlmButton } from '@evidgate/ui/button';
+import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
+import { HlmSkeleton } from '@evidgate/ui/skeleton';
+import { HlmTableImports } from '@evidgate/ui/table';
 import { LIST_CHUNK } from './suite-composition.model';
 import { SuiteCompositionStore } from './suite-composition.store';
 import { SuiteWarningListComponent } from './suite-warning-list.component';
 
 @Component({
   selector: 'app-suite-composition',
-  imports: [SuiteWarningListComponent],
+  imports: [
+    SuiteWarningListComponent,
+    HlmAlert,
+    HlmButton,
+    HlmCard,
+    HlmCardTitle,
+    HlmSkeleton,
+    HlmTableImports,
+  ],
   providers: [SuiteCompositionStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './suite-composition.component.html',
-  styleUrl: './suite-composition.component.css',
-  host: { '[attr.data-suite-composition-status]': 'store.status()' },
+  host: {
+    '[attr.data-suite-composition-status]': 'store.status()',
+    class:
+      'block min-w-0 font-sans text-sm text-foreground wrap-anywhere [&_dl]:m-0 [&_dd]:m-0 [&_dd]:min-w-0 [&_dt]:text-muted-foreground [&_p]:m-0',
+  },
 })
 export class SuiteCompositionComponent {
   protected readonly store = inject(SuiteCompositionStore);
   private readonly params = toSignal(inject(ActivatedRoute).paramMap);
   private readonly stateHeading = viewChild<ElementRef<HTMLHeadingElement>>('stateHeading');
   protected readonly copy = {
+    variantHash: $localize`:@@suites.composition.variant-hash:Variant hash`,
     title: $localize`:@@suites.composition.suite-composition:Suite composition`,
     revision: $localize`:@@suites.composition.revision:Revision`,
     status: $localize`:@@suites.composition.status:Status`,
