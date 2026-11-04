@@ -669,29 +669,6 @@ public sealed class AuthoringImportTests
     /// <summary>An active member of the org, optionally holding one built-in role, granted by the founder through the API.</summary>
     /// <param name="world">The world.</param>
     /// <param name="roleCode">The role, or null for a member with no role at all.</param>
-    private async Task<Guid> AddMemberAsync(World world, string? roleCode)
-    {
-        var user = Guid.CreateVersion7();
-        var membership = Guid.CreateVersion7();
-
-        await _fixture.ExecuteAsync(
-            world.Database,
-            $"""
-            insert into public."user" (id, email) values ('{user}', 'member-{user:N}@example.test');
-            insert into public.membership (id, org_id, user_id, invited_email, status)
-            values ('{membership}', '{world.Org}', '{user}', 'member-{user:N}@example.test', 'active')
-            """);
-
-        if (roleCode is not null)
-        {
-            var role = await _fixture.ScalarAsync<Guid>(
-                world.Database, $"select id from public.role where code = '{roleCode}' and org_id is null");
-            var granted = await world.Client.SendAsync(
-                HttpMethod.Post, $"/v1/orgs/{world.Org}/memberships/{membership}/roles", world.As, new { role_id = role }, NewKey());
-
-            granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
-        }
-
-        return user;
-    }
+    private Task<Guid> AddMemberAsync(World world, string? roleCode) =>
+        RegistryApi.AddMemberAsync(_fixture, world.Client, world.Database, world.Org, world.As, roleCode);
 }

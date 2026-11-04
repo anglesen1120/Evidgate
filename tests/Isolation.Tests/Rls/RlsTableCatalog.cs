@@ -311,6 +311,28 @@ internal static class RlsTableCatalog
     }
 
     /// <summary>
+    /// True when the role holds the privilege on one column of the relation. <c>grant update (state)</c> leaves
+    /// <c>has_table_privilege(…, 'UPDATE')</c> false and every other column unwritable — the only way to prove a
+    /// column-scoped grant is to name the column (SEC5).
+    /// </summary>
+    internal static async Task<bool> HasColumnPrivilegeAsync(
+        NpgsqlConnection connection,
+        string role,
+        string table,
+        string column,
+        string privilege,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select has_column_privilege(@role::name, @table, @column, @privilege)";
+        command.Parameters.AddWithValue("role", role);
+        command.Parameters.AddWithValue("table", table);
+        command.Parameters.AddWithValue("column", column);
+        command.Parameters.AddWithValue("privilege", privilege);
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken))!;
+    }
+
+    /// <summary>
     /// True when the role holds the privilege on any column of the relation. A column-level
     /// <c>GRANT</c> is independent of the table-level one — <c>has_table_privilege</c> stays
     /// false — so a read check that only asks the table would miss
@@ -352,6 +374,14 @@ internal static class RlsTableCatalog
     /// </summary>
     internal static bool MatchesUsing(RlsPolicy policy, string predicate) =>
         policy.Using.Length > 0 && IsolationSelfCheck.MatchesPredicate(policy.Using, predicate);
+
+    /// <summary>
+    /// True when the policy's WITH CHECK clause carries the predicate. Checked separately from USING because a
+    /// policy may scope its read and leave the write open — <c>using (org_id = …) with check (true)</c> passes an
+    /// assertion written with <see cref="Matches"/>, which is the OR of the two clauses (00 §5.4.7/T2).
+    /// </summary>
+    internal static bool MatchesWithCheck(RlsPolicy policy, string predicate) =>
+        policy.WithCheck.Length > 0 && IsolationSelfCheck.MatchesPredicate(policy.WithCheck, predicate);
 
     /// <summary>True when either clause of the policy carries the predicate (the catalogue rule of 02 §4.5).</summary>
     internal static bool Matches(RlsPolicy policy, string predicate) =>
