@@ -796,6 +796,23 @@ internal static class RouteRequests
         Add("GET", "/v1/projects/{p}/retention", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/retention"));
         Add("PUT", "/v1/projects/{p}/retention", ctx => new(HttpMethod.Put, $"/v1/projects/{ctx.ProjectId}/retention",
             new JsonObject { ["artifact_days"] = 14, ["metadata_days"] = 90 }));
+        // The sensitivity surface: this host seeds no artifact (upload-url is the only mint and needs a run), so the
+        // two reads address a fresh id and answer their one 404; the write carries the closed five-member body of
+        // `artifact_kind_policy` and no Idempotency-Key (the upsert is naturally idempotent), so the matrices see the
+        // authz outcome before any lookup.
+        Add("GET", "/v1/artifacts/{a}", _ => new(HttpMethod.Get, $"/v1/artifacts/{Guid.CreateVersion7()}"));
+        Add("GET", "/v1/artifacts/{a}/download-url", _ => new(HttpMethod.Get,
+            $"/v1/artifacts/{Guid.CreateVersion7()}/download-url"));
+        Add("PUT", "/v1/projects/{p}/artifact-kind-policy/{kind}", ctx => new(HttpMethod.Put,
+            $"/v1/projects/{ctx.ProjectId}/artifact-kind-policy/screenshot",
+            new JsonObject
+            {
+                ["max_bytes"] = 1_048_576,
+                ["media_types"] = new JsonArray("image/png"),
+                ["default_sensitivity"] = "normal",
+                ["capture_enabled"] = true,
+                ["reject_on_secret"] = true,
+            }));
 
         // ---- Ingestion ---------------------------------------------------------------------------------------
         // 04.1.1-T1: the run is addressed in the path, so a fresh id is used - the route answers 404 not_found

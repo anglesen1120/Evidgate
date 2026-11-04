@@ -46,6 +46,7 @@ public static partial class AuditMetadata
         "range_days",
         "reason",
         "outcome",
+        "run_id",
         // 07.1.1-T4.1: the activation records which revision it moved the pointer from and the mode it stored.
         "previous_id",
         "mode",
@@ -58,6 +59,8 @@ public static partial class AuditMetadata
         "target_user_id",
         // The append-only version chain records which version the audited save produced; a number, never content.
         "version_no",
+        // 06.2.1: the kind-policy override records the sensitivity the row carried before the write.
+        "previous_default_sensitivity",
     };
 
     /// <summary>

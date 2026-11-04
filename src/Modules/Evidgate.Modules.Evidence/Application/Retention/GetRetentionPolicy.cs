@@ -37,7 +37,7 @@ internal sealed class GetRetentionPolicyQueryHandler(
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Evidence, nameof(GetRetentionPolicyQuery));
 
-        if (RetentionPolicyScope.Project(query.ProjectId, principals, tenant) is { } mismatch)
+        if (EvidenceProjectScope.Project(query.ProjectId, principals.Current?.ProjectScope, tenant.Current?.ProjectId) is { } mismatch)
         {
             return Result.Failure<RetentionPolicy>(mismatch);
         }

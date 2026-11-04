@@ -27,6 +27,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'agents',
   'ai-settings',
   'approve',
+  'artifact-kind-policy',
   'artifacts',
   'attempts',
   'audit',
