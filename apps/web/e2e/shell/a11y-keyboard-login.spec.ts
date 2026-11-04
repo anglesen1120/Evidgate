@@ -47,6 +47,15 @@ function providerButton(page: Page, provider: 'Google' | 'GitHub') {
   return page.getByRole('button', { name: `Continue with ${provider}` });
 }
 
+async function walkToProviders(page: Page): Promise<void> {
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.login-topbar .locale-toggle')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.login-topbar .theme-toggle')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(providerButton(page, 'Google')).toBeFocused();
+}
+
 /**
  * The fixture IdP, at the one seam that matters (`auth.spec.ts` uses the same one).
  *
@@ -80,7 +89,7 @@ async function stubProviderIdp(page: Page, answer: 'land' | 'stay'): Promise<Sta
 }
 
 test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
-  test('a page load keeps the browser’s focus start, and the first Tab is the first provider', async ({
+  test('a page load keeps browser focus and reaches preferences before providers', async ({
     page,
   }) => {
     await page.goto(withVariant(localePath('en', '/login'), ANONYMOUS_SESSION));
@@ -97,8 +106,7 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     expect(await activeElement(page)).toMatchObject({ tag: 'body' });
     await expect(page.locator('#login-heading')).toHaveAttribute('tabindex', '-1');
 
-    // The first Tab reaches the first provider: nothing focusable precedes it.
-    await page.keyboard.press('Tab');
+    await walkToProviders(page);
     const google = providerButton(page, 'Google');
     await expect(google).toBeFocused();
 
@@ -115,7 +123,7 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     await page.goto(withVariant(localePath('en', '/login'), ANONYMOUS_SESSION));
     await expect(page.locator('main h1')).toHaveText('Sign in to Evidgate');
 
-    await page.keyboard.press('Tab');
+    await walkToProviders(page);
     const google = providerButton(page, 'Google');
     await expect(google).toBeFocused();
     await expect(google).toHaveCSS('outline-color', 'rgb(118, 216, 203)');
@@ -128,7 +136,7 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     const google = providerButton(page, 'Google');
     const github = providerButton(page, 'GitHub');
 
-    await page.keyboard.press('Tab');
+    await walkToProviders(page);
     await expect(google).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(github).toBeFocused();
@@ -139,10 +147,9 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     await page.keyboard.press('Tab');
     await expect(github).toBeFocused();
 
-    // There is no third tab stop: the page offers exactly the two providers and no link, and Tab
-    // past the last one leaves the document instead of landing on something invisible.
+    // After the provider choices, no hidden route details introduce extra focus stops.
     await expect(page.locator('main a, main input, main [tabindex="0"]')).toHaveCount(0);
-    await expect(page.getByRole('button')).toHaveCount(2);
+    await expect(page.locator('.login-providers button')).toHaveCount(2);
     await page.keyboard.press('Tab');
     expect(await activeElement(page)).toMatchObject({ tag: 'body' });
 
@@ -155,7 +162,7 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
 
     // Going back to the first provider is one Shift+Tab from inside the page.
     await page.keyboard.press('Shift+Tab');
-    await expect(page.getByRole('button')).toHaveCount(2);
+    await expect(page.locator('.login-providers button')).toHaveCount(2);
     await expect(github).toBeFocused();
     await page.keyboard.press('Shift+Tab');
     await expect(google).toBeFocused();
@@ -173,7 +180,7 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
 
     const google = providerButton(page, 'Google');
     const github = providerButton(page, 'GitHub');
-    await page.keyboard.press('Tab');
+    await walkToProviders(page);
     await expect(google).toBeFocused();
     await page.keyboard.press('Enter');
 
@@ -211,7 +218,7 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     await page.goto(withVariant(localePath('en', DEEP_LINK), ANONYMOUS_SESSION));
     await expect.poll(() => new URL(page.url()).pathname).toBe('/en/login');
 
-    await page.keyboard.press('Tab');
+    await walkToProviders(page);
     await expect(providerButton(page, 'Google')).toBeFocused();
     await page.keyboard.press('Enter');
     await expect.poll(() => starts.length).toBe(1);
@@ -277,13 +284,9 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     await expect(page.locator('.login-notice')).toContainText('Your session expired');
     await expect(page.getByRole('status')).toHaveAttribute('aria-live', 'polite');
 
-    // This entry is the document's FIRST render: no navigation had ended in this document before the
-    // guard redirect produced it, which is exactly the case a page load is (`Router.navigated` is
-    // false — the same marker the shell uses). So focus keeps the browser's own start, and the
-    // client-side handoff does not fire. Nothing is lost: the notice is a live region, and the first
-    // Tab is still the first provider.
+    // This is the first render, so preferences precede the providers in document focus order.
     expect(await activeElement(page)).toMatchObject({ tag: 'body' });
-    await page.keyboard.press('Tab');
+    await walkToProviders(page);
     await expect(providerButton(page, 'Google')).toBeFocused();
   });
 
@@ -356,13 +359,36 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     await expect(notice).not.toContainText('session ended');
     await expect(page.getByRole('status')).toHaveAttribute('aria-live', 'polite');
 
-    // The state is announced, not enforced: both providers stay operable and the keyboard path in is
-    // unchanged — a page load keeps the browser's own start, and one Tab reaches the first provider.
+    // The notice does not disable preferences or either real provider.
     await expect(providerButton(page, 'Google')).toBeEnabled();
     await expect(providerButton(page, 'GitHub')).toBeEnabled();
     expect(await activeElement(page)).toMatchObject({ tag: 'body' });
-    await page.keyboard.press('Tab');
+    await walkToProviders(page);
     await expect(providerButton(page, 'Google')).toBeFocused();
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
+
+  for (const width of [390, 1440]) {
+    test(`login composition preserves readable order at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(withVariant(localePath('en', '/login'), ANONYMOUS_SESSION));
+      const intro = page.locator('.login-intro');
+      const card = page.locator('.login-card');
+      await expect(intro).toBeVisible();
+      await expect(card).toBeVisible();
+      await expect(page.locator('.login-destination')).toContainText('continue to your workspace');
+      await expect(card).toHaveCSS('border-top-style', 'solid');
+      const introBox = await intro.boundingBox();
+      const cardBox = await card.boundingBox();
+      if (!introBox || !cardBox) throw new Error('Login composition has no visible bounds');
+      if (width < 900) {
+        expect(cardBox.y).toBeGreaterThanOrEqual(introBox.y + introBox.height);
+      } else {
+        expect(cardBox.x).toBeGreaterThan(introBox.x);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+    });
+  }
 });

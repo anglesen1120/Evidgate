@@ -70,12 +70,6 @@ describe('ShellComponent', () => {
     expect(root.textContent).not.toContain('QA engineer');
   });
 
-  // F-SWITCH-01 (09.8.1-T1.2, WCAG 2.4.3): below 768px the two scope selects sit on a second row
-  // while the theme toggle stays on the first, next to the navigation toggle. CSS `order` reorders
-  // paint only, so the header's document order is the browser's Tab order and must agree with what
-  // the topbar looks like at every width: navigation toggle → theme toggle → organization →
-  // project. jsdom has no sequential focus navigation, so the document order is what this pins; the
-  // geometry of the two rows is pinned in Chromium by `e2e/shell/a11y-keyboard-scope.spec.ts`.
   it('keeps the topbar keyboard stops in the order the header reads', () => {
     const topbar = root.querySelector<HTMLElement>('header.topbar')!;
     const stops = Array.from(topbar.querySelectorAll<HTMLElement>('button, select')).map(
@@ -83,17 +77,50 @@ describe('ShellComponent', () => {
     );
     expect(stops).toEqual([
       'icon-button nav-toggle',
+      'select',
+      'select',
       'icon-button theme-toggle',
-      'select',
-      'select',
     ]);
 
     const theme = topbar.querySelector<HTMLElement>('button.theme-toggle')!;
     const scope = topbar.querySelector<HTMLElement>('app-scope-switcher')!;
-    expect(theme.compareDocumentPosition(scope) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // The CSS reorder that caused the finding is gone (the scope group is last in the document too),
-    // and nothing here can reintroduce one: jsdom does not evaluate the 767px media block, so the
-    // paint order at both widths is pinned in Chromium by `e2e/shell/a11y-keyboard-scope.spec.ts`.
+    expect(scope.classList.contains('compact')).toBe(true);
+    expect(scope.compareDocumentPosition(theme) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it.each([360, 390, 767])('moves scope controls into the drawer at %ipx', async (width) => {
+    vi.stubGlobal('innerWidth', width);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    const topbar = root.querySelector('header.topbar');
+    expect(topbar?.querySelectorAll('select')).toHaveLength(0);
+    expect(topbar?.querySelectorAll('button')).toHaveLength(2);
+    expect(root.querySelectorAll('app-scope-switcher')).toHaveLength(1);
+    const aside = root.querySelector<HTMLElement>('aside');
+    expect(aside?.querySelectorAll('select')).toHaveLength(2);
+    expect(aside?.hasAttribute('inert')).toBe(true);
+    root.querySelector<HTMLButtonElement>('.nav-toggle')?.click();
+    await fixture.whenStable();
+    expect(aside?.hasAttribute('inert')).toBe(false);
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    const organization = aside?.querySelector('select');
+    if (!organization) throw new Error('Missing drawer organization selector');
+    organization.value = 'org-two';
+    organization.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(navigate).toHaveBeenCalledWith(['/orgs', 'org-two']);
+  });
+
+  it('restores compact scope in the topbar when leaving the narrow layout', async () => {
+    vi.stubGlobal('innerWidth', 390);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    vi.stubGlobal('innerWidth', 1440);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    expect(root.querySelector('aside app-scope-switcher')).toBeNull();
+    expect(root.querySelectorAll('header.topbar select')).toHaveLength(2);
+    expect(root.querySelectorAll('app-scope-switcher')).toHaveLength(1);
   });
 
   it('uses expanded/rail natural modes and preserves a user override on resize', async () => {

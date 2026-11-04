@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import type { RunStateDto } from '@evidgate/sdk';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
@@ -15,6 +15,8 @@ import { escapeFormatChars } from '../list/ref-name-display';
 })
 export class RunHeaderComponent {
   readonly run = input.required<RunStateDto>();
+  readonly view = input<'summary' | 'context'>('summary');
+  readonly viewEvidence = output<void>();
   /**
    * Collection completeness of the newest frozen revision, when the revision list answered. The
    * header badge describes the run's collection, never the revision the evidence region is pinned
@@ -37,7 +39,10 @@ export class RunHeaderComponent {
     yes: $localize`:@@runs.detail.yes:Yes`,
     no: $localize`:@@runs.detail.no:No`,
     unverified: $localize`:@@runs.detail.unverified:Unverified ref`,
+    incomplete: $localize`:@@runs.detail.incomplete-summary:Collection is incomplete. Review the evidence panel for recorded missing reasons.`,
+    viewEvidence: $localize`:@@runs.detail.view-evidence:View evidence`,
     evidence: $localize`:@@runs.detail.evidence:Evidence revision`,
+    completeness: $localize`:@@runs.detail.evidence-completeness:Evidence completeness`,
     none: $localize`:@@runs.detail.none:None recorded`,
     context: $localize`:@@runs.detail.context:Execution context`,
     environment: $localize`:@@runs.detail.environment:Environment`,

@@ -30,8 +30,10 @@ const STEP_KEYS: Readonly<Record<string, true>> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './scope-switcher.component.html',
   styleUrl: './scope-switcher.component.css',
+  host: { '[class.compact]': 'compact()' },
 })
 export class ScopeSwitcherComponent {
+  readonly compact = input(false);
   readonly organizations = input<readonly OrganizationSummaryDto[]>([]);
   readonly projects = input<readonly ProjectDto[]>([]);
   readonly currentOrg = input<OrganizationSummaryDto | null>(null);

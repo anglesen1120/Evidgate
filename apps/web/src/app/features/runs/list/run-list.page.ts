@@ -51,11 +51,12 @@ export class RunListPage {
   private readonly pagingSection = viewChild<ElementRef<HTMLElement>>('paging');
   protected readonly copy = {
     title: $localize`:@@runs.list.title:Runs`,
-    description: $localize`:@@runs.list.description:Review collection state and stored decisions. Evidence completeness is not provided by this list.`,
+    description: $localize`:@@runs.list.description:Review collection state. Open a run for its stored decision and evidence completeness.`,
     filters: $localize`:@@runs.list.filters:Filter loaded runs`,
     filterHint: $localize`:@@runs.list.filter-hint:State, decision and run scope filter loaded runs only. Ref name filters the server list. Load more to search older runs.`,
     state: $localize`:@@runs.list.state-filter:State in loaded runs`,
     decision: $localize`:@@runs.list.decision-filter:Decision in loaded runs`,
+    decisionHint: $localize`:@@shared.decision-chip.list-unavailable:The run list does not carry decisions. Open the run for its stored decision.`,
     scope: $localize`:@@runs.list.scope-filter:Scope in loaded runs`,
     ref: $localize`:@@runs.list.ref-filter:Ref name (exact match)`,
     any: $localize`:@@runs.list.any:All`,
@@ -66,7 +67,6 @@ export class RunListPage {
     complete: $localize`:@@shared.run-state.complete:Complete`,
     incomplete: $localize`:@@shared.run-state.incomplete:Incomplete`,
     canceled: $localize`:@@shared.run-state.canceled:Canceled`,
-    pending: $localize`:@@shared.decision-chip.pending:pending`,
     original: $localize`:@@runs.list.original:Original run`,
     rerun: $localize`:@@runs.list.rerun:Rerun`,
     reprocess: $localize`:@@runs.list.reprocess:Reprocessed`,
@@ -100,6 +100,15 @@ export class RunListPage {
         const raw = Object.fromEntries(
           ['state', 'decision', 'scope', 'ref'].map((key) => [key, query.get(key) ?? undefined]),
         );
+        if (raw['decision'] === 'pending') {
+          raw['decision'] = undefined;
+          void this.router.navigate([], {
+            relativeTo: this.route,
+            queryParams: { decision: null },
+            queryParamsHandling: 'merge',
+            replaceUrl: true,
+          });
+        }
         const current = this.store.toQuery();
         // A form submission already updated the store. Its own URL emission must not reset rows.
         if (

@@ -85,9 +85,9 @@ export const MEMBERS_COPY = {
         </caption>
         <thead>
           <tr>
-            <th scope="col">{{ copy.member }}</th>
-            <th scope="col">{{ copy.status }}</th>
-            <th scope="col">{{ copy.roles }}</th>
+            <th scope="col" id="members-member">{{ copy.member }}</th>
+            <th scope="col" id="members-status">{{ copy.status }}</th>
+            <th scope="col" id="members-roles">{{ copy.roles }}</th>
             @if (canWrite()) {
               <th scope="col" class="mutation">{{ copy.actions }}</th>
             }
@@ -100,19 +100,26 @@ export const MEMBERS_COPY = {
               [attr.data-membership-id]="member.id"
               [attr.data-members-status]="member.status"
             >
-              <th scope="row">{{ member.invited_email }}</th>
-              <td>
+              <th scope="row" class="member-identity" [id]="'member-' + member.id">
+                <span class="record-label" aria-hidden="true">{{ copy.member }}</span>
+                <span>{{ member.invited_email }}</span>
+              </th>
+              <td [attr.headers]="'member-' + member.id + ' members-status'">
+                <span class="record-label" aria-hidden="true">{{ copy.status }}</span>
                 <app-status-pill
                   [tone]="member.status === 'active' ? 'success' : 'neutral'"
                   [label]="statusLabel(member.status)"
                 />
               </td>
-              <td>
-                @for (role of member.roles; track role.id) {
-                  <span class="role-name">{{ role.name }}</span>
-                } @empty {
-                  {{ copy.noRoles }}
-                }
+              <td [attr.headers]="'member-' + member.id + ' members-roles'">
+                <span class="record-label" aria-hidden="true">{{ copy.roles }}</span>
+                <span>
+                  @for (role of member.roles; track role.id) {
+                    <span class="role-name">{{ role.name }}</span>
+                  } @empty {
+                    {{ copy.noRoles }}
+                  }
+                </span>
               </td>
               @if (canWrite()) {
                 <td class="mutation">

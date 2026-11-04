@@ -1,7 +1,6 @@
-// 09.2.1-T1.1/T2 (plan 09.2.1 §6, §10 T1.1/T2; decisions (d) and (f); AC2, AC7): the wizard's
-// view state as a SignalStore. It holds no progress of its own — `OnboardingProgressService`
-// derives that from the server on every `load` or `refresh` (T63) — and it holds no secret: step
-// 2's one-time values live in the page's component-scoped `RevealSlot`, never here.
+// Progress comes from server reads or a confirmed policy activation, never from selecting a step.
+// Confirmations stay in project-scoped state so leaving the activation step does not lose them.
+// One-time secrets remain in the page's component-scoped RevealSlot, never here.
 //
 // Six behaviours the shell depends on:
 //
@@ -11,10 +10,8 @@
 // 2. A superseded load never publishes. Two `load`s can overlap (a route change while a read is
 //    still in flight); the newer one increments the sequence, and the older answer — success or
 //    failure — is dropped, because it describes a project nobody is looking at any more.
-// 3. The viewed step is gated by the derived one: `selectStep` cannot open a step the server has
-//    not reached, and `next` cannot pass a step whose done-condition is unmet (T1.3's disabled
-//    `onboarding-next`). Nothing here advances the wizard except the derivation: only a new `load`
-//    moves it.
+// 3. Step navigation is gated by server-confirmed resources. A confirmed policy activation updates
+//    its done-condition without changing the viewed step; later loads re-derive the whole journey.
 // 4. This store is a route-level singleton, not a per-activation one: the route's `providers`
 //    keep one instance for the app's lifetime, so a state that is still `ready` says nothing
 //    about the activation on screen. The only thing reusable across activations is the one-shot
@@ -40,7 +37,12 @@
 
 import { computed, inject } from '@angular/core';
 import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
-import type { CiBindingView, IngestTokenView, ProjectDto } from '@evidgate/sdk';
+import type {
+  CiBindingView,
+  IngestTokenView,
+  PolicyActivationStateDto,
+  ProjectDto,
+} from '@evidgate/sdk';
 
 import { isApiRequestError } from '../../core/http/api-error';
 import { SessionStore } from '../../core/session/session.store';
@@ -51,6 +53,7 @@ import {
 import {
   NO_STEPS_DONE,
   STEP_NUMBERS,
+  deriveCurrentStep,
   viewStepFor,
   type StepNumber,
   type StepsDone,
@@ -238,6 +241,27 @@ export const OnboardingStore = signalStore(
        * derivation and opens the first step that is not done. Never rejects (see the header).
        */
       load,
+
+      recordActivation(orgId: string, activation: PolicyActivationStateDto): void {
+        const progress = store.progress();
+        if (
+          store.status() !== 'ready' ||
+          progress?.project?.org_id !== orgId ||
+          progress.project.id !== activation.project_id
+        )
+          return;
+        // A refresh started before this confirmation must not replace the newer server answer.
+        newestRefresh += 1;
+        const done: StepsDone = { ...progress.done, 5: true };
+        patchState(store, {
+          progress: {
+            ...progress,
+            activation: { kind: 'active', state: activation },
+            done,
+            currentStep: deriveCurrentStep(done),
+          },
+        });
+      },
 
       /**
        * Re-derives the position in place: keeps `status`, `viewStep` and `focusToken`, patches

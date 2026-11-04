@@ -26,6 +26,42 @@
           <context context-type="linenumber">49</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="auth.login.switch-language" datatype="html">
+        <source>EN / VI: Switch language between English and Vietnamese</source>
+        <target>EN / VI: Chuyển ngôn ngữ giữa tiếng Anh và tiếng Việt</target>
+      </trans-unit>
+      <trans-unit id="auth.login.locale-en" datatype="html">
+        <source>EN</source>
+        <target>EN</target>
+      </trans-unit>
+      <trans-unit id="auth.login.locale-vi" datatype="html">
+        <source>VI</source>
+        <target>VI</target>
+      </trans-unit>
+      <trans-unit id="auth.login.introduction" datatype="html">
+        <source>Return to your workspace to review evidence and make informed release decisions.</source>
+        <target>Quay lại không gian làm việc để xem xét bằng chứng và đưa ra quyết định phát hành có cơ sở.</target>
+      </trans-unit>
+      <trans-unit id="auth.login.welcome" datatype="html">
+        <source>Welcome back</source>
+        <target>Chào mừng trở lại</target>
+      </trans-unit>
+      <trans-unit id="auth.login.destination-heading" datatype="html">
+        <source>Your return destination</source>
+        <target>Đích trở về của bạn</target>
+      </trans-unit>
+      <trans-unit id="auth.login.saved-destination" datatype="html">
+        <source>After sign-in, continue to your saved workspace destination. Access is checked before it opens.</source>
+        <target>Sau khi đăng nhập, tiếp tục đến đích đã lưu trong không gian làm việc. Quyền truy cập được kiểm tra trước khi mở.</target>
+      </trans-unit>
+      <trans-unit id="auth.login.default-destination" datatype="html">
+        <source>After sign-in, continue to your workspace.</source>
+        <target>Sau khi đăng nhập, tiếp tục đến không gian làm việc của bạn.</target>
+      </trans-unit>
+      <trans-unit id="auth.login.destination-privacy" datatype="html">
+        <source>Private route details are not displayed on this sign-in page.</source>
+        <target>Chi tiết đường dẫn riêng tư không được hiển thị trên trang đăng nhập này.</target>
+      </trans-unit>
       <trans-unit id="auth.login.heading" datatype="html">
         <source>Sign in to Evidgate</source>
         <target>Đăng nhập vào Evidgate</target>
@@ -1945,29 +1981,45 @@
         <source>Project ID</source>
         <target>Mã dự án</target>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.empty" datatype="html">
-        <source>Nothing produced yet for this step.</source>
-        <target>Bước này chưa tạo ra tài nguyên nào.</target>
+      <trans-unit id="onboarding.evidence.no-resources" datatype="html">
+        <source>No setup resources have been created yet.</source>
+        <target>Chưa có tài nguyên thiết lập nào được tạo.</target>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.step-1" datatype="html">
-        <source>The created project will appear here.</source>
-        <target>Dự án được tạo sẽ xuất hiện tại đây.</target>
+      <trans-unit id="onboarding.evidence.unavailable" datatype="html">
+        <source>Created resources are unavailable.</source>
+        <target>Không thể tải thông tin tài nguyên đã tạo.</target>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.step-2" datatype="html">
-        <source>Connection resources will appear here.</source>
-        <target>Tài nguyên kết nối sẽ xuất hiện tại đây.</target>
+      <trans-unit id="onboarding.evidence.stale" datatype="html">
+        <source>Resources could not be refreshed. Showing the last confirmed resources.</source>
+        <target>Không thể cập nhật thông tin tài nguyên. Đang hiển thị các tài nguyên được xác nhận gần nhất.</target>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.step-3" datatype="html">
-        <source>Sample-run evidence will appear here.</source>
-        <target>Bằng chứng của lượt chạy mẫu sẽ xuất hiện tại đây.</target>
+      <trans-unit id="onboarding.evidence.bindings" datatype="html">
+        <source>CI bindings</source>
+        <target>Liên kết CI</target>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.step-4" datatype="html">
-        <source>Comparison resources will appear here.</source>
-        <target>Tài nguyên so sánh sẽ xuất hiện tại đây.</target>
+      <trans-unit id="onboarding.evidence.tokens" datatype="html">
+        <source>Ingest tokens</source>
+        <target>Token thu thập dữ liệu</target>
       </trans-unit>
-      <trans-unit id="onboarding.evidence.step-5" datatype="html">
-        <source>Activation resources will appear here. Collection is not enabled by viewing this step.</source>
-        <target>Tài nguyên kích hoạt sẽ xuất hiện tại đây. Việc xem bước này không bật thu thập dữ liệu.</target>
+      <trans-unit id="onboarding.evidence.sample" datatype="html">
+        <source>Sample run ID</source>
+        <target>ID lượt chạy mẫu</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.revision" datatype="html">
+        <source>Evidence revision ID</source>
+        <target>ID phiên bản bằng chứng</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.activation" datatype="html">
+        <source>Activated policy revision</source>
+        <target>Phiên bản chính sách đã kích hoạt</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.activated-at" datatype="html">
+        <source>Activated at</source>
+        <target>Thời điểm kích hoạt</target>
+      </trans-unit>
+      <trans-unit id="onboarding.evidence.activation-unavailable" datatype="html">
+        <source>Activation details are unavailable with your current access.</source>
+        <target>Quyền truy cập hiện tại không cho phép xem thông tin kích hoạt.</target>
       </trans-unit>
       <trans-unit id="onboarding.create.name" datatype="html">
         <source>Project name</source>
@@ -2585,7 +2637,7 @@
       <trans-unit id="settings.secrets.ci.more" datatype="html"><source>Load more CI bindings</source><target>Tải thêm liên kết CI</target></trans-unit>
       <trans-unit id="settings.secrets.ci.loading-more" datatype="html"><source>Loading more CI bindings…</source><target>Đang tải thêm liên kết CI…</target></trans-unit>
       <trans-unit id="runs.list.title" datatype="html"><source>Runs</source><target>Lượt chạy</target></trans-unit>
-      <trans-unit id="runs.list.description" datatype="html"><source>Review collection state and stored decisions. Evidence completeness is not provided by this list.</source><target>Xem trạng thái thu thập và quyết định đã lưu. Danh sách này không cung cấp độ đầy đủ của bằng chứng.</target></trans-unit>
+      <trans-unit id="runs.list.description" datatype="html"><source>Review collection state. Open a run for its stored decision and evidence completeness.</source><target>Xem trạng thái thu thập. Mở lượt chạy để xem quyết định đã lưu và độ đầy đủ của bằng chứng.</target></trans-unit>
       <trans-unit id="runs.list.filters" datatype="html"><source>Filter loaded runs</source><target>Lọc các lượt chạy đã tải</target></trans-unit>
       <trans-unit id="runs.list.filter-hint" datatype="html"><source>State, decision and run scope filter loaded runs only. Ref name filters the server list. Load more to search older runs.</source><target>Trạng thái, quyết định và phạm vi chỉ lọc các lượt chạy đã tải. Tên tham chiếu lọc danh sách trên máy chủ. Tải thêm để tìm các lượt chạy cũ hơn.</target></trans-unit>
       <trans-unit id="runs.list.state-filter" datatype="html"><source>State in loaded runs</source><target>Trạng thái trong các lượt đã tải</target></trans-unit>
@@ -2989,6 +3041,10 @@
       <trans-unit id="auth.dev.submitting" datatype="html"><source>Signing in and checking your session…</source><target>Đang đăng nhập và kiểm tra phiên…</target></trans-unit>
       <trans-unit id="auth.dev.wrong-secret" datatype="html"><source>The dev-login secret is incorrect. Try again.</source><target>Khóa bí mật đăng nhập phát triển không đúng. Hãy thử lại.</target></trans-unit>
       <trans-unit id="auth.dev.unavailable" datatype="html"><source>Dev sign-in is not enabled. Check the development server configuration.</source><target>Đăng nhập phát triển chưa được bật. Hãy kiểm tra cấu hình máy chủ phát triển.</target></trans-unit>
+      <trans-unit id="shared.decision-chip.list-unavailable" datatype="html"><source>The run list does not carry decisions. Open the run for its stored decision.</source><target>Danh sách lượt chạy không cung cấp quyết định. Mở lượt chạy để xem quyết định đã lưu.</target></trans-unit>
+      <trans-unit id="runs.detail.incomplete-summary" datatype="html"><source>Collection is incomplete. Review the evidence panel for recorded missing reasons.</source><target>Thu thập chưa đầy đủ. Xem bảng bằng chứng để biết các lý do thiếu đã được ghi nhận.</target></trans-unit>
+      <trans-unit id="runs.detail.view-evidence" datatype="html"><source>View evidence</source><target>Xem bằng chứng</target></trans-unit>
+      <trans-unit id="runs.detail.evidence-completeness" datatype="html"><source>Evidence completeness</source><target>Độ đầy đủ của bằng chứng</target></trans-unit>
     </body>
   </file>
 </xliff>
