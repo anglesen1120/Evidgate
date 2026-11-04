@@ -128,6 +128,9 @@ public static class ApiErrorCode
     /// <summary>A pending invite for that address already exists in this org (02.1.2 AC1: 409).</summary>
     public const string InviteExists = "invite_exists";
 
+    /// <summary>A removed, user-bound membership prevents re-inviting that address to the organization (409).</summary>
+    public const string MemberRemoved = "member_removed";
+
     /// <summary>The org's last active <c>tenant_admin</c> cannot be removed or demoted (02.1.2 AC4: 409).</summary>
     public const string LastAdmin = "last_admin";
 

@@ -66,10 +66,7 @@ internal sealed class UpdateMembershipCommandValidator : AbstractValidator<Updat
 /// active <c>tenant_admin</c> is 409 <c>last_admin</c> (AC4).
 /// </summary>
 /// <remarks>
-/// 02.1.2-T3.2 wires <c>ISessionRevocation</c> into this path in the same
-/// transaction (AC3); the interface exists (02.1.2-T1.3) and the call is recorded as
-/// deferred in the feature plan §3, because the <c>session</c> table it revokes is
-/// 02.3.2-T1's and does not exist in this build.
+/// <c>ISessionRevocation</c> is called in this path in the same transaction (AC3).
 /// </remarks>
 [AuditedAction("membership.update")]
 [Permission(Permissions.Membership.Write)]
@@ -78,7 +75,7 @@ internal sealed class UpdateMembershipCommandHandler(
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IAuditTrail audit,
-    ISessionPrivilegeChange privilegeChanges)
+    ISessionRevocation sessions)
     : ICommandHandler<UpdateMembershipCommand, Result<MembershipView>>
 {
     /// <inheritdoc />
@@ -152,12 +149,11 @@ internal sealed class UpdateMembershipCommandHandler(
             return Result.Failure<MembershipView>(Stale(latest?.Version ?? membership.Version));
         }
 
-        // 02.3.2-T1 (AC7, D5b): a status change alters what the user may do in this org, so every live session
-        // of the member is flagged for rotation in this transaction — the active -> removed / revoked / expired
-        // transitions alike. Revoking ALL of the user's sessions stays with 02.1.2-T3 (ISessionRevocation).
+        // Disabling the membership ends every live session of the user in this same transaction (AC3);
+        // a failed revocation rolls the status change back with it.
         if (membership.UserId is { } changedUser)
         {
-            _ = await privilegeChanges.RequireRotationForUserAsync(changedUser, cancellationToken)
+            _ = await sessions.RevokeAllForUserAsync(changedUser, cancellationToken)
                 .ConfigureAwait(false);
         }
 

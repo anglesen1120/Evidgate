@@ -877,7 +877,7 @@ export const listMemberships = <ThrowOnError extends boolean = false>(options: O
 /**
  * Invite a member; returns invite_token once (02)
  *
- * Creates a `pending` membership bound to the normalised address and mints its invite token (02.1.2-T2), returned as `invite_token` in this one response. It becomes `active` only when the invite's single-use secret is presented **and** a login reports the same address as provider-verified (T75, 02.1.2 AC2), so this route never activates one. Optional initial roles must be built-in or the caller's own (409 `unknown_role`); a second invite while one is pending is 409 `invite_exists` (AC1); an org at its `max_seats` is 429 `quota_exceeded`; a deployment without the invite pepper is 503 `unavailable`. `Idempotency-Key` per T11: an `Idempotency-Key` replay returns the stored response **without** `invite_token` — the token is never persisted, and rotating it is what `POST …/{m}/resend` is for.
+ * Creates a `pending` membership bound to the normalised address and mints its invite token (02.1.2-T2), returned as `invite_token` in this one response. It becomes `active` only when the invite's single-use secret is presented **and** a login reports the same address as provider-verified (T75, 02.1.2 AC2), so this route never activates one. Optional initial roles must be built-in or the caller's own (409 `unknown_role`); a second invite while one is pending is 409 `invite_exists` (AC1). An address matching a removed, user-bound membership in this org is refused with 409 `member_removed`, without creating a pending membership. An org at its `max_seats` is 429 `quota_exceeded`; a deployment without the invite pepper is 503 `unavailable`. `Idempotency-Key` per T11: an `Idempotency-Key` replay returns the stored response **without** `invite_token` — the token is never persisted, and rotating it is what `POST …/{m}/resend` is for.
  */
 export const createMembership = <ThrowOnError extends boolean = false>(options: Options<CreateMembershipData, ThrowOnError>): RequestResult<CreateMembershipResponses, CreateMembershipErrors, ThrowOnError> => (options.client ?? client).post<CreateMembershipResponses, CreateMembershipErrors, ThrowOnError>({
     security: [{
@@ -896,7 +896,7 @@ export const createMembership = <ThrowOnError extends boolean = false>(options: 
 /**
  * Remove a member; the last active tenant_admin is protected (02, AC4)
  *
- * Sets `status = removed` and keeps the row as audit history (02.1.2 §8). Removing the org's last active `tenant_admin` is 409 `last_admin`; a `pending` invite is 409 `invalid_transition` (cancel it through 02.1.2-T2's route). 02.1.2-T3.2 adds the in-transaction session revocation (AC3).
+ * Sets `status = removed` and keeps the row as audit history (02.1.2 §8). Removing the org's last active `tenant_admin` is 409 `last_admin`; a `pending` invite is 409 `invalid_transition` (cancel it through 02.1.2-T2's route). Removal revokes the user's sessions in every org in the same transaction (AC3).
  */
 export const removeMember = <ThrowOnError extends boolean = false>(options: Options<RemoveMemberData, ThrowOnError>): RequestResult<RemoveMemberResponses, RemoveMemberErrors, ThrowOnError> => (options.client ?? client).delete<RemoveMemberResponses, RemoveMemberErrors, ThrowOnError>({
     security: [{

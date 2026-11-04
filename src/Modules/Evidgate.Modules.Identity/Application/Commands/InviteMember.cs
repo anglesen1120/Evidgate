@@ -86,6 +86,8 @@ internal sealed class InviteMemberCommandValidator : AbstractValidator<InviteMem
 /// <c>invite_exists</c>), seat limit (429 <c>quota_exceeded</c>, 02.1.2-T2.3), then the
 /// write, whose unique-index violations map to the same 409 and to a 503 for the
 /// token prefix so a collision is never a 500.
+/// An address that belongs to a user holding a removed membership of this org is
+/// refused with 409 <c>member_removed</c>, before the seat check.
 /// <para>
 /// A role whose <c>kind</c> is not <c>member</c> is refused as
 /// <c>unknown_role</c> like an invisible one (W7-SEC-03): the staff and service
@@ -180,6 +182,23 @@ internal sealed class InviteMemberCommandHandler(
             {
                 return Result.Failure<InviteIssuedView>(SelfEscalation.Refused);
             }
+        }
+
+        // `membership_org_user_key` spans every status, so a pending row for this address
+        // could never bind while the removed one exists: refuse instead of issuing an
+        // invite no login can redeem.
+        if (await context.Memberships
+                .AnyAsync(
+                    membership => membership.OrgId == orgId
+                        && membership.InvitedEmail == email
+                        && membership.Status == MembershipStatus.Removed
+                        && membership.UserId != null,
+                    cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return Result.Failure<InviteIssuedView>(Error.Conflict(
+                ApiErrorCode.MemberRemoved,
+                "a removed member cannot be re-invited to this organization"));
         }
 
         if (await context.Memberships
