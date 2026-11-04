@@ -17,7 +17,7 @@ for (const locale of LOCALES) {
     await page.goto(withVariants(membersPath(locale), [SETTINGS_ADMIN_GRANTS]));
     await page.locator('app-members-page [data-members-invite-open]').click();
 
-    const dialog = page.locator('[data-members-dialog="invite"]');
+    const dialog = page.locator('[data-members-dialog="invite"][data-state="open"]');
     await expect(dialog).toBeVisible();
 
     const field = dialog.locator('input[type="email"]');

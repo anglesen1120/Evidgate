@@ -2809,6 +2809,7 @@
       <trans-unit id="suites.composition.ordinal" datatype="html"><source>Ordinal</source><target>Thứ tự</target></trans-unit>
       <trans-unit id="suites.composition.no-member" datatype="html"><source>No member</source><target>Không có thành viên</target></trans-unit>
       <trans-unit id="suites.composition.variant-params" datatype="html"><source>Variant parameters</source><target>Tham số biến thể</target></trans-unit>
+      <trans-unit id="suites.composition.variant-hash" datatype="html"><source>Variant hash</source><target>Hash biến thể</target></trans-unit>
       <trans-unit id="suites.composition.repeated-variant-cells" datatype="html"><source>Repeated variant members: <x id="count" equiv-text="count"/>; the matrix keeps only the first member of each cell.</source><target>Thành viên biến thể lặp: <x id="count"/>; ma trận chỉ giữ thành viên đầu tiên của mỗi ô.</target></trans-unit>
       <trans-unit id="suites.composition.flat-matrix-note" datatype="html"><source>This revision has more cells than a matrix can show, so its members are listed as a flat table.</source><target>Bản sửa đổi này có nhiều ô hơn mức ma trận có thể hiển thị, nên các thành viên được liệt kê thành bảng phẳng.</target></trans-unit>
       <trans-unit id="suites.composition.show-more" datatype="html"><source>Show more</source><target>Hiển thị thêm</target></trans-unit>

@@ -19,8 +19,6 @@ const MEMBER: MembershipView = {
   updated_at: '2026-10-25T00:00:00Z',
   version: 1,
 };
-const showModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal');
-const close = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
 
 describe('CancelInviteDialog pending invitation confirmation', () => {
   let fixture: ComponentFixture<CancelInviteDialogComponent>;
@@ -34,18 +32,6 @@ describe('CancelInviteDialog pending invitation confirmation', () => {
     cancelInvite: Mock<(org: string, id: string, intent: Intent) => Promise<void>>;
   };
   beforeEach(async () => {
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     allowed = true;
     data = {
       listMemberships: vi.fn().mockResolvedValue({ items: [MEMBER], next_cursor: null }),
@@ -66,19 +52,16 @@ describe('CancelInviteDialog pending invitation confirmation', () => {
     await TestBed.inject(MembersStore).load('org1');
     fixture = TestBed.createComponent(CancelInviteDialogComponent);
     fixture.detectChanges();
-    root = fixture.nativeElement as HTMLElement;
+    root = document.body;
     opener = document.createElement('button');
     document.body.append(opener);
     fixture.componentInstance.open(MEMBER, opener);
     fixture.detectChanges();
+    await fixture.whenStable();
   });
   afterEach(() => {
     TestBed.resetTestingModule();
     opener.remove();
-    if (showModal) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModal);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (close) Object.defineProperty(HTMLDialogElement.prototype, 'close', close);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
   function press() {
@@ -95,7 +78,7 @@ describe('CancelInviteDialog pending invitation confirmation', () => {
     await settle();
     expect(data.cancelInvite).toHaveBeenCalledWith('org1', MEMBER.id, expect.anything());
     expect(data.listMemberships).toHaveBeenCalledTimes(2);
-    expect(root.querySelector('dialog')?.open).toBe(false);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(false);
     expect(document.activeElement).toBe(opener);
     expect(completed).toHaveBeenCalledTimes(1);
   });
@@ -119,7 +102,7 @@ describe('CancelInviteDialog pending invitation confirmation', () => {
     );
     expect(root.querySelector('[data-members-error-code]')?.textContent).toBe('invite_not_pending');
     expect(root.querySelector('[data-members-error] b')).toBeNull();
-    expect(root.querySelector('dialog')?.open).toBe(true);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(true);
     // L5: the refusal means the pending row was stale, so the store re-read the list once.
     expect(data.listMemberships).toHaveBeenCalledTimes(2);
   });
@@ -152,15 +135,19 @@ describe('CancelInviteDialog pending invitation confirmation', () => {
     expect(data.cancelInvite.mock.calls[1]?.[2]).toBe(data.cancelInvite.mock.calls[0]?.[2]);
   });
   it('Escape closes without mutating; unauthorized and non-pending rows cannot open', () => {
-    root.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }));
+    root
+      .querySelector<HTMLElement>('[data-members-dialog]')!
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
     fixture.detectChanges();
-    expect(root.querySelector('dialog')?.open).toBe(false);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(false);
     expect(data.cancelInvite).not.toHaveBeenCalled();
     allowed = false;
     fixture.componentInstance.open(MEMBER, opener);
-    expect(root.querySelector('dialog')?.open).toBe(false);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(false);
     allowed = true;
     fixture.componentInstance.open({ ...MEMBER, status: 'active' }, opener);
-    expect(root.querySelector('dialog')?.open).toBe(false);
+    expect(root.querySelector('[data-members-dialog][data-state="open"]') !== null).toBe(false);
   });
 });

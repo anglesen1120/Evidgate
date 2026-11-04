@@ -9,7 +9,6 @@ import emptyFixture from '../../../../fixtures/web-api/suite-revision-empty/inpu
 import largeFixture from '../../../../fixtures/web-api/suite-revision-large/input.json';
 import publishedFixture from '../../../../fixtures/web-api/suite-revision-published/input.json';
 import {
-  activeElement,
   expectNoA11yViolations,
   localePath,
   LOCALES,
@@ -214,10 +213,10 @@ for (const locale of LOCALES) {
     // The screen moves focus to its own state heading, so the route's region is announced first.
     await expect(page.getByTestId('suite-composition-state')).toBeFocused();
     await page.keyboard.press('Tab');
-    const focused = await activeElement(page);
     // The matrix scroll region is the only stop between the heading and the end of the route.
-    expect(focused.className, 'matrix region focus').toContain('matrix-scroll');
-    const region = page.locator('.matrix-scroll');
+    const region = page
+      .locator('[role="region"][tabindex="0"]')
+      .filter({ has: page.locator(MATRIX) });
     await expect(region).toBeFocused();
     expect(await region.evaluate((element) => element.matches(':focus-visible'))).toBe(true);
     await expect(region).toHaveCSS('outline-width', '2px');
@@ -232,12 +231,25 @@ for (const locale of LOCALES) {
       await page.setViewportSize({ width: 360, height: 800 });
       await page.goto(revisionPath(locale, 'ok'));
       await composition(page, 'ready');
-      await expect(page.locator(MATRIX)).toBeVisible();
+      await expect(page.locator(MATRIX)).toBeHidden();
+      const mobileMembers = page.getByTestId('suite-members-mobile');
+      await expect(mobileMembers).toBeVisible();
+      await expect(mobileMembers.locator(':scope > li')).toHaveCount(DRAFT.members.length);
+      for (const member of DRAFT.members) {
+        const item = mobileMembers.getByRole('listitem').filter({ hasText: member.id });
+        await expect(item).toHaveCount(1);
+        await expect(item).toContainText(member.case_revision_id);
+        await expect(item).toContainText(member.variant_hash);
+      }
+      await expect(page.locator(STRATEGY)).toBeVisible();
+      await expect(page.locator(STRATEGY)).toContainText(String(DRAFT.shard_strategy.count));
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
       await expectNoA11yViolations(page, `suite composition ${locale}/${theme}/360px`);
       await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(page.locator(MATRIX)).toBeVisible();
+      await expect(mobileMembers).toBeHidden();
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);

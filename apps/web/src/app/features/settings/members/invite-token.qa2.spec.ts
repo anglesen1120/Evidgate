@@ -22,8 +22,6 @@ const MEMBER: MembershipView = {
 };
 /** A token shaped like the server's, plus markup and quotes a hostile or buggy server could send. */
 const MARKUP_TOKEN = `evgi_<img src=x onerror="globalThis.__qa2Pwned=1">_"'>${'k'.repeat(40)}`;
-const showModal = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'showModal');
-const close = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
 
 describe('Invite token as an inert literal (09.7.1-T3 F12 QA2)', () => {
   let fixture: ComponentFixture<ResendInviteDialogComponent>;
@@ -32,18 +30,6 @@ describe('Invite token as an inert literal (09.7.1-T3 F12 QA2)', () => {
   let token: string | null;
 
   beforeEach(async () => {
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     token = MARKUP_TOKEN;
     const data = {
       listMemberships: vi.fn().mockResolvedValue({ items: [MEMBER], next_cursor: null }),
@@ -66,21 +52,18 @@ describe('Invite token as an inert literal (09.7.1-T3 F12 QA2)', () => {
     await TestBed.inject(MembersStore).load('org1');
     fixture = TestBed.createComponent(ResendInviteDialogComponent);
     fixture.detectChanges();
-    root = fixture.nativeElement as HTMLElement;
+    root = document.body;
     opener = document.createElement('button');
     document.body.append(opener);
     fixture.componentInstance.open(MEMBER, opener);
     fixture.detectChanges();
+    await fixture.whenStable();
   });
 
   afterEach(() => {
     TestBed.resetTestingModule();
     opener.remove();
     Reflect.deleteProperty(globalThis, '__qa2Pwned');
-    if (showModal) Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModal);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (close) Object.defineProperty(HTMLDialogElement.prototype, 'close', close);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
 

@@ -1,14 +1,12 @@
-// 09.7.1-T1.1/T1.2 (AC1): empty accessible destinations disclose no hidden destination names.
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 
 import { EmptyPatternComponent } from '../../shared/ui/states/empty-pattern.component';
 
 @Component({
   selector: 'app-settings-no-tabs',
-  standalone: true,
   imports: [EmptyPatternComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styleUrl: './settings-no-tabs.page.css',
+  host: { class: 'block min-w-0' },
   template: `<app-empty-pattern [title]="title" [description]="description" />`,
 })
 export class SettingsNoTabsPage {

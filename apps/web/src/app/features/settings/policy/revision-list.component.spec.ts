@@ -1,4 +1,6 @@
 import { LOCALE_ID } from '@angular/core';
+import { ComponentHarness } from '@angular/cdk/testing';
+import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import type { PolicyRevisionSummaryDto } from '@evidgate/sdk';
 import { RevisionListComponent } from './revision-list.component';
@@ -12,6 +14,14 @@ const row: PolicyRevisionSummaryDto = {
   created_at: '2026-10-26T06:00:00Z',
   version: 1,
 };
+class LoadMoreHarness extends ComponentHarness {
+  static hostSelector = 'button[hlmBtn]';
+  async activate(): Promise<void> {
+    const host = await this.host();
+    await host.focus();
+    await host.click();
+  }
+}
 describe('RevisionListComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
   it('renders revision metadata, raw state, localized creation time and head marker', () => {
@@ -33,6 +43,10 @@ describe('RevisionListComponent', () => {
         timeStyle: 'short',
       }).format(new Date(row.created_at)),
     );
+    expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
+      'policy-revisions-title',
+    );
+    expect(root.querySelector('code')?.getAttribute('aria-label')).toBe(row.hash);
   });
   it('shows a labelled empty state and bounded load-more action only when available', () => {
     const fixture = TestBed.createComponent(RevisionListComponent);
@@ -52,5 +66,15 @@ describe('RevisionListComponent', () => {
     root.querySelector<HTMLButtonElement>('button')?.click();
     expect(more).toHaveBeenCalledTimes(1);
     expect(root.querySelector('section')?.getAttribute('aria-busy')).toBe('true');
+  });
+  it('keeps the load-more action reachable through the component harness', async () => {
+    const fixture = TestBed.createComponent(RevisionListComponent);
+    fixture.componentRef.setInput('hasMore', true);
+    const more = vi.fn();
+    fixture.componentInstance.loadMore.subscribe(more);
+    const action = await TestbedHarnessEnvironment.loader(fixture).getHarness(LoadMoreHarness);
+    await action.activate();
+    expect(more).toHaveBeenCalledTimes(1);
+    expect(document.activeElement?.textContent).toContain('Load more');
   });
 });

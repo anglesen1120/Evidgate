@@ -138,13 +138,14 @@ describe('composition view', () => {
 });
 
 describe('member layout', () => {
-  it('keeps the matrix below the cell limit and builds no flat rows', () => {
+  it('keeps the desktop matrix below the cell limit and projects mobile member records', () => {
     const view = compositionView(grid(3, 3));
 
     expect(view.layout).toBe('matrix');
     expect(view.rows).toHaveLength(3);
     expect(view.columns).toHaveLength(3);
-    expect(view.flatMembers).toEqual([]);
+    expect(view.flatMembers).toHaveLength(9);
+    expect(view.flatMembers[0]?.variantHash).toBe('variant-0');
   });
 
   it('keeps the matrix at exactly the cell limit and goes flat one cell past it', () => {
@@ -166,6 +167,7 @@ describe('member layout', () => {
     expect(defined(view.flatMembers[0], 'the first flat row')).toEqual({
       memberId: 'member-0-0',
       caseRevisionId: 'case-000',
+      variantHash: 'variant-0',
       params: ['column=0'],
       required: true,
       ordinal: 0,
@@ -203,9 +205,7 @@ describe('repeated variant cells', () => {
     expect(row.byVariant.size).toBe(1);
     expect(row.byVariant.get(first.variant_hash)?.id).toBe(first.id);
     expect(view.duplicateMembers).toBe(1);
-    // `matrix` layout builds no flat rows at all, so the displaced member is only ever reported
-    // through the count here — which is exactly what the screen's note reads.
-    expect(view.flatMembers).toEqual([]);
+    expect(view.flatMembers.map((member) => member.memberId)).toEqual([first.id, second.id]);
   });
 
   it('lists every served member of a flat layout, including the ones the matrix cannot place', () => {

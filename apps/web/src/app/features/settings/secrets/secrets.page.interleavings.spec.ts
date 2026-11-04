@@ -1,23 +1,12 @@
-// QA2 independent gate (09.7.1-T3 AC3 + S82 P1/P5): the sinks the review packet names but the
-// suite's own page spec does not exercise — console output and web storage during a rotation — plus
-// two interleavings: a second row pressed while one rotation is out, and a throttled next page.
-// Real `RevealSlot`, so "cleared on dismiss" is the component's own behaviour.
+import { InteractivityChecker } from '@angular/cdk/a11y';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
 import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
-import fixtureData from '../../../../../../../fixtures/web-api/ingest-tokens-list-onboarding-token/input.json';
 import { SecretsPage } from './secrets.page';
-import {
-  SecretsStore,
-  type CiBindingsPhase,
-  type RotationResult,
-  type RotationState,
-} from './secrets.store';
-
-const base = fixtureData.body.items[0] as IngestTokenView;
+import { SecretsStore, type RotationResult } from './secrets.store';
+import { base, FakeSecretsStore, renderSecretsPage as render } from './secrets-page.testing';
 const failure: ApiError = {
   kind: 'conflict',
   status: 409,
@@ -28,38 +17,6 @@ const failure: ApiError = {
   retryAfterSeconds: null,
   details: [],
 };
-class FakeSecretsStore {
-  readonly rows = signal<readonly IngestTokenView[]>([base]);
-  readonly phase = signal<'loading' | 'ready' | 'error'>('ready');
-  readonly loadError = signal<ApiError | null>(null);
-  readonly hasMore = signal(false);
-  readonly projectId = signal<string | null>(null);
-  readonly rotateState = signal<RotationState>({ phase: 'idle', tokenId: null, error: null });
-  readonly rotating = signal(false);
-  readonly ciBindings = signal<readonly CiBindingView[]>([]);
-  readonly ciBindingsPhase = signal<CiBindingsPhase>('idle');
-  readonly ciBindingsError = signal<ApiError | null>(null);
-  readonly hasMoreCiBindings = signal(false);
-  readonly loadCiBindings = vi.fn<(id: string) => Promise<void>>(() => Promise.resolve());
-  readonly loadMoreCiBindings = vi.fn(() => Promise.resolve());
-  readonly resetCiBindings = vi.fn();
-  readonly load = vi.fn((id: string) => {
-    this.projectId.set(id);
-    return Promise.resolve();
-  });
-  readonly loadMore = vi.fn(() => Promise.resolve());
-  readonly rotate = vi.fn<(id: string) => Promise<RotationResult | null>>(() =>
-    Promise.resolve(null),
-  );
-  resetRotation(): void {
-    this.rotateState.set({ phase: 'idle', tokenId: null, error: null });
-  }
-}
-const showModalDescriptor = Object.getOwnPropertyDescriptor(
-  HTMLDialogElement.prototype,
-  'showModal',
-);
-const closeDescriptor = Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, 'close');
 
 /** Every key/value a web storage holds, so a write of any name is visible. */
 function dumpStorage(storage: Storage): string {
@@ -71,7 +28,7 @@ function dumpStorage(storage: Storage): string {
   return entries.join('&');
 }
 
-describe('SecretsPage sinks and interleavings (09.7.1-T3 QA2)', () => {
+describe('SecretsPage sinks and interleavings', () => {
   let store: FakeSecretsStore;
   const projects = signal([
     { id: 'p1', name: 'Storefront' },
@@ -81,6 +38,9 @@ describe('SecretsPage sinks and interleavings (09.7.1-T3 QA2)', () => {
 
   beforeEach(() => {
     store = new FakeSecretsStore();
+    store.ciBindings.set([]);
+    store.ciBindingsPhase.set('idle');
+    store.rotate.mockResolvedValue(null);
     projects.set([
       { id: 'p1', name: 'Storefront' },
       { id: 'p2', name: 'API' },
@@ -88,18 +48,6 @@ describe('SecretsPage sinks and interleavings (09.7.1-T3 QA2)', () => {
     canWrite.set(true);
     window.localStorage.clear();
     window.sessionStorage.clear();
-    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = true;
-      },
-    });
-    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
-      configurable: true,
-      value: function (this: HTMLDialogElement) {
-        this.open = false;
-      },
-    });
     TestBed.configureTestingModule({
       providers: [
         {
@@ -114,29 +62,13 @@ describe('SecretsPage sinks and interleavings (09.7.1-T3 QA2)', () => {
     TestBed.overrideComponent(SecretsPage, {
       set: { providers: [{ provide: SecretsStore, useValue: store }, RevealSlot] },
     });
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
   });
 
   afterEach(() => {
     TestBed.resetTestingModule();
-    if (showModalDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'showModal', showModalDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'showModal');
-    if (closeDescriptor)
-      Object.defineProperty(HTMLDialogElement.prototype, 'close', closeDescriptor);
-    else Reflect.deleteProperty(HTMLDialogElement.prototype, 'close');
     vi.restoreAllMocks();
   });
-
-  async function render() {
-    const fixture = TestBed.createComponent(SecretsPage);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    return {
-      fixture,
-      root: fixture.nativeElement as HTMLElement,
-      slot: fixture.debugElement.injector.get(RevealSlot),
-    };
-  }
 
   function rotateButtons(root: HTMLElement): HTMLButtonElement[] {
     return Array.from(root.querySelectorAll<HTMLButtonElement>('[data-rotate]'));
@@ -159,13 +91,13 @@ describe('SecretsPage sinks and interleavings (09.7.1-T3 QA2)', () => {
     // The value reaches exactly one place: the reveal slot of the mounted page.
     expect(slot.current()).toEqual({ source: 'ingest-token-rotation', value: secret });
 
-    root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
+    document.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
     fixture.detectChanges();
     await fixture.whenStable();
 
     expect(slot.current()).toBeNull();
-    expect(root.outerHTML).not.toContain(secret);
-    for (const element of root.querySelectorAll('[role="status"], [role="alert"]')) {
+    expect(document.body.outerHTML).not.toContain(secret);
+    for (const element of document.querySelectorAll('[role="status"], [role="alert"]')) {
       expect(element.textContent ?? '').not.toContain(secret);
     }
     for (const spy of consoleSpies) {
@@ -198,7 +130,7 @@ describe('SecretsPage sinks and interleavings (09.7.1-T3 QA2)', () => {
     // The message is interpolated, never parsed: the markup in it created no element.
     expect(root.querySelector('em')).toBeNull();
     expect(slot.current()).toBeNull();
-    expect(root.querySelector('[data-testid="reveal-value"]')).toBeNull();
+    expect(document.querySelector('[data-testid="reveal-value"]')).toBeNull();
     expect(store.rows()).toBe(original);
   });
 

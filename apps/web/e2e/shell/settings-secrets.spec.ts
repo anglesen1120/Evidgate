@@ -12,8 +12,8 @@
 // terminal page, focus back on the section heading.
 // Reminder dates are pinned with a browser clock, not compared to the machine's changing calendar.
 // No source-text assertions or mock UI.
-// Project changes during a native modal are injected as a DOM change event: the modal correctly
-// makes the picker inert to users, but a scope-change event must still clear the reveal immediately.
+// Project changes during an overlay are injected as a DOM change event: the focus trap prevents
+// reaching the background picker, but a scope-change event must still clear the reveal immediately.
 // All selectors use component/data hooks, IDs or roles; localized text is asserted, never selected.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
@@ -40,12 +40,13 @@ import {
   THEMES,
   UNKNOWN_ORG,
   withVariants,
+  waitForDialogAnimations,
   type ShellLocale,
 } from './support';
 
 const PAGE = 'app-secrets-page';
 const ROWS = `${PAGE} [data-secret-reference]`;
-const DIALOG = 'app-rotate-reveal-dialog dialog';
+const DIALOG = '[role="dialog"]';
 const SECRET = rotation.body.secret;
 const TARGET = ((): (typeof references.body.items)[number] => {
   const first = references.body.items[0];
@@ -106,6 +107,7 @@ async function reveal(page: Page): Promise<Locator> {
   const dialog = page.locator(DIALOG);
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId('reveal-value')).toHaveValue(SECRET);
+  await waitForDialogAnimations(page, DIALOG);
   // Plaintext belongs to exactly one live reveal control, never to the metadata list or storage.
   await expect(page.getByTestId('reveal-value')).toHaveCount(1);
   await expect(page.locator('app-secret-reference-list')).not.toContainText(SECRET);
@@ -128,9 +130,9 @@ for (const locale of LOCALES) {
       await expect(row.locator('code').filter({ hasText: reference.prefix })).toHaveText(
         reference.prefix,
       );
-      await expect(row.locator('.scope')).toHaveText(reference.scopes);
+      await expect(row.locator('dl > div').first().locator('code')).toHaveText(reference.scopes);
       await expect(
-        row.locator('.reference-heading > app-status-pill .status-pill__label'),
+        row.locator('app-status-pill').first().locator('.status-pill__label'),
       ).toHaveText(STATUS[locale][reference.status as keyof (typeof STATUS)['en']]);
       for (const date of [
         reference.expires_at,
@@ -254,8 +256,9 @@ for (const locale of LOCALES) {
   test(`360px is inspection-only (${locale})`, async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 800 });
     await visit(page, locale);
-    await expect(page.locator(`${PAGE} .narrow-notice`)).toBeVisible();
-    await expect(page.locator(`${PAGE} .narrow-notice`)).not.toBeEmpty();
+    const narrowNotice = page.locator(`${PAGE} > p[class~="md:hidden"]`);
+    await expect(narrowNotice).toBeVisible();
+    await expect(narrowNotice).not.toBeEmpty();
     await expect(page.locator(`${PAGE} [data-rotate]:visible`)).toHaveCount(0);
     // CSS-hidden controls must not be keyboard stops either.
     for (const button of await page.locator(`${PAGE} [data-rotate]`).all()) {
@@ -268,8 +271,7 @@ for (const locale of LOCALES) {
     await expectNoA11yViolations(page, `Secrets inspection-only ${locale} 360px`);
   });
 
-  // AC3 / delivery Notes P1/P5: scope changes erase an open reveal even though native modal makes
-  // the background picker inert. Dispatch a real DOM change rather than calling Angular internals.
+  // A scope-change event must erase the reveal even while the overlay traps user focus.
   test(`project scope change closes and erases reveal (${locale})`, async ({ page }) => {
     await visit(page, locale);
     const dialog = await reveal(page);
@@ -295,7 +297,7 @@ for (const locale of LOCALES) {
   });
 
   for (const theme of THEMES) {
-    // AC3 / T3.1+T3.2: real-browser WCAG 2.2 AA includes contrast in both list and native modal.
+    // Contrast is checked in both the metadata list and the portalled reveal.
     test(`axe has no violations on list and open reveal (${locale}, ${theme})`, async ({
       page,
     }) => {
@@ -303,6 +305,12 @@ for (const locale of LOCALES) {
       await visit(page, locale);
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      const scopePickers = page.getByRole('banner').getByRole('combobox');
+      await expect(scopePickers).toHaveCount(2);
+      for (const picker of await scopePickers.all()) {
+        await expect(picker).toHaveAttribute('aria-expanded', 'false');
+        await expect(picker).toHaveAccessibleName(/\S/u);
+      }
       await expectNoA11yViolations(page, `Secrets list ${locale} ${theme}`);
       const dialog = await reveal(page);
       await expectNoA11yViolations(page, `Secrets open reveal ${locale} ${theme}`);
