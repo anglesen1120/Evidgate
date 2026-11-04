@@ -113,6 +113,13 @@ internal static class ArtifactScanState
         value is null || IsKnown(value)
             ? value
             : throw new ArgumentOutOfRangeException(nameof(value), value, "scan_state is outside the 00 §7 closed list (06.1.1 §4)");
+
+    /// <summary>The scan state, or an <see cref="ArgumentOutOfRangeException"/> when it is outside the closed list.</summary>
+    /// <param name="value">The candidate scan state.</param>
+    public static string Ensure(string value) =>
+        IsKnown(value)
+            ? value
+            : throw new ArgumentOutOfRangeException(nameof(value), value, "scan_state is outside the 00 §7 closed list (06.1.1 §4)");
 }
 
 /// <summary>The closed list of <c>artifact.state</c> (00 §7, §8.4): <c>pending_upload</c> is the only initial state.</summary>
@@ -185,6 +192,12 @@ internal static class ArtifactFailureCode
 
     /// <summary>Neither the staging object nor a matching final object exists in the store (T86).</summary>
     public const string ObjectMissing = "object_missing";
+
+    /// <summary>
+    /// The masking scan found a secret and the project's kind policy rejects such an artifact (T57(b)): the row moves
+    /// <c>ready → pending_delete</c>, so it stops being evidence and the deletion job removes its object.
+    /// </summary>
+    public const string SecretRejected = "secret_rejected";
 
     /// <summary>
     /// The parse child died of its heap limit (06.3.6 AC3). The value is the one
@@ -266,27 +279,13 @@ internal sealed class Artifact
     /// final key (06.1.2-T1 decision 7), and it is the one column migration 0028 does not grant the app role.
     /// </summary>
     /// <param name="verifiedBytes">The stored length <c>HEAD</c> reported for the verified object.</param>
-    public Artifact MarkReady(long? verifiedBytes) => new(
-        Id,
-        OrgId,
-        ProjectId,
-        RunId,
-        ExecutionKey,
-        AttemptNo,
-        Kind,
-        ObjectKey,
-        MediaType,
-        Checksum,
+    public Artifact MarkReady(long? verifiedBytes) => Copy(
         Sensitivity,
-        attemptId: AttemptId,
-        bytes: verifiedBytes,
-        scanState: ArtifactScanState.Pending,
-        state: ArtifactState.Ready,
-        expiresAt: ExpiresAt,
-        failureCode: null,
-        version: Version,
-        createdAt: CreatedAt,
-        updatedAt: UpdatedAt);
+        verifiedBytes,
+        ArtifactScanState.Pending,
+        ArtifactState.Ready,
+        ExpiresAt,
+        failureCode: null);
 
     /// <summary>
     /// The <c>pending_upload|uploaded → rejected</c> transition of 06.1.2 §6 (AC3): the object never became
@@ -306,28 +305,103 @@ internal sealed class Artifact
         ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(failureCode.Length, 128);
 
-        return new Artifact(
-            Id,
-            OrgId,
-            ProjectId,
-            RunId,
-            ExecutionKey,
-            AttemptNo,
-            Kind,
-            ObjectKey,
-            MediaType,
-            Checksum,
-            Sensitivity,
-            attemptId: AttemptId,
-            bytes: Bytes,
-            scanState: ScanState,
-            state: ArtifactState.Rejected,
-            expiresAt: ExpiresAt,
-            failureCode: failureCode,
-            version: Version,
-            createdAt: CreatedAt,
-            updatedAt: UpdatedAt);
+        return Copy(Sensitivity, Bytes, ScanState, ArtifactState.Rejected, ExpiresAt, failureCode);
     }
+
+    /// <summary>
+    /// The masking scan's <c>pending → clean|flagged</c> transition: a clean artifact keeps the sensitivity it was
+    /// minted with, a flagged one is raised to <c>sensitive</c> so every read path gates it. Refuses to run twice, and
+    /// refuses <c>pending</c> as a target, because the scan is the only writer of this column and a second write would
+    /// mean a second scan of bytes that may already be gone.
+    /// </summary>
+    /// <param name="scanState">One of <see cref="ArtifactScanState.Clean"/> or <see cref="ArtifactScanState.Flagged"/>.</param>
+    /// <exception cref="ArgumentOutOfRangeException">The value is outside the closed list.</exception>
+    /// <exception cref="InvalidOperationException">The row is not awaiting its scan.</exception>
+    public Artifact MarkScanned(string scanState)
+    {
+        var next = ArtifactScanState.Ensure(scanState);
+
+        if (string.Equals(next, ArtifactScanState.Pending, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("the masking scan cannot leave an artifact pending");
+        }
+
+        if (!string.Equals(ScanState, ArtifactScanState.Pending, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("the artifact is not awaiting its masking scan, so it is not scanned twice");
+        }
+
+        return Copy(
+            string.Equals(next, ArtifactScanState.Flagged, StringComparison.Ordinal)
+                ? ArtifactSensitivity.Sensitive
+                : Sensitivity,
+            Bytes,
+            next,
+            State,
+            ExpiresAt,
+            FailureCode);
+    }
+
+    /// <summary>
+    /// The <c>ready → pending_delete</c> transition the retention sweep and the secret-scan rejection both take
+    /// (00 §8.4, T57(b)): the artifact stops being evidence and the deletion job removes its object like any other
+    /// pending deletion. Refuses every other source state, so a rejection can never be written as an illegal move.
+    /// </summary>
+    /// <param name="failureCode">The reason the artifact leaves evidence, e.g. <see cref="ArtifactFailureCode.SecretRejected"/>.</param>
+    /// <exception cref="ArgumentException">The code is empty.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The code is longer than the column's bound.</exception>
+    /// <exception cref="InvalidOperationException">The row is not <c>ready</c>.</exception>
+    public Artifact MarkPendingDelete(string failureCode)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(failureCode.Length, 128);
+
+        if (!string.Equals(State, ArtifactState.Ready, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("only a ready artifact moves to pending_delete");
+        }
+
+        return Copy(Sensitivity, Bytes, ScanState, ArtifactState.PendingDelete, ExpiresAt, failureCode);
+    }
+
+    /// <summary>
+    /// The next row this aggregate's transition returns: every immutable member carried over, the six lifecycle values
+    /// taken from the caller. One place builds a transitioned row, so a new lifecycle column cannot be forgotten in
+    /// one transition and carried in another.
+    /// </summary>
+    /// <param name="sensitivity">The row's <c>sensitivity</c>.</param>
+    /// <param name="bytes">The row's stored length, or <see langword="null"/> while unknown.</param>
+    /// <param name="scanState">The row's <c>scan_state</c>; null lets the column default apply.</param>
+    /// <param name="state">The row's <c>state</c>; null lets the column default apply.</param>
+    /// <param name="expiresAt">The retention deadline, or <see langword="null"/> while unset.</param>
+    /// <param name="failureCode">The reason the row carries, or <see langword="null"/> when it carries none.</param>
+    private Artifact Copy(
+        string sensitivity,
+        long? bytes,
+        string? scanState,
+        string? state,
+        DateTimeOffset? expiresAt,
+        string? failureCode) => new(
+        Id,
+        OrgId,
+        ProjectId,
+        RunId,
+        ExecutionKey,
+        AttemptNo,
+        Kind,
+        ObjectKey,
+        MediaType,
+        Checksum,
+        sensitivity,
+        attemptId: AttemptId,
+        bytes: bytes,
+        scanState: scanState,
+        state: state,
+        expiresAt: expiresAt,
+        failureCode: failureCode,
+        version: Version,
+        createdAt: CreatedAt,
+        updatedAt: UpdatedAt);
 
     /// <summary>UUIDv7 id (00 §7).</summary>
     public Guid Id { get; }

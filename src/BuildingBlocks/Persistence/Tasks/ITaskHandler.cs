@@ -66,6 +66,30 @@ public interface ITaskHandler<TPayload> : ITaskHandler
 }
 
 /// <summary>
+/// A tenant handler that opens its own short tenant transactions instead of running inside the one the consumer
+/// opens. Register it when the attempt must make a call the platform forbids inside a transaction — an object-store
+/// read or an HTTP request (00 §5.7 P5): a first scope reads what the call needs, the call runs with no scope open,
+/// and a last scope writes the result. The consumer still enforces the row's tenant and still marks the row
+/// <c>done</c>, retried or dead-lettered itself; it only stops wrapping the attempt in its own transaction.
+/// </summary>
+/// <typeparam name="TPayload">Type the task payload JSON binds to (snake_case fields, 00 §7).</typeparam>
+public interface ITransactionlessTaskHandler<TPayload> : ITaskHandler
+{
+    /// <summary>
+    /// Runs one attempt without a scope the consumer opened. Every statement runs in a scope this method opens and
+    /// commits or disposes itself, so a call the platform forbids inside a transaction is made with none open.
+    /// </summary>
+    /// <param name="payload">The row's payload.</param>
+    /// <param name="orgId">The tenant the claimed row names (<c>task.org_id</c>): the only trusted tenant source.</param>
+    /// <param name="cancellationToken">Cancelled on shutdown and on lease loss.</param>
+    /// <remarks>
+    /// Throwing still means the attempt failed: the row moves to <c>retry</c> (or <c>dead_letter</c> at the cap).
+    /// Every write must already be committed when this returns; the consumer commits nothing for it.
+    /// </remarks>
+    ValueTask HandleAsync(TPayload payload, Guid orgId, CancellationToken cancellationToken);
+}
+
+/// <summary>
 /// The dispatch seam between the consumer and a handler: binds a payload string,
 /// then invokes. One adapter per registered handler.
 /// </summary>
@@ -77,8 +101,23 @@ public interface ITaskHandlerInvoker
     /// <summary>Whether the wrapped handler needs a tenant scope (see <see cref="ITaskHandler.RequiresTenant"/>).</summary>
     bool RequiresTenant { get; }
 
+    /// <summary>
+    /// Whether the wrapped handler opens its own transactions (see <see cref="ITransactionlessTaskHandler{TPayload}"/>).
+    /// When true the consumer opens no scope and calls <see cref="InvokeWithoutScopeAsync"/>.
+    /// </summary>
+    bool OpensOwnTransactions => false;
+
     /// <summary>Binds <paramref name="payloadJson"/> to the handler's payload type and runs it.</summary>
     ValueTask InvokeAsync(string payloadJson, ITenantScope? scope, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Binds <paramref name="payloadJson"/> to the handler's payload type and runs it with no scope open. Called only
+    /// when <see cref="OpensOwnTransactions"/> is true; an invoker that wraps a scoped handler refuses instead of
+    /// running one unscoped (a missing tenant is never a reason to skip the boundary, 00 §5.4).
+    /// </summary>
+    ValueTask InvokeWithoutScopeAsync(string payloadJson, Guid orgId, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException(
+            $"the handler for task_type '{TaskType}' needs the consumer's tenant scope and cannot run without one");
 }
 
 /// <summary>Handler lookup by <c>task_type</c> (01.5.1-T4.1: registry dispatch).</summary>
