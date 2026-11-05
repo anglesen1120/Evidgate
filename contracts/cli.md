@@ -13,8 +13,8 @@ holds only the process-level contract.
   [open-items register](../plans/open-items/02-catalog-ingest-runs-evidence.md).
 - 04.2.1-T1 adds the auth-exchange section: `auth login`, the token cache
   location, and the `binding_pending` / `binding_conflict` rows.
-- 04.2.2-T1 adds `manifests upload` and §8 (the manifest upload, its 256 KiB cap
-  and the 401 purge); 04.2.2-T2 adds `runs create` (§9).
+- 04.2.2-T1 adds `manifests upload` and §8 (the manifest upload, its published
+  body cap and the 401 purge); 04.2.2-T2 adds `runs create` (§9).
 - 04.2.3 adds §11: the spool format, its caps, `EVIDGATE_SPOOL_DIR` /
   `EVIDGATE_SPOOL_MAX_BYTES` / `EVIDGATE_SEND_DEADLINE`, the spool error family,
   and the `events send` and `runs finalize` commands.
@@ -270,7 +270,7 @@ position (`#n`) rather than by value, is the server contract (05.1.1, openapi
 | `oidc_request_failed`      | 3    | the `ACTIONS_ID_TOKEN_REQUEST_URL` fetch failed (non-2xx, or a body without `value`)                                                                                                                                                                                                    |
 | `token_cache_error`        | 3    | `auth logout` could not delete the token cache; the message names the operation, never a token value. A cache **write** that fails is not this code: it is one stderr warning and the command continues (§7)                                                                            |
 | `manifest_unreadable`      | 3    | the manifest file could not be read (missing, unreadable, not a regular file or empty); the message names the errno code, never the path or the content                                                                                                                                 |
-| `manifest_too_large`       | 3    | the manifest file is larger than the server's 256 KiB transport cap; refused locally, before any request                                                                                                                                                                                |
+| `manifest_too_large`       | 3    | the manifest file is larger than the server's published manifest body cap (openapi `x-evidgate-limits.manifest_bytes`, 32 MiB by default); refused locally, before any request                                                                                                          |
 | `request_failed`           | 3    | a non-2xx reply from a project-scoped command (`manifests upload`, `runs create`) without a usable error envelope, or a 2xx body that fails validation; the body is never echoed                                                                                                        |
 | `binding_pending`          | 3    | 403: the repository has not presented the binding challenge yet; hint: set the repository variable `EVIDGATE_BINDING_CHALLENGE` to the challenge shown when the binding was created                                                                                                     |
 | `binding_conflict`         | 3    | 409: this repository is already bound to another organization; hint: its admin must disable that binding first                                                                                                                                                                          |
@@ -502,7 +502,7 @@ Order of operations (observable):
    errno code) and an empty file are exit 3 `manifest_unreadable`. At most
    `maxManifestBytes + 1` bytes are read — the size is never trusted from `stat`
    alone — and more than `maxManifestBytes` is exit 3 `manifest_too_large`
-   (`the manifest file exceeds 262144 bytes`).
+   (`the manifest file exceeds 33554432 bytes`).
 3. `getToken()` (04.2.1) supplies the bearer, `createApiClient` builds the
    redirect-refusing client, and the generated `createManifest` operation is
    called with that client explicitly (§6). The body is the RAW file bytes — no
@@ -530,10 +530,16 @@ Output:
 - text: `manifest_id=<id> manifest_hash=<hash>` and nothing else on stdout.
 - `--json`: exactly one line `{"manifest_id":"…","manifest_hash":"…"}`.
 
-The cap is the server's documented transport limit: openapi `createManifest`
-("Body ≤ 256 KiB → 413") and 05.1.1 §8 (`MaxManifestBytes = 256 * 1024`). The
-CLI refuses a larger file locally, so the 413 is never reached. The manifest
-content is never echoed, not even under `--verbose`.
+The cap is the server's documented limit for a manifest body: openapi
+`createRun`'s `x-evidgate-limits.manifest_bytes` and the option behind it
+(`IngestionLimits.DefaultMaxManifestBytes = 32 * 1024 * 1024`, lowerable per
+deployment through `EVIDGATE__INGESTION__MAXMANIFESTBYTES`). The CLI refuses a
+file larger than that default locally, so a deployment at the default never
+sees the 413 for a file the CLI can open; a deployment that lowered the cap
+answers 413 `payload_too_large` (detail path `manifest_bytes`) for a file the
+CLI accepted locally, and the CLI prints that refusal as the server sent it.
+The server still counts the bytes itself, so a client that bypasses the CLI is
+refused too. The manifest content is never echoed, not even under `--verbose`.
 
 ## 9. Run create
 

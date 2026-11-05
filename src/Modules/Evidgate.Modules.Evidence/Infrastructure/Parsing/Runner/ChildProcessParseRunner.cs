@@ -628,6 +628,8 @@ internal sealed class ChildProcessParseRunner : IParseRunner, IDisposable
 
         AddArgument(startInfo, "--max-bytes");
         AddArgument(startInfo, request.MaxBytes.ToString(CultureInfo.InvariantCulture));
+        AddArgument(startInfo, "--max-cases");
+        AddArgument(startInfo, request.MaxCases.ToString(CultureInfo.InvariantCulture));
 
         if (request.MediaType is { } mediaType)
         {

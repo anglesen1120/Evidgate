@@ -1166,8 +1166,12 @@ paths:
         Uploads + verifies the manifest and returns `manifest_id` and
         `manifest_hash` (00 §9.3). The request body is
         `contracts/manifest/manifest.v1.json` — the schema file is authoritative,
-        the same file both validators load (server Corvus, CLI Ajv, T42). Body ≤
-        256 KiB → `413`. Every refusal is 422 `manifest_invalid` whose `details[]`
+        the same file both validators load (server Corvus, CLI Ajv, T42). The body
+        cap is `manifest_bytes`: 33554432 bytes (32 MiB) by default, lowerable per
+        deployment through `EVIDGATE__INGESTION__MAXMANIFESTBYTES`; a larger body
+        is `413` `payload_too_large` with one detail (`path: manifest_bytes`, the
+        `limit`, and the declared length or the counted `actual`). Every refusal
+        is 422 `manifest_invalid` whose `details[]`
         carry `index` (the planned execution, when there is one), `path` and
         `reason`: a schema keyword, `secret_in_variant_params`, `matrix_not_covered`,
         `unknown_case_revision`, `unknown_suite_revision`,
@@ -1323,9 +1327,29 @@ paths:
         `head_sha`/`base_sha` outside `^[0-9a-f]{40}([0-9a-f]{24})?$`, a
         `pr_number` below 1 or a non-boolean `is_fork` is 422 `request_invalid`
         with `details[].path`, and `kind: pull_request` without `pr_number` is
-        refused on the values that remain after the claim merge.
+        refused on the values that remain after the claim merge. Three caps refuse
+        a body the schema accepts: a run-create body over its fixed 64 KiB
+        transport cap is 413 `payload_too_large` with one detail
+        (`path: run_body_bytes`, the `limit` and the counted `actual`), and a
+        manifest declaring more `manifest_executions`, or a case declaring more
+        `manifest_variants`, than its configured cap is 422 `cap_exceeded` with one
+        detail (`path` naming the cap, `reason: cap_exceeded`, `limit`, `actual`).
+        Every refusal is measured before a run, planned execution, outbox or audit
+        row is written, and the body bytes are counted as they arrive, so a missing
+        or short `Content-Length` cannot raise them. The 64 KiB run-body cap is
+        fixed, not configurable; `x-evidgate-limits` publishes the configurable
+        ingestion caps.
       x-permission: run:create
       x-version: v1
+      x-evidgate-limits:
+        # The published caps of src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs;
+        # OpenApi_LimitsMatchConstants fails when a default moves here without moving there.
+        # manifest_bytes is enforced on createManifest (the upload route); this block publishes the
+        # whole ingestion cap set on the run-create operation.
+        manifest_bytes: 33554432
+        manifest_executions: 150000
+        manifest_variants: 20
+        report_cases: 150000
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -8978,7 +9002,13 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
     TooLarge:
-      description: 413 too large (00 §9.2)
+      description: >-
+        413 too large (00 §9.2): a request body over its published cap. For the
+        caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the
+        raw-report byte cap behind `report_bytes`) the one detail names the cap in
+        `path` and carries `limit` and `actual`; `actual` is the declared length
+        when the declaration alone was over, otherwise the bytes counted when the
+        overrun was seen, so a missing or short `Content-Length` never hides it.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
@@ -8987,7 +9017,12 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
     Unprocessable:
-      description: 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+      description: >-
+        422 schema/manifest invalid — per-item causes in `error.details[]`
+        (00 §9.2). A body the schema accepts but a published cap refuses is
+        `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming
+        the cap (`manifest_executions`, `manifest_variants`, `report_cases`),
+        and `limit`/`actual` when the server measured a value.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
@@ -9047,6 +9082,19 @@ components:
                     type: string
                   reason:
                     type: string
+                  limit:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                      The cap that refused the value, present only when the reason names one
+                      (`cap_exceeded`, `payload_too_large`); omitted otherwise.
+                  actual:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                      The value the server measured against `limit`, present only alongside it:
+                      the declared length, or the bytes counted when the overrun was seen;
+                      omitted otherwise.
     CursorList:
       type: object
       description: 00 §9.1 cursor list envelope; `next_cursor` is null when the page is last.

@@ -29,6 +29,9 @@ internal static class SafeXml
     /// <summary>How many ASCII letters of a prologue <c>!NAME</c> are compared (<c>DOCTYPE</c> is the longest).</summary>
     private const int NameBufferBytes = 8;
 
+    /// <summary>The element a JUnit report carries once per test entry.</summary>
+    private const string ReportCaseElement = "testcase";
+
     /// <summary>
     /// Validates one XML document against the profile and returns the report handle on success.
     /// </summary>
@@ -37,7 +40,23 @@ internal static class SafeXml
     /// <param name="cancellationToken">The caller's cancellation; a caller cancellation is never swallowed.</param>
     /// <returns>The validated report, or the profile failure.</returns>
     public static Result<ParsedXmlReport> Parse(Stream content, long maxBytes, CancellationToken cancellationToken) =>
-        Parse(content, maxBytes, ParsingLimits.ParseTimeout, cancellationToken);
+        Parse(content, maxBytes, long.MaxValue, ParsingLimits.ParseTimeout, cancellationToken);
+
+    /// <summary>
+    /// Validates one XML document against the profile, refusing a report that carries more than
+    /// <paramref name="maxCases"/> test entries.
+    /// </summary>
+    /// <param name="content">The untrusted bytes; the caller keeps ownership of the stream.</param>
+    /// <param name="maxBytes">The per-kind byte cap.</param>
+    /// <param name="maxCases">The most <c>testcase</c> elements the document may carry (positive).</param>
+    /// <param name="cancellationToken">The caller's cancellation; a caller cancellation is never swallowed.</param>
+    /// <returns>The validated report, or the profile failure.</returns>
+    public static Result<ParsedXmlReport> Parse(
+        Stream content,
+        long maxBytes,
+        long maxCases,
+        CancellationToken cancellationToken) =>
+        Parse(content, maxBytes, maxCases, ParsingLimits.ParseTimeout, cancellationToken);
 
     /// <summary>
     /// The profile with an explicit timeout, so a test can prove the wall-clock guard without waiting 30 s.
@@ -51,10 +70,29 @@ internal static class SafeXml
         Stream content,
         long maxBytes,
         TimeSpan timeout,
+        CancellationToken cancellationToken) =>
+        Parse(content, maxBytes, long.MaxValue, timeout, cancellationToken);
+
+    /// <summary>
+    /// The full profile: one bounded read, the DTD scan, then one walk that enforces depth, entry count and the
+    /// wall clock.
+    /// </summary>
+    /// <param name="content">The untrusted bytes; the caller keeps ownership of the stream.</param>
+    /// <param name="maxBytes">The per-kind byte cap.</param>
+    /// <param name="maxCases">The most <c>testcase</c> elements the document may carry, or <see cref="long.MaxValue"/> for none.</param>
+    /// <param name="timeout">The wall-clock cap for this parse.</param>
+    /// <param name="cancellationToken">The caller's cancellation; a caller cancellation is never swallowed.</param>
+    /// <returns>The validated report, or the profile failure.</returns>
+    internal static Result<ParsedXmlReport> Parse(
+        Stream content,
+        long maxBytes,
+        long maxCases,
+        TimeSpan timeout,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(content);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCases);
 
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(timeout);
@@ -71,7 +109,7 @@ internal static class SafeXml
                 return Result.Failure<ParsedXmlReport>(ParsingFailure.For(ParsingFailureReason.DtdProhibited));
             }
 
-            var failure = Validate(chunks, maxBytes, token);
+            var failure = Validate(chunks, maxBytes, maxCases, token);
             if (failure is not null)
             {
                 return Result.Failure<ParsedXmlReport>(failure);
@@ -109,12 +147,18 @@ internal static class SafeXml
     }
 
     /// <summary>
-    /// Walks the document once with the closed profile, enforcing depth and the wall clock. Returns the
+    /// Walks the document once with the closed profile, enforcing depth, the entry count and the wall clock. Returns the
     /// failure, or null when the document is well-formed and inside every cap.
     /// </summary>
-    private static Error? Validate(IReadOnlyList<byte[]> chunks, long maxBytes, CancellationToken token)
+    /// <remarks>
+    /// The entry count is exact rather than an early stop at <c>maxCases + 1</c>: the walk happens anyway for the
+    /// depth cap, and it reads bytes that are already bounded in memory, so the only thing a full count buys is an
+    /// honest <c>actual</c> in the refusal.
+    /// </remarks>
+    private static Error? Validate(IReadOnlyList<byte[]> chunks, long maxBytes, long maxCases, CancellationToken token)
     {
         using var reader = OpenReader(chunks, maxBytes);
+        var cases = 0L;
 
         while (reader.Read())
         {
@@ -124,13 +168,22 @@ internal static class SafeXml
             // 64th element level has Depth 63 and is allowed, while the 65th has Depth 64 and is refused. A text,
             // whitespace or comment node inside the 64th element has Depth 64 too, and must not be mistaken for a
             // 65th element — counting every node's depth would reject a legal document that carries a text leaf.
-            if (reader.NodeType == XmlNodeType.Element && reader.Depth >= ParsingLimits.MaxDepth)
+            if (reader.NodeType == XmlNodeType.Element)
             {
-                return ParsingFailure.For(ParsingFailureReason.DepthExceeded);
+                if (reader.Depth >= ParsingLimits.MaxDepth)
+                {
+                    return ParsingFailure.For(ParsingFailureReason.DepthExceeded);
+                }
+
+                // A JUnit report carries one <testcase> per entry; the prefix is irrelevant, the local name is not.
+                if (string.Equals(reader.LocalName, ReportCaseElement, StringComparison.Ordinal))
+                {
+                    cases++;
+                }
             }
         }
 
-        return null;
+        return cases > maxCases ? ParsingFailure.CasesExceeded(maxCases, cases) : null;
     }
 
     /// <summary>Opens a reader over the profile's closed settings; every setting is a guard, none is optional.</summary>

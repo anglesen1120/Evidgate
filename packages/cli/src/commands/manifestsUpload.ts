@@ -23,8 +23,8 @@ import { serverErrorFromResponse, transportError } from '../serverError.js';
 
 import type { CommandDefinition } from './index.js';
 
-/** The server's documented body cap (openapi `createManifest`: "Body ≤ 256 KiB → 413"). */
-const maxManifestBytes = 256 * 1024;
+/** The server's published body cap (openapi `createRun` `x-evidgate-limits.manifest_bytes`, 32 MiB). */
+const maxManifestBytes = 32 * 1024 * 1024;
 /**
  * The openapi `createManifest` path, spelled once: the command calls the client's own
  * `post` (below), whose body is untyped, because the route takes the RAW file bytes and

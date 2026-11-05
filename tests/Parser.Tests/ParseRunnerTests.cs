@@ -191,6 +191,8 @@ public sealed class ParseRunnerTests
             "xml",
             "--max-bytes",
             "12345",
+            "--max-cases",
+            "150000",
             "--media-type",
             "application/xml",
             "--cpu-seconds",
