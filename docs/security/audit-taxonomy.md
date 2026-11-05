@@ -158,6 +158,8 @@ Emitters on develop `4d1a7aa`: **64 actions / 65 emit sites** (`artifact.mint` h
 | 62 | `authoring.manual_case.restore` | `src/Modules/Evidgate.Modules.Authoring/Application/Commands/AuthoringRestoreCommands.cs:225` | Authoring | `RestoreManualCaseCommand` (`:234`) | user | `manual_test_case` / `command.CaseId` (`:275`) | — |
 | 63 | `authoring.version.restore` | `src/Modules/Evidgate.Modules.Authoring/Application/Commands/AuthoringRestoreCommands.cs:291` | Authoring | `RestoreVersionCommand` (`:300`) | user | kind from `RestoreAudit.ObjectTypeOf(kind)` (`:375-381`) — `feature_node`/`checklist_item`/`manual_test_case`; id `version.EntityId` (`:352`) | — |
 | 64 | `authoring.import` | `src/Modules/Evidgate.Modules.Authoring/Application/Import/ImportCommands.cs:74` | Authoring | `ImportAuthoringCommand` (`:83`) | user | `authoring_import` / `batchId` (`:148`) | — |
+| 65 | `release.create` | `src/Modules/Evidgate.Modules.Orchestrator/Application/Releases/CreateRelease.cs:44` | Orchestrator | `CreateReleaseCommand` (`:46`) | user, ci | `release` / `releaseId` (`:111-121`); metadata `count`, `status` | — |
+| 66 | `release.bind` | `src/Modules/Evidgate.Modules.Orchestrator/Application/Releases/BindReleaseRun.cs:57` | Orchestrator | `BindReleaseRunCommand` (`:59`) | user, ci | `release` / `command.ReleaseId` (`:185-195`); metadata `count` (rows the pair holds), `outcome` (`complete`/`partial`) and `run_id` — allowlisted keys only, never a component key or digest; suppressed when the pair already held every key | — |
 
 Notes on the rows that are easy to misread:
 

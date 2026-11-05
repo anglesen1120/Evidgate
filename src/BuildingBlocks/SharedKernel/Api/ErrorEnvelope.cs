@@ -195,6 +195,15 @@ public static class ApiErrorCode
     /// <summary>409: the project already declares a release with that name (<c>unique (org_id, project_id, name)</c>).</summary>
     public const string ReleaseNameConflict = "release_name_conflict";
 
+    /// <summary>422: a <c>draft</c> release accepts no run binds, so the release must be <c>active</c> first.</summary>
+    public const string ReleaseNotActive = "release_not_active";
+
+    /// <summary>409: the run already has a stored <c>live</c> evaluation, so its release binding is closed.</summary>
+    public const string ReleaseBindClosed = "release_bind_closed";
+
+    /// <summary>422: no component of the run matches the release's digests, so an explicit bind would store nothing.</summary>
+    public const string ReleaseComponentMismatch = "release_component_mismatch";
+
     /// <summary>422: a policy body carries a member the 00 §8.6 field set does not declare (07.1.1 AC3).</summary>
     public const string PolicyUnknownField = "policy_unknown_field";
 

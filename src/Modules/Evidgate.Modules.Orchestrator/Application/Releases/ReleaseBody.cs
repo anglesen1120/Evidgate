@@ -232,7 +232,7 @@ internal static class ReleaseBody
     /// cannot echo under the cap answers the stable placeholder, and a repeated member is refused like a malformed body —
     /// the last value would otherwise win silently.
     /// </summary>
-    private static Error? Members(JsonElement root, ReadOnlySpan<string> allowed, int? index)
+    internal static Error? Members(JsonElement root, ReadOnlySpan<string> allowed, int? index)
     {
         try
         {

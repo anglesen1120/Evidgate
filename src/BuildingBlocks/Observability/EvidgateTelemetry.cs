@@ -62,6 +62,9 @@ public static class EvidgateTelemetry
     /// <summary>Counter of repeat finalizes whose declared values disagree with the stored declaration (05.3.2-T1, the T68/D3 signal).</summary>
     public const string FinalizeDeclarationMismatchMetricName = "evidgate_finalize_declaration_mismatch_total";
 
+    /// <summary>Counter of release components a bind could not match, added per applied bind. No labels: never a key or a digest.</summary>
+    public const string ReleaseBindMismatchMetricName = "evidgate_release_bind_mismatch_total";
+
     /// <summary>Histogram of pipeline-handler durations in milliseconds (01.4.2-T4.1, the C2 telemetry stage).</summary>
     public const string PipelineDurationMetricName = "evidgate.pipeline.duration";
 
@@ -149,6 +152,11 @@ public static class EvidgateTelemetry
         FinalizeDeclarationMismatchMetricName,
         unit: "{request}",
         description: "Repeat finalizes whose declared values disagree with the stored declaration (05.3.2-T1, T68/D3). No labels.");
+
+    private static readonly Counter<long> ReleaseBindMismatch = Meter.CreateCounter<long>(
+        ReleaseBindMismatchMetricName,
+        unit: "{component}",
+        description: "Release components a bind could not match. No labels: never a component key, a digest or an id.");
 
     private static readonly Histogram<double> PipelineDurations = Meter.CreateHistogram<double>(
         PipelineDurationMetricName,
@@ -296,6 +304,21 @@ public static class EvidgateTelemetry
     /// abuse signal the plan §11 names). No labels: the request's token, run id and producer id are never recorded.
     /// </summary>
     public static void RecordFinalizeProducerSlotTaken() => FinalizeProducerSlotTaken.Add(1);
+
+    /// <summary>
+    /// Counts the release components a bind could not match (<c>digest_mismatch</c> or <c>component_missing</c>), added
+    /// once per applied bind. No labels: the component keys and digests themselves are never recorded.
+    /// </summary>
+    /// <param name="count">The mismatched components; zero or less is a no-op.</param>
+    public static void RecordReleaseBindMismatch(long count)
+    {
+        if (count <= 0)
+        {
+            return;
+        }
+
+        ReleaseBindMismatch.Add(count);
+    }
 
     /// <summary>
     /// Counts one repeat finalize whose declared values disagree with the values the first close stored (05.3.2-T1;

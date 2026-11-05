@@ -232,7 +232,7 @@ internal sealed class CreateRunCommandHandler(
 
         foreach (var member in body.EnumerateObject())
         {
-            if (member.Name is not ("manifest_id" or "release" or "components" or "purpose" or "replay_grant_id" or "ref"))
+            if (member.Name is not ("manifest_id" or "release" or "release_id" or "components" or "purpose" or "replay_grant_id" or "ref"))
             {
                 return BodyInvalid("the request body carries an unknown field", [new ErrorDetail($"/{member.Name}", "additional_properties")]);
             }
@@ -348,6 +348,21 @@ internal sealed class CreateRunCommandHandler(
             components = componentsElement;
         }
 
+        // (1b2) the release the run wants to be bound to. Shape only here — the uuid and nothing else — because an
+        // unknown, foreign or draft release is a database answer (404/422) that needs the tenant scope below.
+        Guid? releaseId = null;
+        if (body.TryGetProperty("release_id", out var releaseIdElement))
+        {
+            if (releaseIdElement.ValueKind != JsonValueKind.String
+                || !releaseIdElement.TryGetGuid(out var parsedReleaseId)
+                || parsedReleaseId == Guid.Empty)
+            {
+                return BodyInvalid("release_id must be a UUID", [new ErrorDetail("/release_id", InvalidValue)]);
+            }
+
+            releaseId = parsedReleaseId;
+        }
+
         // (1c) the run-identity block (05.2.2-T1.3, AC4): shape-checked here — before the database reads below and long
         // before the write — whether or not a verified claim later overrides one of its members. An invalid member is
         // 422 request_invalid naming its pointer, exactly like the rest of this body parse.
@@ -364,6 +379,17 @@ internal sealed class CreateRunCommandHandler(
         }
 
         var orgId = scopes.Require().OrgId;
+
+        // (1d) the release the run asks to be bound to: resolved inside this project before any write, so an unknown,
+        // foreign or draft release leaves no run, execution or slot behind. A release that resolves but shares no
+        // digest never refuses the run — the binding is partial or empty, and the mismatch is read back from the pair.
+        var (bindReleaseId, releaseError) = await RunReleaseBinding
+            .ResolveAsync(releaseId, command.ProjectId, orgId, db, cancellationToken)
+            .ConfigureAwait(false);
+        if (releaseError is not null)
+        {
+            return Result.Failure<RunCreated>(releaseError);
+        }
 
         // (2) the manifest, by id and project; RLS makes another tenant's invisible, so unknown and foreign are one 404.
         var manifest = await db.QuerySingleOrDefaultAsync<ManifestRow>(
@@ -499,6 +525,16 @@ internal sealed class CreateRunCommandHandler(
         if (!slots.IsSuccess)
         {
             return Result.Failure<RunCreated>(slots.Error!);
+        }
+
+        // The run's release binding, in the same transaction as the run, its executions and its slots: a failure after
+        // this point rolls the binding back with the run, and a caller that replayed its Idempotency-Key never reaches
+        // here at all (the idempotency stage answers the stored response).
+        if (bindReleaseId is { } boundReleaseId)
+        {
+            await RunReleaseBinding
+                .BindAsync(boundReleaseId, runId, orgId, components, db, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         await outbox.EnqueueAsync(
