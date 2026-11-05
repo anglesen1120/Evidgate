@@ -9,7 +9,7 @@
   "body": {
     "error": {
       "code": "precondition_failed",
-      "message": "the project's policy head changed since the draft was read",
+      "message": "the project's policy head changed since it was read",
       "request_id": "018f0000-0000-7000-8000-000000000109",
       "retryable": false,
       "details": [
