@@ -106,9 +106,10 @@ for (const locale of LOCALES) {
     // A press that could not run must not hand the focus back to `body`.
     expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
     expect(
-      await page.evaluate(() =>
-        (document.activeElement as HTMLElement | null)?.hasAttribute('data-policy-reads-retry'),
-      ),
+      await page.evaluate(() => {
+        const active = document.activeElement;
+        return active instanceof HTMLElement && active.hasAttribute('data-policy-reads-retry');
+      }),
     ).toBe(true);
   });
 

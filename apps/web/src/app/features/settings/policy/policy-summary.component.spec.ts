@@ -7,6 +7,7 @@ import { TestBed } from '@angular/core/testing';
 import type { PolicyActivationStateDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
 
 import type { PolicyReadView } from './policy-reads';
+import { rootElement } from './policy-reads.test-support';
 import { PolicySummaryComponent } from './policy-summary.component';
 
 const ACTIVATION: PolicyActivationStateDto = {
@@ -66,7 +67,7 @@ describe('PolicySummaryComponent', () => {
     fixture.componentRef.setInput('waiting', gates.waiting ?? false);
     fixture.detectChanges();
     await fixture.whenStable();
-    return { fixture, root: fixture.nativeElement as HTMLElement };
+    return { fixture, root: rootElement(fixture) };
   }
 
   /** A typed 429 with the server's interval, the only failure that opens a wait. */

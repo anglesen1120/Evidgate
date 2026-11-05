@@ -157,8 +157,15 @@ describe('PolicyProjectReads', () => {
     data.head = () => firstHead.promise;
     start();
 
+    // The second start belongs to another project and read a newer head, so the two answers name
+    // different revisions: a head that kept the first project's id could not tell them apart.
+    const newerHead: PolicyRevisionSummaryDto = {
+      ...HEAD,
+      id: '018f0000-0000-7000-8000-00000000a006',
+      revision_no: 4,
+    };
     data.activation = () => Promise.resolve({ ...ACTIVATION, mode: 'enforcing' });
-    data.head = () => Promise.resolve({ revision: HEAD, headRevisionId: HEAD.id });
+    data.head = () => Promise.resolve({ revision: newerHead, headRevisionId: newerHead.id });
     start(OTHER_PROJECT_ID);
     await flushMicrotasks();
     first.resolve(ACTIVATION);
@@ -167,6 +174,8 @@ describe('PolicyProjectReads', () => {
 
     expect(data.activationCalls).toEqual([PROJECT_ID, OTHER_PROJECT_ID]);
     expect(reads.activation().value?.mode).toBe('enforcing');
+    expect(reads.head().value).toBe(newerHead);
+    expect(reads.head().value?.id).toBe(newerHead.id);
   });
 
   it('writes nothing once the view was cleared', async () => {
@@ -290,7 +299,14 @@ describe('PolicyProjectReads', () => {
     data.head = () => staleHead.promise;
     start();
 
-    const published: PolicyRevisionSummaryDto = { ...HEAD, revision_no: 4, version: 3 };
+    // A publish mints a new revision, so the head it left behind has its own id: sharing the old
+    // one would make an applied stale answer and a discarded one assert the same way.
+    const published: PolicyRevisionSummaryDto = {
+      ...HEAD,
+      id: '018f0000-0000-7000-8000-00000000a005',
+      revision_no: 4,
+      version: 3,
+    };
     data.head = () => Promise.resolve({ revision: published, headRevisionId: published.id });
     reads.refreshHead(PROJECT_ID);
     await flushMicrotasks();
@@ -302,6 +318,8 @@ describe('PolicyProjectReads', () => {
 
     // The stale head wrote nothing; the activation read of the same start still landed.
     expect(reads.head().value).toBe(published);
+    expect(reads.head().value?.id).toBe(published.id);
+    expect(reads.head().value?.revision_no).toBe(4);
     expect(reads.activation().value).toBe(ACTIVATION);
   });
 });

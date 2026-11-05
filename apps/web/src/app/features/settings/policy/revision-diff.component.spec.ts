@@ -4,6 +4,7 @@ import type { PolicyRevisionDto, PolicyRevisionSummaryDto } from '@evidgate/sdk'
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { MAX_DIFF_VALUE_CHARS } from './policy-diff';
+import { rootElement } from './policy-reads.test-support';
 import { PolicyStore } from './policy.store';
 import { RevisionDiffComponent } from './revision-diff.component';
 
@@ -73,7 +74,7 @@ describe('RevisionDiffComponent', () => {
     const fixture = TestBed.createComponent(RevisionDiffComponent);
     fixture.detectChanges();
     await settle(fixture);
-    return { fixture, root: fixture.nativeElement as HTMLElement };
+    return { fixture, root: rootElement(fixture) };
   }
   async function choose(
     fixture: ComponentFixture<RevisionDiffComponent>,
