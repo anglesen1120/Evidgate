@@ -347,7 +347,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
                 violations.Add($"{template} answered {(int)response.StatusCode} {response.StatusCode} instead of 200");
             }
 
-            violations.AddRange(SecretScanner.Scan(body, secrets).Select(violation => $"{template}: {violation}"));
+            violations.AddRange(SecretScanner.Scan(body, secrets, template).Select(violation => $"{template}: {violation}"));
         }
 
         violations.ShouldBeEmpty(
@@ -1069,13 +1069,13 @@ internal static partial class SecretScanner
     /// JSON document or NDJSON (the audit export streams one object per line); a body
     /// that parses as neither contributes nothing.
     /// </summary>
-    private static IReadOnlyList<string> MemberViolations(string body)
+    private static IReadOnlyList<string> MemberViolations(string body, string? routeTemplate)
     {
         var violations = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (var element in Elements(body))
         {
-            Collect(element, violations);
+            Collect(element, violations, routeTemplate);
         }
 
         return [.. violations];
@@ -1119,11 +1119,14 @@ internal static partial class SecretScanner
     /// plaintext or a JWT-shaped value, and one when a non-empty body is neither JSON
     /// nor NDJSON.
     /// </summary>
-    internal static IReadOnlyList<string> Scan(string body, IReadOnlyCollection<string> secretValues)
+    internal static IReadOnlyList<string> Scan(
+        string body,
+        IReadOnlyCollection<string> secretValues,
+        string? routeTemplate = null)
     {
         ArgumentNullException.ThrowIfNull(secretValues);
 
-        var violations = MemberViolations(body).ToList();
+        var violations = MemberViolations(body, routeTemplate).ToList();
 
         if (!string.IsNullOrWhiteSpace(body) && !IsJsonOrNdjson(body))
         {
@@ -1197,14 +1200,14 @@ internal static partial class SecretScanner
         }
     }
 
-    private static void Collect(JsonElement element, SortedSet<string> violations)
+    private static void Collect(JsonElement element, SortedSet<string> violations, string? routeTemplate)
     {
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
                 foreach (var property in element.EnumerateObject())
                 {
-                    if (IsForbidden(property.Name))
+                    if (IsForbidden(property.Name) && !IsBuildDigestExemption(routeTemplate, property))
                     {
                         violations.Add($"a JSON member named '{property.Name}' is on the secret deny-list");
                     }
@@ -1214,7 +1217,7 @@ internal static partial class SecretScanner
                         CollectSecretRefs(property.Value, violations);
                     }
 
-                    Collect(property.Value, violations);
+                    Collect(property.Value, violations, routeTemplate);
                 }
 
                 break;
@@ -1222,7 +1225,7 @@ internal static partial class SecretScanner
             case JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
                 {
-                    Collect(item, violations);
+                    Collect(item, violations, routeTemplate);
                 }
 
                 break;
@@ -1253,6 +1256,26 @@ internal static partial class SecretScanner
     private static bool IsForbidden(string member) =>
         !AllowedMembers.Contains(member)
         && DenyTerms.Any(term => member.Contains(term, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The one path-scoped exemption from the deny list: <c>GET /v1/releases/{id}</c> returns each component's build
+    /// digest (05.6.1 §5), which is <c>sha256:</c> + 64 lower-case hex over a build — an identifier that already
+    /// appears in CI logs, never key material. It is narrower than <see cref="AllowedMembers"/> on purpose: the member
+    /// must be <c>digest</c>, on that route only, and its value must be exactly that shape (the create route's
+    /// <c>release_invalid</c> rule), so no secret can be carried under the name elsewhere or with another value.
+    /// </summary>
+    private static bool IsBuildDigestExemption(string? routeTemplate, JsonProperty property) =>
+        routeTemplate == "/v1/releases/{id}"
+        && property.Name.Equals("digest", StringComparison.OrdinalIgnoreCase)
+        && property.Value.ValueKind == JsonValueKind.String
+        && BuildDigest().IsMatch(property.Value.GetString()!);
+
+    /// <summary>A build digest: <c>sha256:</c> + 64 lower-case hex, the shape 05.6.1 §4 stores.</summary>
+    [GeneratedRegex(
+        "^sha256:[0-9a-f]{64}$",
+        RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 100)]
+    private static partial Regex BuildDigest();
 }
 
 /// <summary>
@@ -1327,5 +1350,31 @@ public sealed class SecretScannerTests
 
         SecretScanner.Scan(string.Empty, [])
             .ShouldBeEmpty("an empty body is not a violation");
+    }
+
+    /// <summary>
+    /// The build-digest exemption is path- and shape-scoped: a real <c>sha256:</c> digest on the release read route is
+    /// clean, while the same member name on another route, or a value that is not a build digest, still fires.
+    /// </summary>
+    [Fact]
+    public void Scan_Exempts_Only_A_Build_Digest_On_The_Release_Route()
+    {
+        var digest = "sha256:" + new string('a', 64);
+        var release = $$"""{"release_id":"{{Guid.Empty:D}}","components":[{"component_key":"web","digest":"{{digest}}"}]}""";
+
+        SecretScanner.Scan(release, [], "/v1/releases/{id}")
+            .ShouldBeEmpty("a build digest on the release read route is an identifier, not a secret");
+
+        SecretScanner.Scan(release, [], "/v1/runs/{r}")
+            .ShouldNotBeEmpty("the exemption is scoped to the release read route");
+
+        SecretScanner.Scan(
+                $$"""{"components":[{"digest":"{{new string('b', 64)}}"}]}""",
+                [],
+                "/v1/releases/{id}")
+            .ShouldNotBeEmpty("only the sha256:<64 hex> shape is exempt, so a bare hash still fires");
+
+        SecretScanner.Scan("""{"digest":"not a digest"}""", [], "/v1/releases/{id}")
+            .ShouldNotBeEmpty("a digest member carrying any other value is on the deny list as before");
     }
 }

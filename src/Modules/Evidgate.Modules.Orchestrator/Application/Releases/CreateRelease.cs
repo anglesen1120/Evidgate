@@ -11,6 +11,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Messaging;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Application.Manifests;
+using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Domain;
 using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 using Mediator;
@@ -34,10 +35,6 @@ internal sealed record CreateReleaseCommand(
     /// <summary>The dedupe operation the key is claimed for, beside <c>run:create</c> (00 §9.1).</summary>
     string IIdempotentCommand.Operation => "release:create";
 }
-
-/// <summary>The 201 body: the id of the release the request declared.</summary>
-/// <param name="ReleaseId">The new release's id.</param>
-public sealed record ReleaseCreated(Guid ReleaseId);
 
 /// <summary>
 /// The one write path of a release (05.6.1 AC1): validate the closed body, refuse an environment revision that does not

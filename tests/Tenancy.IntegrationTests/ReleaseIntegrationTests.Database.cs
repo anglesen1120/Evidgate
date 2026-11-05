@@ -254,7 +254,7 @@ public sealed partial class ReleaseIntegrationTests
         await using (var blocked = await TenantScope.BeginAsync(
             _fixture.AppConnectionString(world.Database), world.Org, world.Project))
         {
-            await blocked.ExecuteAsync("set local statement_timeout = '2 seconds'");
+            await blocked.ExecuteAsync("set local statement_timeout = '2s'");
             var wait = await Should.ThrowAsync<PostgresException>(() => blocked.ExecuteAsync(
                 $"insert into public.release_component (id, org_id, release_id, component_key, digest, environment_revision_id) "
                 + $"values ('{Guid.CreateVersion7():D}', '{world.Org:D}', '{releaseId:D}', 'web-race', "

@@ -280,15 +280,17 @@ create or replace function evidgate.orchestration_release_component_guard() retu
     end if;
 
     -- The composite FK to `environment_revision` keeps the revision inside the org; this keeps it inside the release's
-    -- own project, so a release of project A can never cite a revision built for project B of the same org.
-    if not exists (select 1
-                     from public.release r
-                     join public.environment_revision er
-                       on er.org_id = r.org_id
-                      and er.project_id = r.project_id
-                    where r.org_id = new.org_id
-                      and r.id = new.release_id
-                      and er.id = new.environment_revision_id) then
+    -- own project, so a release of project A can never cite a revision built for project B of the same org. Only a
+    -- revision that IS in this org but in another project is refused here (23514); a missing or another org's revision
+    -- is left to the composite FK, so it answers the one 23503 every tenant reference answers.
+    if exists (select 1
+                 from public.release r
+                 join public.environment_revision er
+                   on er.org_id = r.org_id
+                  and er.id = new.environment_revision_id
+                where r.org_id = new.org_id
+                  and r.id = new.release_id
+                  and er.project_id <> r.project_id) then
       raise exception 'release_component_project: the environment revision belongs to another project'
         using errcode = '23514';
     end if;
@@ -308,6 +310,7 @@ create trigger release_component_guard
 -- unique key's no-op, not an UPDATE.
 create or replace function evidgate.orchestration_release_run_immutable() returns trigger
   language plpgsql
+  set search_path = ''
   as $$
   begin
     raise exception 'release_run_immutable: a release binding is append-only (%)', tg_op

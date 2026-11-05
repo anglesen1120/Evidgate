@@ -96,11 +96,13 @@ public sealed partial class ReleaseIntegrationTests
             insert into public.organization (id, name, slug) values ('{org:D}', 'Session', 'session-{org:N}');
             insert into public.membership (id, org_id, user_id, invited_email, status)
             values (gen_random_uuid(), '{org:D}', '{KnownDevUser.UserId:D}', 'dev@example.test', 'active');
+            -- The catalogue (0010) has no `owner` role code; `tenant_admin` is the member role that holds
+            -- `run:create` and `run:read` (02.2.1), so the browser session is a real member the evaluator allows.
             insert into public.membership_role (id, org_id, membership_id, role_id)
             select gen_random_uuid(), '{org:D}', m.id, r.id
               from public.membership m, public.role r
              where m.org_id = '{org:D}' and m.user_id = '{KnownDevUser.UserId:D}'
-               and r.code = 'owner' and r.org_id is null;
+               and r.code = 'tenant_admin' and r.org_id is null;
             insert into public.project (id, org_id, name, slug) values ('{project:D}', '{org:D}', 'Session', 'session-{project:N}');
             insert into public.environment (id, org_id, project_id, environment_key, name)
             values ('{environment:D}', '{org:D}', '{project:D}', 'staging', 'Staging');
