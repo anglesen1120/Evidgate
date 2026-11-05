@@ -48,6 +48,7 @@ public.template        catalogue  # built-in rows (03); a tenant template carrie
 public.report_parser   catalogue  # built-in rows (03); a tenant parser carries its own org
 public.healing_switch  catalogue  # 08.6.3 (0052): the platform-wide `scope = 'system'` row has `org_id` NULL and every tenant reads it; tenant/project rows carry their own org and are written only inside it, while the system row is written only by the `evidgate.healing_switch_set_system` definer, which refuses a call made inside a tenant transaction
 
+public.usage_price    catalogue  # a NULL `org_id` is the platform rate card every org reads, a row with the org is its override; only the `evidgate.usage_price_insert_global` definer writes the card, and it refuses a call made inside a tenant transaction
 public.schema_migration mechanism # the DbUp journal: no org_id at all, written only by the Migrator
 public.outbox           mechanism # the dispatcher scans every org by design; the tenant boundary is enforced one hop later, on `task`
 public.task             mechanism # org_id is nullable for platform tasks; the claim scan walks every org by design
