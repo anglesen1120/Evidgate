@@ -2,92 +2,36 @@
 // Proven here: the on-disk record is the upload identity plus the four state fields, the
 // directory is 0700 and every record 0600, no temp file survives a write, the resume
 // selection and the mint derivation survive a restart and never cross identities, a legacy
-// record is ignored instead of crashing a resume, a busy producer lock is waited out with
-// bounded backoff, and a tampered record, a symlinked `uploads/` or a missing record is
-// refused instead of trusted. Nothing here waits on a real clock or touches the network.
-import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readdir,
-  readFile,
-  rm,
-  stat,
-  symlink,
-  writeFile,
-} from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+// record is ignored instead of crashing a resume, and a tampered record, a symlinked
+// `uploads/` or a missing record is refused instead of trusted. The producer-lock waits live
+// in `uploadJournal.lock.test.ts`. Nothing here waits on a real clock or touches the network.
+import { chmod, mkdir, readdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { CliError } from './errors.js';
 import { ProducerSpool } from './spool.js';
-import { SpoolLockedError } from './spoolLock.js';
 import {
   UploadJournal,
   journalFileName,
   journalFor,
   uploadIdentityDigest,
   uploadsDirectoryName,
-  type UploadIdentity,
   type UploadJournalEntry,
 } from './uploadJournal.js';
-
-const artifactId = '7d1f9a52-3c4e-4b6a-9f01-2b3c4d5e6f70';
-const otherArtifactId = '0a1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d';
-const sha256 = `sha256:${'ab'.repeat(32)}`;
-const otherSha = `sha256:${'cd'.repeat(32)}`;
-const executionKey = 'a3'.repeat(32);
-
-/** The identity an upload derives from its request (kind, execution, attempt, media type). */
-function identity(overrides: Partial<UploadIdentity> = {}): UploadIdentity {
-  return {
-    file_sha256: sha256,
-    size: 4_096,
-    kind: 'trace',
-    execution_key: executionKey,
-    attempt_no: 1,
-    media_type: 'application/zip',
-    ...overrides,
-  };
-}
-
-function entry(overrides: Partial<UploadJournalEntry> = {}): UploadJournalEntry {
-  return {
-    artifact_id: artifactId,
-    ...identity(),
-    put_done: false,
-    complete_done: false,
-    mint_no: 0,
-    ...overrides,
-  };
-}
+import {
+  artifactId,
+  entry,
+  identity,
+  otherArtifactId,
+  otherSha,
+  sha256,
+  useUploadJournalSpec,
+} from './uploadJournal.testing.js';
 
 describe('upload journal', () => {
-  const dirs: string[] = [];
-
-  afterEach(async () => {
-    await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
-  });
-
-  /** A producer directory shaped exactly like the 04.2.3 spool's. */
-  async function producerDir(): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'evidgate-journal-'));
-    dirs.push(dir);
-    return dir;
-  }
-
-  /** A journal over one producer directory, with a lock that really serialises. */
-  async function journal(dir: string): Promise<UploadJournal> {
-    let tail: Promise<unknown> = Promise.resolve();
-    const withLock = <T>(fn: () => Promise<T>): Promise<T> => {
-      const next = tail.then(fn, fn);
-      tail = next.catch(() => undefined);
-      return next;
-    };
-    return UploadJournal.open({ producerDirectory: dir, withLock });
-  }
+  const { producerDir, journal } = useUploadJournalSpec();
 
   it('writes_exactly_the_record_fields', async () => {
     const dir = await producerDir();
@@ -248,129 +192,6 @@ describe('upload journal', () => {
     expect(await second.nextMintNo(identity())).toBe(1);
     await second.write(entry({ artifact_id: otherArtifactId, mint_no: 1 }));
     expect(await second.nextMintNo(identity())).toBe(2);
-  });
-
-  // F5: `events send` holds the same producer lock, so a journal write waits it out with
-  // bounded backoff instead of failing the upload at once.
-  it('waits_out_a_busy_producer_lock', async () => {
-    const dir = await producerDir();
-    const clock = { now: 1_000 };
-    const sleeps: number[] = [];
-    let busy = 2;
-    const store = await UploadJournal.open({
-      producerDirectory: dir,
-      withLock: async (fn) => {
-        if (busy > 0) {
-          busy -= 1;
-          throw new SpoolLockedError(join(dir, 'spool.lock'), 4_242);
-        }
-        return fn();
-      },
-      now: () => clock.now,
-      sleep: (milliseconds) => {
-        sleeps.push(milliseconds);
-        clock.now += milliseconds;
-        return Promise.resolve();
-      },
-      deadlineAt: 1_000 + 60_000,
-    });
-
-    await store.write(entry());
-    expect(sleeps).toEqual([25, 50]);
-    expect((await store.findResumable(identity()))?.artifact_id).toBe(artifactId);
-  });
-
-  // F5: the wait is bounded by the upload deadline by default, so a long `events send` does
-  // not fail the write — and the last `spool_locked` surfaces unchanged when the deadline is
-  // spent.
-  it('waits_out_a_lock_held_past_the_old_ten_second_budget', async () => {
-    const dir = await producerDir();
-    const clock = { now: 1_000 };
-    let busy = 6;
-    // 25 + 50 + 100 + 200 = 375 ms of sleeps, but the clock jumps to `busy` seconds so the
-    // wait itself lasts 20 simulated seconds — longer than the old fixed 10 s budget.
-    const store = await UploadJournal.open({
-      producerDirectory: dir,
-      withLock: (fn) => {
-        if (busy > 0) {
-          busy -= 1;
-          clock.now += 3_500;
-          return Promise.reject(new SpoolLockedError(join(dir, 'spool.lock'), 4_242));
-        }
-        return fn();
-      },
-      now: () => clock.now,
-      sleep: (milliseconds) => {
-        clock.now += milliseconds;
-        return Promise.resolve();
-      },
-      deadlineAt: 1_000 + 60_000,
-    });
-
-    await store.write(entry());
-    expect((await store.findResumable(identity()))?.artifact_id).toBe(artifactId);
-  });
-  it('surfaces_spool_locked_when_the_wait_budget_is_spent', async () => {
-    const dir = await producerDir();
-    const clock = { now: 1_000 };
-    const store = await UploadJournal.open({
-      producerDirectory: dir,
-      withLock: () => Promise.reject(new SpoolLockedError(join(dir, 'spool.lock'), 4_242)),
-      now: () => clock.now,
-      sleep: (milliseconds) => {
-        clock.now += milliseconds;
-        return Promise.resolve();
-      },
-      deadlineAt: 1_000 + 3_600_000,
-      maxWaitMs: 100,
-    });
-
-    await expect(store.write(entry())).rejects.toMatchObject({ code: 'spool_locked' });
-    await expect(store.update(artifactId, { put_done: true })).rejects.toMatchObject({
-      code: 'spool_locked',
-    });
-    // The budget stopped the wait; the 1 h upload deadline was never reached.
-    expect(clock.now).toBeLessThan(1_000 + 200);
-  });
-
-  // N1: the per-call cap is what the post-transfer best-effort updates use. It shortens THAT
-  // call only — the pre-PUT `write` that records a minted row keeps the deadline budget, so a
-  // long `events send` still does not lose the record a restart resumes from.
-  it('caps_one_update_without_shrinking_the_write_budget', async () => {
-    const dir = await producerDir();
-    const clock = { now: 1_000 };
-    let refusals = 0;
-    const store = await UploadJournal.open({
-      producerDirectory: dir,
-      withLock: (fn) => {
-        if (refusals > 0) {
-          refusals -= 1;
-          return Promise.reject(new SpoolLockedError(join(dir, 'spool.lock'), 4_242));
-        }
-        return fn();
-      },
-      now: () => clock.now,
-      sleep: (milliseconds) => {
-        clock.now += milliseconds;
-        return Promise.resolve();
-      },
-      deadlineAt: 1_000 + 3_600_000,
-    });
-    await store.write(entry());
-
-    refusals = 100;
-    await expect(
-      store.update(artifactId, { put_done: true }, { maxWaitMs: 2_000 }),
-    ).rejects.toMatchObject({ code: 'spool_locked' });
-    const capped = clock.now - 1_000;
-    expect(capped).toBeGreaterThan(1_000);
-    expect(capped).toBeLessThan(2_000);
-
-    // The journal's own budget is untouched: this write waits past the 2 s cap and lands.
-    refusals = 8;
-    await expect(store.write(entry({ put_done: true }))).resolves.toBeUndefined();
-    expect(clock.now - 1_000).toBeGreaterThan(2_000);
-    expect((await store.findResumable(identity()))?.put_done).toBe(true);
   });
 
   it('refuses_a_tampered_record', async () => {
