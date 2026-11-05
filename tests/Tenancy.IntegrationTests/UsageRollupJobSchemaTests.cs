@@ -35,8 +35,8 @@ public sealed class UsageRollupJobSchemaTests
 
         (await _fixture.TableExistsAsync(database, Table)).ShouldBeTrue();
         var constraints = await _fixture.ConstraintNamesAsync(database, Table);
-        constraints.ShouldContain("usage_duplicate_attempt_org_id_key");
-        constraints.ShouldContain("usage_duplicate_attempt_billing_key_key");
+        constraints.ShouldContain("u:usage_duplicate_attempt_org_id_key");
+        constraints.ShouldContain("u:usage_duplicate_attempt_billing_key_key");
 
         (await _fixture.RowSecurityAsync(database, Table)).ShouldBe((true, true));
         var policies = await _fixture.PoliciesAsync(database, Table);
@@ -85,7 +85,9 @@ public sealed class UsageRollupJobSchemaTests
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org);
         var error = await scope.CaptureErrorAsync("delete from public.usage_rollup");
         error.SqlState.ShouldBe("42501", "a recompute updates an aggregate; it never removes one");
-        (await scope.ScalarAsync<long>("select count(*) from public.usage_rollup")).ShouldBe(1);
+
+        // The refused statement aborted that transaction (25P02), so the surviving row is counted outside it.
+        (await _fixture.ScalarAsync<long>(database, "select count(*) from public.usage_rollup")).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ the definer

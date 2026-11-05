@@ -180,6 +180,31 @@ internal sealed class UsageReadsWorld : IAsyncDisposable
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
+    /// <summary>
+    /// Inserts one global rate-card row, so a ledger row may name it as its <c>price_ref</c>: the ledger's key
+    /// accepts a price its org may see, and a global price is visible to every org.
+    /// </summary>
+    /// <param name="metric">The priced metric.</param>
+    /// <returns>The price's id, which the ledger row stores.</returns>
+    internal async Task<Guid> SeedGlobalPriceAsync(string metric)
+    {
+        var id = Guid.CreateVersion7();
+        await using var connection = await OpenOwnerAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            insert into public.usage_price
+                (id, org_id, metric, unit_price, currency, effective_from, rate_card_version)
+            values (@id, null, @metric, 0.5, 'USD', '2026-01-01T00:00:00Z', 'card-read')
+            """;
+        command.Parameters.Add(new NpgsqlParameter("id", id));
+        command.Parameters.Add(new NpgsqlParameter("metric", metric));
+
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+
+        return id;
+    }
+
     /// <summary>Inserts the given roll-up rows.</summary>
     /// <param name="rows">The rows to insert.</param>
     internal async Task SeedRollupAsync(params RollupSeed[] rows)

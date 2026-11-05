@@ -147,10 +147,10 @@ public sealed class UsageRollupRecomputeTests
 
         var open = rows.Single(row => row.StartsWith(world.Project.ToString("D"), StringComparison.Ordinal)
             && row.Contains($"|{OpenPeriod}|results|", StringComparison.Ordinal));
-        open.ShouldContain("|results|5|10|USD|2|False|", Case.Sensitive);
+        open.ShouldContain("|results|5|10|USD|2|false|", Case.Sensitive);
 
-        rows.ShouldContain(row => row.Contains($"|{OpenPeriod}|ai_tokens|100|null|null|1|False|", StringComparison.Ordinal));
-        rows.ShouldContain(row => row.Contains($"|{ClosedPeriod}|results|1|null|null|1|False|", StringComparison.Ordinal));
+        rows.ShouldContain(row => row.Contains($"|{OpenPeriod}|ai_tokens|100|null|null|1|false|", StringComparison.Ordinal));
+        rows.ShouldContain(row => row.Contains($"|{ClosedPeriod}|results|1|null|null|1|false|", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public sealed class UsageRollupRecomputeTests
         var after = await RowsAsync(world);
 
         after.Single(row => row.Contains($"|{ClosedPeriod}|", StringComparison.Ordinal))
-            .ShouldContain("|results|9|null|null|2|False|", Case.Sensitive);
+            .ShouldContain("|results|9|null|null|2|false|", Case.Sensitive);
         after.Single(row => row.Contains($"|{OpenPeriod}|", StringComparison.Ordinal))
             .ShouldBe(before.Single(row => row.Contains($"|{OpenPeriod}|", StringComparison.Ordinal)),
                 "a period whose rows did not change is not rewritten by the fire");
@@ -209,7 +209,7 @@ public sealed class UsageRollupRecomputeTests
         var rows = await RowsAsync(world);
         rows.Count.ShouldBe(1, "the coalesce-project arbiter keeps the org-level aggregate singular");
         rows[0].ShouldStartWith("org-level|", Case.Sensitive);
-        rows[0].ShouldContain("|runner_minutes|5|null|null|2|False|", Case.Sensitive);
+        rows[0].ShouldContain("|runner_minutes|5|null|null|2|false|", Case.Sensitive);
     }
 
     [Fact]
@@ -225,7 +225,7 @@ public sealed class UsageRollupRecomputeTests
         await RecomputeAsync(world);
 
         var row = (await RowsAsync(world)).Single();
-        row.ShouldContain("|results|2|5|null|2|False|", Case.Sensitive);
+        row.ShouldContain("|results|2|5|null|2|false|", Case.Sensitive);
     }
 
     // ------------------------------------------------------------------ AC7: the gap flag
@@ -238,7 +238,7 @@ public sealed class UsageRollupRecomputeTests
         await SeedAsync(world, new LedgerRow(world.Project, "results", ClosedPeriod, 5m, at));
 
         await RecomputeAsync(world);
-        (await RowsAsync(world)).Single().ShouldContain("|False|", Case.Sensitive);
+        (await RowsAsync(world)).Single().ShouldContain("|false|", Case.Sensitive);
 
         // The rows of a stored aggregate vanish (an erasure, a corrected import): the recompute cannot insert such a
         // row, so the flag is what keeps the divergence visible.
@@ -247,16 +247,16 @@ public sealed class UsageRollupRecomputeTests
             $"delete from public.usage_ledger_entry where org_id = '{world.Org:D}'");
         await RecomputeAsync(world);
 
-        (await RowsAsync(world)).Single().ShouldContain("|True|", Case.Sensitive);
+        (await RowsAsync(world)).Single().ShouldContain("|true|", Case.Sensitive);
 
         // A repeated fire changes nothing: the flag is set only while it is not already set.
         await RecomputeAsync(world);
-        (await RowsAsync(world)).Single().ShouldContain("|True|", Case.Sensitive);
+        (await RowsAsync(world)).Single().ShouldContain("|true|", Case.Sensitive);
 
         await SeedAsync(world, new LedgerRow(world.Project, "results", ClosedPeriod, 5m, at));
         await RecomputeAsync(world);
 
-        (await RowsAsync(world)).Single().ShouldContain("|False|", Case.Sensitive);
+        (await RowsAsync(world)).Single().ShouldContain("|false|", Case.Sensitive);
     }
 
     [Fact]
@@ -276,8 +276,8 @@ public sealed class UsageRollupRecomputeTests
         await RecomputeAsync(world);
 
         var rows = await RowsAsync(world);
-        rows.Single(row => row.Contains("|ai_tokens|", StringComparison.Ordinal)).ShouldContain("|True|", Case.Sensitive);
-        rows.Single(row => row.Contains("|results|", StringComparison.Ordinal)).ShouldContain("|False|", Case.Sensitive);
+        rows.Single(row => row.Contains("|ai_tokens|", StringComparison.Ordinal)).ShouldContain("|true|", Case.Sensitive);
+        rows.Single(row => row.Contains("|results|", StringComparison.Ordinal)).ShouldContain("|false|", Case.Sensitive);
     }
 
     // ------------------------------------------------------------------ AC6: two workers, one org
@@ -294,7 +294,7 @@ public sealed class UsageRollupRecomputeTests
 
         var rows = await RowsAsync(world);
         rows.Count.ShouldBe(1);
-        rows[0].ShouldContain("|results|5|null|null|1|False|", Case.Sensitive);
+        rows[0].ShouldContain("|results|5|null|null|1|false|", Case.Sensitive);
     }
 
     [Fact]
@@ -320,7 +320,7 @@ public sealed class UsageRollupRecomputeTests
 
         var rows = await RowsAsync(world);
         rows.Count.ShouldBe(1, "the recompute only derives the scope's own tenant");
-        rows[0].ShouldContain("|results|1|null|null|1|False|", Case.Sensitive);
+        rows[0].ShouldContain("|results|1|null|null|1|false|", Case.Sensitive);
         (await _fixture.ScalarAsync<long>(
             world.Database,
             $"select count(*) from public.usage_rollup where org_id = '{otherOrg:D}'"))

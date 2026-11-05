@@ -60,9 +60,9 @@ internal sealed record UsageLedgerPage(IReadOnlyList<UsageLedgerRow> Items, stri
 /// </summary>
 /// <remarks>
 /// Every read is audited: the row carries the actor, the org and the query parameters (period,
-/// metric, page bound, continuation). The audit row is written in the same transaction as the read,
-/// so a read whose audit row cannot be written fails instead of returning billing data nobody
-/// recorded, and a refused read (422, 400, 404) writes nothing at all.
+/// metric, page bound, whether a continuation was used). The audit row is written in the same
+/// transaction as the read, so a read whose audit row cannot be written fails instead of returning
+/// billing data nobody recorded, and a refused read (422, 400, 404) writes nothing at all.
 /// </remarks>
 internal sealed class UsageLedgerReader(
     ITenantScopeFactory scopes,
@@ -209,9 +209,11 @@ internal sealed class UsageLedgerReader(
             metadata["metric"] = metric;
         }
 
+        // Whether a continuation was used, never the continuation itself: the cursor is an opaque
+        // token-shaped value, and the audit metadata rule refuses anything shaped like a credential.
         if (!string.IsNullOrEmpty(cursor))
         {
-            metadata["cursor"] = cursor;
+            metadata["has_cursor"] = "true";
         }
 
         audit.Describe(new AuditObject("usage_ledger", orgId.ToString("D"), Metadata: metadata));

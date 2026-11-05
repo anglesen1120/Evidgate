@@ -7,6 +7,7 @@ using Evidgate.Modules.Usage;
 using Evidgate.Modules.Usage.Application.Rollup;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -19,8 +20,9 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// The host composes the production mechanism (<c>AddEvidgateTasks</c> plus the Usage module), so the assertions cover
-/// the registration itself. The sweep role's credential is the migration owner here: the function is called for its
-/// rows and its ACL is proven separately, and no test in this suite may assume the deployment's secret.
+/// the registration itself. The fixture mints no login for the sweep role, so the host replaces the sweep data source
+/// with a double that switches a superuser connection to <c>evidgate_worker_sched</c> — the same shape the reconcile
+/// suites use — while the function's own ACL is proven by the schema suite.
 /// </remarks>
 [Trait("Category", "Docker")]
 public sealed class UsageRollupScheduleTests
@@ -125,7 +127,6 @@ public sealed class UsageRollupScheduleTests
             [$"{TasksOptions.SectionName}:BatchSize"] = "50",
             [$"{TasksOptions.SectionName}:VisibilityTimeoutSeconds"] = "300",
             [$"{TasksOptions.SectionName}:ScheduleLookbackSeconds"] = "300",
-            [$"{TasksOptions.SectionName}:SweepConnectionString"] = _fixture.OwnerConnectionString(database),
         };
 
         var services = new ServiceCollection();
@@ -135,7 +136,34 @@ public sealed class UsageRollupScheduleTests
         services.AddEvidgateTasks(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
         services.AddUsageModule();
 
+        // The fixture mints no login for evidgate_worker_sched, and the production source refuses a credential that
+        // names another role: the double opens a superuser connection and switches to the sweep role instead.
+        services.RemoveAll<IWorkerSchedDataSource>();
+        services.AddSingleton<IWorkerSchedDataSource>(_ => new SweepRoleDataSource(_fixture, database));
+
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>Opens the sweep role's connection: a superuser connection switched with <c>set role</c>.</summary>
+    private sealed class SweepRoleDataSource(PostgresTenancyFixture fixture, string database) : IWorkerSchedDataSource
+    {
+        public async ValueTask<NpgsqlConnection> OpenAsync(CancellationToken cancellationToken = default)
+        {
+            var connection = await fixture.OpenSuperuserAsync(database).ConfigureAwait(false);
+            try
+            {
+                await using var switchRole = connection.CreateCommand();
+                switchRole.CommandText = "set role evidgate_worker_sched";
+                await switchRole.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                await connection.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+
+            return connection;
+        }
     }
 
     /// <summary>One org with one project and one ledger row, per entry, as the migration owner.</summary>
@@ -146,12 +174,15 @@ public sealed class UsageRollupScheduleTests
         {
             var org = Guid.CreateVersion7();
             var project = Guid.CreateVersion7();
-            var suffix = org.ToString("N")[..8];
+            // A v7 uuid's first hex digits are its timestamp, so two orgs seeded in one test would share them;
+            // the shared helper draws an independent random suffix instead.
+            var orgSlug = Unique.Slug("acme");
+            var projectSlug = Unique.Slug("pp");
             await _fixture.ExecuteAsync(
                 database,
                 $"""
-                insert into public.organization (id, name, slug) values ('{org:D}', 'acme', 'acme-{suffix}');
-                insert into public.project (id, org_id, name, slug) values ('{project:D}', '{org:D}', 'pp', 'pp-{suffix}');
+                insert into public.organization (id, name, slug) values ('{org:D}', 'acme', '{orgSlug}');
+                insert into public.project (id, org_id, name, slug) values ('{project:D}', '{org:D}', 'pp', '{projectSlug}');
                 insert into public.usage_ledger_entry
                     (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at)
                 values ('{Guid.CreateVersion7():D}', '{org:D}', '{project:D}', 'results', {index + 1}, 'batch',

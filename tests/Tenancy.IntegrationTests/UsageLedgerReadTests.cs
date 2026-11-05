@@ -39,7 +39,8 @@ public sealed class UsageLedgerReadTests
             .Select(index => new LedgerSeed(
                 Guid.CreateVersion7(), world.Project, "results", 1m, Period, $"tied:{index}", SameInstant))
             .ToArray();
-        await world.SeedLedgerAsync([.. tied, Later(world, "late:1", 1), Later(world, "late:2", 2)]);
+        var late = new[] { Later(world, "late:1", 1), Later(world, "late:2", 2) };
+        await world.SeedLedgerAsync([.. tied, .. late]);
 
         var seen = new List<Guid>();
         string? cursor = null;
@@ -58,7 +59,7 @@ public sealed class UsageLedgerReadTests
 
         seen.Count.ShouldBe(7);
         seen.Distinct().Count().ShouldBe(7, "a keyset page never repeats a row");
-        seen.ShouldBeSubsetOf(tied.Select(row => row.Id).Append(Later(world, "late:1", 1).Id).Append(Later(world, "late:2", 2).Id));
+        seen.ShouldBe([.. tied.Select(row => row.Id), .. late.Select(row => row.Id)], ignoreOrder: true);
     }
 
     [Fact]
@@ -175,10 +176,11 @@ public sealed class UsageLedgerReadTests
         recorded.Metadata["metric"].ShouldBe("results");
         recorded.Metadata["limit"].ShouldBe("1");
         recorded.Metadata["count"].ShouldBe("1");
-        recorded.Metadata.ShouldNotContainKey("cursor", "the first page names no continuation");
+        recorded.Metadata.ShouldNotContainKey("has_cursor", "the first page names no continuation");
 
         var continued = ParseAudit(rows[1]);
-        continued.Metadata["cursor"].ShouldBe(continuation);
+        continued.Metadata["has_cursor"].ShouldBe("true", "the audit row names that a continuation was used");
+        continued.Metadata.ShouldNotContainKey("cursor", "the continuation itself is never recorded");
 
         // A refused request is not a read: nothing is appended for it.
         var refused = await world.GetAsync(world.LedgerUrl("period=2026-13"));
@@ -265,7 +267,8 @@ public sealed class UsageLedgerReadTests
     public async Task LedgerPage_ReadRow_CarriesEveryStoredBillingFact()
     {
         await using var world = await UsageReadsWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
-        var priceRef = Guid.CreateVersion7();
+        // The ledger's price_ref is a real foreign key: the row must name a price its org may see.
+        var priceRef = await world.SeedGlobalPriceAsync("artifact_gb_month");
         var original = Later(world, "facts:original", 1) with
         {
             Quantity = 4.5m,
