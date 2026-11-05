@@ -244,8 +244,8 @@ public sealed partial class EvidenceRawReportParseTests
         Text(row, "outcome").ShouldBe("unsupported");
         Text(row, "reason").ShouldBe("parser_unavailable");
         Text(row, "producer_kind").ShouldBe(unloaded.Kind);
-        Text(row, "parser_id").ShouldBe(unloaded.ParserId);
-        Text(row, "parser_version").ShouldBe(unloaded.Version);
+        Text(row, "parser_id").ShouldBeNull();
+        Text(row, "parser_version").ShouldBeNull();
 
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
     }

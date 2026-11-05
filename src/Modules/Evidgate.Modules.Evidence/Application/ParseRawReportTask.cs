@@ -423,13 +423,14 @@ internal sealed partial class ParseRawReportHandler(
         if (mapper is null)
         {
             // A registry row without a loaded mapper is a deployment mismatch, reported like an unknown kind so a
-            // report of an unloaded parser is never parsed by a different one.
+            // report of an unloaded parser is never parsed by a different one. The row carries no parser pair: a
+            // Worker that does load the mapper later must still be able to store its own row for the same release.
             LogUnsupported(logger, payload.ArtifactId, "parser_unavailable");
             return new Preparation(
                 null,
                 new ParseRawReportOutcome(ParseRawReportOutcome.Unsupported, "parser_unavailable"),
-                resolution.ParserId,
-                resolution.Version);
+                null,
+                null);
         }
 
         // The kind policy caps one kind; the profile's hard ceiling caps every report, so the read is bounded by the
