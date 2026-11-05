@@ -153,6 +153,16 @@ internal static class ReleaseBody
         var index = 0;
         foreach (var item in array.EnumerateArray())
         {
+            // A component that is not a JSON object is a rule failure of the declared array, not a member scan: it is
+            // collected with its index (`invalid_type`) like every other component-level refusal, so one bad item never
+            // hides the rest and the answer stays `422 release_invalid`.
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                details.Add(new ErrorDetail($"/components/{index}", "invalid_type", index));
+                index++;
+                continue;
+            }
+
             if (Members(item, ComponentMembers, index) is { } memberError)
             {
                 return (default!, memberError);

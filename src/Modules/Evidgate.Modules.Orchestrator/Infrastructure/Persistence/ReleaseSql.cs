@@ -23,6 +23,18 @@ internal static class ReleaseSql
         """;
 
     /// <summary>
+    /// The project-visibility probe that runs before any body rule can answer: one row when the project exists, is not
+    /// soft-deleted and belongs to the caller's org, nothing otherwise. It is one statement, and it puts the 404 in
+    /// front of every 422 — an unknown, soft-deleted, other-tenant or sibling-project target must not learn from a
+    /// `release_invalid` that its project id was recognised at all (00 §9.2).
+    /// </summary>
+    internal const string ProjectVisible = """
+        select 1
+          from public.project p
+         where p.id = @project_id and p.org_id = @org_id and p.status <> 'deleted'
+        """;
+
+    /// <summary>
     /// Every component of the release in one batch insert (00 §5.7 P2): the rows travel as ONE <c>jsonb</c> text
     /// parameter expanded by <c>jsonb_to_recordset</c>, so the statement count is constant in the component count. The
     /// migration's composite FK to <c>environment_revision</c> is the last line of defence; the handler's own probe

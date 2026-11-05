@@ -79,9 +79,14 @@ create table if not exists public.release (
   constraint release_project_fk foreign key (org_id, project_id) references public.project (org_id, id),
   -- A name is trimmed, 1..128 characters and printable: a control character would make two releases whose names look
   -- identical to an operator, and an untrimmed one would make the unique key above miss a duplicate.
+  -- The app rule (`ReleaseRules.IsName`) refuses exactly the same classes: Cc (`[[:cntrl:]]`), and the invisible or
+  -- line/paragraph-separating characters Cf, Zl and Zp — the bidi overrides, zero-width and BOM code points and the two
+  -- separators — so no value the route accepts can fail this check (a 500) and no value it refuses can be stored by a
+  -- writer that skips the route.
   constraint release_name_check check (char_length(name) between 1 and 128
                                       and name = btrim(name)
-                                      and name !~ '[[:cntrl:]]'),
+                                      and name !~ '[[:cntrl:]]'
+                                      and name !~ '[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF\u2028\u2029]'),
   constraint release_state_check check (state in ('draft', 'active')),
   constraint release_created_by_check check (char_length(created_by) between 1 and 128),
   constraint release_version_check check (version >= 1)
@@ -222,6 +227,16 @@ create or replace function evidgate.orchestration_release_guard() returns trigge
         using errcode = '23514';
     end if;
 
+    -- An `active` release with no component states nothing a run could be bound to, so the one permitted transition
+    -- requires the set it freezes. The create path inserts the release `draft`, its components, and only then moves it
+    -- to `active` in the same transaction, so a create naming `active` satisfies this.
+    if new.state = 'active'
+       and old.state = 'draft'
+       and not exists (select 1 from public.release_component c where c.org_id = new.org_id and c.release_id = new.id) then
+      raise exception 'release_state_invalid: an active release needs at least one component'
+        using errcode = '23514';
+    end if;
+
     return new;
   end;
   $$;
@@ -247,12 +262,35 @@ create or replace function evidgate.orchestration_release_component_guard() retu
         using errcode = '23514';
     end if;
 
+    -- The parent row is locked FOR SHARE before its state is read, so a concurrent `draft -> active` UPDATE of the
+    -- same release waits here (and this INSERT waits for it), and the two can never interleave: a component can only
+    -- land while the release is still `draft`, and the activation cannot commit with a component written after it.
+    perform 1
+       from public.release r
+      where r.org_id = new.org_id
+        and r.id = new.release_id
+        for share;
+
     if exists (select 1
                  from public.release r
                 where r.org_id = new.org_id
                   and r.id = new.release_id
                   and r.state = 'active') then
       raise exception 'release_component_closed: the release is active, so its components are final'
+        using errcode = '23514';
+    end if;
+
+    -- The composite FK to `environment_revision` keeps the revision inside the org; this keeps it inside the release's
+    -- own project, so a release of project A can never cite a revision built for project B of the same org.
+    if not exists (select 1
+                     from public.release r
+                     join public.environment_revision er
+                       on er.org_id = r.org_id
+                      and er.project_id = r.project_id
+                    where r.org_id = new.org_id
+                      and r.id = new.release_id
+                      and er.id = new.environment_revision_id) then
+      raise exception 'release_component_project: the environment revision belongs to another project'
         using errcode = '23514';
     end if;
 

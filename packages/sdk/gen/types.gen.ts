@@ -330,11 +330,11 @@ export type RunRef = {
 };
 
 /**
- * Body of `POST /v1/projects/{p}/releases` (05.6.1-T1). Closed: a member the body does not declare is `400 request_invalid`. `state` defaults to `draft`; `active` is accepted at create and freezes the component list from then on. Each `component_key` is unique within the request, and its `environment_revision_id` must resolve inside the project in the path.
+ * Body of `POST /v1/projects/{p}/releases` (05.6.1-T1). Closed: a member the body does not declare, a repeated member and a declared member of the wrong JSON type are `422 request_invalid`; only unparseable bytes are `400 request_invalid`; a body of this declared shape that breaks a release rule is `422 release_invalid`. `state` defaults to `draft`; `active` is accepted at create and freezes the component list from then on (a `draft` release needs at least one component before it can become `active`). Each `component_key` is unique within the request, and its `environment_revision_id` must resolve inside the project in the path.
  */
 export type ReleaseCreateRequest = {
     /**
-     * The release's name, unique in the project (duplicate → `409 release_name_conflict`). It must already be trimmed and printable (no control character, not credential-shaped); a name that breaks either rule is `422 release_invalid`, and the stored value is exactly the one sent.
+     * The release's name, unique in the project (duplicate → `409 release_name_conflict`). It must already be trimmed and printable — no control (Cc), formatting (Cf, e.g. zero width, BOM, bidi overrides) or line/paragraph-separator (Zl, Zp) character, and not credential-shaped; a name that breaks any of those rules is `422 release_invalid`, and the stored value is exactly the one sent. Letters of any script are accepted.
      */
     name: string;
     /**
@@ -5478,7 +5478,7 @@ export type CreateReleaseData = {
 
 export type CreateReleaseErrors = {
     /**
-     * `request_invalid` — bytes that are not JSON, a body that is not a JSON object, a member this route does not accept (every body here is closed), a member name the reader cannot decode, or a repeated member: each is refused here with `details[]`, and no release is written. A body of the declared shape whose members break a rule is the `422` below, not this answer.
+     * `request_invalid` — the bytes are not JSON at all, so no member can be read and no release is written. Every other body failure is the `422` below: this route answers 400 only for an unparseable body, the same split the retention-policy body parser makes (00 §9.2). A project the caller cannot see answers its `404` before the body is parsed, so even unparseable bytes under such a project are the `404`.
      */
     400: ErrorEnvelope;
     /**
@@ -5498,7 +5498,7 @@ export type CreateReleaseErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * `release_invalid` — a semantic failure of a body of the declared shape, with `details[]` naming each offending member (`index` for a component entry, `path` such as `/components/2/digest`, `reason` for the rule): a bad name, an unknown `state`, a `components` member that is missing, not an array or empty, more than 100 components, a component that is not an object, a repeated or malformed `component_key`, a malformed `digest`, or an `environment_revision_id` that does not resolve inside this project. No release row is written.
+     * Two codes share this status. `request_invalid` is the body's *shape*: a root that is not a JSON object, a member this route does not accept (every body here is closed), a member name the reader cannot decode, a repeated member, or a declared member of the wrong JSON type (`/name`, `/state`, `/components`). The `release_invalid` code is a body of the declared shape that breaks a release rule, with `details[]` naming each offending member (`index` for a component entry, `path` such as `/components/2/digest`, `reason` for the rule): a bad name, an unknown `state`, a `components` member that is empty, more than 100 components, a component that is not an object or whose members are of the wrong type, a repeated or malformed `component_key`, a malformed `digest`, or an `environment_revision_id` that does not resolve inside this project. No release row is written by either.
      */
     422: ErrorEnvelope;
     /**

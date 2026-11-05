@@ -253,8 +253,6 @@ public sealed partial class ReleaseIntegrationTests
         [
             $$"""{"name":7,"components":[]}""",
             $$"""{"name":"release-typed","components":"none"}""",
-            $$"""{"name":"release-typed","components":[{"component_key":"web","digest":7,"environment_revision_id":"{{revision}}"}]}""",
-            $$"""{"name":"release-typed","components":[{"component_key":"web","digest":"{{Digest('a')}}","environment_revision_id":7}]}""",
             $$"""{"name":"release-typed","components":[{"component_key":"web","digest":"{{Digest('a')}}","environment_revision_id":"{{revision}}"}],"state":true}""",
         ];
 
@@ -275,8 +273,6 @@ public sealed partial class ReleaseIntegrationTests
         string[] bodies =
         [
             $$"""{"name":"release-typed","components":[{"component_key":7,"digest":"{{Digest('a')}}","environment_revision_id":"{{revision}}"}]}""",
-            $$"""{"name":"release-typed","components":[{"component_key":"web","digest":7,"environment_revision_id":"{{revision}}"}]}""",
-            $$"""{"name":"release-typed","components":[{"component_key":"web","digest":"{{Digest('a')}}","environment_revision_id":7}]}""",
         ];
 
         foreach (var body in bodies)
@@ -315,9 +311,10 @@ public sealed partial class ReleaseIntegrationTests
 
         // The name is unique per project, and only per project.
         var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("other"));
+        var otherRevision = await SeedRevisionAsync(world, otherProject);
         var sibling = await CreateAsync(
             world,
-            Body("release-one", OneComponent(world)),
+            Body("release-one", [new("web", Digest('a'), otherRevision)]),
             project: otherProject);
         sibling.Status.ShouldBe(HttpStatusCode.Created, sibling.ErrorMessage);
     }
@@ -437,6 +434,100 @@ public sealed partial class ReleaseIntegrationTests
 
         answer.Status.ShouldBe(HttpStatusCode.Forbidden, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("project_scope_mismatch");
+        (await ReleaseCountAsync(world)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Create_NonObjectComponentItems_422ReleaseInvalid_WithIndex()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var revision = $"{world.EnvironmentRevision:D}";
+        string valid = $$"""{"component_key":"web","digest":"{{Digest('a')}}","environment_revision_id":"{{revision}}"}""";
+        (string Body, string Path)[] cases =
+        [
+            ($$"""{"name":"release-items","components":[{{valid}},7]}""", "/components/1"),
+            ($$"""{"name":"release-items","components":[null]}""", "/components/0"),
+            ($$"""{"name":"release-items","components":["x"]}""", "/components/0"),
+        ];
+
+        foreach (var (body, path) in cases)
+        {
+            var answer = await CreateAsync(world, body);
+            ShouldBeReleaseInvalid(answer, path);
+            answer.Body.GetProperty("error").GetProperty("details")[0].GetProperty("reason").GetString()
+                .ShouldBe("invalid_type");
+        }
+
+        (await ReleaseCountAsync(world)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Create_NameWithInvisibleOrFormatCharacters_422ReleaseInvalid_AndUnicodeLettersAccepted()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+
+        foreach (var name in new[] { "release\u2028line", "release\u200Bzero", "release\u202Ebidi" })
+        {
+            ShouldBeReleaseInvalid(await CreateAsync(world, Body(name, OneComponent(world))), "/name");
+        }
+
+        (await ReleaseCountAsync(world)).ShouldBe(0);
+
+        // A name made of real Unicode letters and marks is not a formatting character: it is stored as sent.
+        var accepted = await CreateAsync(world, Body("Rilis ñandú 1.0", OneComponent(world)));
+        accepted.Status.ShouldBe(HttpStatusCode.Created, accepted.ErrorMessage);
+        (await ReleaseCountAsync(world)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Create_UnknownSoftDeletedAndForeignProject_404SameEnvelope()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var (_, foreignProject, foreignRevision) = await SeedForeignTenantAsync(world.Database);
+
+        var softDeleted = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("gone"));
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.project set status = 'deleted' where id = '{softDeleted:D}'");
+
+        // The body names a revision no project of this tenant owns, so a 422 would prove the project id was recognised.
+        var unknownRevision = Guid.CreateVersion7();
+        var foreign = await CreateAsync(
+            world, Body("release-404", [new("web", Digest('a'), unknownRevision)]), project: foreignProject);
+        var missing = await CreateAsync(
+            world, Body("release-404", [new("web", Digest('a'), unknownRevision)]), project: Guid.CreateVersion7());
+        var deleted = await CreateAsync(
+            world, Body("release-404", [new("web", Digest('a'), unknownRevision)]), project: softDeleted);
+
+        foreach (var answer in new[] { foreign, missing, deleted })
+        {
+            answer.Status.ShouldBe(HttpStatusCode.NotFound, answer.ErrorMessage);
+            answer.ErrorCode.ShouldBe("not_found");
+        }
+
+        Envelope(deleted).ShouldBe(Envelope(missing));
+        Envelope(foreign).ShouldBe(Envelope(missing));
+        foreignRevision.ShouldNotBe(unknownRevision);
+
+        // The probe runs before the body is parsed at all, so a body that would be 422/400 against a project the caller
+        // can see answers the same 404 for a project it cannot: an untrimmed name, an empty component list and bytes
+        // that are not JSON are indistinguishable from the unknown-project case.
+        string[] invalidBodies =
+        [
+            Body(" release-untrimmed ", [new("web", Digest('a'), unknownRevision)]),
+            Body("release-empty-components", []),
+            "{\"name\":",
+        ];
+        foreach (var invalid in invalidBodies)
+        {
+            foreach (var project in new[] { foreignProject, Guid.CreateVersion7(), softDeleted })
+            {
+                var answer = await CreateAsync(world, invalid, project: project);
+                answer.Status.ShouldBe(HttpStatusCode.NotFound, answer.ErrorMessage);
+                Envelope(answer).ShouldBe(Envelope(missing));
+            }
+        }
+
         (await ReleaseCountAsync(world)).ShouldBe(0);
     }
 }

@@ -189,6 +189,25 @@ public sealed partial class ReleaseIntegrationTests
             $"select count(*) from public.audit_log where org_id = '{world.Org:D}' "
             + $"and object_type = 'release' and object_id = '{releaseId:D}'").ConfigureAwait(false);
 
+    /// <summary>Seeds one environment and its revision for an existing project of the world's org, as the owner.</summary>
+    private async Task<Guid> SeedRevisionAsync(RunCreationTests.World world, Guid project)
+    {
+        var environment = Guid.CreateVersion7();
+        var revision = Guid.CreateVersion7();
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"""
+            insert into public.environment (id, org_id, project_id, environment_key, name)
+            values ('{environment:D}', '{world.Org:D}', '{project:D}', 'staging', 'Staging');
+            insert into public.environment_revision
+                (id, org_id, project_id, environment_id, revision_no, base_urls, dependency_versions, revision_hash, created_by)
+            values ('{revision:D}', '{world.Org:D}', '{project:D}', '{environment:D}', 1, jsonb_build_object(), jsonb_build_object(),
+                    'sha256:{new string('b', 64)}', 'probe');
+            """).ConfigureAwait(false);
+
+        return revision;
+    }
+
     /// <summary>Seeds an org whose project and environment revision must never be reachable from another tenant.</summary>
     private async Task<(Guid Org, Guid Project, Guid EnvironmentRevision)> SeedForeignTenantAsync(string database)
     {

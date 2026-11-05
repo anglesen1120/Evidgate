@@ -237,6 +237,85 @@ public sealed partial class ReleaseIntegrationTests
         + $"values ('{Guid.CreateVersion7():D}', '{world.Org:D}', '{releaseId:D}', '{runId:D}', '{componentKey}')";
 
     /// <summary>One component's id, read as the migration role.</summary>
+    [Fact]
+    public async Task ReleaseComponent_ConcurrentActivationBlocksTheInsert_ThenRefusesIt()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var releaseId = await CreateReleaseAsync(world, "release-race", null, OneComponent(world)[0]);
+
+        // Transaction 1 activates the release and stays open, so its UPDATE holds the parent row.
+        await using var activating = await TenantScope.BeginAsync(
+            _fixture.AppConnectionString(world.Database), world.Org, world.Project);
+        await activating.ExecuteAsync(
+            $"update public.release set state = 'active' where id = '{releaseId:D}'");
+
+        // Transaction 2's INSERT must wait on the parent row: the guard's `for share` is what makes it wait, and a
+        // bounded `statement_timeout` proves the wait without a sleep (57014 is the cancel the wait ends in).
+        await using (var blocked = await TenantScope.BeginAsync(
+            _fixture.AppConnectionString(world.Database), world.Org, world.Project))
+        {
+            await blocked.ExecuteAsync("set local statement_timeout = '2 seconds'");
+            var wait = await Should.ThrowAsync<PostgresException>(() => blocked.ExecuteAsync(
+                $"insert into public.release_component (id, org_id, release_id, component_key, digest, environment_revision_id) "
+                + $"values ('{Guid.CreateVersion7():D}', '{world.Org:D}', '{releaseId:D}', 'web-race', "
+                + $"'{Digest('c')}', '{world.EnvironmentRevision:D}')"));
+            wait.SqlState.ShouldBe(PostgresErrorCodes.QueryCanceled, wait.MessageText);
+        }
+
+        // Once the activation commits, the same INSERT is refused because the release is closed.
+        await activating.CommitAsync();
+        var closed = await AppErrorAsync(
+            world,
+            $"insert into public.release_component (id, org_id, release_id, component_key, digest, environment_revision_id) "
+            + $"values ('{Guid.CreateVersion7():D}', '{world.Org:D}', '{releaseId:D}', 'web-race', "
+            + $"'{Digest('c')}', '{world.EnvironmentRevision:D}')");
+        closed.SqlState.ShouldBe("23514");
+        closed.MessageText.ShouldContain("release_component_closed");
+        (await ComponentCountAsync(world, releaseId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ReleaseComponent_RefusesASiblingProjectRevision_WithSameProjectControl()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var releaseId = await CreateReleaseAsync(world, "release-project-scope", null, OneComponent(world)[0]);
+        var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("sibling"));
+        var siblingRevision = await SeedRevisionAsync(world, sibling);
+
+        var refused = await AppErrorAsync(
+            world,
+            $"insert into public.release_component (id, org_id, release_id, component_key, digest, environment_revision_id) "
+            + $"values ('{Guid.CreateVersion7():D}', '{world.Org:D}', '{releaseId:D}', 'api', '{Digest('d')}', '{siblingRevision:D}')");
+        refused.SqlState.ShouldBe("23514");
+        refused.MessageText.ShouldContain("release_component_project");
+
+        // The same INSERT with the project's own revision is accepted: only the variable under test changed.
+        var accepted = await AppExecuteAsync(
+            world,
+            $"insert into public.release_component (id, org_id, release_id, component_key, digest, environment_revision_id) "
+            + $"values ('{Guid.CreateVersion7():D}', '{world.Org:D}', '{releaseId:D}', 'api', '{Digest('d')}', '{world.EnvironmentRevision:D}')");
+        accepted.ShouldBe(1);
+        (await ComponentCountAsync(world, releaseId)).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Release_ActivationWithoutComponents_IsRefused()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var releaseId = Guid.CreateVersion7();
+        await OwnerExecuteAsync(
+            world,
+            $"insert into public.release (id, org_id, project_id, name, created_by) "
+            + $"values ('{releaseId:D}', '{world.Org:D}', '{world.Project:D}', 'release-empty', 'probe')");
+
+        var refused = await OwnerErrorAsync(
+            world,
+            $"update public.release set state = 'active' where id = '{releaseId:D}'");
+        refused.SqlState.ShouldBe("23514");
+        refused.MessageText.ShouldContain("at least one component");
+        (await ReleaseScalarAsync(world, releaseId, "state")).ShouldBe("draft");
+    }
+
     private async Task<Guid> ComponentIdAsync(RunCreationTests.World world, Guid releaseId, string key) =>
         await _fixture.ScalarAsync<Guid>(
             world.Database,

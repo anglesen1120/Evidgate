@@ -66,13 +66,25 @@ internal sealed class CreateReleaseCommandHandler(
             return Result.Failure<ReleaseCreated>(mismatch);
         }
 
+        var orgId = scopes.Require().OrgId;
+
+        // The 404 comes first, before the body is even parsed: an unknown, soft-deleted, other-tenant or sibling
+        // project must not learn from a `release_invalid` or a `request_invalid` that its id was recognised. It is one
+        // statement (`ReleaseSql.ProjectVisible`), and the insert below repeats the predicate, so a project that
+        // vanishes between the two still inserts nothing.
+        if (await db.QuerySingleOrDefaultAsync<int>(
+                ReleaseSql.ProjectVisible,
+                new { project_id = command.ProjectId, org_id = orgId },
+                cancellationToken).ConfigureAwait(false) is not 1)
+        {
+            return Result.Failure<ReleaseCreated>(OrchestratorErrors.ProjectNotFound);
+        }
+
         var (request, bodyError) = ReleaseBody.Parse(command.Body);
         if (bodyError is not null)
         {
             return Result.Failure<ReleaseCreated>(bodyError);
         }
-
-        var orgId = scopes.Require().OrgId;
 
         if (await UnresolvedAsync(command.ProjectId, request.Components, cancellationToken).ConfigureAwait(false) is { Count: > 0 } unresolved)
         {

@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Globalization;
 using Evidgate.BuildingBlocks.SharedKernel.Security;
 
 namespace Evidgate.Modules.Orchestrator.Domain;
@@ -60,6 +61,28 @@ internal static class ReleaseRules
     internal static bool IsName(string? name) =>
         name is { Length: > 0 and <= MaxNameLength }
         && name == name.Trim()
-        && !name.Any(char.IsControl)
+        && !HasInvisibleOrControl(name)
         && !SecretShape.ValueLooksSecret(name);
+
+    /// <summary>
+    /// True when the name carries a character no screen renders as itself: a control character (Cc), an invisible or
+    /// formatting one (Cf — zero width, BOM, bidi overrides) or a line/paragraph separator (Zl, Zp). 0072's
+    /// <c>release_name_check</c> refuses exactly these classes, so a name this rule accepts can never fail the insert.
+    /// </summary>
+    private static bool HasInvisibleOrControl(string name)
+    {
+        foreach (var character in name)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(character);
+            if (category is UnicodeCategory.Control
+                or UnicodeCategory.Format
+                or UnicodeCategory.LineSeparator
+                or UnicodeCategory.ParagraphSeparator)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
