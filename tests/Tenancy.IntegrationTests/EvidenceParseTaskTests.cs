@@ -16,9 +16,11 @@ using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
+using Evidgate.Modules.Ingestion.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -224,6 +226,61 @@ public sealed class EvidenceParseTaskTests(PostgresTenancyFixture fixture, Seawe
         (await ColumnAsync(world, seeded.ArtifactId, "bytes")).ShouldBe(
             ReportBody.LongLength.ToString(CultureInfo.InvariantCulture),
             "the verified length is kept");
+    }
+
+    /// <summary>
+    /// 04.1.3-T1 (AC3): the child's <c>cap_exceeded</c> record — the one cap that arm can hit is the report entry
+    /// budget — is the artifact's verdict, the handler hands its configured cap to every run, and the refusal is
+    /// counted as <c>report_cases</c> so the operator sees which cap fired.
+    /// </summary>
+    [Fact]
+    public async Task Parse_Report_Over_The_Case_Cap_Is_Rejected_And_Counted()
+    {
+        await using var world = await StartAsync();
+        var seeded = await SeedReadyAsync(world);
+        var runner = new StubParseRunner
+        {
+            Result = new ParseRunSucceeded(
+                [
+                    Record(
+                        $$"""{"t":"rejected","code":"{{ParsingErrorCode.ArtifactInvalid}}","reason":"{{ArtifactFailureCode.CapExceeded}}"}"""),
+                ],
+                ChildExitCode: 0,
+                OutputBytes: 96,
+                OutputRecords: 1),
+        };
+
+        using var listener = IngestTelemetryCapture.Caps(out var caps);
+
+        await InvokeAsync(
+            world,
+            seeded.ArtifactId,
+            runner,
+            limits: Options.Create(new IngestionLimits { MaxReportCases = 7 }));
+
+        (await ColumnAsync(world, seeded.ArtifactId, "state")).ShouldBe(ArtifactState.Rejected);
+        (await ColumnAsync(world, seeded.ArtifactId, "failure_code")).ShouldBe(ArtifactFailureCode.CapExceeded);
+        runner.MaxCases.ShouldBe([7L], "the child runs with the host's configured entry cap");
+        caps.ShouldContain("report_cases");
+    }
+
+    /// <summary>
+    /// The kind's byte cap is the other published cap behind this handler: its <c>too_large</c> refusal is counted as
+    /// <c>report_bytes</c>, so a report refused for size is distinguishable from one refused for its entry count.
+    /// </summary>
+    [Fact]
+    public async Task Parse_Object_Over_The_Kind_Cap_Counts_Report_Bytes()
+    {
+        await using var world = await StartAsync();
+        await SeedKindPolicyAsync(world, maxBytes: 8);
+        var seeded = await SeedReadyAsync(world);
+
+        using var listener = IngestTelemetryCapture.Caps(out var caps);
+
+        await InvokeAsync(world, seeded.ArtifactId, new StubParseRunner());
+
+        (await ColumnAsync(world, seeded.ArtifactId, "failure_code")).ShouldBe(ArtifactFailureCode.TooLarge);
+        caps.ShouldContain("report_bytes");
     }
 
     /// <summary>
@@ -739,7 +796,8 @@ public sealed class EvidenceParseTaskTests(PostgresTenancyFixture fixture, Seawe
         Guid artifactId,
         StubParseRunner runner,
         CancellationToken? cancellationToken = null,
-        ILogger<ParseArtifactTaskHandler>? logger = null)
+        ILogger<ParseArtifactTaskHandler>? logger = null,
+        IOptions<IngestionLimits>? limits = null)
     {
         var token = cancellationToken ?? Token;
 
@@ -747,6 +805,7 @@ public sealed class EvidenceParseTaskTests(PostgresTenancyFixture fixture, Seawe
             world.Host.Services.GetRequiredService<ITenantDbContextFactory<EvidenceDbContext>>(),
             world.Host.Services.GetRequiredService<IObjectStorage>(),
             runner,
+            limits ?? world.Host.Services.GetRequiredService<IOptions<IngestionLimits>>(),
             logger ?? NullLogger<ParseArtifactTaskHandler>.Instance);
 
         var invoker = new TaskHandlerAdapter<ParseArtifactPayload>(handler);
@@ -810,12 +869,17 @@ internal sealed class StubParseRunner : IParseRunner
     /// <summary>The input bytes of every run, in order: proof the handler handed over the stored report.</summary>
     public List<byte[]> Inputs { get; } = [];
 
+    /// <summary>The entry cap of every run, in order: proof the handler handed over its configured cap.</summary>
+    public List<long> MaxCases { get; } = [];
+
     /// <inheritdoc />
     public async Task<ParseRunResult> RunAsync(ParseRunRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         Calls++;
+
+        MaxCases.Add(request.MaxCases);
 
         using var buffer = new MemoryStream();
         await request.Input.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);

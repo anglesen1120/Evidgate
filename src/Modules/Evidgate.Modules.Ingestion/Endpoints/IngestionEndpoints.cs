@@ -7,6 +7,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Ingestion.Application;
 using Evidgate.Modules.Ingestion.Application.Commands;
+using Evidgate.Modules.Ingestion.Contracts;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;

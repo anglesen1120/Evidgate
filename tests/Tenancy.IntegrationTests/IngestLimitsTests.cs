@@ -11,6 +11,7 @@ using System.Net;
 using System.Text;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.Modules.Ingestion.Application;
+using Evidgate.Modules.Ingestion.Contracts;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;

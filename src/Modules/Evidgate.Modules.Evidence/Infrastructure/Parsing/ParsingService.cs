@@ -13,9 +13,26 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing;
 /// </summary>
 internal sealed class ParsingService : IParsing
 {
+    /// <summary>The entry-count cap used when the caller has no configured value; the published default.</summary>
+    public const long DefaultMaxReportCases = 150_000;
+
+    private readonly long maxReportCases;
+
+    /// <summary>The profile with the published default entry cap — the child's construction path, which reads no options.</summary>
+    public ParsingService() => maxReportCases = DefaultMaxReportCases;
+
+    /// <summary>The profile with the host's configured entry cap.</summary>
+    /// <param name="maxReportCases">The most <c>testcase</c> elements one report may carry (positive).</param>
+    public ParsingService(long maxReportCases)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxReportCases);
+
+        this.maxReportCases = maxReportCases;
+    }
+
     /// <inheritdoc />
     public Result<ParsedXmlReport> ParseXmlReport(Stream content, long maxBytes, CancellationToken cancellationToken) =>
-        SafeXml.Parse(content, maxBytes, cancellationToken);
+        SafeXml.Parse(content, maxBytes, maxReportCases, cancellationToken);
 
     /// <inheritdoc />
     public Result<JsonDocument> ParseJson(Stream content, long maxBytes, CancellationToken cancellationToken) =>

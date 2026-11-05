@@ -199,19 +199,6 @@ public sealed class ManifestTests
         (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.manifest")).ShouldBe(0);
     }
 
-    [Fact]
-    public async Task UploadManifest_BodyOver256KiB_Is413()
-    {
-        await using var world = await StartAsync(_fixture);
-        var manifest = Manifest(world);
-        manifest["padding"] = new string(' ', 10);
-        var body = manifest.ToJsonString().Replace("\"padding\":\"          \"", "\"padding\":\"" + new string('x', 270 * 1024) + "\"", StringComparison.Ordinal);
-
-        var answer = await UploadAsync(world, body);
-
-        answer.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
-    }
-
     // ------------------------------------------------------------------ AC3
 
     [Fact]
@@ -488,7 +475,7 @@ public sealed class ManifestTests
         }
 
         var small = await CountAsync(1);
-        var large = await CountAsync(40); // 1 600 planned executions, about 200 KiB: near the 256 KiB cap
+        var large = await CountAsync(40); // 1 600 planned executions, about 200 KiB: a large but legal manifest
 
         large.ShouldBe(small);
         small.ShouldBeLessThanOrEqualTo(12, string.Join(Environment.NewLine, world.Api.Statements.Snapshot()));

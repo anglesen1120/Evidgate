@@ -9,12 +9,14 @@ using Evidgate.Modules.Orchestrator.Application.Manifests;
 using Evidgate.Modules.Orchestrator.Application.Queries;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
+using Evidgate.Modules.Ingestion.Contracts;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Orchestrator.Endpoints;
 
@@ -25,25 +27,22 @@ namespace Evidgate.Modules.Orchestrator.Endpoints;
 /// </summary>
 public static class OrchestratorEndpoints
 {
-    /// <summary>The manifest transport cap (05.1.1 §8 [DECISION]); the schema's <c>x-max-bytes</c> says the same.</summary>
-    internal const int MaxManifestBytes = 256 * 1024;
-
     /// <summary>The environment-revision transport cap (the schema's <c>x-max-bytes</c>).</summary>
     internal const int MaxEnvironmentBytes = 64 * 1024;
 
-    /// <summary>The run-create transport cap (05.2.1 §5): the body is a manifest id, an optional release and components.</summary>
-    internal const int MaxRunBytes = 64 * 1024;
+    /// <summary>The cap name a manifest over its byte budget carries in the 413 detail.</summary>
+    internal const string ManifestBytesCap = "manifest_bytes";
 
     /// <summary>
     /// The finalize transport cap (05.3.2 §5): the body is five scalars (<c>producer_id</c>, <c>shard</c>,
     /// <c>last_sequence</c>, <c>count</c>, <c>manifest_hash</c>), so 8 KiB is generous and still refuses an oversized
-    /// body before it is buffered whole — the same bound-the-edge rule <see cref="MaxRunBytes"/> follows.
+    /// body before it is buffered whole — the same bound-the-edge rule the manifest body cap follows.
     /// </summary>
     internal const int MaxFinalizeBytes = 8 * 1024;
 
     /// <summary>
     /// The cancel transport cap (05.4.1 §5): the body is one optional string of at most 1000 characters, so 4 KiB
-    /// refuses an oversized body before it is buffered — the same bound-the-edge rule <see cref="MaxRunBytes"/> follows.
+    /// refuses an oversized body before it is buffered — the same bound-the-edge rule the manifest body cap follows.
     /// </summary>
     internal const int MaxCancelBytes = 4 * 1024;
 
@@ -146,7 +145,8 @@ public static class OrchestratorEndpoints
             return Result.Failure<ManifestAccepted>(Unauthenticated);
         }
 
-        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxManifestBytes, cancellationToken).ConfigureAwait(false);
+        var manifestLimit = context.RequestServices.GetRequiredService<IOptions<IngestionLimits>>().Value.MaxManifestBytes;
+        var (bytes, tooLarge) = await ReadBodyAsync(context, manifestLimit, ManifestBytesCap, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)
         {
             EvidgateTelemetry.RecordManifestRejected(ContractValidationError.BodyTooLargeReason);
@@ -178,7 +178,8 @@ public static class OrchestratorEndpoints
             return Result.Failure<RunCreated>(Unauthenticated);
         }
 
-        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxRunBytes, cancellationToken).ConfigureAwait(false);
+        var manifestLimit = context.RequestServices.GetRequiredService<IOptions<IngestionLimits>>().Value.MaxManifestBytes;
+        var (bytes, tooLarge) = await ReadBodyAsync(context, manifestLimit, ManifestBytesCap, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)
         {
             return Result.Failure<RunCreated>(tooLarge);
@@ -206,7 +207,7 @@ public static class OrchestratorEndpoints
             return Result.Failure<EnvironmentRevisionCreated>(Unauthenticated);
         }
 
-        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxEnvironmentBytes, cancellationToken).ConfigureAwait(false);
+        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxEnvironmentBytes, null, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)
         {
             return Result.Failure<EnvironmentRevisionCreated>(tooLarge);
@@ -255,7 +256,7 @@ public static class OrchestratorEndpoints
             return Result.Failure(Unauthenticated);
         }
 
-        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxCancelBytes, cancellationToken).ConfigureAwait(false);
+        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxCancelBytes, null, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)
         {
             return Result.Failure(tooLarge);
@@ -424,7 +425,7 @@ public static class OrchestratorEndpoints
             return Result.Failure(UnauthenticatedProducer);
         }
 
-        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxFinalizeBytes, cancellationToken).ConfigureAwait(false);
+        var (bytes, tooLarge) = await ReadBodyAsync(context, MaxFinalizeBytes, null, cancellationToken).ConfigureAwait(false);
         if (tooLarge is not null)
         {
             return Result.Failure(tooLarge);
@@ -618,27 +619,48 @@ public static class OrchestratorEndpoints
     }
 
     /// <summary>The raw body, refused with 413 as soon as it passes <paramref name="limit"/> bytes (never buffered beyond it).</summary>
-    private static async Task<(ReadOnlyMemory<byte> Bytes, Error? TooLarge)> ReadBodyAsync(HttpContext context, int limit, CancellationToken cancellationToken)
+    /// <remarks>
+    /// The read is a byte counter, not a length check: a body without a <c>Content-Length</c>, or one whose
+    /// declared length lies about it, is refused at <c>limit + 1</c> bytes anyway, so the buffer never holds more
+    /// than the cap plus one byte. A declared length over the cap is refused before a byte is read.
+    /// </remarks>
+    internal static async Task<(ReadOnlyMemory<byte> Bytes, Error? TooLarge)> ReadBodyAsync(
+        HttpContext context,
+        long limit,
+        string? cap,
+        CancellationToken cancellationToken)
     {
-        var tooLarge = new Error(ApiErrorCode.PayloadTooLarge, "the request body is too large", StatusCodes.Status413PayloadTooLarge);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit);
+
+        var tooLarge = (long? actual) => new Error(
+            ApiErrorCode.PayloadTooLarge,
+            "the request body is too large",
+            StatusCodes.Status413PayloadTooLarge,
+            Details: cap is null
+                ? null
+                : [new ErrorDetail(cap, ApiErrorCode.PayloadTooLarge, Limit: limit, Actual: actual)]);
+
         var declared = context.Request.ContentLength;
         if (declared > limit)
         {
-            return (default, tooLarge);
+            Record(cap);
+            return (default, tooLarge(null));
         }
 
-        var buffer = new byte[declared is { } known ? (int)known + 1 : Math.Min(16 * 1024, limit + 1)];
+        var ceiling = (int)Math.Min(limit + 1, int.MaxValue);
+        var buffer = new byte[declared is { } known ? (int)Math.Min(known + 1, ceiling) : Math.Min(16 * 1024, ceiling)];
         var length = 0;
         while (true)
         {
             if (length == buffer.Length)
             {
-                if (buffer.Length > limit)
+                if (length > limit)
                 {
-                    return (default, tooLarge);
+                    Record(cap);
+                    return (default, tooLarge(length));
                 }
 
-                Array.Resize(ref buffer, Math.Min(buffer.Length * 2, limit + 1));
+                Array.Resize(ref buffer, Math.Min(buffer.Length * 2, ceiling));
             }
 
             var read = await context.Request.Body.ReadAsync(buffer.AsMemory(length), cancellationToken).ConfigureAwait(false);
@@ -648,9 +670,25 @@ public static class OrchestratorEndpoints
             }
 
             length += read;
+
+            // A body at or past the cap is refused before the next read, so the stream is never pulled further
+            // than the cap plus one byte whatever the loop's buffer arithmetic says.
+            if (length > limit)
+            {
+                Record(cap);
+                return (default, tooLarge(length));
+            }
         }
 
-        return length > limit ? (default, tooLarge) : (buffer.AsMemory(0, length), null);
+        return (buffer.AsMemory(0, length), null);
+
+        static void Record(string? name)
+        {
+            if (name is not null)
+            {
+                EvidgateTelemetry.RecordIngestCapExceeded(name);
+            }
+        }
     }
 
     private static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();

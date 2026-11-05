@@ -1227,7 +1227,7 @@
       "consumers": ["api", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
-      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion/Application/IngestionLimits.cs",
+      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
       "constraints": {
         "min": 1048576,
         "max": 67108864
@@ -1251,7 +1251,7 @@
       "consumers": ["api", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
-      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion/Application/IngestionLimits.cs",
+      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
       "constraints": {
         "min": 1,
         "max": 1000
@@ -1268,6 +1268,102 @@
         "prod": "default"
       },
       "note": "expanded/compressed ratio cap of a gzip event batch (04.1.1-T3.2, DECISIONS §8.1 D-A8): decoding refuses once expanded bytes / compressed bytes read exceeds this value, so a small body cannot expand without bound (the 50 MiB-from-20 KiB bomb). Paired with EVIDGATE__INGESTION__MAXEXPANDEDBYTES; either overrun is 413 `batch_too_large` with no write. Option default 20 (20:1); the range 1..1000 keeps the guard meaningful."
+    },
+    {
+      "key": "EVIDGATE__INGESTION__MAXMANIFESTBYTES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
+      "constraints": {
+        "min": 1,
+        "max": 67108864
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "manifest body cap of `POST /v1/runs` (04.1.3-T1, AC1): the byte count of the request body, measured while it is read and before any parse or allocation, so a body without `Content-Length`, or one whose `Content-Length` understates it, is still refused. Exceeding it is 413 `payload_too_large` with detail path `manifest_bytes`, the limit and the observed count, and no run row. Option default 33554432 (32 MiB uncompressed); the range 1..67108864 keeps a deployment from switching the cap off and from admitting a manifest larger than the host's own request body limit."
+    },
+    {
+      "key": "EVIDGATE__INGESTION__MAXMANIFESTEXECUTIONS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
+      "constraints": {
+        "min": 1,
+        "max": 1000000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "manifest execution cap of `POST /v1/runs` (04.1.3-T1, AC2): the declared executions of the manifest, counted after the schema parse and before the planned-execution list is expanded, so a manifest at the cap is accepted and one entry over is 422 `cap_exceeded` with detail path `manifest_executions`, the limit and the declared count, and no run row. Option default 150000; the range 1..1000000 keeps the expansion bounded well below the row budget of one run."
+    },
+    {
+      "key": "EVIDGATE__INGESTION__MAXMANIFESTVARIANTS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
+      "constraints": {
+        "min": 1,
+        "max": 1000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "per-case variant cap of `POST /v1/runs` (04.1.3-T1, AC2): the variants one manifest case declares. At the cap the case is planned; one over is 422 `cap_exceeded` with detail path `manifest_variants`, the limit and the declared count, and no run row. Option default 20; the range 1..1000 keeps one case's attempt fan-out bounded."
+    },
+    {
+      "key": "EVIDGATE__INGESTION__MAXREPORTCASES",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
+      "constraints": {
+        "min": 1,
+        "max": 1000000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "report entry cap of a raw XML report (04.1.3-T1, AC3): the `testcase` elements the parser profile admits, counted once during the walk it already performs. A report at the cap parses; one over is a populated-artifact rejection with code `cap_exceeded` and detail path `report_cases`, the limit and the counted entries, and the in-process parse reports the same refusal before any record is kept. The host passes the value to the parse child as `--max-cases`, so both paths share one number. Option default 150000; the range 1..1000000 bounds the record stream of one report."
     },
     {
       "key": "EVIDGATE__INGESTION__RATELIMIT__PERMITLIMIT",

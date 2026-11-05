@@ -68,9 +68,9 @@ describe('contract schema registry', () => {
       expect(schemas.has(key), `${key} must load from contracts/**`).toBe(true);
     }
 
-    // The transport caps the plans decide: 04.7.1 §8 (16 KiB) and 05.1.1 §8 (256 KiB).
+    // The transport caps the plans decide: 04.7.1 §8 (16 KiB) and 04.1.3-T1 (32 MiB manifest body).
     expect(schemas.maxBytes('capability.v1')).toBe(16384);
-    expect(schemas.maxBytes('manifest.v1')).toBe(262144);
+    expect(schemas.maxBytes('manifest.v1')).toBe(33554432);
   });
 
   it('resolves the operation envelope $ref from the loaded set, not the file system', () => {

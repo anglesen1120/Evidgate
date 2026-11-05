@@ -1323,9 +1323,25 @@ paths:
         `head_sha`/`base_sha` outside `^[0-9a-f]{40}([0-9a-f]{24})?$`, a
         `pr_number` below 1 or a non-boolean `is_fork` is 422 `request_invalid`
         with `details[].path`, and `kind: pull_request` without `pr_number` is
-        refused on the values that remain after the claim merge.
+        refused on the values that remain after the claim merge. Two published
+        caps refuse a body the schema accepts: a manifest body over
+        `manifest_bytes` is 413 `payload_too_large` with one detail
+        (`path: manifest_bytes`, the `limit` and the counted `actual`), and a
+        manifest declaring more `manifest_executions`, or a case declaring more
+        `manifest_variants`, than its cap is 422 `cap_exceeded` with one detail
+        (`path` naming the cap, `reason: cap_exceeded`, `limit`, `actual`).
+        Both are measured before a run, planned execution, outbox or audit row
+        is written, and the bytes are counted as they arrive, so a missing or
+        short `Content-Length` cannot raise them (see `x-evidgate-limits`).
       x-permission: run:create
       x-version: v1
+      x-evidgate-limits:
+        # The published caps of src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs;
+        # OpenApi_LimitsMatchConstants fails when a default moves here without moving there.
+        manifest_bytes: 33554432
+        manifest_executions: 150000
+        manifest_variants: 20
+        report_cases: 150000
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -8909,7 +8925,12 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
     TooLarge:
-      description: 413 too large (00 §9.2)
+      description: >-
+        413 too large (00 §9.2): a request body over its published cap. For the
+        caps that carry numbers (`manifest_bytes`, and the raw-report byte cap
+        behind `report_bytes`) the one detail names the cap in `path` and
+        carries `limit` and `actual`; `actual` is the counted value, so a
+        missing or short `Content-Length` never hides the overrun.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
@@ -8918,7 +8939,12 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
     Unprocessable:
-      description: 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+      description: >-
+        422 schema/manifest invalid — per-item causes in `error.details[]`
+        (00 §9.2). A body the schema accepts but a published cap refuses is
+        `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming
+        the cap (`manifest_executions`, `manifest_variants`, `report_cases`),
+        and `limit`/`actual` when the server measured a value.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/XRequestId'
@@ -8978,6 +9004,18 @@ components:
                     type: string
                   reason:
                     type: string
+                  limit:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                      The cap that refused the value, present only when the reason names one
+                      (`cap_exceeded`, `payload_too_large`); omitted otherwise.
+                  actual:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                      The value the server measured against `limit`, present only alongside it;
+                      omitted otherwise.
     CursorList:
       type: object
       description: 00 §9.1 cursor list envelope; `next_cursor` is null when the page is last.

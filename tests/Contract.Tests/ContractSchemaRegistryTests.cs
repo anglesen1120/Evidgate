@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Shouldly;
@@ -49,9 +50,9 @@ public sealed class ContractSchemaRegistryTests
         }
 
         // The two transport caps the plans decide: 04.7.1 §8 (≤ 16 KiB capability
-        // document) and 05.1.1 §8 (256 KiB manifest body).
+        // document) and 04.1.3-T1's published 32 MiB manifest body.
         Schemas.Value.MaxBytes("capability.v1").ShouldBe(16384L);
-        Schemas.Value.MaxBytes(ContractSchemaKeys.Manifest).ShouldBe(262144L);
+        Schemas.Value.MaxBytes(ContractSchemaKeys.Manifest).ShouldBe(33_554_432L);
     }
 
     /// <summary>
@@ -316,22 +317,33 @@ public sealed class ContractSchemaRegistryTests
     }
 
     /// <summary>
-    /// 05.1.1-T1.2: the bounds live in the schema, not in a later check — 10 000
-    /// planned executions and 256 shards are accepted at the limit and one past it
-    /// is not. Validated as a parsed document because the 256 KiB transport cap
-    /// (05.1.1 §8) would otherwise fire first: a body that large is a 413, not a
-    /// `max_items` row.
+    /// 05.1.1-T1.2 with 04.1.3-T1: the bounds live in the schema, not in a later check — 150 000 planned executions and
+    /// 256 shards are accepted at the limit and one past it is not. Validated as a parsed document because the
+    /// transport cap (32 MiB) would otherwise fire first on the execution axis: a body that large is a 413, not a
+    /// <c>max_items</c> row, which is why the execution axis is asserted at its declared value and the document is
+    /// materialised on the shard axis.
     /// </summary>
     [Fact]
     public void Manifest_Bounds_Are_Encoded_In_The_Schema()
     {
-        AtLimit(10000, 256).IsValid.ShouldBeTrue("10 000 planned executions and 256 shards are the declared bounds");
+        ExecutionBound().ShouldBe(150_000, "the planned-execution bound is the published cap");
+        ManifestSchema("matrix")["case_revision_ids"]!.AsObject()["maxItems"]!.GetValue<int>()
+            .ShouldBe(150_000, "the matrix's case bound is the same cap");
 
-        AtLimit(10001, 1).Errors.ShouldBe(
-            [new ContractValidationError(null, "/planned_executions", "max_items")]);
+        AtLimit(1, 256).IsValid.ShouldBeTrue("256 shards are the declared bound");
         AtLimit(1, 257).Errors.ShouldBe(
             [new ContractValidationError(null, "/shard_plan/shards", "max_items")]);
     }
+
+    /// <summary>The schema's declared bound on <c>planned_executions</c>.</summary>
+    private static int ExecutionBound() =>
+        ManifestSchema("properties")["planned_executions"]!.AsObject()["maxItems"]!.GetValue<int>();
+
+    /// <summary>One section of the manifest schema as a JSON object.</summary>
+    private static JsonObject ManifestSchema(string section) =>
+        JsonNode.Parse(File.ReadAllText(
+            Path.Combine(ContractPaths.ContractsDirectory, "manifest", "manifest.v1.json")))!
+            .AsObject()[section]!.AsObject();
 
     /// <summary>Validates (as a parsed body) a manifest with exactly these counts.</summary>
     private static ContractValidationResult AtLimit(int plannedExecutions, int shards)

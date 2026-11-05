@@ -1,5 +1,6 @@
 using System.Text;
 using System.Xml;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
@@ -300,6 +301,48 @@ public sealed class SafeXmlReaderTests
     /// <summary>Parses a UTF-8 payload against the profile at the test's kind cap.</summary>
     private static Result<ParsedXmlReport> ParseXml(string payload, long maxBytes = MaxBytes) =>
         SafeXml.Parse(new MemoryStream(Encoding.UTF8.GetBytes(payload)), maxBytes, CancellationToken.None);
+
+    /// <summary>
+    /// 04.1.3-T1 (AC3): the entry cap is exact — a report carrying exactly the cap's entries parses, one more is
+    /// refused <c>cap_exceeded</c> with the cap's name, its limit and the counted entries, and the count is the
+    /// document's real one rather than an early stop.
+    /// </summary>
+    [Fact]
+    public void EnforcesTheReportCaseCap()
+    {
+        var atCap = SafeXml.Parse(
+            new MemoryStream(Encoding.UTF8.GetBytes(ReportWithCases(3))),
+            MaxBytes,
+            maxCases: 3,
+            CancellationToken.None);
+        atCap.IsSuccess.ShouldBeTrue(atCap.Error?.Message);
+
+        var overCap = SafeXml.Parse(
+            new MemoryStream(Encoding.UTF8.GetBytes(ReportWithCases(4))),
+            MaxBytes,
+            maxCases: 3,
+            CancellationToken.None);
+
+        overCap.IsSuccess.ShouldBeFalse();
+        overCap.Error!.Code.ShouldBe(ApiErrorCode.CapExceeded);
+        var detail = overCap.Error.Details.ShouldHaveSingleItem();
+        detail.Path.ShouldBe("report_cases");
+        detail.Reason.ShouldBe(ApiErrorCode.CapExceeded);
+        detail.Limit.ShouldBe(3);
+        detail.Actual.ShouldBe(4);
+    }
+
+    /// <summary>A JUnit-shaped report carrying exactly <paramref name="cases"/> entries.</summary>
+    private static string ReportWithCases(int cases)
+    {
+        var body = new StringBuilder();
+        for (var index = 0; index < cases; index++)
+        {
+            body.Append("<testcase name=\"case ").Append(index).Append("\"/>");
+        }
+
+        return "<testsuites><testsuite>" + body + "</testsuite></testsuites>";
+    }
 
     /// <summary>The generic reason a failure carries in its <c>details</c> (00 §5.7 S3).</summary>
     private static string? ReasonOf(Result result) =>

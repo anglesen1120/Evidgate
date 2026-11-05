@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "manifest.v1.json",
   "title": "Manifest v1",
-  "description": "The run manifest accepted by POST /v1/projects/{p}/manifests (05.1.1-T1.1/T1.2, 00 §9.3). It declares the suite revision, the planned executions (case revision × variant params × target env), the matrix those executions cover, the shard plan that partitions them and the per-environment needs. Bounds are encoded here: at most 10000 planned executions, 256 shards, 32 target environments, 32 variant params; the transport cap is 256 KiB [DECISION 05.1.1 §8]. Semantic checks — unknown case revision, secret literal in variant params, matrix coverage — are 05.1.1-T2's; this schema only fixes the shape.",
-  "x-max-bytes": 262144,
+  "description": "The run manifest accepted by POST /v1/projects/{p}/manifests (05.1.1-T1.1/T1.2, 00 §9.3). It declares the suite revision, the planned executions (case revision × variant params × target env), the matrix those executions cover, the shard plan that partitions them and the per-environment needs. Bounds are encoded here: at most 150000 planned executions, 256 shards, 32 target environments, 32 variants in the matrix; the transport cap is 33554432 bytes (32 MiB, the published manifest_bytes cap of 04.1.3-T1, overridable through EVIDGATE__INGESTION__MAXMANIFESTBYTES). Semantic checks — unknown case revision, secret literal in variant params, matrix coverage — are 05.1.1-T2's; this schema only fixes the shape.",
+  "x-max-bytes": 33554432,
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -29,7 +29,7 @@
     },
     "planned_executions": {
       "type": "array",
-      "maxItems": 10000,
+      "maxItems": 150000,
       "items": {
         "$ref": "#/$defs/plannedExecution"
       }
@@ -41,7 +41,7 @@
       "properties": {
         "case_revision_ids": {
           "type": "array",
-          "maxItems": 10000,
+          "maxItems": 150000,
           "items": {
             "type": "string",
             "format": "uuid"

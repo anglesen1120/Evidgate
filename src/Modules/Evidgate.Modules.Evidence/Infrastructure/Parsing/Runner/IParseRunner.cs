@@ -30,13 +30,21 @@ internal sealed class ParseRunRequest
     /// <param name="maxBytes">The per-kind byte cap from <c>artifact_kind_policy.max_bytes</c> (positive).</param>
     /// <param name="mediaType">The declared media type, or <see langword="null"/> when the caller already sniffed it.</param>
     /// <param name="input">The artifact's bytes; the caller keeps ownership.</param>
-    public ParseRunRequest(ParseRunnerProfile profile, long maxBytes, string? mediaType, Stream input)
+    /// <param name="maxCases">The most report entries the child may emit (positive).</param>
+    public ParseRunRequest(
+        ParseRunnerProfile profile,
+        long maxBytes,
+        string? mediaType,
+        Stream input,
+        long maxCases = ParsingService.DefaultMaxReportCases)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBytes);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCases);
         ArgumentNullException.ThrowIfNull(input);
 
         Profile = profile;
         MaxBytes = maxBytes;
+        MaxCases = maxCases;
         MediaType = mediaType;
         Input = input;
     }
@@ -46,6 +54,9 @@ internal sealed class ParseRunRequest
 
     /// <summary>The per-kind byte cap, handed to the child as <c>--max-bytes</c>.</summary>
     public long MaxBytes { get; }
+
+    /// <summary>The report entry cap, handed to the child as <c>--max-cases</c>.</summary>
+    public long MaxCases { get; }
 
     /// <summary>The declared media type, or <see langword="null"/> when the caller already sniffed it.</summary>
     public string? MediaType { get; }
