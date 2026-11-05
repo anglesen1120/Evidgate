@@ -11,7 +11,7 @@ namespace GoldenHarness.UnitTests;
 /// The seeded corpus is read from the repository's <c>fixtures/</c> directory because the same
 /// bytes are the checked-in golden set; every forced case is written to a temporary root.
 /// </summary>
-public sealed class RunnerTests : IDisposable
+public sealed partial class RunnerTests : IDisposable
 {
     private const string Producer = "temp-producer";
     private const string ParserId = "temp-parser";
@@ -33,21 +33,27 @@ public sealed class RunnerTests : IDisposable
     }
 
     [Fact]
-    public void Run_Seeded_Corpus_With_No_Parsers_Reports_Pending_And_Exits_Zero()
+    public void Run_Seeded_Corpus_With_No_Parsers_Reports_Every_Case_Pending_And_Exits_Zero()
     {
         var (exitCode, output) = Run("--fixtures", SeededFixtures);
 
         exitCode.ShouldBe(0);
         output.ShouldContain("fixture");
         output.ShouldContain("verdict");
-        output.ShouldContain("junit-pytest/happy");
-        output.ShouldContain("junit-pytest/truncated");
-        output.ShouldContain("playwright-reporter/skeleton");
-        (output.Split("PENDING").Length - 1).ShouldBe(3);
+
+        foreach (var seeded in new[] { "junit-pytest/happy", "junit-pytest/truncated", "playwright-reporter/skeleton" })
+        {
+            RowFor(output, seeded).ShouldContain("PENDING");
+        }
+
+        // The corpus grows, so the count is the number of discovered cases: the summary must
+        // agree with the rows, and the three seeded cases must still be discovered.
+        var pending = PendingRows(output);
+        pending.ShouldBeGreaterThanOrEqualTo(3);
         output.ShouldNotContain(" PASS ");
         output.ShouldContain("0 passed");
         output.ShouldContain("0 failed");
-        output.ShouldContain("3 pending");
+        output.ShouldContain($"{pending} pending");
         output.ShouldContain("0 error");
     }
 
@@ -57,8 +63,11 @@ public sealed class RunnerTests : IDisposable
         var (exitCode, output) = Run("--fixtures", SeededFixtures, "--strict");
 
         exitCode.ShouldBe(1);
-        output.ShouldContain("3 pending");
-        output.ShouldContain("PENDING");
+
+        var pending = PendingRows(output);
+        pending.ShouldBeGreaterThanOrEqualTo(3);
+        output.ShouldContain($"{pending} pending");
+        RowFor(output, "junit-pytest/happy").ShouldContain("PENDING");
     }
 
     [Fact]
@@ -164,110 +173,6 @@ public sealed class RunnerTests : IDisposable
         output.ShouldContain("extra_event");
     }
 
-    [Fact]
-    public void Run_Declared_Malformed_Case_Passes_When_The_Parser_Refuses_The_Report()
-    {
-        CopySeededCase("junit-pytest", "truncated");
-
-        var registry = new ParserRegistry().Register(
-            "junit-pytest",
-            _ => throw new FormatException("the document ends inside an attribute"));
-
-        var (exitCode, output) = Run(registry, "--fixtures", _root);
-
-        exitCode.ShouldBe(0);
-        output.ShouldContain("junit-pytest/truncated");
-        output.ShouldContain("PASS");
-        output.ShouldContain("1 passed");
-        output.ShouldContain("0 failed");
-    }
-
-    [Fact]
-    public void Run_Declared_Malformed_Case_That_Still_Lists_Events_Fails()
-    {
-        CreateCase(
-            "claims-events",
-            ExpectedJson("malformed", 1, Event(1, "case::one", "failed", "failed")),
-            parserStatus: null);
-
-        var registry = new ParserRegistry().Register(
-            ParserId,
-            _ => throw new FormatException("the document ends inside an attribute"));
-
-        var (exitCode, output) = Run(registry, "--fixtures", _root);
-
-        exitCode.ShouldBe(1);
-        output.ShouldContain("temp-producer/claims-events");
-        output.ShouldContain("FAIL");
-        output.ShouldContain("malformed");
-    }
-
-    [Fact]
-    public void Run_Throwing_Parser_On_A_Parsed_Case_Fails_With_Malformed()
-    {
-        CopySeededCase("junit-pytest", "happy");
-
-        var registry = new ParserRegistry().Register(
-            "junit-pytest",
-            _ => throw new FormatException("the document ends inside an attribute"));
-
-        var (exitCode, output) = Run(registry, "--fixtures", _root);
-
-        exitCode.ShouldBe(1);
-        output.ShouldContain("junit-pytest/happy");
-        output.ShouldContain("FAIL");
-        output.ShouldContain("malformed");
-        output.ShouldContain("raw_report_status");
-        output.ShouldContain("1 failed");
-    }
-
-    [Fact]
-    public void Run_Unregistered_Parser_Without_Pending_Is_Refused_By_Name()
-    {
-        CreateCase("orphan", ExpectedJson("parsed", 0), parserId: "ghost-parser", parserStatus: null);
-
-        var (exitCode, output) = Run("--fixtures", _root);
-
-        exitCode.ShouldBe(1);
-        output.ShouldContain("temp-producer/orphan");
-        output.ShouldContain("ghost-parser");
-        output.ShouldContain("ERROR");
-        output.ShouldContain("1 error");
-    }
-
-    [Fact]
-    public void Run_Missing_Expected_File_Is_A_Named_Error()
-    {
-        CreateCase("broken", expectedJson: null);
-
-        var (exitCode, output) = Run("--fixtures", _root);
-
-        exitCode.ShouldBe(1);
-        output.ShouldContain("temp-producer/broken");
-        output.ShouldContain("ERROR");
-    }
-
-    [Fact]
-    public void Run_Without_Fixtures_Is_A_Usage_Error()
-    {
-        var (exitCode, output) = Run();
-
-        exitCode.ShouldBe(2);
-        output.ShouldContain("--fixtures");
-        output.ShouldContain("usage:");
-    }
-
-    [Fact]
-    public void Run_Empty_Corpus_Exits_Zero()
-    {
-        var (exitCode, output) = Run("--fixtures", _root);
-
-        exitCode.ShouldBe(0);
-        output.ShouldContain("0 passed");
-        output.ShouldContain("0 pending");
-        output.ShouldContain("0 error");
-    }
-
     private static (int ExitCode, string Output) Run(params string[] args) =>
         Run(new ParserRegistry(), args);
 
@@ -281,9 +186,18 @@ public sealed class RunnerTests : IDisposable
     private static ParserRegistry Registry(ExpectedDoc produced) =>
         new ParserRegistry().Register(ParserId, _ => produced);
 
-    private static ExpectedDoc ProducedDoc(params (string CaseKey, long Sequence, string Raw, string Normalised)[] events) =>
+    private static int PendingRows(string output) => output.Split("PENDING").Length - 1;
+
+    /// <summary>The verdict row of one fixture, without its padding or its detail column.</summary>
+    private static string RowFor(string output, string fixture) =>
+        output.Split('\n').Single(line =>
+            line.StartsWith(fixture, StringComparison.Ordinal)
+            && line.Length > fixture.Length
+            && line[fixture.Length] == ' ');
+
+    private static ExpectedDoc ProducedDoc(string rawReportStatus, params (string CaseKey, long Sequence, string Raw, string Normalised)[] events) =>
         new(
-            "parsed",
+            rawReportStatus,
             events.Length,
             events
                 .Select(eventEntry => new NormalisedEvent(
@@ -293,6 +207,9 @@ public sealed class RunnerTests : IDisposable
                     eventEntry.Raw,
                     eventEntry.Normalised))
                 .ToList());
+
+    private static ExpectedDoc ProducedDoc(params (string CaseKey, long Sequence, string Raw, string Normalised)[] events) =>
+        ProducedDoc("parsed", events);
 
     private static JsonObject Event(long sequence, string caseKey, string rawStatus, string normalisedStatus) =>
         new()

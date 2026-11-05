@@ -42,3 +42,6 @@ public sealed class ParserRegistry : IParserRegistry
         return _parsers.TryGetValue(parserId, out parse);
     }
 }
+
+/// <summary>Parsers throw this when malformed input prevents producing a document, not for implementation errors.</summary>
+public sealed class ParseRefusedException(string message) : Exception(message);

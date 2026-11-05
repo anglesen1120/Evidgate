@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace Evidgate.GoldenHarness;
 
@@ -71,9 +72,13 @@ public static class HarnessRunner
         {
             observed = parse(fixture);
         }
-        catch (Exception exception)
+        catch (ParseRefusedException exception)
         {
             return Refused(label, fixture.Expected, exception);
+        }
+        catch (Exception exception)
+        {
+            return new CaseVerdict(label, Verdict.Error, [], $"{exception.GetType().Name}: {exception.Message}");
         }
 
         var diffs = GoldenDiff.Compare(fixture.Expected, observed);
@@ -86,7 +91,7 @@ public static class HarnessRunner
     /// A parser that refuses the bytes is the declared outcome only when the expectation says
     /// so; otherwise the refusal is a failure, so a truncated report can never pass silently.
     /// </summary>
-    private static CaseVerdict Refused(string label, ExpectedDoc expected, Exception exception)
+    private static CaseVerdict Refused(string label, ExpectedDoc expected, ParseRefusedException exception)
     {
         var message = $"{exception.GetType().Name}: {exception.Message}";
         var declaredMalformed = string.Equals(
@@ -118,16 +123,16 @@ public static class HarnessRunner
     {
         var width = verdicts.Count == 0
             ? "fixture".Length
-            : Math.Max("fixture".Length, verdicts.Max(verdict => verdict.Fixture.Length));
+            : Math.Max("fixture".Length, verdicts.Max(verdict => EscapeControls(verdict.Fixture).Length));
 
         var header = "fixture".PadRight(width);
         output.WriteLine($"{header}  verdict  detail");
         foreach (var verdict in verdicts)
         {
-            var row = $"{verdict.Fixture.PadRight(width)}  {Word(verdict.Verdict),-7}";
+            var row = $"{EscapeControls(verdict.Fixture).PadRight(width)}  {Word(verdict.Verdict),-7}";
             if (!string.IsNullOrEmpty(verdict.Message))
             {
-                row = $"{row}  {verdict.Message}";
+                row = $"{row}  {EscapeControls(verdict.Message)}";
             }
 
             output.WriteLine(row.TrimEnd());
@@ -147,10 +152,44 @@ public static class HarnessRunner
 
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"  diff {fixture}: event {index} field {diff.Field} ({diff.Reason}) expected={Show(diff.Expected)} observed={Show(diff.Observed)}");
+            $"  diff {EscapeControls(fixture)}: event {index} field {EscapeControls(diff.Field)} ({EscapeControls(diff.Reason)}) expected={Show(diff.Expected)} observed={Show(diff.Observed)}");
     }
 
-    private static string Show(string? value) => value ?? "<null>";
+    private static string Show(string? value) => value is null ? "<null>" : EscapeControls(value);
+
+    private static string EscapeControls(string value)
+    {
+        var firstControl = -1;
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (char.IsControl(value[index]))
+            {
+                firstControl = index;
+                break;
+            }
+        }
+
+        if (firstControl < 0)
+        {
+            return value;
+        }
+
+        var escaped = new StringBuilder(value.Length).Append(value, 0, firstControl);
+        for (var index = firstControl; index < value.Length; index++)
+        {
+            var character = value[index];
+            if (char.IsControl(character))
+            {
+                escaped.Append("\\u").Append(((int)character).ToString("X4", CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                escaped.Append(character);
+            }
+        }
+
+        return escaped.ToString();
+    }
 
     private static string Word(Verdict verdict) => verdict switch
     {

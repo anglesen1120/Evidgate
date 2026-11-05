@@ -134,6 +134,38 @@ public sealed class DiffTests
     }
 
     [Fact]
+    public void Diff_SequencesThatShareADouble_AreStillAFieldMismatch()
+    {
+        var expected = Doc(1, Event(9_007_199_254_740_992));
+        var observed = Doc(1, Event(9_007_199_254_740_993));
+
+        // Both values render as the same IEEE 754 double, so the canonical bytes agree; the
+        // exact sequence the fixture pins must still be compared and reported.
+        var diff = GoldenDiff.Compare(expected, observed).ShouldHaveSingleItem();
+
+        diff.EventIndex.ShouldBe(0);
+        diff.Field.ShouldBe("sequence");
+        diff.Reason.ShouldBe(DiffReasons.FieldMismatch);
+        diff.Expected.ShouldBe("9007199254740992");
+        diff.Observed.ShouldBe("9007199254740993");
+    }
+
+    [Fact]
+    public void Diff_ProducerIdMismatch_IsAFieldMismatch()
+    {
+        var expected = Doc(1, Event(0));
+        var observed = Doc(1, Event(0, producerId: "other-producer"));
+
+        var diff = GoldenDiff.Compare(expected, observed).ShouldHaveSingleItem();
+
+        diff.EventIndex.ShouldBe(0);
+        diff.Field.ShouldBe("producer_id");
+        diff.Reason.ShouldBe(DiffReasons.FieldMismatch);
+        diff.Expected.ShouldBe("junit-pytest");
+        diff.Observed.ShouldBe("other-producer");
+    }
+
+    [Fact]
     public void Diff_EventIndex_IsTheSortedExpectedPosition()
     {
         var expected = Doc(2, Event(1, rawStatus: "failed"), Event(0));
@@ -155,6 +187,7 @@ public sealed class DiffTests
         long sequence,
         string caseKey = "tests/test_a.py::test_a",
         string rawStatus = "passed",
-        string normalisedStatus = "passed") =>
-        new("junit-pytest", sequence, caseKey, rawStatus, normalisedStatus);
+        string normalisedStatus = "passed",
+        string producerId = "junit-pytest") =>
+        new(producerId, sequence, caseKey, rawStatus, normalisedStatus);
 }

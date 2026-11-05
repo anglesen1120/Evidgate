@@ -72,7 +72,7 @@ fixtures/<producer>/<case>/
   expected.json       # RFC 8785 canonical bytes (no trailing newline)
 ```
 
-A case directory holds no `meta.json` and no file named `input.*`: `meta.json` would make the harness skip the directory as the older corpus, and `input.*` would make the other loaders read it as a `<domain>/<name>/` fixture. The canonical `expected.json` files are excluded from prettier by the existing `**/fixtures/**/expected.json` rule in `.prettierignore`.
+A case directory holds no `meta.json` and no file named `input.*`: `meta.json` would make the harness skip the directory as the older corpus, and `input.*` would make the other loaders read it as a `<domain>/<name>/` fixture. Every entry of a case is checked, and a symbolic link is refused rather than followed: a linked case directory, `case.json`, `expected.json`, a report file, `README.md` or a nested directory fails the scan as an `ERROR` naming the fixture and the link, so a case can only ever read bytes inside the corpus. The canonical `expected.json` files are excluded from prettier by the existing `**/fixtures/**/expected.json` rule in `.prettierignore`.
 
 ### `case.json`
 
@@ -84,15 +84,16 @@ A case directory holds no `meta.json` and no file named `input.*`: `meta.json` w
 
 ### `expected.json`
 
-`raw_report_status` (`parsed`, `malformed` or `unsupported`), `declared_count` (the producer's own declared case count) and `events[]`, each event carrying `producer_id`, `sequence`, `case_key`, `raw_status` and `normalised_status`. Events are compared after RFC 8785 canonicalisation and sorted by `(producer_id, sequence)`, so the order written in the file does not have to match the parser's output order. A deliberately malformed report declares `raw_report_status: "malformed"` with `declared_count: 0` and no events.
+`raw_report_status` (`parsed`, `malformed` or `unsupported`), `declared_count` (the producer's own declared case count) and `events[]`, each event carrying `producer_id`, `sequence`, `case_key`, `raw_status` and `normalised_status`. Events are compared after RFC 8785 canonicalisation and sorted by `(producer_id, sequence)`, so the order written in the file does not have to match the parser's output order. `producer_id` and `sequence` are also compared on their exact values before canonicalisation, because canonical form writes numbers as doubles and two sequences above 2^53 could otherwise canonicalise to the same bytes. A deliberately malformed report declares `raw_report_status: "malformed"` with `declared_count: 0` and no events; the loader refuses any expectation that is malformed and still counts or lists events, since it would pin two outcomes at once.
 
 ### Verdicts
 
 - `PASS` — the parser's events equal `expected.json`.
 - `FAIL` — they differ; each difference names the fixture, the event index, the field and the reason (`count_mismatch`, `unmapped_case`, `status_mismatch`, `extra_event`, `missing_event`, `field_mismatch`, `malformed`).
 - `PENDING` — `parser_status: "pending"` and the parser id is not registered. Not a pass: the summary counts it separately, and `--strict` makes it exit 1.
-- `ERROR` — an unregistered parser id without `pending`, or a layout violation (missing `case.json`, `expected.json` or report file, malformed JSON, duplicate member, BOM). Both name the fixture.
-- A registered parser that throws is `FAIL` (reason `malformed`) unless the case declares a malformed report with no events, which is how `truncated/` passes.
+- `ERROR` — an unregistered parser id without `pending`, a layout violation (missing `case.json`, `expected.json` or report file, malformed JSON, duplicate member, BOM, an entry that is a symbolic link, or a malformed expectation that still counts or lists events), or a parser that throws anything except `ParseRefusedException`. Each names the fixture.
+- A registered parser that throws `ParseRefusedException` is the one exception treated as a declared refusal: `PASS` when the case declares a malformed report with `declared_count: 0` and no events, which is how `truncated/` passes, and `FAIL` (reason `malformed`) otherwise. Any other exception is `ERROR` with its type and message, even on a case that declares a malformed report, so a mapper bug cannot pass as the expected refusal.
+- Every value a verdict prints — fixture name, parser id, event field — has control characters escaped as `\uXXXX`, so an embedded newline or terminal escape sequence cannot add a row or repaint the terminal; the counts are computed from the cases, never from the printed text.
 
 Exit codes: `0` nothing failed, `1` any `FAIL`, `ERROR` or (under `--strict`) `PENDING`, `2` a usage error.
 

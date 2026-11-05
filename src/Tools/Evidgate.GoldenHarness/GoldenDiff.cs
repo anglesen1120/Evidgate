@@ -148,6 +148,28 @@ public static class GoldenDiff
         NormalisedEvent observed,
         List<DiffEntry> diffs)
     {
+        // Identity is compared on its exact values first: the canonical form writes numbers as
+        // IEEE 754 doubles, so two sequences above 2^53 can canonicalize to the same bytes.
+        if (!string.Equals(expected.ProducerId, observed.ProducerId, StringComparison.Ordinal))
+        {
+            diffs.Add(new DiffEntry(
+                eventIndex,
+                ProducerIdField,
+                DiffReasons.FieldMismatch,
+                expected.ProducerId,
+                observed.ProducerId));
+        }
+
+        if (expected.Sequence != observed.Sequence)
+        {
+            diffs.Add(new DiffEntry(
+                eventIndex,
+                SequenceField,
+                DiffReasons.FieldMismatch,
+                Integer(expected.Sequence),
+                Integer(observed.Sequence)));
+        }
+
         var expectedCanonical = CanonicalEvent(expected);
         var observedCanonical = CanonicalEvent(observed);
         if (expectedCanonical.AsSpan().SequenceEqual(observedCanonical))
@@ -160,6 +182,13 @@ public static class GoldenDiff
 
         foreach (var property in expectedDocument.RootElement.EnumerateObject())
         {
+            // Both members were compared exactly above, so a canonical difference in them is
+            // already reported and must not be reported twice.
+            if (property.Name is ProducerIdField or SequenceField)
+            {
+                continue;
+            }
+
             var observedValue = observedDocument.RootElement.GetProperty(property.Name);
             if (property.Value.GetRawText().AsSpan().SequenceEqual(observedValue.GetRawText()))
             {

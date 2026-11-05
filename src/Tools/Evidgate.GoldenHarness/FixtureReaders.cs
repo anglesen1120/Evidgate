@@ -15,8 +15,9 @@ internal static class FixtureReaders
     internal const string ExpectedFileName = "expected.json";
 
     private const string PendingStatus = "pending";
+    private const string MalformedStatus = "malformed";
 
-    private static readonly string[] RawReportStatuses = ["parsed", "malformed", "unsupported"];
+    private static readonly string[] RawReportStatuses = ["parsed", MalformedStatus, "unsupported"];
 
     private static readonly UTF8Encoding StrictUtf8 =
         new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
@@ -60,6 +61,17 @@ internal static class FixtureReaders
             throw new FixtureLayoutException(
                 fixture,
                 $"'{ExpectedFileName}' field 'events' must be an array");
+        }
+
+        // A malformed report yielded nothing to map, so an expectation that is malformed and
+        // still counts or lists events declares two outcomes at once and can never be compared
+        // in a way a reader can trust.
+        if (string.Equals(rawReportStatus, MalformedStatus, StringComparison.Ordinal)
+            && (declaredCount != 0 || events.Count > 0))
+        {
+            throw new FixtureLayoutException(
+                fixture,
+                $"'{ExpectedFileName}' declares 'raw_report_status' '{MalformedStatus}', so 'declared_count' must be 0 and 'events' must be empty");
         }
 
         var normalised = new List<NormalisedEvent>(events.Count);

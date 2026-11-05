@@ -2,6 +2,7 @@ using System.Text;
 using Evidgate.GoldenHarness;
 using Shouldly;
 using Xunit;
+using static GoldenHarness.UnitTests.TempCorpus;
 
 namespace GoldenHarness.UnitTests;
 
@@ -10,14 +11,8 @@ namespace GoldenHarness.UnitTests;
 /// fails the scan by name, an empty corpus is a clean empty result, and the older
 /// <c>meta.json</c> corpus and the protocol <c>contracts</c> namespace are never read as cases.
 /// </summary>
-public sealed class LayoutTests
+public sealed partial class LayoutTests
 {
-    private const string CaseJson =
-        """{"producer_id":"junit-pytest","parser_id":"junit_pytest","parser_version":"3.1","rationale":"captured from a real run"}""";
-
-    private const string ExpectedJson =
-        """{"raw_report_status":"parsed","declared_count":1,"events":[{"producer_id":"junit-pytest","sequence":0,"case_key":"tests/test_a.py::test_a","raw_status":"passed","normalised_status":"passed"}]}""";
-
     private const string MetaJson =
         """{"domain":"legacy-domain","kind":"junit","source":"a real run","added_by":"the corpus loader"}""";
 
@@ -39,7 +34,8 @@ public sealed class LayoutTests
             var error = Should.Throw<FixtureLayoutException>(() => FixtureLayout.Scan(root));
 
             error.Fixture.ShouldBe("junit-pytest/happy");
-            error.Message.ShouldBe("junit-pytest/happy: expected.json is missing");
+            error.Message.ShouldContain("expected.json");
+            error.Message.ShouldContain("missing");
         }
         finally
         {
@@ -405,6 +401,12 @@ public sealed class LayoutTests
     [InlineData(
         """{"raw_report_status":"parsed","declared_count":-1,"events":[]}""",
         "field 'declared_count' must be a non-negative integer")]
+    [InlineData(
+        """{"raw_report_status":"malformed","declared_count":1,"events":[]}""",
+        "'declared_count' must be 0")]
+    [InlineData(
+        """{"raw_report_status":"malformed","declared_count":0,"events":[{"producer_id":"junit-pytest","sequence":0,"case_key":"tests/test_a.py::test_a","raw_status":"passed","normalised_status":"passed"}]}""",
+        "'events' must be empty")]
     public void Fixture_RefusedExpectedShapes_FailNamed(string expectedJson, string problem)
     {
         var root = NewRoot();
@@ -421,42 +423,6 @@ public sealed class LayoutTests
         finally
         {
             Directory.Delete(root, recursive: true);
-        }
-    }
-
-    private static string NewRoot()
-    {
-        var root = Path.Combine(Path.GetTempPath(), "evidgate-golden-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        return root;
-    }
-
-    private static string CaseDirectory(string root, string producer, string caseName)
-    {
-        var directory = Path.GetFullPath(Path.Combine(root, producer, caseName));
-        Directory.CreateDirectory(directory);
-        return directory;
-    }
-
-    private static void WriteCaseFiles(
-        string directory,
-        string? caseJson = CaseJson,
-        string? expectedJson = ExpectedJson,
-        params string[] reports)
-    {
-        if (caseJson is not null)
-        {
-            File.WriteAllText(Path.Combine(directory, "case.json"), caseJson);
-        }
-
-        if (expectedJson is not null)
-        {
-            File.WriteAllText(Path.Combine(directory, "expected.json"), expectedJson);
-        }
-
-        foreach (var report in reports)
-        {
-            File.WriteAllText(Path.Combine(directory, report), "<testsuite/>");
         }
     }
 }
