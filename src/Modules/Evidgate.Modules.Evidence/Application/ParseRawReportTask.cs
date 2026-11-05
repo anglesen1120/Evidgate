@@ -8,11 +8,14 @@ using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
+using Evidgate.Modules.Ingestion.Contracts;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Evidence.Application;
 
@@ -86,9 +89,10 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// </para>
 /// <para>
 /// <b>A refused document writes nothing.</b> <see cref="JUnitParseRefusedException"/> is the mapper's only way to
-/// report a refusal (DTD, truncation, cap), and it becomes a named <c>malformed</c> outcome with zero events — except a
-/// wall-clock <c>timeout</c>, which is an infrastructure abandon rather than a verdict and is thrown so the queue
-/// retries it. No other exception is read as a verdict: a resolver or storage fault must surface.
+/// report a refusal of the record stream, and the child's own rejection record (DTD, truncation, cap) or a failed run
+/// (<c>parse_crashed</c>, <c>parse_oom</c>, <c>parse_timeout</c>) becomes a named <c>malformed</c> outcome with zero
+/// events, exactly as for an artifact parse. Only a child that never started is retried. No other exception is read
+/// as a verdict: a resolver or storage fault must surface.
 /// </para>
 /// <para>
 /// <b>A report whose artifact belongs to another run, or another tenant, yields no event.</b> The payload's run id is
@@ -101,6 +105,8 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// <param name="db">The Dapper path for the registry, the plan, the slot and the event insert.</param>
 /// <param name="storage">The object store the report's bytes are read from, capped by the kind policy.</param>
 /// <param name="parsers">The parser registry read (producer kind → parser pair).</param>
+/// <param name="runner">The resource-limited child the untrusted report is parsed in; this process never parses it.</param>
+/// <param name="limits">The host's ingest caps; the report entry budget is handed to the child.</param>
 /// <param name="mappers">The loaded JUnit mappers; the one whose pair the registry names does the mapping.</param>
 /// <param name="scopeFactory">Reaches the scoped case-attempt writer: handlers are singletons, and the writer joins the ambient tenant transaction and never commits.</param>
 /// <param name="outbox">The reconcile trigger's transactional outbox writer.</param>
@@ -111,6 +117,8 @@ internal sealed partial class ParseRawReportHandler(
     ITenantDb db,
     IObjectStorage storage,
     IReportParserResolver parsers,
+    IParseRunner runner,
+    IOptions<IngestionLimits> limits,
     IEnumerable<IJUnitMapper> mappers,
     IServiceScopeFactory scopeFactory,
     IOutboxWriter outbox,
@@ -118,6 +126,12 @@ internal sealed partial class ParseRawReportHandler(
 {
     /// <summary>The cap name a report over its byte budget carries in telemetry.</summary>
     private const string ReportBytesCap = "report_bytes";
+
+    /// <summary>The cap name a report over its entry budget carries in telemetry.</summary>
+    private const string ReportCasesCap = "report_cases";
+
+    /// <summary>The media type the child is told the report carries.</summary>
+    private const string XmlMediaType = "application/xml";
 
     /// <summary>The prefix of the synthetic producer id; the artifact id makes it unique per report.</summary>
     private const string ProducerPrefix = "junit-";
@@ -188,22 +202,52 @@ internal sealed partial class ParseRawReportHandler(
                 "the raw report's stored object is not readable, so the report was not parsed; the task is retried");
         }
 
+        // The untrusted bytes go to the resource-limited child and nowhere else: a crash, an out-of-memory kill or a
+        // wall-clock expiry ends the child, never this process. No scope is open while it runs.
+        await using var input = new MemoryStream(bytes, writable: false);
+        var run = await runner
+            .RunAsync(
+                new ParseRunRequest(
+                    ParseRunnerProfile.Xml,
+                    prepared.MaxBytes,
+                    XmlMediaType,
+                    input,
+                    limits.Value.MaxReportCases),
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (run is ParseRunFailed failed)
+        {
+            if (!ParseRunRejection.TryMap(failed, out var failure))
+            {
+                // SpawnFailed: no child existed, so the report was never judged; the queue retries with backoff.
+                throw new InvalidOperationException(
+                    "the parse child could not be started, so the raw report was not judged; the task is retried");
+            }
+
+            LogRefused(logger, payload.ArtifactId, failure);
+            return new ParseRawReportOutcome(ParseRawReportOutcome.Malformed, failure);
+        }
+
+        var succeeded = (ParseRunSucceeded)run;
+        if (ChildRejectionRecord.ReasonIn(succeeded) is { } reported)
+        {
+            if (string.Equals(reported, ArtifactFailureCode.CapExceeded, StringComparison.Ordinal))
+            {
+                // The only child-side cap_exceeded is the report entry budget, so the counter names it.
+                EvidgateTelemetry.RecordIngestCapExceeded(ReportCasesCap);
+            }
+
+            LogRefused(logger, payload.ArtifactId, reported);
+            return new ParseRawReportOutcome(ParseRawReportOutcome.Malformed, reported);
+        }
+
         JUnitMapResult mapped;
-        using var input = new MemoryStream(bytes, writable: false);
         try
         {
             mapped = prepared.Mapper.Map(
-                input,
+                succeeded.Records,
                 new JUnitMapContext(payload.ArtifactId, prepared.Plan.Resolve));
-        }
-        catch (JUnitParseRefusedException refused) when (string.Equals(
-            refused.Reason, ParsingFailureReason.Timeout, StringComparison.Ordinal))
-        {
-            // A wall-clock abandon says nothing about the document: it may parse on a less loaded attempt, so the task
-            // is retried rather than recorded as malformed evidence.
-            throw new InvalidOperationException(
-                "the raw report parse timed out before the document was judged, so the report was not parsed; the task is retried",
-                refused);
         }
         catch (JUnitParseRefusedException refused)
         {

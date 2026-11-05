@@ -55,6 +55,10 @@ internal static class ParseRunnerServiceCollectionExtensions
             // but never this extension — can neither resolve the runner nor claim or run an `artifact_parse` row. With
             // the flag off neither is registered and such rows stay `queued` for the in-process rollback (06.3.6 §11).
             services.AddTaskHandler<ParseArtifactPayload, ParseArtifactTaskHandler>();
+
+            // The raw-report mapping parses the same untrusted XML, so it travels with the runner for the same reason:
+            // the Api can neither parse a report nor claim a `raw_report_parse` row.
+            services.AddTransactionlessTaskHandler<ParseRawReportPayload, ParseRawReportHandler>();
         }
 
         return services;

@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 
 namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 
@@ -32,6 +33,17 @@ internal interface IJUnitMapper
     /// declared malformed report.
     /// </exception>
     JUnitMapResult Map(Stream xml, JUnitMapContext context);
+
+    /// <summary>
+    /// Maps one report the parse child already validated: the child's XML record stream, not the report's bytes. This is
+    /// the production path; <see cref="Map(Stream, JUnitMapContext)"/> parses in this process and exists for offline
+    /// tooling (the golden harness) that has no child to spawn.
+    /// </summary>
+    /// <param name="records">The child's records in stream order, its marker excluded and no rejection among them.</param>
+    /// <param name="context">The synthetic producer identity and the caller's execution-key resolution.</param>
+    /// <returns>One mapped case per resolvable <c>testcase</c>, the declared counters and the discrepancies.</returns>
+    /// <exception cref="JUnitParseRefusedException">The records are not a well-formed element tree (<c>parse_crashed</c>).</exception>
+    JUnitMapResult Map(IReadOnlyList<ParseRecord> records, JUnitMapContext context);
 }
 
 /// <summary>

@@ -1,5 +1,6 @@
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Shouldly;
 using Xunit;
 
@@ -173,9 +174,11 @@ public sealed class PytestJUnitMapperEdgeTests
         var mapper = new PytestJUnitMapper(new ParsingService(PytestJUnitMapperReplay.MaxCases));
 
         Should.Throw<ArgumentNullException>(
-            () => mapper.Map(null!, new JUnitMapContext(PytestJUnitMapperReplay.ReportId, PytestJUnitMapperReplay.NodeId)));
+            () => mapper.Map((Stream)null!, new JUnitMapContext(PytestJUnitMapperReplay.ReportId, PytestJUnitMapperReplay.NodeId)));
         Should.Throw<ArgumentNullException>(
             () => mapper.Map(new MemoryStream(), null!));
+        Should.Throw<ArgumentNullException>(
+            () => mapper.Map((IReadOnlyList<ParseRecord>)null!, new JUnitMapContext(PytestJUnitMapperReplay.ReportId, PytestJUnitMapperReplay.NodeId)));
     }
 
     [Fact]

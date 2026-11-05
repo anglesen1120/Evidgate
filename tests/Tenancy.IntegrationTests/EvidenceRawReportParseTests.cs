@@ -5,12 +5,12 @@
 // migration ships `report_parser` only.
 using System.Globalization;
 using Evidgate.BuildingBlocks.ObjectStorage;
-using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.Modules.Evidence.Application;
 using Evidgate.Modules.Evidence.Domain;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -31,7 +31,7 @@ namespace Tenancy.IntegrationTests;
 /// migration, and the run's one planned execution is seeded as the owner seam, the way the run's other parents are.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
+public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>
 {
     /// <summary>The registry's producer kind for a pytest JUnit XML report.</summary>
@@ -471,24 +471,19 @@ public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, 
     }
 
     /// <summary>
-    /// The call the task consumer makes, minus the queue: the handler the module's own registration produced, so a
-    /// missing registration fails here rather than in production.
+    /// The call the task consumer makes, minus the queue. The runner is the child's stand-in: unless a test scripts one,
+    /// it answers with the record stream the real child would write for these bytes.
     /// </summary>
     private static async Task<ParseRawReportOutcome> ParseAsync(
         World world,
         Guid artifactId,
         string producerKind,
-        Guid? runId = null)
-    {
-        var handler = world.Host.Services.GetRequiredService<ParseRawReportHandler>();
-
-        handler.ShouldBeAssignableTo<ITransactionlessTaskHandler<ParseRawReportPayload>>();
-
-        return await handler.ExecuteAsync(
+        Guid? runId = null,
+        IParseRunner? runner = null) =>
+        await CreateHandler(world, runner).ExecuteAsync(
             new ParseRawReportPayload(runId ?? world.RunId, artifactId, producerKind),
             world.Org,
             Token);
-    }
 
     private Task<long> CountAsync(World world, string table, Guid? artifactId = null) =>
         _fixture.ScalarAsync<long>(

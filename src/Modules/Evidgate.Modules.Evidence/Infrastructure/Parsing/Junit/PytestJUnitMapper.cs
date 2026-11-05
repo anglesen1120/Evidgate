@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Xml;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Evidence.Contracts;
 
 namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
@@ -94,6 +95,26 @@ internal sealed class PytestJUnitMapper : IJUnitMapper
 
         using var reader = parsed.Value.OpenReader();
         return Walk(reader, context);
+    }
+
+    /// <inheritdoc />
+    public JUnitMapResult Map(IReadOnlyList<ParseRecord> records, JUnitMapContext context)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        ArgumentNullException.ThrowIfNull(context);
+
+        using var reader = ChildXmlRecords.OpenReader(records);
+
+        try
+        {
+            return Walk(reader, context);
+        }
+        catch (XmlException)
+        {
+            // The reader is lazy: a stream that rebuilt into a document the reader refuses fails here, and it is the
+            // child's protocol that broke, not a property of the report.
+            throw ChildXmlRecords.Crashed();
+        }
     }
 
     private static JUnitMapResult Walk(XmlReader reader, JUnitMapContext context)

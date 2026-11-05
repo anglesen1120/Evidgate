@@ -43,7 +43,7 @@ internal sealed record ReportParserResolution
 }
 
 /// <summary>
-/// The one read of the parser registry (04.4.1-T1.1): <c>producer_kind -&gt; (parser_id, version)</c>. It runs on the
+/// The one read of the parser registry: <c>producer_kind -&gt; (parser_id, version)</c>. It runs on the
 /// caller's ambient tenant scope, because the catalogue's built-in rows are readable by every org and an org's own
 /// override must stay invisible to another.
 /// </summary>
