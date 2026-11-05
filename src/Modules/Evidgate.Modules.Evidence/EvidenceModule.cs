@@ -6,6 +6,7 @@ using Evidgate.Modules.Evidence.Application.Freeze;
 using Evidgate.Modules.Evidence.Application.Retention;
 using Evidgate.Modules.Evidence.Application.Evaluation;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
@@ -81,6 +82,14 @@ internal static class EvidenceModule
         // because the object read must run with no database transaction open (00 §5.7 P5): the handler opens a short
         // read scope, reads the object and scans it, then opens the write scope that commits the verdict.
         services.AddTransactionlessTaskHandler<RunArtifactSecretScanPayload, RunArtifactSecretScanHandler>();
+
+        // 04.4.1-T1: the JUnit mapping path. The registry read is a singleton because the handler that consumes it is one (a
+        // singleton must never take a scoped service); the mapper is a singleton because its only state is the untrusted-parser profile and the report byte ceiling. The task handler
+        // is transactionless for the same reason as the scan: its bytes are fetched and mapped before any write scope
+        // opens (P5), and only the event insert commits.
+        services.TryAddSingleton<IReportParserResolver, ReportParserResolver>();
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IJUnitMapper, PytestJUnitMapper>());
+        services.AddTransactionlessTaskHandler<ParseRawReportPayload, ParseRawReportHandler>();
 
         // 06.3.1-T1.2: the one untrusted-parser profile (00 §5.7 S5), published on the module's .Contracts.
         // It has no consumer yet: the `complete` verifier uses the static MediaSniffer directly (06.3.1-T1),
