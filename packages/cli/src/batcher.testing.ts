@@ -10,8 +10,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { maxBatchBytes, maxBatchEvents, type PackBatchesOptions } from './batcher.js';
-import { collect, eventIdFor } from './qa.spoolSend.testing.js';
-import { failureOf } from './spool.testing.js';
+import { eventIdFor } from './qa.spoolSend.testing.js';
+import { collect, failureOf } from './spool.testing.js';
 
 import type { SpoolEvent } from './spool.js';
 

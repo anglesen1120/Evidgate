@@ -7,7 +7,8 @@ import {
   resolveTokenSource,
   tokenSourceNames,
 } from './config.js';
-import { baseEnv, captureCliError } from './config.testing.js';
+import { baseEnv } from './config.testing.js';
+import { captureCliError } from './commands/cliSpec.testing.js';
 import { redact, redacted, resetSecrets } from './redact.js';
 
 // 04.2.1-T2.1 / AC5: `EVIDGATE_*` resolution — precedence, validation and the

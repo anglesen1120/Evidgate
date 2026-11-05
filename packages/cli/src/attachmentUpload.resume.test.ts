@@ -1,10 +1,6 @@
 // A restarted shard: with a spool the journal is opened per `(run, producer)`, so the second
 // call resumes the artifact rows of the first instead of minting a new one — it answers from
 // the terminal record with no request at all.
-import { mkdtemp } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -17,12 +13,11 @@ import {
 } from './attachmentUpload.testing.js';
 
 describe('createAttachmentUploader', () => {
-  const { attachment, directories, env, uploader } = useAttachmentUploadSpec();
+  const { attachment, env, tempRoot, uploader } = useAttachmentUploadSpec();
 
   it('resumes_a_journaled_upload_without_a_second_artifact_row', async () => {
     const { path, content } = await attachment('trace.zip');
-    const spoolDir = await mkdtemp(join(tmpdir(), 'evidgate-attach-spool-'));
-    directories.push(spoolDir);
+    const spoolDir = await tempRoot('evidgate-attach-spool-');
     const spoolEnv = env({ EVIDGATE_SPOOL_DIR: spoolDir });
 
     const first = acceptingStore(await digestOfFile(path));

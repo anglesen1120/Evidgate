@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ProducerSpool, defaultSpoolMaxBytes } from './spool.js';
 import { SpoolLockedError, readSpoolLock } from './spoolLock.js';
-import { expectError, failureOf } from './spoolLock.kit.test.js';
+import { expectError, failureOf } from './spool.testing.js';
 
 describe('ProducerSpool.withLock', () => {
   let root: string;

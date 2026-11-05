@@ -1,7 +1,5 @@
 // The drain signal at its first checkpoint: an already-aborted call opens nothing and requests
 // nothing, so an abandoned attachment costs no descriptor and no token exchange.
-import { mkdtemp } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -16,14 +14,13 @@ import {
 import { CliError } from './errors.js';
 
 describe('createAttachmentUploader', () => {
-  const { directories, uploader } = useAttachmentUploadSpec();
+  const { tempRoot, uploader } = useAttachmentUploadSpec();
 
   // The drain signal is read BEFORE the file is opened: the path is outside the allowed roots
   // and does not exist, so `upload_aborted` (not `upload_path_refused`/`upload_unreadable`)
   // proves nothing was opened and no request was made.
   it('opens_nothing_and_requests_nothing_when_the_signal_is_already_aborted', async () => {
-    const outside = await mkdtemp(join(tmpdir(), 'evidgate-attach-aborted-'));
-    directories.push(outside);
+    const outside = await tempRoot('evidgate-attach-aborted-');
     const path = join(outside, 'never-opened.zip');
     const controller = new AbortController();
     controller.abort();

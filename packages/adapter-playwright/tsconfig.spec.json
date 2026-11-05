@@ -10,5 +10,12 @@
     // to the `.mts` source, and tsc only allows the `.mts` extension under noEmit.
     "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.test.ts", "vitest.config.ts", "../../vitest.config.base.mts"]
+  "include": [
+    "src/**/*.test.ts",
+    // The fixture modules the specs share; unlisted, the emitting project excludes them
+    // and their exports would resolve to `error` types in the type-aware lint run.
+    "src/**/*.testing.ts",
+    "vitest.config.ts",
+    "../../vitest.config.base.mts"
+  ]
 }

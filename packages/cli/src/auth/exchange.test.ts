@@ -6,8 +6,12 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  captureCliErrorAsync as captureCliError,
+  jsonResponse,
+  stubRequestFetch as stubFetch,
+} from '../commands/cliSpec.testing.js';
 import { resolveConfig } from '../config.js';
-import { CliError } from '../errors.js';
 import { resetSecrets } from '../redact.js';
 
 import { ExchangeAuthError, exchangeAndPurge, exchangeToken } from './exchange.js';
@@ -15,36 +19,6 @@ import { readCachedToken, tokenCachePath, writeCachedToken } from './tokenCache.
 
 /** A valid `project_id` (openapi `format: uuid`); the exchange refuses anything else (S1). */
 const projectId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
-
-interface StubCall {
-  readonly request: Request;
-  readonly body: string;
-}
-
-/** A `fetch` stub that records every request (URL, headers, body) and answers from `handler`. */
-function stubFetch(handler: (request: Request) => Response | Promise<Response>): {
-  readonly fetchImpl: typeof fetch;
-  readonly calls: StubCall[];
-} {
-  const calls: StubCall[] = [];
-  const fetchImpl: typeof fetch = async (input, init) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    calls.push({ request, body: await request.clone().text() });
-    return handler(request);
-  };
-  return { fetchImpl, calls };
-}
-
-function jsonResponse(
-  status: number,
-  body: unknown,
-  headers: Record<string, string> = {},
-): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json', ...headers },
-  });
-}
 
 function envelope(code: string): unknown {
   return {
@@ -59,18 +33,6 @@ function successBody(): unknown {
     project_id: projectId,
     permission_set: [],
   };
-}
-
-async function captureCliError(run: () => Promise<unknown>): Promise<CliError> {
-  try {
-    await run();
-  } catch (error) {
-    if (error instanceof CliError) {
-      return error;
-    }
-    throw error;
-  }
-  throw new Error('expected the call to throw a CliError');
 }
 
 async function listen(server: Server): Promise<number> {

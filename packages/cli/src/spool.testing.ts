@@ -15,8 +15,6 @@ import { afterEach, beforeEach } from 'vitest';
 
 import { ProducerSpool, defaultSpoolMaxBytes, spoolDirMode, spoolFileMode } from './spool.js';
 
-import type { SpoolEvent } from './spool.js';
-
 export const runId = 'run-04.2.3';
 export const producerId = 'producer-primary';
 
@@ -53,8 +51,8 @@ export function range(from: number, to: number): number[] {
   return values;
 }
 
-export async function collect(events: AsyncIterable<SpoolEvent>): Promise<SpoolEvent[]> {
-  const collected: SpoolEvent[] = [];
+export async function collect<T>(events: AsyncIterable<T>): Promise<T[]> {
+  const collected: T[] = [];
   for await (const event of events) collected.push(event);
   return collected;
 }
