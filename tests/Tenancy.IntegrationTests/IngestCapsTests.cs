@@ -10,6 +10,7 @@ using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Orchestrator.Endpoints;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -17,16 +18,14 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The manifest caps of 04.1.3-T1: a body counted as it is read (so a missing or short <c>Content-Length</c> cannot
-/// raise it, and no more than the cap plus one read buffer is ever pulled off the stream), and the declared
-/// executions/variants counted after the schema parse but before anything is expanded or written.
+/// The manifest caps: a body counted as it is read (so a missing or short <c>Content-Length</c> cannot raise it, and
+/// no more than the cap plus one byte is ever pulled off the stream), and the declared executions/variants counted
+/// after the schema parse but before anything is expanded or written.
 /// </summary>
 [Trait("Category", "Docker")]
+[Collection(ExclusiveTenancySuite.Name)]
 public sealed class IngestCapsTests(PostgresTenancyFixture fixture)
 {
-    /// <summary>The most bytes one read of the body reader may pull: its own 16 KiB starting buffer.</summary>
-    private const int OneReadBuffer = 16 * 1024;
-
     private readonly PostgresTenancyFixture _fixture = fixture;
 
     // ------------------------------------------------------------------ body reader, on its own
@@ -55,7 +54,7 @@ public sealed class IngestCapsTests(PostgresTenancyFixture fixture)
         detail.Actual.Value.ShouldBeGreaterThan(100, "the count is measured, not taken from the header");
     }
 
-    /// <summary>A declared length over the cap refuses before a byte of the stream is read.</summary>
+    /// <summary>A declared length over the cap refuses before a byte of the stream is read, and reports that declaration.</summary>
     [Fact]
     public async Task ReadBodyAsync_DeclaredLengthOverTheCap_RefusesWithoutReading()
     {
@@ -72,16 +71,37 @@ public sealed class IngestCapsTests(PostgresTenancyFixture fixture)
 
         bytes.IsEmpty.ShouldBeTrue();
         tooLarge.ShouldNotBeNull();
-        tooLarge.Details.ShouldHaveSingleItem().Actual.ShouldBeNull("nothing was counted");
+        tooLarge.Details.ShouldHaveSingleItem().Actual.ShouldBe(1024 * 1024, "the declaration is the value the server has");
         source.BytesRead.ShouldBe(0, "the declaration alone refuses it");
+    }
+
+    /// <summary>The host's own body-size limit is cleared so the route's counter answers, and a read-only one is left alone.</summary>
+    [Fact]
+    public void AllowCounterToOwnTheRefusal_ClearsTheHostLimit()
+    {
+        var feature = new BodySizeFeature(maxRequestBodySize: 30_000_000);
+        var context = new DefaultHttpContext();
+        context.Features.Set<IHttpMaxRequestBodySizeFeature>(feature);
+
+        OrchestratorEndpoints.AllowCounterToOwnTheRefusal(context);
+
+        feature.MaxRequestBodySize.ShouldBeNull("the counter owns the refusal, at the configured cap and with its detail");
+
+        var readOnly = new BodySizeFeature(maxRequestBodySize: 30_000_000, readOnly: true);
+        var settled = new DefaultHttpContext();
+        settled.Features.Set<IHttpMaxRequestBodySizeFeature>(readOnly);
+
+        OrchestratorEndpoints.AllowCounterToOwnTheRefusal(settled);
+
+        readOnly.MaxRequestBodySize.ShouldBe(30_000_000, "a feature the host already fixed is not rewritten");
     }
 
     /// <summary>
     /// A chunked body (no <c>Content-Length</c>) is counted as it arrives and refused at the cap, and the reader stops
-    /// there: at most one read buffer beyond the cap leaves the stream however large the body claims to be.
+    /// there: the stream is never pulled past the one byte that proves the overrun.
     /// </summary>
     [Fact]
-    public async Task ReadBodyAsync_ChunkedBodyOverTheCap_ConsumesAtMostOneBufferPastTheCap()
+    public async Task ReadBodyAsync_ChunkedBodyOverTheCap_StopsOneBytePastTheCap()
     {
         var source = new CountingStream(new byte[8 * 1024 * 1024]);
         var context = new DefaultHttpContext();
@@ -97,7 +117,7 @@ public sealed class IngestCapsTests(PostgresTenancyFixture fixture)
         bytes.IsEmpty.ShouldBeTrue();
         tooLarge.ShouldNotBeNull();
         tooLarge.Details.ShouldHaveSingleItem().Limit.ShouldBe(1000);
-        source.BytesRead.ShouldBeLessThanOrEqualTo(1000 + OneReadBuffer, "bounded memory: the stream is never drained");
+        source.BytesRead.ShouldBe(1001, "bounded memory: the stream is never drained, and never read past the cap plus one");
     }
 
     /// <summary>A body exactly at the cap is accepted whole; one byte more is refused.</summary>
@@ -141,17 +161,19 @@ public sealed class IngestCapsTests(PostgresTenancyFixture fixture)
     }
 
     /// <summary>
-    /// AC1: a manifest body one byte over the cap is 413 <c>payload_too_large</c> with
-    /// <c>details[] {path: manifest_bytes, reason, limit, actual}</c>, counted as it arrives, and no manifest row is
-    /// written — the caller keeps the server's own count rather than the header it sent.
+    /// A manifest body one byte over the cap is 413 <c>payload_too_large</c> with
+    /// <c>details[] {path: manifest_bytes, reason, limit, actual}</c> and no manifest row written. The body declares
+    /// its length, so the detail carries that declaration — the length the server refused without reading.
     /// </summary>
     [Fact]
     public async Task UploadManifest_BodyOverTheCap_413WithCapDetail_NoManifestCreated()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
 
-        var manifest = ManifestBody(world);
-        var cap = Encoding.UTF8.GetByteCount(manifest) - 1;
+        // A plan of its own, so an accepted upload would add a manifest row the assertion below can see.
+        var manifest = ManifestBody(world, variants: 1, shards: 1);
+        var declared = Encoding.UTF8.GetByteCount(manifest);
+        var cap = declared - 1;
 
         await using var capped = CappedHost(world, ("MaxManifestBytes", cap));
 
@@ -163,27 +185,28 @@ public sealed class IngestCapsTests(PostgresTenancyFixture fixture)
         detail.GetProperty("path").GetString().ShouldBe("manifest_bytes");
         detail.GetProperty("reason").GetString().ShouldBe(ApiErrorCode.PayloadTooLarge);
         detail.GetProperty("limit").GetInt64().ShouldBe(cap);
-        detail.GetProperty("actual").GetInt64().ShouldBe(cap + 1);
+        detail.GetProperty("actual").GetInt64().ShouldBe(declared, "the declared length is the value the server refused");
+        (await ManifestCountAsync(world)).ShouldBe(1, "only the manifest the world arranged exists");
     }
 
     /// <summary>
-    /// AC1: the run-create route reads its body through the same published cap, so a chunked run-create body over it is
-    /// 413 with the cap detail and no run, planned execution, producer slot or outbox row.
+    /// A manifest body with no <c>Content-Length</c> is counted as it arrives: 413 with the same cap detail, whose
+    /// <c>actual</c> is the measured count past the limit, and no manifest row written.
     /// </summary>
     [Fact]
-    public async Task CreateRun_ChunkedBodyOverTheCap_413WithCapDetail_NoRowCreated()
+    public async Task UploadManifest_ChunkedBodyOverTheCap_413WithMeasuredDetail_NoManifestCreated()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        await using var capped = CappedHost(world, ("MaxManifestBytes", 16));
 
-        var body = RunCreationTests.RunBody(world.ManifestId);
-        Encoding.UTF8.GetByteCount(body).ShouldBeGreaterThan(16, "the body must exceed the configured cap");
+        var manifest = ManifestBody(world, variants: 1, shards: 1);
+        var cap = Encoding.UTF8.GetByteCount(manifest) / 2;
 
-        using var content = new ChunkedJson(body);
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/projects/{world.Project}/runs");
+        await using var capped = CappedHost(world, ("MaxManifestBytes", cap));
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/projects/{world.Project}/manifests");
         world.Admin(request.Headers);
         request.Headers.Add("Idempotency-Key", RegistryApi.NewKey());
-        request.Content = content;
+        request.Content = new ChunkedJson(manifest);
 
         using var response = await capped.Client.SendAsync(request, TestContext.Current.CancellationToken);
         var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
@@ -194,8 +217,40 @@ public sealed class IngestCapsTests(PostgresTenancyFixture fixture)
         answer.ErrorCode.ShouldBe(ApiErrorCode.PayloadTooLarge);
         var detail = answer.Body.GetProperty("error").GetProperty("details")[0];
         detail.GetProperty("path").GetString().ShouldBe("manifest_bytes");
-        detail.GetProperty("limit").GetInt64().ShouldBe(16);
-        detail.GetProperty("actual").GetInt64().ShouldBeGreaterThan(16);
+        detail.GetProperty("limit").GetInt64().ShouldBe(cap);
+        detail.GetProperty("actual").GetInt64().ShouldBeGreaterThan(cap, "the count is measured, not taken from a header");
+        (await ManifestCountAsync(world)).ShouldBe(1, "only the manifest the world arranged exists");
+    }
+
+    /// <summary>
+    /// The run-create route has its own small transport cap: a chunked body over it is 413 with
+    /// <c>path: run_body_bytes</c> and no run, planned execution, producer slot or outbox row.
+    /// </summary>
+    [Fact]
+    public async Task CreateRun_ChunkedBodyOverTheCap_413WithCapDetail_NoRowCreated()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+
+        var body = RunCreationTests.RunBody(world.ManifestId) + new string(' ', OrchestratorEndpoints.MaxRunBytes);
+        Encoding.UTF8.GetByteCount(body).ShouldBeGreaterThan(OrchestratorEndpoints.MaxRunBytes, "the body must exceed the transport cap");
+
+        using var content = new ChunkedJson(body);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/projects/{world.Project}/runs");
+        world.Admin(request.Headers);
+        request.Headers.Add("Idempotency-Key", RegistryApi.NewKey());
+        request.Content = content;
+
+        using var response = await world.Client.SendAsync(request, TestContext.Current.CancellationToken);
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var document = JsonDocument.Parse(text);
+        var answer = new ApiAnswer(response.StatusCode, document.RootElement.Clone(), response.Headers);
+
+        answer.Status.ShouldBe((HttpStatusCode)413, text);
+        answer.ErrorCode.ShouldBe(ApiErrorCode.PayloadTooLarge);
+        var detail = answer.Body.GetProperty("error").GetProperty("details")[0];
+        detail.GetProperty("path").GetString().ShouldBe("run_body_bytes");
+        detail.GetProperty("limit").GetInt64().ShouldBe(OrchestratorEndpoints.MaxRunBytes);
+        detail.GetProperty("actual").GetInt64().ShouldBeGreaterThan(OrchestratorEndpoints.MaxRunBytes);
 
         await RunCreationTests.AssertNoRunRowsAsync(_fixture, world);
     }
@@ -269,40 +324,91 @@ public sealed class IngestCapsTests(PostgresTenancyFixture fixture)
         await RunCreationTests.AssertNoRunRowsAsync(_fixture, world);
     }
 
-    /// <summary>
-    /// Each refusal is counted once under the cap that refused it, on the counter's closed label vocabulary, so an
-    /// operator can tell which cap is firing without reading a body.
-    /// </summary>
+    /// <summary>The variant axis at its cap is accepted: two variants under a cap of two create the run.</summary>
     [Fact]
-    public async Task CreateRun_CapRefusal_CountsTheCap()
+    public async Task CreateRun_VariantsAtTheCap_IsAccepted()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        await using var capped = CappedHost(world, ("MaxManifestExecutions", 3));
-
-        using var listener = IngestTelemetryCapture.Caps(out ConcurrentBag<string> caps);
+        await using var capped = CappedHost(world, ("MaxManifestVariants", 2));
 
         var answer = await RunCreationTests.CreateRunAsync(
             world,
             RunCreationTests.RunBody(world.ManifestId),
             client: capped.Client);
 
-        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, answer.ErrorMessage);
-        caps.ShouldContain("manifest_executions");
+        answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
+        (await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.planned_execution where org_id = '{world.Org}'"))
+            .ShouldBe(4, "two cases × two variants × one environment");
+    }
+
+    /// <summary>
+    /// Each refusal is counted exactly once under the cap that refused it, on the counter's closed label vocabulary, so
+    /// an operator can tell which cap is firing without reading a body.
+    /// </summary>
+    [Fact]
+    public async Task CapRefusals_CountEachCapExactlyOnce()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+
+        var manifest = ManifestBody(world);
+        await using var capped = CappedHost(
+            world,
+            ("MaxManifestBytes", Encoding.UTF8.GetByteCount(manifest) - 1),
+            ("MaxManifestVariants", 1));
+
+        using var listener = IngestTelemetryCapture.Caps(out ConcurrentBag<string> caps);
+
+        var upload = await UploadManifestAsync(capped.Client, world, manifest);
+        upload.Status.ShouldBe((HttpStatusCode)413, upload.ErrorMessage);
+
+        var run = await RunCreationTests.CreateRunAsync(
+            world,
+            RunCreationTests.RunBody(world.ManifestId),
+            client: capped.Client);
+        run.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, run.ErrorMessage);
+
+        caps.Count(cap => cap == "manifest_bytes").ShouldBe(1);
+        caps.Count(cap => cap == "manifest_variants").ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A plan past the retired schema bound is a legal manifest: the schema admits every count the configured
+    /// execution cap can be raised to, so the runtime cap — not a schema bound — refuses a plan over its value.
+    /// </summary>
+    [Fact]
+    public async Task UploadManifest_TenThousandAndOneExecutions_IsAccepted()
+    {
+        // 73 cases × 137 variants × one environment is 10 001 planned executions, each covered once.
+        await using var world = await RunCreationTests.StartAsync(_fixture, cases: 73);
+
+        var manifest = RunCreationTests.Manifest(world.SuiteRevision, world.Cases, variants: 137, shards: 1);
+        manifest["environment_revision_id"] = world.EnvironmentRevision.ToString();
+        manifest["planned_executions"]!.AsArray().Count.ShouldBe(10_001);
+
+        var answer = await UploadManifestAsync(world.Client, world, manifest.ToJsonString());
+
+        answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
+        (await _fixture.ScalarAsync<int>(world.Database, $"select planned_count from public.manifest where id = '{answer.Id("manifest_id")}'"))
+            .ShouldBe(10_001);
     }
 
     // ------------------------------------------------------------------ helpers
 
     /// <summary>
-    /// The world's own manifest, serialised exactly as the arrange step uploaded it, so a body-boundary test can
-    /// measure it and reuse it.
+    /// A manifest of the world's suite and cases, serialised so a body-boundary test can measure it and reuse it. The
+    /// axes are parameters because a test that counts manifest rows needs a plan of its own.
     /// </summary>
-    private static string ManifestBody(RunCreationTests.World world)
+    private static string ManifestBody(RunCreationTests.World world, int variants = 2, int shards = 2)
     {
-        var manifest = RunCreationTests.Manifest(world.SuiteRevision, world.Cases, variants: 2, shards: 2);
+        var manifest = RunCreationTests.Manifest(world.SuiteRevision, world.Cases, variants, shards);
         manifest["environment_revision_id"] = world.EnvironmentRevision.ToString();
 
         return manifest.ToJsonString();
     }
+
+    /// <summary>The manifest rows the world's org holds.</summary>
+    private async Task<long> ManifestCountAsync(RunCreationTests.World world) =>
+        await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.manifest where org_id = '{world.Org}'");
 
     /// <summary>One upload of <paramref name="manifest"/> as the world's caller, through a given host.</summary>
     private static async Task<ApiAnswer> UploadManifestAsync(
@@ -346,6 +452,14 @@ public sealed class IngestCapsTests(PostgresTenancyFixture fixture)
             Client.Dispose();
             await api.DisposeAsync();
         }
+    }
+
+    /// <summary>A host body-size feature whose limit and read-only state a test sets.</summary>
+    private sealed class BodySizeFeature(long? maxRequestBodySize, bool readOnly = false) : IHttpMaxRequestBodySizeFeature
+    {
+        public bool IsReadOnly { get; } = readOnly;
+
+        public long? MaxRequestBodySize { get; set; } = maxRequestBodySize;
     }
 
     /// <summary>

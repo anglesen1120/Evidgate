@@ -46,7 +46,7 @@ public static class EvidgateTelemetry
     /// <summary>
     /// Counter of ingestion requests refused by one published cap, tagged by the cap name only
     /// (<c>manifest_bytes</c>, <c>manifest_executions</c>, <c>manifest_variants</c>, <c>report_cases</c>,
-    /// <c>report_bytes</c>). Never labelled with a value, an id or a body.
+    /// <c>report_bytes</c>, <c>run_body_bytes</c>). Never labelled with a value, an id or a body.
     /// </summary>
     public const string IngestCapExceededMetricName = "evidgate_ingest_cap_exceeded_total";
 
@@ -239,7 +239,7 @@ public static class EvidgateTelemetry
     }
 
     private static bool IsCapName(string cap) =>
-        cap is "manifest_bytes" or "manifest_executions" or "manifest_variants" or "report_cases" or "report_bytes";
+        cap is "manifest_bytes" or "manifest_executions" or "manifest_variants" or "report_cases" or "report_bytes" or "run_body_bytes";
 
     /// <summary>
     /// Counts one adapter capability refused at first send (04.7.1-T2), tagged by the

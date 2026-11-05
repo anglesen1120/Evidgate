@@ -13,7 +13,12 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing;
 /// </summary>
 internal sealed class ParsingService : IParsing
 {
-    /// <summary>The entry-count cap used when the caller has no configured value; the published default.</summary>
+    /// <summary>
+    /// The entry-count cap used when the caller has no configured value; the published default. This folder is also
+    /// source-linked into the parser executable, which has no reference to the ingestion contracts, so the number is
+    /// repeated here; <c>Parser_default_report_cap_is_the_published_cap</c> fails when it drifts from
+    /// <c>IngestionLimits.DefaultMaxReportCases</c>.
+    /// </summary>
     public const long DefaultMaxReportCases = 150_000;
 
     private readonly long maxReportCases;

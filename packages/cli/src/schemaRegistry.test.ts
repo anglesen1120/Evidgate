@@ -5,7 +5,7 @@
 // silently overwritten, cross-file $refs resolved from the loaded set only, and
 // the x-max-bytes cap. The per-vector verdicts of the documents that cross a file
 // boundary live in fixtures/contracts/vectors/execute.v1|collect.v1 (parity.test.ts).
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -154,11 +154,14 @@ describe('contract schema registry', () => {
       env_needs: { target_envs: [] },
     });
 
-    // 10 000 planned executions and 256 shards are the declared bounds (05.1.1-T1.2).
-    expect(schemas.validateParsed('manifest.v1', atBounds(10000, 256)).errors).toEqual([]);
-    expect(schemas.validateParsed('manifest.v1', atBounds(10001, 1)).errors).toEqual([
-      { index: null, path: '/planned_executions', reason: 'max_items' },
-    ]);
+    // The execution bound is the ceiling the configured cap may be raised to, so a plan past the retired 10 000
+    // bound is legal and only the runtime cap refuses it; 256 shards stays the schema's own bound.
+    const schema = JSON.parse(
+      readFileSync(join(repoRoot, 'contracts', 'manifest', 'manifest.v1.json'), 'utf8'),
+    ) as { properties: { planned_executions: { maxItems: number } } };
+
+    expect(schema.properties.planned_executions.maxItems).toBe(1_000_000);
+    expect(schemas.validateParsed('manifest.v1', atBounds(10001, 256)).errors).toEqual([]);
     expect(schemas.validateParsed('manifest.v1', atBounds(1, 257)).errors).toEqual([
       { index: null, path: '/shard_plan/shards', reason: 'max_items' },
     ]);

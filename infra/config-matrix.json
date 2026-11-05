@@ -1291,7 +1291,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "manifest body cap of `POST /v1/runs` (04.1.3-T1, AC1): the byte count of the request body, measured while it is read and before any parse or allocation, so a body without `Content-Length`, or one whose `Content-Length` understates it, is still refused. Exceeding it is 413 `payload_too_large` with detail path `manifest_bytes`, the limit and the observed count, and no run row. Option default 33554432 (32 MiB uncompressed); the range 1..67108864 keeps a deployment from switching the cap off and from admitting a manifest larger than the host's own request body limit."
+      "note": "manifest body cap of `POST /v1/projects/{p}/manifests` (04.1.3-T1, AC1): the byte count of the request body, measured while it is read and before any parse or allocation, so a body without `Content-Length`, or one whose `Content-Length` understates it, is still refused. Exceeding it is 413 `payload_too_large` with detail path `manifest_bytes`, the limit and the declared length or counted bytes, and no manifest row. Option default 33554432 (32 MiB uncompressed); the range 1..67108864 keeps a deployment from switching the cap off, and the upload route lifts the host's own request-body limit so this cap is the one that refuses a larger body. The schema's own `x-max-bytes` is 33554432, so raising the option above that value admits no larger body."
     },
     {
       "key": "EVIDGATE__INGESTION__MAXMANIFESTEXECUTIONS",

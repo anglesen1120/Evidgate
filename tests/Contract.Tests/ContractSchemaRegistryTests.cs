@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Contracts.Validation;
+using Evidgate.Modules.Ingestion.Contracts;
 using Shouldly;
 using Xunit;
 
@@ -317,18 +318,28 @@ public sealed class ContractSchemaRegistryTests
     }
 
     /// <summary>
-    /// 05.1.1-T1.2 with 04.1.3-T1: the bounds live in the schema, not in a later check — 150 000 planned executions and
-    /// 256 shards are accepted at the limit and one past it is not. Validated as a parsed document because the
-    /// transport cap (32 MiB) would otherwise fire first on the execution axis: a body that large is a 413, not a
-    /// <c>max_items</c> row, which is why the execution axis is asserted at its declared value and the document is
-    /// materialised on the shard axis.
+    /// The schema admits every count the configured caps may be raised to, so the runtime cap — not a schema bound —
+    /// is what refuses a plan over its configured value. The 256-shard bound is the schema's own. Validated as a
+    /// parsed document because the transport cap (32 MiB) would otherwise fire first on the execution axis: a body
+    /// that large is a 413, not a <c>max_items</c> row, which is why the execution axis is asserted at its declared
+    /// value and the document is materialised on the shard axis.
     /// </summary>
     [Fact]
     public void Manifest_Bounds_Are_Encoded_In_The_Schema()
     {
-        ExecutionBound().ShouldBe(150_000, "the planned-execution bound is the published cap");
-        ManifestSchema("properties")["matrix"]!.AsObject()["properties"]!.AsObject()["case_revision_ids"]!.AsObject()["maxItems"]!.GetValue<int>()
-            .ShouldBe(150_000, "the matrix's case bound is the same cap");
+        ExecutionBound().ShouldBe(IngestionLimits.MaxManifestExecutionsCeiling, "the planned-execution bound is the configurable ceiling");
+
+        var matrix = ManifestSchema("properties")["matrix"]!.AsObject()["properties"]!.AsObject();
+        matrix["case_revision_ids"]!.AsObject()["maxItems"]!.GetValue<int>()
+            .ShouldBe(IngestionLimits.MaxManifestExecutionsCeiling, "the matrix's case bound is the same ceiling");
+        matrix["variants"]!.AsObject()["maxItems"]!.GetValue<int>()
+            .ShouldBe(IngestionLimits.MaxManifestVariantsCeiling, "the variant axis admits the configurable ceiling");
+
+        var shard = ManifestSchema("$defs")["shard"]!.AsObject()["properties"]!.AsObject();
+        shard["from_index"]!.AsObject()["maximum"]!.GetValue<int>()
+            .ShouldBe(IngestionLimits.MaxManifestExecutionsCeiling - 1, "a shard starts inside the largest plan");
+        shard["to_index"]!.AsObject()["maximum"]!.GetValue<int>()
+            .ShouldBe(IngestionLimits.MaxManifestExecutionsCeiling, "a shard ends at the largest plan's count");
 
         AtLimit(1, 256).IsValid.ShouldBeTrue("256 shards are the declared bound");
         AtLimit(1, 257).Errors.ShouldBe(

@@ -532,10 +532,13 @@ Output:
 
 The cap is the server's documented limit for a manifest body: openapi
 `createRun`'s `x-evidgate-limits.manifest_bytes` and the option behind it
-(`IngestionLimits.DefaultMaxManifestBytes = 32 * 1024 * 1024`, overridable per
+(`IngestionLimits.DefaultMaxManifestBytes = 32 * 1024 * 1024`, lowerable per
 deployment through `EVIDGATE__INGESTION__MAXMANIFESTBYTES`). The CLI refuses a
-larger file locally, so the 413 is never reached for a file the CLI can open;
-the server still counts the bytes itself, so a client that bypasses the CLI is
+file larger than that default locally, so a deployment at the default never
+sees the 413 for a file the CLI can open; a deployment that lowered the cap
+answers 413 `payload_too_large` (detail path `manifest_bytes`) for a file the
+CLI accepted locally, and the CLI prints that refusal as the server sent it.
+The server still counts the bytes itself, so a client that bypasses the CLI is
 refused too. The manifest content is never echoed, not even under `--verbose`.
 
 ## 9. Run create

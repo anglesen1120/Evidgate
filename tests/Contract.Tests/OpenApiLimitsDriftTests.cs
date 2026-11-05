@@ -2,6 +2,7 @@
 // the spec declares on `createRun` and the constants behind it, and fails on any difference in either direction — a
 // cap added to the code but not published, or a published value the code no longer uses.
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Ingestion.Contracts;
 using Shouldly;
@@ -57,6 +58,52 @@ public sealed class OpenApiLimitsDriftTests
         text.ShouldContain("manifest_executions");
         text.ShouldContain("manifest_variants");
         text.ShouldContain("report_cases");
+    }
+
+    /// <summary>
+    /// The manifest upload documents the cap it enforces: the configurable default and the option that lowers it, never
+    /// the retired fixed 256 KiB.
+    /// </summary>
+    [Fact]
+    public void OpenApi_ManifestUploadDocumentsTheConfigurableCap()
+    {
+        var block = OperationBlock("createManifest");
+
+        block.ShouldNotContain("256 KiB", Case.Sensitive, "the retired fixed manifest cap must not come back");
+        block.ShouldContain(
+            IngestionLimits.DefaultMaxManifestBytes.ToString(CultureInfo.InvariantCulture),
+            Case.Sensitive,
+            "the description must state the published default");
+        block.ShouldContain(
+            "EVIDGATE__INGESTION__MAXMANIFESTBYTES",
+            Case.Sensitive,
+            "the description must name the option that lowers the cap");
+    }
+
+    /// <summary>The spec lines of one operation: from its path line to the next path line.</summary>
+    private static string OperationBlock(string operationId)
+    {
+        var lines = File.ReadAllLines(Path.Combine(ContractPaths.ContractsDirectory, "openapi.yaml"));
+        var operation = Array.FindIndex(lines, line => line.Trim() == $"operationId: {operationId}");
+        operation.ShouldBeGreaterThanOrEqualTo(0, $"the spec must document {operationId}");
+
+        var start = operation;
+        while (start > 0 && !Regex.IsMatch(lines[start], @"^  /\S"))
+        {
+            start--;
+        }
+
+        var end = lines.Length;
+        for (var index = operation + 1; index < lines.Length; index++)
+        {
+            if (Regex.IsMatch(lines[index], @"^  /\S"))
+            {
+                end = index;
+                break;
+            }
+        }
+
+        return string.Join('\n', lines[start..end]);
     }
 
     /// <summary>Reads the <c>x-evidgate-limits</c> mapping as the numbers a client is told.</summary>

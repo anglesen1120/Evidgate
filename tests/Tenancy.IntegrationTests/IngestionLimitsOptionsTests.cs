@@ -5,6 +5,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Collections.Generic;
 using System.Linq;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Ingestion.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -150,6 +151,16 @@ public sealed class IngestionLimitsOptionsTests
         defaults.MaxManifestVariants.ShouldBe(20);
         defaults.MaxReportCases.ShouldBe(150_000);
         Validate(defaults).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The parser's own fallback entry cap is the published report cap, so the number the spec publishes
+    /// (<c>x-evidgate-limits.report_cases</c>) is the one the parser applies when nothing is configured.
+    /// </summary>
+    [Fact]
+    public void Parser_default_report_cap_is_the_published_cap()
+    {
+        ParsingService.DefaultMaxReportCases.ShouldBe(IngestionLimits.DefaultMaxReportCases);
     }
 
     [Theory]

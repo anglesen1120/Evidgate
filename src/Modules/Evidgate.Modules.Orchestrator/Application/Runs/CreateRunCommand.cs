@@ -52,7 +52,7 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// </para>
 /// </summary>
 /// <param name="ProjectId">The project from the route.</param>
-/// <param name="Body">The raw UTF-8 body, at most 64 KiB.</param>
+/// <param name="Body">The raw UTF-8 body, at most 64 KiB — the run-create transport cap the endpoint counts.</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c>.</param>
 /// <param name="CiRunBinding">
 /// The caller's verified CI run reference in the <see cref="CiRunReference.ToBindingReference"/> form
