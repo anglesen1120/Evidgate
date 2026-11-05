@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using Evidgate.Modules.Usage.Contracts;
 
@@ -21,12 +22,15 @@ internal static partial class UsagePriceCardRules
     /// <summary>Longest <c>rate_card_version</c> the column accepts.</summary>
     internal const int MaxVersionLength = 64;
 
+    /// <summary>Largest number of refusals one response carries before the walk stops.</summary>
+    internal const int MaxViolations = 100;
+
     /// <summary>
     /// The amount shape: plain decimal digits with an optional fraction, never a sign, an exponent, a group separator or
-    /// surrounding whitespace. Bounded to 20 integer and 12 fractional digits, which is what the money columns store
-    /// sanely; a larger value is refused rather than rounded.
+    /// surrounding whitespace. At most 16 integer and 12 fraction digits — 28 significant digits, which decimal holds
+    /// exactly — so a value that cannot be stored without rounding is refused rather than rounded.
     /// </summary>
-    [GeneratedRegex(@"\A[0-9]{1,20}(\.[0-9]{1,12})?\z", RegexOptions.CultureInvariant, 100)]
+    [GeneratedRegex(@"\A[0-9]{1,16}(\.[0-9]{1,12})?\z", RegexOptions.CultureInvariant, 100)]
     private static partial Regex AmountShape();
 
     /// <summary>The ISO-4217 shape the column's check mirrors.</summary>
@@ -55,14 +59,65 @@ internal static partial class UsagePriceCardRules
     {
         value = 0m;
 
-        if (!AmountShape().IsMatch(token))
+        if (!AmountShape().IsMatch(token)
+            || !decimal.TryParse(token, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var parsed))
         {
             return false;
         }
 
-        // A 20-integer-digit token can exceed decimal's range even though it fits the shape: that is a refusal too.
-        return decimal.TryParse(token, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out value);
+        // The digit caps should already keep the token exact; comparing the digits decimal kept against the ones the
+        // token spelled is the cross-check that proves it, so a rounded amount can never pass as a stored one.
+        if (!DigitsMatch(token, parsed))
+        {
+            return false;
+        }
+
+        value = parsed;
+        return true;
     }
+
+    /// <summary>Whether two decimal texts spell the same significant digits, ignoring leading and trailing zeros.</summary>
+    private static bool DigitsMatch(string token, decimal value) =>
+        string.Equals(
+            SignificantDigits(token),
+            SignificantDigits(value.ToString(CultureInfo.InvariantCulture)),
+            StringComparison.Ordinal);
+
+    private static string SignificantDigits(string text)
+    {
+        var digits = new StringBuilder(text.Length);
+
+        foreach (var character in text)
+        {
+            if (character is >= '0' and <= '9')
+            {
+                digits.Append(character);
+            }
+        }
+
+        var start = 0;
+        var end = digits.Length;
+
+        while (start < end && digits[start] == '0')
+        {
+            start++;
+        }
+
+        while (end > start && digits[end - 1] == '0')
+        {
+            end--;
+        }
+
+        return start == end ? "0" : digits.ToString(start, end - start);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="instant"/> is a whole number of microseconds, the finest precision <c>timestamptz</c>
+    /// stores. A finer instant would be rounded on write, moving a window boundary away from the one the card named.
+    /// </summary>
+    /// <param name="instant">The parsed instant.</param>
+    internal static bool IsMicrosecondAligned(DateTimeOffset instant) =>
+        instant.UtcTicks % TimeSpan.TicksPerMicrosecond == 0;
 
     /// <summary>Whether <paramref name="value"/> is a currency code the column accepts.</summary>
     /// <param name="value">The candidate code.</param>

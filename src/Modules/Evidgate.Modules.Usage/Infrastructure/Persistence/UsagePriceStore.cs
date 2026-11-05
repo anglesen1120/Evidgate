@@ -114,11 +114,12 @@ internal sealed class UsagePriceStore(
 
         try
         {
-            await using var command = CreateCommand(scope.Connection, scope.Transaction, card, orgId);
-            var ids = await ReadIdsAsync(command, cancellationToken).ConfigureAwait(false);
+            var (built, generated, cardIndexes) = CreateCommand(scope.Connection, scope.Transaction, card, orgId);
+            await using var command = built;
+            var written = await ReadIdsAsync(command, cancellationToken).ConfigureAwait(false);
 
             await ExecuteAsync(scope, "release savepoint " + Savepoint, cancellationToken).ConfigureAwait(false);
-            return UsagePriceLoadResult.Loaded(ids);
+            return UsagePriceLoadResult.Loaded(InCardOrder(written, generated, cardIndexes));
         }
         catch (PostgresException error) when (MapRefusal(error) is { } reason)
         {
@@ -143,11 +144,12 @@ internal sealed class UsagePriceStore(
 
         try
         {
-            await using var command = CreateCommand(connection, transaction, card, orgId: null);
-            var ids = await ReadIdsAsync(command, cancellationToken).ConfigureAwait(false);
+            var (built, generated, cardIndexes) = CreateCommand(connection, transaction, card, orgId: null);
+            await using var command = built;
+            var written = await ReadIdsAsync(command, cancellationToken).ConfigureAwait(false);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return UsagePriceLoadResult.Loaded(ids);
+            return UsagePriceLoadResult.Loaded(InCardOrder(written, generated, cardIndexes));
         }
         catch (PostgresException error) when (MapRefusal(error) is { } reason)
         {
@@ -206,13 +208,21 @@ internal sealed class UsagePriceStore(
             reader.GetString(7));
     }
 
-    private static NpgsqlCommand CreateCommand(
+    private static (NpgsqlCommand Command, Guid[] Generated, int[] CardIndexes) CreateCommand(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         UsagePriceCard card,
         Guid? orgId)
     {
         var count = card.Rows.Count;
+
+        // The overlap trigger takes one advisory lock per (scope, metric) in the order the rows arrive, so two cards
+        // holding the same metrics in different orders would wait on each other. Writing every card in metric order
+        // gives all loads one lock order; the returned ids are put back in the card's order by the caller.
+        var order = Enumerable.Range(0, count)
+            .OrderBy(slot => (int)card.Rows[slot].Metric)
+            .ToArray();
+
         var ids = new Guid[count];
         var metrics = new string[count];
         var unitPrices = new decimal[count];
@@ -221,16 +231,16 @@ internal sealed class UsagePriceStore(
         var effectiveTo = new DateTime?[count];
         var includedQuotas = new decimal?[count];
 
-        for (var index = 0; index < count; index++)
+        for (var slot = 0; slot < count; slot++)
         {
-            var row = card.Rows[index];
-            ids[index] = Guid.CreateVersion7();
-            metrics[index] = UsageMetricWire.ToWireValue(row.Metric);
-            unitPrices[index] = row.UnitPrice;
-            currencies[index] = row.Currency;
-            effectiveFrom[index] = row.EffectiveFrom.UtcDateTime;
-            effectiveTo[index] = row.EffectiveTo?.UtcDateTime;
-            includedQuotas[index] = row.IncludedQuota;
+            var row = card.Rows[order[slot]];
+            ids[slot] = Guid.CreateVersion7();
+            metrics[slot] = UsageMetricWire.ToWireValue(row.Metric);
+            unitPrices[slot] = row.UnitPrice;
+            currencies[slot] = row.Currency;
+            effectiveFrom[slot] = row.EffectiveFrom.UtcDateTime;
+            effectiveTo[slot] = row.EffectiveTo?.UtcDateTime;
+            includedQuotas[slot] = row.IncludedQuota;
         }
 
         var command = connection.CreateCommand();
@@ -250,7 +260,35 @@ internal sealed class UsagePriceStore(
             command.Parameters.Add(new NpgsqlParameter("org_id", NpgsqlDbType.Uuid) { Value = org });
         }
 
-        return command;
+        return (command, ids, order);
+    }
+
+    /// <summary>
+    /// Puts the ids the statement returned back in the card's own order. The rows were written in metric order, and
+    /// <c>RETURNING</c> does not promise an order of its own, so each id is matched to the row that generated it
+    /// instead of trusting the result's sequence.
+    /// </summary>
+    private static Guid[] InCardOrder(IReadOnlyList<Guid> written, Guid[] generated, int[] cardIndexes)
+    {
+        if (written.Count != generated.Length)
+        {
+            throw new InvalidOperationException(
+                "the card load returned " + written.Count + " rows for a card of " + generated.Length);
+        }
+
+        var cardIndexById = new Dictionary<Guid, int>(generated.Length);
+        for (var slot = 0; slot < generated.Length; slot++)
+        {
+            cardIndexById[generated[slot]] = cardIndexes[slot];
+        }
+
+        var ids = new Guid[written.Count];
+        foreach (var id in written)
+        {
+            ids[cardIndexById[id]] = id;
+        }
+
+        return ids;
     }
 
     private static async Task<IReadOnlyList<Guid>> ReadIdsAsync(

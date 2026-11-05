@@ -70,11 +70,17 @@ public sealed class UsagePriceResolverTests
         DateTimeOffset? from = null,
         DateTimeOffset? to = null,
         string metric = "results") =>
-        "{\"rate_card_version\":\"" + version + "\",\"prices\":[{\"metric\":\"" + metric
+        CardOfRows(version, Row(metric, unitPrice, from ?? January, to));
+
+    private static string CardOfRows(string version, params string[] rows) =>
+        "{\"rate_card_version\":\"" + version + "\",\"prices\":[" + string.Join(",", rows) + "]}";
+
+    private static string Row(string metric, string unitPrice, DateTimeOffset from, DateTimeOffset? to) =>
+        "{\"metric\":\"" + metric
         + "\",\"unit_price\":\"" + unitPrice + "\",\"currency\":\"USD\",\"effective_from\":\""
-        + Instant(from ?? January) + "\",\"effective_to\":"
+        + Instant(from) + "\",\"effective_to\":"
         + (to is null ? "null" : "\"" + Instant(to.Value) + "\"")
-        + ",\"included_quota\":null}]}";
+        + ",\"included_quota\":null}";
 
     private static string Instant(DateTimeOffset value) =>
         value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffffffZ", CultureInfo.InvariantCulture);
@@ -131,6 +137,24 @@ public sealed class UsagePriceResolverTests
         return _fixture.ScalarAsync<long>(
             world.Database,
             $"select count(*) from public.usage_price where rate_card_version = '{version}' and {scope}");
+    }
+
+    /// <summary>The metric and unit price a stored row holds, read by the id the load returned.</summary>
+    private async Task<(string Metric, decimal UnitPrice)> RowAsync(World world, Guid priceId, Guid? org)
+    {
+        var scope = org is null
+            ? "org_id is null"
+            : "org_id = '" + org.Value.ToString("D", CultureInfo.InvariantCulture) + "'";
+        var filter = " where id = '" + priceId.ToString("D", CultureInfo.InvariantCulture) + "' and " + scope;
+
+        var metric = await _fixture.ScalarAsync<string>(
+            world.Database,
+            "select metric from public.usage_price" + filter);
+        var unitPrice = await _fixture.ScalarAsync<decimal>(
+            world.Database,
+            "select unit_price from public.usage_price" + filter);
+
+        return (metric, unitPrice);
     }
 
     /// <summary>One ledger row that points at <paramref name="priceRef"/>, written as the app role inside a tenant scope.</summary>
@@ -298,6 +322,208 @@ public sealed class UsagePriceResolverTests
         overlapping.Violations.ShouldContain(violation =>
             violation.Reason == UsagePriceRefusalReasons.OverlappingRange);
         (await CountAsync(world, "global-v2")).ShouldBe(0);
+    }
+
+    // ------------------------------------------------------------------ a whole card, two metrics
+
+    [Fact]
+    public async Task LoadOrg_TwoRowCard_SecondRowConflicts_NeitherRowPersists()
+    {
+        await using var world = await StartAsync();
+        (await LoadOrgAsync(world, world.Org, CardOfRows(
+            "org-base",
+            Row("results", "0.0100", January, February),
+            Row("ai_tokens", "0.0200", January, February)))).Succeeded.ShouldBeTrue();
+
+        var conflicting = await LoadOrgAsync(world, world.Org, CardOfRows(
+            "org-v2",
+            Row("results", "0.0300", February, March),
+            Row("ai_tokens", "0.0400", January, March)));
+
+        conflicting.Succeeded.ShouldBeFalse();
+        conflicting.PriceIds.ShouldBeEmpty();
+        conflicting.Violations.ShouldContain(violation =>
+            violation.Reason == UsagePriceRefusalReasons.OverlappingRange);
+
+        // The first row of the card had a clear window; the refused card still wrote neither row.
+        (await CountAsync(world, "org-v2", world.Org)).ShouldBe(0);
+        (await CountAsync(world, "org-base", world.Org)).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task LoadGlobal_TwoRowCard_SecondRowConflicts_NeitherRowPersists()
+    {
+        await using var world = await StartAsync();
+        (await LoadGlobalAsync(world, CardOfRows(
+            "global-base",
+            Row("results", "0.0100", January, February),
+            Row("ai_tokens", "0.0200", January, February)))).Succeeded.ShouldBeTrue();
+
+        var conflicting = await LoadGlobalAsync(world, CardOfRows(
+            "global-v2",
+            Row("results", "0.0300", February, March),
+            Row("ai_tokens", "0.0400", January, March)));
+
+        conflicting.Succeeded.ShouldBeFalse();
+        conflicting.PriceIds.ShouldBeEmpty();
+        conflicting.Violations.ShouldContain(violation =>
+            violation.Reason == UsagePriceRefusalReasons.OverlappingRange);
+        (await CountAsync(world, "global-v2")).ShouldBe(0);
+        (await CountAsync(world, "global-base")).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task LoadOrg_TwoRowCard_PersistsBothRowsAndReturnsIdsInCardOrder()
+    {
+        await using var world = await StartAsync();
+
+        var loaded = await LoadOrgAsync(world, world.Org, CardOfRows(
+            "org-pair",
+            Row("ai_tokens", "0.0200", January, February),
+            Row("results", "0.0100", January, February)));
+
+        loaded.Succeeded.ShouldBeTrue();
+        loaded.PriceIds.Count.ShouldBe(2);
+
+        // The rows are written in metric order so concurrent loads take the same locks, but the ids still follow the
+        // card's own order.
+        var first = await RowAsync(world, loaded.PriceIds[0], world.Org);
+        var second = await RowAsync(world, loaded.PriceIds[1], world.Org);
+
+        first.Metric.ShouldBe("ai_tokens");
+        first.UnitPrice.ShouldBe(0.0200m);
+        second.Metric.ShouldBe("results");
+        second.UnitPrice.ShouldBe(0.0100m);
+        (await CountAsync(world, "org-pair", world.Org)).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task LoadGlobal_TwoRowCard_PersistsBothRowsAndReturnsIdsInCardOrder()
+    {
+        await using var world = await StartAsync();
+
+        var loaded = await LoadGlobalAsync(world, CardOfRows(
+            "global-pair",
+            Row("ai_tokens", "0.0200", January, February),
+            Row("results", "0.0100", January, February)));
+
+        loaded.Succeeded.ShouldBeTrue();
+        loaded.PriceIds.Count.ShouldBe(2);
+
+        var first = await RowAsync(world, loaded.PriceIds[0], org: null);
+        var second = await RowAsync(world, loaded.PriceIds[1], org: null);
+
+        first.Metric.ShouldBe("ai_tokens");
+        first.UnitPrice.ShouldBe(0.0200m);
+        second.Metric.ShouldBe("results");
+        second.UnitPrice.ShouldBe(0.0100m);
+        (await CountAsync(world, "global-pair")).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task LoadOrg_ConcurrentCardsWithReversedMetricOrder_AllSucceed()
+    {
+        await using var world = await StartAsync();
+        var token = TestContext.Current.CancellationToken;
+
+        // One tenant scope per async flow: the factory refuses two in the same flow, so each load gets its own
+        // task, and the rendezvous releases both at the same instant.
+        using var arrived = new SemaphoreSlim(0, 2);
+        using var go = new SemaphoreSlim(0, 2);
+
+        for (var round = 0; round < 4; round++)
+        {
+            var start = January.AddDays(2 * round);
+            var middle = start.AddDays(1);
+            var end = start.AddDays(2);
+            var tag = "org-c" + round;
+
+            // Same two metrics, opposite orders, disjoint windows: with card order kept the two statements would
+            // wait on each other's advisory locks.
+            var forward = CardOfRows(
+                tag + "-forward",
+                Row("results", "0.0100", start, middle),
+                Row("ai_tokens", "0.0200", start, middle));
+            var reverse = CardOfRows(
+                tag + "-reverse",
+                Row("ai_tokens", "0.0300", middle, end),
+                Row("results", "0.0400", middle, end));
+
+            async Task<UsagePriceLoadResult> LoadInOwnFlowAsync(string card)
+            {
+                await using var services = world.Api.Services.CreateAsyncScope();
+                var provider = services.ServiceProvider;
+                await using var scope = await provider.GetRequiredService<ITenantScopeFactory>()
+                    .BeginAsync(world.Org, null, false, token);
+                var loader = provider.GetRequiredService<UsagePriceLoader>();
+
+                arrived.Release();
+                await go.WaitAsync(token);
+
+                var result = await loader.LoadAsync(UsagePriceScope.Org, Bytes(card), token);
+                await scope.CommitAsync(token);
+                return result;
+            }
+
+            var first = Task.Run(() => LoadInOwnFlowAsync(forward), token);
+            var second = Task.Run(() => LoadInOwnFlowAsync(reverse), token);
+
+            await arrived.WaitAsync(token);
+            await arrived.WaitAsync(token);
+            go.Release(2);
+
+            var results = await Task.WhenAll(first, second);
+
+            results.ShouldAllBe(result => result.Succeeded);
+        }
+    }
+
+    [Fact]
+    public async Task LoadGlobal_ConcurrentCardsWithReversedMetricOrder_AllSucceed()
+    {
+        await using var world = await StartAsync();
+        var token = TestContext.Current.CancellationToken;
+        using var arrived = new SemaphoreSlim(0, 2);
+        using var go = new SemaphoreSlim(0, 2);
+
+        for (var round = 0; round < 4; round++)
+        {
+            var start = January.AddDays(2 * round);
+            var middle = start.AddDays(1);
+            var end = start.AddDays(2);
+            var tag = "global-c" + round;
+
+            var forward = CardOfRows(
+                tag + "-forward",
+                Row("results", "0.0100", start, middle),
+                Row("ai_tokens", "0.0200", start, middle));
+            var reverse = CardOfRows(
+                tag + "-reverse",
+                Row("ai_tokens", "0.0300", middle, end),
+                Row("results", "0.0400", middle, end));
+
+            async Task<UsagePriceLoadResult> LoadInOwnFlowAsync(string card)
+            {
+                await using var services = world.Api.Services.CreateAsyncScope();
+                var loader = services.ServiceProvider.GetRequiredService<UsagePriceLoader>();
+
+                arrived.Release();
+                await go.WaitAsync(token);
+
+                return await loader.LoadAsync(UsagePriceScope.Global, Bytes(card), token);
+            }
+
+            var first = Task.Run(() => LoadInOwnFlowAsync(forward), token);
+            var second = Task.Run(() => LoadInOwnFlowAsync(reverse), token);
+
+            await arrived.WaitAsync(token);
+            await arrived.WaitAsync(token);
+            go.Release(2);
+
+            var results = await Task.WhenAll(first, second);
+
+            results.ShouldAllBe(result => result.Succeeded);
+        }
     }
 
     [Fact]

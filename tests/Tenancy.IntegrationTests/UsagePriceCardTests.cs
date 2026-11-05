@@ -95,6 +95,49 @@ public sealed class UsagePriceCardTests
         fromNumber.Rows[0].UnitPrice.ShouldBe(0.0100m);
     }
 
+    [Fact]
+    public void Parse_AmountAtTheDigitLimits_RoundTripsExactly()
+    {
+        // Sixteen integer and twelve fraction digits is the widest token the shape accepts: 28 significant digits,
+        // which is still inside decimal's exact range.
+        var card = ShouldParse(Card(Row(unitPrice: "\"1234567890123456.123456789012\"")));
+
+        card.Rows.ShouldHaveSingleItem().UnitPrice.ShouldBe(1234567890123456.123456789012m);
+    }
+
+    [Fact]
+    public void Parse_AmountWithLeadingZeros_ComparesOnlyItsSignificantDigits()
+    {
+        var card = ShouldParse(Card(Row(unitPrice: "\"0000000000000000.000000000001\"")));
+
+        card.Rows.ShouldHaveSingleItem().UnitPrice.ShouldBe(0.000000000001m);
+    }
+
+    [Fact]
+    public void Parse_AmountWiderThanTheDigitLimits_Refused()
+    {
+        ShouldParse(Card(Row(unitPrice: "\"1234567890123456\"")));
+
+        // Seventeen integer digits and a twenty-digit quota: both exceed what decimal holds exactly, as string and as
+        // a JSON number token, so neither is rounded into the column.
+        ShouldRefuse(
+            Card(Row(unitPrice: "\"12345678901234567\"")),
+            UsagePriceRefusalReasons.InvalidAmount,
+            "/prices/0/unit_price");
+        ShouldRefuse(
+            Card(Row(unitPrice: "12345678901234567")),
+            UsagePriceRefusalReasons.InvalidAmount,
+            "/prices/0/unit_price");
+        ShouldRefuse(
+            Card(Row(quota: "\"12345678901234567890\"")),
+            UsagePriceRefusalReasons.InvalidAmount,
+            "/prices/0/included_quota");
+        ShouldRefuse(
+            Card(Row(quota: "12345678901234567890")),
+            UsagePriceRefusalReasons.InvalidAmount,
+            "/prices/0/included_quota");
+    }
+
     // ------------------------------------------------------------------ ranges and versions
 
     [Fact]
@@ -147,6 +190,43 @@ public sealed class UsagePriceCardTests
             Card(Row(from: "\"2026-01-01T00:00:00\"")),
             UsagePriceRefusalReasons.InvalidValue,
             "/prices/0/effective_from");
+    }
+
+    [Fact]
+    public void Parse_InstantFinerThanAMicrosecond_Refused()
+    {
+        // timestamptz stores whole microseconds; anything finer would move the stored boundary.
+        ShouldParse(Card(Row(
+            from: "\"2026-01-01T00:00:00.123456Z\"",
+            to: "\"2026-01-01T00:00:01.123456Z\"")));
+
+        ShouldRefuse(
+            Card(Row(from: "\"2026-01-01T00:00:00.1234567Z\"")),
+            UsagePriceRefusalReasons.InvalidInstant,
+            "/prices/0/effective_from");
+        ShouldRefuse(
+            Card(Row(to: "\"2026-01-31T00:00:00.0000001Z\"")),
+            UsagePriceRefusalReasons.InvalidInstant,
+            "/prices/0/effective_to");
+    }
+
+    [Fact]
+    public void Parse_WindowFinerThanAMicrosecond_RefusedRatherThanCollapsed()
+    {
+        // Both bounds would round to the same microsecond, so the stored window would be empty.
+        ShouldRefuse(
+            Card(Row(from: "\"2026-01-01T00:00:00.0000001Z\"", to: "\"2026-01-01T00:00:00.0000009Z\"")),
+            UsagePriceRefusalReasons.InvalidInstant,
+            "/prices/0/effective_from");
+        ShouldRefuse(
+            Card(Row(from: "\"2026-01-01T00:00:00Z\"", to: "\"2026-01-01T00:00:00.0000001Z\"")),
+            UsagePriceRefusalReasons.InvalidInstant,
+            "/prices/0/effective_to");
+
+        // One microsecond is the shortest window the column can hold.
+        ShouldParse(Card(Row(
+            from: "\"2026-01-01T00:00:00.000000Z\"",
+            to: "\"2026-01-01T00:00:00.000001Z\"")));
     }
 
     // ------------------------------------------------------------------ money
@@ -345,6 +425,175 @@ public sealed class UsagePriceCardTests
         ShouldParse(Card(Row()));
 
         ShouldRefuse("[]", UsagePriceRefusalReasons.InvalidValue, "/");
+    }
+
+    // ------------------------------------------------------------------ text the database cannot store
+
+    [Fact]
+    public void Parse_LoneSurrogateInAValue_RefusedWithoutThrowing()
+    {
+        ShouldParse(Card(Row()));
+
+        ShouldRefuse(
+            "{\"rate_card_version\":\"\\ud800\",\"prices\":[" + Row() + "]}",
+            UsagePriceRefusalReasons.InvalidValue,
+            "/rate_card_version");
+        ShouldRefuse(
+            Card(Row(metric: "\"\\ud800\"")),
+            UsagePriceRefusalReasons.InvalidValue,
+            "/prices/0/metric");
+        ShouldRefuse(
+            Card(Row(currency: "\"\\ud800\"")),
+            UsagePriceRefusalReasons.InvalidValue,
+            "/prices/0/currency");
+        ShouldRefuse(
+            Card(Row(from: "\"\\ud800\"")),
+            UsagePriceRefusalReasons.InvalidValue,
+            "/prices/0/effective_from");
+        ShouldRefuse(
+            Card(Row(unitPrice: "\"\\ud800\"")),
+            UsagePriceRefusalReasons.InvalidAmount,
+            "/prices/0/unit_price");
+        ShouldRefuse(
+            Card(Row(quota: "\"\\ud800\"")),
+            UsagePriceRefusalReasons.InvalidAmount,
+            "/prices/0/included_quota");
+    }
+
+    [Fact]
+    public void Parse_NullCharacterInAValue_RefusedAsInvalidValue()
+    {
+        ShouldParse(Card(Row()));
+
+        ShouldRefuse(
+            "{\"rate_card_version\":\"a\\u0000b\",\"prices\":[" + Row() + "]}",
+            UsagePriceRefusalReasons.InvalidValue,
+            "/rate_card_version");
+        ShouldRefuse(
+            Card(Row(metric: "\"res\\u0000ults\"")),
+            UsagePriceRefusalReasons.InvalidValue,
+            "/prices/0/metric");
+    }
+
+    [Fact]
+    public void Parse_UnstorableMemberName_RefusedWithoutRepeatingTheName()
+    {
+        ShouldParse(Card(Row()));
+
+        var root = Parse("{\"rate_card_version\":" + Version + ",\"prices\":[" + Row() + "],\"\\ud800\":1}");
+        root.Card.ShouldBeNull();
+        root.Violations.ShouldContain(violation =>
+            violation.Reason == UsagePriceRefusalReasons.InvalidValue && violation.Path == "/<unknown>");
+
+        var row = Parse(Card(Row(extra: ",\"\\ud800\":1")));
+        row.Card.ShouldBeNull();
+        row.Violations.ShouldContain(violation =>
+            violation.Reason == UsagePriceRefusalReasons.InvalidValue
+            && violation.Path == "/prices/0/<unknown>");
+    }
+
+    [Fact]
+    public void Parse_SurrogatePairInAValue_IsStorableTextAndParses()
+    {
+        // A valid pair is ordinary text: the guard must refuse lone halves, not every non-BMP character.
+        var card = ShouldParse("{\"rate_card_version\":\"2026-\\ud83c\\udf89\",\"prices\":[" + Row() + "]}");
+
+        card.RateCardVersion.ShouldBe("2026-\U0001F389");
+    }
+
+    // ------------------------------------------------------------------ bounded refusals
+
+    [Fact]
+    public void Parse_MoreRefusalsThanTheCap_StopsTheWalkAndNamesTheOverflow()
+    {
+        // The largest card, every row naming eight members the card does not declare: thousands of refusals.
+        var rows = Enumerable.Range(0, UsagePriceCardRules.MaxRows)
+            .Select(_ => Row(extra: string.Concat(Enumerable.Range(0, 8).Select(index => ",\"x" + index + "\":0"))))
+            .ToArray();
+
+        var result = Parse(Card(rows));
+
+        result.Card.ShouldBeNull();
+        result.Violations.Count.ShouldBe(UsagePriceCardRules.MaxViolations + 1);
+        result.Violations[^1].Reason.ShouldBe(UsagePriceRefusalReasons.TooManyViolations);
+        result.Violations[^1].Path.ShouldBe("/");
+    }
+
+    [Fact]
+    public void Parse_MemberNameAtThePathLimit_IsTheLongestNameARefusalRepeats()
+    {
+        var atLimit = new string('m', 64);
+
+        var echoed = Parse("{\"rate_card_version\":" + Version + ",\"prices\":[" + Row() + "],\"" + atLimit + "\":1}");
+        echoed.Violations.ShouldContain(violation =>
+            violation.Reason == UsagePriceRefusalReasons.UnknownField && violation.Path == "/" + atLimit);
+
+        var overLimit = new string('m', 65);
+        var bounded = Parse("{\"rate_card_version\":" + Version + ",\"prices\":[" + Row() + "],\"" + overLimit + "\":1}");
+        bounded.Violations.ShouldContain(violation =>
+            violation.Reason == UsagePriceRefusalReasons.UnknownField && violation.Path == "/<unknown>");
+    }
+
+    [Fact]
+    public void Parse_VeryLongMemberName_RefusedWithABoundedPath()
+    {
+        var name = new string('n', 200 * 1024);
+
+        var result = Parse("{\"rate_card_version\":" + Version + ",\"prices\":[" + Row() + "],\"" + name + "\":1}");
+
+        result.Card.ShouldBeNull();
+        var violation = result.Violations.ShouldHaveSingleItem();
+        violation.Reason.ShouldBe(UsagePriceRefusalReasons.UnknownField);
+        violation.Path.ShouldBe("/<unknown>");
+
+        var rowResult = Parse(Card(Row(extra: ",\"" + name + "\":1")));
+        rowResult.Violations.ShouldContain(inner =>
+            inner.Reason == UsagePriceRefusalReasons.UnknownField && inner.Path == "/prices/0/<unknown>");
+    }
+
+    [Fact]
+    public void Parse_MemberNameFillingTheWholeBody_RefusedWithABoundedPath()
+    {
+        // The largest name that still parses: everything but the fixed parts of the document. A name that filled the
+        // cap by itself could never reach the walk, which is why the body cap is checked first.
+        var prefix = "{\"rate_card_version\":" + Version + ",\"prices\":[" + Row() + "],\"";
+        const string suffix = "\":1}";
+        var name = new string('n', UsagePriceCardRules.MaxBodyBytes - Encoding.UTF8.GetByteCount(prefix + suffix));
+
+        var result = Parse(prefix + name + suffix);
+
+        result.Card.ShouldBeNull();
+        var violation = result.Violations.ShouldHaveSingleItem();
+        violation.Reason.ShouldBe(UsagePriceRefusalReasons.UnknownField);
+        violation.Path.ShouldBe("/<unknown>");
+    }
+
+    [Fact]
+    public void Parse_MemberNameAsLongAsTheBodyCap_RefusedWithoutEchoingIt()
+    {
+        var name = new string('n', UsagePriceCardRules.MaxBodyBytes);
+
+        var result = Parse("{\"" + name + "\":1}");
+
+        result.Card.ShouldBeNull();
+        var violation = result.Violations.ShouldHaveSingleItem();
+        violation.Reason.ShouldBe(UsagePriceRefusalReasons.TooLarge);
+        violation.Path.ShouldBe("/");
+    }
+
+    [Fact]
+    public void Parse_FiftyThousandUnknownMembers_AnswersInBoundedSize()
+    {
+        // Fifty thousand members do not fit the body cap, so the whole body is refused before the walk; the answer
+        // stays one refusal rather than listing members.
+        var members = string.Concat(Enumerable.Range(0, 50_000).Select(index => ",\"m" + index + "\":0"));
+
+        var result = Parse("{\"rate_card_version\":" + Version + ",\"prices\":[" + Row() + "]" + members + "}");
+
+        result.Card.ShouldBeNull();
+        var violation = result.Violations.ShouldHaveSingleItem();
+        violation.Reason.ShouldBe(UsagePriceRefusalReasons.TooLarge);
+        violation.Path.ShouldBe("/");
     }
 
     // ------------------------------------------------------------------ no echo

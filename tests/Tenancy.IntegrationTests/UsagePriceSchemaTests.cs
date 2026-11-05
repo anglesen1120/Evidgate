@@ -9,8 +9,8 @@ namespace Tenancy.IntegrationTests;
 /// currency vocabularies, the unique card version per scope, the non-overlap rule of one scope and
 /// metric, the append-only grant of the application role, the owner-only definer that writes the
 /// platform rate card and the tenant boundary itself (ENABLE + FORCE row level security with the
-/// catalogue read shape for <c>evidgate_app</c> only), and the deferred single-column reference the
-/// usage ledger holds to a price.
+/// catalogue read shape for <c>evidgate_app</c> only), and the unvalidated single-column reference
+/// the usage ledger holds to a price.
 /// </summary>
 /// <remarks>
 /// A price is immutable, so the table is written only by the card load: the app role inserts its own
@@ -126,7 +126,8 @@ public sealed class UsagePriceSchemaTests
             + $"where tgrelid = 'public.{Table}'::regclass and not tgisinternal");
         triggers.ShouldBe(
             "usage_price_overlap_guard,usage_price_set_updated_at_and_version",
-            "the non-overlap guard runs before every insert and the shared trigger owns updated_at and version");
+            "the card-version and non-overlap guard runs before every insert and the shared trigger owns "
+            + "updated_at and version");
     }
 
     [Fact]
@@ -140,8 +141,8 @@ public sealed class UsagePriceSchemaTests
         // A negative price, a currency that is not three uppercase letters, an empty window, and a
         // metric outside the closed metering list: each answers 23514 with its own constraint name, so
         // a caller can name what it sent wrong without the message echoing the value. Each refused row
-        // takes a free window: the non-overlap guard runs before the checks, so an overlapping row
-        // would answer with the overlap first.
+        // takes a free window and its own card version: the guards run before the checks, so an
+        // overlapping or repeated row would answer as that first.
         await AssertRefusedAsync(
             database,
             org,
@@ -189,11 +190,21 @@ public sealed class UsagePriceSchemaTests
         await InsertAsync(database, orgA, PriceRow(Guid.CreateVersion7(), orgA, effectiveFrom: At(1), effectiveTo: At(2)));
 
         // Same scope, metric and version, in a window that does not overlap: the unique index answers
-        // before the overlap guard, so a card reload is refused by name rather than by diffing rows.
+        // a card reload rather than the caller diffing rows.
         await AssertRefusedAsync(
             database,
             orgA,
             PriceRow(Guid.CreateVersion7(), orgA, effectiveFrom: At(6), effectiveTo: At(7)),
+            "23505",
+            "usage_price_card_key");
+
+        // The same reload in a window that also overlaps an existing row still answers as a duplicate:
+        // the guard's version check runs under the unique index's name before the window rule, so the
+        // store's duplicate_version mapping does not depend on which window the retry used.
+        await AssertRefusedAsync(
+            database,
+            orgA,
+            PriceRow(Guid.CreateVersion7(), orgA, effectiveFrom: At(1), effectiveTo: At(2)),
             "23505",
             "usage_price_card_key");
 
@@ -273,7 +284,7 @@ public sealed class UsagePriceSchemaTests
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_app", Table, "DELETE")).ShouldBeFalse(
             "a deleted price would orphan the ledger rows that name it");
         (await _fixture.HasTablePrivilegeAsync(database, "evidgate_operator", Table, "SELECT")).ShouldBeTrue(
-            "the operator reads through its SELECT grant and has no policy");
+            "the operator holds SELECT and no policy, so the grant is inert until a grant-gated form lands");
 
         await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org))
         {
@@ -323,12 +334,14 @@ public sealed class UsagePriceSchemaTests
             "select prosecdef from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace "
             + "where n.nspname = 'evidgate' and p.proname = 'usage_price_insert_global'"))
             .ShouldBeTrue("the loader stands in for the migration role");
+        // The pinned image spells the empty setting as `search_path=""`; the whole setting list is
+        // compared, so an added GUC or a non-empty path fails this check as loudly as a missing one.
         (await _fixture.ScalarAsync<string>(
             database,
-            "select coalesce(array_to_string(proconfig, ','), '') from pg_catalog.pg_proc p "
+            "select array_to_string(proconfig, ',') from pg_catalog.pg_proc p "
             + "join pg_catalog.pg_namespace n on n.oid = p.pronamespace "
             + "where n.nspname = 'evidgate' and p.proname = 'usage_price_insert_global'"))
-            .ShouldContain("search_path", Case.Sensitive, "a definer pins its search path");
+            .ShouldBe("search_path=\"\"", "the definer pins the empty search_path and nothing else");
 
         // Outside a tenant transaction the definer stores the platform row and returns its id.
         var id = Guid.CreateVersion7();
@@ -403,12 +416,14 @@ public sealed class UsagePriceSchemaTests
         constraints.ShouldContain(
             constraint => constraint.StartsWith("f:usage_ledger_entry_price_fk:", StringComparison.Ordinal)
                 && constraint.Contains("(price_ref)", StringComparison.Ordinal),
-            "the ledger names its price through the single-column, deferred key");
+            "the ledger names its price through the single-column key, added not valid");
 
         (await _fixture.ScalarAsync<bool>(
             database,
             "select convalidated from pg_catalog.pg_constraint where conname = 'usage_ledger_entry_price_fk'"))
-            .ShouldBeTrue("the key was added not valid and then validated, so existing rows are checked");
+            .ShouldBeFalse(
+                "the key stays not valid on purpose: no writer sets price_ref yet, and a not valid key "
+                + "already refuses a new row, so the validation scan of the whole ledger buys nothing");
 
         var globalId = await InsertGlobalCardAsync(database, "card-global", At(1), null);
         var priceA = await InsertTenantPriceAsync(database, orgA, "card-a");
@@ -434,9 +449,43 @@ public sealed class UsagePriceSchemaTests
         }
 
         // The platform card and the org's own rows are both legal references.
-        await InsertAsync(database, orgA, LedgerRow(Guid.CreateVersion7(), orgA, globalId));
+        var ownRow = Guid.CreateVersion7();
+        await InsertAsync(database, orgA, LedgerRow(ownRow, orgA, globalId));
         await InsertAsync(database, orgA, LedgerRow(Guid.CreateVersion7(), orgA, priceA));
         await InsertAsync(database, orgA, LedgerRow(Guid.CreateVersion7(), orgA, null));
+
+        // The guard also runs on an update that rewrites the reference or the tenant, so a repair
+        // statement cannot move a row onto a price its org may not see. Each attempt runs in its own
+        // transaction, because a refused statement aborts the one it runs in.
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database), orgA))
+        {
+            var moved = await owner.CaptureErrorAsync(
+                "update public.usage_ledger_entry set price_ref = @price::uuid where id = @id::uuid",
+                new (string Name, object Value)[] { ("price", priceB), ("id", ownRow) });
+            moved.SqlState.ShouldBe("23503", "an update may not point a ledger row at another org's override");
+            moved.ConstraintName.ShouldBe("usage_ledger_entry_price_fk");
+        }
+
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database), orgA))
+        {
+            var retenanted = await owner.CaptureErrorAsync(
+                "update public.usage_ledger_entry set org_id = @org::uuid where id = @id::uuid",
+                new (string Name, object Value)[] { ("org", orgB), ("id", ownRow) });
+            retenanted.SqlState.ShouldBe(
+                "23503",
+                "moving a row to another tenant would leave it naming the old org's price");
+            retenanted.ConstraintName.ShouldBe("usage_ledger_entry_price_fk");
+        }
+
+        // A visible reference still moves: the guard refuses the reference, never the update itself.
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database), orgA))
+        {
+            (await owner.ExecuteAsync(
+                "update public.usage_ledger_entry set price_ref = @price::uuid where id = @id::uuid",
+                new (string Name, object Value)[] { ("price", priceA), ("id", ownRow) }))
+                .ShouldBe(1, "the org's own override is a price its rows may name");
+            await owner.CommitAsync();
+        }
     }
 
     [Fact]
@@ -469,7 +518,7 @@ public sealed class UsagePriceSchemaTests
             database,
             "select count(*) from pg_catalog.pg_constraint where conrelid = 'public.usage_ledger_entry'::regclass "
             + "and conname = 'usage_ledger_entry_price_fk'"))
-            .ShouldBe(1, "the deferred key is not added twice");
+            .ShouldBe(1, "the ledger key is not added twice");
     }
 
     private static DateTimeOffset At(int month) =>

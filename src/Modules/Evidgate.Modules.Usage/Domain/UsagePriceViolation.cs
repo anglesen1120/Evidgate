@@ -45,8 +45,20 @@ internal static class UsagePriceRefusalReasons
     /// <summary>The card carries no price rows.</summary>
     internal const string Empty = "empty";
 
+    /// <summary>
+    /// An instant is not aligned to the microsecond, the finest precision the <c>timestamptz</c> column stores, so the
+    /// stored boundary would be rounded away from the instant the card named.
+    /// </summary>
+    internal const string InvalidInstant = "invalid_instant";
+
     /// <summary>The card carries more rows than one load accepts.</summary>
     internal const string TooMany = "too_many";
+
+    /// <summary>
+    /// The card earned more refusals than one response carries; the walk stopped at the cap rather than returning
+    /// every one of them.
+    /// </summary>
+    internal const string TooManyViolations = "too_many_violations";
 
     /// <summary>The body is larger than one card may be.</summary>
     internal const string TooLarge = "too_large";

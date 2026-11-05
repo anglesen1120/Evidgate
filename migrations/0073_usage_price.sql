@@ -17,9 +17,11 @@
 -- database form would be an EXCLUDE constraint over a range with btree_gist, but no migration in
 -- this repository enables an extension, so the rule is a BEFORE INSERT trigger instead: it takes an
 -- advisory transaction lock keyed by (scope, metric), so two concurrent loads cannot both pass the
--- existence check, and it raises one named refusal (`usage_price_no_overlap`) instead of a bare
--- CHECK. The windows are half-open `[effective_from, effective_to)` and a NULL `effective_to` is
--- infinity, so adjacent windows `[a,b)` + `[b,c)` are legal. A per-org override is allowed to cover
+-- existence check. Under that lock it refuses a repeated card version under the unique index's own
+-- name (`usage_price_card_key`, 23505, the store's duplicate_version) and a genuine window clash
+-- under its own (`usage_price_no_overlap`, 23514) instead of a bare CHECK. The windows are half-open
+-- `[effective_from, effective_to)` and a NULL `effective_to` is infinity, so adjacent windows
+-- `[a,b)` + `[b,c)` are legal. A per-org override is allowed to cover
 -- an instant the global card also covers — override-first is the point — so only rows of the SAME
 -- scope are compared, and the trigger runs with the caller's rights, so row level security already
 -- limits an org's check to its own rows plus the global card.
@@ -28,39 +30,53 @@
 -- `(coalesce(org_id, zero-uuid), metric, rate_card_version)` is what makes a card load idempotent at
 -- the row level: the same version of the same metric can be loaded once per scope and a retry is
 -- refused by the database, not by an application pre-check. The zero uuid sentinel mirrors the
--- roll-up's coalesce index (a real org id is never the nil uuid).
+-- roll-up's coalesce index (a real org id is never the nil uuid). The BEFORE INSERT guard below
+-- answers a reload under the same constraint name, so a reloaded card whose window also overlaps an
+-- existing row is still a duplicate-version refusal rather than an overlap one.
 --
 -- GRANTS. A price row is immutable, so the app role holds SELECT (its own rows plus the global
 -- card) and INSERT (its own rows only) and nothing else: UPDATE and DELETE are revoked before the
 -- minimal grant, because the migration role's default privileges would otherwise leave them in
--- place. The operator reads through its SELECT grant with no operator policy, exactly as the
--- ledger does, and the sweep role holds nothing.
+-- place. The operator holds SELECT alone, and with FORCE row level security and no operator policy
+-- that grant is inert: the operator reads zero rows until a grant-gated operator form adds its own
+-- policy, which is the shape the ledger and `redaction_rule` already carry. The sweep role holds
+-- nothing.
+
+-- LOCKS. `set local lock_timeout` bounds every DDL wait in this file, including the trigger and the
+-- key on `public.usage_ledger_entry`, so a busy ledger fails the migration for a retry instead of
+-- stalling its writers behind an unqueued lock request.
 --
 -- THE DEFINER. `evidgate.usage_price_insert_global` is the only writer of a global row. It borrows
 -- the migration role's rights, and FORCE row level security would otherwise deny the owner, so it
 -- reaches the row through the explicit owner policy; that is exactly why it carries the tenant
 -- boundary itself and refuses to run at all inside a tenant transaction. It validates nothing the
 -- table's own constraints cannot (a bad metric, currency, window or version is answered by the
--- CHECK, a duplicate card version by the unique index), and it returns the stored id.
+-- CHECK, a duplicate card version by the guard's version check), and it returns the stored id.
 --
 -- THE DEFERRED LEDGER REFERENCE. `usage_ledger_entry.price_ref` was declared without a foreign key
 -- because this table did not exist yet. The key added here is SINGLE-column on purpose: a ledger
 -- row always carries an `org_id`, a global price carries NULL, so a composite `(org_id, price_ref)`
 -- key could never match a global row. Whether the referenced price is *visible* to the writer is
--- not something a foreign key can express, so the BEFORE INSERT trigger below refuses a row whose
--- `price_ref` is neither a global price nor one of the row's own org — which also keeps an owner
--- backfill from filing a cross-tenant pointer. The constraint is added `not valid` and then
--- validated in one transaction, so an existing database with ledger rows is checked, not assumed.
+-- not something a foreign key can express, so the BEFORE INSERT OR UPDATE trigger below refuses a
+-- row whose `price_ref` is neither a global price nor one of the row's own org — which also keeps
+-- an owner backfill from filing a cross-tenant pointer. The key is added `not valid` and stays so:
+-- no writer sets `price_ref` yet (the ledger store inserts it as null), so every existing ledger
+-- row carries NULL and there is nothing to check, while a NOT VALID key still enforces every new
+-- insert and every update of the column immediately, and the visibility trigger answers before it.
+-- Validating would scan the whole ledger under its lock for no row it could reject, so a later
+-- migration may validate once writers populate the column.
 --
 -- Idempotent in the 0025/0027/0028/0046 shape: `create table if not exists`, `create index if not
 -- exists`, `drop … if exists` before every `create` and re-stated grants, so a re-run is a no-op.
--- One file runs in one transaction, so the table, its policies, its functions and the deferred key
+-- One file runs in one transaction, so the table, its policies, its functions and the ledger key
 -- are never observable apart. Rollback: `drop trigger if exists usage_ledger_entry_price_visible
 -- on public.usage_ledger_entry; alter table public.usage_ledger_entry drop constraint if exists
 -- usage_ledger_entry_price_fk; drop function if exists evidgate.usage_ledger_price_guard();
 -- drop function if exists evidgate.usage_price_insert_global(uuid, text, numeric, text,
 -- timestamptz, timestamptz, numeric, text); drop function if exists evidgate.usage_price_overlap_guard();
 -- drop table if exists public.usage_price;` and remove the `contracts/rls-exceptions.txt` line.
+
+set local lock_timeout = '5s';
 
 create table if not exists public.usage_price (
   id uuid not null,
@@ -107,7 +123,7 @@ create trigger usage_price_set_updated_at_and_version
   for each row execute function public.set_updated_at_and_version();
 
 -- The overlap refusal. Two integer-key advisory locks (scope, metric) serialize concurrent writers
--- of one scope, so the existence check below cannot miss a row another transaction is inserting.
+-- of one scope, so the existence checks below cannot miss a row another transaction is inserting.
 create or replace function evidgate.usage_price_overlap_guard() returns trigger
   language plpgsql
   security invoker
@@ -123,6 +139,20 @@ begin
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtext('evidgate.usage_price:' || new.metric),
     pg_catalog.hashtext(coalesce(new.org_id::text, 'global')));
+
+  -- A duplicate card version is answered under its unique index's name: a reload is refused as a
+  -- duplicate even when its window also overlaps, because the guard runs before the index and the
+  -- store maps this name to its duplicate_version refusal.
+  if exists (
+    select 1
+      from public.usage_price p
+     where p.org_id is not distinct from new.org_id
+       and p.metric = new.metric
+       and p.rate_card_version = new.rate_card_version)
+  then
+    raise exception 'usage_price_card_key: this card version is already loaded for this metric in this scope'
+      using errcode = '23505', constraint = 'usage_price_card_key';
+  end if;
 
   if exists (
     select 1
@@ -219,7 +249,8 @@ grant execute on function evidgate.usage_price_insert_global(uuid, text, numeric
 -- foreign key alone cannot say that (it sees ids, not tenants), and row level security would hide
 -- the referenced row instead of answering, so the check is explicit. The FK's name is reused as the
 -- constraint name: a dangling reference and a foreign one are the same broken reference to the
--- caller, and both answer 23503.
+-- caller, and both answer 23503. An update that rewrites the reference or the tenant is checked
+-- too, so a later repair statement cannot move a row onto a price its org may not see.
 create or replace function evidgate.usage_ledger_price_guard() returns trigger
   language plpgsql
   security invoker
@@ -242,7 +273,7 @@ $$;
 
 drop trigger if exists usage_ledger_entry_price_visible on public.usage_ledger_entry;
 create trigger usage_ledger_entry_price_visible
-  before insert on public.usage_ledger_entry
+  before insert or update of price_ref, org_id on public.usage_ledger_entry
   for each row when (new.price_ref is not null)
   execute function evidgate.usage_ledger_price_guard();
 
@@ -259,5 +290,3 @@ begin
   end if;
 end
 $fk$;
-
-alter table public.usage_ledger_entry validate constraint usage_ledger_entry_price_fk;
