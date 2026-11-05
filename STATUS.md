@@ -269,7 +269,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 02.4.3-T2 | M | `github_installation`, install callback, token minting | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json`; S91: additive endpoint registration | n/a | yes |
 | 02.4.4-T1 | M | `api_token` table, create/list/revoke API | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` | n/a | yes |
 | 02.8.1-T1 | M | `support_grant` model and request/approve/revoke flow | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` | n/a | yes |
-| 03.3.1-T1 | M | `fixture_revision` schema + suite reference + seed versioning + cleanup policy fields | yes | yes (0049+) | no — same Catalog module as S97, new types only | n/a | yes |
+| 03.3.1-T1 | M | `fixture_revision` schema + suite reference + seed versioning + cleanup policy fields. LANDED by S253 (#526, 3f36265d): `fixture` + `fixture_revision` (migration 0074), create/append/list/get API, same-project suite reference check; AC3-AC6 stay with T2/T3; open items in carried rows titled `(S253)` | yes | yes (0049+) | no — same Catalog module as S97, new types only | n/a | yes |
 | 03.6.1-T1 | M | Suite draft tables + `ETag`/`If-Match` on the draft routes | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes |
 | 03.7.1-T3 | S | Evaluate Playwright planner/generator agents | yes | no | no | n/a | yes |
 | 04.1.2-T2 | S | Stale/foreign-epoch handling | yes | no | no | n/a | yes |
