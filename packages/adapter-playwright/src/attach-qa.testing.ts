@@ -71,14 +71,14 @@ export const ALL_CAPS: AttachmentUploader['kindMaxBytes'] = {
   ui_hierarchy: undefined,
 };
 
-export interface FakeUploader {
+interface FakeUploader {
   uploader: AttachmentUploader;
   calls: AttachmentUploadInput[];
   /** A live read: the count keeps rising while the uploads run. */
   readonly peak: number;
 }
 
-export interface FakeUploaderOptions {
+interface FakeUploaderOptions {
   readonly uploads?: (
     input: AttachmentUploadInput,
     index: number,
@@ -120,7 +120,7 @@ export function fakeCli(factory: () => AttachmentUploader): CliModule {
   return fake<CliModule>({ createAttachmentUploader: () => factory() });
 }
 
-export interface Harness {
+interface Harness {
   readonly pipeline: AttachmentPipeline;
   readonly uploader: FakeUploader;
   readonly root: string;
@@ -172,7 +172,7 @@ export function fakeTest(
   });
 }
 
-export interface ReporterHarness {
+interface ReporterHarness {
   readonly reporter: EvidgateReporter;
   readonly spool: string;
 }

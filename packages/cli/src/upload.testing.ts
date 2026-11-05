@@ -17,14 +17,14 @@ import { resetSecrets } from './redact.js';
 import { hashUploadFile, type UploadDeps, type UploadRequest } from './upload.js';
 import { UploadJournal, type UploadIdentity } from './uploadJournal.js';
 import { closeUploadFile, openUploadFile, type UploadFile } from './uploadPaths.js';
+import { artifactId, otherArtifactId } from './artifactIds.testing.js';
 
 /** Assembled at runtime so no token-shaped literal is stored in the spec. */
 export const token = ['tk', 'upload', 'value'].join('-');
 export const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
 export const producerId = 'shard-1';
 export const executionKey = 'a3'.repeat(32);
-export const artifactId = '7d1f9a52-3c4e-4b6a-9f01-2b3c4d5e6f70';
-export const secondArtifactId = '0a1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d';
+export { artifactId, otherArtifactId as secondArtifactId };
 /** The presigned URL: a loopback origin with a signature in the query (never printed). */
 const presignedUrl = `http://127.0.0.1:9/pending/bucket/${artifactId}?X-Amz-Signature=deadbeef&X-Amz-Credential=AKIA%2F20261024`;
 const config = resolveConfig({
