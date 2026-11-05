@@ -72,7 +72,7 @@ fixtures/<producer>/<case>/
   expected.json       # RFC 8785 canonical bytes (no trailing newline)
 ```
 
-A case directory holds no `meta.json` and no file named `input.*`: `meta.json` would make the harness skip the directory as the older corpus, and `input.*` would make the other loaders read it as a `<domain>/<name>/` fixture. Every entry of a case is checked, and a symbolic link is refused rather than followed: a linked case directory, `case.json`, `expected.json`, a report file, `README.md` or a nested directory fails the scan as an `ERROR` naming the fixture and the link, so a case can only ever read bytes inside the corpus. The canonical `expected.json` files are excluded from prettier by the existing `**/fixtures/**/expected.json` rule in `.prettierignore`.
+A case directory holds no `meta.json` and no file named `input.*`: `meta.json` would make the harness skip the directory as the older corpus, and `input.*` would make the other loaders read it as a `<domain>/<name>/` fixture. Every entry of a case is checked, and a symbolic link is refused rather than followed: a linked case directory, `case.json`, `expected.json`, a report file, `README.md` or a nested directory fails the scan as an `ERROR` naming the fixture and the link, so the entries directly inside a case cannot escape the corpus (links buried deeper inside a nested directory are not yet inspected). The canonical `expected.json` files are excluded from prettier by the existing `**/fixtures/**/expected.json` rule in `.prettierignore`.
 
 ### `case.json`
 
