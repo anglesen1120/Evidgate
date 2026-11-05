@@ -116,12 +116,15 @@ public sealed class CompositeFkTests : HarnessTest
 
         foreach (var table in scan.TenantTables)
         {
-            // The same criterion rule 2 uses: a parent that carries org_id is
-            // org-scoped, so the child's key to it must be the composite tenant key —
-            // and that is the parent the corruption moves to the other org.
+            // A tenant parent is a key to another table of the tenant set. A catalogue principal
+            // (`report_parser`, `usage_price`) carries a nullable `org_id` for its platform rows, so a
+            // composite key could never match one; a tenant table's key to it is TenantFkScan's documented
+            // catalogue allowance. Only the allowance that names a guard on the referencing table can be
+            // exercised here: the corrupt row is built and the guard is what must refuse it.
             var tenantParents = scan.Schema
                 .ForeignKeysOf(table)
-                .Where(foreignKey => scan.Schema.HasOrgId(foreignKey.PrincipalTable))
+                .Where(foreignKey => scan.TenantTables.Contains(foreignKey.PrincipalTable)
+                    || TenantFkScan.HasCrossOrgGuard(table, foreignKey.Name))
                 .ToArray();
 
             if (tenantParents.Length == 0)

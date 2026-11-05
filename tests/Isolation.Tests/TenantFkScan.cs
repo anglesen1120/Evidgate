@@ -228,10 +228,12 @@ internal static class TenantFkScan
             if (!isTenantKey)
             {
                 // A key to a catalogue parent cannot be composite when the built-in row carries `org_id`
-                // IS NULL (the composite reference could never match it), so the one documented allowance
-                // below takes the plain identity key; the caller's own trigger refuses another org's row.
-                if (CatalogueKeyAllowlist.Contains((table, foreignKey.Name))
-                    && foreignKey.PrincipalColumns.AsSpan().SequenceEqual(CatalogueKeyIdentity)
+                // IS NULL (the composite reference could never match it), so the documented allowances below
+                // take the catalogue's own identity key instead.
+                if (CatalogueKeyAllowlist.Any(entry =>
+                        string.Equals(entry.Table, table, StringComparison.Ordinal)
+                        && string.Equals(entry.Constraint, foreignKey.Name, StringComparison.Ordinal)
+                        && foreignKey.PrincipalColumns.AsSpan().SequenceEqual(entry.PrincipalColumns))
                     && IsCataloguePrincipal(exceptions, foreignKey.PrincipalTable))
                 {
                     continue;
@@ -258,18 +260,28 @@ internal static class TenantFkScan
             && string.Equals(exception.Kind, "platform", StringComparison.Ordinal));
 
     /// <summary>
-    /// The plain identity key a tenant table may hold to a <c>catalogue</c> parent, keyed by
-    /// (table, constraint): a built-in catalogue row carries <c>org_id IS NULL</c>, so the composite tenant key
-    /// rule 2 wants could never match it. Each entry names the trigger that refuses another org's row on the
-    /// referencing table, which is the half a foreign key cannot express.
+    /// The key a tenant table may hold to a <c>catalogue</c> parent, keyed by (table, constraint): a built-in
+    /// catalogue row carries <c>org_id IS NULL</c>, so the composite tenant key rule 2 wants could never match
+    /// it, and <c>PrincipalColumns</c> is that catalogue's own identity for the reference.
+    /// <c>CrossOrgGuarded</c> marks the ones whose guard is a check on the referencing table, so a row naming
+    /// another org's catalogue row can be built and refused: <c>usage_ledger_entry</c>'s price reference is the
+    /// trigger <c>usage_ledger_entry_price_visible</c>, which raises 23503 under the foreign key's own name.
+    /// <c>raw_report</c>'s parser reference has no such case to build: it names <c>report_parser</c>'s
+    /// <c>(parser_id, version)</c> release key, and the registry is written only by the migration and the owner
+    /// role (0075), so no tenant can register a release a row names and no other org's row can exist.
     /// </summary>
-    private static readonly (string Table, string Constraint)[] CatalogueKeyAllowlist =
+    private static readonly (string Table, string Constraint, string[] PrincipalColumns, bool CrossOrgGuarded)[] CatalogueKeyAllowlist =
     [
-        ("public.usage_ledger_entry", "usage_ledger_entry_price_fk"),
+        ("public.usage_ledger_entry", "usage_ledger_entry_price_fk", [TenantKeyColumn], true),
+        ("public.raw_report", "raw_report_parser_fk", ["parser_id", "version"], false),
     ];
 
-    /// <summary>The principal columns of an allowed catalogue key: the parent's own identity, never <c>org_id</c>.</summary>
-    private static readonly string[] CatalogueKeyIdentity = [TenantKeyColumn];
+    /// <summary>True when one of these allowances names a guard that refuses another org's catalogue row.</summary>
+    internal static bool HasCrossOrgGuard(string table, string constraint) =>
+        CatalogueKeyAllowlist.Any(entry =>
+            entry.CrossOrgGuarded
+            && string.Equals(entry.Table, table, StringComparison.Ordinal)
+            && string.Equals(entry.Constraint, constraint, StringComparison.Ordinal));
 
     /// <summary>True when <paramref name="principal"/> is a <c>catalogue</c> table: nullable <c>org_id</c>, read by every org.</summary>
     private static bool IsCataloguePrincipal(IReadOnlyList<RlsException> exceptions, string principal) =>
