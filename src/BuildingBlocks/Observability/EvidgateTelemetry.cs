@@ -226,13 +226,10 @@ public static class EvidgateTelemetry
 
     /// <summary>Counts one ingestion request refused by <paramref name="cap"/> and tags its trace, so a refusal shows in both.</summary>
     /// <param name="cap">One of the closed cap names; never a value from the request.</param>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="cap"/> is outside the closed vocabulary.</exception>
     public static void RecordIngestCapExceeded(string cap)
     {
-        if (!IsCapName(cap))
-        {
-            throw new ArgumentOutOfRangeException(nameof(cap), "the cap name is outside the closed ingestion vocabulary");
-        }
+        // A name outside the closed set collapses to "other" so a refusal path never throws and the label stays bounded.
+        cap = IsCapName(cap) ? cap : "other";
 
         IngestCapExceeded.Add(1, new KeyValuePair<string, object?>("cap", cap));
         Activity.Current?.SetTag(IngestCapTag, cap);
