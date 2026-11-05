@@ -255,7 +255,7 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
       ]);
     });
 
-    // QA defect R1 (S86): a ternary BRANCH is a read. The identifier in front of a `:` used to be
+    // A ternary BRANCH is a read. The identifier in front of a `:` used to be
     // skipped as an object key, so `{{ ok ? token : '' }}` and `[title]="a ? secret : b"` were
     // never reported.
     it('reports a bare read in a ternary branch', () => {
@@ -287,7 +287,7 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
       );
     });
 
-    // QA defects R2 and R4 (S86): `@case (...)` and `@defer (when ...)` are headers Angular
+    // `@case (...)` and `@defer (when ...)` are headers Angular
     // evaluates, and an `@for` whose `of` is wrapped onto the next line still names its iterated
     // expression.
     it('reports a bare read in an @case, an @defer and a wrapped @for header', () => {
@@ -303,7 +303,7 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
       expect(quoted('Do not bind ', messages)).toEqual(['credential', 'password', 'pendingToken']);
     });
 
-    // QA defect R5 (S86): the identifier a `let` clause declares in a `*` structural directive is a
+    // The identifier a `let` clause declares in a `*` structural directive is a
     // declaration, not a read, and so is the alias of an `index as name` clause.
     it('accepts a structural directive let declaration and its index alias', () => {
       expect(
@@ -311,7 +311,7 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
       ).toEqual([]);
     });
 
-    // QA defect O5 (S86): a quoted string that is the DIRECT subscript of a member access names the
+    // A quoted string that is the DIRECT subscript of a member access names the
     // member, so `store['token']()` and `row["signing_secret"]` are reads. Every other string —
     // prose, an array literal, a template reference — stays masked.
     it('reports a bracket-quoted secret member read', () => {
