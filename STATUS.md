@@ -228,7 +228,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 04.8.1-T1 | M | Emit `results` usage rows through `IUsageLedger.RecordAsync` in the accepted-batch transaction; unblocked by 12.3.1-T1 (04.1.1-T2 merged). Earlier T1.1 shipped the `usage.batch_accepted` outbox row (`IngestEventBatch.cs:590`, `IngestEventBatchTests.cs:186`). LANDED by S212 (#440, 4925b0f4): the `usage.batch_accepted` handler, fail-closed duplicate key compare (`IUsageLedger.FindAsync`) and the Architecture rules; AC3 reprocess test open until 04.4.2 exists (see carried rows 'Usage meter'). | yes | yes (0049+) | no | n/a | yes |
 | 06.2.2-T1 | M | Adapter capability + per-project options (disable kinds, allowlisted redaction rules) with 04 | yes | yes (0049+) | no | n/a | yes |
 | 06.2.3-T1 | M | Async secret-scan `task` handler (outbox row written by `complete`): scan the object, set `scan_state`, write `masking_event`, enforce `reject_on_secret`; LANDED by S214 (#450, 4d2b26ae, migration 0066; AC4 stays with 06.2.1, residuals in the carried rows) | yes | yes (0049+) | no | n/a | yes |
-| 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1 | yes | yes (0049+) | no | T1.1-T1.2 ; T1.3-T1.4 ; T1.5-T1.6-T1.7 | yes (dep 12.3.1-T1 merged; `MockHealingLlmProvider` covers tests) |
+| 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1; partial: T1.1-T1.2 landed by S145 (#306, f8fd2f56; `healing_llm_call`, `healing_llm_budget`, provider seam, migration 0054), T1.3-T1.7 open | yes | yes (0049+) | no | T1.1-T1.2 ; T1.3-T1.4 ; T1.5-T1.6-T1.7 | yes (dep 12.3.1-T1 merged; `MockHealingLlmProvider` covers tests) |
 | 10.1.1-T3 | L | Environment bootstrap automation | yes | no | no | T3.1-T3.2 ; T3.3-T3.4 | yes for the scripts; AC5 needs a live instance |
 | 10.1.2-T1 | M | Secret inventory and CI check | yes | no | no | n/a | yes |
 | 10.1.2-T2 | XS | Repository secret scanning and push protection | yes | no | no | n/a | yes (needs repo-admin token; ⚠️ plan feature availability) |
@@ -300,10 +300,10 @@ Stricter variant that also requires every dependency task's whole story to be me
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
 | 09.3.1-T2 | L | Run detail: manifest summary, release components + digests, environment, pinned `manifest_hash`/suite/policy revision (T2.1 merged #216, 1742764; T2.2 S146 #302 fbb2fe91) | no | no | no | T2.1+T2.2 \| T2.3+T2.4 | yes |
-| 09.3.1-T3 | L | Evidence panel: completeness verdict, `missing[]` reasons with deep links, immutable evidence-revision selector | no | no | no | T3.1+T3.2 \| T3.3+T3.4 | yes |
+| 09.3.1-T3 | L | Evidence panel: completeness verdict, `missing[]` reasons with deep links, immutable evidence-revision selector; LANDED by S183 (#387, a902681a): T3.1-T3.4 (evidence panel, revision selector, pending state, anchor contract) | no | no | no | T3.1+T3.2 \| T3.3+T3.4 | yes |
 | 09.3.1-T4 | M | Attempts table: raw vs normalised status, retry chain, duration, pre-healing failure always visible. Delivered: UI component S111 (PR #232); wire swap + wire fixtures S146 (PR #302, fbb2fe91); healing marker stays unavailable until 08.3.1 (§6 row "Run detail web remainders (S146)") | no | no | no | n/a | yes |
 | 09.3.1-T6 | M | Producer/shard view: finalize status, `last_sequence`, count vs expected, stale epochs, late events | no | no | no — consumes the 03.2.1 suite-composition/slot API that S97 is building (dependency, not a shared file) | n/a | yes |
-| 10.7.1-T1 | M | Dead-letter runbook | no | no | no (docs/runbooks) | n/a | no |
+| 10.7.1-T1 | M | Dead-letter runbook; partial: T1.1 landed by S161 (#341, 44f2bef2; `docs/runbooks/dead-letter.md`), T1.2 non-author staging drill, alert links and T3-T6 runbooks open | no | no | no (docs/runbooks) | n/a | no |
 | 13.7.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | no | no | no | n/a | no |
 
 ### G3: 6 tasks / 9 d (backend lane 4 / 6 d = 3 code + 1 web writing `.github/`, web-only 2 / 3 d, docs-only 0 / 0 d) Newly ready after S124: 09.5.2-T3 (M, web-only; its only dependency 08.6.3-T1 landed), counted in this header; its row is added when the lane picks it up (a row insert would shift every STATUS.md:N cite below).
@@ -321,7 +321,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
-| 09.8.1-T1 | L | WCAG 2.2 AA pass on core flows (keyboard, focus, contrast, target size, error identification) with fixes | no | no | no (`apps/web` `shared/ui` tokens; S97 adds no web surface) | T1.1+T1.2 landed (#284, 46389453, partial); T1.3+T1.4 remain | yes |
+| 09.8.1-T1 | L | WCAG 2.2 AA pass on core flows (keyboard, focus, contrast, target size, error identification) with fixes; LANDED by S135 (#284, 46389453; T1.1-T1.2) and S154 (#325, f5a60258; T1.3-T1.4, remainder closed) | no | no | no (`apps/web` `shared/ui` tokens; S97 adds no web surface) | T1.1+T1.2 landed (#284, 46389453, partial); T1.3+T1.4 remain | yes |
 
 ### G4: 10 tasks / 14 d (backend lane 8 / 11 d = 7 code + 1 docs writing `scripts/` and `fixtures/`, web-only 1 / 1 d, docs-only 1 / 2 d)
 
@@ -342,7 +342,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
-| 09.6.1-T6 | M | Suite composition: case revisions × variants, shard strategy, DAG/coverage gap warnings | no | no | no | n/a | yes |
+| 09.6.1-T6 | M | Suite composition: case revisions × variants, shard strategy, DAG/coverage gap warnings; partial: landed by S162 (#346, 33749233) and S174 (#364, 18b22136) for what the read API exposes; remainder: `SuiteRevisionDto` carries no `warnings` or case names (receiver 03.2.x) | no | no | no | n/a | yes |
 | 12.1.1-T1 | L | Waived by O1; do not schedule interviews | no | no | no (`docs/discovery`, `interviews/`) | T1.1+T1.2 \| T1.3+T1.4 | no |
 
 **Waived:** 12.1.1-T1/T2 customer interviews (O1, 2026-10-02); pilot profile in `docs/decisions/O1-pilot-profile.md`, real reports from the owner’s own pipeline.
