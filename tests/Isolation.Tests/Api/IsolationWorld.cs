@@ -85,6 +85,13 @@ public sealed class IsolationProject
     public required Guid ManifestId { get; init; }
 
     /// <summary>
+    /// The project's release (<c>{id}</c> of <c>/v1/releases/{id}</c> and of <c>/v1/releases/{id}/runs</c>): one
+    /// <c>web</c> component at a fixed digest, created <c>active</c> through the create route so a cross-tenant read
+    /// or bind names a real row instead of writing one into the world.
+    /// </summary>
+    public required Guid ReleaseId { get; init; }
+
+    /// <summary>
     /// The project's runs (<c>{r}</c> of <c>/v1/runs/{r}</c>), all created from <see cref="ManifestId"/> (05.3.1):
     /// at least two, so <c>GET /v1/projects/{p}/runs</c> pages at limit 1 (05.2.2-T2). The first carries a
     /// body-only <c>branch</c>/<c>main</c> ref, so the <c>?ref_name=main</c> filter has a matching row per project.
@@ -619,6 +626,10 @@ public sealed class IsolationWorld
                     HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("run_id").GetGuid());
             }
 
+            // One active release through the route, so the isolation probes address a real row by id instead of
+            // writing an org-A release of their own while a snapshot is being compared.
+            var release = await SeedReleaseAsync(project, org, admin, environmentRevision).ConfigureAwait(false);
+
             var waivers = new List<Guid>();
             for (var i = 0; i < WaiversPerProject; i++)
             {
@@ -882,6 +893,7 @@ public sealed class IsolationWorld
                 EnvironmentRevisionId = environmentRevision,
                 PolicyRevisionId = policyRevision,
                 ManifestId = manifest,
+                ReleaseId = release,
                 RunIds = runs,
                 WaiverIds = waivers,
                 QuarantineIds = quarantines,
@@ -900,6 +912,31 @@ public sealed class IsolationWorld
                 AuthoringDeletedManualCaseId = authoringRestorableCase,
                 AuthoringDeletedManualCaseVersion = authoringRestorableCaseVersion,
             };
+        }
+
+        /// <summary>
+        /// One active release of <paramref name="environmentRevision"/> through <c>POST /v1/projects/{p}/releases</c>:
+        /// one <c>web</c> component at a fixed digest, so a cross-tenant read or bind names a real row.
+        /// </summary>
+        private async Task<Guid> SeedReleaseAsync(Guid project, Guid org, IsolationUser admin, Guid environmentRevision)
+        {
+            var created = await SendAsync(
+                HttpMethod.Post,
+                $"/v1/projects/{project}/releases",
+                admin,
+                org,
+                new
+                {
+                    name = "isolation seed release",
+                    state = "active",
+                    components = new[]
+                    {
+                        new { component_key = "web", digest = "sha256:" + new string('a', 64), environment_revision_id = environmentRevision },
+                    },
+                },
+                HttpStatusCode.Created).ConfigureAwait(false);
+
+            return created.GetProperty("release_id").GetGuid();
         }
 
         /// <summary>

@@ -45,8 +45,12 @@ internal static class ReleaseEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .WithSummary("One release, its components and its stored bindings");
 
+        // The delegate returns the `Result<T>` wrapper, which the host's filter unwraps and never the wire shape;
+        // the bodiless `.Produces(200)` below replaces the response ASP.NET infers for the default status from that
+        // return type, so `ResultOfReleaseBindResult` never reaches the served document (the create route does the same).
         group.MapPost("/releases/{id}/runs", BindReleaseRunAsync)
             .Produces<ReleaseBindResult>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound)

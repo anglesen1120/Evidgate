@@ -33,26 +33,7 @@ public sealed class ReleaseBindingContractTests
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, "checkout");
-        var seeded = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, database, org, 1);
-        var runId = seeded.RunId;
-        var revision = await _fixture.ScalarAsync<Guid>(
-            database,
-            $"select environment_revision_id from public.run where id = '{runId:D}'");
-        var releaseId = Guid.CreateVersion7();
-
-        await _fixture.ExecuteAsync(
-            database,
-            $"""
-            update public.run set components = jsonb_build_object('web', '{Digest('a')}', 'api', '{Digest('d')}')
-             where id = '{runId:D}';
-            insert into public.release (id, org_id, project_id, name, created_by)
-            values ('{releaseId:D}', '{org:D}', '{project:D}', 'reader-mismatch', 'probe');
-            insert into public.release_component (id, org_id, release_id, component_key, digest, environment_revision_id)
-            values ('{Guid.CreateVersion7():D}', '{org:D}', '{releaseId:D}', 'web', '{Digest('a')}', '{revision:D}'),
-                   ('{Guid.CreateVersion7():D}', '{org:D}', '{releaseId:D}', 'api', '{Digest('b')}', '{revision:D}'),
-                   ('{Guid.CreateVersion7():D}', '{org:D}', '{releaseId:D}', 'worker', '{Digest('c')}', '{revision:D}');
-            update public.release set state = 'active' where id = '{releaseId:D}';
-            """);
+        var (runId, releaseId) = await SeedMismatchedPairAsync(database, org, project);
 
         await using var scope = api.Services.CreateAsyncScope();
         var provider = scope.ServiceProvider;
@@ -94,5 +75,35 @@ public sealed class ReleaseBindingContractTests
             .Select(mismatch => mismatch.ComponentKey).ShouldBe(["api", "worker"]);
 
         await api.DisposeAsync();
+    }
+
+    /// <summary>
+    /// One active release of three digests against a run that recorded two of them, one at another digest: the pair
+    /// <see cref="MismatchSurfaced"/> reads, written directly so the reader meets it with no bind row stored.
+    /// </summary>
+    private async Task<(Guid RunId, Guid ReleaseId)> SeedMismatchedPairAsync(string database, Guid org, Guid project)
+    {
+        var seeded = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, database, org, 1);
+        var runId = seeded.RunId;
+        var revision = await _fixture.ScalarAsync<Guid>(
+            database,
+            $"select environment_revision_id from public.run where id = '{runId:D}'");
+        var releaseId = Guid.CreateVersion7();
+
+        await _fixture.ExecuteAsync(
+            database,
+            $"""
+            update public.run set components = jsonb_build_object('web', '{Digest('a')}', 'api', '{Digest('d')}')
+             where id = '{runId:D}';
+            insert into public.release (id, org_id, project_id, name, created_by)
+            values ('{releaseId:D}', '{org:D}', '{project:D}', 'reader-mismatch', 'probe');
+            insert into public.release_component (id, org_id, release_id, component_key, digest, environment_revision_id)
+            values ('{Guid.CreateVersion7():D}', '{org:D}', '{releaseId:D}', 'web', '{Digest('a')}', '{revision:D}'),
+                   ('{Guid.CreateVersion7():D}', '{org:D}', '{releaseId:D}', 'api', '{Digest('b')}', '{revision:D}'),
+                   ('{Guid.CreateVersion7():D}', '{org:D}', '{releaseId:D}', 'worker', '{Digest('c')}', '{revision:D}');
+            update public.release set state = 'active' where id = '{releaseId:D}';
+            """);
+
+        return (runId, releaseId);
     }
 }

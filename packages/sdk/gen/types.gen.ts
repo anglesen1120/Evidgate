@@ -5682,7 +5682,7 @@ export type BindReleaseRunErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * `request_invalid` — the body is larger than the 64 KiB cap this route reads, so it is refused before it is parsed.
+     * `payload_too_large` — the body is larger than the 64 KiB cap this route reads, so it is refused before it is parsed.
      */
     413: ErrorEnvelope;
     /**
