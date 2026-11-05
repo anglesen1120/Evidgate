@@ -28,6 +28,11 @@ internal static class UsageModule
         // 12.3.1 §5: the in-process surface the metering callers resolve (00 §5.5).
         services.TryAddScoped<IUsageLedger, UsageContracts>();
 
+        // The rate card's read path and the internal loader that writes one card as one unit of work.
+        services.TryAddScoped<UsagePriceStore>();
+        services.TryAddScoped<IUsagePriceResolver, UsagePriceResolver>();
+        services.TryAddScoped<UsagePriceLoader>();
+
         // IQuotaGate stays unregistered until 12.3.1-T4 implements it: a hot path that asks for it must fail at
         // resolution rather than meter against a stub that always answers Ok. Fail closed is the contract (IQuotaGate's
         // docs), so nothing here substitutes an always-Ok default, now or later.
