@@ -210,7 +210,7 @@ public sealed partial class ReleaseIntegrationTests
                     '{{revision:D}}', now() + interval '2 hours', 1440, jsonb_build_object('web', '{{digest}}'));
             """);
 
-        await using var host = ReleaseSessionHost.Start(_fixture.AppConnectionString(database));
+        await using var host = CookieSessionHost.Start(_fixture.AppConnectionString(database));
         using var client = host.CreateSessionClient();
         var pair = await host.SignInAsync(client);
 
@@ -438,7 +438,7 @@ public sealed partial class ReleaseIntegrationTests
         request.Headers.Add("Idempotency-Key", NewKey());
         if (xsrf is not null)
         {
-            request.Headers.Add(XsrfHeader, xsrf);
+            request.Headers.Add(CookieSessionHost.XsrfHeader, xsrf);
         }
 
         request.Content = new StringContent(BindBody(runId), Encoding.UTF8, "application/json");
