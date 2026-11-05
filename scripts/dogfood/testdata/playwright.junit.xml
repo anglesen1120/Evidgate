@@ -1,0 +1,94 @@
+<testsuites id="" name="" tests="44" failures="0" skipped="0" errors="0" time="50.406319">
+<testsuite name="settings-policy.spec.ts" timestamp="2026-11-05T05:06:42.186Z" hostname="host" tests="32" failures="0" skipped="0" time="43.295" errors="0">
+<testcase name="revision form keeps its field beside the action on desktop (en)" classname="settings-policy.spec.ts" time="1.338">
+</testcase>
+<testcase name="revision list, head marking, mode chip and diff state (en)" classname="settings-policy.spec.ts" time="1.28">
+</testcase>
+<testcase name="two revisions diff in the panel and in the 412 dialog (en)" classname="settings-policy.spec.ts" time="1.68">
+</testcase>
+<testcase name="a revision id that is not a UUID requests nothing (en)" classname="settings-policy.spec.ts" time="1.003">
+</testcase>
+<testcase name="read-only grant offers no publish control (en)" classname="settings-policy.spec.ts" time="0.818">
+</testcase>
+<testcase name="publish 201: seeded body, confirmation and the reloaded head (en)" classname="settings-policy.spec.ts" time="1.296">
+</testcase>
+<testcase name="publish 200 unchanged: confirmation without a new revision (en)" classname="settings-policy.spec.ts" time="1.095">
+</testcase>
+<testcase name="publish 412: conflict diff, explicit reload, no retry (en)" classname="settings-policy.spec.ts" time="2.245">
+</testcase>
+<testcase name="publish 422 unknown field is verbatim (en)" classname="settings-policy.spec.ts" time="0.867">
+</testcase>
+<testcase name="publish 422 critical case is verbatim (en)" classname="settings-policy.spec.ts" time="0.883">
+</testcase>
+<testcase name="local refusals send nothing and keep the editor open (en)" classname="settings-policy.spec.ts" time="1.185">
+</testcase>
+<testcase name="360px is inspection-only (en)" classname="settings-policy.spec.ts" time="0.789">
+</testcase>
+<testcase name="keyboard publish: Enter opens, trap holds, Escape restores focus (en)" classname="settings-policy.spec.ts" time="0.713">
+</testcase>
+<testcase name="review route refuses missing read grant and foreign org (en)" classname="settings-policy.spec.ts" time="0.877">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (en, light)" classname="settings-policy.spec.ts" time="3.485">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (en, dark)" classname="settings-policy.spec.ts" time="2.998">
+</testcase>
+<testcase name="revision form keeps its field beside the action on desktop (vi)" classname="settings-policy.spec.ts" time="0.981">
+</testcase>
+<testcase name="revision list, head marking, mode chip and diff state (vi)" classname="settings-policy.spec.ts" time="1.445">
+</testcase>
+<testcase name="two revisions diff in the panel and in the 412 dialog (vi)" classname="settings-policy.spec.ts" time="1.603">
+</testcase>
+<testcase name="a revision id that is not a UUID requests nothing (vi)" classname="settings-policy.spec.ts" time="1.171">
+</testcase>
+<testcase name="read-only grant offers no publish control (vi)" classname="settings-policy.spec.ts" time="1.158">
+</testcase>
+<testcase name="publish 201: seeded body, confirmation and the reloaded head (vi)" classname="settings-policy.spec.ts" time="1.409">
+</testcase>
+<testcase name="publish 200 unchanged: confirmation without a new revision (vi)" classname="settings-policy.spec.ts" time="1.027">
+</testcase>
+<testcase name="publish 412: conflict diff, explicit reload, no retry (vi)" classname="settings-policy.spec.ts" time="2.286">
+</testcase>
+<testcase name="publish 422 unknown field is verbatim (vi)" classname="settings-policy.spec.ts" time="1.133">
+</testcase>
+<testcase name="publish 422 critical case is verbatim (vi)" classname="settings-policy.spec.ts" time="0.9">
+</testcase>
+<testcase name="local refusals send nothing and keep the editor open (vi)" classname="settings-policy.spec.ts" time="1.163">
+</testcase>
+<testcase name="360px is inspection-only (vi)" classname="settings-policy.spec.ts" time="0.747">
+</testcase>
+<testcase name="keyboard publish: Enter opens, trap holds, Escape restores focus (vi)" classname="settings-policy.spec.ts" time="0.781">
+</testcase>
+<testcase name="review route refuses missing read grant and foreign org (vi)" classname="settings-policy.spec.ts" time="0.491">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (vi, light)" classname="settings-policy.spec.ts" time="2.209">
+</testcase>
+<testcase name="axe has no violations on list/diff, publish and conflict (vi, dark)" classname="settings-policy.spec.ts" time="2.239">
+</testcase>
+</testsuite>
+<testsuite name="settings-policy.summary.spec.ts" timestamp="2026-11-05T05:06:42.186Z" hostname="host" tests="12" failures="0" skipped="0" time="9.268" errors="0">
+<testcase name="policy summary renders the mode and both revisions (en)" classname="settings-policy.summary.spec.ts" time="1.646">
+</testcase>
+<testcase name="an enforcing activation renders the gating chip (en)" classname="settings-policy.summary.spec.ts" time="1.103">
+</testcase>
+<testcase name="no activation shows the empty state and keeps the list (en)" classname="settings-policy.summary.spec.ts" time="0.707">
+</testcase>
+<testcase name="an activation the caller may not read is forbidden, not retryable (en)" classname="settings-policy.summary.spec.ts" time="0.564">
+</testcase>
+<testcase name="a throttled activation read keeps its retry closed until the wait ends (en)" classname="settings-policy.summary.spec.ts" time="0.791">
+</testcase>
+<testcase name="a project with no head revision shows the empty head state (en)" classname="settings-policy.summary.spec.ts" time="0.521">
+</testcase>
+<testcase name="policy summary renders the mode and both revisions (vi)" classname="settings-policy.summary.spec.ts" time="0.813">
+</testcase>
+<testcase name="an enforcing activation renders the gating chip (vi)" classname="settings-policy.summary.spec.ts" time="0.59">
+</testcase>
+<testcase name="no activation shows the empty state and keeps the list (vi)" classname="settings-policy.summary.spec.ts" time="0.73">
+</testcase>
+<testcase name="an activation the caller may not read is forbidden, not retryable (vi)" classname="settings-policy.summary.spec.ts" time="0.586">
+</testcase>
+<testcase name="a throttled activation read keeps its retry closed until the wait ends (vi)" classname="settings-policy.summary.spec.ts" time="0.623">
+</testcase>
+<testcase name="a project with no head revision shows the empty head state (vi)" classname="settings-policy.summary.spec.ts" time="0.594">
+</testcase>
+</testsuite>
+</testsuites>
