@@ -1,0 +1,24 @@
+{
+  "operation_id": "getRunDecision",
+  "variant": "evaluated-pass",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000dc03"
+  },
+  "latency_ms": 0,
+  "body": {
+    "status": "evaluated",
+    "decision": "PASS",
+    "evaluation_id": "018f0000-0000-7000-8000-0000000e0001",
+    "evidence_revision": 1,
+    "completeness": "complete",
+    "outcome": "all_passed",
+    "missing": [],
+    "reasons": [],
+    "policy_hash": "sha256:018f00000000000000000000000000000000000000000000000000000000a004",
+    "manifest_hash": "sha256:018f000000000000000000000000000000000000000000000000000000000000",
+    "evaluator_version": "evidgate-evaluator/1.4.0",
+    "mode": "live",
+    "url": "https://app.evidgate.example/runs/018f0000-0000-7000-8000-000000000071"
+  }
+}

@@ -187,12 +187,29 @@ const PROTOCOL_MEMBERS = new Set(['headers', 'operation_id', 'variant', 'code'])
  * members outright would also exempt every *other* word a fixture ever puts there, so the
  * exemption is per value: `ENUM_MEMBERS.get(member).has(value)` (09.2.1-T7).
  */
+const MISSING_CODES = new Set([
+  'missing_shard',
+  'count_mismatch',
+  'artifact_missing',
+  'build_mismatch',
+  'unknown_status',
+  'setup_error',
+  'stale_epoch',
+  'missing_result',
+]);
+
 const ENUM_MEMBERS = new Map([
   ['provider', new Set(['github_actions'])],
   [
     'status',
     new Set(['pending_verification', 'active', 'disabled', 'rotated', 'expired', 'revoked']),
   ],
+  // The decision body's closed vocabularies: the run decision view names them (outcome labels and
+  // the eight missing-evidence codes), so production code carries the same words.
+  ['outcome', new Set(['all_passed', 'has_failures', 'no_results'])],
+  ['missing', MISSING_CODES],
+  // A pending-evidence reason is one of the same codes.
+  ['reasons', MISSING_CODES],
 ]);
 
 /**
@@ -267,7 +284,14 @@ function isProtocolValue(key, child) {
     return true;
   }
   const enumerated = ENUM_MEMBERS.get(key);
-  return enumerated !== undefined && typeof child === 'string' && enumerated.has(child);
+  if (enumerated === undefined) {
+    return false;
+  }
+  // `missing` is a list of codes: vocabulary only when every item is an enumerated word.
+  if (Array.isArray(child)) {
+    return child.every((item) => typeof item === 'string' && enumerated.has(item));
+  }
+  return typeof child === 'string' && enumerated.has(child);
 }
 
 /**

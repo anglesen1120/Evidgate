@@ -1,4 +1,4 @@
-import { readDecisionBody, type DecisionBody } from '../../data/decision-body';
+import { readDecisionBody, type ReceivedDecision } from '../../data/decision-reader';
 import { toDecisionCandidate } from './decision-mapper';
 
 /**
@@ -149,7 +149,7 @@ describe('decision body and view mapper', () => {
   });
 
   it('refuses a body the wire parser cannot vouch for once it reaches the mapper', () => {
-    const body = readDecisionBody(evaluated()) as DecisionBody;
+    const body = readDecisionBody(evaluated()) as ReceivedDecision;
     expect(body).not.toBeNull();
     expect(toDecisionCandidate({ ...body, evidence_revision: 2 ** 53 })).toEqual(CONTRACT_INVALID);
     expect(toDecisionCandidate({ ...body, evaluation_id: '' })).toEqual(CONTRACT_INVALID);
