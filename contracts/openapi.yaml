@@ -4834,6 +4834,172 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/fixtures:
+    post:
+      operationId: createFixture
+      tags: [catalog]
+      summary: Create a fixture with its first revision (03.3.1)
+      description: >-
+        A fixture is the project-scoped identity a suite revision pins by key and revision number; its first revision is
+        written in the same transaction. 409 `fixture_key_taken` when the key is used in the project; another org's
+        project is the same 404 as a missing one. The body is a pointer (`body_ref`), never the body itself.
+      x-permission: fixture:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFixtureRequest'
+      responses:
+        '201':
+          description: The fixture with its first revision
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FixtureRevisionHead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listFixtures
+      tags: [catalog]
+      summary: Cursor page of a project's fixtures (03.3.1)
+      description: >-
+        Each item carries the head revision number and hash; a fixture with no revision answers null for both.
+      x-permission: suite:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of fixtures
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FixtureListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /fixtures/{f}:
+    get:
+      operationId: getFixture
+      tags: [catalog]
+      summary: One fixture with its head revision (03.3.1)
+      description: >-
+        `ETag` is the head revision's content hash. `body_ref` is a pointer (a repository path or an artifact id); the
+        body itself is never part of an answer.
+      x-permission: suite:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/FixtureId'
+      responses:
+        '200':
+          description: The fixture and its head revision
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FixtureDetailDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /fixtures/{f}/revisions:
+    post:
+      operationId: createFixtureRevision
+      tags: [catalog]
+      summary: Append an immutable fixture revision (03.3.1)
+      description: >-
+        `revision_no` is allocated per fixture (concurrent appends get n and n+1). Identical content returns the existing
+        revision (200, `created: false`) instead of allocating another. The resource prefix is derived by the server.
+      x-permission: fixture:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/FixtureId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFixtureRevisionRequest'
+      responses:
+        '200':
+          description: Existing revision with identical content
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FixtureRevisionHead'
+        '201':
+          description: Revision appended
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FixtureRevisionHead'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/suites:
     post:
       operationId: createSuite
@@ -8587,6 +8753,13 @@ components:
       schema:
         type: string
         format: uuid
+    FixtureId:
+      name: f
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     CaseStatusFilter:
       name: status
       in: query
@@ -10713,6 +10886,105 @@ components:
       description: >-
         Any JSON value. The served document names the .NET `JsonElement` this way; the members that use it (variant
         `params`, the three strategy documents) say what they hold in their own description.
+    FixtureDto:
+      type: object
+      required: [id, org_id, project_id, fixture_key, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        fixture_key: { type: string, pattern: '^[a-z0-9][a-z0-9-]{0,63}$' }
+        head_revision_id: { type: [string, 'null'], format: uuid }
+        head_revision_no: { type: [integer, 'null'] }
+        head_revision_hash: { type: [string, 'null'], pattern: '^sha256:[0-9a-f]{64}$' }
+        created_at: { type: string, format: date-time }
+    FixtureListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/FixtureDto' }
+        next_cursor: { type: [string, 'null'] }
+    FixtureRevisionDto:
+      type: object
+      description: 'One immutable fixture revision; `body_ref` is a pointer, never the body.'
+      required:
+        [
+          id,
+          fixture_id,
+          revision_no,
+          revision_hash,
+          seed_version,
+          timeout_s,
+          cleanup_policy,
+          resource_prefix,
+          body_ref,
+          created_at,
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        fixture_id: { type: string, format: uuid }
+        revision_no: { type: integer, minimum: 1 }
+        revision_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        seed_version: { type: string, maxLength: 64 }
+        timeout_s: { type: integer, minimum: 1, maximum: 86400 }
+        cleanup_policy: { type: string, enum: [drop, truncate, none] }
+        resource_prefix: { type: string, pattern: '^fx_[0-9a-f]{16}$' }
+        body_ref: { type: string, maxLength: 1024 }
+        created_at: { type: string, format: date-time }
+    FixtureDetailDto:
+      type: object
+      required: [id, org_id, project_id, fixture_key, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        fixture_key: { type: string, pattern: '^[a-z0-9][a-z0-9-]{0,63}$' }
+        created_at: { type: string, format: date-time }
+        head:
+          oneOf:
+            - $ref: '#/components/schemas/FixtureRevisionDto'
+            - type: 'null'
+    CreateFixtureRequest:
+      type: object
+      required: [fixture_key, seed_version, body_ref]
+      additionalProperties: false
+      properties:
+        fixture_key: { type: string, pattern: '^[a-z0-9][a-z0-9-]{0,63}$' }
+        seed_version: { type: string, maxLength: 64 }
+        body_ref:
+          {
+            type: string,
+            maxLength: 1024,
+            description: 'A repository-relative path or an artifact id; never inline content (no whitespace).',
+          }
+        timeout_s: { type: integer, minimum: 1, maximum: 86400, default: 60 }
+        cleanup_policy: { type: string, enum: [drop, truncate, none], default: drop }
+    CreateFixtureRevisionRequest:
+      type: object
+      required: [seed_version, body_ref]
+      additionalProperties: false
+      properties:
+        seed_version: { type: string, maxLength: 64 }
+        body_ref:
+          {
+            type: string,
+            maxLength: 1024,
+            description: 'A repository-relative path or an artifact id; never inline content (no whitespace).',
+          }
+        timeout_s: { type: integer, minimum: 1, maximum: 86400, default: 60 }
+        cleanup_policy: { type: string, enum: [drop, truncate, none], default: drop }
+    FixtureRevisionHead:
+      type: object
+      required: [fixture_id, fixture_key, revision_id, revision_no, revision_hash, created]
+      properties:
+        fixture_id: { type: string, format: uuid }
+        fixture_key: { type: string }
+        revision_id: { type: string, format: uuid }
+        revision_no: { type: integer, minimum: 1 }
+        revision_hash: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        created: { type: boolean }
     SuiteDto:
       type: object
       required:

@@ -75,6 +75,9 @@ public sealed class IsolationProject
     /// <summary>One suite revision per suite (<c>{r}</c> of <c>/suite-revisions/{r}</c>), aligned with <see cref="SuiteIds"/>.</summary>
     public required IReadOnlyList<Guid> SuiteRevisionIds { get; init; }
 
+    /// <summary>The fixtures (<c>{f}</c> of <c>/v1/fixtures/{f}</c>): <c>users</c> then <c>orders</c>.</summary>
+    public required IReadOnlyList<Guid> FixtureIds { get; init; }
+
     /// <summary>The revision of environment <see cref="IsolationWorld.EnvironmentKey"/> (<c>{id}</c> of <c>/environment-revisions/{id}</c>).</summary>
     public required Guid EnvironmentRevisionId { get; init; }
 
@@ -579,6 +582,20 @@ public sealed class IsolationWorld
                 suiteRevisions.Add(revision);
             }
 
+            // Fixtures are seeded through the API like every other catalog object, so the create path is exercised by the
+            // isolation suite as well as by its own tests.
+            var fixtures = new List<Guid>();
+            foreach (var fixtureKey in new[] { "users", "orders" })
+            {
+                fixtures.Add((await SendAsync(
+                    HttpMethod.Post,
+                    $"/v1/projects/{project}/fixtures",
+                    admin,
+                    org,
+                    new { fixture_key = fixtureKey, seed_version = "v1", body_ref = $"seeds/{fixtureKey}.json" },
+                    HttpStatusCode.Created).ConfigureAwait(false)).GetProperty("fixture_id").GetGuid());
+            }
+
             var environmentRevision = (await SendAsync(
                 HttpMethod.Post,
                 $"/v1/projects/{project}/environments/{EnvironmentKey}/revisions",
@@ -890,6 +907,7 @@ public sealed class IsolationWorld
                 CaseRevisions = [.. caseRevisions.Select(perCase => (IReadOnlyList<Guid>)perCase)],
                 SuiteIds = suites,
                 SuiteRevisionIds = suiteRevisions,
+                FixtureIds = fixtures,
                 EnvironmentRevisionId = environmentRevision,
                 PolicyRevisionId = policyRevision,
                 ManifestId = manifest,

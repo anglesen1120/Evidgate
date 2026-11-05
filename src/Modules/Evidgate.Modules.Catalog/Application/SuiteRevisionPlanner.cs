@@ -64,18 +64,21 @@ internal sealed class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schemaSet)
 
     /// <summary>Plans <paramref name="request"/> for a suite of <paramref name="projectId"/>.</summary>
     /// <param name="db">The tenant read path.</param>
+    /// <param name="fixtures">The fixture side, for the references the revision pins (03.3.1 AC7).</param>
     /// <param name="projectId">The suite's project.</param>
     /// <param name="request">The authored revision.</param>
     /// <param name="current">The taxonomy the suite holds today; a member of the request overrides it.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     public async Task<Result<SuiteRevisionPlan>> PlanAsync(
         ITenantDb db,
+        IFixtureRegistry fixtures,
         Guid projectId,
         CreateSuiteRevisionRequest request,
         SuiteTaxonomy current,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(fixtures);
 
         var members = request.Members ?? [];
         var edges = request.Edges ?? [];
@@ -128,6 +131,14 @@ internal sealed class SuiteRevisionPlanner(Lazy<ContractSchemaSet> schemaSet)
         if (secretDetails.Count > 0)
         {
             return Fail(SuiteErrors.NotSecretFree(secretDetails));
+        }
+
+        // ---- fixtures (03.3.1 AC7): a reference must exist in THIS project at exactly that revision. Checked after the
+        // secret rules so a body that leaks a value is refused for that first, and after the schema so the entries have
+        // the shape this walk reads.
+        if (await FixtureReferences.CheckAsync(fixtures, projectId, environment, cancellationToken).ConfigureAwait(false) is { } fixtureError)
+        {
+            return Fail(fixtureError);
         }
 
         // ---- members: refs, variants.

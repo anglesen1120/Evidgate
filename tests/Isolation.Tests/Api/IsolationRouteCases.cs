@@ -790,6 +790,12 @@ public static class IsolationRouteCases
         SuiteRevisionCreateCase(),
         ObjectCase("GET", "/v1/suite-revisions/{r}", p => Indexed("suite revision", p.SuiteRevisionIds), id => new(HttpMethod.Get, $"/v1/suite-revisions/{id}"), ownControl: true),
         SuiteRevisionDiffCase(),
+        ProjectCase("POST", "/v1/projects/{p}/fixtures", p => new(HttpMethod.Post, $"/v1/projects/{p}/fixtures",
+            new JsonObject { ["fixture_key"] = "intruder", ["seed_version"] = "v1", ["body_ref"] = "seeds/intruder.json" })),
+        ProjectCase("GET", "/v1/projects/{p}/fixtures", p => new(HttpMethod.Get, $"/v1/projects/{p}/fixtures"), list: true),
+        ObjectCase("GET", "/v1/fixtures/{f}", p => Indexed("fixture", p.FixtureIds), id => new(HttpMethod.Get, $"/v1/fixtures/{id}"), ownControl: true),
+        ObjectCase("POST", "/v1/fixtures/{f}/revisions", p => Indexed("fixture", p.FixtureIds), id =>
+            new(HttpMethod.Post, $"/v1/fixtures/{id}/revisions", new JsonObject { ["seed_version"] = "v2", ["body_ref"] = "seeds/v2.json" })),
 
         // ---- Orchestrator (OrchestratorEndpoints.cs:37-47) -----------------------------------------------------
         ManifestCase(),

@@ -336,6 +336,22 @@ public sealed class TenantGucTests
             ("org_id", orgId),
             ("suite_revision_id", suiteRevisionId),
             ("member_id", memberId));
+        var fixtureId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            "insert into public.fixture (id, org_id, project_id, fixture_key) values (@id, @org_id, @project_id, 'probe-fixture')",
+            ("id", fixtureId),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.fixture_revision (id, org_id, fixture_id, project_id, fixture_key, revision_no, revision_hash, seed_version, resource_prefix, body_ref)
+            values (@id, @org_id, @fixture_id, @project_id, 'probe-fixture', 1, @hash, 'v1', 'fx_0123456789abcdef', 'fixtures/probe.sql')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("fixture_id", fixtureId),
+            ("project_id", projectId),
+            ("hash", "sha256:" + new string('d', 64)));
         var environmentId = Guid.CreateVersion7();
         var environmentRevisionId = Guid.CreateVersion7();
         await scope.ExecuteAsync(

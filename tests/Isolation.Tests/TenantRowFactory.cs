@@ -593,6 +593,13 @@ internal sealed class TenantRowFactory
             ("public.test_revision", "revision_hash" or "content_sha256" or "assertion_hash") => "sha256:" + new string('a', 64),
             ("public.suite_revision", "revision_hash") or ("public.variant", "variant_hash") => "sha256:" + new string('a', 64),
             ("public.suite", "slug") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
+            ("public.fixture", "fixture_key") or ("public.fixture_revision", "fixture_key") =>
+                "fixture" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
+            ("public.fixture_revision", "revision_hash") => "sha256:" + new string('a', 64),
+            ("public.fixture_revision", "seed_version") => "v1",
+            ("public.fixture_revision", "cleanup_policy") => "drop",
+            ("public.fixture_revision", "resource_prefix") => "fx_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..16],
+            ("public.fixture_revision", "body_ref") => "seeds/" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8] + ".json",
             ("public.environment_revision", "revision_no") => Interlocked.Increment(ref _revisionNo),
             ("public.manifest", "manifest_hash") or ("public.environment_revision", "revision_hash") =>
                 "sha256:" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture) + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),

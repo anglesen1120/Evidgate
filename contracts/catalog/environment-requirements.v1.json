@@ -27,6 +27,20 @@
       }
     },
     "data_isolation": { "enum": ["isolated", "shared"] },
+    "fixtures": {
+      "description": "The fixtures the run must create before it executes, each pinned at a revision number of a fixture of the suite's own project (03.3.1). The key names the fixture; the number names the immutable version, so a run can never pick up a newer body by accident.",
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+          "revision": { "type": "integer", "minimum": 1 }
+        },
+        "required": ["name", "revision"]
+      }
+    },
     "secrets": {
       "type": "array",
       "maxItems": 32,
