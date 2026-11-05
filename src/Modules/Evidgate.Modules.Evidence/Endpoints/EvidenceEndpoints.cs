@@ -388,38 +388,3 @@ public sealed record DownloadUrlResponse(
     [property: JsonPropertyName("artifact_id")] Guid ArtifactId,
     [property: JsonPropertyName("download_url")] Uri DownloadUrl,
     [property: JsonPropertyName("expires_at")] DateTimeOffset ExpiresAt);
-
-/// <summary>
-/// Body of <c>PUT /v1/projects/{p}/artifact-kind-policy/{kind}</c> and its 200 answer: the stored capture policy of
-/// one kind in one project. Every member is required — the row's five knobs are written as a whole, so a caller
-/// never leaves one to a stale value.
-/// </summary>
-/// <param name="MaxBytes">The largest artifact of the kind the project accepts, greater than zero.</param>
-/// <param name="MediaTypes">The accepted media types, between one and 64.</param>
-/// <param name="DefaultSensitivity"><c>normal</c> or <c>sensitive</c>.</param>
-/// <param name="CaptureEnabled">False switches capture of the kind off for the project.</param>
-/// <param name="RejectOnSecret">True makes the project reject an artifact whose scan flags a secret.</param>
-public sealed record ArtifactKindPolicyBody(
-    [property: JsonRequired, JsonPropertyName("max_bytes")] long MaxBytes,
-    [property: JsonRequired, JsonPropertyName("media_types")] string[] MediaTypes,
-    [property: JsonRequired, JsonPropertyName("default_sensitivity")] string DefaultSensitivity,
-    [property: JsonRequired, JsonPropertyName("capture_enabled")] bool CaptureEnabled,
-    [property: JsonRequired, JsonPropertyName("reject_on_secret")] bool RejectOnSecret);
-
-/// <summary>
-/// 200 body of the kind-policy override: the stored policy, including the kind the path named. It repeats the
-/// request's members so a client can render what the server committed without a second read.
-/// </summary>
-/// <param name="Kind">The kind the row belongs to.</param>
-/// <param name="MaxBytes">The stored size cap.</param>
-/// <param name="MediaTypes">The stored media-type allowlist.</param>
-/// <param name="DefaultSensitivity">The stored default sensitivity.</param>
-/// <param name="CaptureEnabled">The stored capture switch.</param>
-/// <param name="RejectOnSecret">The stored secret-rejection switch.</param>
-public sealed record ArtifactKindPolicyView(
-    [property: JsonPropertyName("kind")] string Kind,
-    [property: JsonPropertyName("max_bytes")] long MaxBytes,
-    [property: JsonPropertyName("media_types")] string[] MediaTypes,
-    [property: JsonPropertyName("default_sensitivity")] string DefaultSensitivity,
-    [property: JsonPropertyName("capture_enabled")] bool CaptureEnabled,
-    [property: JsonPropertyName("reject_on_secret")] bool RejectOnSecret);

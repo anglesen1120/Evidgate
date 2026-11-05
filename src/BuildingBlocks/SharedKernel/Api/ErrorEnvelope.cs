@@ -269,6 +269,9 @@ public static class ApiErrorCode
     /// <summary>422: capture of the artifact kind is switched off for the project, or the project has no policy row for it (06.1.2 AC1, 06.2.2 AC2).</summary>
     public const string KindDisabled = "kind_disabled";
 
+    /// <summary>422: a declared redaction rule names a field class outside the four contract types (06.2.2 AC3).</summary>
+    public const string RedactionRuleTypeUnknown = "redaction_rule_type_unknown";
+
     /// <summary>422: the event batch is not a well-formed envelope batch — schema, canonicalisation or per-event shape (04.1.1 AC1/AC4, 00 §9.4).</summary>
     public const string EventInvalid = "event_invalid";
 

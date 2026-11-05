@@ -84,6 +84,16 @@ internal static class EvidenceErrors
         [new ErrorDetail("media_type", "not_allowed")]);
 
     /// <summary>
+    /// 422: a declared redaction rule names a field class outside the four contract types. The value is never echoed —
+    /// the refusal names the member and the reason only — and nothing is written, because an unknown type is a rule the
+    /// reporter could not apply and the platform would have stored as if it had.
+    /// </summary>
+    internal static Error RedactionRuleTypeUnknown => Error.Unprocessable(
+        ApiErrorCode.RedactionRuleTypeUnknown,
+        "a redaction rule names a field class that is not one of the four contract types",
+        [new ErrorDetail("redaction_rules", "rule_type_unknown")]);
+
+    /// <summary>
     /// 422: capture of the kind is switched off for the project, or the project has no policy row for the kind and
     /// the kind has no static default (06.1.2 AC1, 06.2.2 AC2, 06.1.2-T3.1). A project row with
     /// <c>capture_enabled</c> false is this refusal however the defaults read; a kind with a static default and no

@@ -24,6 +24,13 @@ public static class AsciiShape
     /// <summary><c>[A-Z]</c>.</summary>
     public static readonly SearchValues<char> UpperAlpha = SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
 
+    /// <summary>
+    /// <c>[A-Za-z0-9._~%+:*?/-]</c>: a declared header, cookie, form-field or query-parameter name, or a <c>*</c>/<c>?</c>
+    /// glob over it. The two glob characters are the only metacharacters, and every other character is literal.
+    /// </summary>
+    public static readonly SearchValues<char> NameGlob =
+        SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._~%+:*?/-");
+
     /// <summary><c>[A-Z0-9]</c>.</summary>
     public static readonly SearchValues<char> UpperAlnum = SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789");
 

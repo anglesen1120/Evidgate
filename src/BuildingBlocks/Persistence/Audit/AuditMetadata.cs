@@ -61,6 +61,9 @@ public static partial class AuditMetadata
         "version_no",
         // 06.2.1: the kind-policy override records the sensitivity the row carried before the write.
         "previous_default_sensitivity",
+        // 06.2.2: the kind-policy override records how many redaction rules the write left on the kind — a count, never
+        // a pattern.
+        "redaction_rule_count",
     };
 
     /// <summary>

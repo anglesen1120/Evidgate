@@ -2795,6 +2795,43 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/artifact-kind-policy:
+    get:
+      operationId: getCaptureOptions
+      tags: [artifacts]
+      summary: A project's capture switch and redaction rules per artifact kind
+      description: >-
+        The project's capture options for every contract kind: the effective `capture_enabled` and the redaction rules
+        declared for it, so an adapter can read the project's policy in one answer instead of one request per kind. A
+        kind the project overrides answers the stored switch; a kind it does not override answers the kind's static
+        default, and a kind with neither answers `false` — the same resolution the upload route's `kind_disabled` gate
+        makes. The rules are declarative data the reporter applies client-side before capture; the server never
+        interprets them. An unknown, soft-deleted or other-tenant project is the one `404` (00 §9.2), never another
+        tenant's policy. A read, so no `Idempotency-Key`.
+      x-permission: project:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: The project's capture options for all eight kinds, in contract order
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptureOptionsView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/artifact-kind-policy/{kind}:
     put:
       operationId: setArtifactKindPolicyOverride
@@ -2860,9 +2897,11 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           description: >-
-            `kind_unknown` for a kind outside the closed list, or `request_invalid` for a member that breaks the
-            column's shape (a non-positive `max_bytes`, a media-type list outside one to 64 entries, a sensitivity
-            that is neither `normal` nor `sensitive`).
+            `kind_unknown` for a kind outside the closed list, `redaction_rule_type_unknown` for a rule whose
+            `rule_type` is outside `header`/`cookie`/`form_field`/`query_param`, or `request_invalid` for a member that
+            breaks the column's shape (a non-positive `max_bytes`, a media-type list outside one to 64 entries, a
+            sensitivity that is neither `normal` nor `sensitive`, more than 64 rules, a repeated rule, or a
+            `name_pattern` outside 1..200 characters of `[A-Za-z0-9._~%+:*?/-]`).
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -11330,6 +11369,66 @@ components:
           enum: [normal, sensitive]
         capture_enabled: { type: boolean }
         reject_on_secret: { type: boolean }
+        redaction_rules:
+          type: array
+          description: >-
+            The kind's declared redaction rules. On the request a list replaces the stored set, `[]` clears it and an
+            omitted member leaves it untouched, so a caller that only toggles a switch never deletes a privacy control
+            it never sent. On the answer it is always present and ordered by `rule_type`, then `name_pattern`.
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/RedactionRuleView'
+    CaptureOptionsView:
+      type: object
+      description: >-
+        The `200` answer of `GET /v1/projects/{p}/artifact-kind-policy`: the project's capture options for every contract
+        kind. A project with no policy row for a kind answers that kind's static default, and a kind with neither a row
+        nor a default answers `capture_enabled: false` — the same three cases the upload route's `kind_disabled` gate
+        resolves, so a client reading this answer and a client uploading agree.
+      additionalProperties: false
+      required: [kinds]
+      properties:
+        kinds:
+          type: array
+          minItems: 8
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/CaptureOptionsKindView'
+    CaptureOptionsKindView:
+      type: object
+      description: One artifact kind's effective capture switch and the rules the project declared for it.
+      additionalProperties: false
+      required: [kind, capture_enabled, redaction_rules]
+      properties:
+        kind:
+          type: string
+          enum:
+            [trace, video, screenshot, raw_report, dom_snapshot, a11y_snapshot, patch, ui_hierarchy]
+        capture_enabled:
+          type: boolean
+          description: >-
+            The effective switch: the project row's value when it has one, the kind's static default when it has none,
+            and `false` for a kind with neither.
+        redaction_rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/RedactionRuleView'
+    RedactionRuleView:
+      type: object
+      description: >-
+        One declared redaction rule: a field class and the name (or `*`/`?` glob over it) the reporter strips before
+        capture. The server stores and serves the declaration; the reporter applies it client-side.
+      additionalProperties: false
+      required: [rule_type, name_pattern]
+      properties:
+        rule_type:
+          type: string
+          enum: [header, cookie, form_field, query_param]
+        name_pattern:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: '^[A-Za-z0-9._~%+:*?/-]+$'
     NodeDto:
       type: object
       description: >-
