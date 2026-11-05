@@ -50,7 +50,7 @@ public sealed partial class ReleaseIntegrationTests
         using (var document = JsonDocument.Parse(await accepted.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)))
         {
             var releaseId = document.RootElement.GetProperty("release_id").GetGuid();
-            (await _fixture.ScalarAsync<int>(
+            (await _fixture.ScalarAsync<long>(
                 database,
                 $"select count(*) from public.release where org_id = '{org:D}' and id = '{releaseId:D}'")).ShouldBe(1);
         }
