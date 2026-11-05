@@ -520,8 +520,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // The run's decision: a pending body carries no verdict, hash or reason yet, so it is clean by construction
             // and the scan still covers the route.
             ["/v1/runs/{r}/decision"] = $"/v1/runs/{seeded.RunId}/decision",
-            // 05.6.1-T1's release read: the release seeded above answers its component list (a name, a digest and
-            // ids — no secret), and the answer carries no bound run.
+            // The release read answers its component list — a name, a digest and ids, no secret — and carries no
+            // bound run, so it is clean by construction while the scan still covers the route.
             ["/v1/releases/{id}"] = $"/v1/releases/{seeded.ReleaseId}",
         };
 
@@ -561,8 +561,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // unaddressable — and the scan would miss the route — without both.
         var manifestId = await CreateManifestAsync(client, project, suiteRevisionId, [caseRevisionId], environmentRevisionId);
         var runId = await CreateRunAsync(client, project, manifestId);
-        // 05.6.1-T1: one release of the same environment revision, so GET /v1/releases/{id} answers 200 with its
-        // component list (a name, a digest and two ids: no secret) instead of the 404 the scan would report.
+        // One release of the same environment revision, so GET /v1/releases/{id} answers 200 with its component
+        // list (a name, a digest and two ids: no secret) instead of the 404 the scan would report.
         var releaseId = await CreateReleaseAsync(client, project, environmentRevisionId);
 
         return new SeededResources(
@@ -740,9 +740,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     }
 
     /// <summary>
-    /// Creates a release of the seeded environment revision through the served route
-    /// (05.6.1-T1) and returns its id: the smallest accepted body, one component keyed
-    /// <c>web</c> at a well-formed digest, with the default <c>draft</c> state.
+    /// Creates a release of the seeded environment revision through the served route and
+    /// returns its id: the smallest accepted body, one component keyed <c>web</c> at a
+    /// well-formed digest, with the default <c>draft</c> state.
     /// </summary>
     private static async Task<Guid> CreateReleaseAsync(HttpClient client, Guid project, Guid environmentRevision)
     {
@@ -1259,9 +1259,9 @@ internal static partial class SecretScanner
 
     /// <summary>
     /// The one path-scoped exemption from the deny list: <c>GET /v1/releases/{id}</c> returns each component's build
-    /// digest (05.6.1 §5), which is <c>sha256:</c> + 64 lower-case hex over a build — an identifier that already
-    /// appears in CI logs, never key material. It is narrower than <see cref="AllowedMembers"/> on purpose: the member
-    /// must be <c>digest</c>, on that route only, and its value must be exactly that shape (the create route's
+    /// digest, which is <c>sha256:</c> + 64 lower-case hex over a build — an identifier that already appears in CI
+    /// logs, never key material. It is narrower than <see cref="AllowedMembers"/> on purpose: the member must be
+    /// <c>digest</c>, on that route only, and its value must be exactly that shape (the create route's
     /// <c>release_invalid</c> rule), so no secret can be carried under the name elsewhere or with another value.
     /// </summary>
     private static bool IsBuildDigestExemption(string? routeTemplate, JsonProperty property) =>
@@ -1270,7 +1270,7 @@ internal static partial class SecretScanner
         && property.Value.ValueKind == JsonValueKind.String
         && BuildDigest().IsMatch(property.Value.GetString()!);
 
-    /// <summary>A build digest: <c>sha256:</c> + 64 lower-case hex, the shape 05.6.1 §4 stores.</summary>
+    /// <summary>A build digest: <c>sha256:</c> + 64 lower-case hex, the shape the create route stores.</summary>
     [GeneratedRegex(
         "^sha256:[0-9a-f]{64}$",
         RegexOptions.CultureInvariant,

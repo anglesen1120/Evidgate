@@ -187,9 +187,9 @@ public static class IsolationRouteCases
     private const string UnauthenticatedCode = "unauthenticated";
 
     /// <summary>
-    /// The 00 §9.2 <c>error.code</c> of <c>GET /v1/releases/{id}</c> for an unknown, other-tenant or other-project
-    /// id (05.6.1-T1): the module answers the shared <c>not_found</c> code, so all three answer identically and a
-    /// refused read never names which case it hit.
+    /// The <c>error.code</c> of <c>GET /v1/releases/{id}</c> for an unknown, other-tenant or other-project id: the
+    /// module answers the shared <c>not_found</c> code, so all three answer identically and a refused read never
+    /// names which case it hit.
     /// </summary>
     private const string ReleaseNotFoundCode = "not_found";
 
@@ -828,7 +828,7 @@ public static class IsolationRouteCases
         // control answers 200 with the pending body because the world stores no evaluation.
         ObjectCase("GET", "/v1/runs/{r}/decision", p => [("run", p.RunId)], id =>
             new(HttpMethod.Get, $"/v1/runs/{id}/decision"), ownControl: true),
-        // 05.6.1-T1: the release pair. The create names its project in {p}, so its body must carry that project's own
+        // The release pair. The create names its project in {p}, so its body must carry that project's own
         // environment revision (a foreign project is refused before the body is validated); the read names the
         // release alone, so its tenant scope is the RLS read and another tenant's release is the 404
         // release_not_found, never a 403 that would name existence.
@@ -1373,7 +1373,7 @@ public static class IsolationRouteCases
     }
 
     /// <summary>
-    /// <c>POST /v1/projects/{p}/releases</c> (05.6.1-T1): org A's project with org A's environment revision (404 —
+    /// <c>POST /v1/projects/{p}/releases</c>: org A's project with org A's environment revision (404 —
     /// refused before the body is validated), org B's own project naming org A's environment revision (a non-2xx
     /// naming a revision outside the project, never the row), and org B's own project with its own revision accepted
     /// (201) as the positive control that the probe body reaches the command. The caller holds <c>run:create</c>; a
@@ -1446,7 +1446,7 @@ public static class IsolationRouteCases
     }
 
     /// <summary>
-    /// <c>GET /v1/releases/{id}</c> (05.6.1-T1): a release created as org A inside the probe — 201 — is read 200 by
+    /// <c>GET /v1/releases/{id}</c>: a release created as org A inside the probe — 201 — is read 200 by
     /// org A and refused 404 <c>not_found</c> for org B, identically to a random id. The release is addressed
     /// by id alone, so its tenant scope is the RLS read; the refused answer carries no org-A id. <c>run:read</c> is
     /// outside the service-role ceiling, so a <c>ci_producer</c> is refused before the handler (403, or the same 404

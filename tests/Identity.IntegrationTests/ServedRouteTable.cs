@@ -740,7 +740,7 @@ internal static class RouteRequests
         // the route needs no verdict to be exercisable.
         Add("GET", "/v1/runs/{r}/decision", ctx => new(HttpMethod.Get, $"/v1/runs/{ctx.RunId}/decision"));
 
-        // 05.6.1-T1: the release create/read pair. The create recipe is the closed body of `release-create`
+        // The release create/read pair. The create recipe is the closed body of `release-create`
         // (`name`, optional `state`, and one `components` entry naming the seeded environment revision) with the
         // mandatory key, so a granted caller reaches the command; the read addresses a fresh id, so a granted call
         // answers 404 `not_found` and the matrix only asserts the authorization outcome.
@@ -1054,7 +1054,7 @@ internal static class RouteRequests
     };
 
     /// <summary>
-    /// The <c>POST /v1/projects/{p}/releases</c> body (05.6.1-T1): a name, the default `draft` state and one
+    /// The <c>POST /v1/projects/{p}/releases</c> body: a name, the default `draft` state and one
     /// component whose digest is a well-formed `sha256:` value and whose environment revision is the seeded one, so
     /// a granted caller reaches the command instead of a 400 or a 422.
     /// </summary>
