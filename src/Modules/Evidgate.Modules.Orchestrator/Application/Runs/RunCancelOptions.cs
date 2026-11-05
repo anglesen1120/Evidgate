@@ -11,6 +11,12 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// <see cref="KillDelay"/> is measured from the same accepted request. Both are relative to the request because a
 /// deadline is stored on the row: an absolute timestamp that a restart can re-read, never an in-memory timer.
 /// </para>
+/// <para>
+/// Neither window has a default. The kill deadline is the moment a request still stopping is recorded <c>killed</c>,
+/// so the operator of a deployment states both windows instead of inheriting a number this code chose for them: a
+/// missing key binds to zero and fails the boot validation below, which is the same refusal a zero or negative value
+/// gets.
+/// </para>
 /// </summary>
 internal sealed class RunCancelOptions : IValidatableObject
 {
@@ -18,18 +24,29 @@ internal sealed class RunCancelOptions : IValidatableObject
     public const string SectionName = "EVIDGATE:Runs:Cancel";
 
     /// <summary>
-    /// The soft-stop window: <c>requested_at + SoftStopDelay</c> is stored as <c>soft_stop_deadline_at</c>. Default 30 s
-    /// — long enough for a producer's current event batch to commit, short enough that an operator sees the stop begin.
+    /// The soft-stop window: <c>requested_at + SoftStopDelay</c> is stored as <c>soft_stop_deadline_at</c> — long
+    /// enough for a producer's current event batch to commit, short enough that an operator sees the stop begin.
     /// </summary>
-    [RunDuration]
-    public TimeSpan SoftStopDelay { get; init; } = TimeSpan.FromSeconds(30);
+    /// <remarks>
+    /// <see cref="RequiredAttribute"/> is the declaration the configuration lint reads; a <see cref="TimeSpan"/> can
+    /// never be null, so the value a missing key binds — zero — is what <see cref="RunDurationAttribute"/> refuses.
+    /// </remarks>
+    [Required(ErrorMessage = "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY is required")]
+    [RunDuration(
+        ErrorMessage = "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY must be set and greater than 00:00:00 and at most 366 days.")]
+    public TimeSpan SoftStopDelay { get; init; }
 
     /// <summary>
-    /// The kill window: <c>requested_at + KillDelay</c> is stored as <c>kill_at</c>, the instant execution is stopped
-    /// whatever it is doing. Default 120 s, i.e. 90 s after the soft-stop deadline of the default windows.
+    /// The kill window: <c>requested_at + KillDelay</c> is stored as <c>kill_at</c>, the instant a request still
+    /// stopping is recorded <c>killed</c>, and the moment the durable kill task becomes claimable.
     /// </summary>
-    [RunDuration]
-    public TimeSpan KillDelay { get; init; } = TimeSpan.FromSeconds(120);
+    /// <remarks>
+    /// Required for the same reason as <see cref="SoftStopDelay"/>: no default, and zero is refused.
+    /// </remarks>
+    [Required(ErrorMessage = "EVIDGATE__RUNS__CANCEL__KILLDELAY is required")]
+    [RunDuration(
+        ErrorMessage = "EVIDGATE__RUNS__CANCEL__KILLDELAY must be set and greater than 00:00:00 and at most 366 days.")]
+    public TimeSpan KillDelay { get; init; }
 
     /// <inheritdoc />
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -41,7 +58,8 @@ internal sealed class RunCancelOptions : IValidatableObject
         if (KillDelay < SoftStopDelay)
         {
             yield return new ValidationResult(
-                $"{nameof(KillDelay)} must be at least {nameof(SoftStopDelay)} (EVIDGATE:Runs:Cancel).",
+                "EVIDGATE__RUNS__CANCEL__KILLDELAY must be at least EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY "
+                + "(EVIDGATE:Runs:Cancel).",
                 [nameof(KillDelay)]);
         }
     }

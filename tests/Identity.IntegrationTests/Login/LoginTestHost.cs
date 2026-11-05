@@ -410,6 +410,8 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
                 ["EVIDGATE:Login:RetryAfterSeconds"] =
                     RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["EVIDGATE:Database:ConnectionString"] = NoDatabase,
+                ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+                ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 ["EVIDGATE:Isolation:SelfCheck"] = "Disabled",
             }));
 

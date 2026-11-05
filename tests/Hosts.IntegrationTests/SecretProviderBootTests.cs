@@ -89,6 +89,8 @@ public sealed class SecretProviderBootTests
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             ["EVIDGATE:Database:ConnectionString"] = connectionString,
+            ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+            ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
             ["EVIDGATE:Ci:Pepper"] = pepper,
             [IsolationSelfCheckEnvironment.InMemoryKey] = IsolationSelfCheckEnvironment.Disabled,
         });
@@ -115,6 +117,8 @@ public sealed class SecretProviderBootTests
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             ["EVIDGATE:Database:ConnectionString"] = FirstConnectionString,
+            ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+            ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
             ["EVIDGATE:Tasks:SweepConnectionString"] = sweepConnectionString,
             [IsolationSelfCheckEnvironment.InMemoryKey] = IsolationSelfCheckEnvironment.Disabled,
         });

@@ -67,6 +67,14 @@
       "origin": "secret-store",
       "from": "provider secret store (10.1.1-T3), injected as an environment variable at deploy and resolved through ISecretProvider by GitHubLoginOptionsSecretPostConfigure (SecretNames.OauthGithubClientSecret, 02.3.1-T1.3); staging's own GitHub OAuth app, never prod's. Not required: until both halves are present the GitHub routes answer 503"
     },
+    "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY": {
+      "origin": "environment",
+      "from": "injected at deploy as a plain variable next to the rest of staging's configuration; the graceful window a producer gets before the kill deadline. Required at boot: no option default, a missing key binds to 00:00:00 and is refused"
+    },
+    "EVIDGATE__RUNS__CANCEL__KILLDELAY": {
+      "origin": "environment",
+      "from": "injected at deploy as a plain variable; the instant execution is stopped whatever it is doing, and the moment the durable kill task is due. Required at boot and must be at least the soft-stop window"
+    },
     "EVIDGATE__TASKS__BACKOFFBASESECONDS": {
       "origin": "default",
       "from": "option default 5"

@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
@@ -86,7 +87,8 @@ internal sealed record CancelRunCommand(
 /// <b>The durable request.</b> A run that actually moved gets exactly one <c>run_cancel_request</c> row: the insert's
 /// <c>on conflict (org_id, run_id) do nothing</c> makes the row's own unique key the arbiter of a repeat, so an accepted
 /// request survives a restart and a second one records nothing. Its windows are computed from configuration on the
-/// handler's clock, and they act on execution only — <c>run.state</c> is already terminal when they start.
+/// handler's clock, and they act on execution only — <c>run.state</c> is already terminal when they start. The same
+/// transaction queues the one kill task due at <c>kill_at</c>, so the deadline is durable with the request.
 /// </para>
 /// <para>
 /// <b>Audit.</b> An applied transition writes its own canonical <c>run.state_changed</c> entry, credited to the caller.
@@ -103,6 +105,8 @@ internal sealed partial class CancelRunCommandHandler(
     IRequestTenantContextAccessor tenant,
     IRunStateTransition runStates,
     IAuditTrail audit,
+    ITaskQueueWriter tasks,
+    IOptions<TasksOptions> taskOptions,
     IOptions<RunCancelOptions> options,
     TimeProvider clock) : ICommandHandler<CancelRunCommand, Result>
 {
@@ -139,8 +143,6 @@ internal sealed partial class CancelRunCommandHandler(
             return Result.Failure(RunNotFound);
         }
 
-        var orgId = scopes.Require().OrgId;
-
         // The guarded edge, in this transaction: it locks the run row, classifies `* -> canceled` and writes the state
         // change, its outbox row and its own audit entry. Nothing about the request row is decided before it answers.
         var transition = await runStates
@@ -159,7 +161,7 @@ internal sealed partial class CancelRunCommandHandler(
             return Accepted(activity, "no_op");
         }
 
-        var inserted = await RecordRequestAsync(command.RunId, orgId, requestedBy, (string?)parsed.SuccessValue, cancellationToken)
+        var inserted = await RecordRequestAsync(command.RunId, requestedBy, (string?)parsed.SuccessValue, cancellationToken)
             .ConfigureAwait(false);
         if (inserted == 0)
         {
@@ -194,31 +196,66 @@ internal sealed partial class CancelRunCommandHandler(
     /// Writes the one durable request row of an applied cancel and answers its affected-row count: <c>1</c> when this
     /// call recorded it, <c>0</c> when the run's own unique key already held one. The stop windows are computed here from
     /// configuration on the handler's clock, so a repeat can never reopen or shift them.
+    /// <para>
+    /// The kill row follows the request row in this same transaction, so "the cancel is recorded" and "the kill is
+    /// due at <c>kill_at</c>" commit together or not at all; its key names the request, so a second writer of the
+    /// same request inserts nothing.
+    /// </para>
     /// </summary>
     private async ValueTask<int> RecordRequestAsync(
         Guid runId,
-        Guid orgId,
         Guid requestedBy,
         string? reason,
         CancellationToken cancellationToken)
     {
+        // The one scope of this unit: its connection and transaction are the ones the request row and the kill row are
+        // written on, which is what makes them one durable event.
+        var scope = scopes.Require();
         var now = clock.GetUtcNow();
         var settings = options.Value;
+        var requestId = Guid.CreateVersion7();
+        var killAt = now + settings.KillDelay;
 
-        return await db.ExecuteAsync(
+        var inserted = await db.ExecuteAsync(
             RunCancelSql.InsertRequest,
             new
             {
-                id = Guid.CreateVersion7(),
-                org_id = orgId,
+                id = requestId,
+                org_id = scope.OrgId,
                 run_id = runId,
                 requested_by = requestedBy,
                 reason,
                 requested_at = now,
                 soft_stop_deadline_at = now + settings.SoftStopDelay,
-                kill_at = now + settings.KillDelay,
+                kill_at = killAt,
             },
             cancellationToken).ConfigureAwait(false);
+
+        if (inserted == 0)
+        {
+            return 0;
+        }
+
+        // The queue's contract is that the row is durable with the business change, so it takes the caller's own
+        // connection and transaction: a rollback leaves neither the request nor its schedule behind.
+        // The queue is the deployment's routing decision for this task_type, never a constant: the Worker consumes the
+        // queues it is configured for, so a row written into a queue nobody polls would lose the kill silently. Same
+        // rule as the outbox dispatcher; resolved here because this row is written straight onto the caller's transaction.
+        await tasks.EnqueueAsync(
+            scope.Connection,
+            scope.Transaction,
+            new TaskEnqueue
+            {
+                Queue = TaskQueueRouting.QueueFor(taskOptions.Value, CancelKillContract.TaskType),
+                TaskType = CancelKillContract.TaskType,
+                PayloadJson = CancelKillContract.PayloadJson(runId, requestId),
+                IdempotencyKey = CancelKillContract.IdempotencyKey(runId, requestId),
+                OrgId = scope.OrgId,
+                AvailableAt = killAt.UtcDateTime,
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return inserted;
     }
 
     /// <summary>

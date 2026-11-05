@@ -54,11 +54,25 @@ public sealed class RunCreationTests
     }
 
     /// <summary>An org with a project, cases, a suite revision, an environment revision and one uploaded manifest.</summary>
-    internal static async Task<World> StartAsync(PostgresTenancyFixture fixture, int cases = 2, string slug = "acme", string? database = null)
+    /// <param name="configuration">
+    /// Extra in-memory configuration for the Api this world boots — a suite that needs a non-default EVIDGATE__* value
+    /// (the run-cancel windows, for one) passes it here instead of booting a second kind of host.
+    /// </param>
+    /// <param name="services">
+    /// Extra registrations for that host — the task queue, when a suite drives the real consumer against the rows this
+    /// host's requests wrote.
+    /// </param>
+    internal static async Task<World> StartAsync(
+        PostgresTenancyFixture fixture,
+        int cases = 2,
+        string slug = "acme",
+        string? database = null,
+        IReadOnlyDictionary<string, string?>? configuration = null,
+        Action<IServiceCollection>? services = null)
     {
         // A suite that counts the whole database passes its own dedicated database; the rest share one under a fresh org.
         database ??= await fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
+        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database), configuration, services);
         var client = api.CreateClient();
 
         try
