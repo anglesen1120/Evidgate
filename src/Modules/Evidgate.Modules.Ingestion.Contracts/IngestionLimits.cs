@@ -49,7 +49,7 @@ public sealed class IngestionLimits
     /// The most planned executions a manifest may declare. Checked before the executions are expanded into
     /// rows, so an over-cap manifest costs one count and creates nothing.
     /// </summary>
-    [Range(1, MaxManifestExecutionsCeiling, ErrorMessage = "EVIDGATE__INGESTION__MAXMANIFESTEXECUTIONS must be between 1 and 1000000")]
+    [Range(1, 1_000_000, ErrorMessage = "EVIDGATE__INGESTION__MAXMANIFESTEXECUTIONS must be between 1 and 1000000")]
     public int MaxManifestExecutions { get; init; } = DefaultMaxManifestExecutions;
 
     /// <summary>The most report entries (JUnit <c>testcase</c> elements) one raw report may carry.</summary>
@@ -60,7 +60,7 @@ public sealed class IngestionLimits
     /// The most variants one case may carry, which is the manifest matrix's variant axis: a plan over
     /// <c>cases × variants × environments</c> multiplies every extra variant across every case.
     /// </summary>
-    [Range(1, MaxManifestVariantsCeiling, ErrorMessage = "EVIDGATE__INGESTION__MAXMANIFESTVARIANTS must be between 1 and 1000")]
+    [Range(1, 1_000, ErrorMessage = "EVIDGATE__INGESTION__MAXMANIFESTVARIANTS must be between 1 and 1000")]
     public int MaxManifestVariants { get; init; } = DefaultMaxManifestVariants;
 
     /// <summary>

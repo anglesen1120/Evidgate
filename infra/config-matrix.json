@@ -1224,7 +1224,7 @@
     {
       "key": "EVIDGATE__INGESTION__MAXEXPANDEDBYTES",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
@@ -1248,7 +1248,7 @@
     {
       "key": "EVIDGATE__INGESTION__MAXEXPANSIONRATIO",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
@@ -1272,7 +1272,7 @@
     {
       "key": "EVIDGATE__INGESTION__MAXMANIFESTBYTES",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
@@ -1296,7 +1296,7 @@
     {
       "key": "EVIDGATE__INGESTION__MAXMANIFESTEXECUTIONS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
@@ -1320,7 +1320,7 @@
     {
       "key": "EVIDGATE__INGESTION__MAXMANIFESTVARIANTS",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
@@ -1344,7 +1344,7 @@
     {
       "key": "EVIDGATE__INGESTION__MAXREPORTCASES",
       "scope": "runtime",
-      "consumers": ["api", "worker"],
+      "consumers": ["api", "migrator", "worker"],
       "type": "integer",
       "requiredAtBoot": false,
       "requiredBy": "src/Modules/Evidgate.Modules.Ingestion.Contracts/IngestionLimits.cs",
