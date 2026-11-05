@@ -60,7 +60,7 @@ internal sealed class UsageContracts(
         }
 
         var inserted = await store
-            .InsertAsync(orgId, batch.Rows, cancellationToken)
+            .RecordBatchAsync(orgId, batch, cancellationToken)
             .ConfigureAwait(false);
 
         return UsageBatchOutcome.Merge(batch, inserted);

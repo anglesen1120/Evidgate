@@ -20,28 +20,19 @@ internal static class UsageBatchOutcome
         ArgumentNullException.ThrowIfNull(inserted);
 
         var insertedKeys = inserted.ToHashSet(StringComparer.Ordinal);
-        var repeated = batch.RepeatedBillingKeys.ToHashSet(StringComparer.Ordinal);
 
         List<string>? kept = null;
-        List<string>? duplicates = null;
 
         foreach (var row in batch.Rows)
         {
-            var wasInserted = insertedKeys.Contains(row.BillingKey);
-
-            if (wasInserted)
+            if (insertedKeys.Contains(row.BillingKey))
             {
                 (kept ??= []).Add(row.BillingKey);
             }
-
-            // A repeated key is a duplicate even when its first occurrence was inserted; a key the statement skipped is
-            // a duplicate because it was already on file.
-            if (!wasInserted || repeated.Contains(row.BillingKey))
-            {
-                (duplicates ??= []).Add(row.BillingKey);
-            }
         }
 
-        return new UsageBatchResult(kept ?? [], duplicates ?? []);
+        // The duplicate list comes from the batch's own classification so the recorded attempts and this answer can
+        // never name different keys.
+        return new UsageBatchResult(kept ?? [], batch.DuplicateBillingKeys(insertedKeys));
     }
 }
