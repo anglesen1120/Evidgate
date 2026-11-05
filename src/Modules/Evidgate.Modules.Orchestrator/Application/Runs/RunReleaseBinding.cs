@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Application.Manifests;
 using Evidgate.Modules.Orchestrator.Application.Releases;
@@ -16,6 +17,28 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// </summary>
 internal static class RunReleaseBinding
 {
+    /// <summary>
+    /// The body's <c>release_id</c> member, shape-checked and nothing more: a uuid string that is not the empty guid.
+    /// Whether that release exists, belongs to this project or is bindable at all is a database answer
+    /// (<see cref="ResolveAsync"/>); keep the two apart so a malformed body is refused before any read.
+    /// </summary>
+    /// <param name="body">The run-create body, already known to be a JSON object.</param>
+    internal static (Guid? ReleaseId, Error? Error) ParseReleaseId(JsonElement body)
+    {
+        if (!body.TryGetProperty("release_id", out var element))
+        {
+            return (null, null);
+        }
+
+        return element.ValueKind == JsonValueKind.String
+            && element.TryGetGuid(out var releaseId)
+            && releaseId != Guid.Empty
+            ? (releaseId, null)
+            : (null, Error.Invalid(
+                "release_id must be a UUID",
+                [new ErrorDetail("/release_id", "invalid_value")]));
+    }
+
     /// <summary>
     /// Resolves a body's <c>release_id</c> inside the run's project before anything is written. A null id means the
     /// body named none; an error is the refusal the run create answers and then writes nothing: <c>404 not_found</c> for

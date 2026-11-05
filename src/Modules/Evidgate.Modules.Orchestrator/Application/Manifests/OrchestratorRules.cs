@@ -69,6 +69,12 @@ internal static class OrchestratorErrors
     /// <summary>404 <c>not_found</c>: no run with that id is visible in the release's project.</summary>
     internal static Error RunNotFound => Error.NotFound("no run with that id is visible to this tenant");
 
+    /// <summary>
+    /// 404 <c>not_found</c> for a bind, release and run alike: one message, so a same-org caller cannot tell a
+    /// sibling-project id from an unknown one, or which of the two ids the tenant check refused.
+    /// </summary>
+    internal static Error BindTargetNotFound => Error.NotFound("no release or run with those ids is visible to this tenant");
+
     /// <summary>422 <c>release_not_active</c>: a <c>draft</c> release accepts no binds, at run create or explicitly.</summary>
     internal static Error ReleaseNotActive => Error.Unprocessable(
         ApiErrorCode.ReleaseNotActive,
@@ -84,6 +90,11 @@ internal static class OrchestratorErrors
         ApiErrorCode.ReleaseComponentMismatch,
         "no component of the run matches the release's digests",
         details);
+
+    /// <summary>422 <c>fork_run_not_bindable</c>: a fork run's identity is advisory-only, so it pins to no release.</summary>
+    internal static Error ForkRunNotBindable => Error.Unprocessable(
+        ApiErrorCode.ForkRunNotBindable,
+        "a fork run is advisory-only and cannot be bound to a release");
 
     internal static Error RevisionConflict(int next) => new(
         ApiErrorCode.RevisionConflict,

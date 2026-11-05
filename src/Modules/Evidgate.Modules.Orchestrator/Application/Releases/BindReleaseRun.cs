@@ -15,11 +15,13 @@ using Evidgate.BuildingBlocks.SharedKernel.Messaging;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Application.Manifests;
+using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Domain;
 using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 using Evidgate.Modules.Policy.Contracts;
 using Mediator;
+using CreateRunHandler = Evidgate.Modules.Orchestrator.Application.Runs.CreateRunCommandHandler;
 using Microsoft.AspNetCore.Http;
 
 namespace Evidgate.Modules.Orchestrator.Application.Releases;
@@ -41,10 +43,10 @@ internal sealed record BindReleaseRunCommand(
 }
 
 /// <summary>
-/// The explicit bind: load the release and the run, refuse a draft release and a run that already has a live verdict,
-/// then write one <c>release_run</c> row per component whose digests agree, with its audit row and its outbox event, in
-/// the caller's one tenant transaction. Mismatches are never stored — the answer reports them, and a later read derives
-/// them again from the same two rows.
+/// The explicit bind: load the release and the run, refuse a fork or replay run and a draft release, refuse a run that
+/// already has a live verdict, then write one <c>release_run</c> row per component whose digests agree, with its audit
+/// row and its outbox event, in the caller's one tenant transaction. Mismatches are never stored — the answer reports
+/// them, and a later read derives them again from the same two rows.
 /// </summary>
 /// <remarks>
 /// A re-bind of an existing pair inserts nothing (<c>on conflict do nothing</c>) and answers every row the pair holds,
@@ -75,15 +77,10 @@ internal sealed class BindReleaseRunHandler(
         ArgumentNullException.ThrowIfNull(command);
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Orchestrator, nameof(BindReleaseRunCommand));
 
-        var release = await db.QuerySingleOrDefaultAsync<ReleaseRow>(
-            ReleaseSql.ReleaseById,
-            new { release_id = command.ReleaseId, org_id = scopes.Require().OrgId },
-            cancellationToken).ConfigureAwait(false);
-        // One answer for every release the caller may not bind: unknown, another tenant's, and a sibling project's are
-        // all 404. A distinct 403 here would tell a project-narrowed credential that the id exists elsewhere in its org.
-        if (release is null || OrchestratorScope.Project(release.ProjectId, principals, tenant) is not null)
+        var (release, releaseError) = await LoadReleaseAsync(command.ReleaseId, cancellationToken).ConfigureAwait(false);
+        if (releaseError is not null)
         {
-            return Result.Failure<ReleaseBindResult>(OrchestratorErrors.ReleaseNotFound);
+            return Result.Failure<ReleaseBindResult>(releaseError);
         }
 
         var (runId, bodyError) = BindReleaseBody.Parse(command.Body);
@@ -93,33 +90,107 @@ internal sealed class BindReleaseRunHandler(
         }
 
         var orgId = scopes.Require().OrgId;
+        var (run, runError) = await LoadRunAsync(runId, release!.ProjectId, orgId, cancellationToken).ConfigureAwait(false);
+        if (runError is not null)
+        {
+            return Result.Failure<ReleaseBindResult>(runError);
+        }
+
+        if (Refusal(release, run!) is { } refusal)
+        {
+            return Result.Failure<ReleaseBindResult>(refusal);
+        }
+
+        var closed = await TakeRunLockAsync(runId, orgId, cancellationToken).ConfigureAwait(false);
+        if (closed is not null)
+        {
+            return Result.Failure<ReleaseBindResult>(closed);
+        }
+
+        return await BindAsync(command.ReleaseId, runId, orgId, run!, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The release, answered as one 404 for every release the caller may not bind: unknown, another tenant's, and a
+    /// sibling project's. A distinct 403 would tell a project-narrowed credential that the id exists elsewhere in its org.
+    /// </summary>
+    private async ValueTask<(ReleaseRow? Release, Error? Error)> LoadReleaseAsync(
+        Guid releaseId,
+        CancellationToken cancellationToken)
+    {
+        var release = await db.QuerySingleOrDefaultAsync<ReleaseRow>(
+            ReleaseSql.ReleaseById,
+            new { release_id = releaseId, org_id = scopes.Require().OrgId },
+            cancellationToken).ConfigureAwait(false);
+
+        return release is null || OrchestratorScope.Project(release.ProjectId, principals, tenant) is not null
+            ? (null, OrchestratorErrors.BindTargetNotFound)
+            : (release, null);
+    }
+
+    /// <summary>The run under the release's project, or the same 404 an unknown id gets.</summary>
+    private async ValueTask<(RunRow? Run, Error? Error)> LoadRunAsync(
+        Guid runId,
+        Guid projectId,
+        Guid orgId,
+        CancellationToken cancellationToken)
+    {
         var run = await db.QuerySingleOrDefaultAsync<RunRow>(
             ReleaseSql.RunComponents,
-            new { run_id = runId, org_id = orgId, project_id = release.ProjectId },
+            new { run_id = runId, org_id = orgId, project_id = projectId },
             cancellationToken).ConfigureAwait(false);
-        if (run is null)
+
+        return run is null ? (null, OrchestratorErrors.BindTargetNotFound) : (run, null);
+    }
+
+    /// <summary>
+    /// The refusals that need no lock, in the order a caller can act on them: a fork run's identity is advisory-only, a
+    /// replay run re-executes a stored run's inputs rather than this release's, and a <c>draft</c> release has no final
+    /// component set yet.
+    /// </summary>
+    private static Error? Refusal(ReleaseRow release, RunRow run)
+    {
+        if (run.IsFork)
         {
-            return Result.Failure<ReleaseBindResult>(OrchestratorErrors.RunNotFound);
+            return OrchestratorErrors.ForkRunNotBindable;
         }
 
-        if (release.State == ReleaseStates.Draft)
+        if (run.Purpose == CreateRunHandler.ReplayPurpose)
         {
-            return Result.Failure<ReleaseBindResult>(OrchestratorErrors.ReleaseNotActive);
+            return OrchestratorErrors.ReplayReleaseNotAllowed;
         }
 
+        return release.State == ReleaseStates.Draft ? OrchestratorErrors.ReleaseNotActive : null;
+    }
+
+    /// <summary>
+    /// Locks the run for the rest of the transaction, then asks whether a live verdict already exists: the lock is what
+    /// makes the answer stable, because an evaluation row's composite foreign key needs the key-share lock this one
+    /// conflicts with.
+    /// </summary>
+    private async ValueTask<Error?> TakeRunLockAsync(Guid runId, Guid orgId, CancellationToken cancellationToken)
+    {
         await db.ExecuteAsync(
             ReleaseSql.LockRun,
             new { run_id = runId, org_id = orgId },
             cancellationToken).ConfigureAwait(false);
 
-        if (await liveEvaluations.HasLiveAsync(runId, cancellationToken).ConfigureAwait(false))
-        {
-            return Result.Failure<ReleaseBindResult>(OrchestratorErrors.ReleaseBindClosed);
-        }
+        return await liveEvaluations.HasLiveAsync(runId, cancellationToken).ConfigureAwait(false)
+            ? OrchestratorErrors.ReleaseBindClosed
+            : null;
+    }
 
+    /// <summary>The match and its write: components, insert, the rows the pair now holds, then the event and the audit row.</summary>
+    private async ValueTask<Result<ReleaseBindResult>> BindAsync(
+        Guid releaseId,
+        Guid runId,
+        Guid orgId,
+        RunRow run,
+        CancellationToken cancellationToken)
+    {
         var components = await db.QueryAsync<ComponentRow>(
             ReleaseSql.ComponentsByRelease,
-            new { org_id = orgId, release_id = command.ReleaseId },
+            new { org_id = orgId, release_id = releaseId },
             cancellationToken).ConfigureAwait(false);
         var match = ReleaseMatch.Match(
             components.Select(component => new ReleaseComponentDigest(component.ComponentKey, component.Digest)),
@@ -127,29 +198,16 @@ internal sealed class BindReleaseRunHandler(
 
         if (match.Bound.Count == 0)
         {
-            // One detail per mismatched component: the pointer names the run's component, the reason says whether the
-            // run recorded another digest or none. The digests themselves stay out of the envelope — it carries no
-            // free-form value, and a digest in an error body would be an unversioned wire field.
-            return Result.Failure<ReleaseBindResult>(OrchestratorErrors.ReleaseComponentMismatch(
-                [.. match.Mismatched.Select(mismatched => new ErrorDetail(
-                    $"/run/components/{mismatched.ComponentKey}",
-                    mismatched.Reason))]));
+            return Result.Failure<ReleaseBindResult>(NoComponentMatches(match));
         }
 
         var inserted = await db.ExecuteAsync(
             ReleaseSql.InsertBindings,
-            new
-            {
-                org_id = orgId,
-                release_id = command.ReleaseId,
-                run_id = runId,
-                rows = BindingRows(match.Bound),
-            },
+            new { org_id = orgId, release_id = releaseId, run_id = runId, rows = BindingRows(match.Bound) },
             cancellationToken).ConfigureAwait(false);
-
         var bound = await db.QueryAsync<BoundRow>(
             ReleaseSql.BoundComponentsByPair,
-            new { org_id = orgId, release_id = command.ReleaseId, run_id = runId },
+            new { org_id = orgId, release_id = releaseId, run_id = runId },
             cancellationToken).ConfigureAwait(false);
 
         if (inserted == 0)
@@ -157,46 +215,62 @@ internal sealed class BindReleaseRunHandler(
             // The pair already held every key: nothing new committed, so no second audit row and no second event. The
             // answer still lists what the pair holds, which is what makes the call a no-op rather than a refusal.
             audit.Suppress();
-            return Result.Success(BindResult(command.ReleaseId, runId, bound, match), StatusCodes.Status201Created);
+            return Result.Success(BindResult(releaseId, runId, bound, match), StatusCodes.Status201Created);
         }
 
         // A bind that wrote nothing is not an applied bind: its mismatches were counted when the rows were inserted.
         EvidgateTelemetry.RecordReleaseBindMismatch(match.Mismatched.Count);
 
+        await EnqueueBound(releaseId, runId, match, cancellationToken).ConfigureAwait(false);
+        audit.Describe(AppliedAudit(releaseId, runId, bound.Count, match));
+
+        return Result.Success(BindResult(releaseId, runId, bound, match), StatusCodes.Status201Created);
+    }
+
+    /// <summary>One outbox event for the applied bind, deduped on the matched key set (see <see cref="OutboxKey"/>).</summary>
+    private async ValueTask EnqueueBound(
+        Guid releaseId,
+        Guid runId,
+        ReleaseMatchOutcome match,
+        CancellationToken cancellationToken) =>
         await outbox.EnqueueAsync(
             BoundTaskType,
             JsonSerializer.Serialize(new
             {
-                release_id = command.ReleaseId,
+                release_id = releaseId,
                 run_id = runId,
-                bound = inserted,
+                bound = match.Bound.Count,
                 mismatched = match.Mismatched.Count,
             }),
             "release",
-            command.ReleaseId,
-            // The inserted key set is the unit: a set can only be inserted once (the unique key refuses a repeat), so a
-            // partial re-bind that adds keys gets its own row while a replay of the same set collides with this one.
-            OutboxKey(command.ReleaseId, runId, match.Bound),
+            releaseId,
+            OutboxKey(releaseId, runId, match.Bound),
             cancellationToken).ConfigureAwait(false);
 
-        audit.Describe(new AuditObject(
+    /// <summary>The audit object of an applied bind: allowlisted keys only, and no component key or digest.</summary>
+    /// <param name="releaseId">The release the row is about.</param>
+    /// <param name="runId">The run the binding is for.</param>
+    /// <param name="boundCount">The rows the pair holds after the call.</param>
+    /// <param name="match">The match that was applied: its mismatch count decides the outcome word.</param>
+    private static AuditObject AppliedAudit(Guid releaseId, Guid runId, int boundCount, ReleaseMatchOutcome match) =>
+        new(
             "release",
-            command.ReleaseId.ToString("D"),
+            releaseId.ToString("D"),
             Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                // Only allowlisted keys: `count` is the rows the pair holds after the call, `outcome` says whether the
-                // release was matched in full, and `run_id` names the run the row is about.
-                ["count"] = bound.Count.ToString(CultureInfo.InvariantCulture),
+                ["count"] = boundCount.ToString(CultureInfo.InvariantCulture),
                 ["outcome"] = match.Mismatched.Count == 0 ? "complete" : "partial",
                 ["run_id"] = runId.ToString("D"),
-            }));
+            });
 
-        activity?.SetTag("evidgate.release_id", command.ReleaseId.ToString("D"));
+    /// <summary>The zero-match refusal: one detail per component, naming the run's pointer and the reason.</summary>
+    private static Error NoComponentMatches(ReleaseMatchOutcome match) =>
+        OrchestratorErrors.ReleaseComponentMismatch(
+            [.. match.Mismatched.Select(mismatched => new ErrorDetail(
+                $"/run/components/{mismatched.ComponentKey}",
+                mismatched.Reason))]);
 
-        return Result.Success(BindResult(command.ReleaseId, runId, bound, match), StatusCodes.Status201Created);
-    }
-
-    /// <summary>The answer of a call that wrote its rows: what the pair holds now, and what it never will.</summary>
+    /// <summary>The answer of a call that held its rows: what the pair holds now, and the keys it never will.</summary>
     private static ReleaseBindResult BindResult(
         Guid releaseId,
         Guid runId,
@@ -206,7 +280,7 @@ internal sealed class BindReleaseRunHandler(
             releaseId,
             runId,
             [.. bound.Select(row => new ReleaseBoundComponent(row.ComponentKey, row.Digest))],
-            match.Mismatched);
+            [.. match.Mismatched.Select(mismatched => new ReleaseBindMismatch(mismatched.ComponentKey, mismatched.Reason))]);
 
     /// <summary>The one <c>jsonb</c> batch parameter of <see cref="ReleaseSql.InsertBindings"/>: ids server-chosen, keys ordered.</summary>
     private static string BindingRows(IReadOnlyList<ReleaseBoundComponent> bound) =>
@@ -215,8 +289,8 @@ internal sealed class BindReleaseRunHandler(
             component.ComponentKey)));
 
     /// <summary>
-    /// The outbox dedupe key of this call's inserted set: <c>orchestrator:release:&lt;id&gt;:run:&lt;id&gt;:&lt;digest&gt;</c>,
-    /// where the digest covers the ordered component keys. It stays inside the column's 256-character bound.
+    /// The outbox dedupe key of this call's matched set: <c>orchestrator:release:&lt;id&gt;:run:&lt;id&gt;:&lt;digest&gt;</c>,
+    /// where the digest covers the ordered matched keys. It stays inside the column's 256-character bound.
     /// </summary>
     private static string OutboxKey(Guid releaseId, Guid runId, IReadOnlyList<ReleaseBoundComponent> bound)
     {
@@ -242,10 +316,14 @@ internal sealed class BindReleaseRunHandler(
         public string State { get; set; } = string.Empty;
     }
 
-    /// <summary>The run's recorded components, as the match reads them.</summary>
+    /// <summary>The run's recorded components and the two identity facts that decide whether it may bind at all.</summary>
     private sealed class RunRow
     {
         public string? Components { get; set; }
+
+        public bool IsFork { get; set; }
+
+        public string Purpose { get; set; } = string.Empty;
     }
 
     /// <summary>One release component the match compares.</summary>

@@ -204,6 +204,9 @@ public static class ApiErrorCode
     /// <summary>422: no component of the run matches the release's digests, so an explicit bind would store nothing.</summary>
     public const string ReleaseComponentMismatch = "release_component_mismatch";
 
+    /// <summary>422: a fork run is advisory-only identity, so it can be bound to no release, at create or explicitly.</summary>
+    public const string ForkRunNotBindable = "fork_run_not_bindable";
+
     /// <summary>422: a policy body carries a member the 00 §8.6 field set does not declare (07.1.1 AC3).</summary>
     public const string PolicyUnknownField = "policy_unknown_field";
 

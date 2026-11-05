@@ -33,7 +33,8 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// (like <see cref="Manifests.UploadManifestCommand"/>): the handler parses and validates it after the C2 pipeline
 /// authorized the caller, so an anonymous or unauthorized request costs no parse.
 /// <para>
-/// Besides <c>manifest_id</c>, <c>release</c> and <c>components</c>, the body may carry <c>purpose</c>
+/// Besides <c>manifest_id</c>, <c>components</c> and an optional <c>release_id</c>, the body may carry the legacy
+/// <c>release</c> name — permanently unresolvable, because a run binds to a release by id — plus <c>purpose</c>
 /// (<c>regular</c>, the default, or <c>replay</c>) and <c>replay_grant_id</c> (05.2.1-T5): a <c>replay</c> request is
 /// refused 422 before any read, and a <c>replay_grant_id</c> is only meaningful for one.
 /// </para>
@@ -302,9 +303,9 @@ internal sealed class CreateRunCommandHandler(
 
         if (purpose == ReplayPurpose)
         {
-            // AC9: a replay run re-executes a stored run's inputs, so it may not also name a release; this refusal wins
-            // over the grant check below.
-            if (release is not null)
+            // A replay run re-executes a stored run's inputs, so it may not also name a release — by legacy name or by
+            // id; this refusal wins over the grant check below. The member is checked on the body, before its shape.
+            if (release is not null || body.TryGetProperty("release_id", out _))
             {
                 return Result.Failure<RunCreated>(OrchestratorErrors.ReplayReleaseNotAllowed);
             }
@@ -350,17 +351,10 @@ internal sealed class CreateRunCommandHandler(
 
         // (1b2) the release the run wants to be bound to. Shape only here — the uuid and nothing else — because an
         // unknown, foreign or draft release is a database answer (404/422) that needs the tenant scope below.
-        Guid? releaseId = null;
-        if (body.TryGetProperty("release_id", out var releaseIdElement))
+        var (releaseId, releaseIdError) = RunReleaseBinding.ParseReleaseId(body);
+        if (releaseIdError is not null)
         {
-            if (releaseIdElement.ValueKind != JsonValueKind.String
-                || !releaseIdElement.TryGetGuid(out var parsedReleaseId)
-                || parsedReleaseId == Guid.Empty)
-            {
-                return BodyInvalid("release_id must be a UUID", [new ErrorDetail("/release_id", InvalidValue)]);
-            }
-
-            releaseId = parsedReleaseId;
+            return Result.Failure<RunCreated>(releaseIdError);
         }
 
         // (1c) the run-identity block (05.2.2-T1.3, AC4): shape-checked here — before the database reads below and long
@@ -372,24 +366,14 @@ internal sealed class CreateRunCommandHandler(
             return BodyInvalid("the request body carries an invalid ref", refErrors);
         }
 
-        // AC10: a syntactically valid release is still unresolvable at M1 (the bind path lands with 05.6.1).
+        // The legacy `release` name stays permanently unresolvable: a release is addressed by id, and a name would make
+        // the binding depend on a mutable lookup rather than the immutable row the caller chose.
         if (release is not null)
         {
             return Result.Failure<RunCreated>(OrchestratorErrors.ReleaseUnresolvable);
         }
 
         var orgId = scopes.Require().OrgId;
-
-        // (1d) the release the run asks to be bound to: resolved inside this project before any write, so an unknown,
-        // foreign or draft release leaves no run, execution or slot behind. A release that resolves but shares no
-        // digest never refuses the run — the binding is partial or empty, and the mismatch is read back from the pair.
-        var (bindReleaseId, releaseError) = await RunReleaseBinding
-            .ResolveAsync(releaseId, command.ProjectId, orgId, db, cancellationToken)
-            .ConfigureAwait(false);
-        if (releaseError is not null)
-        {
-            return Result.Failure<RunCreated>(releaseError);
-        }
 
         // (2) the manifest, by id and project; RLS makes another tenant's invisible, so unknown and foreign are one 404.
         var manifest = await db.QuerySingleOrDefaultAsync<ManifestRow>(
@@ -463,6 +447,24 @@ internal sealed class CreateRunCommandHandler(
         {
             // The body-only path: a `pull_request` kind without a number is not a usable identity (AC4).
             return BodyInvalid("the run identity is invalid", [violation]);
+        }
+
+        // (5c) a fork run's identity is advisory-only, so it may not be pinned to a release; the refusal runs before
+        // the release read and long before the writes, so a fork request leaves nothing behind.
+        if (identity.IsFork && releaseId is not null)
+        {
+            return Result.Failure<RunCreated>(OrchestratorErrors.ForkRunNotBindable);
+        }
+
+        // (5d) the release the run asks to be bound to: resolved inside this project before any write, so an unknown,
+        // foreign or draft release leaves no run, execution or slot behind. A release that resolves but shares no
+        // digest never refuses the run — the binding is partial or empty, and the mismatch is read back from the pair.
+        var (bindReleaseId, releaseError) = await RunReleaseBinding
+            .ResolveAsync(releaseId, command.ProjectId, orgId, db, cancellationToken)
+            .ConfigureAwait(false);
+        if (releaseError is not null)
+        {
+            return Result.Failure<RunCreated>(releaseError);
         }
 
         // (6) the writes, all inside the one C2 tenant transaction.

@@ -94,9 +94,13 @@ internal static class ReleaseSql
          where r.id = @release_id and r.org_id = @org_id and r.project_id = @project_id
         """;
 
-    /// <summary>The run's recorded <c>components</c> as text, matched on the caller's org and the release's project.</summary>
+    /// <summary>
+    /// The run's recorded <c>components</c> as text, plus the two identity facts a bind must refuse on, matched on the
+    /// caller's org and the release's project. A fork run is advisory-only identity, and a replay run re-executes a
+    /// stored run's inputs rather than this release's, so neither may be pinned to a release.
+    /// </summary>
     internal const string RunComponents = """
-        select r.components::text as components
+        select r.components::text as components, r.is_fork, r.purpose
           from public.run r
          where r.id = @run_id and r.org_id = @org_id and r.project_id = @project_id
         """;
@@ -155,17 +159,23 @@ internal static class ReleaseSql
         """;
 
     /// <summary>
-    /// The two sides of the match for one pair in one statement — the release's components and the run's recorded
-    /// <c>components</c> — so the read seam derives a mismatch list without a second round trip.
+    /// The two sides of the match for one pair in one row — the run's recorded <c>components</c> once, and the release's
+    /// components aggregated into one document in <c>component_key</c> order — so the read seam derives a mismatch list
+    /// in one round trip without repeating the run document per component.
     /// </summary>
     internal const string MismatchSource = """
-        select c.component_key, c.digest as release_digest, ru.components::text as run_components
+        select ru.components::text as run_components,
+               coalesce(
+                   jsonb_agg(
+                       jsonb_build_object('component_key', c.component_key, 'digest', c.digest)
+                       order by c.component_key),
+                   '[]'::jsonb)::text as release_components
           from public.release_component c
           join public.release rel
             on rel.org_id = c.org_id and rel.id = c.release_id
           join public.run ru
             on ru.org_id = c.org_id and ru.id = @run_id and ru.project_id = rel.project_id
          where c.org_id = @org_id and c.release_id = @release_id
-         order by c.component_key
+         group by ru.components
         """;
 }

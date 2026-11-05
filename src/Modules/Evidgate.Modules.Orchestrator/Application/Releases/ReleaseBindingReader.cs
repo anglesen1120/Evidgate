@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
@@ -33,32 +34,50 @@ internal sealed class ReleaseBindingReader(ITenantDb db, ITenantScopeAccessor sc
         Guid runId,
         CancellationToken cancellationToken)
     {
-        var rows = await db.QueryAsync<MismatchRow>(
+        var source = await db.QuerySingleOrDefaultAsync<MismatchSourceRow>(
             ReleaseSql.MismatchSource,
             new { org_id = scopes.Require().OrgId, release_id = releaseId, run_id = runId },
             cancellationToken).ConfigureAwait(false);
 
-        // The header repeats on every row; no row means the release is unknown or invisible, or the run is, and
-        // "nothing to compare" is the same empty answer the bind would have computed for a pair with no components.
-        if (rows.Count == 0)
+        // No row means the release is unknown or invisible, or the run is (or belongs to another project): "nothing to
+        // compare" is the same empty answer a release with no component produces.
+        if (source is null)
         {
             return [];
         }
 
         var outcome = ReleaseMatch.Match(
-            rows.Select(row => new ReleaseComponentDigest(row.ComponentKey, row.ReleaseDigest)),
-            ReleaseMatch.ParseRunComponents(rows[0].RunComponents));
+            Components(source.ReleaseComponents),
+            ReleaseMatch.ParseRunComponents(source.RunComponents));
 
         return outcome.Mismatched;
     }
 
-    /// <summary>One release component joined with the run's recorded <c>components</c>.</summary>
-    private sealed class MismatchRow
+    /// <summary>The aggregate document the one row carries: release components in <c>component_key</c> order.</summary>
+    private static List<ReleaseComponentDigest> Components(string? releaseComponents)
     {
-        public string ComponentKey { get; set; } = string.Empty;
+        if (string.IsNullOrWhiteSpace(releaseComponents))
+        {
+            return [];
+        }
 
-        public string ReleaseDigest { get; set; } = string.Empty;
+        var components = new List<ReleaseComponentDigest>();
+        using var document = JsonDocument.Parse(releaseComponents);
+        foreach (var element in document.RootElement.EnumerateArray())
+        {
+            components.Add(new ReleaseComponentDigest(
+                element.GetProperty("component_key").GetString()!,
+                element.GetProperty("digest").GetString()!));
+        }
 
+        return components;
+    }
+
+    /// <summary>The one row of the mismatch source: the run's recorded components and the release's, aggregated.</summary>
+    private sealed class MismatchSourceRow
+    {
         public string? RunComponents { get; set; }
+
+        public string? ReleaseComponents { get; set; }
     }
 }

@@ -6,9 +6,18 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 public sealed record ReleaseBoundComponent(string ComponentKey, string Digest);
 
 /// <summary>
-/// One component a run could not be bound for, and why. Computed on read from the release's components and the run's
-/// recorded <c>components</c> object; never stored, so a later read of the same pair derives the same answer without a
-/// migration or a recency join.
+/// One component a run could not be bound for, and why, as the bind's <c>201</c> reports it: the key and the reason
+/// only. The digests stay off this answer — a caller needs <c>run:create</c> to reach it, so it echoes no build data
+/// back and stores none in the idempotency record.
+/// </summary>
+/// <param name="ComponentKey">The release component the run did not match.</param>
+/// <param name="Reason"><c>digest_mismatch</c> (the run recorded another digest for the key) or <c>component_missing</c> (the run recorded nothing usable for it).</param>
+public sealed record ReleaseBindMismatch(string ComponentKey, string Reason);
+
+/// <summary>
+/// One component a run could not be bound for, and why — the in-process form the evaluation path consumes, which needs
+/// both digests to explain a <c>build_mismatch</c>. Computed on read from the release's components and the run's
+/// <c>components</c> object; never stored, so a later read derives the same answer without a migration or a recency join.
 /// </summary>
 /// <param name="ComponentKey">The release component the run did not match.</param>
 /// <param name="Reason"><c>digest_mismatch</c> (the run recorded another digest for the key) or <c>component_missing</c> (the run recorded nothing usable for it).</param>
@@ -23,12 +32,12 @@ public sealed record ReleaseMismatch(string ComponentKey, string Reason, string 
 /// <param name="ReleaseId">The release from the route.</param>
 /// <param name="RunId">The run the body named.</param>
 /// <param name="Bound">Every component currently bound for the pair, ordered by component key.</param>
-/// <param name="Mismatched">Every release component the run does not match, ordered by component key.</param>
+/// <param name="Mismatched">Every release component the run does not match, ordered by component key: key and reason only.</param>
 public sealed record ReleaseBindResult(
     Guid ReleaseId,
     Guid RunId,
     IReadOnlyList<ReleaseBoundComponent> Bound,
-    IReadOnlyList<ReleaseMismatch> Mismatched);
+    IReadOnlyList<ReleaseBindMismatch> Mismatched);
 
 /// <summary>One stored <c>release_run</c> row, as the release read reports it.</summary>
 /// <param name="RunId">The bound run.</param>

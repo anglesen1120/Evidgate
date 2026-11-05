@@ -1309,12 +1309,15 @@ paths:
         another tenant's) is 404 `not_found`; an unresolved suite or
         environment revision is 422 `manifest_invalid` with `details[]`; a
         manifest whose planned executions collide on `execution_key` is 422
-        `execution_key_conflict`; naming a `release` is 422
-        `release_unresolvable` at M1 (the release tables land with 05.6.1). A
+        `execution_key_conflict`; naming the legacy `release` name is 422
+        `release_unresolvable` (a run binds to a release by id). A `release_id`
+        binds the run by exact digest in the same transaction: unknown,
+        other-tenant or sibling-project is 404 `not_found`, `draft` is 422
+        `release_not_active`, a fork run is 422 `fork_run_not_bindable`. A
         `purpose` of `replay` is refused 422 `replay_grant_invalid` until
         08.4.3 issues grants (every replay request, even one naming a
-        well-formed grant); a `replay` purpose together with a `release` is 422
-        `replay_release_not_allowed`. A refusal writes no run, planned
+        well-formed grant); a `replay` purpose together with a `release` name or
+        a `release_id` is 422 `replay_release_not_allowed`. A refusal writes no run, planned
         execution, producer slot, outbox or audit row, and its failure Result is
         never stored for idempotency (the key stays reusable). The optional
         `ref` object records the run's branch/tag/PR identity (05.2.2-T1): a
@@ -2734,7 +2737,9 @@ paths:
         `mismatched[]` with the reason `digest_mismatch` or `component_missing`. A release key the run's `components`
         do not declare is a mismatch, never a wildcard; a key the run records but the release does not declare is
         ignored. Nothing recency-based is involved: no timestamp, no "latest run" selection, and the mismatch list is
-        computed on every read from the two stored rows rather than persisted. The `bound[]` answer lists every row the
+        computed on every read from the two stored rows rather than persisted. A run whose identity is a fork, and a run
+        created with `purpose: replay`, are refused `422 fork_run_not_bindable` / `422 replay_release_not_allowed`:
+        neither is evidence of this release's build. The `bound[]` answer lists every row the
         pair holds after the call, so a re-bind of already-bound keys writes nothing and still answers them. The call
         is refused `422 release_not_active` while the release is `draft` (components are final only once it is
         `active`), `409 release_bind_closed` once the run has a stored `live` evaluation — the binding may not move
@@ -2783,8 +2788,9 @@ paths:
           description: >-
             `not_found` — the release id is unknown, belongs to another tenant, or names a release of a project other than
             the caller's scoped project; a `run_id` that is unknown, other-tenant or of another project answers the same
-            code. All of them answer identically, so a refused bind never names which case it hit, and none is answered
-            by a mismatch code.
+            code and the same message ("no release or run with those ids is visible to this tenant"). All of them answer
+            identically, so a refused bind never names which id or which case it hit, and none is answered by a mismatch
+            code.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -2803,14 +2809,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+        '413':
+          description: >-
+            `request_invalid` — the body is larger than the 64 KiB cap this route reads, so it is refused before it is
+            parsed.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           description: >-
-            Three codes share this status. `request_invalid` is the body's shape: not a JSON object, a member this route
+            Four codes share this status. `request_invalid` is the body's shape: not a JSON object, a member this route
             does not accept, a repeated member, or a `run_id` that is missing, not a string or not a UUID.
-            `release_not_active` — the release is `draft`, so it accepts no bind. `release_component_mismatch` — no
-            release component matches the run's digests; `details[]` carries one entry per mismatched component, its
-            `path` naming `/run/components/<component_key>` and its `reason` the `digest_mismatch` or
-            `component_missing` code.
+            `release_not_active` — the release is `draft`, so it accepts no bind. `fork_run_not_bindable` — the run's
+            identity is a fork, so it is advisory-only and pins to no release; a `purpose: replay` run is refused the
+            same way with `replay_release_not_allowed`. `release_component_mismatch` — no release component matches the
+            run's digests; `details[]` carries one entry per mismatched component, its `path` naming
+            `/run/components/<component_key>` and its `reason` the `digest_mismatch` or `component_missing` code.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -9580,7 +9598,9 @@ components:
             Optional release id: the run is bound to that release by exact build digest inside the same transaction, so
             a partial (or empty) match never fails the run create — the components that agree get a `release_run` row
             and the rest are reported by the binding reader. An unknown, another tenant's or a sibling project's release
-            is `404 not_found` with no run written; a `draft` release is `422 release_not_active`.
+            is `404 not_found` with no run written; a `draft` release is `422 release_not_active`; a fork run is
+            `422 fork_run_not_bindable` and a `purpose: replay` body naming this member is
+            `422 replay_release_not_allowed`.
         purpose:
           type: string
           enum: [regular, replay]
@@ -9872,10 +9892,11 @@ components:
         mismatched:
           type: array
           description: >-
-            Every release component the run does not match, ordered by component key. Never stored: derived on read
-            from the release's components and the run's recorded `components`.
+            Every release component the run does not match, ordered by component key: the key and the reason only, with no
+            digest echoed back. Never stored: derived on read from the release's components and the run's recorded
+            `components`.
           items:
-            $ref: '#/components/schemas/ReleaseMismatch'
+            $ref: '#/components/schemas/ReleaseBindMismatch'
     ReleaseBoundComponent:
       type: object
       description: One component a run's build matched.
@@ -9889,11 +9910,13 @@ components:
           type: string
           pattern: '^sha256:[0-9a-f]{64}$'
           description: The build digest both sides agree on. A build identifier, never a secret.
-    ReleaseMismatch:
+    ReleaseBindMismatch:
       type: object
-      description: One release component a run could not be bound for, and why.
+      description: >-
+        One release component a run could not be bound for, and why. Key and reason only: the answer needs
+        `run:create`, so it echoes no build digest back and stores none in the idempotency record.
       additionalProperties: false
-      required: [component_key, reason, expected_digest, actual_digest]
+      required: [component_key, reason]
       properties:
         component_key:
           type: string
@@ -9904,12 +9927,6 @@ components:
           description: >-
             `digest_mismatch` — the run recorded another digest for the key; `component_missing` — the run recorded no
             usable digest for it.
-        expected_digest:
-          type: string
-          pattern: '^sha256:[0-9a-f]{64}$'
-        actual_digest:
-          type: [string, 'null']
-          description: The digest the run recorded, or null when it recorded none (or recorded a value that is not a string).
     ReleaseComponentDetail:
       type: object
       description: One immutable component of a release, as read back by `GET /v1/releases/{id}`.

@@ -274,7 +274,7 @@ export type CreateRunRequest = {
      */
     release?: string;
     /**
-     * Optional release id: the run is bound to that release by exact build digest inside the same transaction, so a partial (or empty) match never fails the run create — the components that agree get a `release_run` row and the rest are reported by the binding reader. An unknown, another tenant's or a sibling project's release is `404 not_found` with no run written; a `draft` release is `422 release_not_active`.
+     * Optional release id: the run is bound to that release by exact build digest inside the same transaction, so a partial (or empty) match never fails the run create — the components that agree get a `release_run` row and the rest are reported by the binding reader. An unknown, another tenant's or a sibling project's release is `404 not_found` with no run written; a `draft` release is `422 release_not_active`; a fork run is `422 fork_run_not_bindable` and a `purpose: replay` body naming this member is `422 replay_release_not_allowed`.
      */
     release_id?: string;
     /**
@@ -441,9 +441,9 @@ export type ReleaseBindResult = {
      */
     bound: Array<ReleaseBoundComponent>;
     /**
-     * Every release component the run does not match, ordered by component key. Never stored: derived on read from the release's components and the run's recorded `components`.
+     * Every release component the run does not match, ordered by component key: the key and the reason only, with no digest echoed back. Never stored: derived on read from the release's components and the run's recorded `components`.
      */
-    mismatched: Array<ReleaseMismatch>;
+    mismatched: Array<ReleaseBindMismatch>;
 };
 
 /**
@@ -458,19 +458,14 @@ export type ReleaseBoundComponent = {
 };
 
 /**
- * One release component a run could not be bound for, and why.
+ * One release component a run could not be bound for, and why. Key and reason only: the answer needs `run:create`, so it echoes no build digest back and stores none in the idempotency record.
  */
-export type ReleaseMismatch = {
+export type ReleaseBindMismatch = {
     component_key: string;
     /**
      * `digest_mismatch` — the run recorded another digest for the key; `component_missing` — the run recorded no usable digest for it.
      */
     reason: 'digest_mismatch' | 'component_missing';
-    expected_digest: string;
-    /**
-     * The digest the run recorded, or null when it recorded none (or recorded a value that is not a string).
-     */
-    actual_digest: string | null;
 };
 
 /**
@@ -5679,7 +5674,7 @@ export type BindReleaseRunErrors = {
      */
     403: ErrorEnvelope;
     /**
-     * `not_found` — the release id is unknown, belongs to another tenant, or names a release of a project other than the caller's scoped project; a `run_id` that is unknown, other-tenant or of another project answers the same code. All of them answer identically, so a refused bind never names which case it hit, and none is answered by a mismatch code.
+     * `not_found` — the release id is unknown, belongs to another tenant, or names a release of a project other than the caller's scoped project; a `run_id` that is unknown, other-tenant or of another project answers the same code and the same message ("no release or run with those ids is visible to this tenant"). All of them answer identically, so a refused bind never names which id or which case it hit, and none is answered by a mismatch code.
      */
     404: ErrorEnvelope;
     /**
@@ -5687,7 +5682,11 @@ export type BindReleaseRunErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * Three codes share this status. `request_invalid` is the body's shape: not a JSON object, a member this route does not accept, a repeated member, or a `run_id` that is missing, not a string or not a UUID. `release_not_active` — the release is `draft`, so it accepts no bind. `release_component_mismatch` — no release component matches the run's digests; `details[]` carries one entry per mismatched component, its `path` naming `/run/components/<component_key>` and its `reason` the `digest_mismatch` or `component_missing` code.
+     * `request_invalid` — the body is larger than the 64 KiB cap this route reads, so it is refused before it is parsed.
+     */
+    413: ErrorEnvelope;
+    /**
+     * Four codes share this status. `request_invalid` is the body's shape: not a JSON object, a member this route does not accept, a repeated member, or a `run_id` that is missing, not a string or not a UUID. `release_not_active` — the release is `draft`, so it accepts no bind. `fork_run_not_bindable` — the run's identity is a fork, so it is advisory-only and pins to no release; a `purpose: replay` run is refused the same way with `replay_release_not_allowed`. `release_component_mismatch` — no release component matches the run's digests; `details[]` carries one entry per mismatched component, its `path` naming `/run/components/<component_key>` and its `reason` the `digest_mismatch` or `component_missing` code.
      */
     422: ErrorEnvelope;
     /**
