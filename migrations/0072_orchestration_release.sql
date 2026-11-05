@@ -79,10 +79,9 @@ create table if not exists public.release (
   constraint release_project_fk foreign key (org_id, project_id) references public.project (org_id, id),
   -- A name is trimmed, 1..128 characters and printable: a control character would make two releases whose names look
   -- identical to an operator, and an untrimmed one would make the unique key above miss a duplicate.
-  -- The app rule (`ReleaseRules.IsName`) refuses exactly the same classes: Cc (`[[:cntrl:]]`), and the invisible or
-  -- line/paragraph-separating characters Cf, Zl and Zp — the bidi overrides, zero-width and BOM code points and the two
-  -- separators — so no value the route accepts can fail this check (a 500) and no value it refuses can be stored by a
-  -- writer that skips the route.
+  -- The app rule (`ReleaseRules.IsName`) refuses Cc, Cf, Zl and Zp; this check refuses Cc plus the common invisible and
+  -- separator code points (bidi, zero-width, BOM, the two separators). The check refuses a subset of what the app
+  -- refuses, so no value the route accepts can fail it (a 500).
   constraint release_name_check check (char_length(name) between 1 and 128
                                       and name = btrim(name)
                                       and name !~ '[[:cntrl:]]'

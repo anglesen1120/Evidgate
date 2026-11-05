@@ -67,7 +67,7 @@ internal static class ReleaseRules
     /// <summary>
     /// True when the name carries a character no screen renders as itself: a control character (Cc), an invisible or
     /// formatting one (Cf — zero width, BOM, bidi overrides) or a line/paragraph separator (Zl, Zp). 0072's
-    /// <c>release_name_check</c> refuses exactly these classes, so a name this rule accepts can never fail the insert.
+    /// <c>release_name_check</c> refuses a subset of these, so a name this rule accepts can never fail the insert.
     /// </summary>
     private static bool HasInvisibleOrControl(string name)
     {
