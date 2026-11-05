@@ -39,7 +39,7 @@ describe('conflictFromError', () => {
     expect(draft.title).toBe('<img src=x onerror=alert(1)>');
   });
 
-  it.each(['revision_id', 'version', 'order'])(
+  it.each(['revision_id', 'version', 'order', '/revision_id', '/version', '/order'])(
     'reads the documented %s metadata identifier as text',
     (path) => {
       const result = conflictFromError(
@@ -86,5 +86,32 @@ describe('conflictFromError', () => {
       local: 'draft',
       server: null,
     });
+  });
+
+  it.each(['/items/0/version', '/version/0', '//version', '/If-Match', '/unknown'])(
+    'does not treat the pointer %s as concurrency metadata',
+    (path) => {
+      const result = conflictFromError(
+        { ...error, details: [{ path, reason: 'not a revision' }] },
+        { title: 'draft' },
+        {},
+      );
+      expect(result.currentRevision).toBeNull();
+    },
+  );
+
+  it('reads an authoring stale body in the server pointer form', () => {
+    const result = conflictFromError(
+      {
+        ...error,
+        details: [
+          { path: '/If-Match', reason: 'stale' },
+          { path: '/version', reason: '7' },
+        ],
+      },
+      { title: 'draft' },
+      { title: 'Title' },
+    );
+    expect(result.currentRevision).toBe('7');
   });
 });

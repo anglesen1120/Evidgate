@@ -10,10 +10,10 @@ import { join } from 'node:path';
 
 import { afterEach } from 'vitest';
 
+import { artifactId, otherArtifactId } from './artifactIds.testing.js';
 import { UploadJournal, type UploadIdentity, type UploadJournalEntry } from './uploadJournal.js';
 
-export const artifactId = '7d1f9a52-3c4e-4b6a-9f01-2b3c4d5e6f70';
-export const otherArtifactId = '0a1b2c3d-4e5f-4a6b-8c9d-0e1f2a3b4c5d';
+export { artifactId, otherArtifactId };
 export const sha256 = `sha256:${'ab'.repeat(32)}`;
 export const otherSha = `sha256:${'cd'.repeat(32)}`;
 const executionKey = 'a3'.repeat(32);

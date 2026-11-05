@@ -3,7 +3,7 @@ import { provideZonelessChangeDetection, reflectComponentType } from '@angular/c
 import { TestBed } from '@angular/core/testing';
 
 import type { ApiError } from '../../../core/http/api-error';
-import type { ConflictField } from './conflict-details';
+import { conflictFromError, type ConflictField } from './conflict-details';
 import { ConflictDialogComponent } from './conflict-dialog.component';
 
 const fields: readonly ConflictField[] = Object.freeze([
@@ -67,6 +67,30 @@ describe('ConflictDialogComponent', () => {
     }
     expect(root.querySelector('form')).toBeNull();
     expect(button('.reload').hasAttribute('hlmBtn')).toBe(true);
+  });
+
+  it('shows the local draft and the server version from a pointer-form authoring 412', async () => {
+    const stale: ApiError = {
+      kind: 'precondition_failed',
+      status: 412,
+      code: 'precondition_failed',
+      message: 'the case changed since it was read (current version 7)',
+      requestId: 'request-412',
+      retryable: false,
+      details: [
+        { path: '/If-Match', reason: 'stale' },
+        { path: '/version', reason: '7' },
+      ],
+      retryAfterSeconds: null,
+    };
+    const conflict = conflictFromError(stale, { title: 'My retained draft' }, { title: 'Title' });
+    const fixture = TestBed.createComponent(ConflictDialogComponent);
+    fixture.componentRef.setInput('open', true);
+    fixture.componentRef.setInput('fields', conflict.fields);
+    fixture.componentRef.setInput('currentRevision', conflict.currentRevision);
+    await fixture.whenStable();
+    expect(dialog().textContent).toContain('My retained draft');
+    expect(dialog().querySelector('.revision code')?.textContent).toBe('7');
   });
 
   it('preserves its public inputs and outputs; Reload emits only reload and keeps the draft', async () => {
