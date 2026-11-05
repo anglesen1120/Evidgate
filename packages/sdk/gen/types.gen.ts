@@ -330,6 +330,78 @@ export type RunRef = {
 };
 
 /**
+ * Body of `POST /v1/projects/{p}/releases` (05.6.1-T1). Closed: a member the body does not declare is `400 request_invalid`. `state` defaults to `draft`; `active` is accepted at create and freezes the component list from then on. Each `component_key` is unique within the request, and its `environment_revision_id` must resolve inside the project in the path.
+ */
+export type ReleaseCreateRequest = {
+    /**
+     * The release's name, unique in the project (duplicate → `409 release_name_conflict`). It must already be trimmed and printable (no control character, not credential-shaped); a name that breaks either rule is `422 release_invalid`, and the stored value is exactly the one sent.
+     */
+    name: string;
+    /**
+     * `draft` (the default) accepts no run binds; `active` freezes the components (05.6.1 AC7).
+     */
+    state?: 'draft' | 'active';
+    /**
+     * The release's components. An empty list, or more than 100 entries, is `422 release_invalid` rather than a silently truncated set.
+     */
+    components: Array<ReleaseCreateComponent>;
+};
+
+/**
+ * One required component of a new release — a key, the exact build digest and the environment revision it was built in.
+ */
+export type ReleaseCreateComponent = {
+    /**
+     * ASCII component key, unique within the request and on `(org_id, release_id, component_key)`.
+     */
+    component_key: string;
+    /**
+     * The component's build digest: `sha256:` and 64 lower-case hex characters.
+     */
+    digest: string;
+    /**
+     * The environment revision the component was built in; it must belong to the project in the path.
+     */
+    environment_revision_id: string;
+};
+
+/**
+ * `201` answer of `POST /v1/projects/{p}/releases`: the new release's id.
+ */
+export type ReleaseCreated = {
+    release_id: string;
+};
+
+/**
+ * `200` answer of `GET /v1/releases/{id}` (05.6.1-T1): the release's identity and its immutable components, ordered by `component_key` ascending. It carries no bound runs — `release_run` is read by its own surface (05.6.1-T2). An unknown, other-tenant or other-project id is `404 not_found`.
+ */
+export type ReleaseDetail = {
+    release_id: string;
+    project_id: string;
+    name: string;
+    state: 'draft' | 'active';
+    /**
+     * The audit actor that declared the release, as `<type>:<id>` (the same spelling the audit row carries), so a member's user id and an operator's or service's id stay distinguishable.
+     */
+    created_by: string;
+    created_at: string;
+    /**
+     * The release row's version, incremented on the one permitted `draft` → `active` transition.
+     */
+    version: number;
+    components: Array<ReleaseComponentDetail>;
+};
+
+/**
+ * One immutable component of a release, as read back by `GET /v1/releases/{id}`.
+ */
+export type ReleaseComponentDetail = {
+    component_key: string;
+    digest: string;
+    environment_revision_id: string;
+};
+
+/**
  * Release decision body of `GET /releases/{id}/decision` (00 §8.5/§9.3). Not reconciled with the run body `Decision`; the release story owns its shape.
  */
 export type ReleaseDecision = {
@@ -5386,11 +5458,7 @@ export type ReprocessRunResponses = {
 };
 
 export type CreateReleaseData = {
-    body: {
-        components: Array<{
-            build_digest?: string;
-        }>;
-    };
+    body: ReleaseCreateRequest;
     headers: {
         /**
          * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
@@ -5410,6 +5478,10 @@ export type CreateReleaseData = {
 
 export type CreateReleaseErrors = {
     /**
+     * `request_invalid` — bytes that are not JSON, a body that is not a JSON object, a member this route does not accept (every body here is closed), a member name the reader cannot decode, or a repeated member: each is refused here with `details[]`, and no release is written. A body of the declared shape whose members break a rule is the `422` below, not this answer.
+     */
+    400: ErrorEnvelope;
+    /**
      * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
     401: ErrorEnvelope;
@@ -5422,7 +5494,11 @@ export type CreateReleaseErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * `release_name_conflict` — the project already has a release with this name (unique on `(org_id, project_id, name)`), so no second release is written.
+     */
+    409: ErrorEnvelope;
+    /**
+     * `release_invalid` — a semantic failure of a body of the declared shape, with `details[]` naming each offending member (`index` for a component entry, `path` such as `/components/2/digest`, `reason` for the rule): a bad name, an unknown `state`, a `components` member that is missing, not an array or empty, more than 100 components, a component that is not an object, a repeated or malformed `component_key`, a malformed `digest`, or an `environment_revision_id` that does not resolve inside this project. No release row is written.
      */
     422: ErrorEnvelope;
     /**
@@ -5439,11 +5515,9 @@ export type CreateReleaseError = CreateReleaseErrors[keyof CreateReleaseErrors];
 
 export type CreateReleaseResponses = {
     /**
-     * Release created
+     * Release created; its components are immutable from here on
      */
-    201: {
-        release_id: string;
-    };
+    201: ReleaseCreated;
 };
 
 export type CreateReleaseResponse = CreateReleaseResponses[keyof CreateReleaseResponses];
@@ -5467,7 +5541,7 @@ export type GetReleaseErrors = {
      */
     403: ErrorEnvelope;
     /**
-     * 404 not found — also for other-tenant ids (00 §9.2)
+     * `not_found` — the id is unknown, belongs to another tenant, or names a release of a project other than the caller's scoped project; all three answer identically, so a refused read never names which case it hit.
      */
     404: ErrorEnvelope;
     /**
@@ -5484,10 +5558,12 @@ export type GetReleaseError = GetReleaseErrors[keyof GetReleaseErrors];
 
 export type GetReleaseResponses = {
     /**
-     * Release detail
+     * The release and its components, ordered by `component_key`
      */
-    200: unknown;
+    200: ReleaseDetail;
 };
+
+export type GetReleaseResponse = GetReleaseResponses[keyof GetReleaseResponses];
 
 export type BindReleaseRunData = {
     body: {

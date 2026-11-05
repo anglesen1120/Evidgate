@@ -44,6 +44,9 @@ internal static class OrchestratorErrors
         "two planned executions of the manifest share an execution key",
         details);
 
+    /// <summary>404 <c>not_found</c>: no release with that id is visible to this tenant (05.6.1 §5) — the same code and body an unknown id gets, so another tenant's and a sibling project's release are indistinguishable from one that does not exist.</summary>
+    internal static Error ReleaseNotFound => Error.NotFound("no release with that id is visible to this tenant");
+
     internal static Error ProjectScopeMismatch => Error.Denied(ApiErrorCode.ProjectScopeMismatch, "the credential is scoped to a different project");
 
     internal static Error Busy => new(ApiErrorCode.Unavailable, "the environment is being changed by another request; retry shortly", StatusCodes.Status503ServiceUnavailable);
@@ -53,6 +56,15 @@ internal static class OrchestratorErrors
 
     internal static Error EnvironmentRevisionInvalid(string message, IReadOnlyList<ErrorDetail> details) =>
         Error.Unprocessable(ApiErrorCode.EnvironmentRevisionInvalid, message, details);
+
+    /// <summary>422 <c>release_invalid</c> (05.6.1 AC1): the body is JSON of the declared shape but breaks a release rule.</summary>
+    internal static Error ReleaseInvalid(string message, IReadOnlyList<ErrorDetail> details) =>
+        Error.Unprocessable(ApiErrorCode.ReleaseInvalid, message, details);
+
+    /// <summary>409 <c>release_name_conflict</c>: the project already declares a release with that name (05.6.1 §4).</summary>
+    internal static Error ReleaseNameConflict => Error.Conflict(
+        ApiErrorCode.ReleaseNameConflict,
+        "the project already declares a release with that name");
 
     internal static Error RevisionConflict(int next) => new(
         ApiErrorCode.RevisionConflict,

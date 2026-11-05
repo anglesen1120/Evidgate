@@ -621,7 +621,9 @@ export const reprocessRun = <ThrowOnError extends boolean = false>(options: Opti
 });
 
 /**
- * Create a release (components → build digests)
+ * Create a digest-bound release (05.6.1-T1)
+ *
+ * Creates one immutable release of the project named in the path: each entry of `components` fixes one component to an exact build `digest`, written with the release row in one tenant transaction, and the answer is the release's id. `state` defaults to `draft`; `active` is accepted at create, and from then on the components are immutable — no update route exists, and the app role holds no UPDATE or DELETE grant on `release_component` (a trigger refuses both for every role). Semantic failures are `422 release_invalid` with `details[]` naming the member (`/components/{index}/<member>`, with the index repeated): a `name` that is missing, not a string, untrimmed, empty, over 128 characters, carrying a control character or shaped like a credential; a `state` outside `draft`/`active`; a `components` member that is missing, not an array or empty; more than 100 components; a component that is not an object; a `component_key` that is missing, outside `[a-z0-9][a-z0-9_-]{0,63}` or repeated in the request; a `digest` that is missing or outside `sha256:<64 lowercase hex>`; and an `environment_revision_id` that is missing, not a UUID, or does not resolve inside this project. The same name in the same project is `409 release_name_conflict`. A body that is not JSON at all, is not a JSON object, declares a member this route does not accept, carries an undecodable member name, or repeats a member is `400 request_invalid`. An unknown, soft-deleted or other-tenant project is the one `404` (00 §9.2), and a service token scoped to a sibling project of its org is `403 project_scope_mismatch`. A retry with the same `Idempotency-Key` and the same body replays the original `201`.
  */
 export const createRelease = <ThrowOnError extends boolean = false>(options: Options<CreateReleaseData, ThrowOnError>): RequestResult<CreateReleaseResponses, CreateReleaseErrors, ThrowOnError> => (options.client ?? client).post<CreateReleaseResponses, CreateReleaseErrors, ThrowOnError>({
     security: [{
@@ -638,7 +640,9 @@ export const createRelease = <ThrowOnError extends boolean = false>(options: Opt
 });
 
 /**
- * Read a release
+ * Read a release and its immutable components (05.6.1-T1)
+ *
+ * The release's identity and its components, `component_key` ascending, so a client can compare a run's build digests against the release in one request. The answer carries no bound runs: the run ↔ release binding is `release_run`, whose own surface is 05.6.1-T2, so this body stays a statement of what the release requires. The credential's project narrows the read: an unknown id, another tenant's id, and a release of a project other than the caller's scoped project are the one `404 not_found`, never a row and never a 403 that would name existence. A read, so no `Idempotency-Key`.
  */
 export const getRelease = <ThrowOnError extends boolean = false>(options: Options<GetReleaseData, ThrowOnError>): RequestResult<GetReleaseResponses, GetReleaseErrors, ThrowOnError> => (options.client ?? client).get<GetReleaseResponses, GetReleaseErrors, ThrowOnError>({
     security: [{

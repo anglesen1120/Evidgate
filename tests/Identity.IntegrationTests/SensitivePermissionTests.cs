@@ -376,6 +376,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ("/v1/projects/{p}/policies/head", seeded.PolicyRevisionId),
             ("/v1/projects/{p}/policy-activation", seeded.PolicyRevisionId),
             ("/v1/runs/{r}", seeded.RunId),
+            ("/v1/releases/{id}", seeded.ReleaseId),
         ];
 
         foreach (var (template, id) in seededRoutes)
@@ -519,6 +520,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // The run's decision: a pending body carries no verdict, hash or reason yet, so it is clean by construction
             // and the scan still covers the route.
             ["/v1/runs/{r}/decision"] = $"/v1/runs/{seeded.RunId}/decision",
+            // 05.6.1-T1's release read: the release seeded above answers its component list (a name, a digest and
+            // ids — no secret), and the answer carries no bound run.
+            ["/v1/releases/{id}"] = $"/v1/releases/{seeded.ReleaseId}",
         };
 
     /// <summary>
@@ -557,6 +561,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // unaddressable — and the scan would miss the route — without both.
         var manifestId = await CreateManifestAsync(client, project, suiteRevisionId, [caseRevisionId], environmentRevisionId);
         var runId = await CreateRunAsync(client, project, manifestId);
+        // 05.6.1-T1: one release of the same environment revision, so GET /v1/releases/{id} answers 200 with its
+        // component list (a name, a digest and two ids: no secret) instead of the 404 the scan would report.
+        var releaseId = await CreateReleaseAsync(client, project, environmentRevisionId);
 
         return new SeededResources(
             caseId,
@@ -566,7 +573,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             otherSuiteRevisionId,
             environmentRevisionId,
             policyRevisionId,
-            runId);
+            runId,
+            releaseId);
     }
 
     /// <summary>
@@ -732,6 +740,38 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     }
 
     /// <summary>
+    /// Creates a release of the seeded environment revision through the served route
+    /// (05.6.1-T1) and returns its id: the smallest accepted body, one component keyed
+    /// <c>web</c> at a well-formed digest, with the default <c>draft</c> state.
+    /// </summary>
+    private static async Task<Guid> CreateReleaseAsync(HttpClient client, Guid project, Guid environmentRevision)
+    {
+        var (status, body) = await PostAsync(
+            client,
+            $"/v1/projects/{project}/releases",
+            new
+            {
+                // A unique name: the release name is unique per project, so a rerun against a shared fixture database
+                // must not collide with an earlier seed's 409 `release_name_conflict`.
+                Name = "ac5-release " + Guid.CreateVersion7().ToString("N"),
+                Components = new[]
+                {
+                    new
+                    {
+                        ComponentKey = "web",
+                        Digest = "sha256:" + new string('a', 64),
+                        EnvironmentRevisionId = environmentRevision,
+                    },
+                },
+            });
+
+        status.ShouldBe(HttpStatusCode.Created, body);
+
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("release_id").GetGuid();
+    }
+
+    /// <summary>
     /// Arranges one policy revision through the harness's owner seam: the served
     /// create route needs <c>policy:write</c>, which the 00 §2 matrix does not give
     /// <c>tenant_admin</c>, so the row is arranged like the policy suites arrange it.
@@ -798,7 +838,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         Guid OtherSuiteRevisionId,
         Guid EnvironmentRevisionId,
         Guid PolicyRevisionId,
-        Guid RunId);
+        Guid RunId,
+        Guid ReleaseId);
 
     /// <summary>The id of the seeded member's membership, read under RLS as the org.</summary>
     private async Task<Guid> MembershipIdAsync(Guid org, Guid userId)

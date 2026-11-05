@@ -2554,7 +2554,25 @@ paths:
     post:
       operationId: createRelease
       tags: [releases]
-      summary: Create a release (components → build digests)
+      summary: Create a digest-bound release (05.6.1-T1)
+      description: >-
+        Creates one immutable release of the project named in the path: each entry of `components` fixes one
+        component to an exact build `digest`, written with the release row in one tenant transaction, and the answer
+        is the release's id. `state` defaults to `draft`; `active` is accepted at create, and from then on the
+        components are immutable — no update route exists, and the app role holds no UPDATE or DELETE grant on
+        `release_component` (a trigger refuses both for every role). Semantic failures are `422 release_invalid` with
+        `details[]` naming the member (`/components/{index}/<member>`, with the index repeated): a `name` that is
+        missing, not a string, untrimmed, empty, over 128 characters, carrying a control character or shaped like a
+        credential; a `state` outside `draft`/`active`; a `components` member that is missing, not an array or empty;
+        more than 100 components; a component that is not an object; a `component_key` that is missing, outside
+        `[a-z0-9][a-z0-9_-]{0,63}` or repeated in the request; a `digest` that is missing or outside
+        `sha256:<64 lowercase hex>`; and an `environment_revision_id` that is missing, not a UUID, or does not resolve
+        inside this project. The same name in the same project is `409 release_name_conflict`. A body that is not
+        JSON at all, is not a JSON object, declares a member this route does not accept, carries an undecodable
+        member name, or repeats a member is `400 request_invalid`. An unknown, soft-deleted or other-tenant project is
+        the one `404` (00 §9.2), and a service token scoped to a sibling project of its org is `403
+        project_scope_mismatch`. A retry with the same `Idempotency-Key` and the same body replays the original
+        `201`.
       x-permission: run:create
       x-version: v1
       parameters:
@@ -2566,39 +2584,64 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [components]
-              properties:
-                components:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      build_digest:
-                        type: string
+              $ref: '#/components/schemas/ReleaseCreateRequest'
       responses:
         '201':
-          description: Release created
+          description: Release created; its components are immutable from here on
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
-                type: object
-                required: [release_id]
-                properties:
-                  release_id:
-                    type: string
-                    format: uuid
+                $ref: '#/components/schemas/ReleaseCreated'
+        '400':
+          description: >-
+            `request_invalid` — the bytes are not JSON at all, so no member can be read and no release is written. Every
+            other body failure is the `422` below: this route answers 400 only for an unparseable body, the same split
+            the retention-policy body parser makes (00 §9.2).
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: >-
+            `release_name_conflict` — the project already has a release with this name (unique on
+            `(org_id, project_id, name)`), so no second release is written.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
-          $ref: '#/components/responses/Unprocessable'
+          description: >-
+            Two codes share this status. `request_invalid` is the body's *shape*: a root that is not a JSON object, a
+            member this route does not accept (every body here is closed), a member name the reader cannot decode, a
+            repeated member, or a declared member of the wrong JSON type (`/name`, `/state`, `/components`). The
+            `release_invalid` code is a body of the declared shape that breaks a release rule, with `details[]` naming
+            each offending member (`index` for a component entry, `path` such as `/components/2/digest`, `reason` for
+            the rule): a bad name, an unknown `state`, a `components` member that is empty, more than 100 components, a
+            component that is not an object or whose members are of the wrong type, a repeated or malformed
+            `component_key`, a malformed `digest`, or an `environment_revision_id` that does not resolve inside this
+            project. No release row is written by either.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -2607,23 +2650,43 @@ paths:
     get:
       operationId: getRelease
       tags: [releases]
-      summary: Read a release
+      summary: Read a release and its immutable components (05.6.1-T1)
+      description: >-
+        The release's identity and its components, `component_key` ascending, so a client can compare a run's build
+        digests against the release in one request. The answer carries no bound runs: the run ↔ release binding is
+        `release_run`, whose own surface is 05.6.1-T2, so this body stays a statement of what the release requires.
+        The credential's project narrows the read: an unknown id, another tenant's id, and a release of a project
+        other than the caller's scoped project are the one `404 not_found`, never a row and never a 403 that
+        would name existence. A read, so no `Idempotency-Key`.
       x-permission: run:read
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/ReleaseId'
       responses:
         '200':
-          description: Release detail
+          description: The release and its components, ordered by `component_key`
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReleaseDetail'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            `not_found` — the id is unknown, belongs to another tenant, or names a release of a project other than the
+            caller's scoped project; all three answer identically, so a refused read never names which case it hit.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -9513,6 +9576,120 @@ components:
           enum: [push, pull_request, schedule, manual, dispatch, null]
         is_fork:
           type: boolean
+    ReleaseCreateRequest:
+      type: object
+      description: >-
+        Body of `POST /v1/projects/{p}/releases` (05.6.1-T1). Closed: a member the body does not declare is
+        `400 request_invalid`. `state` defaults to `draft`; `active` is accepted at create and freezes the component
+        list from then on. Each `component_key` is unique within the request, and its `environment_revision_id`
+        must resolve inside the project in the path.
+      additionalProperties: false
+      required: [name, components]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: >-
+            The release's name, unique in the project (duplicate → `409 release_name_conflict`). It must already be
+            trimmed and printable (no control character, not credential-shaped); a name that breaks either rule is
+            `422 release_invalid`, and the stored value is exactly the one sent.
+        state:
+          type: string
+          enum: [draft, active]
+          default: draft
+          description: '`draft` (the default) accepts no run binds; `active` freezes the components (05.6.1 AC7).'
+        components:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: >-
+            The release's components. An empty list, or more than 100 entries, is `422 release_invalid` rather than a
+            silently truncated set.
+          items:
+            $ref: '#/components/schemas/ReleaseCreateComponent'
+    ReleaseCreateComponent:
+      type: object
+      description: >-
+        One required component of a new release — a key, the exact build digest and the environment revision it was
+        built in.
+      additionalProperties: false
+      required: [component_key, digest, environment_revision_id]
+      properties:
+        component_key:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9_-]{0,63}$'
+          description: ASCII component key, unique within the request and on `(org_id, release_id, component_key)`.
+        digest:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+          description: "The component's build digest: `sha256:` and 64 lower-case hex characters."
+        environment_revision_id:
+          type: string
+          format: uuid
+          description: The environment revision the component was built in; it must belong to the project in the path.
+    ReleaseCreated:
+      type: object
+      description: "`201` answer of `POST /v1/projects/{p}/releases`: the new release's id."
+      additionalProperties: false
+      required: [release_id]
+      properties:
+        release_id:
+          type: string
+          format: uuid
+    ReleaseDetail:
+      type: object
+      description: >-
+        `200` answer of `GET /v1/releases/{id}` (05.6.1-T1): the release's identity and its immutable components,
+        ordered by `component_key` ascending. It carries no bound runs — `release_run` is read by its own surface
+        (05.6.1-T2). An unknown, other-tenant or other-project id is `404 not_found`.
+      additionalProperties: false
+      required: [release_id, project_id, name, state, created_by, created_at, version, components]
+      properties:
+        release_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        state:
+          type: string
+          enum: [draft, active]
+        created_by:
+          type: string
+          description: >-
+            The audit actor that declared the release, as `<type>:<id>` (the same spelling the audit row carries), so
+            a member's user id and an operator's or service's id stay distinguishable.
+        created_at:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          minimum: 1
+          description: The release row's version, incremented on the one permitted `draft` → `active` transition.
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReleaseComponentDetail'
+    ReleaseComponentDetail:
+      type: object
+      description: One immutable component of a release, as read back by `GET /v1/releases/{id}`.
+      additionalProperties: false
+      required: [component_key, digest, environment_revision_id]
+      properties:
+        component_key:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9_-]{0,63}$'
+        digest:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+        environment_revision_id:
+          type: string
+          format: uuid
     ReleaseDecision:
       type: object
       description: >-

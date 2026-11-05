@@ -187,6 +187,13 @@ public static class IsolationRouteCases
     private const string UnauthenticatedCode = "unauthenticated";
 
     /// <summary>
+    /// The 00 §9.2 <c>error.code</c> of <c>GET /v1/releases/{id}</c> for an unknown, other-tenant or other-project
+    /// id (05.6.1-T1): the module answers the shared <c>not_found</c> code, so all three answer identically and a
+    /// refused read never names which case it hit.
+    /// </summary>
+    private const string ReleaseNotFoundCode = "not_found";
+
+    /// <summary>
     /// A token with the contract's shape (<c>evgi_&lt;12-char prefix&gt;_&lt;43-char secret&gt;</c>,
     /// <c>InviteTokenFormat</c>) and no matching row: the invite staging route of 02.3.1-T2 validates the shape
     /// only — whether the token exists is decided by the binder at login — so this is the body it accepts.
@@ -821,6 +828,12 @@ public static class IsolationRouteCases
         // control answers 200 with the pending body because the world stores no evaluation.
         ObjectCase("GET", "/v1/runs/{r}/decision", p => [("run", p.RunId)], id =>
             new(HttpMethod.Get, $"/v1/runs/{id}/decision"), ownControl: true),
+        // 05.6.1-T1: the release pair. The create names its project in {p}, so its body must carry that project's own
+        // environment revision (a foreign project is refused before the body is validated); the read names the
+        // release alone, so its tenant scope is the RLS read and another tenant's release is the 404
+        // release_not_found, never a 403 that would name existence.
+        ReleaseCreateCase(),
+        ReleaseReadCase(),
         // 05.4.1-T1: the cancel request names the run in its path, so the run — not the body — decides the
         // tenant. Another org's run is the 404 not_found of GET /v1/runs/{r} (never a 403 leaking existence), and
         // run:cancel sits outside the service-role ceiling, so the app and sibling-project service probes below are
@@ -1357,6 +1370,228 @@ public static class IsolationRouteCases
                         Create(w.Acme2.Projects[0].Id, w.Acme.Projects[0].ManifestId), Create(w.Acme2.Projects[0].Id, Guid.CreateVersion7())),
                 ];
             });
+    }
+
+    /// <summary>
+    /// <c>POST /v1/projects/{p}/releases</c> (05.6.1-T1): org A's project with org A's environment revision (404 —
+    /// refused before the body is validated), org B's own project naming org A's environment revision (a non-2xx
+    /// naming a revision outside the project, never the row), and org B's own project with its own revision accepted
+    /// (201) as the positive control that the probe body reaches the command. The caller holds <c>run:create</c>; a
+    /// service token scoped to the sibling project is refused 403 <c>project_scope_mismatch</c>.
+    /// </summary>
+    private static RouteCase ReleaseCreateCase()
+    {
+        var route = new ApiRoute("POST", "/v1/projects/{p}/releases");
+
+        static ProbeRequest Create(Guid project, Guid environmentRevision) => new(HttpMethod.Post,
+            $"/v1/projects/{project}/releases", new JsonObject
+            {
+                ["name"] = "isolation release " + Guid.CreateVersion7().ToString("N"),
+                ["components"] = new JsonArray(new JsonObject
+                {
+                    ["component_key"] = "web",
+                    ["digest"] = "sha256:" + new string('a', 64),
+                    ["environment_revision_id"] = environmentRevision.ToString(),
+                }),
+            });
+
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                var member = OrgBAdmin(w);
+                return
+                [
+                    .. w.Acme.Projects.Select(p => Pair(route, $"org A project {p.Slug} in {{p}}", ProbeExpect.NotFound, member,
+                        Create(p.Id, p.EnvironmentRevisionId), Create(Guid.CreateVersion7(), p.EnvironmentRevisionId))),
+                    Pair(route, "own project, org A's environment revision in the body", ProbeExpect.NotSuccess, member,
+                        Create(w.Acme2.Projects[0].Id, w.Acme.Projects[0].EnvironmentRevisionId),
+                        Create(w.Acme2.Projects[0].Id, Guid.CreateVersion7())),
+                    new(route, "X-Evidgate-Org: A with an org-A project id", runner => runner.CallerPairAsync(
+                        route, "X-Evidgate-Org: A with an org-A project id", ForeignHeaderCaller(w), RandomHeaderCaller(w),
+                        Create(w.Acme.Projects[0].Id, w.Acme.Projects[0].EnvironmentRevisionId))),
+                    new(route, "own project, own environment revision accepted", async runner =>
+                    {
+                        var violations = new List<string>();
+                        var response = await runner.SendAsync(member,
+                            Create(w.Acme2.Projects[0].Id, w.Acme2.Projects[0].EnvironmentRevisionId));
+                        if (response.Status != 201)
+                        {
+                            violations.Add(RouteProbeRunner.Describe(route, "own project, own environment revision accepted", member,
+                                $"answered {response}, expected 201"));
+                        }
+
+                        return violations;
+                    }),
+                ];
+            },
+            world =>
+            {
+                var w = Require(world);
+                var service = OrgBService(w);
+                return
+                [
+                    new(route, "sibling project api of the token's org", runner => runner.ScopeMismatchAsync(
+                        route, "sibling project api of the token's org", service,
+                        Create(w.Acme2.Projects[1].Id, w.Acme2.Projects[1].EnvironmentRevisionId), requireScopeCode: true)),
+                    Pair(route, "org A project web in {p}", ProbeExpect.ServiceRefused, service,
+                        Create(w.Acme.Projects[0].Id, w.Acme.Projects[0].EnvironmentRevisionId),
+                        Create(Guid.CreateVersion7(), w.Acme.Projects[0].EnvironmentRevisionId)),
+                    Pair(route, "own project, org A's environment revision in the body", ProbeExpect.NotSuccess, service,
+                        Create(w.Acme2.Projects[0].Id, w.Acme.Projects[0].EnvironmentRevisionId),
+                        Create(w.Acme2.Projects[0].Id, Guid.CreateVersion7())),
+                ];
+            });
+    }
+
+    /// <summary>
+    /// <c>GET /v1/releases/{id}</c> (05.6.1-T1): a release created as org A inside the probe — 201 — is read 200 by
+    /// org A and refused 404 <c>not_found</c> for org B, identically to a random id. The release is addressed
+    /// by id alone, so its tenant scope is the RLS read; the refused answer carries no org-A id. <c>run:read</c> is
+    /// outside the service-role ceiling, so a <c>ci_producer</c> is refused before the handler (403, or the same 404
+    /// on a foreign org).
+    /// </summary>
+    private static RouteCase ReleaseReadCase()
+    {
+        var route = new ApiRoute("GET", "/v1/releases/{id}");
+        const string Name = "org A's release read by both tenants";
+
+        return new RouteCase(
+            route,
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    new(route, Name, runner => ReadReleaseAsync(runner, route, w, Name)),
+                ];
+            },
+            world =>
+            {
+                var w = Require(world);
+                return
+                [
+                    new(route, "org A's release with a ci_producer token", runner =>
+                        ReadReleaseAsServiceAsync(w, runner, route, "org A's release with a ci_producer token")),
+                ];
+            });
+    }
+
+    /// <summary>
+    /// Creates one release as org A and reads it three ways: the owner gets the 200 body carrying the id, and org B
+    /// and a random id both answer 404 <c>not_found</c> without the org-A id.
+    /// </summary>
+    private static async Task<IReadOnlyList<string>> ReadReleaseAsync(RouteProbeRunner runner, ApiRoute route, IsolationWorld world, string name)
+    {
+        var violations = new List<string>();
+        var release = await CreateReleaseAsOrgAAsync(runner, route, world, name, violations);
+        if (release is null)
+        {
+            return violations;
+        }
+
+        var owner = OrgAAdmin(world);
+        var ownRead = await runner.SendAsync(owner, new(HttpMethod.Get, $"/v1/releases/{release.Value}"));
+        if (ownRead.Status != 200 || !ownRead.Text.Contains(release.Value.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            violations.Add(RouteProbeRunner.Describe(route, name, owner,
+                $"the owner's read answered {ownRead}, expected the 200 body of the release it created"));
+        }
+
+        var foreigner = OrgBAdmin(world);
+        var foreign = await runner.SendAsync(foreigner, new(HttpMethod.Get, $"/v1/releases/{release.Value}"));
+        var control = await runner.SendAsync(foreigner, new(HttpMethod.Get, $"/v1/releases/{Guid.CreateVersion7()}"));
+        foreach (var (label, response) in new[] { ("org A's release id", foreign), ("a random id", control) })
+        {
+            if (response.Status != 404 || response.Code != ReleaseNotFoundCode)
+            {
+                violations.Add(RouteProbeRunner.Describe(route, name, foreigner,
+                    $"the read of {label} answered {response}, expected 404 {ReleaseNotFoundCode}"));
+            }
+        }
+
+        if (foreign.Text.Contains(release.Value.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            violations.Add(RouteProbeRunner.Describe(route, name, foreigner,
+                $"the refused answer carried org A's release id {release.Value}"));
+        }
+
+        return violations;
+    }
+
+    /// <summary>
+    /// Reads a fresh release id as org B's <c>ci_producer</c>: <c>run:read</c> sits outside the service-role ceiling, so
+    /// the permission stage refuses it before the handler (403), or a foreign org answers the same 404 as an unknown
+    /// id. The probe creates nothing, so org A's rows stay byte-identical around the service matrix.
+    /// </summary>
+    private static Task<IReadOnlyList<string>> ReadReleaseAsServiceAsync(IsolationWorld world, RouteProbeRunner runner, ApiRoute route, string name)
+    {
+        var service = OrgBService(world);
+        var release = Guid.CreateVersion7();
+        return ReadRefusedAsync(runner, route, name, service, release);
+    }
+
+    private static async Task<IReadOnlyList<string>> ReadRefusedAsync(
+        RouteProbeRunner runner,
+        ApiRoute route,
+        string name,
+        ProbeCaller caller,
+        Guid release)
+    {
+        var violations = new List<string>();
+        var refused = await runner.SendAsync(caller, new(HttpMethod.Get, $"/v1/releases/{release}"));
+        if (refused.Status is not (403 or 404) || (refused.Status == 404 && refused.Code != "not_found"))
+        {
+            violations.Add(RouteProbeRunner.Describe(route, name, caller,
+                $"the read answered {refused}, expected 403 or 404 not_found"));
+        }
+
+        if (refused.Text.Contains(release.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            violations.Add(RouteProbeRunner.Describe(route, name, caller,
+                $"the refused answer carried the release id {release}"));
+        }
+
+        return violations;
+    }
+
+    /// <summary>
+    /// Creates one release of org A's first project through the served route and returns its id, or null after
+    /// recording the violation when the create is not the expected 201 with a <c>release_id</c>.
+    /// </summary>
+    private static async Task<Guid?> CreateReleaseAsOrgAAsync(
+        RouteProbeRunner runner,
+        ApiRoute route,
+        IsolationWorld world,
+        string name,
+        List<string> violations)
+    {
+        var project = world.Acme.Projects[0];
+        var admin = OrgAAdmin(world);
+        var response = await runner.SendAsync(admin, new(HttpMethod.Post,
+            $"/v1/projects/{project.Id}/releases", new JsonObject
+            {
+                ["name"] = "isolation read release " + Guid.CreateVersion7().ToString("N"),
+                ["components"] = new JsonArray(new JsonObject
+                {
+                    ["component_key"] = "web",
+                    ["digest"] = "sha256:" + new string('a', 64),
+                    ["environment_revision_id"] = project.EnvironmentRevisionId.ToString(),
+                }),
+            }));
+
+        if (response.Status == 201
+            && response.Json is { ValueKind: JsonValueKind.Object } json
+            && json.TryGetProperty("release_id", out var id)
+            && id.TryGetGuid(out var release))
+        {
+            return release;
+        }
+
+        violations.Add(RouteProbeRunner.Describe(route, name, admin,
+            $"the org-A create answered {response}, expected 201 with a release_id"));
+        return null;
     }
 
     /// <summary>

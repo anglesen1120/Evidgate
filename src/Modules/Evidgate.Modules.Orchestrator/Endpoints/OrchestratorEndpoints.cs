@@ -129,6 +129,8 @@ public static class OrchestratorEndpoints
             .Produces<RunPage>(StatusCodes.Status200OK)
             .WithSummary("Cursor list of a project's runs, filtered by the recorded branch/PR/commit identity plus state, decision, rerun scope and parent run (05.2.2, F43)");
 
+        ReleaseEndpoints.Map(group);
+
         return group;
     }
 
@@ -222,7 +224,7 @@ public static class OrchestratorEndpoints
         return result;
     }
 
-    private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
+    internal static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
 
     /// <summary>
     /// 401 for a caller with no principal at all — no token and no session. The same code and wording the events route
@@ -235,7 +237,7 @@ public static class OrchestratorEndpoints
         "no authenticated producer could be resolved",
         StatusCodes.Status401Unauthorized);
 
-    private static string Sha256(ReadOnlyMemory<byte> bytes) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes.Span));
+    internal static string Sha256(ReadOnlyMemory<byte> bytes) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes.Span));
 
     /// <summary>
     /// <c>POST /v1/runs/{r}/cancel</c> (05.4.1 §5): binds the path, the capped body and the caller's
@@ -618,7 +620,7 @@ public static class OrchestratorEndpoints
     }
 
     /// <summary>The raw body, refused with 413 as soon as it passes <paramref name="limit"/> bytes (never buffered beyond it).</summary>
-    private static async Task<(ReadOnlyMemory<byte> Bytes, Error? TooLarge)> ReadBodyAsync(HttpContext context, int limit, CancellationToken cancellationToken)
+    internal static async Task<(ReadOnlyMemory<byte> Bytes, Error? TooLarge)> ReadBodyAsync(HttpContext context, int limit, CancellationToken cancellationToken)
     {
         var tooLarge = new Error(ApiErrorCode.PayloadTooLarge, "the request body is too large", StatusCodes.Status413PayloadTooLarge);
         var declared = context.Request.ContentLength;
@@ -653,5 +655,5 @@ public static class OrchestratorEndpoints
         return length > limit ? (default, tooLarge) : (buffer.AsMemory(0, length), null);
     }
 
-    private static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();
+    internal static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();
 }

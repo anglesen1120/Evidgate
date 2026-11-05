@@ -740,6 +740,14 @@ internal static class RouteRequests
         // the route needs no verdict to be exercisable.
         Add("GET", "/v1/runs/{r}/decision", ctx => new(HttpMethod.Get, $"/v1/runs/{ctx.RunId}/decision"));
 
+        // 05.6.1-T1: the release create/read pair. The create recipe is the closed body of `release-create`
+        // (`name`, optional `state`, and one `components` entry naming the seeded environment revision) with the
+        // mandatory key, so a granted caller reaches the command; the read addresses a fresh id, so a granted call
+        // answers 404 `not_found` and the matrix only asserts the authorization outcome.
+        Add("POST", "/v1/projects/{p}/releases", ctx => new(HttpMethod.Post,
+            $"/v1/projects/{ctx.ProjectId}/releases", ReleaseCreate(ctx), IdempotencyKey: Key()));
+        Add("GET", "/v1/releases/{id}", _ => new(HttpMethod.Get, $"/v1/releases/{Guid.CreateVersion7()}"));
+
         // 05.3.2-T1: the finalize route is the events route's twin — a resolved member session reaches the C2 pipeline's
         // `event:write` gate, which answers the matrix's 403, so the recipe uses a fresh run id and a shape-valid body:
         // nothing is created for a random id, and the recipe never becomes an oracle over an existing run. The route is
@@ -1043,6 +1051,22 @@ internal static class RouteRequests
     private static JsonObject Run(RouteRequestContext ctx) => new()
     {
         ["manifest_id"] = ctx.ManifestId.ToString(),
+    };
+
+    /// <summary>
+    /// The <c>POST /v1/projects/{p}/releases</c> body (05.6.1-T1): a name, the default `draft` state and one
+    /// component whose digest is a well-formed `sha256:` value and whose environment revision is the seeded one, so
+    /// a granted caller reaches the command instead of a 400 or a 422.
+    /// </summary>
+    private static JsonObject ReleaseCreate(RouteRequestContext ctx) => new()
+    {
+        ["name"] = "probe release " + Guid.CreateVersion7().ToString("N"),
+        ["components"] = new JsonArray(new JsonObject
+        {
+            ["component_key"] = "web",
+            ["digest"] = "sha256:" + new string('a', 64),
+            ["environment_revision_id"] = ctx.EnvironmentRevisionId.ToString(),
+        }),
     };
 
     /// <summary>
