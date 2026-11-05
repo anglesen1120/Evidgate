@@ -83,11 +83,13 @@ public sealed partial class ReleaseIntegrationTests
         var second = await BindAsync(world, releaseId, runId);
 
         second.Status.ShouldBe(HttpStatusCode.Created, second.ErrorMessage);
-        BoundOf(second).ShouldBe(new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["web"] = Digest('a'),
-            ["api"] = Digest('b'),
-        });
+        BoundOf(second).ShouldBe(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["web"] = Digest('a'),
+                ["api"] = Digest('b'),
+            },
+            ignoreOrder: true);
         MismatchedOf(second).ShouldBeEmpty();
         (await BindingCountAsync(world, releaseId, runId)).ShouldBe(2);
         (await BindAuditCountAsync(world, releaseId)).ShouldBe(1);

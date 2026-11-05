@@ -2,6 +2,7 @@
 // the same transaction as the run, and never fails the run when some or all components do not match.
 #pragma warning disable CA1861
 using System.Net;
+using System.Net.Http.Headers;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -122,11 +123,50 @@ public sealed partial class ReleaseIntegrationTests
     }
 
     /// <summary>
-    /// A failure at the bind's own insert rolls the run, its plan, its slots and every binding back together: the hook
-    /// runs after the run and slots are written, so nothing may survive it.
+    /// A fork run's ref cannot be trusted, so a create that names a release with a fork identity is refused before the
+    /// release is read or a row is written: 422 <c>fork_run_not_bindable</c>, no run, plan, slot, binding or outbox
+    /// row. The same body without the fork flag binds, which is what makes the refusal the identity's.
     /// </summary>
     [Fact]
-    public async Task BindAtRunCreate_FailureAtTheBind_RollsBackRunAndBindings()
+    public async Task BindAtRunCreate_ForkIdentity_422NoRun()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var releaseId = await ReleaseWithAsync(world, "run-create-fork", "active", ("web", 'a'));
+        var forkBody = "{\"ref\":{\"is_fork\":true},"
+            + RunBodyWith(world.ManifestId, Components(("web", 'a')), releaseId).TrimStart('{');
+
+        var forkKey = NewKey();
+        var refused = await RunCreationTests.CreateRunAsync(
+            world, forkBody, caller: UserCaller(world), idempotencyKey: forkKey);
+
+        refused.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, refused.ErrorMessage);
+        refused.ErrorCode.ShouldBe("fork_run_not_bindable");
+        await AssertNothingSurvivedAsync(world, forkKey);
+
+        var control = await RunCreationTests.CreateRunAsync(
+            world,
+            RunBodyWith(world.ManifestId, Components(("web", 'a')), releaseId),
+            caller: UserCaller(world));
+
+        control.Status.ShouldBe(HttpStatusCode.Created, control.ErrorMessage);
+        (await BindingCountAsync(world)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The caller whose identity comes from the body rather than a verified CI claim: a member of the org with no
+    /// claim, so <c>ref.is_fork</c> is the recorded value.
+    /// </summary>
+    /// <param name="world">The suite's tenant.</param>
+    private static Action<HttpRequestHeaders> UserCaller(RunCreationTests.World world) =>
+        TenancyApiFactory.Resolved(user: world.User, orgHeader: world.Org);
+
+    /// <summary>
+    /// A failure after the binding was written rolls everything back together: the hook runs once the run, its plan
+    /// and its slots exist, so the failing statement is the outbox enqueue that follows it - the binding has succeeded
+    /// by then and must vanish with the rest.
+    /// </summary>
+    [Fact]
+    public async Task BindAtRunCreate_FailureAfterTheBind_RollsBackEverything()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var releaseId = await ReleaseWithAsync(world, "run-create-rollback", "active", ("web", 'a'), ("api", 'b'));
@@ -135,18 +175,39 @@ public sealed partial class ReleaseIntegrationTests
             services.RemoveAll<ITenantDb>();
             services.AddSingleton<TenantDb>();
             services.AddSingleton<ITenantDb>(provider =>
-                new ThrowingTenantDb(provider.GetRequiredService<TenantDb>(), "insert into public.release_run"));
+                new ThrowingTenantDb(provider.GetRequiredService<TenantDb>(), "insert into public.outbox"));
         }));
         using var client = crashing.CreateClient();
+        var key = NewKey();
 
         var created = await RunCreationTests.CreateRunAsync(
             world,
             RunBodyWith(world.ManifestId, Components(("web", 'a'), ("api", 'b')), releaseId),
-            client: client);
+            client: client,
+            idempotencyKey: key);
 
         created.Status.ShouldBe(HttpStatusCode.InternalServerError, created.ErrorMessage);
+        await AssertNothingSurvivedAsync(world, key);
+    }
+
+    /// <summary>
+    /// No row of the rejected create survives anywhere: the run, its plan, its slots, the bindings the hook wrote,
+    /// the idempotency record and the audit row are one transaction, and the outbox event never reached its insert.
+    /// </summary>
+    /// <param name="world">The suite's tenant.</param>
+    private async Task AssertNothingSurvivedAsync(RunCreationTests.World world, string idempotencyKey)
+    {
         await RunCreationTests.AssertNoRunRowsAsync(_fixture, world);
-        (await BindingCountAsync(world)).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.release_run where org_id = '{world.Org:D}'")).ShouldBe(0);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.idempotency_record where org_id = '{world.Org:D}' "
+            + $"and key = '{idempotencyKey}'")).ShouldBe(0, "the rejected create's key was never stored");
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.audit_log where org_id = '{world.Org:D}' and action = 'run.create'")).ShouldBe(0);
     }
 
     /// <summary>

@@ -112,19 +112,27 @@ public sealed partial class ReleaseIntegrationTests
             item => item.GetProperty("digest").GetString()!,
             StringComparer.Ordinal);
 
-    /// <summary>One <c>mismatched[]</c> entry of the bind answer.</summary>
-    private sealed record Mismatch(string ComponentKey, string Reason, string Expected, string? Actual);
+    /// <summary>One <c>mismatched[]</c> entry of the bind answer: the key and why it did not bind.</summary>
+    private sealed record Mismatch(string ComponentKey, string Reason);
 
-    /// <summary>The 201 body's <c>mismatched</c> list, in the order the answer carries it.</summary>
+    /// <summary>
+    /// The 201 body's <c>mismatched</c> list, in the order the answer carries it. A bind answer names what did not
+    /// match and why, never the digests themselves: the pair's digests belong to the release read and the run, and the
+    /// detail members the refusal used to echo are gone from the wire.
+    /// </summary>
     private static IReadOnlyList<Mismatch> MismatchedOf(ApiAnswer answer) =>
     [
-        .. answer.Body.GetProperty("mismatched").EnumerateArray().Select(item => new Mismatch(
-            item.GetProperty("component_key").GetString()!,
-            item.GetProperty("reason").GetString()!,
-            item.GetProperty("expected_digest").GetString()!,
-            item.GetProperty("actual_digest").ValueKind == JsonValueKind.Null
-                ? null
-                : item.GetProperty("actual_digest").GetString())),
+        .. answer.Body.GetProperty("mismatched").EnumerateArray().Select(item =>
+        {
+            item.TryGetProperty("expected_digest", out _).ShouldBeFalse("the bind answer carries no release digest");
+            item.TryGetProperty("actual_digest", out _).ShouldBeFalse("the bind answer carries no run digest");
+            item.EnumerateObject().Select(member => member.Name)
+                .ShouldBe(["component_key", "reason"], ignoreOrder: true);
+
+            return new Mismatch(
+                item.GetProperty("component_key").GetString()!,
+                item.GetProperty("reason").GetString()!);
+        }),
     ];
 
     [Fact]
@@ -139,11 +147,13 @@ public sealed partial class ReleaseIntegrationTests
         answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
         answer.Body.EnumerateObject().Select(member => member.Name)
             .ShouldBe(["release_id", "run_id", "bound", "mismatched"], ignoreOrder: true);
-        BoundOf(answer).ShouldBe(new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["web"] = Digest('a'),
-            ["api"] = Digest('b'),
-        });
+        BoundOf(answer).ShouldBe(
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["web"] = Digest('a'),
+                ["api"] = Digest('b'),
+            },
+            ignoreOrder: true);
         MismatchedOf(answer).ShouldBeEmpty();
 
         (await BoundKeysOfAsync(world, releaseId, runId)).ShouldBe(["api", "web"]);
@@ -169,8 +179,8 @@ public sealed partial class ReleaseIntegrationTests
 
         var mismatched = MismatchedOf(answer).ToDictionary(entry => entry.ComponentKey, StringComparer.Ordinal);
         mismatched.Keys.ShouldBe(["api", "worker"], ignoreOrder: true);
-        mismatched["api"].ShouldBe(new Mismatch("api", "digest_mismatch", Digest('b'), Digest('d')));
-        mismatched["worker"].ShouldBe(new Mismatch("worker", "component_missing", Digest('c'), null));
+        mismatched["api"].ShouldBe(new Mismatch("api", "digest_mismatch"));
+        mismatched["worker"].ShouldBe(new Mismatch("worker", "component_missing"));
 
         // Only the matched key is stored: a mismatch is computed on read and never persisted.
         (await BoundKeysOfAsync(world, releaseId, runId)).ShouldBe(["web"]);
@@ -199,7 +209,7 @@ public sealed partial class ReleaseIntegrationTests
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var releaseId = await ReleaseWithAsync(world, "bind-none", "active", ("web", 'a'));
-        var runId = await RunWithAsync(world, Components(("web", 'g')));
+        var runId = await RunWithAsync(world, Components(("web", 'b')));
 
         var answer = await BindAsync(world, releaseId, runId);
 

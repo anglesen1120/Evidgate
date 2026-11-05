@@ -17,6 +17,16 @@ public sealed class ReleaseArchitectureTests
         @"order\s+by[^;]*\bcreated_at\b[^;]*\blimit\s+1\b|select\s+max\s*\(\s*[^)]*created_at",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.Singleline);
 
+    /// <summary>The release side of a join: the release or one of its components.</summary>
+    private static readonly Regex ReleaseSide = new(
+        @"\bpublic\.release(?:_component)?\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    /// <summary>The run table as a joined table, wherever it is named.</summary>
+    private static readonly Regex RunTable = new(
+        @"\bpublic\.run\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
     /// <summary>A write that would store the release pointer on the run itself.</summary>
     private static readonly Regex RunWrite = new(
         @"\b(insert\s+into|update)\s+(public\.)?run\b",
@@ -41,16 +51,17 @@ public sealed class ReleaseArchitectureTests
 
     /// <summary>One violation per statement that picks a run for a release by recency or stores a release pointer on it.</summary>
     /// <remarks>
-    /// The recency rule only looks at statements that already span the binding (<c>release_run</c>) and the run: that
-    /// is the shape "which run belongs to this release" takes, and a worker sweep ordering runs by <c>created_at</c>
-    /// on its own is not this rule's business.
+    /// The recency rule looks at any statement that spans a release and the run table - the binding itself
+    /// (<c>release_run</c>), or a direct release-to-run join - because both are the shape "which run belongs to this
+    /// release" takes. A worker sweep ordering runs by <c>created_at</c> on its own binds nothing and stays legal.
     /// </remarks>
     private static IReadOnlyList<string> FindViolations(IEnumerable<(string Path, string Text)> sources) =>
     [
         .. Statements(sources).SelectMany(statement =>
         {
             var violations = new List<string>();
-            var binds = statement.Text.Contains("public.release_run", StringComparison.Ordinal);
+            var binds = statement.Text.Contains("public.release_run", StringComparison.Ordinal)
+                || (ReleaseSide.IsMatch(statement.Text) && RunTable.IsMatch(statement.Text));
 
             if (binds && NewestRun.IsMatch(statement.Text))
             {
@@ -87,6 +98,30 @@ public sealed class ReleaseArchitectureTests
         };
 
         FindViolations(sources).Count.ShouldBe(2);
+    }
+
+    /// <summary>
+    /// The same rule without <c>release_run</c>: a release joined straight to a run and ordered by creation is the
+    /// "latest run of this release" query in its other spelling, so the guard must see it too.
+    /// </summary>
+    [Fact]
+    public void Synthetic_ReleaseToRunJoin_IsDetectedWithoutReleaseRun()
+    {
+        var sources = new (string, string)[]
+        {
+            ("Persistence/Bypass.cs", """
+                select r.id from public.release rel
+                  join public.run r on r.project_id = rel.project_id
+                 order by r.created_at desc limit 1
+                """),
+            ("Persistence/Bypass.cs", """
+                select c.component_key from public.release_component c
+                  join public.run r on r.project_id = c.org_id
+                 where r.created_at = (select max(created_at) from public.run)
+                """),
+        };
+
+        FindViolations(sources).Count.ShouldBe(2, "a release-to-run recency read is the rule's target even unnamed");
     }
 
     [Fact]
