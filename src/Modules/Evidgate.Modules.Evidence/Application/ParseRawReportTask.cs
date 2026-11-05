@@ -10,6 +10,7 @@ using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Orchestrator.Contracts;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -101,7 +102,7 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// <param name="storage">The object store the report's bytes are read from, capped by the kind policy.</param>
 /// <param name="parsers">The parser registry read (producer kind → parser pair).</param>
 /// <param name="mappers">The loaded JUnit mappers; the one whose pair the registry names does the mapping.</param>
-/// <param name="attempts">The case-attempt writer; it joins this handler's transaction and never commits.</param>
+/// <param name="scopeFactory">Reaches the scoped case-attempt writer: handlers are singletons, and the writer joins the ambient tenant transaction and never commits.</param>
 /// <param name="outbox">The reconcile trigger's transactional outbox writer.</param>
 /// <param name="logger">The one structured line each attempt writes.</param>
 internal sealed partial class ParseRawReportHandler(
@@ -111,7 +112,7 @@ internal sealed partial class ParseRawReportHandler(
     IObjectStorage storage,
     IReportParserResolver parsers,
     IEnumerable<IJUnitMapper> mappers,
-    ICaseAttemptWriter attempts,
+    IServiceScopeFactory scopeFactory,
     IOutboxWriter outbox,
     ILogger<ParseRawReportHandler> logger) : ITransactionlessTaskHandler<ParseRawReportPayload>
 {

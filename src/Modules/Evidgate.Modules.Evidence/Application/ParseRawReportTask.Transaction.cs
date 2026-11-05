@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Orchestrator.Contracts;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Evidgate.Modules.Evidence.Application;
 
@@ -223,6 +224,9 @@ internal sealed partial class ParseRawReportHandler
             .Where(item => insertedIds.Contains(item.Row.EventId) && item.Attempt is not null)
             .Select(item => item.Attempt!)
             .ToArray();
+
+        await using var attemptScope = scopeFactory.CreateAsyncScope();
+        var attempts = attemptScope.ServiceProvider.GetRequiredService<ICaseAttemptWriter>();
 
         for (var offset = 0; offset < inputs.Length; offset += ICaseAttemptWriter.MaxBatchSize)
         {
