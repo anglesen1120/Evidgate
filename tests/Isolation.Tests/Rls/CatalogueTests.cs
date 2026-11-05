@@ -62,6 +62,9 @@ public sealed class CatalogueTests : HarnessTest
     /// <summary>The fixed id of the built-in system switch row this suite seeds for the 0052 surface.</summary>
     private static readonly Guid SystemSwitchId = Guid.Parse("33333333-3333-7333-8333-333333333333");
 
+    /// <summary>The fixed id of the fixture platform price row this suite seeds for the 0073 surface.</summary>
+    private static readonly Guid UsagePriceRowId = Guid.Parse("44444444-4444-7444-8444-444444444444");
+
     /// <summary>
     /// The catalogue surfaces AC5 names, with the clause that selects their built-in rows and the
     /// expression that yields a row key as text. <c>permission</c> has no <c>org_id</c> column, so
@@ -75,6 +78,8 @@ public sealed class CatalogueTests : HarnessTest
         // 08.6.3 (0052): the system-scope kill switch is the platform-wide built-in row every tenant
         // reads; its tenant/project siblings are the per-org custom rows (a separate suite's subject).
         ("public.healing_switch", "scope = 'system'", "id::text"),
+        // 12.3.1 (0073): the platform rate card is the built-in row every tenant reads.
+        ("public.usage_price", "org_id is null", "id::text"),
     ];
 
     private readonly ITestOutputHelper _output;
@@ -170,6 +175,7 @@ public sealed class CatalogueTests : HarnessTest
         await CheckRoleWritesAsync(failures);
         await CheckRolePermissionWritesAsync(failures);
         await CheckHealingSwitchWritesAsync(failures);
+        await CheckUsagePriceWritesAsync(failures);
 
         failures.ShouldBeEmpty(
             $"the catalogue is not read-only for the application role:{Environment.NewLine}"
@@ -347,6 +353,17 @@ public sealed class CatalogueTests : HarnessTest
             """,
             [("id", SystemSwitchId), ("set_by", OrgA)],
             Token);
+
+        // 12.3.1 (0073): the platform rate card is written by the definer; the probe row is a fixture
+        // price (no real number), created through the owner seam like the switch row above.
+        await Fixture.SeedAsync(
+            """
+            insert into public.usage_price (id, org_id, metric, unit_price, currency, effective_from, rate_card_version)
+            values (@id, null, 'results', 1, 'USD', '2026-01-01T00:00:00Z', 'catalogue-probe')
+            on conflict do nothing
+            """,
+            [("id", UsagePriceRowId)],
+            Token);
     }
 
     /// <summary><c>public.permission</c>: 0010 revokes INSERT/UPDATE/DELETE from the app role, so every command is a 42501.</summary>
@@ -489,6 +506,34 @@ public sealed class CatalogueTests : HarnessTest
         AssertRefused(table, "TRUNCATE", truncate, silentAllowed: false, failures);
 
         await AssertUnchangedAsync(table, "scope = 'system'", "id::text", before, failures);
+        _output.WriteLine("{0}: insert/update/delete/truncate refused; {1} built-in row(s) unchanged", table, before.Count);
+    }
+
+    /// <summary>
+    /// <c>public.usage_price</c>: the platform rate-card rows (<c>org_id</c> NULL) are readable by every org and the app
+    /// role can neither insert one (the <c>WITH CHECK</c> never matches a NULL org), nor update or delete (no privilege).
+    /// </summary>
+    private async Task CheckUsagePriceWritesAsync(List<string> failures)
+    {
+        const string table = "public.usage_price";
+        var before = await ReadKeysAsync(table, "org_id is null", "id::text");
+        before.ShouldNotBeEmpty($"{table}: the platform price row is missing — the write probe would have nothing to target");
+
+        var insert = await RefusalAsync(
+            "insert into public.usage_price (id, org_id, metric, unit_price, currency, effective_from, rate_card_version) values (@key::uuid, null, 'results', 1, 'USD', now(), 'probe')",
+            ("key", Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture)));
+        AssertRefused(table, "INSERT of a platform row", insert, silentAllowed: false, failures);
+
+        var update = await RefusalAsync("update public.usage_price set unit_price = 2 where org_id is null");
+        AssertRefused(table, "UPDATE of a platform row", update, silentAllowed: true, failures);
+
+        var delete = await RefusalAsync("delete from public.usage_price where org_id is null");
+        AssertRefused(table, "DELETE of a platform row", delete, silentAllowed: true, failures);
+
+        var truncate = await RefusalAsync("truncate public.usage_price");
+        AssertRefused(table, "TRUNCATE", truncate, silentAllowed: false, failures);
+
+        await AssertUnchangedAsync(table, "org_id is null", "id::text", before, failures);
         _output.WriteLine("{0}: insert/update/delete/truncate refused; {1} built-in row(s) unchanged", table, before.Count);
     }
 
