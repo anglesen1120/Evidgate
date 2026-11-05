@@ -1526,7 +1526,25 @@ export type DownloadUrlResponse = {
 };
 
 /**
- * The request and the `200` answer of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's stored capture policy for one kind. Every member is required — the row's knobs are written as a whole. The answer adds `kind`, so a client can render what the server committed without a second read.
+ * The request body of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's capture policy for one kind. Every member is required — the row's knobs are written as a whole — and the body is closed, so a member it does not declare, `kind` and `redaction_rule_count` included, is refused `400 request_invalid` at binding rather than ignored. The path names the kind.
+ */
+export type ArtifactKindPolicyRequest = {
+    /**
+     * The largest artifact of the kind the project accepts.
+     */
+    max_bytes: number;
+    media_types: Array<string>;
+    default_sensitivity: 'normal' | 'sensitive';
+    capture_enabled: boolean;
+    reject_on_secret: boolean;
+    /**
+     * The kind's declared redaction rules: a list replaces the stored set, `[]` clears it and an omitted member leaves it untouched, so a caller that only toggles a switch never deletes a privacy control it never sent.
+     */
+    redaction_rules?: Array<RedactionRuleView>;
+};
+
+/**
+ * The `200` answer of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's stored capture policy for one kind. Every knob is required; `kind` names the row the answer committed, so a client can render the result without a second read. The request body is `ArtifactKindPolicyRequest`, which never carries `kind`.
  */
 export type ArtifactKindPolicyView = {
     /**
@@ -1542,7 +1560,7 @@ export type ArtifactKindPolicyView = {
     capture_enabled: boolean;
     reject_on_secret: boolean;
     /**
-     * The kind's declared redaction rules. On the request a list replaces the stored set, `[]` clears it and an omitted member leaves it untouched, so a caller that only toggles a switch never deletes a privacy control it never sent. On the answer it is always present and ordered by `rule_type`, then `name_pattern`.
+     * The kind's declared redaction rules, always present and ordered by `rule_type`, then `name_pattern`.
      */
     redaction_rules?: Array<RedactionRuleView>;
 };
@@ -5709,7 +5727,7 @@ export type GetCaptureOptionsResponses = {
 export type GetCaptureOptionsResponse = GetCaptureOptionsResponses[keyof GetCaptureOptionsResponses];
 
 export type SetArtifactKindPolicyOverrideData = {
-    body: ArtifactKindPolicyView;
+    body: ArtifactKindPolicyRequest;
     headers?: {
         /**
          * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
@@ -5729,7 +5747,7 @@ export type SetArtifactKindPolicyOverrideData = {
 
 export type SetArtifactKindPolicyOverrideErrors = {
     /**
-     * `request_invalid` — the body is not a JSON object of the five members, or a `redaction_rules` entry carries a member a rule does not declare (`additionalProperties: false`). Every member is required: a body that omits `capture_enabled` or `reject_on_secret` is refused here rather than defaulting the switch to `false`, so an incomplete body can never silently disable an existing policy control, and no row is written. A body over the 32768-byte cap is `413 payload_too_large` before parsing.
+     * `request_invalid` — the body is not a JSON object of the five members: a member the body does not declare is refused here (`additionalProperties: false`), and so is a `redaction_rules` entry carrying a member a rule does not declare. Every member is required: a body that omits `capture_enabled` or `reject_on_secret` is refused here rather than defaulting the switch to `false`, so an incomplete body can never silently disable an existing policy control, and no row is written. A body over the 32768-byte cap is `413 payload_too_large` before parsing.
      */
     400: ErrorEnvelope;
     /**
@@ -5749,7 +5767,7 @@ export type SetArtifactKindPolicyOverrideErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * `kind_unknown` for a kind outside the closed list, `redaction_rule_type_unknown` for a rule whose `rule_type` is outside `header`/`cookie`/`form_field`/`query_param`, or `request_invalid` for a member that breaks the column's shape (a non-positive `max_bytes`, a media-type list outside one to 64 entries, a sensitivity that is neither `normal` nor `sensitive`, a `null` rule entry, more than 64 rules, a repeated rule, or a `name_pattern` outside 1..128 characters of `[A-Za-z0-9._~%+:*?/-]`).
+     * `kind_unknown` for a kind outside the closed list, `redaction_rule_type_unknown` for a rule whose `rule_type` is outside `header`/`cookie`/`form_field`/`query_param`, or `request_invalid` for a member that breaks the column's shape (a non-positive `max_bytes`, a media-type list outside one to 64 entries, a media type that is empty, longer than 255 characters or carries a control or format character, a media-type entry that is not a string or whose escapes spell no UTF-16 text such as an unpaired surrogate, a sensitivity that is neither `normal` nor `sensitive`, a `null` rule entry, more than 64 rules, a repeated rule, or a `name_pattern` outside 1..128 characters of `[A-Za-z0-9._~%+:*?/-]`).
      */
     422: ErrorEnvelope;
     /**

@@ -26,7 +26,9 @@ namespace Evidgate.Modules.Evidence.Application.Artifacts;
 /// <param name="ProjectId">The project whose policy is overridden.</param>
 /// <param name="Kind">One of the eight contract kinds; an unknown one is refused 422.</param>
 /// <param name="MaxBytes">The largest artifact of the kind the project accepts, greater than zero.</param>
-/// <param name="MediaTypes">The accepted media types, between one and 64.</param>
+/// <param name="MediaTypes">
+/// The accepted media types, between one and 64, each 1–255 characters with no control or format character.
+/// </param>
 /// <param name="DefaultSensitivity"><c>normal</c> or <c>sensitive</c>.</param>
 /// <param name="CaptureEnabled">False switches capture of the kind off for the project.</param>
 /// <param name="RejectOnSecret">True makes the project reject an artifact whose scan flags a secret.</param>
@@ -48,10 +50,10 @@ internal sealed record SetArtifactKindPolicyOverride(
 
 /// <summary>
 /// Shape validation of <see cref="SetArtifactKindPolicyOverride"/> before the tenant transaction: the sensitivity is
-/// one of the column's two values, the media-type list is within the column's bounds, the size is positive and no larger
-/// than one stored object can be read, and every declared rule carries a name the column accepts and appears once.
-/// Unknown kinds and unknown rule types are the handler's named 422 codes, not validator reasons, because a client has to
-/// be able to act on them.
+/// one of the column's two values, the media-type list is within the column's bounds and carries no control character,
+/// the size is positive and no larger than one stored object can be read, and every declared rule carries a name the
+/// column accepts and appears once. Unknown kinds and unknown rule types are the handler's named 422 codes, not
+/// validator reasons, because a client has to be able to act on them.
 /// </summary>
 internal sealed class SetArtifactKindPolicyOverrideValidator : AbstractValidator<SetArtifactKindPolicyOverride>
 {
@@ -76,8 +78,14 @@ internal sealed class SetArtifactKindPolicyOverrideValidator : AbstractValidator
             .Must(types => types is { Length: >= 1 and <= 64 })
             .WithErrorCode("out_of_range");
 
+        // A media type is stored verbatim and reaches the column through a jsonb cast, so a control character (a NUL
+        // above all) would fail inside the transaction, and a stored newline could never match an upload. The bounds
+        // and the character check are the artifact route's own shape helpers; a blank entry stays refused.
         RuleFor(command => command.MediaTypes)
-            .Must(types => types is null || types.All(type => !string.IsNullOrWhiteSpace(type) && type.Length <= 255))
+            .Must(types => types is null
+                || types.All(type => ArtifactShape.IsMediaType(type)
+                    && !string.IsNullOrWhiteSpace(type)
+                    && ArtifactShape.HasNoControlCharacter(type)))
             .WithErrorCode("invalid_format");
 
         RuleFor(command => command.DefaultSensitivity)

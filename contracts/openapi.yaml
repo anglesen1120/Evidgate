@@ -2842,9 +2842,11 @@ paths:
         concurrent writes converge and the last committed write wins, and answers the stored policy. This is the only
         route that can lower a kind whose static default is sensitive: every write appends an audit row naming the
         previous and the new `default_sensitivity`, so a lowering never happens by omission. A kind outside the closed
-        list is `422 kind_unknown`; `default_sensitivity` outside `normal`/`sensitive`, `max_bytes` not positive, or a
-        media-type list outside one to 64 entries is `422 request_invalid` with a reason, and no row is written. An
-        unknown or other-tenant project is `404`, a project being deleted is `409 project_deleting`.
+        list is `422 kind_unknown`; `default_sensitivity` outside `normal`/`sensitive`, `max_bytes` not positive, a
+        media-type list outside one to 64 entries, or a media type that is empty, longer than 255 characters, not a
+        JSON string or not decodable UTF-16 (an unpaired surrogate), or that carries a control or format character is
+        `422 request_invalid` with a reason, and no row is written. An unknown or other-tenant project is `404`, a
+        project being deleted is `409 project_deleting`.
       x-permission: project:write
       x-version: v1
       parameters:
@@ -2856,7 +2858,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ArtifactKindPolicyView'
+              $ref: '#/components/schemas/ArtifactKindPolicyRequest'
       responses:
         '200':
           description: The stored policy of the kind
@@ -2884,11 +2886,12 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '400':
           description: >-
-            `request_invalid` — the body is not a JSON object of the five members, or a `redaction_rules` entry carries
-            a member a rule does not declare (`additionalProperties: false`). Every member is required: a body that
-            omits `capture_enabled` or `reject_on_secret` is refused here rather than defaulting the switch to `false`,
-            so an incomplete body can never silently disable an existing policy control, and no row is written. A body
-            over the 32768-byte cap is `413 payload_too_large` before parsing.
+            `request_invalid` — the body is not a JSON object of the five members: a member the body does not declare
+            is refused here (`additionalProperties: false`), and so is a `redaction_rules` entry carrying a member a
+            rule does not declare. Every member is required: a body that omits `capture_enabled` or `reject_on_secret`
+            is refused here rather than defaulting the switch to `false`, so an incomplete body can never silently
+            disable an existing policy control, and no row is written. A body over the 32768-byte cap is `413
+            payload_too_large` before parsing.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
@@ -2901,6 +2904,8 @@ paths:
             `kind_unknown` for a kind outside the closed list, `redaction_rule_type_unknown` for a rule whose
             `rule_type` is outside `header`/`cookie`/`form_field`/`query_param`, or `request_invalid` for a member that
             breaks the column's shape (a non-positive `max_bytes`, a media-type list outside one to 64 entries, a
+            media type that is empty, longer than 255 characters or carries a control or format character, a media-type
+            entry that is not a string or whose escapes spell no UTF-16 text such as an unpaired surrogate, a
             sensitivity that is neither `normal` nor `sensitive`, a `null` rule entry, more than 64 rules, a repeated
             rule, or a `name_pattern` outside 1..128 characters of `[A-Za-z0-9._~%+:*?/-]`).
           headers:
@@ -11342,12 +11347,51 @@ components:
         artifact_id: { type: string, format: uuid }
         download_url: { type: string, format: uri }
         expires_at: { type: string, format: date-time }
+    ArtifactKindPolicyRequest:
+      type: object
+      description: >-
+        The request body of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's capture policy for one
+        kind. Every member is required — the row's knobs are written as a whole — and the body is closed, so a member it
+        does not declare, `kind` and `redaction_rule_count` included, is refused `400 request_invalid` at binding
+        rather than ignored. The path names the kind.
+      additionalProperties: false
+      required: [max_bytes, media_types, default_sensitivity, capture_enabled, reject_on_secret]
+      properties:
+        max_bytes:
+          type: integer
+          minimum: 1
+          description: The largest artifact of the kind the project accepts.
+        media_types:
+          type: array
+          minItems: 1
+          maxItems: 64
+          items:
+            type: string
+            minLength: 1
+            maxLength: 255
+            description: >-
+              One media type: a JSON string of 1..255 characters with no control or format character (a NUL or a
+              newline included) and no unpaired surrogate. The list is what the kind accepts; the upload route
+              compares a declared type against it verbatim.
+        default_sensitivity:
+          type: string
+          enum: [normal, sensitive]
+        capture_enabled: { type: boolean }
+        reject_on_secret: { type: boolean }
+        redaction_rules:
+          type: array
+          description: >-
+            The kind's declared redaction rules: a list replaces the stored set, `[]` clears it and an omitted member
+            leaves it untouched, so a caller that only toggles a switch never deletes a privacy control it never sent.
+          maxItems: 64
+          items:
+            $ref: '#/components/schemas/RedactionRuleView'
     ArtifactKindPolicyView:
       type: object
       description: >-
-        The request and the `200` answer of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's stored
-        capture policy for one kind. Every member is required — the row's knobs are written as a whole. The answer adds
-        `kind`, so a client can render what the server committed without a second read.
+        The `200` answer of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's stored capture policy for
+        one kind. Every knob is required; `kind` names the row the answer committed, so a client can render the result
+        without a second read. The request body is `ArtifactKindPolicyRequest`, which never carries `kind`.
       additionalProperties: false
       required: [max_bytes, media_types, default_sensitivity, capture_enabled, reject_on_secret]
       properties:
@@ -11373,9 +11417,7 @@ components:
         redaction_rules:
           type: array
           description: >-
-            The kind's declared redaction rules. On the request a list replaces the stored set, `[]` clears it and an
-            omitted member leaves it untouched, so a caller that only toggles a switch never deletes a privacy control
-            it never sent. On the answer it is always present and ordered by `rule_type`, then `name_pattern`.
+            The kind's declared redaction rules, always present and ordered by `rule_type`, then `name_pattern`.
           maxItems: 64
           items:
             $ref: '#/components/schemas/RedactionRuleView'

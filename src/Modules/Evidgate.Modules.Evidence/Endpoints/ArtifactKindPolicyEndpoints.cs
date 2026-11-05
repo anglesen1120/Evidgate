@@ -135,27 +135,76 @@ public static class ArtifactKindPolicyEndpoints
             }
         }
 
+        // A media type arrives as a token, so an entry the typed reader would have faulted on is the request's shape
+        // refusal with the entry named, exactly as a null rule entry is: no statement runs either way.
+        var mediaTypes = ReadMediaTypes(body.MediaTypes);
+        if (!mediaTypes.IsSuccess)
+        {
+            return Result.Failure<ArtifactKindPolicyView>(mediaTypes.Error!);
+        }
+
         return await mediator.Send(
             new SetArtifactKindPolicyOverride(
                 p,
                 kind,
                 body.MaxBytes,
-                body.MediaTypes is { Length: > 0 } mediaTypes ? mediaTypes : [],
+                mediaTypes.Value,
                 body.DefaultSensitivity,
                 body.CaptureEnabled,
                 body.RejectOnSecret,
                 body.RedactionRules?.Select(rule => new RedactionRule(rule.RuleType ?? string.Empty, rule.NamePattern ?? string.Empty)).ToArray()),
             cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Reads the media-type entries: a token that is not a string, and a string whose escapes spell no UTF-16 text (an
+    /// unpaired surrogate), cannot become a text value, so each is refused with its path — the second would otherwise
+    /// fail the jsonb cast inside the transaction.
+    /// </summary>
+    private static Result<string[]> ReadMediaTypes(JsonElement[]? entries)
+    {
+        if (entries is null)
+        {
+            return Result.Success(Array.Empty<string>());
+        }
+
+        var mediaTypes = new string[entries.Length];
+        for (var index = 0; index < entries.Length; index++)
+        {
+            var entry = entries[index];
+            if (entry.ValueKind is not JsonValueKind.String)
+            {
+                return Result.Failure<string[]>(Error.Invalid(
+                    "every media type must be a string",
+                    [new ErrorDetail($"/media_types/{index}", "invalid_type")]));
+            }
+
+            try
+            {
+                mediaTypes[index] = entry.GetString()!;
+            }
+            catch (InvalidOperationException)
+            {
+                return Result.Failure<string[]>(Error.Invalid(
+                    "a media type must be a string of decodable characters",
+                    [new ErrorDetail($"/media_types/{index}", "invalid_format")]));
+            }
+        }
+
+        return Result.Success(mediaTypes);
+    }
 }
 
 /// <summary>
-/// Body of <c>PUT /v1/projects/{p}/artifact-kind-policy/{kind}</c> and its 200 answer: the stored capture policy of
-/// one kind in one project. Every knob is required — the row is written as a whole, so a caller never leaves one to a
-/// stale value.
+/// Body of <c>PUT /v1/projects/{p}/artifact-kind-policy/{kind}</c>: the capture policy a project sets for one kind.
+/// Every knob is required — the row is written as a whole, so a caller never leaves one to a stale value — and the
+/// record is closed: a member outside this list is refused at binding.
 /// </summary>
 /// <param name="MaxBytes">The largest artifact of the kind the project accepts, greater than zero.</param>
-/// <param name="MediaTypes">The accepted media types, between one and 64.</param>
+/// <param name="MediaTypes">
+/// The accepted media types as JSON tokens, between one and 64: each must be a string of 1–255 decodable characters
+/// with no control or format character, and the route refuses the rest with the entry's path.
+/// </param>
 /// <param name="DefaultSensitivity"><c>normal</c> or <c>sensitive</c>.</param>
 /// <param name="CaptureEnabled">False switches capture of the kind off for the project.</param>
 /// <param name="RejectOnSecret">True makes the project reject an artifact whose scan flags a secret.</param>
@@ -163,9 +212,10 @@ public static class ArtifactKindPolicyEndpoints
 /// Replaces the kind's declared rules when present; <c>[]</c> clears them and an omitted member leaves them as they are,
 /// so a caller that only toggles the switch cannot delete a privacy control it never saw.
 /// </param>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ArtifactKindPolicyBody(
     [property: JsonRequired, JsonPropertyName("max_bytes")] long MaxBytes,
-    [property: JsonRequired, JsonPropertyName("media_types")] string[] MediaTypes,
+    [property: JsonRequired, JsonPropertyName("media_types")] JsonElement[] MediaTypes,
     [property: JsonRequired, JsonPropertyName("default_sensitivity")] string DefaultSensitivity,
     [property: JsonRequired, JsonPropertyName("capture_enabled")] bool CaptureEnabled,
     [property: JsonRequired, JsonPropertyName("reject_on_secret")] bool RejectOnSecret,
