@@ -12,9 +12,10 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// deadline is stored on the row: an absolute timestamp that a restart can re-read, never an in-memory timer.
 /// </para>
 /// <para>
-/// Neither window has a default. The kill deadline is the moment execution is stopped whatever it is doing, so the
-/// operator of a deployment states both windows instead of inheriting a number this code chose for them: a missing key
-/// binds to zero and fails the boot validation below, which is the same refusal a zero or negative value gets.
+/// Neither window has a default. The kill deadline is the moment a request still stopping is recorded <c>killed</c>,
+/// so the operator of a deployment states both windows instead of inheriting a number this code chose for them: a
+/// missing key binds to zero and fails the boot validation below, which is the same refusal a zero or negative value
+/// gets.
 /// </para>
 /// </summary>
 internal sealed class RunCancelOptions : IValidatableObject
@@ -36,8 +37,8 @@ internal sealed class RunCancelOptions : IValidatableObject
     public TimeSpan SoftStopDelay { get; init; }
 
     /// <summary>
-    /// The kill window: <c>requested_at + KillDelay</c> is stored as <c>kill_at</c>, the instant execution is stopped
-    /// whatever it is doing, and the moment the durable kill task becomes claimable.
+    /// The kill window: <c>requested_at + KillDelay</c> is stored as <c>kill_at</c>, the instant a request still
+    /// stopping is recorded <c>killed</c>, and the moment the durable kill task becomes claimable.
     /// </summary>
     /// <remarks>
     /// Required for the same reason as <see cref="SoftStopDelay"/>: no default, and zero is refused.

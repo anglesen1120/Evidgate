@@ -138,11 +138,14 @@ internal sealed partial class CancelKillTaskHandler(
             $"{CancelKillContract.TaskType} claimed before kill_at for cancel request '{payload.CancelRequestId:D}': the fire is due at '{outcome.KillAt:O}'");
     }
 
-    /// <summary>The stop stage moved to <c>killed</c>: the graceful window is over and execution is stopped.</summary>
+    /// <summary>
+    /// The kill deadline reached with the request still stopping: the <c>killed</c> stage is recorded, and execution
+    /// itself is left alone because no job-killing channel exists.
+    /// </summary>
     [LoggerMessage(
         EventId = 2452,
-        Level = LogLevel.Warning,
-        Message = "killed run {RunId} at its cancel deadline (cancel request {CancelRequestId})")]
+        Level = LogLevel.Information,
+        Message = "run {RunId} reached its cancel kill deadline (cancel request {CancelRequestId}): stage recorded")]
     private partial void LogKilled(Guid runId, Guid cancelRequestId);
 
     /// <summary>The fire found the request already final — a replay, or a soft stop that beat the deadline.</summary>

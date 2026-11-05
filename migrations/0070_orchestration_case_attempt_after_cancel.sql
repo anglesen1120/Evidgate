@@ -9,7 +9,7 @@
 -- "not after the cancel" without a backfill. The writer derives it at insert, in the same statement that inserts the
 -- row: `CaseAttemptSql.InsertAttempts` already joins `public.run` for the scope's project visibility, and its caller
 -- (the ingest batch handler) has taken that row `FOR SHARE` in the same transaction, so the value is serialised with
--- the cancel's `FOR UPDATE` and can never miss a committed cancel.
+-- the cancel's `FOR NO KEY UPDATE` (the lock `IRunStateTransition` takes) and can never miss a committed cancel.
 --
 -- GRANTS: nothing to add. 0032 revokes `update, delete` and grants table-level `select, insert`, which covers a
 -- column added later, so `evidgate_app` can write and read `after_cancel` and still cannot rewrite it: the value is

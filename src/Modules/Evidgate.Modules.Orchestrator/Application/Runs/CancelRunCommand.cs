@@ -197,8 +197,8 @@ internal sealed partial class CancelRunCommandHandler(
     /// call recorded it, <c>0</c> when the run's own unique key already held one. The stop windows are computed here from
     /// configuration on the handler's clock, so a repeat can never reopen or shift them.
     /// <para>
-    /// The kill row follows the request row in this same transaction, so "the cancel is recorded" and "execution will be
-    /// stopped at <c>kill_at</c>" commit together or not at all; its key names the request, so a second writer of the
+    /// The kill row follows the request row in this same transaction, so "the cancel is recorded" and "the kill is
+    /// due at <c>kill_at</c>" commit together or not at all; its key names the request, so a second writer of the
     /// same request inserts nothing.
     /// </para>
     /// </summary>
@@ -238,12 +238,15 @@ internal sealed partial class CancelRunCommandHandler(
 
         // The queue's contract is that the row is durable with the business change, so it takes the caller's own
         // connection and transaction: a rollback leaves neither the request nor its schedule behind.
+        // The queue is the deployment's routing decision for this task_type, never a constant: the Worker consumes the
+        // queues it is configured for, so a row written into a queue nobody polls would lose the kill silently. Same
+        // rule as the outbox dispatcher; resolved here because this row is written straight onto the caller's transaction.
         await tasks.EnqueueAsync(
             scope.Connection,
             scope.Transaction,
             new TaskEnqueue
             {
-                Queue = taskOptions.Value.DispatchDefaultQueue,
+                Queue = TaskQueueRouting.QueueFor(taskOptions.Value, CancelKillContract.TaskType),
                 TaskType = CancelKillContract.TaskType,
                 PayloadJson = CancelKillContract.PayloadJson(runId, requestId),
                 IdempotencyKey = CancelKillContract.IdempotencyKey(runId, requestId),

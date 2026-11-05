@@ -69,9 +69,14 @@ check_api_health() {
   # The Api refuses to serve as any other role (00 §5.4.3), which its own log shows.
   docker exec "$db_container" psql -U postgres -d evidgate -v ON_ERROR_STOP=1 -q \
     -c "alter role evidgate_app login password '$APP_PASSWORD';" >/dev/null
+  # The two cancel windows have no option default: an Api booted without them binds 00:00:00 and
+  # refuses to start, so the health check below would time out on a configuration refusal.
+  # Values match the dev stack's .env.dev.template.
   docker run -d --platform "$CHECK_PLATFORM" --name "$api_container" --network "$network" \
     -p 127.0.0.1::8080 \
     -e "EVIDGATE__DATABASE__CONNECTIONSTRING=Host=db;Port=5432;Database=evidgate;Username=evidgate_app;Password=$APP_PASSWORD" \
+    -e "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY=00:00:30" \
+    -e "EVIDGATE__RUNS__CANCEL__KILLDELAY=00:02:00" \
     "$reference" >/dev/null
   host_port="$(docker port "$api_container" 8080/tcp | head -1)"
   host_port="${host_port##*:}"

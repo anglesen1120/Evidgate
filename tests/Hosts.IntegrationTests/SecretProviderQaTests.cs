@@ -63,6 +63,10 @@ public sealed class SecretProviderQaTests
             {
                 ["ASPNETCORE_URLS"] = url,
                 [SecretNames.DatabaseConnectionString] = $"Host={host};Port=1;Username=evidgate_app;Password={password};Database=evidgate;Timeout=2",
+                // Both cancel windows are required at boot (no option default), so a process started for any other
+                // assertion still states them; the boot lines under test never depend on their values.
+                ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
+                ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
                 [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             },
             url + "/internal/health/live",
