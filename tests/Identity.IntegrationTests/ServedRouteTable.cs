@@ -521,12 +521,14 @@ internal sealed record RouteRequestContext(
     Guid NodeId,
     Guid ItemId,
     Guid ManualCaseId,
-    Guid AuthoringVersionId)
+    Guid AuthoringVersionId,
+    Guid FixtureId)
 {
     /// <summary>The seeded tenant plus fresh ids for everything else.</summary>
     internal static RouteRequestContext Fresh(Guid orgId, Guid projectId) => new(
         orgId,
         projectId,
+        Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
@@ -717,6 +719,26 @@ internal static class RouteRequests
         Add("GET", "/v1/suite-revisions/{r}", ctx => new(HttpMethod.Get, $"/v1/suite-revisions/{ctx.SuiteRevisionId}"));
         Add("GET", "/v1/suite-revisions/{r}/diff", ctx =>
             new(HttpMethod.Get, $"/v1/suite-revisions/{ctx.SuiteRevisionId}/diff?against={ctx.SuiteRevisionId}"));
+
+        // Fixtures: the create recipe is the closed create body with the mandatory key, so a granted caller reaches
+        // the command; the detail and the revision append address a fresh fixture id, so a granted call answers 404
+        // and the matrix only asserts the authorization outcome.
+        Add("POST", "/v1/projects/{p}/fixtures", ctx => new(HttpMethod.Post,
+            $"/v1/projects/{ctx.ProjectId}/fixtures",
+            new JsonObject
+            {
+                ["fixture_key"] = "probe-fixture",
+                ["seed_version"] = "v1",
+                ["body_ref"] = "fixtures/probe.json",
+            },
+            IdempotencyKey: Key()));
+        Add("GET", "/v1/projects/{p}/fixtures", ctx =>
+            new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/fixtures"));
+        Add("GET", "/v1/fixtures/{f}", ctx => new(HttpMethod.Get, $"/v1/fixtures/{ctx.FixtureId}"));
+        Add("POST", "/v1/fixtures/{f}/revisions", ctx => new(HttpMethod.Post,
+            $"/v1/fixtures/{ctx.FixtureId}/revisions",
+            new JsonObject { ["seed_version"] = "v2", ["body_ref"] = "fixtures/probe-v2.json" },
+            IdempotencyKey: Key()));
 
         // ---- Orchestrator ------------------------------------------------------------------------------------
         Add("POST", "/v1/projects/{p}/manifests", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/manifests",
