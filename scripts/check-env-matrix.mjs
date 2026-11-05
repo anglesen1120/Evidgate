@@ -79,6 +79,7 @@ import {
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkSecretsInventory, selfTestSecretsInventory } from './secrets-inventory.mjs';
 
 const SELF = fileURLToPath(import.meta.url);
 const DEFAULT_ROOT = join(dirname(SELF), '..');
@@ -1643,11 +1644,17 @@ function selfTest() {
     console.log(`${ok ? 'ok  ' : 'FAIL'}  ${testCase.name}${detail}`);
   }
   rmSync(base, { recursive: true, force: true });
+  const inventoryCases = selfTestSecretsInventory(DEFAULT_ROOT);
+  for (const result of inventoryCases) {
+    if (!result.ok) failed += 1;
+    console.log(`${result.ok ? 'ok  ' : 'FAIL'}  ${result.name}${result.detail}`);
+  }
+  const total = cases.length + inventoryCases.length;
   if (failed > 0) {
-    console.error(`check-env-matrix --self-test: ${failed} of ${cases.length} cases failed`);
+    console.error(`check-env-matrix --self-test: ${failed} of ${total} cases failed`);
     process.exit(1);
   }
-  console.log(`check-env-matrix --self-test: ${cases.length} cases passed`);
+  console.log(`check-env-matrix --self-test: ${total} cases passed`);
 }
 
 // --------------------------------------------------------------------------
@@ -1695,6 +1702,13 @@ if (printDiscovered) {
 }
 
 const summary = lint(root);
+// Fixture trees carry no inventory; the real repository and any tree that has one are checked.
+let inventory = null;
+if (root === join(DEFAULT_ROOT, '.') || existsSync(join(root, 'infra/secrets-inventory.json'))) {
+  inventory = checkSecretsInventory(root);
+  for (const line of inventory.warnings) console.warn(line);
+  errors.push(...inventory.errors);
+}
 if (errors.length > 0) {
   for (const error of errors) console.error(error);
   console.error(`check-env-matrix: ${errors.length} error(s)`);
@@ -1702,5 +1716,6 @@ if (errors.length > 0) {
 }
 console.log(
   `check-env-matrix: ${summary.keys} keys (${summary.processKeys} consumed by a process) match infra/config-matrix.json ` +
-    `and infra/{dev,staging,prod}/environment.json; ${INTERNAL_PATHS.join(' + ')} stay off the public ingress`,
+    `and infra/{dev,staging,prod}/environment.json; ${INTERNAL_PATHS.join(' + ')} stay off the public ingress` +
+    (inventory ? `; ${inventory.secretCount} secrets all in infra/secrets-inventory.json` : ''),
 );
