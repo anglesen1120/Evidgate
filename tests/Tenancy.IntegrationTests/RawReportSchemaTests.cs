@@ -12,19 +12,15 @@ namespace Tenancy.IntegrationTests;
 /// A parse record is written once per report artifact and parser release, is never rewritten, and is readable
 /// only inside its own org — so the database has to refuse a row naming another org's run or artifact, a refusal
 /// that carries counters or discrepancies, a second row under the same release key, and every update or delete.
+/// The CHECK and reference cases live in <c>RawReportSchemaTests.Constraints.cs</c>.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class RawReportSchemaTests
+public sealed partial class RawReportSchemaTests
 {
     private const string Table = "raw_report";
     private const string DefaultParserId = "junit-pytest";
     private const string DefaultParserVersion = "1.0.0";
     private const string DefaultProducerKind = "pytest-junitxml";
-
-    private static readonly string[] OutcomeRefusals =
-        ["raw_report_outcome_check", "raw_report_partial_check", "raw_report_reason_check"];
-
-    private static readonly string[] ParserVersions = ["1.0.0", "1.1.0", "1.2.0"];
 
     private readonly PostgresTenancyFixture _fixture;
 
@@ -167,235 +163,6 @@ public sealed class RawReportSchemaTests
         // Positive control: the same row shape, corrected to this org's own run and artifact.
         (await InsertAsync(owner, null, Baseline(own))).ShouldBe(1);
         (await RowsAsync(database)).ShouldBe(1);
-    }
-
-    [Fact]
-    public async Task RawReport_OutcomeAndParserPair_FollowTheirChecks()
-    {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var tenant = await SeedTenantAsync(database);
-        var owner = _fixture.OwnerConnectionString(database);
-
-        (string Constraint, ReportRow Row)[] refused =
-        [
-            // A parsed report names the release that read it: `mapped` without a pair cannot answer "who judged it".
-            ("raw_report_parser_pair_check", Baseline(tenant) with { ParserId = null, ParserVersion = null }),
-            ("raw_report_parser_pair_check", Baseline(tenant) with { ParserVersion = null }),
-            // `parsed` is outside the closed outcome list; more than one arm rejects it (the list, the
-            // mapped/partial pairing and the reason rule), so the refusal may name any of them.
-            ("raw_report_outcome_check", Baseline(tenant) with { Outcome = "parsed" }),
-            // A parsed report carries no refusal reason; a refused one carries a code word.
-            ("raw_report_reason_check", Baseline(tenant) with { Reason = "malformed" }),
-            ("raw_report_reason_check", Baseline(tenant) with { Outcome = "malformed" }),
-            ("raw_report_reason_check", Baseline(tenant) with { Outcome = "malformed", Reason = "Malformed" }),
-        ];
-
-        foreach (var (constraint, refusedRow) in refused)
-        {
-            var error = await RefusedAsync(owner, null, refusedRow);
-            error.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation, constraint);
-            if (constraint == "raw_report_outcome_check")
-            {
-                // PostgreSQL reports whichever CHECK it evaluates first; an unknown outcome breaks the closed
-                // list, the mapped/partial arms and the reason pairing at once.
-                OutcomeRefusals.ShouldContain(error.ConstraintName);
-            }
-            else
-            {
-                error.ConstraintName.ShouldBe(constraint);
-            }
-        }
-
-        // The pair is a real release in the registry, not free text: an unknown one is the foreign key's answer.
-        var unknownRelease = await RefusedAsync(
-            owner, null, Baseline(tenant) with { ParserId = "no-such-parser" });
-        unknownRelease.SqlState.ShouldBe(PostgresErrorCodes.ForeignKeyViolation);
-        unknownRelease.ConstraintName.ShouldBe("raw_report_parser_fk");
-
-        // The refusal shape is accepted: a malformed report, and an unsupported one with no parser resolved (the
-        // pair is left null) as well as one whose release exists but could not be loaded.
-        (await InsertAsync(owner, null, Baseline(tenant) with
-        {
-            Artifact = await NewArtifactAsync(database, tenant),
-            Outcome = "malformed",
-            Reason = "malformed",
-        })).ShouldBe(1);
-        (await InsertAsync(owner, null, NoParser(tenant) with { Artifact = await NewArtifactAsync(database, tenant) })).ShouldBe(1);
-        (await InsertAsync(owner, null, Refused(tenant, "unsupported", "parser_unavailable") with
-        {
-            Artifact = await NewArtifactAsync(database, tenant),
-        })).ShouldBe(1);
-        (await RowsAsync(database)).ShouldBe(3);
-    }
-
-    [Fact]
-    public async Task RawReport_RefusedRowsCarryNoCountersOrDiscrepancies()
-    {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var tenant = await SeedTenantAsync(database);
-        var owner = _fixture.OwnerConnectionString(database);
-        var malformed = Refused(tenant, "malformed", "malformed");
-
-        (string Constraint, ReportRow Row)[] refused =
-        [
-            // A refused report produced no events, so an observed count or a declared count is a contradiction.
-            ("raw_report_refused_empty_check", malformed with { ObservedTests = 1 }),
-            ("raw_report_refused_empty_check", malformed with { DeclaredTests = 1 }),
-            // Nothing to compare means no discrepancy list either.
-            ("raw_report_refused_empty_check",
-                NoParser(tenant) with
-                {
-                    Discrepancies = """[{"code":"unmapped_case","count":1}]""",
-                }),
-        ];
-
-        foreach (var (constraint, refusedRow) in refused)
-        {
-            var error = await RefusedAsync(owner, null, refusedRow);
-            error.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation, constraint);
-            error.ConstraintName.ShouldBe(constraint);
-        }
-
-        // The empty refusal is the shape the writer stores, so it is accepted.
-        (await InsertAsync(owner, null, malformed)).ShouldBe(1);
-        (await RowsAsync(database)).ShouldBe(1);
-    }
-
-    [Fact]
-    public async Task RawReport_PartialAndDiscrepancyShape_FollowTheirChecks()
-    {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var tenant = await SeedTenantAsync(database);
-        var owner = _fixture.OwnerConnectionString(database);
-        var one = """[{"code":"count_mismatch","count":1}]""";
-
-        (string Constraint, ReportRow Row)[] refused =
-        [
-            // `mapped` means the declared and observed views agree; `partial` means at least one discrepancy.
-            ("raw_report_partial_check", Baseline(tenant) with { Discrepancies = one }),
-            ("raw_report_partial_check", Baseline(tenant) with { Outcome = "partial" }),
-            // The list is a bounded array of code/count objects, never a free-form document.
-            ("raw_report_discrepancy_shape_check", Baseline(tenant) with { Outcome = "partial", Discrepancies = """{"code":"count_mismatch"}""" }),
-            ("raw_report_discrepancy_shape_check",
-                Baseline(tenant) with { Outcome = "partial", Discrepancies = Discrepancies(17) }),
-            // Outcomes, failures and skips are counted within the tests that produced them.
-            ("raw_report_observed_check", Baseline(tenant) with { ObservedTests = 0, ObservedFailures = 1 }),
-            ("raw_report_observed_check", Baseline(tenant) with { ObservedTests = -1 }),
-            ("raw_report_declared_check", Baseline(tenant) with { DeclaredTests = -1 }),
-            ("raw_report_producer_kind_check", Baseline(tenant) with { ProducerKind = "Pytest" }),
-        ];
-
-        foreach (var (constraint, refusedRow) in refused)
-        {
-            var error = await RefusedAsync(owner, null, refusedRow);
-            error.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation, constraint);
-            error.ConstraintName.ShouldBe(constraint);
-        }
-
-        // The bounds themselves are inside the vocabulary. Each accepted row is a different report artifact:
-        // the key is (artifact, parser pair), so reusing one would collide on the unique index.
-        (await InsertAsync(owner, null, Baseline(tenant) with
-        {
-            Artifact = await NewArtifactAsync(database, tenant),
-            Outcome = "partial",
-            Discrepancies = one,
-        })).ShouldBe(1);
-        (await InsertAsync(owner, null, Baseline(tenant) with
-        {
-            Artifact = await NewArtifactAsync(database, tenant),
-            Outcome = "partial",
-            Discrepancies = Discrepancies(16),
-        })).ShouldBe(1);
-        (await InsertAsync(owner, null, Baseline(tenant) with
-        {
-            Artifact = await NewArtifactAsync(database, tenant),
-            DeclaredTests = 0,
-            ObservedTests = 0,
-        })).ShouldBe(1);
-        (await RowsAsync(database)).ShouldBe(3);
-    }
-
-    [Fact]
-    public async Task RawReport_SecondParseOfTheSameRelease_IsRefusedAndOnConflictWritesNothing()
-    {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var tenant = await SeedTenantAsync(database);
-        var owner = _fixture.OwnerConnectionString(database);
-        var app = _fixture.AppConnectionString(database);
-
-        (await InsertAsync(app, tenant.Org, Baseline(tenant))).ShouldBe(1);
-
-        var duplicate = await RefusedAsync(app, tenant.Org, Baseline(tenant));
-        duplicate.SqlState.ShouldBe(PostgresErrorCodes.UniqueViolation);
-        duplicate.ConstraintName.ShouldBe("raw_report_artifact_parser_key");
-
-        // The handler's replay insert: the same key, `on conflict do nothing`, writes no second row.
-        (await InsertAsync(app, tenant.Org, Baseline(tenant), onConflictDoNothing: true)).ShouldBe(0);
-        (await RowsAsync(database)).ShouldBe(1);
-
-        // A newer release is a new row beside the old one, not an edit of it.
-        await SeedParserVersionAsync(database, "1.1.0");
-        (await InsertAsync(app, tenant.Org, Baseline(tenant) with { ParserVersion = "1.1.0" })).ShouldBe(1);
-
-        // A report no parser resolved for keys on the producer kind it declared, leaving the pair null.
-        (await InsertAsync(app, tenant.Org, NoParser(tenant))).ShouldBe(1);
-        var kindDuplicate = await RefusedAsync(app, tenant.Org, NoParser(tenant));
-        kindDuplicate.SqlState.ShouldBe(PostgresErrorCodes.UniqueViolation);
-        kindDuplicate.ConstraintName.ShouldBe("raw_report_artifact_kind_key");
-        (await InsertAsync(app, tenant.Org, NoParser(tenant), onConflictDoNothing: true)).ShouldBe(0);
-
-        // The kind is part of that key: another producer's declaration is another row.
-        (await InsertAsync(app, tenant.Org, NoParser(tenant) with { ProducerKind = "playwright-json" })).ShouldBe(1);
-
-        (await RowsAsync(database)).ShouldBe(4);
-    }
-
-    [Fact]
-    public async Task RawReport_RunComparisonRead_UsesTheRunIndex()
-    {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var tenant = await SeedTenantAsync(database);
-        var app = _fixture.AppConnectionString(database);
-
-        await SeedParserVersionAsync(database, "1.1.0");
-        await SeedParserVersionAsync(database, "1.2.0");
-        var rows = ParserVersions
-            .Select(version => Baseline(tenant) with { ParserVersion = version })
-            .ToArray();
-        foreach (var row in rows)
-        {
-            (await InsertAsync(app, tenant.Org, row)).ShouldBe(1);
-        }
-
-        // A second run of the same org, carrying many more reports: without it the table is three rows wide
-        // and an org_id index is as cheap as the run index, so the plan would prove nothing about selectivity.
-        var otherRun = await RunRowSeeder.SeedRunAsync(_fixture, database, tenant.Org);
-        for (var index = 0; index < 20; index++)
-        {
-            var artifact = await SeedArtifactAsync(database, tenant.Org, tenant.Project, otherRun);
-            (await InsertAsync(app, tenant.Org, Baseline(tenant) with { Run = otherRun, Artifact = artifact }))
-                .ShouldBe(1);
-        }
-
-        await _fixture.ExecuteAsync(database, "analyze public.raw_report");
-
-        await using var scope = await TenantScope.BeginAsync(app, tenant.Org);
-        await scope.SetAsync("enable_seqscan", "off");
-
-        // The plan is read with the predicate's values inlined: an EXPLAIN of a parameterised statement plans
-        // a generic statement, which is free to answer without a scan at all. The values are generated
-        // UUIDs, never input, and the read below still runs parameterised.
-        var plan = await scope.ScalarAsync<string>(
-            "explain (format json) select id from public.raw_report "
-            + $"where org_id = '{tenant.Org:D}'::uuid and run_id = '{tenant.Run:D}'::uuid");
-        plan.ShouldContain("raw_report_run_idx");
-
-        var ids = await scope.ScalarAsync<Guid[]>(
-            "select coalesce(array_agg(id order by id), '{}'::uuid[]) from public.raw_report "
-            + "where org_id = @org and run_id = @run",
-            ("org", tenant.Org),
-            ("run", tenant.Run));
-        ids.ShouldBe(rows.Select(row => row.Id).ToArray(), ignoreOrder: true);
     }
 
     /// <summary>An organisation with one project, one committed run and one <c>ready</c> raw-report artifact.</summary>
@@ -543,6 +310,26 @@ public sealed class RawReportSchemaTests
             ("id", Guid.CreateVersion7()),
             ("parser_id", DefaultParserId),
             ("version", version),
+            ("producer", DefaultProducerKind))).ShouldBe(1);
+        await scope.CommitAsync();
+    }
+
+    /// <summary>
+    /// One registry release for <paramref name="org"/> (a null org is a built-in release), written as the owner:
+    /// the catalogue's grants give the application role SELECT only, so a tenant can never register a mapping.
+    /// </summary>
+    private async Task SeedParserReleaseAsync(string database, Guid? org, string parserId)
+    {
+        await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
+        (await scope.ExecuteAsync(
+            """
+            insert into public.report_parser (id, org_id, parser_id, version, producer_kind, schema_version, notes)
+            values (@id, @org::uuid, @parser_id, @version, @producer, 1, 'probe')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org", org is { } value ? value : (object)DBNull.Value),
+            ("parser_id", parserId),
+            ("version", DefaultParserVersion),
             ("producer", DefaultProducerKind))).ShouldBe(1);
         await scope.CommitAsync();
     }

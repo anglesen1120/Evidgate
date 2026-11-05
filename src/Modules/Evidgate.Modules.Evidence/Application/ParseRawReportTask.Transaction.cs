@@ -17,7 +17,7 @@ internal sealed partial class ParseRawReportHandler
     /// <summary>
     /// The one write transaction: the run's lock, the closed synthetic producer slot, every event in one statement, the
     /// attempts of the newly inserted finishes, the slot's high-water mark, the reconcile trigger and the report's row —
-    /// committed together or not at all.
+    /// committed together or not at all. A report an earlier attempt committed as refused is refused whole here.
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
@@ -50,7 +50,12 @@ internal sealed partial class ParseRawReportHandler
             // Nothing mapped (every testcase unmapped, or a document with no testcase): no slot, no event, no trigger.
             // The report still leaves its own row, so a document that mapped nothing is distinguishable from one that
             // was never parsed.
-            await InsertRawReportAsync(orgId, payload, report, cancellationToken).ConfigureAwait(false);
+            if (await StoreParsedRowAsync(orgId, payload, report, cancellationToken).ConfigureAwait(false)
+                is { } conflicted)
+            {
+                return conflicted;
+            }
+
             LogMapped(logger, payload.ArtifactId, 0, 0);
             await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
             return new ParseRawReportOutcome(ParseRawReportOutcome.Parsed, Events: 0);
@@ -72,14 +77,52 @@ internal sealed partial class ParseRawReportHandler
         await AdvanceSlotAsync(allowed, orgId, payload, producerId, events, inserted, cancellationToken)
             .ConfigureAwait(false);
 
-        // The row is the transaction's last insert: every earlier refusal above has returned without committing, so a
-        // skipped attempt leaves no row and a committed one always has exactly one.
-        await InsertRawReportAsync(orgId, payload, report, cancellationToken).ConfigureAwait(false);
+        // The row is the transaction's last insert and its last verdict: nothing before it commits without it, so a row
+        // that already holds a refusal for this report and parser release rolls every write above back.
+        if (await StoreParsedRowAsync(orgId, payload, report, cancellationToken).ConfigureAwait(false)
+            is { } rejected)
+        {
+            return rejected;
+        }
 
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
         LogMapped(logger, payload.ArtifactId, events.Events.Length, inserted.Count);
 
         return new ParseRawReportOutcome(ParseRawReportOutcome.Parsed, Events: inserted.Count);
+    }
+
+    /// <summary>
+    /// The report's own row, and the verdict it may not contradict: an insert that wrote nothing means the key already
+    /// holds a verdict, and only a parsed one (<c>mapped</c> or <c>partial</c>) lets this attempt continue. A stored
+    /// refusal, or a key whose row cannot be read, ends the attempt here — the caller returns without committing, so the
+    /// events, the slot, the attempts and the trigger written before this point are rolled back.
+    /// </summary>
+    /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="payload">The run, artifact and producer kind.</param>
+    /// <param name="report">The report's own row, built before this scope opened.</param>
+    /// <param name="cancellationToken">Cancels the insert and the read.</param>
+    /// <returns>The skipped outcome that ends the attempt, or null when the row is stored or a parse already holds it.</returns>
+    private async Task<ParseRawReportOutcome?> StoreParsedRowAsync(
+        Guid orgId,
+        ParseRawReportPayload payload,
+        RawReportDraft report,
+        CancellationToken cancellationToken)
+    {
+        if (await InsertRawReportAsync(orgId, payload, report, cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        var stored = await StoredOutcomeAsync(orgId, payload.ArtifactId, report, cancellationToken).ConfigureAwait(false);
+        if (stored is RawReportOutcomes.Mapped or RawReportOutcomes.Partial)
+        {
+            return null;
+        }
+
+        // The stored row says the document was refused and this parse disagrees: the refusal is immutable, and an event
+        // set beside it would contradict what a reviewer reads. No content of the document is logged either.
+        LogSkipped(logger, payload.ArtifactId, "report_outcome_conflict");
+        return new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "report_outcome_conflict");
     }
 
     /// <summary>

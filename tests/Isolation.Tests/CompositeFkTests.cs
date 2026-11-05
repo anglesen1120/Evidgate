@@ -60,6 +60,16 @@ public sealed class CompositeFkTests : HarnessTest
     /// <summary>The tenant setting the parameterised <c>set_config</c> of the tenant scope writes (00 §5.4.2).</summary>
     private const string TenantSetting = "evidgate.org_id";
 
+    /// <summary>
+    /// Cross-org guarded catalogue keys whose corrupt row this suite cannot generate. <c>report_parser</c> is the
+    /// owner-written catalogue (0075 revokes INSERT from <c>evidgate_app</c>), so the other org's project-owned
+    /// release the corrupt <c>raw_report</c> row must name cannot be created through the application role this
+    /// matrix runs as. <c>RawReportSchemaTests</c> exercises that guard: an owner-seeded org-A release and an org-B
+    /// insert naming it, refused with 23514 <c>raw_report_parser_invisible</c>.
+    /// </summary>
+    private static readonly HashSet<(string Table, string Constraint)> GuardedCatalogueNotGeneratable =
+        [("public.raw_report", "raw_report_parser_fk")];
+
     private readonly ITestOutputHelper _output;
 
     /// <summary>Binds the test to the shared harness fixture (container, migrations, Respawn).</summary>
@@ -110,6 +120,11 @@ public sealed class CompositeFkTests : HarnessTest
         scan.Findings.ShouldBeEmpty(
             $"the tenant set [{coverage}] breaks the composite-FK rules:{Environment.NewLine}{TenantFkScan.Describe(scan.Findings)}");
 
+        // The excluded allowance is only documented, not exercised, while its guard exists: dropping the guard
+        // while keeping the catalogue key would fail here instead of silently leaving the reference unguarded.
+        TenantFkScan.HasCrossOrgGuard("public.raw_report", "raw_report_parser_fk").ShouldBeTrue(
+            "raw_report_parser_fk is excluded from the corruption matrix on the strength of raw_report_parser_visible");
+
         var attempts = 0;
         var structural = new List<string>();
         var rejected = new List<string>();
@@ -120,11 +135,13 @@ public sealed class CompositeFkTests : HarnessTest
             // (`report_parser`, `usage_price`) carries a nullable `org_id` for its platform rows, so a
             // composite key could never match one; a tenant table's key to it is TenantFkScan's documented
             // catalogue allowance. Only the allowance that names a guard on the referencing table can be
-            // exercised here: the corrupt row is built and the guard is what must refuse it.
+            // exercised here: the corrupt row is built and the guard is what must refuse it — except where the
+            // catalogued parent is owner-written, which the exclusion above records.
             var tenantParents = scan.Schema
                 .ForeignKeysOf(table)
                 .Where(foreignKey => scan.TenantTables.Contains(foreignKey.PrincipalTable)
-                    || TenantFkScan.HasCrossOrgGuard(table, foreignKey.Name))
+                    || (TenantFkScan.HasCrossOrgGuard(table, foreignKey.Name)
+                        && !GuardedCatalogueNotGeneratable.Contains((table, foreignKey.Name))))
                 .ToArray();
 
             if (tenantParents.Length == 0)

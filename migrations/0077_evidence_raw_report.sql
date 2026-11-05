@@ -19,11 +19,15 @@
 -- structurally empty, so a refused report can never carry an observed count or a discrepancy list.
 --
 -- DISCREPANCIES: a jsonb array of `{code, count}` objects over the mapper's closed code vocabulary: codes and counts
--- only, never a message body or a case name (PDPL: the raw bytes stay the artifact's, under its retention).
+-- only, never a message body or a case name (PDPL: the raw bytes stay the artifact's, under its retention). Every
+-- element is exactly that pair — a code word and an integer count of at least one — so a free-form document, a
+-- missing member or an extra one is refused by the shape CHECK before it can carry text out of the artifact.
 --
 -- PARSER REFERENCE: `report_parser` carries a null org for a built-in release, so a composite tenant FK on
 -- (org_id, parser_id) could never match one; the reference is the catalogue's own `unique (parser_id, version)` key.
--- The registry is written only by migrations and the owner role, so a tenant cannot register a release a row names.
+-- That key sees the full catalogue, so the FK alone would accept a project-owned release of another org: the
+-- `raw_report_parser_visible` trigger answers that case, reading the catalogue as the caller so row level security
+-- (which hides the foreign row from the tenant, not from the owner) and the explicit org predicate agree.
 --
 -- IMMUTABILITY: for every role. UPDATE and DELETE raise 23514 `raw_report_immutable` from a BEFORE trigger, and the
 -- app role's grants leave it no UPDATE/DELETE/TRUNCATE to attempt (0066/0074 precedent). The trigger is the only
@@ -90,7 +94,19 @@ create table if not exists public.raw_report (
     or (observed_tests = 0 and declared_tests is null and declared_failures is null
         and declared_errors is null and declared_skipped is null and discrepancies = '[]'::jsonb)),
   constraint raw_report_discrepancy_shape_check check (
-    jsonb_typeof(discrepancies) = 'array' and jsonb_array_length(discrepancies) <= 16),
+    jsonb_typeof(discrepancies) = 'array' and jsonb_array_length(discrepancies) <= 16
+    -- Each element is exactly one `{code, count}` object: the element count matches a strict whole-element shape
+    -- match, and twice the element count matches every key/value pair in the array, so a missing member, an extra
+    -- key or a mistyped value leaves one of the two counts short. A jsonpath predicate skips an element it cannot
+    -- read rather than answering for it, which is why the refusal is a count and not a `not exists` test.
+    and jsonb_array_length(discrepancies) = jsonb_array_length(
+      jsonb_path_query_array(
+        discrepancies,
+        'strict $[*] ? (@.type() == "object" && @.code.type() == "string"
+          && @.code like_regex "^[a-z][a-z0-9_]{0,63}$" && @.count.type() == "number"
+          && @.count >= 1 && @.count == @.count.floor())'))
+    and jsonb_array_length(discrepancies) * 2 = jsonb_array_length(
+      jsonb_path_query_array(discrepancies, 'strict $[*] ? (@.type() == "object").keyvalue()'))),
   -- `partial` means at least one discrepancy; `mapped` means none.
   constraint raw_report_partial_check check (
     (outcome = 'mapped' and discrepancies = '[]'::jsonb)
@@ -129,6 +145,40 @@ create trigger raw_report_immutable
   before update or delete on public.raw_report
   for each row execute function evidgate.raw_report_immutable();
 
+-- A project-owned `report_parser` row is visible only inside its own org, but the foreign key above compares the
+-- release key alone, and a foreign key check bypasses row level security. The guard therefore reads the catalogue
+-- as the caller: the tenant's policy hides another org's release, and the owner's backfill policy shows the whole
+-- table to the org predicate. An insert is the only event that can name a release; updates raise `raw_report_immutable`.
+create or replace function evidgate.raw_report_parser_guard() returns trigger
+  language plpgsql
+  security invoker
+  set search_path = ''
+  as $$
+  begin
+    if not exists (
+      select 1
+        from public.report_parser p
+       where p.parser_id = new.parser_id
+         and p.version = new.parser_version
+         and (p.org_id is null or p.org_id = new.org_id))
+    then
+      raise exception 'raw_report_parser_invisible: parser % / % is not a release visible to org %',
+          new.parser_id, new.parser_version, new.org_id
+        using errcode = '23514', constraint = 'raw_report_parser_invisible';
+    end if;
+
+    return new;
+  end
+  $$;
+
+revoke all on function evidgate.raw_report_parser_guard() from public;
+
+drop trigger if exists raw_report_parser_visible on public.raw_report;
+create trigger raw_report_parser_visible
+  before insert on public.raw_report
+  for each row when (new.parser_id is not null)
+  execute function evidgate.raw_report_parser_guard();
+
 alter table public.raw_report enable row level security;
 alter table public.raw_report force row level security;
 
@@ -142,6 +192,9 @@ drop policy if exists raw_report_owner_backfill on public.raw_report;
 create policy raw_report_owner_backfill on public.raw_report
   for all to evidgate_owner using (true) with check (true);
 
+-- Grants: append-only, so the app role reads and inserts and nothing else; UPDATE and DELETE are revoked
+-- explicitly, because the migration role's default privileges would otherwise leave them in place (0066/0074 shape).
+grant select, insert on public.raw_report to evidgate_app;
 revoke update, delete, truncate on public.raw_report from evidgate_app;
 grant select on public.raw_report to evidgate_operator;
 revoke all on public.raw_report from evidgate_worker_sched;

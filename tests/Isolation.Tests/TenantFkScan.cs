@@ -265,15 +265,14 @@ internal static class TenantFkScan
     /// it, and <c>PrincipalColumns</c> is that catalogue's own identity for the reference.
     /// <c>CrossOrgGuarded</c> marks the ones whose guard is a check on the referencing table, so a row naming
     /// another org's catalogue row can be built and refused: <c>usage_ledger_entry</c>'s price reference is the
-    /// trigger <c>usage_ledger_entry_price_visible</c>, which raises 23503 under the foreign key's own name.
-    /// <c>raw_report</c>'s parser reference has no such case to build: it names <c>report_parser</c>'s
-    /// <c>(parser_id, version)</c> release key, and the registry is written only by the migration and the owner
-    /// role (0075), so no tenant can register a release a row names and no other org's row can exist.
+    /// trigger <c>usage_ledger_entry_price_visible</c>, which raises 23503 under the foreign key's own name;
+    /// <c>raw_report</c>'s parser reference is the trigger <c>raw_report_parser_visible</c>, which raises 23514
+    /// <c>raw_report_parser_invisible</c> when the named release is another org's project-owned row.
     /// </summary>
     private static readonly (string Table, string Constraint, string[] PrincipalColumns, bool CrossOrgGuarded)[] CatalogueKeyAllowlist =
     [
         ("public.usage_ledger_entry", "usage_ledger_entry_price_fk", [TenantKeyColumn], true),
-        ("public.raw_report", "raw_report_parser_fk", ["parser_id", "version"], false),
+        ("public.raw_report", "raw_report_parser_fk", ["parser_id", "version"], true),
     ];
 
     /// <summary>True when one of these allowances names a guard that refuses another org's catalogue row.</summary>

@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Evidgate.BuildingBlocks.SharedKernel.Security;
+using Evidgate.Modules.Evidence.Application.Freeze;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 using Microsoft.EntityFrameworkCore;
@@ -32,9 +34,6 @@ internal static class RawReportOutcomes
 /// </summary>
 internal sealed partial class ParseRawReportHandler
 {
-    /// <summary>The longest code word the row's reason CHECK admits.</summary>
-    private const int MaxReasonLength = 64;
-
     /// <summary>The longest producer kind the row's shape CHECK admits.</summary>
     private const int MaxProducerKindLength = 64;
 
@@ -101,6 +100,19 @@ internal sealed partial class ParseRawReportHandler
         """;
 
     /// <summary>
+    /// The stored outcome of the row that already holds this attempt's (artifact, parser release) key. It decides whether
+    /// a parsed attempt may commit after its own insert wrote nothing.
+    /// </summary>
+    private const string StoredOutcomeSql = """
+        select outcome
+        from public.raw_report
+        where org_id = @org_id
+          and artifact_id = @artifact_id
+          and parser_id = @parser_id::text
+          and parser_version = @parser_version::text
+        """;
+
+    /// <summary>
     /// The one insert of a <c>raw_report</c> row. A parsed report's row runs inside the caller's write transaction, after
     /// the events, the attempts and the slot have succeeded, so a rollback or a skipped attempt leaves no row behind; a
     /// refusal's row runs in its own short transaction.
@@ -109,13 +121,51 @@ internal sealed partial class ParseRawReportHandler
     /// <param name="payload">The run, artifact and producer kind.</param>
     /// <param name="report">The row this attempt built.</param>
     /// <param name="cancellationToken">Cancels the insert.</param>
-    private async Task InsertRawReportAsync(
+    /// <returns>True when the row was inserted, false when the key already held one.</returns>
+    private async Task<bool> InsertRawReportAsync(
         Guid orgId,
         ParseRawReportPayload payload,
         RawReportDraft report,
         CancellationToken cancellationToken)
     {
-        await db.ExecuteAsync(InsertRawReportSql, RawReportParameters(orgId, payload, report), cancellationToken)
+        var inserted = await db
+            .ExecuteAsync(InsertRawReportSql, RawReportParameters(orgId, payload, report), cancellationToken)
+            .ConfigureAwait(false);
+
+        return inserted > 0;
+    }
+
+    /// <summary>
+    /// The outcome the row of this (artifact, parser release) key already stores. A conflicting insert waits for the
+    /// transaction that holds the key, so the read sees that row's committed verdict and never a half-written one.
+    /// </summary>
+    /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="artifactId">The report artifact the row hangs off.</param>
+    /// <param name="report">The row this attempt built; its parser pair is the key it shares with the stored row.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The stored outcome, or null when the pair is unresolved or no row holds that key.</returns>
+    private async Task<string?> StoredOutcomeAsync(
+        Guid orgId,
+        Guid artifactId,
+        RawReportDraft report,
+        CancellationToken cancellationToken)
+    {
+        if (report.ParserId is null || report.ParserVersion is null)
+        {
+            return null;
+        }
+
+        return await db
+            .ScalarAsync<string?>(
+                StoredOutcomeSql,
+                new
+                {
+                    org_id = orgId,
+                    artifact_id = artifactId,
+                    parser_id = report.ParserId,
+                    parser_version = report.ParserVersion,
+                },
+                cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -168,6 +218,8 @@ internal sealed partial class ParseRawReportHandler
             return;
         }
 
+        // A row that already holds this key is an earlier verdict: the conflict is a silent no-op, because a refusal may
+        // never overwrite one and a parsed report's row must never be joined by a refusal.
         await InsertRawReportAsync(
                 orgId,
                 payload,
@@ -355,49 +407,18 @@ internal sealed partial class ParseRawReportHandler
     /// <param name="reason">The parse's reason, possibly null or not a code word.</param>
     /// <returns>A word matching the column's <c>^[a-z][a-z0-9_]{0,63}$</c> shape.</returns>
     private static string RefusalReason(string outcome, string? reason) =>
-        reason is not null && IsCodeWord(reason) ? reason : outcome;
+        reason is not null && EvidenceFreeze.IsReasonCode(reason) ? reason : outcome;
 
-    /// <summary>The producer kind column's shape: <c>^[a-z][a-z0-9-]*$</c>, one to 64 characters.</summary>
+    /// <summary>
+    /// The producer kind column's shape, <c>^[a-z][a-z0-9-]*$</c> in one to 64 characters. The shared forward pass
+    /// carries the bounds and the later characters; its first class also admits a digit, which this column does not.
+    /// </summary>
     /// <param name="kind">The kind the report declared.</param>
     /// <returns>True when the registry vocabulary admits the kind.</returns>
-    private static bool IsStorableProducerKind(string kind)
-    {
-        if (kind.Length is 0 or > MaxProducerKindLength || !char.IsAsciiLetterLower(kind[0]))
-        {
-            return false;
-        }
-
-        foreach (var character in kind.AsSpan(1))
-        {
-            if (!char.IsAsciiLetterLower(character) && !char.IsAsciiDigit(character) && character != '-')
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>The column's reason shape, one forward pass and no regex.</summary>
-    /// <param name="value">The candidate word.</param>
-    /// <returns>True when the value matches <c>^[a-z][a-z0-9_]{0,63}$</c>.</returns>
-    private static bool IsCodeWord(string value)
-    {
-        if (value.Length is 0 or > MaxReasonLength || !char.IsAsciiLetterLower(value[0]))
-        {
-            return false;
-        }
-
-        foreach (var character in value.AsSpan(1))
-        {
-            if (!char.IsAsciiLetterLower(character) && !char.IsAsciiDigit(character) && character != '_')
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    private static bool IsStorableProducerKind(string kind) =>
+        kind.Length > 0
+        && char.IsAsciiLetterLower(kind[0])
+        && AsciiShape.IsMatch(kind, 1, MaxProducerKindLength, AsciiShape.LowerAlnum, AsciiShape.LowerAlnumDash);
 
     /// <summary>
     /// The mapper's discrepancy codes grouped into <c>{code, count}</c> objects, in the order the codes first appear and
