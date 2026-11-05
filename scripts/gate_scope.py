@@ -118,7 +118,13 @@ SAFE_ROOT_FILES = frozenset({"package.json", "package-lock.json", ".prettierigno
 SAFE_ROOT_PATTERNS = ("tsconfig*.json", "eslint.config.*", ".prettierrc*")
 # A documentation page a .NET test reads as a rule table, so editing it can fail
 # `test`: prose that a compiled lint asserts on is not prose-only.
-DOCS_FULL_PATHS = frozenset({"docs/security/audit-and-deletion-rule.md"})
+DOCS_FULL_PATHS = frozenset(
+    {
+        "docs/security/alert-rules.md",
+        "docs/security/audit-and-deletion-rule.md",
+        "docs/security/security-event-baseline.md",
+    }
+)
 # ADR pages are resolved by the licence and dependency scans, which read the
 # exception ids: they need the web toolchain, not the .NET SDK.
 DOCS_NO_DOTNET_PREFIXES = ("docs/adr/",)
