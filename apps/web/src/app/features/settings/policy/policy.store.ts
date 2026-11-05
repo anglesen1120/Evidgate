@@ -1,50 +1,7 @@
-// 09.7.1-T4 (plan 09.7.1 §2 AC1/AC4/AC5, §5, §8 S3, §10 T4; COORDINATOR DECISIONS S83 P1–P4):
-// the Settings > Policy tab's state, as a plain Angular signals service — private `signal`s,
-// public `asReadonly()`/`computed`, no writable state escaping the class — shaped exactly like
-// `secrets/secrets.store.ts`, because the workspace does not depend on `@ngrx/signals`.
-//
-// One instance per page (`providers: [PolicyStore]` on the page), because the store owns the
-// cursor of one revision's list and the bodies it has read.
-//
-// Seven rules shape every method:
-//
-// 1. A revision id is the page's only key (S83 P2). `open()` starts from a revision id, learns the
-//    PROJECT from the revision itself (`revision.project_id`, never from the URL or the route
-//    scope), and reads the revision list through that same id. The project's activation and head
-//    revision have their own reads (`policy-reads.ts`), which start once the project is known and
-//    never decide whether the list is shown. An id that is not UUID-shaped is the "no revision
-//    selected" state and requests nothing at all.
-// 2. No existence leak. A revision of a project this session is not in is refused as `not_found` —
-//    the same state a `404`/`403` renders — and nothing else is requested, so the tab cannot be used
-//    to ask whether another project's revision exists.
-// 3. The list is read in pages (00 §9.1, W7). `loadMore()` follows `next_cursor` one page per call,
-//    bounded by {@link MAX_CURSOR_PAGES} and refusing a cursor it already followed — both contract
-//    violations throw a plain `Error`, never a partial list passed off as complete.
-// 4. The head is the server's, and so is the active revision. `headRevisionId()` is the LAST list
-//    answer's `ETag` (unquoted) — the value a publish quotes in `If-Match` — and `activeRevision()`
-//    is the listed row whose `state` is `active`. Neither is ever set optimistically: a publish
-//    changes them only once a list answer says so.
-// 5. Publication checks before it sends (S83 P4). The store refuses locally, with no request, a
-//    caller without `policy:write` (the control is absent from the DOM, so this is defence in
-//    depth), a body that is not a JSON object, and a body over 65 536 UTF-8 bytes — measured on the
-//    COMPACT wire body, never on the pretty-printed text, so indentation cannot cost the user a
-//    revision the server would have accepted (`policy-body-size.ts`); the server's closed schema is
-//    the authority on everything else, so a `422` is surfaced VERBATIM. The textarea's text is a
-//    parameter, never state: no signal, field, URL or log line of this store holds a policy body
-//    (`no-secret-field-in-store` scans store fields for exactly this class of mistake).
-// 6. A `412` is the end of an attempt. The caller gets `conflict` with the current head the server
-//    named, and nothing is retried or resubmitted — the deliberate reload is the user's.
-// 7. The caller gets the publish, the screen gets the refresh. A `created`/`unchanged` answer is
-//    returned as soon as the server confirmed it; re-reading the list is a background read it
-//    neither awaits nor can fail, because a slow or refused list must never cost the user the
-//    revision the server has already stored.
-// 8. Every body read passes the two checks rule 1 states (D1 delta finding; R9). The `412`
-//    envelope's head id is server text and reaches a read without going through `open`, so
-//    `loadBody` applies the same UUID shape check (no request at all when it fails) and refuses a
-//    body whose `project_id` is not the project the READ WAS ASKED FOR, as `not_found` and without
-//    caching it. That project is captured when the call is made, never re-read when the answer
-//    lands (R9): a page that switched project mid-read still gets the legitimate body of the
-//    project that asked, and a call made with nothing on screen compares against nothing.
+// The Settings > Policy tab's state: private `signal`s with readonly/computed views, one instance
+// per page because the store owns one revision list's cursor. A revision id is the only key: the
+// project comes from the revision itself, and a revision this session cannot see is `not_found`,
+// the state a `404` renders, so the tab cannot prove another project's revision exists.
 
 import { computed, inject, Injectable, signal } from '@angular/core';
 import type {
@@ -55,17 +12,20 @@ import type {
 
 import { MAX_CURSOR_PAGES } from '../../../core/data/identity-data.service';
 import { PolicyDataService, type PolicyRevisionPage } from '../../../core/data/policy-data.service';
-import {
-  ApiRequestError,
-  isApiRequestError,
-  type ApiError,
-  type ApiErrorKind,
-} from '../../../core/http/api-error';
+import { ApiRequestError, isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { settledRead } from '../../../core/http/settled-read';
 import { SessionStore } from '../../../core/session/session.store';
-import { conflictFromError } from '../../../shared/ui/conflict/conflict-details';
 import { POLICY_BODY_MAX_BYTES, policyBodyBytes } from './policy-body-size';
 import { PolicyProjectReads } from './policy-reads';
+import { PolicyBodyCache } from './policy-store-bodies';
+import {
+  MALFORMED_REVISION_FAILURE,
+  NO_SCOPE_FAILURE,
+  NO_WRITE_FAILURE,
+  classifyPublishFailure,
+  classifyReadFailure,
+  parsePolicyObject,
+} from './policy-store-failures';
 
 /** The tab's read state: `idle` before a revision is opened, `not_found` for every refusal. */
 export type PolicyPhase = 'idle' | 'loading' | 'ready' | 'error' | 'not_found';
@@ -93,141 +53,11 @@ export type PublishResult =
 const NO_REVISIONS: readonly PolicyRevisionSummaryDto[] = [];
 
 /**
- * How many revision bodies the diff and the publish seed may hold at once. The oldest read is
- * dropped, because a body is only needed while it is on screen and a project's history is unbounded.
- */
-const MAX_CACHED_BODIES = 8;
-
-/**
  * The shape of a revision id: five hex groups, `8-4-4-4-12`, any version. Shape only — the server
  * decides existence and access — which is what makes a stray URL parameter cost no request and
  * reveal nothing.
  */
 const REVISION_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * The refusals that are indistinguishable from "there is no such revision": a `404` (00 §9.2 also
- * answers it for another tenant's or another project's id) and a `403` for a reason other than the
- * antiforgery token. Both become the same `not_found` phase, so the tab cannot tell an id it may not
- * see from an id that does not exist.
- *
- * `csrf_failed` is deliberately NOT one of them (review finding F2): it says nothing about whether
- * the revision exists — it says the antiforgery token was refused — so folding it into `not_found`
- * would hide a fault the user can act on (reload and retry) behind "there is nothing here". It is
- * `error` with the server's own `ApiError`, like every other refusal that is not about existence.
- */
-const REFUSAL_KINDS: readonly ApiErrorKind[] = ['not_found', 'forbidden'];
-
-/** No fields to compare in a policy conflict: the dialog learns the head, not a field snapshot. */
-const NO_CONFLICT_FIELDS: Readonly<Record<string, string>> = {};
-
-/**
- * The typed failure a publish reports when the rejection is not the server's answer — an adapter
- * cancellation or a bug. It is the store's own copy (never text taken from a thrown value, which may
- * carry request data it must not surface) and it claims nothing that was not observed: a request
- * whose outcome is unknown is not retried automatically, because the head may have moved.
- */
-const UNRESOLVED_FAILURE: ApiError = {
-  kind: 'unexpected',
-  status: 0,
-  code: 'policy_publish_unresolved',
-  message:
-    'The request did not complete, so nothing was confirmed; reload the revisions before publishing again.',
-  requestId: null,
-  retryable: false,
-  details: [],
-  retryAfterSeconds: null,
-};
-
-/**
- * The typed failure a publish reports when there is no project to publish to. The page cannot
- * reach this (the publish control only appears once a list answer named a head), so it exists to
- * keep the "nothing was sent" promise honest rather than to be rendered.
- */
-const NO_SCOPE_FAILURE: ApiError = {
-  kind: 'unexpected',
-  status: 0,
-  code: 'policy_scope_unavailable',
-  message: 'No policy revision is open, so nothing was sent.',
-  requestId: null,
-  retryable: false,
-  details: [],
-  retryAfterSeconds: null,
-};
-
-/**
- * The typed failure a publish reports when this session does not hold `policy:write` (review finding
- * F5). The publish control is absent from the DOM without the code (S83 P1), so the page cannot
- * reach this; it is defence in depth, the same way a route repeats an authorization rule its UI
- * already hides. Nothing is sent, and the server's own refusal is never pre-empted — the request
- * that could have been legitimate is simply not made.
- */
-const NO_WRITE_FAILURE: ApiError = {
-  kind: 'forbidden',
-  status: 0,
-  code: 'policy_write_forbidden',
-  message: 'This session may not publish policy revisions, so nothing was sent.',
-  requestId: null,
-  retryable: false,
-  details: [],
-  retryAfterSeconds: null,
-};
-
-/**
- * The typed refusal a body read answers with NO request at all (delta finding D1): the id is not
- * revision-shaped, so there is nothing to ask the server about. The `412` envelope's head id is
- * server text, and it is the one id in this tab that reaches a read without having passed the
- * UUID check {@link PolicyStore.open} applies to the page's own key; refusing it here keeps that
- * one entry point to the same rule. `not_found` is the kind because that is the state both callers
- * already render for "there is no such revision", so a hostile answer cannot open a state the tab
- * has no copy for.
- */
-const MALFORMED_REVISION_FAILURE: ApiError = {
-  kind: 'not_found',
-  status: 0,
-  code: 'policy_revision_id_invalid',
-  message: 'That is not a policy revision id, so no revision was read.',
-  requestId: null,
-  retryable: false,
-  details: [],
-  retryAfterSeconds: null,
-};
-
-/**
- * The typed refusal a body read answers with when the revision it DID read belongs to another
- * project than the one THE READ WAS ASKED FOR (delta finding D1; the captured project is R9).
- * Exactly the same state a `404` renders ({@link REFUSAL_KINDS}), so a body cannot be used to learn
- * that an id of another project exists, and such an answer is never cached: it belongs to a view
- * this store does not own.
- */
-const FOREIGN_REVISION_FAILURE: ApiError = {
-  kind: 'not_found',
-  status: 0,
-  code: 'policy_revision_not_found',
-  message: 'The policy revision was not found in this project.',
-  requestId: null,
-  retryable: false,
-  details: [],
-  retryAfterSeconds: null,
-};
-
-/**
- * The body a publish sends: the textarea's text parsed, or `null` when it is not a JSON OBJECT.
- * An array and a scalar are refused with the same `invalid_json`, because the wire body is a closed
- * object schema and sending either would only spend a request to learn that.
- */
-function parsePolicyObject(bodyText: string): Record<string, unknown> | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(bodyText);
-  } catch {
-    return null;
-  }
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed as Record<string, unknown>;
-}
 
 @Injectable()
 export class PolicyStore {
@@ -260,11 +90,9 @@ export class PolicyStore {
    */
   private anchorRevisionId: string | null = null;
   /**
-   * The last revision id this store was ASKED to open, shape-checked, kept even when that open
-   * failed before it could read the list (review finding F6). It is what {@link reload} retries from
-   * when there is no anchor yet — a `503` on the revision read leaves nothing to re-read the list
-   * through, and a reload that silently did nothing would strand the page's own retry. `null` until
-   * an id is opened, so a reload before any open stays the no-op it was.
+   * The last revision id this store was ASKED to open, kept even when that open failed before it
+   * could read the list: it is what {@link reload} retries from, so a failed open does not strand
+   * the page's own retry.
    */
   private lastRequestedRevisionId: string | null = null;
   /** The cursors this store already asked for, so a repeated one is an error, not a loop. */
@@ -273,19 +101,11 @@ export class PolicyStore {
   private pagesRead = 1;
   /** Bumped by every read; a read of an older generation never writes state. */
   private generation = 0;
-  /**
-   * The bodies read for the diff and the publish seed, oldest first so the entry to drop is the
-   * first key. A body is immutable once stored, so a cached one is never stale.
-   */
-  private readonly bodyCache = new Map<string, PolicyRevisionDto>();
-  /**
-   * The body reads still in flight, keyed by revision id (review finding F3). The diff and the publish
-   * dialog can ask for the same revision in the same tick — the dialog seeds itself from the row the
-   * diff is already measuring — and a second `GET` for an immutable revision would be pure waste. A
-   * later caller joins the read already out instead of starting one of its own; the entry is dropped
-   * the moment that read settles, so a failure is retried on the next call rather than replayed.
-   */
-  private readonly bodyReads = new Map<string, Promise<PolicyRevisionDto>>();
+  /** The bodies the diff and the publish seed share, and the reads still out for them. */
+  private readonly bodies = new PolicyBodyCache(
+    (revisionId) => this.data.getRevision(revisionId),
+    (generation) => generation === this.generation,
+  );
 
   /** The project's revisions, ascending as served, as many cursor pages as were followed. */
   readonly revisions = this.revisionsSignal.asReadonly();
@@ -318,16 +138,9 @@ export class PolicyStore {
   readonly publishing = this.publishingSignal.asReadonly();
 
   /**
-   * Opens the named revision: reads it, refuses it unless its project is one this session is in,
-   * then reads that project's first revision page.
-   *
-   * An id that is not UUID-shaped clears the tab to `idle` (the "no revision selected" state) and
-   * requests nothing. A refusal — `404`, `403`, or a revision of a project this session does not
-   * have — leaves the tab in `not_found` with no second request and no way to tell the three apart.
-   *
-   * Never rejects: the page calls `void store.open(...)` from a click handler and an effect, so a
-   * rejection would be an unhandled one. A cancellation or a bug leaves the typed error `null`,
-   * which the page renders as its generic error state rather than as a message the server never sent.
+   * Opens the named revision, refuses it unless its project is one this session is in, then reads
+   * that project's first revision page. An id that is not UUID-shaped requests nothing, and every
+   * refusal is `not_found`, so the tab cannot tell the three refusals apart. Never rejects.
    */
   async open(revisionId: string): Promise<void> {
     const id = revisionId.trim();
@@ -336,7 +149,7 @@ export class PolicyStore {
       return;
     }
 
-    // The reload retries from here when this open never reached the list (F6).
+    // A reload of a store with no anchor retries from here.
     this.lastRequestedRevisionId = id;
     const generation = ++this.generation;
     this.clearState();
@@ -366,13 +179,9 @@ export class PolicyStore {
   }
 
   /**
-   * Follows `next_cursor` once and appends the page, so the screen keeps the rows it already shows
-   * while the next one is on its way (00 §9.1 keyset cursor; never "load all").
-   *
-   * A cursor already followed, or a {@link MAX_CURSOR_PAGES}-th page that still names another one,
-   * is a contract violation and throws a plain `Error` — the same two refusals as
-   * `IdentityDataService`, so a broken cursor costs visibility of the bug, not a hung tab. A typed
-   * server refusal is not a bug: it becomes `loadError` and the rows already read stay on screen.
+   * Follows `next_cursor` once and appends the page, so the rows already shown stay while the next
+   * one is on its way. A repeated cursor or a page past {@link MAX_CURSOR_PAGES} is a contract
+   * violation and throws; a typed refusal becomes `loadError` and keeps the rows.
    */
   async loadMore(): Promise<void> {
     const anchor = this.anchorRevisionId;
@@ -414,20 +223,14 @@ export class PolicyStore {
     // Every page of one list names the same head; taking it from the newest answer keeps the
     // `If-Match` source honest if a publish committed elsewhere in between.
     this.headRevisionIdSignal.set(page.headRevisionId);
-    // A page that arrived IS the answer the earlier failure withheld (F7): the alert a refused page
-    // raised must not outlive the read that succeeded.
+    // A page that arrived is the answer an earlier refusal withheld: its alert must not outlive it.
     this.loadErrorSignal.set(null);
   }
 
   /**
-   * Re-reads the list from its first page — the explicit reload a `412` conflict dialog offers, and
-   * the page's own retry. It also restarts the project reads, so one control retries every read the
-   * summary renders. It settles `error`/`not_found` on a refusal (so the dialog's reload path
-   * sees the failure) and never rejects.
-   *
-   * With no anchor there is no list to re-read: the open that was meant to set one failed before the
-   * list (a `503` on the revision read, say), so this retries that open from the id it was asked for
-   * (F6). A store that was never opened has nothing to retry and stays the no-op it was.
+   * Re-reads the list from its first page — the reload a `412` conflict dialog offers and the page's
+   * own retry — and restarts the project reads with it. With no anchor it retries the open that
+   * never reached the list. Never rejects.
    */
   async reload(): Promise<void> {
     const anchor = this.anchorRevisionId;
@@ -446,127 +249,26 @@ export class PolicyStore {
   }
 
   /**
-   * One revision with its body, cached for the diff and the publish seed: at most
-   * {@link MAX_CACHED_BODIES} bodies, the oldest dropped. A cached body is returned without a
-   * request (a stored revision is immutable) and re-inserted so it counts as the newest.
-   *
-   * Two checks run BEFORE a body is handed to a caller (delta finding D1, refined by R9). The id
-   * must be revision-shaped ({@link REVISION_ID_SHAPE}), exactly as {@link open} requires of the
-   * page's own key: a body read is the one path a `412` envelope's head id reaches, so a malformed
-   * answer is refused with no request at all. And a body the server answers for a revision of
-   * ANOTHER project than the one the READ WAS ASKED FOR is refused like a missing one and never
-   * cached — the same existence promise {@link open} keeps.
-   *
-   * The project is captured when the CALL is made, before anything is read (R9), and the answer is
-   * compared against that captured value — never against the signal at arrival. The page may switch
-   * project while the answer is on its way, and the body of the project that asked is still that
-   * caller's; comparing at arrival refused exactly that legitimate body, and a reset or a switch in
-   * the same window skipped the check altogether. A call made while NOTHING is open captures
-   * nothing and so compares against nothing: there is no project to compare with, and the tab asks
-   * for a body only after a list already named the project. A cached body passes the same check on
-   * every call, against the project that call is for, so the cache is never a way around it.
-   *
-   * Concurrent calls for the same id share ONE read ({@link bodyReads}): the dialog and the diff
-   * often ask in the same tick, and the second request would only repeat the first. Each caller
-   * still has its own captured project checked, because the joined call was asked for it too. A
-   * read that settles after a {@link reset} or after the page moved to another revision still
-   * answers its own caller — it was asked for exactly that revision — but its body is NOT cached:
-   * the cache belongs to the view that is gone.
-   *
-   * REJECTS with the server's `ApiRequestError` when the read is refused, and with this store's own
-   * typed refusals for the two cases above: both callers (the diff and the publish dialog) have a
-   * failure state of their own, and swallowing the refusal here would leave them seeding an editor
-   * with nothing.
+   * One revision with its body, cached for the diff and the publish seed. The id must be
+   * revision-shaped before any request: a `412` envelope's head id is server text and reaches this
+   * one path without the page's own check. REJECTS with the server's own failure.
    */
   async loadBody(revisionId: string): Promise<PolicyRevisionDto> {
     const id = revisionId.trim();
     if (!REVISION_ID_SHAPE.test(id)) {
-      // No request: the id is the server's own text in the `412` case, and it is not a revision id.
       throw new ApiRequestError(MALFORMED_REVISION_FAILURE);
     }
-    // R9: the project THIS CALL is for, captured before anything is read — never the project on
-    // screen when an answer happens to land. A page that switches project mid-read still gets the
-    // legitimate body of the project that asked, and a call made with nothing open has nothing to
-    // compare against (`null`).
-    const expectedProjectId = this.projectIdSignal();
-    const cached = this.bodyCache.get(id);
-    if (cached !== undefined) {
-      const body = this.bodyOfRequestedProject(cached, expectedProjectId);
-      this.bodyCache.delete(id);
-      this.bodyCache.set(id, cached);
-      return body;
-    }
-    const shared = this.bodyReads.get(id);
-    if (shared !== undefined) {
-      // The joined caller was asked for this revision too, so its own captured project decides.
-      return shared.then((revision) => this.bodyOfRequestedProject(revision, expectedProjectId));
-    }
-    const generation = this.generation;
-    const read = this.data.getRevision(id).then((revision) => {
-      const body = this.bodyOfRequestedProject(revision, expectedProjectId);
-      if (generation === this.generation) {
-        this.cacheBody(revision);
-      }
-      return body;
-    });
-    this.bodyReads.set(id, read);
-    try {
-      return await read;
-    } finally {
-      // Only this read's own entry: a later call may already have started the next one.
-      if (this.bodyReads.get(id) === read) {
-        this.bodyReads.delete(id);
-      }
-    }
+    return this.bodies.load(id, this.projectIdSignal(), this.generation);
   }
 
   /**
-   * The check rule 8 states, applied to ONE body (delta finding D1, refined by R9).
+   * Publishes the textarea's text. Three local refusals send nothing: no `policy:write`, text that
+   * is not a JSON object, and a COMPACT wire body over 65 536 UTF-8 bytes, so indentation the
+   * editor shows cannot cost a body the server would accept. A second call in flight is `busy`.
    *
-   * `expectedProjectId` is the project the CALL was made for, captured by {@link loadBody} before
-   * anything is read: a body of any other project is refused as `not_found` — the state a `404`
-   * renders — so a hostile `412` head id, or a buggy answer, can neither reach the diff nor be
-   * probed for. `null` means the call was made with NOTHING on screen, so there is no project to
-   * compare against and the answer is its caller's.
-   *
-   * Comparing against the signal at ARRIVAL was the R9 bug: a page that switched project while the
-   * read was out refused the legitimate body of the project that asked, and a reset in that window
-   * dropped the check entirely because the signal had gone back to `null`.
-   */
-  private bodyOfRequestedProject(
-    revision: PolicyRevisionDto,
-    expectedProjectId: string | null,
-  ): PolicyRevisionDto {
-    if (expectedProjectId !== null && revision.project_id !== expectedProjectId) {
-      throw new ApiRequestError(FOREIGN_REVISION_FAILURE);
-    }
-    return revision;
-  }
-
-  /**
-   * Publishes the textarea's text (`POST /v1/projects/{p}/policies`, AC1/AC4/AC5).
-   *
-   * The local checks run before the request, in this order: a caller without `policy:write` is
-   * `refused` with this store's own `policy_write_forbidden` (F5 — the control is absent from the DOM
-   * already, so this repeat of the rule costs nothing and sends nothing); text that is not a JSON
-   * object is `invalid_json`; and a WIRE body over 65 536 UTF-8 bytes is `too_large`, carrying that
-   * size so the page can say how far over it is. The size is the compact body's, never the
-   * pretty-printed text's (F1): indentation is what the editor shows, and refusing a body the server
-   * accepts would be a bug of this tab's own making. None of the three sends anything. A second call
-   * while one is in flight is `busy` — the route is not replayable in the way the reveal routes are,
-   * and one click must not append two revisions.
-   *
-   * `If-Match` is {@link headRevisionId}: the head the LAST list answer named. A `412` answers
-   * `conflict` with the head the server named and is NEVER retried — the caller opens the shared
-   * conflict dialog, and only the user's explicit reload can move the attempt forward. Any other
-   * refusal (a `422`, a `413`, a `429`, a transport failure, a cancellation) is `refused` with the
-   * server's own error object, verbatim.
-   *
-   * On `created`/`unchanged` the answer is returned FIRST and the list re-read behind it, without
-   * being awaited and without being able to fail this call: the revision exists either way, and the
-   * head the screen shows must come from a server answer, never from this optimistic moment.
-   *
-   * Never rejects: the dialog awaits it from a click handler.
+   * `If-Match` is the head the last list answer named. A `412` answers `conflict` and is never
+   * retried; any other refusal is `refused` with the server's own error. A stored answer returns
+   * before the list is re-read behind it, and a refusal of that re-read cannot fail this call.
    */
   async publish(bodyText: string): Promise<PublishResult> {
     if (this.publishingSignal()) {
@@ -584,11 +286,8 @@ export class PolicyStore {
     if (body === null) {
       return { kind: 'invalid_json' };
     }
-    // What the request would carry: the compact document, not the indented text on screen (F1). The
-    // cap is declared in UTF-8 bytes, so a multi-byte character counts as every byte it occupies.
-    // `null` is "no measurable wire body": the text is not JSON, or it is JSON the engine refuses to
-    // write compactly (a pathological body, D2). Either way nothing is sent — refusing with the
-    // no-body answer is the honest one, because a size invented for an unmeasurable body would be.
+    // The size is the compact wire body's, never the indented text: the cap counts UTF-8 bytes, so
+    // a character costs every byte it occupies. `null` is no measurable body, which sends nothing.
     const bytes = policyBodyBytes(bodyText);
     if (bytes === null) {
       return { kind: 'invalid_json' };
@@ -617,7 +316,7 @@ export class PolicyStore {
       }
       return answer;
     } catch (error: unknown) {
-      return this.publishFailure(error);
+      return classifyPublishFailure(error);
     } finally {
       this.publishingSignal.set(false);
     }
@@ -643,11 +342,9 @@ export class PolicyStore {
   reset(): void {
     this.generation += 1;
     this.clearState();
-    this.bodyCache.clear();
-    // The in-flight reads are abandoned with the view: a later call starts its own, which caches for
-    // the view that exists (the abandoned one only answers the caller that asked before the reset).
-    this.bodyReads.clear();
-    // Nothing is open any more, so a reload has nothing to retry (F6).
+    // The bodies and their in-flight reads belong to the view that is gone; an abandoned read still
+    // answers its own caller but caches nothing.
+    this.bodies.clear();
     this.lastRequestedRevisionId = null;
     this.phaseSignal.set('idle');
   }
@@ -668,11 +365,9 @@ export class PolicyStore {
       return;
     }
     if (!read.ok) {
-      // A background refresh is not the caller's failure, and it must not cost the revision the
-      // server just stored: the phase and the rows stay exactly as they are. But its refusal is not
-      // nobody's either (F4) — the screen still shows a head that is no longer true, so the server's
-      // own error is surfaced through the page's alert, without touching `phase` or the rows. The
-      // next read that succeeds clears it.
+      // A background refresh must not cost the revision the server stored, and the rows stay as
+      // they are; its refusal still goes to the page's alert, because the screen shows a head that
+      // is no longer true. The next read that succeeds clears it.
       if (foreground) {
         this.settleFailure(read.error);
       } else if (isApiRequestError(read.error)) {
@@ -693,55 +388,13 @@ export class PolicyStore {
     this.phaseSignal.set('ready');
   }
 
-  /** Stores one read body as the newest, dropping the oldest read past {@link MAX_CACHED_BODIES}. */
-  private cacheBody(revision: PolicyRevisionDto): void {
-    this.bodyCache.delete(revision.id);
-    this.bodyCache.set(revision.id, revision);
-    while (this.bodyCache.size > MAX_CACHED_BODIES) {
-      const oldest = this.bodyCache.keys().next();
-      if (oldest.done === true) {
-        break;
-      }
-      this.bodyCache.delete(oldest.value);
-    }
-  }
-
-  /**
-   * A read of the revision or of its list failed: a refusal is the same `not_found` state as an
-   * unknown id, anything else the server said is `error` with its own message, and a rejection that
-   * is not the server's answer is `error` with no copy at all (the page then renders its generic
-   * failure). Both reads classify identically on purpose: a `404` on either route must not tell the
-   * user which of the two objects was missing.
-   */
+  /** Writes what one failed read means: `not_found`, or `error` with the server's own copy. */
   private settleFailure(error: unknown): void {
-    if (!isApiRequestError(error)) {
-      this.phaseSignal.set('error');
-      return;
+    const failure = classifyReadFailure(error);
+    if (failure.error !== null) {
+      this.loadErrorSignal.set(failure.error);
     }
-    if (REFUSAL_KINDS.includes(error.error.kind)) {
-      this.phaseSignal.set('not_found');
-      return;
-    }
-    this.loadErrorSignal.set(error.error);
-    this.phaseSignal.set('error');
-  }
-
-  /** One publish rejection, classified into the two kinds a caller acts on differently. */
-  private publishFailure(error: unknown): PublishResult {
-    if (!isApiRequestError(error)) {
-      return { kind: 'refused', error: UNRESOLVED_FAILURE };
-    }
-    const failure = error.error;
-    if (failure.kind === 'precondition_failed') {
-      // The server named the current head in `details`; the dialog shows it and offers a reload.
-      return {
-        kind: 'conflict',
-        error: failure,
-        currentRevisionId: conflictFromError(failure, NO_CONFLICT_FIELDS, NO_CONFLICT_FIELDS)
-          .currentRevision,
-      };
-    }
-    return { kind: 'refused', error: failure };
+    this.phaseSignal.set(failure.notFound ? 'not_found' : 'error');
   }
 
   /**
