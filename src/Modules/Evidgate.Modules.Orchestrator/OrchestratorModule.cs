@@ -87,6 +87,15 @@ internal static class OrchestratorModule
         // registers it (01.5.1 §11), so this line is what makes the rows finalize already queued claimable.
         services.AddTaskHandler<RunReconcilePayload, ReconcileRunTaskHandler>();
 
+        // The cancel route writes its kill row straight onto the caller's transaction because an outbox row carries no
+        // due time; the writer needs only the app-role data source, so the Api composes it without the Worker's queue.
+        services.TryAddSingleton<ITaskQueueWriter, TaskQueueWriter>();
+
+        // The forced kill of an accepted cancel, due at the request row's kill_at. Registered in both hosts like every
+        // module piece; only the Worker runs a consumer, and a task_type is claimed exactly while a handler registers it,
+        // so this line is what makes the rows a cancel queues claimable.
+        services.AddTaskHandler<CancelKillPayload, CancelKillTaskHandler>();
+
         // The collection-deadline sweep, and the schedule that fires it: a run is otherwise reconciled only by the
         // finalize that closed its last producer slot, so a run whose last shard never closes would never be
         // attempted at all. The handler only enqueues the trigger above; registering it in both hosts is what makes

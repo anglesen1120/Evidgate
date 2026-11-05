@@ -84,11 +84,14 @@ public sealed partial class OutboxDispatcher : IDisposable
             unit: "{row}",
             description: OutboxDispatchMetrics.UndispatchedDescription);
 
-        // Routing is a deployment list; duplicate task_type entries are rejected
-        // by options validation, so the parallel arrays here cannot disagree on
-        // which queue a type lands in.
-        _routeTaskTypes = _options.QueueRoutes.Select(route => route.TaskType).ToArray();
-        _routeQueues = _options.QueueRoutes.Select(route => route.Queue).ToArray();
+        // Routing is a deployment list, and the rule that applies it is stated once
+        // (<see cref="TaskQueueRouting"/>): duplicate task_type entries are rejected by
+        // options validation, so the parallel arrays here cannot disagree on which queue
+        // a type lands in, and a producer that resolves a type for itself — the Api's
+        // run-cancel kill writes its row without this dispatcher — cannot either.
+        var routes = TaskQueueRouting.Routes(_options);
+        _routeTaskTypes = routes.TaskTypes;
+        _routeQueues = routes.Queues;
     }
 
     /// <summary>

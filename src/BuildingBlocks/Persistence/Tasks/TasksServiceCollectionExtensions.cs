@@ -35,34 +35,7 @@ public static class TasksServiceCollectionExtensions
         // queue without persistence still resolves it through ISecretProvider.
         services.AddEvidgateSecrets(configuration);
 
-        services
-            .AddOptions<TasksOptions>()
-            .Bind(configuration.GetSection(TasksOptions.SectionName))
-            .ValidateDataAnnotations()
-            .Validate(
-                options => options.Queues.All(queue => !string.IsNullOrWhiteSpace(queue.Name) && queue.Name.Length <= 64),
-                "every EVIDGATE__TASKS__QUEUES__*__NAME must be a non-empty queue name of at most 64 characters")
-            // ValidateDataAnnotations never looks inside a list, so the per-queue
-            // [Range] is dead here and a zero value stopped the Worker instead of the
-            // boot. The numbers repeat it because check-env-matrix.mjs reads them there.
-            .Validate(
-                options => options.Queues.All(queue => queue.Concurrency >= 1 && queue.Concurrency <= 64),
-                "EVIDGATE__TASKS__QUEUES__*__CONCURRENCY must be between 1 and 64")
-            .Validate(
-                options => options.BackoffMaxSeconds >= options.BackoffBaseSeconds,
-                "EVIDGATE__TASKS__BACKOFFMAXSECONDS must be at least EVIDGATE__TASKS__BACKOFFBASESECONDS")
-            .Validate(
-                options => options.QueueRoutes.All(route =>
-                    !string.IsNullOrWhiteSpace(route.TaskType) && route.TaskType.Length <= 128
-                    && !string.IsNullOrWhiteSpace(route.Queue) && route.Queue.Length <= 64),
-                "every EVIDGATE__TASKS__QUEUEROUTES__* entry needs a non-empty TASKTYPE (≤128 characters) and QUEUE (≤64 characters)")
-            .Validate(
-                options => options.QueueRoutes.Select(route => route.TaskType).Distinct(StringComparer.Ordinal).Count() == options.QueueRoutes.Count,
-                "EVIDGATE__TASKS__QUEUEROUTES__*__TASKTYPE must be unique — a task_type cannot dispatch to two queues")
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.DispatchDefaultQueue) && options.DispatchDefaultQueue.Length <= 64,
-                "EVIDGATE__TASKS__DISPATCHDEFAULTQUEUE must be a non-empty queue name of at most 64 characters")
-            .ValidateOnStart();
+        services.AddEvidgateTaskOptions(configuration);
 
         // The consumer opens the tenant scope of a tenant task from the row's
         // org_id (00 §5.4.2 covers a task exactly as it covers a request), so the
@@ -108,6 +81,54 @@ public static class TasksServiceCollectionExtensions
         services.AddTaskSchedule(AuthoringChangeSweeps.Purge);
         services.AddTaskSchedule(EvidgateSweeps.TaskSweep);
         services.AddTaskSchedule(Audit.AuditSweeps.VerifyChain);
+
+        return services;
+    }
+
+    /// <summary>
+    /// Binds and validates the <c>EVIDGATE__TASKS__*</c> group — the queues, the routes and the default queue — without
+    /// registering the queue's machinery.
+    /// </summary>
+    /// <remarks>
+    /// A Worker composes <see cref="AddEvidgateTasks"/>; a host that only writes a task row reads the same routing decision
+    /// the Worker consumes, and binding nothing there would write into <c>default</c> while the deployment polls a route.
+    /// </remarks>
+    /// <param name="services">The host's service collection.</param>
+    /// <param name="configuration">The host's configuration; the same environment the Worker reads.</param>
+    /// <returns>The same collection, for chaining.</returns>
+    public static IServiceCollection AddEvidgateTaskOptions(this IServiceCollection services, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services
+            .AddOptions<TasksOptions>()
+            .Bind(configuration.GetSection(TasksOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(
+                options => options.Queues.All(queue => !string.IsNullOrWhiteSpace(queue.Name) && queue.Name.Length <= 64),
+                "every EVIDGATE__TASKS__QUEUES__*__NAME must be a non-empty queue name of at most 64 characters")
+            // ValidateDataAnnotations never looks inside a list, so the per-queue
+            // [Range] is dead here and a zero value stopped the Worker instead of the
+            // boot. The numbers repeat it because check-env-matrix.mjs reads them there.
+            .Validate(
+                options => options.Queues.All(queue => queue.Concurrency >= 1 && queue.Concurrency <= 64),
+                "EVIDGATE__TASKS__QUEUES__*__CONCURRENCY must be between 1 and 64")
+            .Validate(
+                options => options.BackoffMaxSeconds >= options.BackoffBaseSeconds,
+                "EVIDGATE__TASKS__BACKOFFMAXSECONDS must be at least EVIDGATE__TASKS__BACKOFFBASESECONDS")
+            .Validate(
+                options => options.QueueRoutes.All(route =>
+                    !string.IsNullOrWhiteSpace(route.TaskType) && route.TaskType.Length <= 128
+                    && !string.IsNullOrWhiteSpace(route.Queue) && route.Queue.Length <= 64),
+                "every EVIDGATE__TASKS__QUEUEROUTES__* entry needs a non-empty TASKTYPE (≤128 characters) and QUEUE (≤64 characters)")
+            .Validate(
+                options => options.QueueRoutes.Select(route => route.TaskType).Distinct(StringComparer.Ordinal).Count() == options.QueueRoutes.Count,
+                "EVIDGATE__TASKS__QUEUEROUTES__*__TASKTYPE must be unique — a task_type cannot dispatch to two queues")
+            .Validate(
+                options => !string.IsNullOrWhiteSpace(options.DispatchDefaultQueue) && options.DispatchDefaultQueue.Length <= 64,
+                "EVIDGATE__TASKS__DISPATCHDEFAULTQUEUE must be a non-empty queue name of at most 64 characters")
+            .ValidateOnStart();
 
         return services;
     }

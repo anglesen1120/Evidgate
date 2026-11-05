@@ -47,6 +47,8 @@ public sealed class OptionsValidationTests
             new Dictionary<string, string>
             {
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
+                ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
                 ["EVIDGATE__WORKER__HEALTHPORT"] = "abc",
                 [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             });
@@ -67,6 +69,8 @@ public sealed class OptionsValidationTests
             new Dictionary<string, string>
             {
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
+                ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
                 ["EVIDGATE__WORKER__HEALTHPORT"] = HostLocator.FreePort().ToString(CultureInfo.InvariantCulture),
                 ["EVIDGATE__WORKER__HEALTHADDRESS"] = "localhost",
                 [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
@@ -88,6 +92,8 @@ public sealed class OptionsValidationTests
             {
                 ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{HostLocator.FreePort()}",
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
+                ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
                 ["EVIDGATE__TELEMETRY__OTLPENDPOINT"] = "not a url",
                 [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             });
@@ -109,6 +115,8 @@ public sealed class OptionsValidationTests
             {
                 ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{HostLocator.FreePort()}",
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
+                ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
                 ["EVIDGATE__TELEMETRY__SAMPLERATIO"] = "1.5",
                 [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             });
@@ -117,6 +125,48 @@ public sealed class OptionsValidationTests
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("Configuration invalid:", output, StringComparison.Ordinal);
         Assert.Contains("SAMPLERATIO", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("Unhandled exception", output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The run-cancel windows carry no option default, so a deployment that states neither, states zero or a negative
+    /// window, or inverts the pair must stop at boot: those two deadlines are immutable on the request row once an
+    /// operator has accepted a cancel.
+    /// </summary>
+    /// <param name="softStop">The soft-stop window as the environment sets it, or null to leave the key out.</param>
+    /// <param name="kill">The kill window as the environment sets it, or null to leave the key out.</param>
+    /// <param name="named">The key the refusal must name.</param>
+    [Theory]
+    [InlineData(null, "00:02:00", "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY")]
+    [InlineData("00:00:30", null, "EVIDGATE__RUNS__CANCEL__KILLDELAY")]
+    [InlineData("00:00:00", "00:02:00", "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY")]
+    [InlineData("-00:00:30", "00:02:00", "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY")]
+    [InlineData("00:02:00", "00:00:30", "EVIDGATE__RUNS__CANCEL__KILLDELAY")]
+    public async Task Invalid_Cancel_Window_Fails_Startup_Cleanly(string? softStop, string? kill, string named)
+    {
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{HostLocator.FreePort()}",
+            ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+            [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
+        };
+        if (softStop is not null)
+        {
+            environment["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = softStop;
+        }
+
+        if (kill is not null)
+        {
+            environment["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = kill;
+        }
+
+        var result = await RunUntilExitAsync(HostLocator.AppHost("Evidgate.Api"), environment);
+
+        var output = result.Stdout + result.Stderr;
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Configuration invalid:", output, StringComparison.Ordinal);
+        Assert.Contains(named, output, StringComparison.Ordinal);
         Assert.DoesNotContain("Unhandled exception", output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
     }

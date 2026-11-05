@@ -185,5 +185,7 @@ public static class WorkerHost
         _ = host.Services.GetRequiredService<IOptions<IsolationSelfCheckOptions>>().Value;
         _ = host.Services.GetRequiredService<IOptions<TelemetryOptions>>().Value;
         _ = host.Services.GetRequiredService<IOptions<TasksOptions>>().Value;
+        // The cancel windows belong to the Orchestrator module and are read through its seam.
+        host.Services.ValidateOrchestratorOptions();
     }
 }

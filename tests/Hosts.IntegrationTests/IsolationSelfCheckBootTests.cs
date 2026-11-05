@@ -508,6 +508,8 @@ public sealed class IsolationSelfCheckBootTests
             ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}",
             ["DOTNET_ENVIRONMENT"] = "Production",
             ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = connectionString,
+            ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
+            ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
         };
 
     /// <summary>The environment the Worker needs, including its readiness listener.</summary>
@@ -516,6 +518,8 @@ public sealed class IsolationSelfCheckBootTests
         {
             ["DOTNET_ENVIRONMENT"] = "Production",
             ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = connectionString,
+            ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
+            ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
             ["EVIDGATE__WORKER__HEALTHPORT"] = port.ToString(CultureInfo.InvariantCulture),
             ["EVIDGATE__WORKER__READINESSPOLLMILLISECONDS"] = "100",
         };

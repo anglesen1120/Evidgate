@@ -148,7 +148,7 @@ public sealed class IngestEventBatchTests
         world.CountAsync("outbox", $"{OrgScope(world)} and task_type = '{taskType}'");
 
     /// <summary>One event of <paramref name="world"/>'s plan with its real execution key (T10).</summary>
-    private static string KeyOf(IngestTestWorld world, int index) => world.Plan.Executions[index].ExecutionKey;
+    internal static string KeyOf(IngestTestWorld world, int index) => world.Plan.Executions[index].ExecutionKey;
 
     // ------------------------------------------------------------------ AC1
 
