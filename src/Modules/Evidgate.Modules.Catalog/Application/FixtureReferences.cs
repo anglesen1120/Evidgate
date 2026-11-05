@@ -118,11 +118,11 @@ internal static class FixtureReferences
     /// </summary>
     private static int? Whole(JsonElement value)
     {
-        var raw = value.ValueSpan;
+        var raw = value.GetRawText();
         var digits = 0;
         foreach (var symbol in raw)
         {
-            if (symbol is < (byte)'0' or > (byte)'9')
+            if (symbol is < '0' or > '9')
             {
                 continue;
             }
