@@ -2554,7 +2554,7 @@ paths:
     post:
       operationId: createRelease
       tags: [releases]
-      summary: Create a digest-bound release (05.6.1-T1)
+      summary: Create a digest-bound release
       description: >-
         Creates one immutable release of the project named in the path: each entry of `components` fixes one
         component to an exact build `digest`, written with the release row in one tenant transaction, and the answer
@@ -2572,7 +2572,7 @@ paths:
         request_invalid` when the body is JSON but not the declared shape (a root that is not an object, a member this
         route does not accept, an undecodable member name, a repeated member, a declared member of the wrong JSON
         type; a component member of the wrong type is `release_invalid`), and `422 release_invalid` when a body of the declared shape breaks a release rule. An unknown,
-        soft-deleted or other-tenant project is the one `404 not_found` (00 §9.2) and it is answered
+        soft-deleted or other-tenant project is the one `404 not_found` and it is answered
         **before** any body rule, so a refused caller cannot tell a recognised project id from an unrecognised one; a
         service token scoped to a sibling project of its org is `403 project_scope_mismatch`. A name may carry any
         printable character — letters of any script included — but no control, formatting or line/paragraph-separator
@@ -2604,7 +2604,7 @@ paths:
           description: >-
             `request_invalid` — the bytes are not JSON at all, so no member can be read and no release is written. Every
             other body failure is the `422` below: this route answers 400 only for an unparseable body, the same split
-            the retention-policy body parser makes (00 §9.2). A project the caller cannot see answers its `404` before
+            the retention-policy body parser makes. A project the caller cannot see answers its `404` before
             the body is parsed, so even unparseable bytes under such a project are the `404`.
           headers:
             X-Request-Id:
@@ -2656,11 +2656,11 @@ paths:
     get:
       operationId: getRelease
       tags: [releases]
-      summary: Read a release and its immutable components (05.6.1-T1)
+      summary: Read a release and its immutable components
       description: >-
         The release's identity and its components, `component_key` ascending, so a client can compare a run's build
         digests against the release in one request. The answer carries no bound runs: the run ↔ release binding is
-        `release_run`, whose own surface is 05.6.1-T2, so this body stays a statement of what the release requires.
+        `release_run`, whose own surface owns it, so this body stays a statement of what the release requires.
         The credential's project narrows the read: an unknown id, another tenant's id, and a release of a project
         other than the caller's scoped project are the one `404 not_found`, never a row and never a 403 that
         would name existence. A read, so no `Idempotency-Key`.
@@ -9585,7 +9585,7 @@ components:
     ReleaseCreateRequest:
       type: object
       description: >-
-        Body of `POST /v1/projects/{p}/releases` (05.6.1-T1). Closed: a member the body does not declare, a repeated
+        Body of `POST /v1/projects/{p}/releases`. Closed: a member the body does not declare, a repeated
         member and a declared member of the wrong JSON type are `422 request_invalid`; only unparseable bytes are
         `400 request_invalid`; a body of this declared shape that breaks a release rule is `422 release_invalid`.
         `state` defaults to `draft`; `active` is accepted at create and freezes the component list from then on (a
@@ -9608,7 +9608,7 @@ components:
           type: string
           enum: [draft, active]
           default: draft
-          description: '`draft` (the default) accepts no run binds; `active` freezes the components (05.6.1 AC7).'
+          description: '`draft` (the default) accepts no run binds; `active` freezes the components.'
         components:
           type: array
           minItems: 1
@@ -9650,9 +9650,9 @@ components:
     ReleaseDetail:
       type: object
       description: >-
-        `200` answer of `GET /v1/releases/{id}` (05.6.1-T1): the release's identity and its immutable components,
-        ordered by `component_key` ascending. It carries no bound runs — `release_run` is read by its own surface
-        (05.6.1-T2). An unknown, other-tenant or other-project id is `404 not_found`.
+        `200` answer of `GET /v1/releases/{id}`: the release's identity and its immutable components,
+        ordered by `component_key` ascending. It carries no bound runs — `release_run` is read by the bind path's own
+        surface. An unknown, other-tenant or other-project id is `404 not_found`.
       additionalProperties: false
       required: [release_id, project_id, name, state, created_by, created_at, version, components]
       properties:

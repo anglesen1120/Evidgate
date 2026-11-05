@@ -7,7 +7,8 @@
 -- SHAPE: three tables, one write path each.
 --   release           one declaration per project: a name, the closed state vocabulary `draft`/`active`, and the
 --                     identity of its author. `unique (org_id, project_id, name)` makes a name one declaration in its
---                     project, and `unique (org_id, id)` is the composite-FK target every business table declares (T3).
+--                     project, and `unique (org_id, id)` is the composite-FK target every business table declares, so
+--                     no row of another org can be referenced by mistake.
 --                     `state` is set by the create command alone: a release is inserted `draft` and moved to `active` in
 --                     the same transaction when the request asked for it, so the only transition the guard below
 --                     permits is `draft -> active`, and `active` is final.
@@ -15,20 +16,21 @@
 --                     `unique (org_id, release_id, component_key)` makes a component key unique inside its release, and
 --                     the two composite FKs keep the row inside its org: `(org_id, release_id) -> release` and
 --                     `(org_id, environment_revision_id) -> environment_revision`.
---   release_run       the binding of a run to a release for one component key, written by the bind path only. The
---                     digest match itself is 05.6.1-T2's; this migration creates the table its rows land in, so the
---                     shape (and its constraints) is reviewed with the release it belongs to. `release_run` is the only
---                     run <-> release binding: `run` carries no `release_id` (T15).
+--   release_run       the binding of a run to a release for one component key, written by the bind path only. This
+--                     migration creates the table its rows land in; the digest match that writes them belongs to the
+--                     bind path, so the shape is reviewed with the release it belongs to. `release_run` is the only
+--                     run <-> release binding: `run` carries no `release_id`, so a run is never re-pointed by editing
+--                     itself.
 --
--- CHECKS: every enum-like text column is closed in the database (D4). A digest is `sha256:` + 64 lower-case hex, the
+-- CHECKS: every enum-like text column is closed in the database. A digest is `sha256:` + 64 lower-case hex, the
 -- same shape `environment_revision.revision_hash` and `manifest.manifest_hash` carry, so a writer that skips the route
--- cannot store a digest nothing can compare. A component key is `[a-z0-9][a-z0-9_-]{0,63}` — the environment-key
--- grammar the same plan set uses — and a release name is 1..128 trimmed printable characters: the route applies the
+-- cannot store a digest nothing can compare. A component key is `[a-z0-9][a-z0-9_-]{0,63}` — the same grammar
+-- environment keys use — and a release name is 1..128 trimmed printable characters: the route applies the
 -- same bounds before any statement, and these are the cheap half that keeps a bypassing writer from storing text no
 -- screen can render.
 --
 -- RLS: ENABLE + FORCE on all three, with the tenant policy `to evidgate_app` over `evidgate.current_org_id()` (never
--- raw `current_setting`, so a missing or empty setting yields zero rows rather than an error or every row, T2) and the
+-- raw `current_setting`, so a missing or empty setting yields zero rows rather than an error or every row) and the
 -- owner backfill policy FORCE requires (0004/0028/0062/0066/0069/0071 precedent). The project half of the scope is
 -- the statement's own `project_id` predicate and the composite FKs — the same split every Orchestrator table uses
 -- (`run`, `environment_revision`), because a policy over `current_project_id()` would refuse a project-wide read that
@@ -39,15 +41,15 @@
 -- `state` alone — the one column the create command moves from `draft` to `active` — so no code path can rename a
 -- release, repoint it at another project or rewrite its author, and no DELETE exists. `release_component` and
 -- `release_run` are append-only: SELECT + INSERT only, no UPDATE and no DELETE at any role, which is the grant half of
--- AC7 ("the app role holds no UPDATE grant") and of "unbind does not exist in V1". `evidgate_operator` keeps its
--- default SELECT and holds no policy on these tables, so until 02.8.1's grant-gated operator policy lands it reads
+-- immutability — the app role holds no UPDATE grant, and unbind does not exist. `evidgate_operator` keeps its
+-- default SELECT and holds no policy on these tables, so until the grant-gated operator policy lands it reads
 -- zero rows (0028/0069's posture, recorded here as a decision). `evidgate_worker_sched` holds nothing: no scheduled job
 -- reads or writes releases.
 --
--- GUARDS: `release.state` is an app-movable state column, so it gets a transition trigger (D2) rather than trusting
+-- GUARDS: `release.state` is an app-movable state column, so it gets a transition trigger rather than trusting
 -- every future writer: the identity columns never change, `draft` moves to `active`, `active` never moves, and a
 -- DELETE is refused. `release_component` is append-only and, once its release is `active`, closed to INSERT too —
--- the immutability AC7 requires, enforced in SQL because the domain type is only half of it (C6). `release_run` is
+-- the immutability the domain type can only half express, enforced in SQL as well. `release_run` is
 -- append-only like `environment_revision` (0024's guard, same shape).
 --
 -- LOCKS: `set local lock_timeout` bounds the DDL's wait, so a busy database fails the migration for a retry instead of
@@ -91,7 +93,7 @@ create table if not exists public.release (
   constraint release_version_check check (version >= 1)
 );
 
--- The list keyset (P4): `(org_id, project_id, created_at, id)` serves the project's release list in the cursor's own
+-- The list keyset: `(org_id, project_id, created_at, id)` serves the project's release list in the cursor's own
 -- order, and its `(org_id, project_id)` prefix also serves the referencing side of the project FK.
 create index if not exists release_project_idx on public.release (org_id, project_id, created_at, id);
 
@@ -138,7 +140,7 @@ create table if not exists public.release_run (
   constraint release_run_component_key_check check (component_key ~ '^[a-z0-9][a-z0-9_-]{0,63}$')
 );
 
--- "Which releases is this run bound to" (P4). The release side is served by the prefix of `release_run_binding_key`.
+-- "Which releases is this run bound to". The release side is served by the prefix of `release_run_binding_key`.
 create index if not exists release_run_run_idx on public.release_run (org_id, run_id);
 
 alter table public.release enable row level security;
@@ -154,7 +156,7 @@ create policy release_app_tenant on public.release
   using (org_id = evidgate.current_org_id())
   with check (org_id = evidgate.current_org_id());
 
--- Deliberately no `TO evidgate_operator` policy (TL T76, D1): the grant-gated operator policy is 02.8.1's
+-- Deliberately no `TO evidgate_operator` policy: the grant-gated operator policy is the
 -- `evidgate.operator_grant_ok` form; until it lands the operator's default SELECT reads zero rows.
 drop policy if exists release_owner_backfill on public.release;
 create policy release_owner_backfill on public.release
@@ -197,7 +199,7 @@ grant select, insert on public.release_run to evidgate_app;
 grant select on public.release_run to evidgate_operator;
 revoke all on public.release_run from evidgate_worker_sched;
 
--- The release state machine (D2). Identity, author and creation time are facts of the declaration and never move;
+-- The release state machine. Identity, author and creation time are facts of the declaration and never move;
 -- `draft` moves to `active`, `active` is final, and a release is never deleted. Re-writing the state a row already
 -- holds is not a change and stays allowed, so a replay of the same transition is not an error.
 create or replace function evidgate.orchestration_release_guard() returns trigger
@@ -248,7 +250,7 @@ create trigger release_guard
   for each row execute function evidgate.orchestration_release_guard();
 
 -- A component is written once, inside the release's own create transaction, and only while the release is still
--- `draft`: once the release is `active` its component set is final (AC7). The grant already withholds UPDATE and
+-- `draft`: once the release is `active` its component set is final. The grant already withholds UPDATE and
 -- DELETE from every role, so this trigger is what closes INSERT on an active release — the one write the grant cannot
 -- express.
 create or replace function evidgate.orchestration_release_component_guard() returns trigger

@@ -1,19 +1,16 @@
 namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 
 /// <summary>
-/// The release SQL of 05.6.1: the create transaction's three statements, the one reference probe that turns an unknown
-/// or foreign environment revision into a 422 before any write, and the two statements of the read path. Every statement
-/// is parameterised (00 §5.7 S1) and runs on the ambient tenant scope, so RLS — not a `where` clause alone — is what
-/// makes another org's rows invisible.
+/// The release SQL: the create transaction's three statements, the reference probe that turns an unknown or foreign
+/// environment revision into a 422 before any write, and the read path's two statements. All are parameterised and run
+/// on the ambient tenant scope, so RLS — not a `where` clause alone — hides another org's rows.
 /// </summary>
 internal static class ReleaseSql
 {
     /// <summary>
-    /// The release row, inserted `draft` (the column default) and moved to `active` by <see cref="Activate"/> in the same
-    /// transaction when the request asked for it. The row is inserted from the project row so a project that does not
-    /// exist — or is deleted, or belongs to another org — inserts nothing and the handler answers the one 404. A duplicate
-    /// name raises the unique key's 23505, which the handler maps to 409 rather than checking first (00 §5.7: no
-    /// check-then-insert).
+    /// The release row, inserted `draft` (the column default) and moved to `active` by <see cref="Activate"/> in the
+    /// same transaction when asked. The insert selects from the project row, so an unknown, deleted or other-org project
+    /// inserts nothing and gets one 404; a duplicate name surfaces as 23505, which the handler maps to 409.
     /// </summary>
     internal const string InsertRelease = """
         insert into public.release (id, org_id, project_id, name, created_by)
@@ -26,7 +23,7 @@ internal static class ReleaseSql
     /// The project-visibility probe that runs before any body rule can answer: one row when the project exists, is not
     /// soft-deleted and belongs to the caller's org, nothing otherwise. It is one statement, and it puts the 404 in
     /// front of every 422 — an unknown, soft-deleted, other-tenant or sibling-project target must not learn from a
-    /// `release_invalid` that its project id was recognised at all (00 §9.2).
+    /// `release_invalid` that its project id was recognised at all.
     /// </summary>
     internal const string ProjectVisible = """
         select 1
@@ -35,7 +32,7 @@ internal static class ReleaseSql
         """;
 
     /// <summary>
-    /// Every component of the release in one batch insert (00 §5.7 P2): the rows travel as ONE <c>jsonb</c> text
+    /// Every component of the release in one batch insert: the rows travel as ONE <c>jsonb</c> text
     /// parameter expanded by <c>jsonb_to_recordset</c>, so the statement count is constant in the component count. The
     /// migration's composite FK to <c>environment_revision</c> is the last line of defence; the handler's own probe
     /// (<see cref="UnresolvedRevisions"/>) answers the 422 before this statement runs.
@@ -76,8 +73,8 @@ internal static class ReleaseSql
 
     /// <summary>
     /// The release's components in <c>component_key</c> order — a total order with no tie, so the read is deterministic
-    /// and the response shape stable. The second and last statement of the read path (00 §5.7 P3): the bound-runs section
-    /// is 05.6.1-T2's and is not read here.
+    /// and the response shape stable. The second and last statement of the read path: the bound-runs section
+    /// belongs to the bind path and is not read here.
     /// </summary>
     internal const string ComponentsByRelease = """
         select c.component_key, c.digest, c.environment_revision_id

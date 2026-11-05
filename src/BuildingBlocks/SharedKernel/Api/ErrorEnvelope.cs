@@ -182,10 +182,10 @@ public static class ApiErrorCode
     /// <summary>422: an environment revision carries a secret value or a malformed member (05.1.2 AC3).</summary>
     public const string EnvironmentRevisionInvalid = "environment_revision_invalid";
 
-    /// <summary>422: a release body is JSON of the declared shape but breaks a release rule — a bad digest, a duplicate component key, an unknown state (05.6.1 AC1).</summary>
+    /// <summary>422: a release body is JSON of the declared shape but breaks a release rule — a bad digest, a duplicate component key, an unknown state.</summary>
     public const string ReleaseInvalid = "release_invalid";
 
-    /// <summary>409: the project already declares a release with that name (05.6.1 §4, <c>unique (org_id, project_id, name)</c>).</summary>
+    /// <summary>409: the project already declares a release with that name (<c>unique (org_id, project_id, name)</c>).</summary>
     public const string ReleaseNameConflict = "release_name_conflict";
 
     /// <summary>422: a policy body carries a member the 00 §8.6 field set does not declare (07.1.1 AC3).</summary>

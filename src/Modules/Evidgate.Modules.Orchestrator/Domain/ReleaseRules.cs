@@ -25,15 +25,15 @@ internal static class ReleaseStates
 }
 
 /// <summary>
-/// Release body rules the route and 0072's <c>CHECK</c>s share (05.6.1 §4/§5): the component-key grammar, the release
+/// Release body rules the route and the migration's <c>CHECK</c>s share: the component-key grammar, the release
 /// name bound and the component-count bound. Every bound here mirrors a constraint in the migration, so a writer that
 /// skips the route cannot store what the route refuses.
 /// </summary>
 internal static class ReleaseRules
 {
     /// <summary>
-    /// Most components one release may declare. The plan set names no limit for a release, so this is the bound the
-    /// story sets (documented in 05.6.1 §5): 100 components is far above the largest suite a run manifest carries in
+    /// Most components one release may declare. No wider requirement asks for more, so this is the bound the
+    /// route sets: 100 components is far above the largest suite a run manifest carries in
     /// practice, and it keeps the create body inside the route's 64 KiB transport cap.
     /// </summary>
     internal const int MaxComponents = 100;

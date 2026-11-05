@@ -12,13 +12,13 @@ using Mediator;
 
 namespace Evidgate.Modules.Orchestrator.Application.Releases;
 
-/// <summary>Read one release (<c>GET /v1/releases/{id}</c>, 05.6.1 §5).</summary>
+/// <summary>Read one release (<c>GET /v1/releases/{id}</c>).</summary>
 /// <param name="ReleaseId">The release from the route.</param>
 internal sealed record GetReleaseQuery(Guid ReleaseId) : IQuery<Result<ReleaseDetail>>;
 
 /// <summary>
 /// The read path of a release: the header under RLS, then its components. An unknown id, another tenant's id and a
-/// release of a sibling project all answer the one 404 (00 §9.2), so neither existence nor a project's release set leaks
+/// release of a sibling project all answer the one 404, so neither existence nor a project's release set leaks
 /// across the scope.
 /// </summary>
 [Permission(Permissions.Run.Read)]

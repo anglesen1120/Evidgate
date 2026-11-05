@@ -1,13 +1,13 @@
 namespace Evidgate.Modules.Orchestrator.Contracts;
 
-/// <summary>The 201 body of <c>POST /v1/projects/{p}/releases</c> (05.6.1 AC1): the id of the declared release.</summary>
+/// <summary>The 201 body of <c>POST /v1/projects/{p}/releases</c>: the id of the declared release.</summary>
 /// <param name="ReleaseId">The new release's id.</param>
 public sealed record ReleaseCreated(Guid ReleaseId);
 
 /// <summary>
-/// The 200 body of <c>GET /v1/releases/{id}</c> (05.6.1 §5): the header, then the component rows in
-/// <c>component_key</c> order. Two statements and no join (00 §5.7 P3); the bound-runs section is 05.6.1-T2's, so this
-/// read never touches <c>release_run</c> and cannot show a recency-derived set (T15).
+/// The 200 body of <c>GET /v1/releases/{id}</c>: the header, then the component rows in
+/// <c>component_key</c> order. Two statements and no join; the bound-runs section belongs to the bind path and needs
+/// <c>release_run</c>, so this read never touches it.
 /// </summary>
 /// <param name="ReleaseId">The release's id.</param>
 /// <param name="ProjectId">The project the release belongs to.</param>

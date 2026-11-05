@@ -3,13 +3,13 @@ using Evidgate.BuildingBlocks.SharedKernel.Security;
 namespace Evidgate.Modules.Orchestrator.Domain;
 
 /// <summary>
-/// The one content-addressed digest shape the Orchestrator's wire bodies and the SQL <c>CHECK</c>s share (00 §7):
+/// The one content-addressed digest shape the Orchestrator's wire bodies and the SQL <c>CHECK</c>s share:
 /// <c>sha256:</c> + 64 lower-case hex characters. One forward pass over at most 71 characters and no regex, so a slow
-/// host cannot turn a refusal into a throw (00 §5.7 N11).
+/// host cannot turn a refusal into a throw.
 /// </summary>
 internal static class DigestShape
 {
-    /// <summary>The prefix every content-addressed digest carries (00 §7, <c>manifest_hash</c> included).</summary>
+    /// <summary>The prefix every content-addressed digest carries (<c>manifest_hash</c> included).</summary>
     internal const string Prefix = "sha256:";
 
     /// <summary>The number of hex characters after <see cref="Prefix"/>.</summary>

@@ -5,7 +5,7 @@ using Evidgate.Modules.Orchestrator.Domain;
 
 namespace Evidgate.Modules.Orchestrator.Application.Releases;
 
-/// <summary>One component of a create-release body (05.6.1 §5).</summary>
+/// <summary>One component of a create-release body.</summary>
 /// <param name="ComponentKey">The component's key inside its release: <c>[a-z0-9][a-z0-9_-]{0,63}</c>.</param>
 /// <param name="Digest">The build digest the component was exercised at: <c>sha256:</c> + 64 lower-case hex.</param>
 /// <param name="EnvironmentRevisionId">The environment revision the digest was built for, resolved inside the project.</param>
@@ -15,11 +15,9 @@ internal sealed record ReleaseComponentRequest(string ComponentKey, string Diges
 internal sealed record ReleaseRequest(string Name, string State, IReadOnlyList<ReleaseComponentRequest> Components);
 
 /// <summary>
-/// The closed body of <c>POST /v1/projects/{p}/releases</c> (05.6.1 §5), parsed once and reported in the 00 §9.2
-/// vocabulary: a body that is not JSON, names a member this route does not accept, or repeats a member is 400
-/// <c>request_invalid</c> — the shape every other closed body uses (<c>RetentionPolicyBodyParser</c>); a body of the
-/// declared shape that is semantically wrong — a bad digest, a duplicate component key, an unknown state, too many
-/// components — is 422 <c>release_invalid</c> with the offending indices.
+/// The closed body of <c>POST /v1/projects/{p}/releases</c>, parsed once: bytes that are not JSON, a member the
+/// route does not accept or a repeated member is 400 <c>request_invalid</c> — the shape every closed body uses; a body
+/// of the declared shape that breaks a release rule is 422 <c>release_invalid</c> with the offending indices.
 /// </summary>
 internal static class ReleaseBody
 {

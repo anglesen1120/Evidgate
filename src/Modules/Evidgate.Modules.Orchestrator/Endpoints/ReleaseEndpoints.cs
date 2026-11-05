@@ -10,9 +10,9 @@ using Microsoft.AspNetCore.Routing;
 namespace Evidgate.Modules.Orchestrator.Endpoints;
 
 /// <summary>
-/// The two release routes of 05.6.1: the declaration (<c>POST /v1/projects/{p}/releases</c>) and the read
+/// The two release routes: the declaration (<c>POST /v1/projects/{p}/releases</c>) and the read
 /// (<c>GET /v1/releases/{id}</c>). Both are thin: the edge reads the capped body and the <c>Idempotency-Key</c>, the
-/// handler owns authorization, validation, the transaction and the audit (00 §5.5 C8).
+/// handler owns authorization, validation, the transaction and the audit.
 /// </summary>
 internal static class ReleaseEndpoints
 {
@@ -36,20 +36,20 @@ internal static class ReleaseEndpoints
             .Produces(StatusCodes.Status409Conflict)
             .Produces(StatusCodes.Status413PayloadTooLarge)
             .Produces(StatusCodes.Status422UnprocessableEntity)
-            .WithSummary("Declare a release from the exact build digest of each component (05.6.1)");
+            .WithSummary("Declare a release from the exact build digest of each component");
 
         group.MapGet("/releases/{id}", GetReleaseAsync)
             .Produces<ReleaseDetail>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound)
-            .WithSummary("One release and its components, ordered by component key (05.6.1)");
+            .WithSummary("One release and its components, ordered by component key");
     }
 
     /// <summary>
-    /// <c>POST /v1/projects/{p}/releases</c> (05.6.1 §5): binds the path, the capped body, its digest and the caller's
+    /// <c>POST /v1/projects/{p}/releases</c>: binds the path, the capped body, its digest and the caller's
     /// <c>Idempotency-Key</c>, then sends the one command. A caller with no principal at all is 401 here, before a byte
-    /// of the body is read; the C2 pipeline's <c>run:create</c> check answers a resolved member without it (403, 00 §9.2).
+    /// of the body is read; the pipeline's <c>run:create</c> check answers a resolved member without it (403).
     /// </summary>
     private static async Task<Result<ReleaseCreated>> CreateReleaseAsync(
         Guid p,
@@ -77,8 +77,8 @@ internal static class ReleaseEndpoints
     }
 
     /// <summary>
-    /// <c>GET /v1/releases/{id}</c> (05.6.1 §5): the header and its components. The handler's <c>run:read</c> permission
-    /// is the C2 pipeline's; an unknown, another tenant's or a sibling project's release is its one 404 <c>not_found</c>.
+    /// <c>GET /v1/releases/{id}</c>: the header and its components. The handler's <c>run:read</c> permission
+    /// is the pipeline's; an unknown, another tenant's or a sibling project's release is its one 404 <c>not_found</c>.
     /// No <c>ETag</c>: the create path is the only writer and the body carries the row's <c>version</c>.
     /// </summary>
     private static async Task<Result<ReleaseDetail>> GetReleaseAsync(

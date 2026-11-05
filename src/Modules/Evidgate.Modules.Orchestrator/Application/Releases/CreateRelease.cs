@@ -20,11 +20,11 @@ using Npgsql;
 
 namespace Evidgate.Modules.Orchestrator.Application.Releases;
 
-/// <summary>Declare a release (<c>POST /v1/projects/{p}/releases</c>, 05.6.1 §5).</summary>
+/// <summary>Declare a release (<c>POST /v1/projects/{p}/releases</c>).</summary>
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="Body">The raw UTF-8 body (≤ 64 KiB), parsed by the handler after authorization.</param>
 /// <param name="BodySha256">Hex SHA-256 of <paramref name="Body"/>: what the idempotency store compares.</param>
-/// <param name="IdempotencyKey">The caller's <c>Idempotency-Key</c> (00 §9.1).</param>
+/// <param name="IdempotencyKey">The caller's <c>Idempotency-Key</c>.</param>
 internal sealed record CreateReleaseCommand(
     Guid ProjectId,
     [property: JsonIgnore] ReadOnlyMemory<byte> Body,
@@ -32,16 +32,14 @@ internal sealed record CreateReleaseCommand(
     string IdempotencyKey)
     : ICommand<Result<ReleaseCreated>>, IIdempotentCommand
 {
-    /// <summary>The dedupe operation the key is claimed for, beside <c>run:create</c> (00 §9.1).</summary>
+    /// <summary>The dedupe operation the key is claimed for, beside <c>run:create</c>.</summary>
     string IIdempotentCommand.Operation => "release:create";
 }
 
 /// <summary>
-/// The one write path of a release (05.6.1 AC1): validate the closed body, refuse an environment revision that does not
-/// resolve inside the project, then insert the release and its components in the command's own tenant transaction and
-/// move the release to <c>active</c> when the request asked for it. Authorization is the C2 pipeline's <c>run:create</c>
-/// check, the audit row is the same unit of work (00 §5.5 N14), and no outbox row is written: a release declares
-/// digests, it triggers no work.
+/// The one write path of a release: validate the closed body, resolve the environment revision inside the project,
+/// then insert the release and its components in one tenant transaction with the audit row, moving it to
+/// <c>active</c> when asked. No outbox row: a release declares digests, it triggers no work.
 /// </summary>
 [AuditedAction("release.create")]
 [Permission(Permissions.Run.Create)]

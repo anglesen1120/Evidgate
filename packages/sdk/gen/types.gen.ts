@@ -330,7 +330,7 @@ export type RunRef = {
 };
 
 /**
- * Body of `POST /v1/projects/{p}/releases` (05.6.1-T1). Closed: a member the body does not declare, a repeated member and a declared member of the wrong JSON type are `422 request_invalid`; only unparseable bytes are `400 request_invalid`; a body of this declared shape that breaks a release rule is `422 release_invalid`. `state` defaults to `draft`; `active` is accepted at create and freezes the component list from then on (a `draft` release needs at least one component before it can become `active`). Each `component_key` is unique within the request, and its `environment_revision_id` must resolve inside the project in the path.
+ * Body of `POST /v1/projects/{p}/releases`. Closed: a member the body does not declare, a repeated member and a declared member of the wrong JSON type are `422 request_invalid`; only unparseable bytes are `400 request_invalid`; a body of this declared shape that breaks a release rule is `422 release_invalid`. `state` defaults to `draft`; `active` is accepted at create and freezes the component list from then on (a `draft` release needs at least one component before it can become `active`). Each `component_key` is unique within the request, and its `environment_revision_id` must resolve inside the project in the path.
  */
 export type ReleaseCreateRequest = {
     /**
@@ -338,7 +338,7 @@ export type ReleaseCreateRequest = {
      */
     name: string;
     /**
-     * `draft` (the default) accepts no run binds; `active` freezes the components (05.6.1 AC7).
+     * `draft` (the default) accepts no run binds; `active` freezes the components.
      */
     state?: 'draft' | 'active';
     /**
@@ -373,7 +373,7 @@ export type ReleaseCreated = {
 };
 
 /**
- * `200` answer of `GET /v1/releases/{id}` (05.6.1-T1): the release's identity and its immutable components, ordered by `component_key` ascending. It carries no bound runs — `release_run` is read by its own surface (05.6.1-T2). An unknown, other-tenant or other-project id is `404 not_found`.
+ * `200` answer of `GET /v1/releases/{id}`: the release's identity and its immutable components, ordered by `component_key` ascending. It carries no bound runs — `release_run` is read by the bind path's own surface. An unknown, other-tenant or other-project id is `404 not_found`.
  */
 export type ReleaseDetail = {
     release_id: string;
@@ -5478,7 +5478,7 @@ export type CreateReleaseData = {
 
 export type CreateReleaseErrors = {
     /**
-     * `request_invalid` — the bytes are not JSON at all, so no member can be read and no release is written. Every other body failure is the `422` below: this route answers 400 only for an unparseable body, the same split the retention-policy body parser makes (00 §9.2). A project the caller cannot see answers its `404` before the body is parsed, so even unparseable bytes under such a project are the `404`.
+     * `request_invalid` — the bytes are not JSON at all, so no member can be read and no release is written. Every other body failure is the `422` below: this route answers 400 only for an unparseable body, the same split the retention-policy body parser makes. A project the caller cannot see answers its `404` before the body is parsed, so even unparseable bytes under such a project are the `404`.
      */
     400: ErrorEnvelope;
     /**
