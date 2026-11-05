@@ -30,6 +30,9 @@ const UNDECLARED_HEADER = 'X-Fixture-Undeclared';
 /** The policy revision document whose standalone body schema the last control breaks. */
 const POLICY_REVISION_DOCUMENT_FIXTURE = 'policy-revision-head';
 
+/** The 412 document whose envelope the last control answers under a success status. */
+const VERSION_POINTER_DOCUMENT_FIXTURE = 'policy-revision-create-version-pointer';
+
 /** A member only `contracts/schemas/policy-revision.v1.json` declares, typed `integer`. */
 const POLICY_BODY_TYPED_MEMBER = 'flaky_budget';
 
@@ -177,5 +180,28 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       ),
       `the contract check reported ${describeErrors(result.errors)}, none of which names the mistyped '${POLICY_BODY_TYPED_MEMBER}'`,
     ).toBe(true);
+  });
+
+  // The pointer-form 412 exists so a browser case can prove the shared conflict dialog reads
+  // `details[].path = /version`. Its envelope is only checked because the generic loop validates the
+  // document at its own status; this control answers the same body under a success status and
+  // requires the contract to refuse it, so the loop cannot be green while validating nothing.
+  it('refuses the pointer-form 412 envelope under a success status', () => {
+    const document = corpusDocument(VERSION_POINTER_DOCUMENT_FIXTURE);
+    const baseline = VALIDATOR.validateResponse(
+      document.operation_id,
+      document.status,
+      document.body,
+    );
+    expect(
+      baseline.errors,
+      `the unmutated pointer-form document must validate before it is broken: ${describeErrors(baseline.errors)}`,
+    ).toEqual([]);
+
+    const nowSuccess = VALIDATOR.validateResponse(document.operation_id, 200, document.body);
+    expect(
+      nowSuccess.errors.length,
+      `a 412 error envelope validated as the contract's 200 answers no error, so the document's contract check proves nothing: ${describeErrors(nowSuccess.errors)}`,
+    ).toBeGreaterThan(0);
   });
 });

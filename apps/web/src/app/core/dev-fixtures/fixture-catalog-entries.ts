@@ -266,8 +266,8 @@ import type { FixtureCatalogRow } from './fixture-document';
  * `policy-revision-create` is publish's `201`: revision 4, `state: draft`, `ETag` its id.
  * `policy-revision-create-unchanged` (`?fixture.variant.createPolicyRevision=unchanged`) is the
  * contract's `200` — a body already stored returns that revision, here the head `…a003` — and is
- * the one answer a publish may not report as a new revision. The three refusals are the error
- * states the tab must render verbatim: `=precondition_failed` (`PolicyErrors.Stale`, details
+ * the one answer a publish may not report as a new revision. The three refusals below are the
+ * error states the tab must render verbatim: `=precondition_failed` (`PolicyErrors.Stale`, details
  * `If-Match`/`stale` plus the current head's id in `revision_id`, as `PolicyRules.cs:45-52` builds
  * it), `=unknown-field` (`422 policy_unknown_field`, the closed schema's refusal with the offending
  * member's JSON pointer and the `additional_properties` reason `PolicyBodyPaths` reports) and
@@ -276,6 +276,15 @@ import type { FixtureCatalogRow } from './fixture-document';
  * reason `quarantined`). The quarantine guard gates ACTIVATION today — the create path has no
  * quarantine read — so this last document pins the envelope the tab must render verbatim when the
  * server sends it, not a route that answers it yet.
+ *
+ * `policy-revision-create-version-pointer` (`?fixture.variant.createPolicyRevision=version-pointer`)
+ * is that same `412` in the pointer spelling the authoring routes emit — `/If-Match` `stale`
+ * beside `/version` (`AuthoringRequestScope.cs:62-71`) — and is a shape pin for the same reason:
+ * the create path answers `revision_id` today, because the authoring screens are still route
+ * stubs. Its detail's reason is the head's id, since the shared conflict dialog reloads whatever
+ * identifier a detail names and this publish dialog is the one web screen that opens it; its code,
+ * message and `retryable` members are copied from `policy-revision-create-precondition-failed`, so
+ * the detail spelling is the only difference a browser case can attribute a dialog state to.
  *
  * `permissions-list-settings-policy-write` and `permissions-list-settings-policy-readonly` are the
  * Policy tab's two grant sets: the `release_approver` and `viewer` grants of
