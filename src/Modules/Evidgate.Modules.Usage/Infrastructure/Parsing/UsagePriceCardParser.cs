@@ -18,7 +18,7 @@ namespace Evidgate.Modules.Usage.Infrastructure.Parsing;
 /// string can spell but PostgreSQL cannot store — a lone surrogate or U+0000 — is refused here rather than at the write.
 /// </para>
 /// </summary>
-internal static class UsagePriceCardParser
+internal static partial class UsagePriceCardParser
 {
     private const string VersionMember = "rate_card_version";
     private const string PricesMember = "prices";
@@ -99,48 +99,6 @@ internal static class UsagePriceCardParser
         return violations.Count > 0
             ? UsagePriceCardParseResult.Refused(violations.ToList())
             : new UsagePriceCardParseResult(new UsagePriceCard(cardVersion, rows), []);
-    }
-
-    /// <summary>
-    /// The refusals of one card, capped: a body can hold thousands of offending members and a response that returned
-    /// all of them would be unbounded. Once the cap is reached the walk stops and one named refusal says so.
-    /// </summary>
-    private sealed class ViolationSink
-    {
-        private readonly List<UsagePriceViolation> violations = [];
-
-        /// <summary>How many refusals were collected, including the overflow marker once it was added.</summary>
-        internal int Count => violations.Count;
-
-        /// <summary>Whether the cap was reached, so the walk must stop reading further members.</summary>
-        internal bool Overflowed { get; private set; }
-
-        internal void Add(string path, string reason)
-        {
-            if (Overflowed)
-            {
-                return;
-            }
-
-            if (violations.Count >= UsagePriceCardRules.MaxViolations)
-            {
-                Overflowed = true;
-                violations.Add(new UsagePriceViolation("/", UsagePriceRefusalReasons.TooManyViolations));
-                return;
-            }
-
-            violations.Add(new UsagePriceViolation(path, reason));
-        }
-
-        internal void AddRange(IEnumerable<UsagePriceViolation> more)
-        {
-            foreach (var violation in more)
-            {
-                Add(violation.Path, violation.Reason);
-            }
-        }
-
-        internal List<UsagePriceViolation> ToList() => violations;
     }
 
     private static (string? Version, JsonElement? Prices) ReadRoot(
@@ -406,114 +364,6 @@ internal static class UsagePriceCardParser
         return metric;
     }
 
-    /// <summary>
-    /// Reads a JSON string only when it is text the database can store: a lone surrogate or a U+0000 has no encoding
-    /// the column accepts, and letting it through would turn a refusal into a server error on write.
-    /// </summary>
-    private static string? ReadStorableString(JsonElement value, string path, ViolationSink violations)
-    {
-        if (value.ValueKind == JsonValueKind.String
-            && TryDecodeString(value, out var text)
-            && PostgresText.IsStorable(text))
-        {
-            return text;
-        }
-
-        violations.Add(path, UsagePriceRefusalReasons.InvalidValue);
-        return null;
-    }
-
-    /// <summary>
-    /// Decodes a JSON string, or answers false for an escape that names an unpaired surrogate.
-    /// System.Text.Json reports that case by throwing from <c>GetString</c> — the only signal it gives — so the
-    /// exception is caught here and becomes the card's own named refusal instead of escaping the parser.
-    /// </summary>
-    private static bool TryDecodeString(JsonElement value, out string text)
-    {
-        try
-        {
-            if (value.GetString() is { } decoded)
-            {
-                text = decoded;
-                return true;
-            }
-        }
-        catch (InvalidOperationException)
-        {
-            // The string's escapes cannot be decoded to UTF-16; the caller reports it as an invalid value.
-        }
-
-        text = string.Empty;
-        return false;
-    }
-
-    private static decimal? ReadAmount(JsonElement value, string path, ViolationSink violations)
-    {
-        // A JSON number is read from its raw token: converting through a floating-point type would round the money.
-        string? token;
-
-        switch (value.ValueKind)
-        {
-            case JsonValueKind.String:
-                if (!TryDecodeString(value, out var text) || !PostgresText.IsStorable(text))
-                {
-                    violations.Add(path, UsagePriceRefusalReasons.InvalidAmount);
-                    return null;
-                }
-
-                token = text;
-                break;
-            case JsonValueKind.Number:
-                token = value.GetRawText();
-                break;
-            default:
-                violations.Add(path, UsagePriceRefusalReasons.InvalidAmount);
-                return null;
-        }
-
-        if (!UsagePriceCardRules.TryParseAmount(token, out var amount))
-        {
-            violations.Add(path, UsagePriceRefusalReasons.InvalidAmount);
-            return null;
-        }
-
-        return amount;
-    }
-
-    private static decimal? ReadNullableAmount(JsonElement value, string path, ViolationSink violations) =>
-        value.ValueKind == JsonValueKind.Null ? null : ReadAmount(value, path, violations);
-
-    private static DateTimeOffset? ReadInstant(JsonElement value, string path, ViolationSink violations)
-    {
-        var text = ReadStorableString(value, path, violations);
-        if (text is null)
-        {
-            return null;
-        }
-
-        if (!UsagePriceCardRules.TryParseInstant(text, out var instant))
-        {
-            violations.Add(path, UsagePriceRefusalReasons.InvalidValue);
-            return null;
-        }
-
-        // The column stores microseconds; a finer instant would be rounded, which can move a window boundary or even
-        // collapse a window to nothing, so the card is refused instead of silently shifted.
-        if (!UsagePriceCardRules.IsMicrosecondAligned(instant))
-        {
-            violations.Add(path, UsagePriceRefusalReasons.InvalidInstant);
-            return null;
-        }
-
-        return instant;
-    }
-
-    private static DateTimeOffset? ReadNullableInstant(
-        JsonElement value,
-        string path,
-        ViolationSink violations) =>
-        value.ValueKind == JsonValueKind.Null ? null : ReadInstant(value, path, violations);
-
     private static void RequireSeen(
         HashSet<string> seen,
         string member,
@@ -526,84 +376,6 @@ internal static class UsagePriceCardParser
         }
     }
 
-    /// <summary>
-    /// Checks a member name before the walk uses it: a name whose escapes name an unpaired surrogate cannot be
-    /// decoded at all, and one that is not text the database can store earns a named refusal either way. The name is
-    /// never repeated in that refusal, so a caller-controlled name of any length cannot reach the response.
-    /// </summary>
-    /// <param name="member">The object member.</param>
-    /// <param name="path">The object's JSON pointer.</param>
-    /// <param name="violations">The refusals of this card.</param>
-    /// <param name="name">The decoded name when the member can be walked.</param>
-    /// <returns>Whether the name can be walked as a member.</returns>
-    private static bool TryReadMemberName(
-        JsonProperty member,
-        string path,
-        ViolationSink violations,
-        out string name)
-    {
-        try
-        {
-            name = member.Name;
-        }
-        catch (InvalidOperationException)
-        {
-            // System.Text.Json throws when an escape names an unpaired surrogate; not a value the column stores.
-            name = string.Empty;
-            violations.Add(path + "/" + UnknownSegment, UsagePriceRefusalReasons.InvalidValue);
-            return false;
-        }
-
-        if (PostgresText.IsStorable(name))
-        {
-            return true;
-        }
-
-        violations.Add(path + "/" + UnknownSegment, UsagePriceRefusalReasons.InvalidValue);
-        return false;
-    }
-
-    /// <summary>
-    /// The pointer of a member: the name when it is a short, storable segment, otherwise a fixed placeholder, so a
-    /// refusal never carries a caller-controlled name of any length.
-    /// </summary>
-    private static string MemberPath(string path, string name) =>
-        path + "/" + (PostgresText.IsStorable(name) && CodePointLength(name) <= MaxPathSegmentLength
-            ? name
-            : UnknownSegment);
-
-    private static void FindDuplicate(JsonElement element, string path, ViolationSink violations)
-    {
-        HashSet<string>? names = null;
-
-        foreach (var member in element.EnumerateObject())
-        {
-            if (violations.Overflowed)
-            {
-                return;
-            }
-
-            names ??= new HashSet<string>(StringComparer.Ordinal);
-
-            string name;
-            try
-            {
-                name = member.Name;
-            }
-            catch (InvalidOperationException)
-            {
-                // The walk below refuses an undecodable name itself; there is nothing to compare here.
-                return;
-            }
-
-            if (!names.Add(name))
-            {
-                violations.Add(MemberPath(path, name), UsagePriceRefusalReasons.DuplicateMember);
-                return;
-            }
-        }
-    }
-
     /// <summary>What one price object declared, before the rules decide whether it is a row.</summary>
     private sealed record RowValues(
         string? MetricName,
@@ -612,16 +384,4 @@ internal static class UsagePriceCardParser
         decimal? IncludedQuota,
         DateTimeOffset? EffectiveFrom,
         DateTimeOffset? EffectiveTo);
-
-    private static int CodePointLength(string value)
-    {
-        var length = 0;
-
-        foreach (var _ in value.EnumerateRunes())
-        {
-            length++;
-        }
-
-        return length;
-    }
 }
