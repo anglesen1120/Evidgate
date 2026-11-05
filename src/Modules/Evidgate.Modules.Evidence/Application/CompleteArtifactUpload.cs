@@ -40,6 +40,12 @@ internal static class EvidenceTaskTypes
     /// on.
     /// </summary>
     public const string Parse = "artifact_parse";
+
+    /// <summary>
+    /// Maps one stored <c>raw_report</c> artifact to <c>test.finished</c> events under the parser its producer kind
+    /// registers; handled by <see cref="ParseRawReportHandler"/>, which writes events rather than a verdict.
+    /// </summary>
+    public const string ReportParse = "raw_report_parse";
 }
 
 /// <summary>

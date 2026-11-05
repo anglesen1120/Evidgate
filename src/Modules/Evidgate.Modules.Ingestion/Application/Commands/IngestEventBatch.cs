@@ -280,37 +280,39 @@ internal sealed class IngestEventBatchHandler(
                 "the run belongs to a project outside the credential's scope"));
         }
 
-        if (string.Equals(scope.ProjectState, "deleted", StringComparison.Ordinal))
-        {
-            return Result.Failure<BatchAckResult>(Error.Conflict(
-                ApiErrorCode.ProjectDeleting,
-                "the project is being deleted"));
-        }
-
-        if (string.Equals(scope.ProjectState, "suspended", StringComparison.Ordinal))
-        {
-            return Result.Failure<BatchAckResult>(Error.Denied(
-                ApiErrorCode.OrgSuspended,
-                "the project is suspended"));
-        }
-
         // T12/T81 (replacing 04.1.1's D6 fail-closed for the incomplete case): a canceled run still accepts
         // events and marks them after_cancel (T12); an incomplete run still accepts late evidence inside its
         // late window and marks it late = true, because the run row's own immutable window (T93) is what
         // closes it - after the window the run answers 409 run_closed (T81). A complete run is closed: its
         // window runs "since completion" and the run row stores no completion instant (T101's run.completed_at
         // is 05.3.1's to add), so nothing here could open it. The state and the window are read from the run
-        // row taken FOR SHARE (T91), so a committed cancel or completion can never be missed.
-        var afterCancel = string.Equals(scope.RunState, "canceled", StringComparison.Ordinal);
-        var late = string.Equals(scope.RunState, "incomplete", StringComparison.Ordinal) && scope.LateWindowOpen;
-        var closed = (string.Equals(scope.RunState, "complete", StringComparison.Ordinal) || string.Equals(scope.RunState, "incomplete", StringComparison.Ordinal))
-            && !late;
-        if (closed)
+        // row taken FOR SHARE (T91), so a committed cancel or completion can never be missed. The decision
+        // itself is shared with every other evidence writer, so no route can disagree on what is closed.
+        var admission = RunAdmissionPolicy.Decide(scope.ProjectState, scope.RunState, scope.LateWindowOpen);
+
+        if (string.Equals(admission.Refusal, RunAdmissionPolicy.ProjectDeleted, StringComparison.Ordinal))
+        {
+            return Result.Failure<BatchAckResult>(Error.Conflict(
+                ApiErrorCode.ProjectDeleting,
+                "the project is being deleted"));
+        }
+
+        if (string.Equals(admission.Refusal, RunAdmissionPolicy.ProjectSuspended, StringComparison.Ordinal))
+        {
+            return Result.Failure<BatchAckResult>(Error.Denied(
+                ApiErrorCode.OrgSuspended,
+                "the project is suspended"));
+        }
+
+        if (string.Equals(admission.Refusal, RunAdmissionPolicy.RunClosed, StringComparison.Ordinal))
         {
             return Result.Failure<BatchAckResult>(Error.Conflict(
                 ApiErrorCode.RunClosed,
                 "the run no longer accepts events"));
         }
+
+        var afterCancel = admission.AfterCancel;
+        var late = admission.Late;
 
         // (c) One bind-or-check per batch: the first accepted write of a slot binds it to this token (T9).
         // It runs before the planned-key gate below (shared contract, T9/T10): a foreign or mismatching

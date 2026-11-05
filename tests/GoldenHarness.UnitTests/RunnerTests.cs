@@ -33,23 +33,48 @@ public sealed partial class RunnerTests : IDisposable
     }
 
     [Fact]
-    public void Run_Seeded_Corpus_With_No_Parsers_Reports_Every_Case_Pending_And_Exits_Zero()
+    public void Run_Seeded_Corpus_With_No_Parsers_Reports_Landed_Producers_As_Errors_And_The_Rest_Pending()
     {
+        // The seeded corpus is the checked-in golden set, so once a producer's parser has landed its cases carry
+        // a real status and an empty registry can no longer call them pending. That is the runner's own rule: a
+        // case whose parser is missing while the case is not marked pending is an error, and only a producer that
+        // has not landed yet stays pending.
         var (exitCode, output) = Run("--fixtures", SeededFixtures);
 
-        exitCode.ShouldBe(0);
+        exitCode.ShouldBe(1);
         output.ShouldContain("fixture");
         output.ShouldContain("verdict");
 
-        foreach (var seeded in new[] { "junit-pytest/happy", "junit-pytest/truncated", "playwright-reporter/skeleton" })
-        {
-            RowFor(output, seeded).ShouldContain("PENDING");
-        }
+        RowFor(output, "junit-pytest/happy").ShouldContain("ERROR");
+        RowFor(output, "junit-pytest/truncated").ShouldContain("ERROR");
+        RowFor(output, "playwright-reporter/skeleton").ShouldContain("PENDING");
 
-        // The corpus grows, so the count is the number of discovered cases: the summary must
-        // agree with the rows, and the three seeded cases must still be discovered.
+        output.ShouldContain("parser 'junit-pytest' is not registered and the case is not marked pending");
+        output.ShouldContain("parser 'playwright-reporter' has not landed yet");
+        output.ShouldNotContain(" PASS ");
+        output.ShouldContain("0 passed");
+        output.ShouldContain("0 failed");
+        output.ShouldContain("1 pending");
+        output.ShouldContain("2 error");
+    }
+
+    [Fact]
+    public void Run_Corpus_With_Only_Pending_Cases_And_No_Parsers_Is_All_Pending_And_Exits_Zero()
+    {
+        // A parser that has not landed is a pending case, never a failure, so a corpus of unlanded producers is
+        // a clean run: the runner reports each case, passes nothing and exits zero without --strict.
+        CreateCase("happy", ExpectedJson("parsed", 0));
+        CreateCase("truncated", ExpectedJson("malformed", 0), parserStatus: "pending");
+        CreateCase("skeleton", ExpectedJson("parsed", 0), producer: "other-producer");
+
+        var (exitCode, output) = Run("--fixtures", _root);
+
+        exitCode.ShouldBe(0);
+
         var pending = PendingRows(output);
         pending.ShouldBeGreaterThanOrEqualTo(3);
+        RowFor(output, "temp-producer/happy").ShouldContain("PENDING");
+        RowFor(output, "other-producer/skeleton").ShouldContain("PENDING");
         output.ShouldNotContain(" PASS ");
         output.ShouldContain("0 passed");
         output.ShouldContain("0 failed");
@@ -58,16 +83,21 @@ public sealed partial class RunnerTests : IDisposable
     }
 
     [Fact]
-    public void Run_Seeded_Corpus_Under_Strict_Exits_One_While_Pending()
+    public void Run_Pending_Corpus_Under_Strict_Exits_One_While_Pending()
     {
-        var (exitCode, output) = Run("--fixtures", SeededFixtures, "--strict");
+        CreateCase("happy", ExpectedJson("parsed", 0));
+        CreateCase("skeleton", ExpectedJson("parsed", 0), producer: "other-producer");
+
+        var (exitCode, output) = Run("--fixtures", _root, "--strict");
 
         exitCode.ShouldBe(1);
 
         var pending = PendingRows(output);
-        pending.ShouldBeGreaterThanOrEqualTo(3);
+        pending.ShouldBeGreaterThanOrEqualTo(2);
         output.ShouldContain($"{pending} pending");
-        RowFor(output, "junit-pytest/happy").ShouldContain("PENDING");
+        output.ShouldContain("0 error");
+        RowFor(output, "temp-producer/happy").ShouldContain("PENDING");
+        RowFor(output, "other-producer/skeleton").ShouldContain("PENDING");
     }
 
     [Fact]
