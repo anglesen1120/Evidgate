@@ -6,11 +6,11 @@
 // reconciliation moves these documents back into `fixtures/web-api/` once the schema carries the
 // reconciled body; nothing else about them changes.
 //
-// Each body is typed by `features/runs/data/decision-body.ts` (the web-local body, which the stale
+// Each body is typed by `features/runs/data/decision-reader.ts` (the web-local body, which the stale
 // SDK `Decision` cannot express), so a renamed member or a widened enum fails here at compile time
 // rather than at the first fixture-backed screen.
 // eslint-disable-next-line evidgate/no-feature-cross-import -- dev-only fixture corpus, absent from every production bundle (the `fixtures` build configuration is its only importer); the body type it must satisfy is the web-local decision declaration.
-import type { DecisionBody } from '../../features/runs/data/decision-body';
+import type { ReceivedDecision } from '../../features/runs/data/decision-reader';
 
 /** `pending`: `status` alone, every evaluation-derived member `null`. */
 export const PENDING_DECISION_BODY = {
@@ -27,7 +27,7 @@ export const PENDING_DECISION_BODY = {
   evaluator_version: null,
   mode: null,
   url: null,
-} satisfies DecisionBody;
+} satisfies ReceivedDecision;
 
 /** The evaluated body of the incomplete revision: a FAIL that names the missing shard. */
 export const FAILED_DECISION_BODY = {
@@ -44,7 +44,7 @@ export const FAILED_DECISION_BODY = {
   evaluator_version: 'evidgate-evaluator/1.4.0',
   mode: 'live',
   url: '/v1/runs/018f0000-0000-7000-8000-000000000071/decision?evidence_revision=2',
-} satisfies DecisionBody;
+} satisfies ReceivedDecision;
 
 /** A complete evaluated PASS with no reasons. */
 export const PASSED_DECISION_BODY = {
@@ -61,7 +61,7 @@ export const PASSED_DECISION_BODY = {
   evaluator_version: 'evidgate-evaluator/1.4.0',
   mode: 'live',
   url: '/v1/runs/018f0000-0000-7000-8000-000000000071/decision?evidence_revision=1',
-} satisfies DecisionBody;
+} satisfies ReceivedDecision;
 
 /**
  * The off-contract body the endpoint filters out: a `mode: shadow` PASS. The receiver must refuse
@@ -81,7 +81,7 @@ export const SHADOW_DECISION_BODY = {
   evaluator_version: 'evidgate-evaluator/1.4.0-shadow',
   mode: 'shadow',
   url: '/v1/runs/018f0000-0000-7000-8000-000000000071/decision?mode=shadow',
-} satisfies DecisionBody;
+} satisfies ReceivedDecision;
 
 /** The `503` answer: the shared error envelope with the `Retry-After` the region renders. */
 export const DECISION_UNAVAILABLE_DOCUMENT = {
