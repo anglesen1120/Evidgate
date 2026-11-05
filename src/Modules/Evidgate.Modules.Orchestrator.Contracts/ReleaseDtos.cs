@@ -5,9 +5,8 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 public sealed record ReleaseCreated(Guid ReleaseId);
 
 /// <summary>
-/// The 200 body of <c>GET /v1/releases/{id}</c>: the header, then the component rows in
-/// <c>component_key</c> order. Two statements and no join; the bound-runs section belongs to the bind path and needs
-/// <c>release_run</c>, so this read never touches it.
+/// The 200 body of <c>GET /v1/releases/{id}</c>: the header, the component rows in <c>component_key</c> order, and the
+/// stored bindings in <c>created_at, id</c> order. Three statements and no join across modules.
 /// </summary>
 /// <param name="ReleaseId">The release's id.</param>
 /// <param name="ProjectId">The project the release belongs to.</param>
@@ -17,6 +16,7 @@ public sealed record ReleaseCreated(Guid ReleaseId);
 /// <param name="CreatedAt">When the declaration was stored.</param>
 /// <param name="Version">The optimistic-concurrency token of the row.</param>
 /// <param name="Components">Every component, ordered by <c>component_key</c>.</param>
+/// <param name="BoundRuns">Every stored binding of this release, ordered by <c>created_at</c> then id — insertion order, never recency.</param>
 public sealed record ReleaseDetail(
     Guid ReleaseId,
     Guid ProjectId,
@@ -25,7 +25,8 @@ public sealed record ReleaseDetail(
     string CreatedBy,
     DateTimeOffset CreatedAt,
     int Version,
-    IReadOnlyList<ReleaseComponentDetail> Components);
+    IReadOnlyList<ReleaseComponentDetail> Components,
+    IReadOnlyList<ReleaseBoundRun> BoundRuns);
 
 /// <summary>
 /// One component of a release: the key, the digest it was built at and the environment revision it was built for.

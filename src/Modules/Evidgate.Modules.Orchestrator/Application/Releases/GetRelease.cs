@@ -17,13 +17,15 @@ namespace Evidgate.Modules.Orchestrator.Application.Releases;
 internal sealed record GetReleaseQuery(Guid ReleaseId) : IQuery<Result<ReleaseDetail>>;
 
 /// <summary>
-/// The read path of a release: the header under RLS, then its components. An unknown id, another tenant's id and a
-/// release of a sibling project all answer the one 404, so neither existence nor a project's release set leaks
-/// across the scope.
+/// The read path of a release: the header under RLS, its components, then its stored bindings. An unknown id, another
+/// tenant's id and a release of a sibling project all answer the one 404, so neither existence nor a project's release
+/// set leaks across the scope.
 /// </summary>
 [Permission(Permissions.Run.Read)]
 internal sealed class GetReleaseQueryHandler(
     ITenantDb db,
+    ITenantScopeAccessor scopes,
+    BoundRunsQuery boundRuns,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant)
     : IQueryHandler<GetReleaseQuery, Result<ReleaseDetail>>
@@ -35,7 +37,7 @@ internal sealed class GetReleaseQueryHandler(
 
         var row = await db.QuerySingleOrDefaultAsync<ReleaseRow>(
             ReleaseSql.ReleaseById,
-            new { release_id = query.ReleaseId },
+            new { release_id = query.ReleaseId, org_id = scopes.Require().OrgId },
             cancellationToken).ConfigureAwait(false);
         if (row is null || OrchestratorScope.Project(row.ProjectId, principals, tenant) is not null)
         {
@@ -46,6 +48,8 @@ internal sealed class GetReleaseQueryHandler(
             ReleaseSql.ComponentsByRelease,
             new { org_id = row.OrgId, release_id = query.ReleaseId },
             cancellationToken).ConfigureAwait(false);
+
+        var bindings = await boundRuns.ReadAsync(row.OrgId, query.ReleaseId, cancellationToken).ConfigureAwait(false);
 
         return Result.Success(new ReleaseDetail(
             row.ReleaseId,
@@ -58,7 +62,8 @@ internal sealed class GetReleaseQueryHandler(
             [.. components.Select(component => new ReleaseComponentDetail(
                 component.ComponentKey,
                 component.Digest,
-                component.EnvironmentRevisionId))]));
+                component.EnvironmentRevisionId))],
+            bindings));
     }
 
     private sealed class ReleaseRow

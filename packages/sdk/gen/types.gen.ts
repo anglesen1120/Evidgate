@@ -274,6 +274,10 @@ export type CreateRunRequest = {
      */
     release?: string;
     /**
+     * Optional release id: the run is bound to that release by exact build digest inside the same transaction, so a partial (or empty) match never fails the run create — the components that agree get a `release_run` row and the rest are reported by the binding reader. An unknown, another tenant's or a sibling project's release is `404 not_found` with no run written; a `draft` release is `422 release_not_active`; a fork run is `422 fork_run_not_bindable` and a `purpose: replay` body naming this member is `422 replay_release_not_allowed`.
+     */
+    release_id?: string;
+    /**
      * Optional run purpose; absent means `regular`. `replay` is refused 422 `replay_grant_invalid` until 08.4.3 issues grants (05.2.1-T5); with `regular` it never changes the 201 shape.
      */
     purpose?: 'regular' | 'replay';
@@ -381,7 +385,7 @@ export type ReleaseCreated = {
 };
 
 /**
- * `200` answer of `GET /v1/releases/{id}`: the release's identity and its immutable components, ordered by `component_key` ascending. It carries no bound runs — `release_run` is read by the bind path's own surface. An unknown, other-tenant or other-project id is `404 not_found`.
+ * `200` answer of `GET /v1/releases/{id}`: the release's identity, its immutable components ordered by `component_key` ascending, and its stored bindings ordered by `created_at` then id. `bound_runs[]` holds every `release_run` row of the release, in insertion order. An unknown, other-tenant or other-project id is `404 not_found`.
  */
 export type ReleaseDetail = {
     release_id: string;
@@ -398,6 +402,70 @@ export type ReleaseDetail = {
      */
     version: number;
     components: Array<ReleaseComponentDetail>;
+    /**
+     * Every stored binding of this release, ordered by `created_at` then id — insertion order, never a "latest run" selection.
+     */
+    bound_runs: Array<ReleaseBoundRun>;
+};
+
+/**
+ * One stored `release_run` row of a release, as the release read reports it.
+ */
+export type ReleaseBoundRun = {
+    run_id: string;
+    component_key: string;
+    /**
+     * When the row was written; the release read's ordering key.
+     */
+    bound_at: string;
+};
+
+/**
+ * Body of `POST /v1/releases/{id}/runs`. Closed: a member the body does not declare, a repeated member and a declared member of the wrong JSON type are `422 request_invalid`; only unparseable bytes are `400 request_invalid`.
+ */
+export type ReleaseBindRequest = {
+    /**
+     * The run to bind. A run of another project of the same org, another tenant's run or an unknown id is the same `404 not_found` as an unknown release.
+     */
+    run_id: string;
+};
+
+/**
+ * `201` answer of `POST /v1/releases/{id}/runs`: what the pair holds after the call, and what it never will. A re-bind of already-bound keys answers the stored rows too, so `bound[]` is the pair's state rather than this call's insert count.
+ */
+export type ReleaseBindResult = {
+    release_id: string;
+    run_id: string;
+    /**
+     * Every component currently bound for the pair, ordered by component key.
+     */
+    bound: Array<ReleaseBoundComponent>;
+    /**
+     * Every release component the run does not match, ordered by component key: the key and the reason only, with no digest echoed back. Never stored: derived on read from the release's components and the run's recorded `components`.
+     */
+    mismatched: Array<ReleaseBindMismatch>;
+};
+
+/**
+ * One component a run's build matched.
+ */
+export type ReleaseBoundComponent = {
+    component_key: string;
+    /**
+     * The build digest both sides agree on. A build identifier, never a secret.
+     */
+    digest: string;
+};
+
+/**
+ * One release component a run could not be bound for, and why. Key and reason only: the answer needs `run:create`, so it echoes no build digest back and stores none in the idempotency record.
+ */
+export type ReleaseBindMismatch = {
+    component_key: string;
+    /**
+     * `digest_mismatch` — the run recorded another digest for the key; `component_missing` — the run recorded no usable digest for it.
+     */
+    reason: 'digest_mismatch' | 'component_missing';
 };
 
 /**
@@ -5647,9 +5715,7 @@ export type GetReleaseResponses = {
 export type GetReleaseResponse = GetReleaseResponses[keyof GetReleaseResponses];
 
 export type BindReleaseRunData = {
-    body: {
-        run_id: string;
-    };
+    body: ReleaseBindRequest;
     headers: {
         /**
          * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
@@ -5669,6 +5735,10 @@ export type BindReleaseRunData = {
 
 export type BindReleaseRunErrors = {
     /**
+     * `request_invalid` — the bytes are not JSON at all, so no member can be read and nothing is written.
+     */
+    400: ErrorEnvelope;
+    /**
      * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
     401: ErrorEnvelope;
@@ -5677,15 +5747,19 @@ export type BindReleaseRunErrors = {
      */
     403: ErrorEnvelope;
     /**
-     * 404 not found — also for other-tenant ids (00 §9.2)
+     * `not_found` — the release id is unknown, belongs to another tenant, or names a release of a project other than the caller's scoped project; a `run_id` that is unknown, other-tenant or of another project answers the same code and the same message ("no release or run with those ids is visible to this tenant"). All of them answer identically, so a refused bind never names which id or which case it hit, and none is answered by a mismatch code.
      */
     404: ErrorEnvelope;
     /**
-     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     * Two codes share this status. `release_bind_closed` — the run already has a stored `live` evaluation, so its binding is final. `idempotency_conflict` — the `Idempotency-Key` was already used for a different body.
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     * `payload_too_large` — the body is larger than the 64 KiB cap this route reads, so it is refused before it is parsed.
+     */
+    413: ErrorEnvelope;
+    /**
+     * Four codes share this status. `request_invalid` is the body's shape: not a JSON object, a member this route does not accept, a repeated member, or a `run_id` that is missing, not a string or not a UUID. `release_not_active` — the release is `draft`, so it accepts no bind. `fork_run_not_bindable` — the run's identity is a fork, so it is advisory-only and pins to no release; a `purpose: replay` run is refused the same way with `replay_release_not_allowed`. `release_component_mismatch` — no release component matches the run's digests; `details[]` carries one entry per mismatched component, its `path` naming `/run/components/<component_key>` and its `reason` the `digest_mismatch` or `component_missing` code.
      */
     422: ErrorEnvelope;
     /**
@@ -5702,10 +5776,12 @@ export type BindReleaseRunError = BindReleaseRunErrors[keyof BindReleaseRunError
 
 export type BindReleaseRunResponses = {
     /**
-     * Binding created
+     * The bindings the pair holds, and the components the run does not match
      */
-    201: unknown;
+    201: ReleaseBindResult;
 };
+
+export type BindReleaseRunResponse = BindReleaseRunResponses[keyof BindReleaseRunResponses];
 
 export type GetReleaseDecisionData = {
     body?: never;

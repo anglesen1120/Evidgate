@@ -8,7 +8,7 @@ namespace Evidgate.BuildingBlocks.Observability;
 /// Hosts subscribe to this <see cref="ActivitySource"/> and <see cref="Meter"/> so both entry points
 /// use one telemetry vocabulary. The <c>evidgate.module</c> tag identifies the modules a trace crosses.
 /// </summary>
-public static class EvidgateTelemetry
+public static partial class EvidgateTelemetry
 {
     /// <summary>Name of the single application activity source (00 §5.7, plan 10).</summary>
     public const string ActivitySourceName = "Evidgate";
@@ -61,6 +61,7 @@ public static class EvidgateTelemetry
 
     /// <summary>Counter of repeat finalizes whose declared values disagree with the stored declaration (05.3.2-T1, the T68/D3 signal).</summary>
     public const string FinalizeDeclarationMismatchMetricName = "evidgate_finalize_declaration_mismatch_total";
+
 
     /// <summary>Histogram of pipeline-handler durations in milliseconds (01.4.2-T4.1, the C2 telemetry stage).</summary>
     public const string PipelineDurationMetricName = "evidgate.pipeline.duration";
@@ -149,6 +150,7 @@ public static class EvidgateTelemetry
         FinalizeDeclarationMismatchMetricName,
         unit: "{request}",
         description: "Repeat finalizes whose declared values disagree with the stored declaration (05.3.2-T1, T68/D3). No labels.");
+
 
     private static readonly Histogram<double> PipelineDurations = Meter.CreateHistogram<double>(
         PipelineDurationMetricName,

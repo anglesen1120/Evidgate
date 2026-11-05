@@ -16,7 +16,7 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// The release create API and its read. A release is a named set of component digests bound to environment
 /// revisions; the create path validates the closed body, stores it in one tenant transaction with its audit row,
-/// and the read returns the same components without any bound run.
+/// and the read returns the same components plus the runs bound to them by digest match.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed partial class ReleaseIntegrationTests

@@ -10,9 +10,9 @@ using Microsoft.AspNetCore.Routing;
 namespace Evidgate.Modules.Orchestrator.Endpoints;
 
 /// <summary>
-/// The two release routes: the declaration (<c>POST /v1/projects/{p}/releases</c>) and the read
-/// (<c>GET /v1/releases/{id}</c>). Both are thin: the edge reads the capped body and the <c>Idempotency-Key</c>, the
-/// handler owns authorization, validation, the transaction and the audit.
+/// The release routes: the declaration (<c>POST /v1/projects/{p}/releases</c>), the read (<c>GET /v1/releases/{id}</c>)
+/// and the explicit bind (<c>POST /v1/releases/{id}/runs</c>). All are thin: the edge reads the capped body and the
+/// <c>Idempotency-Key</c>, the handler owns authorization, validation, the transaction and the audit.
 /// </summary>
 internal static class ReleaseEndpoints
 {
@@ -43,7 +43,21 @@ internal static class ReleaseEndpoints
             .Produces(StatusCodes.Status401Unauthorized)
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound)
-            .WithSummary("One release and its components, ordered by component key");
+            .WithSummary("One release, its components and its stored bindings");
+
+        // The delegate returns the `Result<T>` wrapper, which the host's filter unwraps and never the wire shape;
+        // the bodiless `.Produces(200)` below replaces the response ASP.NET infers for the default status from that
+        // return type, so `ResultOfReleaseBindResult` never reaches the served document (the create route does the same).
+        group.MapPost("/releases/{id}/runs", BindReleaseRunAsync)
+            .Produces<ReleaseBindResult>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .Produces(StatusCodes.Status413PayloadTooLarge)
+            .Produces(StatusCodes.Status422UnprocessableEntity)
+            .WithSummary("Bind a run to a release by exact build digest");
     }
 
     /// <summary>
@@ -86,4 +100,34 @@ internal static class ReleaseEndpoints
         IMediator mediator,
         CancellationToken cancellationToken) =>
         await mediator.Send(new GetReleaseQuery(id), cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// <c>POST /v1/releases/{id}/runs</c>: binds the path, the capped body, its digest and the caller's
+    /// <c>Idempotency-Key</c>, then sends the one command. A caller with no principal at all is 401 here, before a byte of
+    /// the body is read; the pipeline's <c>run:create</c> check answers a resolved member without it (403).
+    /// </summary>
+    private static async Task<Result<ReleaseBindResult>> BindReleaseRunAsync(
+        Guid id,
+        HttpContext context,
+        IRequestPrincipalAccessor principals,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (principals.Current is null)
+        {
+            return Result.Failure<ReleaseBindResult>(OrchestratorEndpoints.Unauthenticated);
+        }
+
+        var (bytes, tooLarge) = await OrchestratorEndpoints
+            .ReadBodyAsync(context, MaxReleaseBytes, null, cancellationToken)
+            .ConfigureAwait(false);
+        if (tooLarge is not null)
+        {
+            return Result.Failure<ReleaseBindResult>(tooLarge);
+        }
+
+        return await mediator.Send(
+            new BindReleaseRunCommand(id, bytes, OrchestratorEndpoints.Sha256(bytes), OrchestratorEndpoints.IdempotencyKey(context)),
+            cancellationToken).ConfigureAwait(false);
+    }
 }

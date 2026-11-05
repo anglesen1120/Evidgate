@@ -40,6 +40,10 @@ internal static class PolicyModule
         services.TryAddScoped<GetLatestLiveDecisionsQuery>();
         services.TryAddScoped<IPolicyContracts, PolicyContracts>();
 
+        // The existence read another module's ordering needs: whether a run already holds a stored live verdict. Scoped
+        // like every other module service, so it runs inside the caller's tenant transaction.
+        services.TryAddScoped<ILiveEvaluationReader, LiveEvaluationReader>();
+
         // The policy routes validate their bodies against the contract schema set, which is compiled on first use (the
         // routes resolve it per request, never at start-up).
         services.TryAddEvidgateContractValidation();
