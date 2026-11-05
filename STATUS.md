@@ -265,7 +265,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 
 | Task | Size | Note | Lock | Migration lane | Shares file with running lane | Split (L/XL) | Buildable |
 |---|---|---|---|---|---|---|---|
-| 01.10.1-T1 | M | Emit own CI results in ingest format | yes | no | no | n/a | yes |
+| 01.10.1-T1 | M | Emit own CI results in ingest format; partial (S245, #510): T1.2 collect.sh + parse tests; mapper half waits for 04.4.1 | yes | no | no | n/a | yes |
 | 02.4.3-T2 | M | `github_installation`, install callback, token minting | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json`; S91: additive endpoint registration | n/a | yes |
 | 02.4.4-T1 | M | `api_token` table, create/list/revoke API | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` | n/a | yes |
 | 02.8.1-T1 | M | `support_grant` model and request/approve/revoke flow | yes | yes (0049+) | S97: `contracts/openapi.yaml`, `packages/sdk`, `contracts/permissions.json` | n/a | yes |
