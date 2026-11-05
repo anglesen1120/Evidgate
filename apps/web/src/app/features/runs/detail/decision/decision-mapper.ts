@@ -8,7 +8,7 @@
 // unknown `missing` literal is kept as a literal for the caller to render, never dropped or mapped
 // onto one of the eight codes.
 
-import { MAX_PROVENANCE_LENGTH, type DecisionBody } from '../../data/decision-body';
+import { MAX_PROVENANCE_LENGTH, type ReceivedDecision } from '../../data/decision-reader';
 import type { DecisionViewModel } from './decision-view-model';
 
 /** A served body that may not fill the live slot; the caller keeps its accepted snapshot. */
@@ -29,7 +29,7 @@ const CONTRACT_DEFECT: DecisionViewModel = { kind: 'unavailable', cause: 'contra
  * only on a complete revision.
  */
 export function toDecisionCandidate(
-  body: DecisionBody | null,
+  body: ReceivedDecision | null,
 ): DecisionViewModel | ShadowCandidate {
   if (body === null) return CONTRACT_DEFECT;
   if (body.mode === 'shadow') return { kind: 'shadow' };

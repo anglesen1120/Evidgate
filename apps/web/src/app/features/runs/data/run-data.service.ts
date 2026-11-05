@@ -5,7 +5,7 @@ import { inject, Injectable } from '@angular/core';
 import type { RunPage } from '@evidgate/sdk';
 
 import { RunsDataService } from '../../../core/data/runs-data.service';
-import { readDecisionBody, type DecisionBody } from './decision-body';
+import { readDecisionBody, type ReceivedDecision } from './decision-reader';
 
 /** One request of the run list, including its server-side filters. */
 export interface RunListQuery {
@@ -51,12 +51,12 @@ export class RunDataService {
   /**
    * The run's live decision body, validated: `null` when the served value is not a contract body.
    *
-   * The gateway hands the value over untyped because the generated `Decision` type is stale (see
-   * `core/data/runs-data.service.ts#getDecision`). `readDecisionBody` is the one place that turns it
+   * The gateway hands the value over untyped (see `core/data/runs-data.service.ts#getDecision`), so
+   * `readDecisionBody` is the one place that turns it
    * into named members, so neither the store nor a component has to trust a wire value. A refusal
    * still arrives as the gateway's typed `ApiRequestError`; only a 2xx body reaches the parser.
    */
-  async getDecision(runId: string): Promise<DecisionBody | null> {
+  async getDecision(runId: string): Promise<ReceivedDecision | null> {
     return readDecisionBody(await this.runs.getDecision(runId));
   }
 }

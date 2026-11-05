@@ -22,6 +22,15 @@ import {
 /** The `kind` every `fixtures/web-api/<name>/meta.json` must declare. */
 const API_RESPONSE_KIND = 'api-response';
 
+/**
+ * Documents that answer a body the contract refuses, on purpose: the endpoint serves live rows only,
+ * and the receiver must still refuse an off-contract shadow body. Each names the one member the
+ * validator must reject, so the exemption cannot hide any other drift.
+ */
+const OFF_CONTRACT_BY_DESIGN: ReadonlyMap<string, string> = new Map([
+  ['run-decision-shadow-refused', '/mode'],
+]);
+
 describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
   it('holds a handcrafted web-api/api-response corpus', () => {
     expect(CORPUS.length, `no fixture directories under ${WEB_API_FIXTURES}`).toBeGreaterThan(0);
@@ -169,6 +178,14 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
         document.status,
         document.body,
       );
+      const refusedMember = OFF_CONTRACT_BY_DESIGN.get(fixture.name);
+      if (refusedMember !== undefined) {
+        expect(
+          result.errors.map((error) => error.path),
+          `fixtures/web-api/${fixture.name} must be refused for exactly ${refusedMember}`,
+        ).toEqual([refusedMember]);
+        return;
+      }
       expect(
         result.errors,
         `fixtures/web-api/${fixture.name} (${document.operation_id} ${document.status}, variant '${document.variant}') no longer matches contracts/openapi.yaml: ${describeErrors(result.errors)}`,

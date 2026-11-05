@@ -74,12 +74,9 @@ export class RunsDataService {
   /**
    * The run's live decision body (`GET /v1/runs/{r}/decision`).
    *
-   * Deliberately `unknown`: the generated `Decision` type this operation resolves is stale — it
-   * predates the reconciled body and carries no `status`, `missing`, `outcome`, hashes or `mode`.
-   * Typing it as `Decision` here would push wrong member names into the app, and asserting a
-   * hand-written shape onto it would skip validation, so the served value keeps no compile-time
-   * type at this seam. The feature's `readDecisionBody` validates it before anything reads a field,
-   * and the decision-route task's regenerated SDK type replaces both in one change.
+   * Deliberately `unknown`: the served value is validated by the feature's `readDecisionBody`
+   * before anything reads a field, so a body that drifts from the contract renders the
+   * contract-invalid state instead of a guessed verdict.
    */
   getDecision(runId: string): Promise<unknown> {
     return this.gateway.call((client) => getRunDecision({ client, path: { r: runId } }));
