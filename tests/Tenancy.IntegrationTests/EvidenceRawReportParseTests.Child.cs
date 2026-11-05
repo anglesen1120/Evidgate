@@ -216,6 +216,18 @@ public sealed partial class EvidenceRawReportParseTests
         viaRecords.Discrepancies.ShouldBe(viaBytes.Discrepancies);
     }
 
+    [Fact]
+    public void Records_Nested_Past_The_Profile_Depth_Are_A_Crashed_Child()
+    {
+        var records = Enumerable.Range(0, 200).Select(_ => Record("{\"t\":\"xml\",\"e\":\"start\",\"n\":\"a\",\"a\":[]}")).ToList();
+        var mapper = new PytestJUnitMapper(new ParsingService(maxReportCases: 10));
+
+        var refused = Should.Throw<JUnitParseRefusedException>(
+            () => mapper.Map(records, new JUnitMapContext(Guid.NewGuid(), (_, _) => null)));
+
+        refused.Reason.ShouldBe("parse_crashed");
+    }
+
     private static ParseRecord Record(string json) => new(Encoding.UTF8.GetBytes(json));
 
     private static ParseRawReportHandler CreateHandler(World world, IParseRunner? runner)

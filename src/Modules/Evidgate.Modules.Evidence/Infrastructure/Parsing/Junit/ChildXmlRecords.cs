@@ -11,7 +11,15 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 /// The child already ran the untrusted bytes through the parser profile inside its resource limits, so what arrives here
 /// is the profile's own output: names and values the profile accepted, no document type, a balanced element tree.
 /// The rebuilt text is therefore read back with a reader that prohibits a document type and resolves nothing; the
-/// parent never hands the report's own bytes to an XML reader. A record that breaks the child's protocol (an unbalanced
+/// parent never hands the report's own bytes to an XML reader.
+/// <para>
+/// <b>Text nodes are not rebuilt.</b> No mapper reads element text (a status is an element name and the identity and
+/// counters are attributes), and decoding a megabyte-sized text record would cost the Worker several times its size in
+/// strings and buffers. Text records are checked to be well-formed records and skipped without decoding their value,
+/// so the rebuilt document is bounded by the structure and attributes the profile already admitted.
+/// </para>
+/// <para>
+/// A record that breaks the child's protocol (an unbalanced
 /// tree, a name that is not an XML name, a record that is not the expected shape) is a crashed child, never a verdict
 /// about the report.
 /// </para>
@@ -28,13 +36,17 @@ internal static class ChildXmlRecords
     private const string EndEvent = "end";
     private const string TextEvent = "text";
 
+    /// <summary>Twice the profile's element depth: slack for how the child counts, never room for a hostile stream.</summary>
+    private const int MaxRebuiltDepth = ParsingLimits.MaxDepth * 2;
+
     /// <summary>
     /// Rebuilds the document the records describe and opens a hardened reader over it.
     /// </summary>
     /// <param name="records">The child's records in stream order, without its marker.</param>
+    /// <param name="maxDocumentBytes">The most the rebuilt document may take; a stream that needs more is a crashed child.</param>
     /// <returns>A reader over the rebuilt document; the caller disposes it.</returns>
     /// <exception cref="JUnitParseRefusedException">The stream is not a well-framed element tree (<c>parse_crashed</c>).</exception>
-    public static XmlReader OpenReader(IReadOnlyList<ParseRecord> records)
+    public static XmlReader OpenReader(IReadOnlyList<ParseRecord> records, long maxDocumentBytes)
     {
         ArgumentNullException.ThrowIfNull(records);
 
@@ -43,7 +55,7 @@ internal static class ChildXmlRecords
             var buffer = new MemoryStream();
             using (var text = new StreamWriter(buffer, new UTF8Encoding(false), 4096, leaveOpen: true))
             {
-                Rebuild(records, text);
+                Rebuild(records, text, buffer, maxDocumentBytes);
             }
 
             buffer.Position = 0;
@@ -56,19 +68,28 @@ internal static class ChildXmlRecords
 
             return XmlReader.Create(buffer, settings);
         }
-        catch (Exception exception) when (exception is JsonException or XmlException or InvalidOperationException)
+        catch (Exception exception) when (exception is JsonException or XmlException or InvalidOperationException or IOException)
         {
             throw Crashed();
         }
     }
 
-    private static void Rebuild(IReadOnlyList<ParseRecord> records, StreamWriter output)
+    private static void Rebuild(
+        IReadOnlyList<ParseRecord> records,
+        StreamWriter output,
+        MemoryStream buffer,
+        long maxDocumentBytes)
     {
         var open = new Stack<string>();
         var roots = 0;
 
         foreach (var record in records)
         {
+            if (buffer.Length > maxDocumentBytes)
+            {
+                throw new InvalidOperationException("the child's records rebuild a document over the report's byte budget");
+            }
+
             var parsed = Decode(record.Utf8Json.Span);
             if (parsed.Kind is not XmlKind)
             {
@@ -81,6 +102,11 @@ internal static class ChildXmlRecords
                     if (open.Count == 0 && ++roots > 1)
                     {
                         throw new InvalidOperationException("the child streamed more than one root element");
+                    }
+
+                    if (open.Count >= MaxRebuiltDepth)
+                    {
+                        throw new InvalidOperationException("the child streamed elements nested deeper than the profile admits");
                     }
 
                     WriteStart(output, parsed);
@@ -99,19 +125,8 @@ internal static class ChildXmlRecords
                     break;
 
                 case TextEvent:
-                    if (open.Count == 0)
-                    {
-                        // The child streams the document-level whitespace the profile's reader reports around the root;
-                        // it carries nothing and is not rebuilt. Anything else outside the root is not a document.
-                        if (!string.IsNullOrWhiteSpace(parsed.Value))
-                        {
-                            throw new InvalidOperationException("the child streamed text outside the root element");
-                        }
-
-                        break;
-                    }
-
-                    WriteEscaped(output, parsed.Value ?? string.Empty);
+                    // Skipped without being decoded (see the type remarks). Text outside the root is only ever the
+                    // document-level whitespace the profile's reader reports, which carries nothing either.
                     break;
 
                 default:
@@ -181,7 +196,6 @@ internal static class ChildXmlRecords
         string? kind = null;
         string? xmlEvent = null;
         string? name = null;
-        string? value = null;
         var attributes = new List<(string Key, string Value)>();
 
         if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
@@ -206,7 +220,8 @@ internal static class ChildXmlRecords
                     name = reader.GetString();
                     break;
                 case ValueProperty:
-                    value = reader.GetString();
+                    // The only record with a value is a text record, whose value is never decoded.
+                    reader.Skip();
                     break;
                 case AttributesProperty:
                     ReadAttributes(ref reader, attributes);
@@ -217,7 +232,7 @@ internal static class ChildXmlRecords
             }
         }
 
-        return new DecodedRecord(kind, xmlEvent, name, value, attributes);
+        return new DecodedRecord(kind, xmlEvent, name, attributes);
     }
 
     private static void ReadAttributes(ref Utf8JsonReader reader, List<(string Key, string Value)> attributes)
@@ -251,6 +266,5 @@ internal static class ChildXmlRecords
         string? Kind,
         string? Event,
         string? Name,
-        string? Value,
         List<(string Key, string Value)> Attributes);
 }

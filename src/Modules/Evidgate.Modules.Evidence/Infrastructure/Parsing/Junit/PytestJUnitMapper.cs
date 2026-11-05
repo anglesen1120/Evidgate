@@ -43,6 +43,9 @@ internal sealed class PytestJUnitMapper : IJUnitMapper
     private const string NameAttribute = "name";
     private const string TimeAttribute = "time";
 
+    /// <summary>Room over the report cap for the names and quoting a rebuilt document spells differently from the source.</summary>
+    private const long DocumentSlackBytes = 1024 * 1024;
+
     private readonly IParsing parsing;
     private readonly long maxReportBytes;
 
@@ -103,7 +106,7 @@ internal sealed class PytestJUnitMapper : IJUnitMapper
         ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(context);
 
-        using var reader = ChildXmlRecords.OpenReader(records);
+        using var reader = ChildXmlRecords.OpenReader(records, maxReportBytes + DocumentSlackBytes);
 
         try
         {
