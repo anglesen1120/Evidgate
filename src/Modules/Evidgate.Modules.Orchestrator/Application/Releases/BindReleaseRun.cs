@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Observability;
@@ -68,8 +66,8 @@ internal sealed class BindReleaseRunHandler(
     IAuditTrail audit)
     : ICommandHandler<BindReleaseRunCommand, Result<ReleaseBindResult>>
 {
-    /// <summary>The outbox task type an applied bind enqueues: no handler consumes it yet, and a row no handler claims stays queued.</summary>
-    internal const string BoundTaskType = "orchestrator.release.bound";
+    /// <summary>The outbox task type an applied bind enqueues, shared with the run-create path.</summary>
+    internal const string BoundTaskType = ReleaseBindWriter.TaskType;
 
     /// <inheritdoc />
     public async ValueTask<Result<ReleaseBindResult>> Handle(BindReleaseRunCommand command, CancellationToken cancellationToken)
@@ -221,47 +219,19 @@ internal sealed class BindReleaseRunHandler(
         // A bind that wrote nothing is not an applied bind: its mismatches were counted when the rows were inserted.
         EvidgateTelemetry.RecordReleaseBindMismatch(match.Mismatched.Count);
 
-        await EnqueueBound(releaseId, runId, match, cancellationToken).ConfigureAwait(false);
-        audit.Describe(AppliedAudit(releaseId, runId, bound.Count, match));
+        await ReleaseBindWriter
+            .EnqueueAsync(
+                outbox,
+                releaseId,
+                runId,
+                [.. match.Bound.Select(component => component.ComponentKey)],
+                match.Mismatched.Count,
+                cancellationToken)
+            .ConfigureAwait(false);
+        ReleaseBindWriter.Describe(audit, releaseId, runId, bound.Count, match.Mismatched.Count);
 
         return Result.Success(BindResult(releaseId, runId, bound, match), StatusCodes.Status201Created);
     }
-
-    /// <summary>One outbox event for the applied bind, deduped on the matched key set (see <see cref="OutboxKey"/>).</summary>
-    private async ValueTask EnqueueBound(
-        Guid releaseId,
-        Guid runId,
-        ReleaseMatchOutcome match,
-        CancellationToken cancellationToken) =>
-        await outbox.EnqueueAsync(
-            BoundTaskType,
-            JsonSerializer.Serialize(new
-            {
-                release_id = releaseId,
-                run_id = runId,
-                bound = match.Bound.Count,
-                mismatched = match.Mismatched.Count,
-            }),
-            "release",
-            releaseId,
-            OutboxKey(releaseId, runId, match.Bound),
-            cancellationToken).ConfigureAwait(false);
-
-    /// <summary>The audit object of an applied bind: allowlisted keys only, and no component key or digest.</summary>
-    /// <param name="releaseId">The release the row is about.</param>
-    /// <param name="runId">The run the binding is for.</param>
-    /// <param name="boundCount">The rows the pair holds after the call.</param>
-    /// <param name="match">The match that was applied: its mismatch count decides the outcome word.</param>
-    private static AuditObject AppliedAudit(Guid releaseId, Guid runId, int boundCount, ReleaseMatchOutcome match) =>
-        new(
-            "release",
-            releaseId.ToString("D"),
-            Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["count"] = boundCount.ToString(CultureInfo.InvariantCulture),
-                ["outcome"] = match.Mismatched.Count == 0 ? "complete" : "partial",
-                ["run_id"] = runId.ToString("D"),
-            });
 
     /// <summary>The zero-match refusal: one detail per component, naming the run's pointer and the reason.</summary>
     private static Error NoComponentMatches(ReleaseMatchOutcome match) =>
@@ -287,17 +257,6 @@ internal sealed class BindReleaseRunHandler(
         JsonSerializer.Serialize(bound.Select(component => new BindingRow(
             Guid.CreateVersion7(),
             component.ComponentKey)));
-
-    /// <summary>
-    /// The outbox dedupe key of this call's matched set: <c>orchestrator:release:&lt;id&gt;:run:&lt;id&gt;:&lt;digest&gt;</c>,
-    /// where the digest covers the ordered matched keys. It stays inside the column's 256-character bound.
-    /// </summary>
-    private static string OutboxKey(Guid releaseId, Guid runId, IReadOnlyList<ReleaseBoundComponent> bound)
-    {
-        var keys = string.Join('\u001f', bound.Select(component => component.ComponentKey));
-        var digest = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(keys)))[..32];
-        return $"orchestrator:release:{releaseId:D}:run:{runId:D}:{digest}";
-    }
 
     /// <summary>One binding as the <c>jsonb_to_recordset</c> batch reads it.</summary>
     private sealed record BindingRow(

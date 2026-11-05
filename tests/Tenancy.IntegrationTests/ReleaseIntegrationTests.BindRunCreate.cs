@@ -207,7 +207,8 @@ public sealed partial class ReleaseIntegrationTests
             + $"and key = '{idempotencyKey}'")).ShouldBe(0, "the rejected create's key was never stored");
         (await _fixture.ScalarAsync<long>(
             world.Database,
-            $"select count(*) from public.audit_log where org_id = '{world.Org:D}' and action = 'run.create'")).ShouldBe(0);
+            $"select count(*) from public.audit_log where org_id = '{world.Org:D}' "
+            + "and action in ('run.create', 'release.bind')")).ShouldBe(0);
     }
 
     /// <summary>

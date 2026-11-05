@@ -534,8 +534,19 @@ internal sealed class CreateRunCommandHandler(
         // here at all (the idempotency stage answers the stored response).
         if (bindReleaseId is { } boundReleaseId)
         {
+            // The binding writes its own audit row and outbox event here, in this transaction: a run create that pinned a
+            // release changed the same rows an explicit bind would, so the chain must say so either way.
             await RunReleaseBinding
-                .BindAsync(boundReleaseId, runId, orgId, components, db, cancellationToken)
+                .BindAsync(
+                    boundReleaseId,
+                    runId,
+                    orgId,
+                    components,
+                    db,
+                    outbox,
+                    audit,
+                    AuditActorResolver.From(principals.Current),
+                    cancellationToken)
                 .ConfigureAwait(false);
         }
 

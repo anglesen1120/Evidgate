@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Persistence.Audit;
+using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
@@ -87,6 +89,9 @@ internal static class RunReleaseBinding
     /// <param name="orgId">The ambient scope's org.</param>
     /// <param name="components">The body's <c>components</c> member, or null when it carried none.</param>
     /// <param name="db">The caller's tenant transaction.</param>
+    /// <param name="outbox">The same transaction's outbox writer, for the binding's event.</param>
+    /// <param name="audit">The run create's audit buffer, for the binding's row.</param>
+    /// <param name="actor">The principal the binding is attributed to.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     internal static async ValueTask BindAsync(
         Guid releaseId,
@@ -94,6 +99,9 @@ internal static class RunReleaseBinding
         Guid orgId,
         JsonElement? components,
         ITenantDb db,
+        IOutboxWriter outbox,
+        IAuditTrail audit,
+        AuditActor actor,
         CancellationToken cancellationToken)
     {
         var rows = await db.QueryAsync<ReleaseComponentRow>(
@@ -116,10 +124,24 @@ internal static class RunReleaseBinding
             component_key = component.ComponentKey,
         }));
 
-        await db.ExecuteAsync(
+        var inserted = await db.ExecuteAsync(
             ReleaseSql.InsertBindings,
             new { org_id = orgId, release_id = releaseId, run_id = runId, rows = bindings },
             cancellationToken).ConfigureAwait(false);
+
+        // The binding is a change of its own even though a run create carried it: the same event and the same audit row
+        // as an explicit bind, written in this same transaction, and only when a row actually landed.
+        if (inserted == 0)
+        {
+            return;
+        }
+
+        var boundKeys = match.Bound.Select(component => component.ComponentKey).ToArray();
+        await ReleaseBindWriter
+            .EnqueueAsync(outbox, releaseId, runId, boundKeys, match.Mismatched.Count, cancellationToken)
+            .ConfigureAwait(false);
+        ReleaseBindWriter.Describe(audit, releaseId, runId, boundKeys.Length, match.Mismatched.Count);
+        ReleaseBindWriter.Record(audit, actor);
     }
 
     /// <summary>The release a run create targets: the state that decides whether it may be bound at all.</summary>
