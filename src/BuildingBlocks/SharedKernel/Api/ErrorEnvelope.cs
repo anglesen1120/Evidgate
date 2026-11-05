@@ -186,6 +186,9 @@ public static class ApiErrorCode
     /// <summary>409: the suite slug is already used in this project (03.2.1 §5).</summary>
     public const string SuiteSlugTaken = "suite_slug_taken";
 
+    /// <summary>409: a fixture of this project already holds the key; a fixture's identity never changes (03.3.1 §5).</summary>
+    public const string FixtureKeyTaken = "fixture_key_taken";
+
     /// <summary>422: an environment revision carries a secret value or a malformed member (05.1.2 AC3).</summary>
     public const string EnvironmentRevisionInvalid = "environment_revision_invalid";
 

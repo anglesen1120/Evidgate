@@ -89,13 +89,6 @@ public sealed class CatalogueTests
             "12.4.1",
             "plans/features/12-pilot-commercial/12.4.1-cost-is-known-before-price-is.md:105 — 12.4.1-T2.1 `GetInvoiceWorksheet` (`billing:read`, line 50)"),
         new(
-            // 12.3.1-T1.4: `billing:write` left this list — `RecordUsageBatchHandler` declares it (the operator
-            // ingress 12.3.1 §5), so the code has its first handler consumer and keeping the entry would trip the
-            // "now referenced" guard below. 12.4.1-T2.1 `IssueStatement` is its next consumer, not its first.
-            "fixture:write",
-            "03.3.1",
-            "plans/features/03-catalog-authoring/03.3.1-fixtures-and-per-run-data.md:133 — 03.3.1-T1.2 `CreateFixtureCommand`/`CreateFixtureRevisionCommand`"),
-        new(
             // Same rule as `authoring:generate` above: 13.5.1's plan file has not landed, so the Story is the one that
             // ships the code and names the receiver (13.1.1 §2 AC17).
             "script:generate",

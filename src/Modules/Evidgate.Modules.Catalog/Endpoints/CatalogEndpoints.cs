@@ -15,9 +15,9 @@ using Microsoft.AspNetCore.Routing;
 namespace Evidgate.Modules.Catalog.Endpoints;
 
 /// <summary>
-/// The catalog routes of 03.1.1 §5. Like the Tenancy and Identity routes the delegates only bind 00 §9.1's
-/// parameters and answer in <see cref="Result"/> terms: authorization is the C2 pipeline, the tenant is the
-/// request's (never the URL's), and the 00 §9.2 envelope is the host's <c>ResultEndpointFilter</c>.
+/// The catalog routes. Like the Tenancy and Identity routes the delegates only bind and answer in <see cref="Result"/>
+/// terms: authorization is the pipeline, the tenant is the request's (never the URL's), and the envelope is the host's
+/// <c>ResultEndpointFilter</c>.
 /// </summary>
 public static class CatalogEndpoints
 {
@@ -29,7 +29,7 @@ public static class CatalogEndpoints
 
     private static readonly string[] Identity = ["id", "org_id", "project_id", "annotation_id", "file_path", "first_seen_commit", "last_seen_commit", "framework", "language"];
 
-    /// <summary>Maps the catalog routes and returns the <c>/v1</c> group so the host can apply its filters (00 §5.5 C8).</summary>
+    /// <summary>Maps the catalog routes and returns the <c>/v1</c> group so the host can apply its filters.</summary>
     public static RouteGroupBuilder MapCatalogEndpoints(this IEndpointRouteBuilder routes)
     {
         ArgumentNullException.ThrowIfNull(routes);
@@ -89,6 +89,8 @@ public static class CatalogEndpoints
             .Produces<SuiteRevisionDiff>(StatusCodes.Status200OK)
             .WithSummary("What changed from another revision of the same suite (03)");
 
+        group.MapFixtureEndpoints();
+
         return group;
     }
 
@@ -117,7 +119,7 @@ public static class CatalogEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (LimitError(context.Request.Query["limit"], out var limit) is { } error)
+        if (CatalogRequestRules.Limit(context.Request.Query["limit"], DefaultLimit, MaxLimit, out var limit) is { } error)
         {
             return Result.Failure<SuiteListResponse>(error);
         }
@@ -164,7 +166,7 @@ public static class CatalogEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var (body, readError) = await ReadObjectAsync(context, MaxRevisionBodyBytes, cancellationToken).ConfigureAwait(false);
+        var (body, readError) = await CatalogRequestRules.ReadJsonAsync(context, MaxRevisionBodyBytes, cancellationToken).ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<SuiteRevisionHead>(readError);
@@ -234,7 +236,7 @@ public static class CatalogEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (LimitError(context.Request.Query["limit"], out var limit) is { } error)
+        if (CatalogRequestRules.Limit(context.Request.Query["limit"], DefaultLimit, MaxLimit, out var limit) is { } error)
         {
             return Result.Failure<CaseListResponse>(error);
         }
@@ -264,7 +266,7 @@ public static class CatalogEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        var (body, readError) = await ReadObjectAsync(context, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
+        var (body, readError) = await CatalogRequestRules.ReadJsonAsync(context, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<CaseDto>(readError);
@@ -320,7 +322,7 @@ public static class CatalogEndpoints
             return Result.Failure<CaseDto>(ifMatch);
         }
 
-        var (body, readError) = await ReadObjectAsync(context, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
+        var (body, readError) = await CatalogRequestRules.ReadJsonAsync(context, MaxBodyBytes, cancellationToken).ConfigureAwait(false);
         if (readError is not null)
         {
             return Result.Failure<CaseDto>(readError);
@@ -354,7 +356,7 @@ public static class CatalogEndpoints
         IMediator mediator,
         CancellationToken cancellationToken)
     {
-        if (LimitError(context.Request.Query["limit"], out var limit) is { } error)
+        if (CatalogRequestRules.Limit(context.Request.Query["limit"], DefaultLimit, MaxLimit, out var limit) is { } error)
         {
             return Result.Failure<CaseRevisionListResponse>(error);
         }
@@ -363,42 +365,11 @@ public static class CatalogEndpoints
             .ConfigureAwait(false);
     }
 
+    /// <summary>A case body is a handful of scalars; 16 KiB is far above any legal one.</summary>
     private const int MaxBodyBytes = 16 * 1024;
 
-    /// <summary>A revision of 10 000 members with parameters stays well under this (00 §5.7 P8).</summary>
+    /// <summary>A revision of 10 000 members with parameters stays well under this.</summary>
     private const int MaxRevisionBodyBytes = 4 * 1024 * 1024;
-
-    /// <summary>The raw JSON body, capped at 16 KiB (P8), so identity members can be named in a precise 422.</summary>
-    private static async Task<(JsonElement Body, Error? Error)> ReadObjectAsync(HttpContext context, int limit, CancellationToken cancellationToken)
-    {
-        if (context.Request.ContentLength > limit)
-        {
-            return (default, new Error(ApiErrorCode.PayloadTooLarge, "the request body is too large", StatusCodes.Status413PayloadTooLarge));
-        }
-
-        try
-        {
-            using var limited = new MemoryStream();
-            var buffer = new byte[1024];
-            int read;
-            while ((read = await context.Request.Body.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
-            {
-                await limited.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                if (limited.Length > limit)
-                {
-                    return (default, new Error(ApiErrorCode.PayloadTooLarge, "the request body is too large", StatusCodes.Status413PayloadTooLarge));
-                }
-            }
-
-            using var document = JsonDocument.Parse(limited.ToArray());
-
-            return (document.RootElement.Clone(), null);
-        }
-        catch (JsonException)
-        {
-            return (default, Error.BadRequest("the body is not valid JSON"));
-        }
-    }
 
     private static readonly JsonSerializerOptions RequestJson = new(JsonSerializerDefaults.Web)
     {
@@ -496,26 +467,5 @@ public static class CatalogEndpoints
         return int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out version) && version >= 1
             ? null
             : Error.Invalid($"If-Match must be the ETag this endpoint issued: the {what}'s version (00 §9.1)", [new ErrorDetail("If-Match", "invalid")]);
-    }
-
-    private static Error? LimitError(string? raw, out int limit)
-    {
-        limit = DefaultLimit;
-
-        if (string.IsNullOrEmpty(raw))
-        {
-            return null;
-        }
-
-        if (!int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) || parsed < 1 || parsed > MaxLimit)
-        {
-            return Error.Invalid(
-                string.Create(CultureInfo.InvariantCulture, $"limit must be an integer between 1 and {MaxLimit} (00 §9.1)"),
-                [new ErrorDetail("limit", "out_of_range")]);
-        }
-
-        limit = parsed;
-
-        return null;
     }
 }
