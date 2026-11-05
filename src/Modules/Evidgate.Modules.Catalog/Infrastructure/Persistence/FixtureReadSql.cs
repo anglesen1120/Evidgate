@@ -75,10 +75,10 @@ internal static class FixtureReadSql
     /// </summary>
     /// <remarks>
     /// Not <c>select … for update</c>: a row lock needs UPDATE on the table, and the app role holds select and insert
-    /// only. The key carries its purpose so it cannot collide with another advisory lock taken on the same id.
+    /// only. The namespace key keeps it apart from other advisory locks taken on the same id.
     /// </remarks>
     internal const string AcquireFixtureLock =
-        "select pg_advisory_xact_lock(hashtextextended('fixture_revision:' || @fixture_id::text, 0))";
+        "select pg_advisory_xact_lock(7401, hashtext(@fixture_id::text))";
 
     /// <summary>The fixture row a revision write reads under the advisory lock: its identity never changes, so a plain read is enough.</summary>
     internal const string FixtureForRead = """

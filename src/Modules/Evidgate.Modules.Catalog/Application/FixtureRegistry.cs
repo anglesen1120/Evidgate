@@ -4,7 +4,7 @@ using Evidgate.Modules.Catalog.Infrastructure.Persistence;
 
 namespace Evidgate.Modules.Catalog.Application;
 
-/// <summary><see cref="IFixtureRegistry"/> over the caller's tenant transaction (03.3.1, 00 §8.10).</summary>
+/// <summary><see cref="IFixtureRegistry"/> over the caller's tenant transaction.</summary>
 internal sealed class FixtureRegistry(ITenantDb db) : IFixtureRegistry
 {
     /// <inheritdoc />

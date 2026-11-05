@@ -1,7 +1,7 @@
 namespace Evidgate.Modules.Catalog.Contracts;
 
 /// <summary>
-/// Wire shape of a fixture (03.3.1 §5): the project-scoped identity that versions point at.
+/// Wire shape of a fixture: the project-scoped identity that versions point at.
 /// </summary>
 /// <param name="Id">Fixture id (UUIDv7).</param>
 /// <param name="OrgId">Owning organization.</param>
