@@ -16,8 +16,8 @@ namespace Evidgate.Modules.Evidence.Endpoints;
 /// <summary>
 /// The per-project capture-policy routes. The read answers every contract kind with its effective capture switch and the
 /// redaction rules the project declared for it; the write overrides one kind. The write's body is a closed object read
-/// here under a small cap that counts the bytes as they arrive; the shape rules live in the command's validator and the
-/// named refusals in its handler, while authorization, the tenant transaction and the envelope stay the pipeline's and
+/// here under the route's cap, which counts the bytes as they arrive; the shape rules live in the command's validator and
+/// the named refusals in its handler, while authorization, the tenant transaction and the envelope stay the pipeline's and
 /// the host's.
 /// </summary>
 public static class ArtifactKindPolicyEndpoints
@@ -42,7 +42,7 @@ public static class ArtifactKindPolicyEndpoints
 
     /// <summary>
     /// <c>GET /v1/projects/{p}/artifact-kind-policy</c>: the project's options for every kind, mapped from the same read
-    /// the run-create path uses, so a client and an adapter never see two answers for one project.
+    /// the contract reader will use, so a client and a future adapter caller never see two answers for one project.
     /// </summary>
     private static async Task<Result<CaptureOptionsView>> GetCaptureOptionsAsync(
         Guid p,
@@ -76,7 +76,7 @@ public static class ArtifactKindPolicyEndpoints
                 StatusCodes.Status415UnsupportedMediaType));
         }
 
-        if (context.Request.ContentLength is { } declared && declared > UploadUrlLimits.MaxBodyBytes)
+        if (context.Request.ContentLength is { } declared && declared > CapturePolicyLimits.MaxBodyBytes)
         {
             return Result.Failure<ArtifactKindPolicyView>(CappedRequestBody.TooLarge);
         }
@@ -87,7 +87,7 @@ public static class ArtifactKindPolicyEndpoints
         var inner = context.Request.Body;
         try
         {
-            context.Request.Body = new CappedBodyStream(inner, UploadUrlLimits.MaxBodyBytes);
+            context.Request.Body = new CappedBodyStream(inner, CapturePolicyLimits.MaxBodyBytes);
             body = await context.Request.ReadFromJsonAsync<ArtifactKindPolicyBody>(cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -107,6 +107,32 @@ public static class ArtifactKindPolicyEndpoints
         if (body is null)
         {
             return Result.Failure<ArtifactKindPolicyView>(Error.BadRequest("the request body is required"));
+        }
+
+        // A null element binds as a null in the array, and the mapping below would fault on it: the shape is refused
+        // here, before the command exists, so a caller learns which entry is wrong and no statement runs. The count is
+        // judged here for the same reason and one more: the validator's per-element rules would answer a failure per
+        // entry, so an over-long list would turn a bounded body into an unbounded refusal.
+        if (body.RedactionRules is { } rules)
+        {
+            if (rules.Length > CapturePolicyLimits.MaxRedactionRules)
+            {
+                return Result.Failure<ArtifactKindPolicyView>(Error.Invalid(
+                    string.Create(
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        $"a kind declares at most {CapturePolicyLimits.MaxRedactionRules} redaction rules"),
+                    [new ErrorDetail("/redaction_rules", "out_of_range")]));
+            }
+
+            for (var index = 0; index < rules.Length; index++)
+            {
+                if (rules[index] is null)
+                {
+                    return Result.Failure<ArtifactKindPolicyView>(Error.Invalid(
+                        "every redaction rule must be an object with rule_type and name_pattern",
+                        [new ErrorDetail($"/redaction_rules/{index}", "invalid_type")]));
+                }
+            }
         }
 
         return await mediator.Send(
@@ -148,6 +174,7 @@ public sealed record ArtifactKindPolicyBody(
 /// <summary>One declared rule of the write body: the field class and the name or glob over it.</summary>
 /// <param name="RuleType">One of <c>header</c>, <c>cookie</c>, <c>form_field</c>, <c>query_param</c>.</param>
 /// <param name="NamePattern">The exact field name, or a <c>*</c>/<c>?</c> glob over it.</param>
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record RedactionRuleBody(
     [property: JsonPropertyName("rule_type")] string? RuleType,
     [property: JsonPropertyName("name_pattern")] string? NamePattern);

@@ -54,9 +54,10 @@ public sealed record CaptureOptionsKind(
 /// <b>not</b> a Mediator query: it runs inside the caller's ambient tenant transaction, never opens, commits or rolls
 /// back one, and issues a bounded number of statements whatever the number of kinds.
 /// <para>
-/// The run-create path is the consumer: it embeds the options in the adapter protocol v1 configuration document so the
-/// reporter applies the redaction client-side. Nothing here decides whether a run is uncontrolled — that is the adapter's
-/// declared capability.
+/// The run-create path is the intended consumer: it will embed the options in the adapter protocol v1 configuration
+/// document so the reporter applies the redaction client-side. That wiring is not part of this surface yet — nothing
+/// calls it outside tests. Nothing here decides whether a run is uncontrolled — that is the adapter's declared
+/// capability.
 /// </para>
 /// </summary>
 public interface ICaptureOptionsReader

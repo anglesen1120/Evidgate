@@ -57,11 +57,12 @@ create table if not exists public.redaction_rule (
   constraint redaction_rule_project_fk foreign key (org_id, project_id) references public.project (org_id, id),
   constraint redaction_rule_kind_check check (kind in ('trace', 'video', 'screenshot', 'raw_report', 'dom_snapshot', 'a11y_snapshot', 'patch', 'ui_hierarchy')),
   constraint redaction_rule_rule_type_check check (rule_type in ('header', 'cookie', 'form_field', 'query_param')),
-  -- The one shape rule the database owns: a declared name is 1..200 characters of `[A-Za-z0-9._~%+:*?/-]`, so a writer
+  -- The one shape rule the database owns: a declared name is 1..128 characters of `[A-Za-z0-9._~%+:*?/-]`, so a writer
   -- that skips the route cannot store a control character, a newline or an unbounded string. `*` and `?` are the only
-  -- metacharacters — the reporter's glob, never a server-side pattern engine.
-  constraint redaction_rule_name_pattern_check check (char_length(name_pattern) between 1 and 200
-                                                     and name_pattern ~ '^[A-Za-z0-9._~%+:*?/-]+$'),
+  -- metacharacters — the reporter's glob, never a server-side pattern engine. 128 is the delivery document's bound
+  -- (`contracts/adapter/config.v1.json` `redactionRule.name_pattern`), so a rule the route stores always fits there.
+  constraint redaction_rule_name_pattern_check check (char_length(name_pattern) between 1 and 128
+                                                    and name_pattern ~ '^[A-Za-z0-9._~%+:*?/-]+$'),
   constraint redaction_rule_version_check check (version >= 1)
 );
 

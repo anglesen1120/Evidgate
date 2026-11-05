@@ -55,9 +55,6 @@ internal sealed record SetArtifactKindPolicyOverride(
 /// </summary>
 internal sealed class SetArtifactKindPolicyOverrideValidator : AbstractValidator<SetArtifactKindPolicyOverride>
 {
-    /// <summary>The most rules one kind may declare, so one write stays one bounded statement.</summary>
-    private const int MaxRedactionRules = 64;
-
     /// <summary>The longest rule-type token the validator accepts before the handler judges its vocabulary.</summary>
     private const int MaxRuleTypeLength = 32;
 
@@ -88,7 +85,7 @@ internal sealed class SetArtifactKindPolicyOverrideValidator : AbstractValidator
             .WithErrorCode("invalid_format");
 
         RuleFor(command => command.RedactionRules)
-            .Must(rules => rules is null || rules.Count <= MaxRedactionRules)
+            .Must(rules => rules is null || rules.Count <= CapturePolicyLimits.MaxRedactionRules)
             .WithErrorCode("out_of_range");
 
         // One declaration is one row: a repeated pair would break the table's unique key inside the transaction, so the
@@ -139,6 +136,18 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
     /// </summary>
     private const string LockSql =
         "select pg_advisory_xact_lock(hashtext('evidgate.artifact_kind_policy'), hashtext(@lock_key))";
+
+    /// <summary>
+    /// The kind's declared rule count before the write, read under the same lock as
+    /// <see cref="PreviousSql"/> so the audit records the set this write actually replaced.
+    /// </summary>
+    private const string PreviousRuleCountSql = """
+        select count(*)
+          from public.redaction_rule
+         where org_id = @org_id
+           and project_id = @project_id
+           and kind = @kind
+        """;
 
     /// <summary>The project's status, so a missing or deleting project is a named refusal and not a foreign-key error.</summary>
     private const string ProjectStatusSql = """
@@ -262,6 +271,15 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
         var previous = await db.QuerySingleOrDefaultAsync<string>(PreviousSql, parameters, cancellationToken)
             .ConfigureAwait(false);
 
+        // Only a write that replaces the declared set changes that control, so only it pays for the count, and it reads
+        // it under the same lock as the previous sensitivity: the pair the audit records is one row's state.
+        long? rulesBefore = null;
+        if (command.RedactionRules is not null)
+        {
+            rulesBefore = await db.ScalarAsync<long>(PreviousRuleCountSql, parameters, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         await db.ExecuteAsync(UpsertSql, parameters, cancellationToken).ConfigureAwait(false);
 
         if (command.RedactionRules is { } rules)
@@ -307,10 +325,11 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
             ["status"] = command.DefaultSensitivity,
         };
 
-        if (command.RedactionRules is not null)
+        if (rulesBefore is { } beforeCount)
         {
-            // A count, never the patterns: the chain has to show that a privacy control changed hands, and a count is
-            // the most a reviewer may need without the row itself.
+            // Counts, never the patterns: the chain has to show that a privacy control changed hands, and how large it
+            // was on either side is the most a reviewer may need without the row itself.
+            metadata["redaction_rule_count_before"] = beforeCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
             metadata["redaction_rule_count"] = stored.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 

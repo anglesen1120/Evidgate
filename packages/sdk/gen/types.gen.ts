@@ -5729,7 +5729,7 @@ export type SetArtifactKindPolicyOverrideData = {
 
 export type SetArtifactKindPolicyOverrideErrors = {
     /**
-     * `request_invalid` — the body is not a JSON object of the five members. Every member is required: a body that omits `capture_enabled` or `reject_on_secret` is refused here rather than defaulting the switch to `false`, so an incomplete body can never silently disable an existing policy control, and no row is written. A body over the 8192-byte cap is `413 payload_too_large` before parsing.
+     * `request_invalid` — the body is not a JSON object of the five members, or a `redaction_rules` entry carries a member a rule does not declare (`additionalProperties: false`). Every member is required: a body that omits `capture_enabled` or `reject_on_secret` is refused here rather than defaulting the switch to `false`, so an incomplete body can never silently disable an existing policy control, and no row is written. A body over the 32768-byte cap is `413 payload_too_large` before parsing.
      */
     400: ErrorEnvelope;
     /**
@@ -5749,7 +5749,7 @@ export type SetArtifactKindPolicyOverrideErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * `kind_unknown` for a kind outside the closed list, `redaction_rule_type_unknown` for a rule whose `rule_type` is outside `header`/`cookie`/`form_field`/`query_param`, or `request_invalid` for a member that breaks the column's shape (a non-positive `max_bytes`, a media-type list outside one to 64 entries, a sensitivity that is neither `normal` nor `sensitive`, more than 64 rules, a repeated rule, or a `name_pattern` outside 1..200 characters of `[A-Za-z0-9._~%+:*?/-]`).
+     * `kind_unknown` for a kind outside the closed list, `redaction_rule_type_unknown` for a rule whose `rule_type` is outside `header`/`cookie`/`form_field`/`query_param`, or `request_invalid` for a member that breaks the column's shape (a non-positive `max_bytes`, a media-type list outside one to 64 entries, a sensitivity that is neither `normal` nor `sensitive`, a `null` rule entry, more than 64 rules, a repeated rule, or a `name_pattern` outside 1..128 characters of `[A-Za-z0-9._~%+:*?/-]`).
      */
     422: ErrorEnvelope;
     /**

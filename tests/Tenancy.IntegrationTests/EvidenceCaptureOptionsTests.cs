@@ -23,7 +23,7 @@ namespace Tenancy.IntegrationTests;
 /// existed and is asserted end-to-end here.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceCaptureOptionsTests
+public sealed partial class EvidenceCaptureOptionsTests
 {
     /// <summary>A well-formed execution key: sha256 hex.</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -140,14 +140,21 @@ public sealed class EvidenceCaptureOptionsTests
     private static string PolicyUrl(Guid project, string kind) =>
         $"/v1/projects/{project:D}/artifact-kind-policy/{kind}";
 
-    /// <summary>A complete policy body: the five knobs, plus the rules when the case declares any.</summary>
+    /// <summary>
+    /// A complete policy body: the five knobs, plus the rules member when the case sends one. <c>null</c> omits the
+    /// member entirely — the "leave the declared set alone" case — while <c>"null"</c> sends it as a JSON null.
+    /// </summary>
     private static string PolicyBody(
         string sensitivity = "normal",
         bool captureEnabled = true,
-        string rules = "null") =>
-        $$"""
-        {"max_bytes":2048,"media_types":["application/zip"],"default_sensitivity":"{{sensitivity}}","capture_enabled":{{(captureEnabled ? "true" : "false")}},"reject_on_secret":false,"redaction_rules":{{rules}}}
-        """;
+        string? rules = "null") =>
+        rules is null
+            ? $$"""
+            {"max_bytes":2048,"media_types":["application/zip"],"default_sensitivity":"{{sensitivity}}","capture_enabled":{{(captureEnabled ? "true" : "false")}},"reject_on_secret":false}
+            """
+            : $$"""
+            {"max_bytes":2048,"media_types":["application/zip"],"default_sensitivity":"{{sensitivity}}","capture_enabled":{{(captureEnabled ? "true" : "false")}},"reject_on_secret":false,"redaction_rules":{{rules}}}
+            """;
 
     /// <summary>An active member holding one built-in role.</summary>
     private async Task<Guid> AddMemberAsync(World world, string roleCode)
@@ -205,6 +212,11 @@ public sealed class EvidenceCaptureOptionsTests
             HttpMethod.Get, OptionsUrl(world.Project), member.Caller);
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        // The raw answer, not only the parsed map: one entry per contract kind, in contract order, every kind once.
+        answer.Body.GetProperty("kinds").GetArrayLength().ShouldBe(8);
+        answer.Body.GetProperty("kinds").EnumerateArray()
+            .Select(kind => kind.GetProperty("kind").GetString())
+            .ShouldBe(ArtifactKinds.All);
         var options = Options(answer);
         options.Keys.ShouldBe(ArtifactKinds.All);
         options["trace"].Enabled.ShouldBeTrue();
@@ -231,15 +243,24 @@ public sealed class EvidenceCaptureOptionsTests
 
         var served = Options(await member.Client.SendAsync(
             HttpMethod.Get, OptionsUrl(world.Project), member.Caller));
-        served["trace"].Rules.ShouldBe(["header|authorization", "cookie|session*"]);
+        // The read orders by rule_type, so cookie sorts before header whatever order the write declared them in.
+        served["trace"].Rules.ShouldBe(["cookie|session*", "header|authorization"]);
 
         // An omitted member leaves the declared rules alone: a caller that only toggles a switch cannot delete a
         // privacy control it never sent.
         var kept = await member.Client.SendRawAsync(
-            HttpMethod.Put, PolicyUrl(world.Project, "trace"), member.Caller, PolicyBody(captureEnabled: false));
+            HttpMethod.Put, PolicyUrl(world.Project, "trace"), member.Caller, PolicyBody(captureEnabled: false, rules: null));
         kept.Status.ShouldBe(HttpStatusCode.OK, kept.ErrorMessage);
         kept.Body.GetProperty("redaction_rules").GetArrayLength().ShouldBe(2);
-        (await RuleRowsAsync(world)).Count.ShouldBe(2);
+        (await RuleRowsAsync(world)).ShouldBe(["trace|cookie|session*", "trace|header|authorization"]);
+
+        // The member sent as a JSON null is the same as omitting it, so a caller that serialises a missing list as
+        // null still cannot clear a privacy control by accident.
+        var nulled = await member.Client.SendRawAsync(
+            HttpMethod.Put, PolicyUrl(world.Project, "trace"), member.Caller, PolicyBody(rules: "null"));
+        nulled.Status.ShouldBe(HttpStatusCode.OK, nulled.ErrorMessage);
+        nulled.Body.GetProperty("redaction_rules").GetArrayLength().ShouldBe(2);
+        (await RuleRowsAsync(world)).ShouldBe(["trace|cookie|session*", "trace|header|authorization"]);
 
         // An empty list clears them, and the answer says so.
         var cleared = await member.Client.SendRawAsync(
@@ -267,7 +288,7 @@ public sealed class EvidenceCaptureOptionsTests
     }
 
     [Fact]
-    public async Task CaptureOptions_MalformedRule_400AndNoRows()
+    public async Task CaptureOptions_MalformedRule_422AndNoRows()
     {
         await using var world = await StartAsync();
         var member = world.MemberClient(world.Founder);
@@ -275,13 +296,13 @@ public sealed class EvidenceCaptureOptionsTests
         var badPattern = await member.Client.SendRawAsync(
             HttpMethod.Put, PolicyUrl(world.Project, "trace"), member.Caller,
             PolicyBody(rules: """[{"rule_type":"header","name_pattern":"a b"}]"""));
-        badPattern.Status.ShouldBe(HttpStatusCode.BadRequest);
+        badPattern.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         badPattern.ErrorCode.ShouldBe("request_invalid");
 
         var repeated = await member.Client.SendRawAsync(
             HttpMethod.Put, PolicyUrl(world.Project, "trace"), member.Caller,
             PolicyBody(rules: """[{"rule_type":"header","name_pattern":"x"},{"rule_type":"header","name_pattern":"x"}]"""));
-        repeated.Status.ShouldBe(HttpStatusCode.BadRequest);
+        repeated.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         repeated.ErrorCode.ShouldBe("request_invalid");
 
         (await RuleRowsAsync(world)).ShouldBeEmpty();

@@ -11,7 +11,7 @@ namespace Evidgate.Modules.Evidence.Domain;
 internal static class RedactionRulePattern
 {
     /// <summary>The longest declared name the column accepts, in characters.</summary>
-    public const int MaxLength = 200;
+    public const int MaxLength = 128;
 
     /// <summary>True when <paramref name="namePattern"/> is a declared name or glob over one.</summary>
     public static bool IsValid(string? namePattern) =>
