@@ -126,6 +126,10 @@ internal static class SchemaConventionScan
             SchemaRule.CompositeForeignKey,
             "Catalogue table (02.2.1-T1.2, 02 §4.5): its only foreign key is `role_permission.role_id -> public.role (id)`, deliberately single-column because a built-in role row carries `org_id IS NULL` and the composite `(org_id, role_id) -> (org_id, id)` reference this rule wants could never match one — the catalogue is org-agnostic by design (TL T3). Its tenant key, RLS flags and audit columns are NOT exempt: 0010 declares `unique (org_id, id)`, ENABLE + FORCE and the shared version trigger."),
         new SchemaExemption(
+            "public.usage_ledger_entry",
+            SchemaRule.CompositeForeignKey,
+            "Usage ledger (migration 0046, key added by 0073): its only non-tenant key is `usage_ledger_entry.price_ref -> public.usage_price (id)`, deliberately single-column because the platform rate card carries `org_id IS NULL` and a composite `(org_id, price_ref) -> (org_id, id)` reference could never match it. The tenant half a foreign key cannot express is the `usage_ledger_entry_price_visible` trigger: a row may name a global price or one of its own org's overrides, never another org's. Its tenant key, RLS flags and audit columns are NOT exempt."),
+        new SchemaExemption(
             "public.evidence_revision",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only frozen evidence sets (05.3.2-T5; migration 0049, feature plan 05.3.2 AC8/AC9, C6): a revision is written once when a run's evidence is frozen and is never rewritten — late evidence appends the next `revision_no` — so the app role holds SELECT + INSERT only (the revoked UPDATE/DELETE refuse the rest) and the row keeps created_at only: no updated_at/version and no version trigger. Its tenant key, composite FKs and RLS are NOT exempt."),

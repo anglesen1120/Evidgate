@@ -648,6 +648,12 @@ internal sealed class TenantRowFactory
             // corrupt row never trips the dedupe key before the composite FK under test.
             ("public.usage_ledger_entry" or "public.usage_rollup", "metric") => "results",
             ("public.usage_ledger_entry" or "public.usage_rollup", "period") => "2026-10",
+            // usage_price (0073) closes `metric` to the same list and its `currency` to three uppercase
+            // letters, which the generic text candidate (13 chars) fails; every other constrained member is
+            // either nullable (`effective_to`, `included_quota`) or satisfied by the generic candidate
+            // (`unit_price`'s 1, the identity `id`, and `effective_from`'s timestamp).
+            ("public.usage_price", "metric") => "results",
+            ("public.usage_price", "currency") => "USD",
             // evidence_revision (0049) closes `completeness` to the 00 §8.5 pair, so the generic text
             // candidate is rejected there; `manifest_hash` is generic on purpose (13 characters is
             // inside the 1-200 CHECK) and `missing` keeps its '{}' default, which is what the

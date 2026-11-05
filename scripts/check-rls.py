@@ -193,6 +193,14 @@ DEFINER_AUDIT_EXEMPT = {
         "exactly like the D-S102-Q3 entries above. No per-call audit row is possible here, which is why "
         "the exemption is recorded rather than the row"
     ),
+    "evidgate.usage_price_insert_global": (
+        "created 0073_usage_price.sql:185 (uuid, text, numeric, text, timestamptz, timestamptz, numeric, text): the "
+        "rate-card loader stands in for the migration role, because a global price belongs to no tenant and the "
+        "app role is refused a global row by row level security. The configuration act has no org chain to append "
+        "to: the durable record is the immutable `usage_price` row it writes (scope, metric, amount, window and "
+        "card version), and the tenant boundary is the function's own guard, which refuses a call made inside a "
+        "tenant transaction"
+    ),
 }
 
 # Roles a definer function may be granted EXECUTE to.
