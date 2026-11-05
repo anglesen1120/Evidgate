@@ -7,9 +7,9 @@ namespace Architecture.Tests;
 /// <summary>
 /// Every <c>security_event</c> type of the closed V1 set has an alert rule and either a production emitter or an
 /// explicit known-gap entry. The set is the baseline page's table, the endpoint's closed array and the alert-rule
-/// rows, which must agree; an emitter is a production file that inserts into <c>security_event</c> and names the
-/// type literal. A type with neither an emitter nor a gap entry fails, and so does a gap entry whose emitter has
-/// landed, so the list cannot go stale.
+/// rows, which must agree. An emitter is recognised only when the INSERT text and quoted type literal share a
+/// file; a writer taking the type as a parameter or from a constants file must extend this scanner's gap-list
+/// handling in the same change. A type with neither an emitter nor a gap entry fails, as does a gap whose emitter lands.
 /// </summary>
 public sealed class SecurityEventEmitterCoverageTests
 {
@@ -32,7 +32,8 @@ public sealed class SecurityEventEmitterCoverageTests
     ];
 
     private static readonly Regex InsertIntoTable =
-        new(@"insert\s+into\s+(public\.)?security_event\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        new(@"\binsert\s+into\s+(?:""[^""]+""\s*\.\s*|[a-z_][a-z0-9_$]*\s*\.\s*)?(?:""security_event""|security_event)(?![a-z0-9_$""])",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     [Fact]
     public void Types_BaselineEndpointAndAlertRules_Agree()
@@ -49,6 +50,8 @@ public sealed class SecurityEventEmitterCoverageTests
     {
         var types = BaselineTypes(ReadRepoFile(BaselinePath));
         var sources = ProductionSources();
+        sources.ShouldNotBeEmpty("the emitter scan must inspect production sources");
+        sources.Keys.ShouldContain(EndpointPath);
 
         KnownGaps.Except(types).ShouldBeEmpty("a known gap names a type that is not in the baseline");
         foreach (var type in types)
@@ -74,12 +77,25 @@ public sealed class SecurityEventEmitterCoverageTests
         {
             ["a.cs"] = "const string Sql = \"INSERT INTO security_event (type) VALUES ('auth_failure')\";",
             ["b.cs"] = "var t = \"cross_tenant_probe\";",
-            ["c.cs"] = "// insert into security_event_other ... 'kill_switch_used'",
+            ["c.cs"] = "INSERT INTO security_event_other (type) VALUES ('kill_switch_used');",
+            ["d.cs"] = "// insert into security_event (type) values ('kill_switch_used');",
+            ["e.sql"] = "-- insert into security_event (type) values ('kill_switch_used');",
+            ["f.cs"] = "/* insert into security_event (type) values ('kill_switch_used'); */",
+            ["g.sql"] = """INSERT INTO "public"."security_event" (type) VALUES ('support_access');""",
+            ["h.sql"] = "INSERT INTO evidgate.security_event (type) VALUES ('support_access');",
         };
 
         Emitters(sources, "auth_failure").ShouldBe(["a.cs"]);
         Emitters(sources, "cross_tenant_probe").ShouldBeEmpty();
         Emitters(sources, "kill_switch_used").ShouldBeEmpty();
+        Emitters(sources, "support_access").ShouldBe(["g.sql", "h.sql"]);
+
+        foreach (var directory in new[] { "bin", "obj" })
+        {
+            var root = Path.Combine(SolutionLayout.RepoRoot, directory, "checkout");
+            IsBuildOutput(root, Path.Combine(root, EndpointPath)).ShouldBeFalse();
+            IsBuildOutput(root, Path.Combine(root, "src", directory, "Generated.cs")).ShouldBeTrue();
+        }
     }
 
     internal static IReadOnlyList<string> BaselineTypes(string markdown) =>
@@ -100,6 +116,7 @@ public sealed class SecurityEventEmitterCoverageTests
     /// <summary>Repo-relative path of every production file that inserts into the table and names the type.</summary>
     private static List<string> Emitters(IReadOnlyDictionary<string, string> sources, string type) =>
         sources
+            .Select(s => KeyValuePair.Create(s.Key, StripComments(s.Value)))
             .Where(s => InsertIntoTable.IsMatch(s.Value)
                 && (s.Value.Contains($"'{type}'", StringComparison.Ordinal)
                     || s.Value.Contains($"\"{type}\"", StringComparison.Ordinal)))
@@ -107,20 +124,27 @@ public sealed class SecurityEventEmitterCoverageTests
             .Order(StringComparer.Ordinal)
             .ToList();
 
+    // This heuristic avoids comment-only emitters; it is not a C# or SQL string-literal parser.
+    private static string StripComments(string source) =>
+        Regex.Replace(source, @"/\*[\s\S]*?\*/|//[^\r\n]*|--[^\r\n]*", " ");
+
     private static Dictionary<string, string> ProductionSources()
     {
         var root = SolutionLayout.RepoRoot;
         var files = Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(f => !IsBuildOutput(f))
+            .Where(f => !IsBuildOutput(root, f))
             .Concat(Directory.EnumerateFiles(Path.Combine(root, "migrations"), "*.sql")
                 .Where(f => !f.EndsWith(SchemaMigration, StringComparison.Ordinal)));
         return files.ToDictionary(
             f => Path.GetRelativePath(root, f).Replace('\\', '/'), File.ReadAllText, StringComparer.Ordinal);
     }
 
-    private static bool IsBuildOutput(string path) =>
-        path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-        || path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
+    private static bool IsBuildOutput(string root, string path)
+    {
+        var relative = Path.GetRelativePath(root, path);
+        return relative.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            || relative.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
+    }
 
     /// <summary>Data rows of the first markdown table after <paramref name="heading"/>, split into trimmed cells.</summary>
     private static List<string[]> TableRows(string markdown, string heading)
