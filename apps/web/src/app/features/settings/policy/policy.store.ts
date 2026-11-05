@@ -608,8 +608,13 @@ export class PolicyStore {
         revision: published.revision,
       };
       // The list on screen still shows the old head, so it owes the screen a re-read — but not the
-      // caller, who already holds the stored revision.
+      // caller, who already holds the stored revision. A created revision also supersedes the
+      // summary's head read, which still names the previous revision; an unchanged answer wrote
+      // nothing, so it leaves that read alone.
       this.refreshBehind(projectId);
+      if (published.created) {
+        this.reads.refreshHead(projectId);
+      }
       return answer;
     } catch (error: unknown) {
       return this.publishFailure(error);

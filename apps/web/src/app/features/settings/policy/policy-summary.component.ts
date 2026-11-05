@@ -6,11 +6,14 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   LOCALE_ID,
   computed,
+  effect,
   inject,
   input,
   output,
+  viewChild,
 } from '@angular/core';
 import type { PolicyActivationStateDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
@@ -104,20 +107,32 @@ import type { PolicyReadView } from './policy-reads';
             </dd>
           </div>
         </dl>
-        @if (readFailed()) {
-          <div class="flex flex-wrap items-center gap-2" data-policy-reads-error>
+        @if (readFailed() || busy()) {
+          <div
+            class="flex flex-wrap items-center gap-2"
+            data-policy-reads-error
+            [attr.data-policy-reads-blocked]="blocked()"
+          >
             @if (readFailure(); as failure) {
               <p>
                 <code>{{ failure.code }}</code> {{ failure.message }}
               </p>
             }
+            @if (waiting()) {
+              <p class="text-muted-foreground" data-policy-reads-waiting>{{ copy.waiting }}</p>
+            }
+            <!-- aria-disabled, never disabled: a disabled button drops focus to body, and this
+                 control must stay focusable across the retry it started. -->
             <button
+              #retryButton
               hlmBtn
               [variant]="'outline'"
               class="min-h-[var(--eg-control-touch)] whitespace-normal"
               type="button"
               data-policy-reads-retry
-              (click)="retry.emit()"
+              [attr.aria-disabled]="blocked()"
+              [attr.aria-busy]="busy()"
+              (click)="requestRetry()"
             >
               {{ copy.retry }}
             </button>
@@ -130,6 +145,13 @@ import type { PolicyReadView } from './policy-reads';
 export class PolicySummaryComponent {
   readonly activation = input.required<PolicyReadView<PolicyActivationStateDto>>();
   readonly head = input.required<PolicyReadView<PolicyRevisionSummaryDto>>();
+  /**
+   * True while any read of the tab — these two, or the list behind them — is in flight. The retry
+   * is inert then, and it stays on screen so the press that started it keeps its focus.
+   */
+  readonly busy = input(false);
+  /** True until a server `Retry-After` wait is over; nothing is retried before that deadline. */
+  readonly waiting = input(false);
   /** Asks the page to re-run both reads; the one control that retries them. */
   readonly retry = output<void>();
 
@@ -138,6 +160,32 @@ export class PolicySummaryComponent {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
+  private readonly retryButton = viewChild<ElementRef<HTMLButtonElement>>('retryButton');
+  /** Set by a press of the retry control: the next failure hands the focus back to it. */
+  private retryOwnedFocus = false;
+
+  constructor() {
+    // The control is on screen while a retry runs, so it normally keeps focus on its own. If the
+    // region is ever rebuilt, the focus a press gave it must come back to it, never fall to `body`.
+    effect(() => {
+      if (!this.retryOwnedFocus) {
+        return;
+      }
+      if (!this.readFailed() && !this.blocked()) {
+        // The retry succeeded and the region is gone: no failure is left to hand the focus to.
+        this.retryOwnedFocus = false;
+        return;
+      }
+      if (this.blocked()) {
+        return;
+      }
+      const button = this.retryButton()?.nativeElement;
+      if (button !== undefined) {
+        this.retryOwnedFocus = false;
+        button.focus();
+      }
+    });
+  }
 
   protected readonly activationRevisionId = computed(
     () => this.activation().value?.policy_revision_id ?? '',
@@ -148,6 +196,8 @@ export class PolicySummaryComponent {
   protected readonly readFailed = computed(
     () => this.activation().phase === 'error' || this.head().phase === 'error',
   );
+  /** True while a retry would be a no-op: a read is out, or the server's wait has not passed. */
+  protected readonly blocked = computed(() => this.busy() || this.waiting());
   /** The server's own refusal, shown once when either read failed; `null` when neither did. */
   protected readonly readFailure = computed(() => {
     const activation = this.activation();
@@ -172,7 +222,17 @@ export class PolicySummaryComponent {
     activatedAt: $localize`:@@settings.policy.activated-at:Activated`,
     readFailed: $localize`:@@settings.policy.read-failed:The project's policy details could not be read.`,
     retry: $localize`:@@settings.policy.read-retry:Reload policy details`,
+    waiting: $localize`:@@settings.policy.read-retry-waiting:Reload available after the wait`,
   };
+
+  /** One press, one read: a press while blocked or waiting asks for nothing. */
+  protected requestRetry(): void {
+    if (this.blocked()) {
+      return;
+    }
+    this.retryOwnedFocus = true;
+    this.retry.emit();
+  }
 
   protected formatDate(value: string): string {
     return this.dates.format(new Date(value));

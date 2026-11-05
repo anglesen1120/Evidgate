@@ -137,6 +137,13 @@ export class PolicyPage {
   protected reload(): void {
     void this.store.reload();
   }
+  /**
+   * The summary's own retry: the store's read gate decides whether it runs (a read in flight or a
+   * server `Retry-After` wait makes it a no-op), so the list is not re-read by this control.
+   */
+  protected retryReads(): void {
+    this.store.reads.retry();
+  }
   protected focusHeading(): void {
     afterNextRender(() => this.heading().nativeElement.focus(), { injector: this.injector });
   }

@@ -12,7 +12,9 @@
 <app-policy-summary
   [activation]="store.reads.activation()"
   [head]="store.reads.head()"
-  (retry)="reload()"
+  [busy]="store.reads.busy() || store.phase() === 'loading'"
+  [waiting]="store.reads.waiting()"
+  (retry)="retryReads()"
 />
 <form
   hlmCard

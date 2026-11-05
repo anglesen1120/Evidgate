@@ -1114,8 +1114,11 @@ describe('PolicyStore (09.7.1-T4)', () => {
       };
 
       const result = await store.publish(bodyOfSize(64));
+      await flushMicrotasks();
 
       expect(result.kind).toBe('unchanged');
+      // Nothing was written, so the summary's head read is not issued again.
+      expect(data.headCalls).toEqual([PROJECT_ID]);
     });
 
     it('sends a compact body of exactly 65 536 bytes and refuses 65 537 without a request', async () => {
@@ -1374,6 +1377,40 @@ describe('PolicyStore (09.7.1-T4)', () => {
 
       expect(store.activeRevision()?.id).toBe(SECOND_ID);
       expect(store.headRevisionId()).toBe(newHead);
+    });
+
+    it('re-reads the head the answer superseded, so the summary advances with the list', async () => {
+      const nextHead = '018f0000-0000-7000-8000-0000000000cb';
+      const newRevision = summary(nextHead, 4, 'active');
+      data.head = Promise.resolve({ revision: newRevision, headRevisionId: nextHead });
+
+      const result = await store.publish(bodyOfSize(64));
+      await flushMicrotasks();
+
+      expect(result.kind).toBe('created');
+      // One read at open, one behind the publish answer: the summary names the new head.
+      expect(data.headCalls).toEqual([PROJECT_ID, PROJECT_ID]);
+      expect(store.reads.head().phase).toBe('ready');
+      expect(store.reads.head().value?.id).toBe(nextHead);
+    });
+
+    it('answers the publish before the head re-read settles', async () => {
+      let settle: (head: PolicyHead) => void = () => undefined;
+      data.head = new Promise<PolicyHead>((resolve) => {
+        settle = resolve;
+      });
+
+      const result = await store.publish(bodyOfSize(64));
+
+      expect(result.kind).toBe('created');
+      expect(store.reads.head().phase).toBe('loading');
+      expect(data.headCalls).toEqual([PROJECT_ID, PROJECT_ID]);
+
+      const newRevision = summary('018f0000-0000-7000-8000-0000000000cc', 4, 'active');
+      settle({ revision: newRevision, headRevisionId: newRevision.id });
+      await flushMicrotasks();
+
+      expect(store.reads.head().value?.id).toBe(newRevision.id);
     });
 
     it('keeps the stored revision when the refresh behind it fails', async () => {

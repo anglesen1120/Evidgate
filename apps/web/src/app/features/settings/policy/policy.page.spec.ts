@@ -66,6 +66,9 @@ class FakePolicyStore {
       value: head,
       error: null,
     }),
+    busy: signal(false),
+    waiting: signal(false),
+    retry: vi.fn(),
   };
   readonly open = vi.fn(() => Promise.resolve());
   readonly loadBody = vi.fn(() => Promise.resolve(revision));
@@ -153,7 +156,30 @@ describe('PolicyPage', () => {
     const { fixture, root } = await render();
     root.querySelector<HTMLButtonElement>('[data-policy-reads-retry]')?.click();
     await fixture.whenStable();
-    expect(store.reload).toHaveBeenCalledTimes(1);
+    // The summary retry re-reads the project's own facts; the list keeps its own reload control.
+    expect(store.reads.retry).toHaveBeenCalledTimes(1);
+    expect(store.reload).not.toHaveBeenCalled();
+  });
+  it('keeps the summary retry inert while a reload is in flight', async () => {
+    store.reads.head.set({
+      phase: 'error',
+      value: null,
+      error: {
+        kind: 'unavailable',
+        status: 503,
+        code: 'unavailable',
+        message: 'a dependency is busy',
+        requestId: null,
+        retryable: true,
+        details: [],
+        retryAfterSeconds: null,
+      },
+    });
+    store.phase.set('loading');
+    const { root } = await render();
+    const retry = root.querySelector<HTMLButtonElement>('[data-policy-reads-retry]');
+    expect(retry?.getAttribute('aria-disabled')).toBe('true');
+    expect(retry?.disabled).toBe(false);
   });
   it('omits publish control entirely without policy:write', async () => {
     canWrite.set(false);

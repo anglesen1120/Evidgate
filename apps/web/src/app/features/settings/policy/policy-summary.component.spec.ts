@@ -1,6 +1,7 @@
 // The Policy tab's project summary: one state per read, and one retry control for both. Renders the
 // states `policy-reads.spec.ts` settles to, so the copy and the hooks the browser suite uses
-// (`data-policy-*`) are pinned here.
+// (`data-policy-*`) are pinned here — including that the control is inert rather than disabled
+// while a read runs, keeps the focus its own press gave it, and says when the server's wait runs.
 
 import { TestBed } from '@angular/core/testing';
 import type { PolicyActivationStateDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
@@ -56,14 +57,29 @@ describe('PolicySummaryComponent', () => {
   async function render(
     activation: PolicyReadView<PolicyActivationStateDto>,
     head: PolicyReadView<PolicyRevisionSummaryDto>,
+    gates: { busy?: boolean; waiting?: boolean } = {},
   ) {
     const fixture = TestBed.createComponent(PolicySummaryComponent);
     fixture.componentRef.setInput('activation', activation);
     fixture.componentRef.setInput('head', head);
+    fixture.componentRef.setInput('busy', gates.busy ?? false);
+    fixture.componentRef.setInput('waiting', gates.waiting ?? false);
     fixture.detectChanges();
     await fixture.whenStable();
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
+
+  /** A typed 429 with the server's interval, the only failure that opens a wait. */
+  const RATE_LIMITED = {
+    kind: 'rate_limited' as const,
+    status: 429,
+    code: 'rate_limited',
+    message: 'the read burst limit for this project was reached',
+    requestId: null,
+    retryable: true,
+    details: [],
+    retryAfterSeconds: 30,
+  };
 
   it('renders nothing before either read starts', async () => {
     const { root } = await render(IDLE_ACTIVATION, IDLE_HEAD);
@@ -182,5 +198,67 @@ describe('PolicySummaryComponent', () => {
       /\S/,
     );
     expect(root.querySelector('[data-policy-head-no]')).not.toBeNull();
+  });
+
+  it('ignores a press while a read is in flight, and keeps the control on screen', async () => {
+    const { fixture, root } = await render(READY_ACTIVATION, {
+      phase: 'error',
+      value: null,
+      error: RATE_LIMITED,
+    });
+    const emitted = vi.fn();
+    fixture.componentInstance.retry.subscribe(emitted);
+
+    fixture.componentRef.setInput('busy', true);
+    fixture.detectChanges();
+    const retry = root.querySelector<HTMLButtonElement>('[data-policy-reads-retry]');
+    expect(retry?.getAttribute('aria-disabled')).toBe('true');
+    // Inert, not disabled: a disabled control drops the focus of the press that started the read.
+    expect(retry?.disabled).toBe(false);
+    retry?.click();
+    await fixture.whenStable();
+    expect(emitted).not.toHaveBeenCalled();
+  });
+
+  it('keeps the retry closed and says so while the server’s wait runs', async () => {
+    const { fixture, root } = await render(
+      READY_ACTIVATION,
+      { phase: 'error', value: null, error: RATE_LIMITED },
+      { waiting: true },
+    );
+    const waiting = root.querySelector('[data-policy-reads-waiting]');
+    expect(waiting?.textContent).toMatch(/\S/);
+    const emitted = vi.fn();
+    fixture.componentInstance.retry.subscribe(emitted);
+    const retry = root.querySelector<HTMLButtonElement>('[data-policy-reads-retry]');
+    expect(retry?.getAttribute('aria-disabled')).toBe('true');
+    retry?.click();
+    await fixture.whenStable();
+    expect(emitted).not.toHaveBeenCalled();
+  });
+
+  it('keeps the focus of its own retry across a failure that repeats', async () => {
+    const { fixture, root } = await render(READY_ACTIVATION, {
+      phase: 'error',
+      value: null,
+      error: RATE_LIMITED,
+    });
+    const retry = root.querySelector<HTMLButtonElement>('[data-policy-reads-retry]');
+    retry?.focus();
+    expect(document.activeElement).toBe(retry);
+
+    retry?.click();
+    // The read starts: the region stays, so the press keeps its focus.
+    fixture.componentRef.setInput('busy', true);
+    fixture.detectChanges();
+    expect(root.querySelector('[data-policy-reads-retry]')).toBe(retry);
+    expect(document.activeElement).toBe(retry);
+
+    // It failed again; focus is never handed back to `body` between the two states.
+    fixture.componentRef.setInput('busy', false);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement).toBe(retry);
   });
 });

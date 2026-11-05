@@ -2645,6 +2645,7 @@
       <trans-unit id="settings.policy.activated-at" datatype="html"><source>Activated</source><target>Kích hoạt lúc</target></trans-unit>
       <trans-unit id="settings.policy.read-failed" datatype="html"><source>The project's policy details could not be read.</source><target>Không đọc được thông tin chính sách của dự án.</target></trans-unit>
       <trans-unit id="settings.policy.read-retry" datatype="html"><source>Reload policy details</source><target>Tải lại thông tin chính sách</target></trans-unit>
+      <trans-unit id="settings.policy.read-retry-waiting" datatype="html"><source>Reload available after the wait</source><target>Tải lại được sau khi hết thời gian chờ</target></trans-unit>
       <trans-unit id="settings.secrets.ci.title" datatype="html"><source>CI bindings</source><target>Liên kết CI</target></trans-unit>
       <trans-unit id="settings.secrets.ci.description" datatype="html"><source>Repository bindings and allowed CI references. Metadata only; bindings are managed during onboarding.</source><target>Liên kết kho mã và tham chiếu CI được phép. Chỉ hiển thị siêu dữ liệu; liên kết được quản lý trong quá trình thiết lập ban đầu.</target></trans-unit>
       <trans-unit id="settings.secrets.ci.provider" datatype="html"><source>Provider</source><target>Nhà cung cấp</target></trans-unit>

@@ -4,20 +4,28 @@
 //
 // Four rules shape this store:
 //
-// 1. Each read has its own generation, bumped by every start and clear. A list refresh bumps the
-//    store's own counter, so sharing it would strand a read in `loading` forever.
+// 1. Each read has its own generation, bumped by every start, clear and head refresh. A head
+//    re-read after a publish must discard the head answer still on its way without stranding a
+//    pending activation read, and a list refresh has its own counter in the store.
 // 2. `404` is absence, not a failure: no activation and no revision are real states of a project.
 // 3. `403` is its own state. The user may read the tab but not this fact, which is not an error to
 //    retry; every other refusal is an error with the server's own message.
 // 4. Only a served activation is a value. Absence and refusal clear the activation the mode chip
 //    renders, so a stale mode can never outlive the project it belonged to.
+//
+// The explicit retry is the only way either read runs again: it is inert while a read is in
+// flight, and a server `Retry-After` keeps it closed until that interval ends, with one timer and
+// no attempt started from here.
 
-import { inject, Injectable, signal } from '@angular/core';
+import { computed, inject, Injectable, signal } from '@angular/core';
 import type { PolicyActivationStateDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
 
 import { PolicyDataService } from '../../../core/data/policy-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { settledRead } from '../../../core/http/settled-read';
+
+/** Largest delay a browser or Node timer accepts; a longer server interval is clamped to it. */
+const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
 
 /** What one project-level read settled to. `empty` is an absent object, which is not a failure. */
 export type PolicyReadPhase = 'idle' | 'loading' | 'ready' | 'empty' | 'forbidden' | 'error';
@@ -64,11 +72,36 @@ export class PolicyProjectReads {
     nothing('idle'),
   );
   private readonly headSignal = signal<PolicyReadView<PolicyRevisionSummaryDto>>(nothing('idle'));
-  /** Bumped by every start and clear: an answer of an older generation writes nothing. */
-  private generation = 0;
+  /**
+   * One generation per read, bumped by every start, clear and head refresh: a head re-read must
+   * discard the head answer still on its way without stranding a pending activation read.
+   */
+  private activationGeneration = 0;
+  private headGeneration = 0;
+  /** The project both reads were last started for; `null` while the view is closed. */
+  private project: string | null = null;
+  /** The store's activation seam, as handed over by {@link start}. */
+  private applyActivation: (activation: PolicyActivationStateDto | null) => void = () => undefined;
+
+  /** Epoch ms at which a server `Retry-After` wait ends; `null` when a retry may run now. */
+  private readonly waitDeadline = signal<number | null>(null);
+  private readonly retryAfterState = signal<number | null>(null);
+  /** Cancels the pending wait; `null` when no timer is armed. */
+  private cancelWait: (() => void) | null = null;
 
   readonly activation = this.activationSignal.asReadonly();
   readonly head = this.headSignal.asReadonly();
+  /** True while either read is in flight: every retry control is inert then. */
+  readonly busy = computed(
+    () => this.activationSignal().phase === 'loading' || this.headSignal().phase === 'loading',
+  );
+  /** The server's `Retry-After` of the last failure, in whole seconds; `null` when it gave none. */
+  readonly retryAfterSeconds = this.retryAfterState.asReadonly();
+  /** True until a server `Retry-After` wait is over; nothing retries on its own while it runs. */
+  readonly waiting = computed(() => {
+    const deadline = this.waitDeadline();
+    return deadline !== null && deadline > Date.now();
+  });
 
   /**
    * Reads the project's activation and head revision. `applyActivation` receives the served
@@ -79,19 +112,92 @@ export class PolicyProjectReads {
     projectId: string,
     applyActivation: (activation: PolicyActivationStateDto | null) => void,
   ): void {
-    const generation = ++this.generation;
-    this.activationSignal.set(nothing('loading'));
+    this.project = projectId;
+    this.applyActivation = applyActivation;
+    this.clearWait();
+    this.runBoth();
+  }
+
+  /**
+   * Re-reads the head revision of the project the view was opened for, and nothing else. The
+   * publish path calls it after an answer: the head it just wrote is the one the summary must
+   * show, and the head answer still on its way is obsolete. A publish that answered for another
+   * project changes nothing here. Never rejects, never awaited.
+   */
+  refreshHead(projectId: string): void {
+    if (this.project !== projectId) {
+      return;
+    }
+    const generation = ++this.headGeneration;
     this.headSignal.set(nothing('loading'));
-    applyActivation(null);
-    void this.readActivation(projectId, generation, applyActivation);
     void this.readHead(projectId, generation);
+  }
+
+  /**
+   * The explicit retry of both reads: a no-op while a read is in flight or a `Retry-After` wait
+   * is still running, so a rate-limited read is never hammered. Nothing here retries on its own.
+   */
+  retry(): void {
+    if (this.busy() || this.waiting() || this.project === null) {
+      return;
+    }
+    this.clearWait();
+    this.runBoth();
   }
 
   /** Abandons both reads and returns to `idle`; an answer still on its way writes nothing. */
   clear(): void {
-    this.generation += 1;
+    this.activationGeneration += 1;
+    this.headGeneration += 1;
+    this.project = null;
+    this.clearWait();
     this.activationSignal.set(nothing('idle'));
     this.headSignal.set(nothing('idle'));
+  }
+
+  /** Starts both reads of the captured project, each with its own generation. */
+  private runBoth(): void {
+    const project = this.project;
+    if (project === null) {
+      return;
+    }
+    const activationGeneration = ++this.activationGeneration;
+    const headGeneration = ++this.headGeneration;
+    this.activationSignal.set(nothing('loading'));
+    this.headSignal.set(nothing('loading'));
+    this.applyActivation(null);
+    void this.readActivation(project, activationGeneration, this.applyActivation);
+    void this.readHead(project, headGeneration);
+  }
+
+  /**
+   * One timer for the failure's `Retry-After`, never a poll and never a retry: it only reopens
+   * the control when the server's interval has passed.
+   */
+  private noteRetryAfter(error: ApiError | null): boolean {
+    this.clearWait();
+    const seconds = error?.retryAfterSeconds ?? null;
+    if (error === null || seconds === null || !Number.isFinite(seconds) || seconds <= 0) {
+      return false;
+    }
+    // A delay above the timer maximum fires immediately in browsers and warns in Node, which
+    // would turn a hostile interval into no wait at all; clamp it instead.
+    const delayMs = Math.min(seconds * 1000, MAX_TIMER_DELAY_MS);
+    this.retryAfterState.set(seconds);
+    this.waitDeadline.set(Date.now() + delayMs);
+    const timer = setTimeout(() => {
+      this.cancelWait = null;
+      this.waitDeadline.set(null);
+    }, delayMs);
+    this.cancelWait = () => clearTimeout(timer);
+    return true;
+  }
+
+  private clearWait(): void {
+    this.cancelWait?.();
+    this.cancelWait = null;
+    this.waitDeadline.set(null);
+    this.retryAfterState.set(null);
   }
 
   /** Never rejects: the read's own outcome is the state, and the caller does not await it. */
@@ -101,25 +207,31 @@ export class PolicyProjectReads {
     applyActivation: (activation: PolicyActivationStateDto | null) => void,
   ): Promise<void> {
     const read = await settledRead(() => this.data.getActivation(projectId));
-    if (generation !== this.generation) {
+    if (generation !== this.activationGeneration) {
       return;
     }
     const view: PolicyReadView<PolicyActivationStateDto> = read.ok
       ? { phase: 'ready', value: read.value, error: null }
       : refusal<PolicyActivationStateDto>(read.error);
     this.activationSignal.set(view);
+    if (view.phase === 'error') {
+      this.noteRetryAfter(view.error);
+    }
     applyActivation(view.value);
   }
 
   /** Never rejects: same contract as {@link readActivation}. */
   private async readHead(projectId: string, generation: number): Promise<void> {
     const read = await settledRead(() => this.data.getHead(projectId));
-    if (generation !== this.generation) {
+    if (generation !== this.headGeneration) {
       return;
     }
     const view: PolicyReadView<PolicyRevisionSummaryDto> = read.ok
       ? { phase: 'ready', value: read.value.revision, error: null }
       : refusal<PolicyRevisionSummaryDto>(read.error);
     this.headSignal.set(view);
+    if (view.phase === 'error') {
+      this.noteRetryAfter(view.error);
+    }
   }
 }

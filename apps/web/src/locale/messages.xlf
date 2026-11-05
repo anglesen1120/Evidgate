@@ -2628,6 +2628,7 @@
       <trans-unit id="settings.policy.activated-at" datatype="html"><source>Activated</source></trans-unit>
       <trans-unit id="settings.policy.read-failed" datatype="html"><source>The project's policy details could not be read.</source></trans-unit>
       <trans-unit id="settings.policy.read-retry" datatype="html"><source>Reload policy details</source></trans-unit>
+      <trans-unit id="settings.policy.read-retry-waiting" datatype="html"><source>Reload available after the wait</source></trans-unit>
       <trans-unit id="settings.secrets.ci.title" datatype="html"><source>CI bindings</source></trans-unit>
       <trans-unit id="settings.secrets.ci.description" datatype="html"><source>Repository bindings and allowed CI references. Metadata only; bindings are managed during onboarding.</source></trans-unit>
       <trans-unit id="settings.secrets.ci.provider" datatype="html"><source>Provider</source></trans-unit>

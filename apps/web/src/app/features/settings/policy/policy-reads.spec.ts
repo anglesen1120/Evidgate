@@ -1,6 +1,8 @@
-// The Policy tab's two project-level reads, in isolation: what each answer settles to, and that a
-// read of an older generation writes nothing. The request side is `policy-data.service.spec.ts`;
-// the tab that renders these states is `policy-summary.component.spec.ts`.
+// The Policy tab's two project-level reads, in isolation: what each answer settles to, that a read
+// of an older generation writes nothing, that a head refresh after a publish discards the answer it
+// superseded, and that a server `Retry-After` closes the retry until its interval ends. The request
+// side is `policy-data.service.spec.ts`; the tab that renders these states is
+// `policy-summary.component.spec.ts`.
 
 import { TestBed } from '@angular/core/testing';
 import type {
@@ -40,6 +42,7 @@ function typedFailure(
   envelope: ErrorEnvelope,
   kind: ApiErrorKind,
   status: number,
+  retryAfterSeconds: number | null = null,
 ): ApiRequestError {
   return new ApiRequestError({
     kind,
@@ -49,7 +52,7 @@ function typedFailure(
     requestId: envelope.error.request_id,
     retryable: envelope.error.retryable,
     details: envelope.error.details ?? [],
-    retryAfterSeconds: null,
+    retryAfterSeconds,
   });
 }
 
@@ -93,6 +96,36 @@ const RATE_LIMITED = typedFailure(
   },
   'rate_limited',
   429,
+);
+
+/** The same 429 as the server sends it: with its own `Retry-After`, which closes the retry. */
+const THROTTLED = typedFailure(
+  {
+    error: {
+      code: 'rate_limited',
+      message: 'the read burst limit for this project was reached',
+      request_id: '018f0000-0000-7000-8000-00000000a10e',
+      retryable: true,
+      details: [],
+    },
+  },
+  'rate_limited',
+  429,
+  30,
+);
+
+const UNAVAILABLE = typedFailure(
+  {
+    error: {
+      code: 'unavailable',
+      message: 'a dependency is busy',
+      request_id: '018f0000-0000-7000-8000-00000000a10f',
+      retryable: true,
+      details: [],
+    },
+  },
+  'unavailable',
+  503,
 );
 
 type Deferred<T> = {
@@ -308,5 +341,120 @@ describe('PolicyProjectReads', () => {
     expect(reads.head().phase).toBe('idle');
     expect(data.activationCalls).toEqual([]);
     expect(data.headCalls).toEqual([]);
+  });
+
+  it('reports busy while either read is in flight', async () => {
+    const head = deferred<PolicyHead>();
+    data.head = () => head.promise;
+
+    start();
+    expect(reads.busy()).toBe(true);
+    await flushMicrotasks();
+    expect(reads.busy()).toBe(true);
+
+    head.resolve({ revision: HEAD, headRevisionId: HEAD.id });
+    await flushMicrotasks();
+    expect(reads.busy()).toBe(false);
+  });
+
+  it('closes the retry until the server Retry-After has passed, and retries nothing itself', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    data.activation = () => Promise.reject(THROTTLED);
+    try {
+      start();
+      await flushMicrotasks();
+
+      expect(reads.activation().phase).toBe('error');
+      expect(reads.retryAfterSeconds()).toBe(30);
+      expect(reads.waiting()).toBe(true);
+      reads.retry();
+      expect(data.activationCalls).toEqual([PROJECT_ID]);
+
+      vi.advanceTimersByTime(29_999);
+      expect(reads.waiting()).toBe(true);
+      reads.retry();
+      expect(data.activationCalls).toEqual([PROJECT_ID]);
+
+      // The interval ends: the control opens, but no read is started from the timer.
+      vi.advanceTimersByTime(1);
+      expect(reads.waiting()).toBe(false);
+      expect(data.activationCalls).toEqual([PROJECT_ID]);
+
+      data.activation = () => Promise.resolve(ACTIVATION);
+      reads.retry();
+      expect(data.activationCalls).toEqual([PROJECT_ID, PROJECT_ID]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('opens the retry at once for a failure that carries no interval', async () => {
+    data.activation = () => Promise.reject(UNAVAILABLE);
+    start();
+    await flushMicrotasks();
+
+    expect(reads.activation().phase).toBe('error');
+    expect(reads.retryAfterSeconds()).toBeNull();
+    expect(reads.waiting()).toBe(false);
+
+    data.activation = () => Promise.resolve(ACTIVATION);
+    reads.retry();
+    await flushMicrotasks();
+    expect(reads.activation().phase).toBe('ready');
+  });
+
+  it('ignores a retry while a read is in flight', () => {
+    const activation = deferred<PolicyActivationStateDto>();
+    data.activation = () => activation.promise;
+    start();
+    reads.retry();
+
+    expect(data.activationCalls).toEqual([PROJECT_ID]);
+    expect(data.headCalls).toEqual([PROJECT_ID]);
+  });
+
+  it('re-reads only the head of the project the view belongs to', async () => {
+    start();
+    await flushMicrotasks();
+
+    reads.refreshHead(PROJECT_ID);
+    await flushMicrotasks();
+
+    expect(data.activationCalls).toEqual([PROJECT_ID]);
+    expect(data.headCalls).toEqual([PROJECT_ID, PROJECT_ID]);
+    expect(reads.head().phase).toBe('ready');
+  });
+
+  it('changes nothing when a publish answered for another project', async () => {
+    start();
+    await flushMicrotasks();
+
+    reads.refreshHead(OTHER_PROJECT_ID);
+    await flushMicrotasks();
+
+    expect(data.headCalls).toEqual([PROJECT_ID]);
+  });
+
+  it('discards the head answer a publish superseded, and keeps a pending activation', async () => {
+    const activation = deferred<PolicyActivationStateDto>();
+    const staleHead = deferred<PolicyHead>();
+    data.activation = () => activation.promise;
+    data.head = () => staleHead.promise;
+    start();
+
+    const published: PolicyRevisionSummaryDto = { ...HEAD, revision_no: 4, version: 3 };
+    data.head = () => Promise.resolve({ revision: published, headRevisionId: published.id });
+    reads.refreshHead(PROJECT_ID);
+    await flushMicrotasks();
+    expect(reads.head().value).toBe(published);
+
+    staleHead.resolve({ revision: HEAD, headRevisionId: HEAD.id });
+    activation.resolve(ACTIVATION);
+    await flushMicrotasks();
+
+    // The stale head wrote nothing; the activation read of the same start still landed.
+    expect(reads.head().value).toBe(published);
+    expect(reads.activation().value).toBe(ACTIVATION);
   });
 });

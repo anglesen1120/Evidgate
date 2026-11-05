@@ -180,7 +180,7 @@ for (const locale of LOCALES) {
     await expect(page.locator(ROWS)).not.toHaveCount(0);
   });
 
-  test(`a throttled activation read offers a retry that re-reads it (${locale})`, async ({
+  test(`a throttled activation read keeps its retry closed until the wait ends (${locale})`, async ({
     page,
   }) => {
     await visit(page, locale, [POLICY_WRITE, ACTIVATION_RATE_LIMITED]);
@@ -188,22 +188,24 @@ for (const locale of LOCALES) {
     await expect(page.locator(`${SUMMARY} [data-policy-reads-error]`)).toContainText(
       'rate_limited',
     );
-    // The fixture backend answers in-process, so no network request shows the re-read: record the
-    // state attribute instead and require the retry to pass through `loading` before it settles.
-    await page.locator(ACTIVATION).evaluate((element) => {
-      const seen: string[] = [];
-      Object.assign(window, { __activationStates: seen });
-      new MutationObserver(() => {
-        seen.push(element.getAttribute('data-policy-activation-state') ?? '');
-      }).observe(element, { attributes: true, attributeFilter: ['data-policy-activation-state'] });
-    });
-    await page.locator(READS_RETRY).click();
-    await expect
-      .poll(() => page.evaluate(() => Reflect.get(window, '__activationStates') as string[]))
-      .toContain('loading');
-    // The variant still refuses, so the error stands: the retry re-issued the read, it did not
-    // clear the state optimistically.
+    // The fixture answers 429 with `Retry-After: 30`, so the control is on screen, focusable and
+    // inert: an early press must spend itself, not fire a second read.
+    const retry = page.locator(READS_RETRY);
+    await expect(retry).toHaveAttribute('aria-disabled', 'true');
+    await expect(retry).not.toHaveAttribute('disabled', '');
+    await expect(page.locator(`${SUMMARY} [data-policy-reads-waiting]`)).toHaveText(/\S/);
+
+    await retry.focus();
+    await retry.press('Enter');
+    await expect(retry).toHaveAttribute('aria-disabled', 'true');
     await expect(page.locator(ACTIVATION)).toHaveAttribute('data-policy-activation-state', 'error');
+    // A press that could not run must not hand the focus back to `body`.
+    expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
+    expect(
+      await page.evaluate(() =>
+        (document.activeElement as HTMLElement | null)?.hasAttribute('data-policy-reads-retry'),
+      ),
+    ).toBe(true);
   });
 
   // The head read's own absence, with the list still served: the two reads are independent.
