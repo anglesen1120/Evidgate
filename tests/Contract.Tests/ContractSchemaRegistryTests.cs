@@ -327,7 +327,7 @@ public sealed class ContractSchemaRegistryTests
     public void Manifest_Bounds_Are_Encoded_In_The_Schema()
     {
         ExecutionBound().ShouldBe(150_000, "the planned-execution bound is the published cap");
-        ManifestSchema("matrix")["case_revision_ids"]!.AsObject()["maxItems"]!.GetValue<int>()
+        ManifestSchema("properties")["matrix"]!.AsObject()["properties"]!.AsObject()["case_revision_ids"]!.AsObject()["maxItems"]!.GetValue<int>()
             .ShouldBe(150_000, "the matrix's case bound is the same cap");
 
         AtLimit(1, 256).IsValid.ShouldBeTrue("256 shards are the declared bound");
