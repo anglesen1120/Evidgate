@@ -56,6 +56,10 @@ public sealed class EvidgateApiFactory : WebApplicationFactory<Program>
                 settings["EVIDGATE:Database:ConnectionString"] = _connectionString;
             }
 
+            // The run-cancel windows have no option default, so every booting host states them.
+            settings["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30";
+            settings["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00";
+
             configuration.AddInMemoryCollection(settings);
         });
 

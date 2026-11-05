@@ -692,6 +692,8 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Database:ConnectionString"] = _connectionString,
+                ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+                ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 // 02.6.1-T1.4: the boot self-check is a deployment guard, not a behaviour under test here.
                 ["EVIDGATE:Isolation:SelfCheck"] = "Disabled",
                 // The pepper is resolved through ISecretProvider, which reads the configuration key the

@@ -170,7 +170,11 @@ internal static class CancelRunTestData
     }
 
     internal static Task<string> StateAsync(PostgresTenancyFixture fixture, RunCreationTests.World world, Guid runId) =>
-        fixture.ScalarAsync<string>(world.Database, $"select state from public.run where id = '{runId}'");
+        StateAsync(fixture, world.Database, runId);
+
+    /// <summary>The committed run state, by database: a suite that outlives its host (a restart) still reads it.</summary>
+    internal static Task<string> StateAsync(PostgresTenancyFixture fixture, string database, Guid runId) =>
+        fixture.ScalarAsync<string>(database, $"select state from public.run where id = '{runId}'");
 
     internal static Task<int> VersionAsync(PostgresTenancyFixture fixture, RunCreationTests.World world, Guid runId) =>
         fixture.ScalarAsync<int>(world.Database, $"select version from public.run where id = '{runId}'");
@@ -182,12 +186,20 @@ internal static class CancelRunTestData
             $"select count(*) from public.run_cancel_request where org_id = '{world.Org}' and run_id = '{runId}'");
 
     /// <summary>The one cancel request row of one run, as the table stores it.</summary>
-    internal static async Task<CancelRow> RowAsync(
+    internal static Task<CancelRow> RowAsync(
         PostgresTenancyFixture fixture,
         RunCreationTests.World world,
+        Guid runId) =>
+        RowAsync(fixture, world.Database, world.Org, runId);
+
+    /// <summary>The one cancel request row of one run, by database and tenant: a restart test keeps both after its host.</summary>
+    internal static async Task<CancelRow> RowAsync(
+        PostgresTenancyFixture fixture,
+        string database,
+        Guid orgId,
         Guid runId)
     {
-        await using var connection = await fixture.OpenSuperuserAsync(world.Database);
+        await using var connection = await fixture.OpenSuperuserAsync(database);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -195,7 +207,7 @@ internal static class CancelRunTestData
               from public.run_cancel_request
              where org_id = @org_id and run_id = @run_id
             """;
-        command.Parameters.AddWithValue("org_id", world.Org);
+        command.Parameters.AddWithValue("org_id", orgId);
         command.Parameters.AddWithValue("run_id", runId);
 
         var token = TestContext.Current.CancellationToken;

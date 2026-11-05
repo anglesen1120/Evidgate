@@ -119,8 +119,13 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public static TenancyApiFactory RealResolver(
         string appConnectionString,
-        IReadOnlyDictionary<string, string?>? configuration = null) =>
-        new(appConnectionString, realEvaluator: true, realResolver: true) { _extraConfiguration = configuration };
+        IReadOnlyDictionary<string, string?>? configuration = null,
+        Action<IServiceCollection>? services = null) =>
+        new(appConnectionString, realEvaluator: true, realResolver: true)
+        {
+            _extraConfiguration = configuration,
+            _extraServices = services,
+        };
 
     /// <summary>Headers for <see cref="RealResolver"/>: a user, optionally naming an org by header.</summary>
     public static Action<HttpRequestHeaders> Resolved(
@@ -208,6 +213,8 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Database:ConnectionString"] = _connectionString,
+                ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+                ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 ["EVIDGATE:Identity:CustomRolesEnabled"] = "false",
                 // 02.1.2-T2: the invite routes mint a token, so the pepper must exist (see IdentityApiFactory).
                 ["EVIDGATE:Invite:Pepper"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),

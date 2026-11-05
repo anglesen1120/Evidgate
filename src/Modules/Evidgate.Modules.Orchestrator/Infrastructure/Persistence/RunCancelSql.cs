@@ -30,4 +30,30 @@ internal static class RunCancelSql
           from public.run r
          where r.id = @run_id
         """;
+
+    /// <summary>
+    /// The kill stage, in one statement: <c>target</c> reads the request under the caller's tenant (the row policy is
+    /// what makes a foreign request invisible) and <c>moved</c> is the one transition the guard allows — <c>killed</c>,
+    /// only at or after <c>kill_at</c>, only from a stage that is still stopping. The row is answered whether it moved or
+    /// not, so the handler can tell an already-final request (a replay after the commit) from one claimed before its
+    /// deadline without a second read, and a missing row (another tenant's, or none) answers no row at all.
+    /// </summary>
+    internal const string MoveToKilled = """
+        with target as (
+            select id, state, kill_at
+              from public.run_cancel_request
+             where id = @cancel_request_id
+        ),
+        moved as (
+            update public.run_cancel_request r
+               set state = 'killed'
+              from target t
+             where r.id = t.id
+               and t.state in ('requested', 'soft_stopping')
+               and t.kill_at <= now()
+            returning r.id
+        )
+        select t.state as "State", t.kill_at as "KillAt", (select count(*) from moved) as "Moved"
+          from target t
+        """;
 }

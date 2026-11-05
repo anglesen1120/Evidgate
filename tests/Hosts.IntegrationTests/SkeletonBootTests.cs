@@ -28,6 +28,8 @@ public sealed class SkeletonBootTests
                 ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{apiPort}",
                 ["DOTNET_ENVIRONMENT"] = "Production",
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = connectionString,
+                ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
+                ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
             });
 
         try
@@ -38,6 +40,8 @@ public sealed class SkeletonBootTests
                 {
                     ["DOTNET_ENVIRONMENT"] = "Production",
                     ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = connectionString,
+                    ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
+                    ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
                     ["EVIDGATE__WORKER__HEALTHPORT"] = workerPort.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["EVIDGATE__WORKER__READINESSPOLLMILLISECONDS"] = "100",
                 });

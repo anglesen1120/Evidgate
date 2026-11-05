@@ -97,6 +97,8 @@ public sealed class IsolationApiFactory : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Database:ConnectionString"] = _connectionString,
+                ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+                ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
 
                 // The production default; custom roles stay off (POST /v1/roles is refused).
                 ["EVIDGATE:Identity:CustomRolesEnabled"] = "false",

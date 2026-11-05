@@ -77,6 +77,16 @@
       "origin": "default",
       "from": "not set: the dev stack completes no federated login, so the secret is never materialised here; staging and prod resolve it through ISecretProvider from the provider secret store (10.1.1-T3)"
     },
+    "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY": {
+      "origin": "env-file",
+      "value": "00:00:30",
+      "from": ".env.dev, literal in .env.dev.template — the graceful window a producer gets before the kill deadline. Required at boot: no option default, a missing key binds to 00:00:00 and is refused"
+    },
+    "EVIDGATE__RUNS__CANCEL__KILLDELAY": {
+      "origin": "env-file",
+      "value": "00:02:00",
+      "from": ".env.dev, literal in .env.dev.template — the instant execution is stopped whatever it is doing, and the moment the durable kill task is due. Required at boot and must be at least the soft-stop window"
+    },
     "EVIDGATE__TASKS__BACKOFFBASESECONDS": {
       "origin": "default",
       "from": "option default 5"

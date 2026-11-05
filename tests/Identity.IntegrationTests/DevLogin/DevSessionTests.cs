@@ -468,6 +468,8 @@ internal sealed class DevSessionTestHost : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Database:ConnectionString"] = _connectionString,
+                ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+                ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 ["EVIDGATE:Isolation:SelfCheck"] = "Disabled",
                 ["EVIDGATE:Session:Pepper"] = Convert.ToBase64String(
                     System.Security.Cryptography.RandomNumberGenerator.GetBytes(SessionPepperBytes)),

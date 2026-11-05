@@ -45,6 +45,8 @@ internal sealed class EvidgateApiFactory : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Database:ConnectionString"] = ConnectionString,
+                ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+                ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 // 02.6.1-T1.4 (AC5): the boot-time isolation self-check defaults to
                 // Required and would refuse a host that cannot read the catalogue — the
                 // dead connection string above is deliberate, because every path the

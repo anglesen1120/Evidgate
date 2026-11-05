@@ -100,6 +100,8 @@ internal sealed class IdentityApiFactory : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Database:ConnectionString"] = ConnectionString,
+                ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+                ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 // The module's flag, bound through AddIdentityModule exactly as the
                 // deployed host binds it (02.2.1 §5, RECOMMENDATIONS 02-Q3).
                 ["EVIDGATE:Identity:CustomRolesEnabled"] = _setup.CustomRolesEnabled ? "true" : "false",

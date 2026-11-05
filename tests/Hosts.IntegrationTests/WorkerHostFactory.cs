@@ -24,6 +24,8 @@ internal static class WorkerHostFactory
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["EVIDGATE:Database:ConnectionString"] = connectionString,
+            ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+            ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
             ["EVIDGATE:Worker:HealthPort"] = healthPort.ToString(CultureInfo.InvariantCulture),
             ["EVIDGATE:Worker:ReadinessPollMilliseconds"] = "100",
             // This suite boots the Worker for the readiness and queue surfaces, on

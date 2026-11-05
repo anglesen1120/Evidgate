@@ -118,6 +118,8 @@ internal sealed class CiProducerJwtFactory : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Database:ConnectionString"] = _connectionString,
+                ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+                ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 ["EVIDGATE:Identity:CustomRolesEnabled"] = "false",
                 ["EVIDGATE:Ci:SigningKey"] = _keys.SigningKey,
                 ["EVIDGATE:Ci:Issuer"] = CiKeyMaterial.Issuer,
@@ -201,6 +203,8 @@ internal sealed class ServicePrincipalProbeFactory : WebApplicationFactory<Progr
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Database:ConnectionString"] = _connectionString,
+                ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+                ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 ["EVIDGATE:Identity:CustomRolesEnabled"] = "false",
             }));
 
