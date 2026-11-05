@@ -26,7 +26,11 @@ import {
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { PolicyRevisionDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
+import type {
+  PolicyActivationStateDto,
+  PolicyRevisionDto,
+  PolicyRevisionSummaryDto,
+} from '@evidgate/sdk';
 
 import { isApiRequestError } from '../http/api-error';
 import { provideApi } from '../http/api-client';
@@ -38,6 +42,8 @@ const REVISION_ID = '018f0000-0000-7000-8000-0000000000a1';
 const REVISION_URL = `${API_BASE_URL}/policies/${REVISION_ID}`;
 const LIST_URL = `${API_BASE_URL}/policies/${REVISION_ID}/revisions`;
 const PUBLISH_URL = `${API_BASE_URL}/projects/p-1/policies`;
+const ACTIVATION_URL = `${API_BASE_URL}/projects/p-1/policy-activation`;
+const HEAD_URL = `${API_BASE_URL}/projects/p-1/policies/head`;
 
 /** The served media type: the adapter reads bodies as text and `flush` does not derive it. */
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
@@ -64,6 +70,16 @@ const ROW: PolicyRevisionSummaryDto = {
   created_by: REVISION.created_by,
   created_at: REVISION.created_at,
   version: 1,
+};
+
+/** The activation in force, as `GET /v1/projects/{p}/policy-activation` answers it. */
+const ACTIVATION: PolicyActivationStateDto = {
+  project_id: 'p-1',
+  policy_revision_id: REVISION_ID,
+  hash: REVISION.hash,
+  mode: 'advisory',
+  activated_by: 'u-1',
+  activated_at: '2026-10-26T08:22:00Z',
 };
 
 /** The 412 the append route answers for a stale `If-Match` (PolicyErrors.Stale). */
@@ -263,6 +279,93 @@ describe('PolicyDataService (09.7.1-T4)', () => {
       expect(cause.error.kind).toBe('precondition_failed');
       expect(cause.error.status).toBe(412);
       expect(cause.error.details).toEqual(STALE.error.details);
+    }
+  });
+
+  it('getActivation() reads the project activation route', async () => {
+    const read = service.getActivation('p-1');
+    const request = await takeRequest(httpMock, ACTIVATION_URL);
+    expect(request.request.method).toBe('GET');
+    expect(request.request.urlWithParams).toBe(ACTIVATION_URL);
+    flushPage(request, ACTIVATION);
+
+    await expect(read).resolves.toEqual(ACTIVATION);
+  });
+
+  it('getActivation() surfaces a 404 as the typed not_found error, never an activation', async () => {
+    const read = rejected(service.getActivation('p-1'));
+    flushPage(
+      await takeRequest(httpMock, ACTIVATION_URL),
+      {
+        error: {
+          code: 'not_found',
+          message: 'No activation.',
+          request_id: 'r-1',
+          retryable: false,
+        },
+      },
+      404,
+    );
+
+    const cause = await read;
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.kind).toBe('not_found');
+    }
+  });
+
+  it('getActivation() surfaces a 403 and a 429 as their own typed kinds', async () => {
+    for (const [status, kind] of [
+      [403, 'forbidden'],
+      [429, 'rate_limited'],
+    ] as const) {
+      const read = rejected(service.getActivation('p-1'));
+      flushPage(
+        await takeRequest(httpMock, ACTIVATION_URL),
+        { error: { code: kind, message: 'Refused.', request_id: 'r-1', retryable: false } },
+        status,
+      );
+      const cause = await read;
+      expect(isApiRequestError(cause)).toBe(true);
+      if (isApiRequestError(cause)) {
+        expect(cause.error.kind).toBe(kind);
+        expect(cause.error.status).toBe(status);
+      }
+    }
+  });
+
+  it('getHead() reads the head route and keeps its ETag as the head revision id', async () => {
+    const head = '018f0000-0000-7000-8000-00000000a003';
+    const read = service.getHead('p-1');
+    const request = await takeRequest(httpMock, HEAD_URL);
+    expect(request.request.method).toBe('GET');
+    expect(request.request.urlWithParams).toBe(HEAD_URL);
+    flushPage(request, ROW, 200, `"${head}"`);
+
+    await expect(read).resolves.toEqual({ revision: ROW, headRevisionId: head });
+  });
+
+  it('getHead() answers a null head when the route names no ETag', async () => {
+    const read = service.getHead('p-1');
+    flushPage(await takeRequest(httpMock, HEAD_URL), ROW);
+
+    await expect(read).resolves.toEqual({ revision: ROW, headRevisionId: null });
+  });
+
+  it('getHead() surfaces a 404 as the typed not_found error, never a revision', async () => {
+    const read = rejected(service.getHead('p-1'));
+    flushPage(
+      await takeRequest(httpMock, HEAD_URL),
+      {
+        error: { code: 'not_found', message: 'No revisions.', request_id: 'r-2', retryable: false },
+      },
+      404,
+    );
+
+    const cause = await read;
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.kind).toBe('not_found');
     }
   });
 });

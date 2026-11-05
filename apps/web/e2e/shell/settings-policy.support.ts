@@ -11,6 +11,12 @@ export const PHASE = `${PAGE}[data-policy-phase]`;
 export const ROWS = `${PAGE} [data-policy-revision]`;
 export const HEAD_ROW = `${ROWS}[data-policy-head]`;
 export const MODE = `${PAGE} [data-policy-mode]`;
+export const SUMMARY = `${PAGE} [data-policy-summary]`;
+export const ACTIVATION = `${SUMMARY} [data-policy-activation]`;
+export const ACTIVATION_REVISION = `${SUMMARY} [data-policy-activation-revision]`;
+export const HEAD_READ = `${SUMMARY} [data-policy-head-read]`;
+export const HEAD_READ_NO = `${SUMMARY} [data-policy-head-no]`;
+export const READS_RETRY = `${SUMMARY} [data-policy-reads-retry]`;
 export const DIFF = `${PAGE} [data-policy-diff]`;
 export const DIFF_ROWS = `${DIFF} [data-diff-row]`;
 export const OPEN_PUBLISH = `${PAGE} [data-policy-publish-open]`;
@@ -86,6 +92,17 @@ export function firstDetail(document: {
 
 export const POLICY_WRITE = '?fixture.variant.listPermissions=settings-policy-write';
 export const POLICY_READONLY = '?fixture.variant.listPermissions=settings-policy-readonly';
+/**
+ * The project's activation: `ok` is `advisory` (what the review project serves by default), and
+ * each of the refusals is a state the summary renders on its own — absence is not an error.
+ */
+export const ACTIVATION_OK = '?fixture.variant.getPolicyActivation=ok';
+export const ACTIVATION_ENFORCING = '?fixture.variant.getPolicyActivation=enforcing';
+export const ACTIVATION_NOT_FOUND = '?fixture.variant.getPolicyActivation=not-found';
+export const ACTIVATION_FORBIDDEN = '?fixture.variant.getPolicyActivation=forbidden';
+export const ACTIVATION_RATE_LIMITED = '?fixture.variant.getPolicyActivation=rate-limited';
+/** The project has no revision at all: the head read answers `404`. */
+export const HEAD_NOT_FOUND = '?fixture.variant.getPolicyHead=not-found';
 export const CREATE_412 = '?fixture.variant.createPolicyRevision=precondition_failed';
 export const CREATE_UNCHANGED = '?fixture.variant.createPolicyRevision=unchanged';
 export const CREATE_UNKNOWN_FIELD = '?fixture.variant.createPolicyRevision=unknown-field';
@@ -122,6 +139,14 @@ export async function ready(page: Page, rowCount: number): Promise<void> {
   await expect(page.locator(PHASE)).toHaveAttribute('data-policy-phase', 'ready');
   await expect(page.locator(ROWS)).toHaveCount(rowCount);
   await expect(page.locator(HEAD_ROW)).toHaveCount(1);
+  // The two project reads start with the list and settle on their own; wait for the summary so a
+  // case never asserts a state that is still `loading` (both reads are answered by the fixture
+  // backend, or by the variant the case selected).
+  await expect(page.locator(ACTIVATION)).not.toHaveAttribute(
+    'data-policy-activation-state',
+    'loading',
+  );
+  await expect(page.locator(HEAD_READ)).not.toHaveAttribute('data-policy-head-state', 'loading');
   await expect(page.locator(DIFF)).toBeVisible();
   // Options are portalled only while open; the placeholder is not a selectable revision.
   for (const id of ['policy-diff-base', 'policy-diff-target']) {

@@ -6,6 +6,7 @@ import created from '../../../../fixtures/web-api/policy-revision-create/input.j
 import critical from '../../../../fixtures/web-api/policy-revision-create-critical-case-quarantined/input.json';
 import unchanged from '../../../../fixtures/web-api/policy-revision-create-unchanged/input.json';
 import unknownField from '../../../../fixtures/web-api/policy-revision-create-unknown-field/input.json';
+import activationRead from '../../../../fixtures/web-api/policy-activation-read-ok/input.json';
 import head from '../../../../fixtures/web-api/policy-revision-head/input.json';
 import publishedRevision from '../../../../fixtures/web-api/policy-revision-published/input.json';
 import previous from '../../../../fixtures/web-api/policy-revision-previous/input.json';
@@ -94,8 +95,9 @@ for (const locale of LOCALES) {
     const headRow = page.locator(HEAD_ROW);
     await expect(headRow).toHaveCount(1);
     await expect(headRow).toHaveAttribute('data-revision-no', HEAD_NO);
-    // No route reads `policy_activation` today (S83 P2): the chip says "unavailable", never a guess.
-    await expect(page.locator(MODE)).toHaveAttribute('data-mode', 'unavailable');
+    // The activation read serves `advisory` for the review project, so the chip shows that mode
+    // verbatim — never a mode inferred from a revision's `state`.
+    await expect(page.locator(MODE)).toHaveAttribute('data-mode', activationRead.body.mode);
     await expect(page.locator(MODE)).toHaveText(/\S/);
     await expect(page.locator('#policy-diff-base')).toBeEnabled();
     await expect(page.locator('#policy-diff-target')).toBeEnabled();

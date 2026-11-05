@@ -1,0 +1,19 @@
+{
+  "operation_id": "getPolicyHead",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000a10f",
+    "ETag": "\"018f0000-0000-7000-8000-00000000a003\""
+  },
+  "latency_ms": 0,
+  "body": {
+    "id": "018f0000-0000-7000-8000-00000000a003",
+    "revision_no": 3,
+    "hash": "sha256:d05c091a94bfe1c59087f5a38ef026b200d2edcbee0fab69a8d080fb461e377e",
+    "state": "active",
+    "created_by": "018f0000-0000-7000-8000-0000000000e1",
+    "created_at": "2026-10-08T06:45:00Z",
+    "version": 2
+  }
+}

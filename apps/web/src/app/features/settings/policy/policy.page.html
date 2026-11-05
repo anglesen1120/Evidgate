@@ -9,6 +9,13 @@
   </h2>
   <p class="text-muted-foreground">{{ copy.description }}</p>
 </header>
+<app-policy-summary
+  [activation]="store.reads.activation()"
+  [head]="store.reads.head()"
+  [busy]="store.reads.busy() || store.phase() === 'loading'"
+  [waiting]="store.reads.waiting()"
+  (retry)="retryReads()"
+/>
 <form
   hlmCard
   class="mb-4 flex flex-row flex-wrap items-end gap-3 p-4"
@@ -39,8 +46,7 @@
     {{ copy.open }}
   </button>
 </form>
-<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-  <app-policy-mode-chip [mode]="store.mode()" />
+<div class="mb-4 flex flex-wrap items-center justify-end gap-3">
   @if (canWrite()) {
     <button
       type="button"

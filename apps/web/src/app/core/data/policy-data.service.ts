@@ -1,34 +1,17 @@
-// 09.7.1-T4 (plan 09.7.1 §2 AC1/AC4/AC5, §5, §10 T4): the three calls the Settings > Policy tab
-// makes — one revision with its body, one cursor page of the project's revisions, and the append
-// that publishes a body.
-//
-// It lives in `core/data` for the reason every data service does: `apps/web/lint` owns the HTTP
-// boundary there (`no-http-outside-core`), so a page, store or component calls this instead of
-// importing an `@evidgate/sdk` operation. The pattern is `secrets-data.service.ts`: the generated
-// operation is called with the app's one client, `ApiGateway.call` decides success versus typed
-// failure, and no wire type is declared here — every signature is an SDK type
-// (`no-hand-written-wire-dto`).
-//
-// Three contract facts shape the signatures:
-//
-// 1. The page's only read of a revision is `GET /v1/policies/{id}` (S83 P2: the contract has no
-//    read for a project's head revision or its activation), so this service takes a REVISION id,
-//    never a project id, for both the single read and the list — the list route names its path
-//    `{id}` and answers the revisions of that id's project.
-// 2. The list is ONE page as served (`next_cursor` included), so the caller owns the cursor loop
-//    and keeps the rows it already renders while the next page is on its way (00 §9.1, W7 "never
-//    load all"). `limit: 200` is the contract's maximum page size for this route.
-// 3. The list answer's `ETag` is the project's head revision id — the value the next publish must
-//    quote in `If-Match` — and it exists only as a response header, which is why the list read
-//    goes through `ApiGateway.callWithResponse` rather than `call`. A publish answers `201` for a
-//    new revision and `200` for a body already on file (AC1), and only the status says which.
+// The Settings > Policy tab's calls: one revision with its body, a cursor page of the project's
+// revisions, the two project-level reads (activation and head), and the append that publishes a
+// body. Every signature is an SDK type and every call goes through `ApiGateway`; the answers whose
+// `ETag` matters go through `callWithResponse`, because a publish quotes the head in `If-Match`.
 
 import { inject, Injectable } from '@angular/core';
 import {
   createPolicyRevision,
+  getPolicyActivation,
+  getPolicyHead,
   getPolicyRevision,
   listPolicyRevisions,
   type ListPolicyRevisionsData,
+  type PolicyActivationStateDto,
   type PolicyRevisionDto,
   type PolicyRevisionSummaryDto,
   type PolicyRevisionV1,
@@ -62,6 +45,13 @@ export interface PublishedRevision {
   readonly created: boolean;
 }
 
+/** The project's head revision, plus the head id its answer's `ETag` named. */
+export interface PolicyHead {
+  readonly revision: PolicyRevisionSummaryDto;
+  /** The `ETag` with its quotes stripped; `null` when the answer carried none. */
+  readonly headRevisionId: string | null;
+}
+
 /**
  * The head revision id an `ETag` names, quotes and a weak marker removed: `"<uuid>"` becomes
  * `<uuid>`, which is the form `PolicyIfMatch.TryParse` accepts inside (and without) quotes. A
@@ -81,6 +71,22 @@ function headRevisionIdOf(headers: Headers): string | null {
 @Injectable({ providedIn: 'root' })
 export class PolicyDataService {
   private readonly gateway = inject(ApiGateway);
+
+  /** The project's activation (`GET /v1/projects/{p}/policy-activation`); `404` means none. */
+  getActivation(projectId: string): Promise<PolicyActivationStateDto> {
+    return this.gateway.call((client) => getPolicyActivation({ client, path: { p: projectId } }));
+  }
+
+  /**
+   * The project's head revision (`GET /v1/projects/{p}/policies/head`): the newest revision, with
+   * the `ETag` that names it. `404` is a project with no revision at all, not a failure.
+   */
+  async getHead(projectId: string): Promise<PolicyHead> {
+    const { data, headers } = await this.gateway.callWithResponse((client) =>
+      getPolicyHead({ client, path: { p: projectId } }),
+    );
+    return { revision: data, headRevisionId: headRevisionIdOf(headers) };
+  }
 
   /**
    * One policy revision with its body (`GET /v1/policies/{id}`, AC3). Another tenant's revision, or

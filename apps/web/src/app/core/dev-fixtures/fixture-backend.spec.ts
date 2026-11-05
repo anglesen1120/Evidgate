@@ -26,6 +26,7 @@ import {
   createCiBinding,
   createIngestToken,
   getPolicyActivation,
+  getPolicyHead,
   getPolicyRevision,
   cancelRun,
   getRun,
@@ -481,6 +482,42 @@ describe('fixture backend (09.1.1-T12.1)', () => {
       expect(cause.error.code).toBe(envelope.error.code);
       expect(cause.error.requestId).toBe(envelope.error.request_id);
       expect(cause.error.retryAfterSeconds).toBe(Number(document.headers['Retry-After']));
+    }
+  });
+
+  it('serves the head revision read with the quoted ETag the publish compares against', async () => {
+    const document = documentOf('policy-head-read-ok');
+    const head = await gateway.call((client) => getPolicyHead({ client, path: { p: 'p-1' } }));
+
+    expect(head).toEqual(document.body);
+    expect(handled.at(0)?.url).toBe(`${API_BASE_URL}/projects/p-1/policies/head`);
+    const answered = events.find((event) => event instanceof HttpResponse);
+    expect(answered instanceof HttpResponse).toBe(true);
+    if (answered instanceof HttpResponse) {
+      expect(answered.headers.get(FIXTURE_RESPONSE_HEADER)).toBe('policy-head-read-ok');
+      // The tab's `If-Match` source must be the corpus header, not a value the spec computes:
+      // the adapter and `ApiGateway` are part of what this case proves.
+      expect(answered.headers.get('ETag')).toBe(document.headers['ETag']);
+    }
+  });
+
+  it('maps the head read’s 404 to a typed not_found that names no project', async () => {
+    toggles.setVariant('getPolicyHead', 'not-found');
+    const document = documentOf('policy-head-read-not-found');
+    const envelope = envelopeOf(document);
+
+    const cause = await rejectionOf(
+      gateway.call((client) => getPolicyHead({ client, path: { p: 'p-unreachable' } })),
+    );
+
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.kind).toBe('not_found');
+      expect(cause.error.status).toBe(404);
+      expect(cause.error.code).toBe(envelope.error.code);
+      expect(cause.error.message).toBe(envelope.error.message);
+      expect(cause.error.message).not.toContain('p-unreachable');
+      expect(cause.error.requestId).toBe(envelope.error.request_id);
     }
   });
 
