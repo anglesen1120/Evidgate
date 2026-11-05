@@ -684,6 +684,15 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("project_id", projectId));
+        // 0076's duplicate tally: one counted attempt for the ledger row above, so the discovered tenant set is
+        // never empty and the fail-closed zero below has a row to hide.
+        await scope.ExecuteAsync(
+            """
+            insert into public.usage_duplicate_attempt (id, org_id, billing_key, attempts, first_seen_at, last_seen_at)
+            values (@id, @org_id, 'probe:guc', 1, now(), now())
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId));
         // The 05.3.2-T5 table (migration 0049): revision 1 of the run seeded above — the insert
         // trigger refuses any number but the run's max + 1. `missing` keeps its '{}' default, which
         // is what the "complete has no missing codes" CHECK requires.

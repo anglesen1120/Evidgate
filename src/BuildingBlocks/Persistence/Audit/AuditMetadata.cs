@@ -65,6 +65,15 @@ public static partial class AuditMetadata
         // a pattern — and, when it replaced the declared set, how many it replaced.
         "redaction_rule_count",
         "redaction_rule_count_before",
+        // The audited billing reads record which slice of an org's accounting records was read: the period and metric
+        // filters (enumerated values), the page bound and whether a continuation was used. None of them is an
+        // amount, a price or a free-text name — and never the opaque continuation itself, which is why the row
+        // records that one was present instead of its value — so an audit row names the query without recording
+        // what it billed.
+        "period",
+        "metric",
+        "limit",
+        "has_cursor",
     };
 
     /// <summary>
