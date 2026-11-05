@@ -501,6 +501,17 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("project_id", projectId));
+        // 0071's redaction_rule: one declared rule for the kind the policy row above names, so the
+        // fail-closed-zero assertions below cover the table a project configures its rules with, not an
+        // empty one.
+        await scope.ExecuteAsync(
+            """
+            insert into public.redaction_rule (id, org_id, project_id, kind, rule_type, name_pattern)
+            values (@id, @org_id, @project_id, 'trace', 'header', 'authorization')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId));
         // 0066's masking_event: one event naming the artifact above, so the discovered tenant set is never empty.
         await scope.ExecuteAsync(
             """

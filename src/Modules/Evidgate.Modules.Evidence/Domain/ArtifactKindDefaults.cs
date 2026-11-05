@@ -18,6 +18,20 @@ internal static class UploadUrlLimits
 }
 
 /// <summary>
+/// The two bounds of <c>PUT /v1/projects/{p}/artifact-kind-policy/{kind}</c>. They belong together because the body
+/// cap has to fit the rule count: 64 rules of a 128-character name cost 11,073 bytes of JSON, the 64 media types the
+/// same body may carry cost at most 16,448, so 32 KiB holds the largest documented body and still bounds a caller.
+/// </summary>
+internal static class CapturePolicyLimits
+{
+    /// <summary>The most rules one kind may declare, so one write stays one bounded statement.</summary>
+    public const int MaxRedactionRules = 64;
+
+    /// <summary>The largest request body the kind-policy route accepts, in bytes; over it the answer is 413.</summary>
+    public const int MaxBodyBytes = 32 * 1024;
+}
+
+/// <summary>
 /// The static default of one artifact kind (06.1.2-T3.1, DECISIONS §8.1 D-A9): the size cap and the accepted media
 /// types a project without an <c>artifact_kind_policy</c> row for the kind gets. The media types are exactly the
 /// ones <c>MediaSniffer.HasSignature</c> can verify from the object's leading bytes (06.3.1-T2.2), so a default

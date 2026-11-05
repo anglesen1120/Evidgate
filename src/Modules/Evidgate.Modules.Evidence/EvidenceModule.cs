@@ -68,6 +68,10 @@ internal static class EvidenceModule
         // C2 stage-2 shape validation of the per-kind policy override.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<Application.Artifacts.SetArtifactKindPolicyOverride>, Application.Artifacts.SetArtifactKindPolicyOverrideValidator>());
 
+        // The capture options read shared by the route that serves them and the run-create path: one cross-module read
+        // over the caller's tenant scope, so both answers come from the same statements.
+        services.TryAddScoped<ICaptureOptionsReader, Application.Capture.CaptureOptionsReader>();
+
         // 06.1.2-T2: the staging-object delete the completion enqueues. Registered in both hosts like every module
         // piece; only the Worker runs a consumer, and the Api host tolerates the row until it does (T19).
         services.AddTaskHandler<ArtifactStagingDeletePayload, ArtifactStagingDeleteTaskHandler>();

@@ -1526,7 +1526,25 @@ export type DownloadUrlResponse = {
 };
 
 /**
- * The request and the `200` answer of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's stored capture policy for one kind. Every member is required — the row's knobs are written as a whole. The answer adds `kind`, so a client can render what the server committed without a second read.
+ * The request body of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's capture policy for one kind. Every member is required — the row's knobs are written as a whole — and the body is closed, so a member it does not declare, `kind` and `redaction_rule_count` included, is refused `400 request_invalid` at binding rather than ignored. The path names the kind.
+ */
+export type ArtifactKindPolicyRequest = {
+    /**
+     * The largest artifact of the kind the project accepts.
+     */
+    max_bytes: number;
+    media_types: Array<string>;
+    default_sensitivity: 'normal' | 'sensitive';
+    capture_enabled: boolean;
+    reject_on_secret: boolean;
+    /**
+     * The kind's declared redaction rules: a list replaces the stored set, `[]` clears it and an omitted member leaves it untouched, so a caller that only toggles a switch never deletes a privacy control it never sent.
+     */
+    redaction_rules?: Array<RedactionRuleView>;
+};
+
+/**
+ * The `200` answer of `PUT /v1/projects/{p}/artifact-kind-policy/{kind}`: the project's stored capture policy for one kind. Every knob is required; `kind` names the row the answer committed, so a client can render the result without a second read. The request body is `ArtifactKindPolicyRequest`, which never carries `kind`.
  */
 export type ArtifactKindPolicyView = {
     /**
@@ -1541,6 +1559,46 @@ export type ArtifactKindPolicyView = {
     default_sensitivity: 'normal' | 'sensitive';
     capture_enabled: boolean;
     reject_on_secret: boolean;
+    /**
+     * The kind's declared redaction rules, always present and ordered by `rule_type`, then `name_pattern`.
+     */
+    redaction_rules?: Array<RedactionRuleView>;
+};
+
+/**
+ * The `200` answer of `GET /v1/projects/{p}/artifact-kind-policy`: the project's capture options for every contract kind. A project with no policy row for a kind answers that kind's static default, and a kind with neither a row nor a default answers `capture_enabled: false` — the same three cases the upload route's `kind_disabled` gate resolves, so a client reading this answer and a client uploading agree.
+ */
+export type CaptureOptionsView = {
+    kinds: [
+        CaptureOptionsKindView,
+        CaptureOptionsKindView,
+        CaptureOptionsKindView,
+        CaptureOptionsKindView,
+        CaptureOptionsKindView,
+        CaptureOptionsKindView,
+        CaptureOptionsKindView,
+        CaptureOptionsKindView
+    ];
+};
+
+/**
+ * One artifact kind's effective capture switch and the rules the project declared for it.
+ */
+export type CaptureOptionsKindView = {
+    kind: 'trace' | 'video' | 'screenshot' | 'raw_report' | 'dom_snapshot' | 'a11y_snapshot' | 'patch' | 'ui_hierarchy';
+    /**
+     * The effective switch: the project row's value when it has one, the kind's static default when it has none, and `false` for a kind with neither.
+     */
+    capture_enabled: boolean;
+    redaction_rules: Array<RedactionRuleView>;
+};
+
+/**
+ * One declared redaction rule: a field class and the name (or `*`/`?` glob over it) the reporter strips before capture. The server stores and serves the declaration; the reporter applies it client-side.
+ */
+export type RedactionRuleView = {
+    rule_type: 'header' | 'cookie' | 'form_field' | 'query_param';
+    name_pattern: string;
 };
 
 /**
@@ -5625,8 +5683,51 @@ export type GetArtifactDownloadUrlResponses = {
 
 export type GetArtifactDownloadUrlResponse = GetArtifactDownloadUrlResponses[keyof GetArtifactDownloadUrlResponses];
 
+export type GetCaptureOptionsData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/artifact-kind-policy';
+};
+
+export type GetCaptureOptionsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetCaptureOptionsError = GetCaptureOptionsErrors[keyof GetCaptureOptionsErrors];
+
+export type GetCaptureOptionsResponses = {
+    /**
+     * The project's capture options for all eight kinds, in contract order
+     */
+    200: CaptureOptionsView;
+};
+
+export type GetCaptureOptionsResponse = GetCaptureOptionsResponses[keyof GetCaptureOptionsResponses];
+
 export type SetArtifactKindPolicyOverrideData = {
-    body: ArtifactKindPolicyView;
+    body: ArtifactKindPolicyRequest;
     headers?: {
         /**
          * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
@@ -5646,7 +5747,7 @@ export type SetArtifactKindPolicyOverrideData = {
 
 export type SetArtifactKindPolicyOverrideErrors = {
     /**
-     * `request_invalid` — the body is not a JSON object of the five members. Every member is required: a body that omits `capture_enabled` or `reject_on_secret` is refused here rather than defaulting the switch to `false`, so an incomplete body can never silently disable an existing policy control, and no row is written. A body over the 8192-byte cap is `413 payload_too_large` before parsing.
+     * `request_invalid` — the body is not a JSON object of the five members: a member the body does not declare is refused here (`additionalProperties: false`), and so is a `redaction_rules` entry carrying a member a rule does not declare. Every member is required: a body that omits `capture_enabled` or `reject_on_secret` is refused here rather than defaulting the switch to `false`, so an incomplete body can never silently disable an existing policy control, and no row is written. A body over the 32768-byte cap is `413 payload_too_large` before parsing.
      */
     400: ErrorEnvelope;
     /**
@@ -5666,7 +5767,7 @@ export type SetArtifactKindPolicyOverrideErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * `kind_unknown` for a kind outside the closed list, or `request_invalid` for a member that breaks the column's shape (a non-positive `max_bytes`, a media-type list outside one to 64 entries, a sensitivity that is neither `normal` nor `sensitive`).
+     * `kind_unknown` for a kind outside the closed list, `redaction_rule_type_unknown` for a rule whose `rule_type` is outside `header`/`cookie`/`form_field`/`query_param`, or `request_invalid` for a member that breaks the column's shape (a non-positive `max_bytes`, a media-type list outside one to 64 entries, a media type that is empty, longer than 255 characters or carries a control or format character, a media-type entry that is not a string or whose escapes spell no UTF-16 text such as an unpaired surrogate, a sensitivity that is neither `normal` nor `sensitive`, a `null` rule entry, more than 64 rules, a repeated rule, or a `name_pattern` outside 1..128 characters of `[A-Za-z0-9._~%+:*?/-]`).
      */
     422: ErrorEnvelope;
     /**

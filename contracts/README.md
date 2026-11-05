@@ -142,7 +142,10 @@ otherwise the envelope filter's default `60` (00 §9.2).
   changes no answer; it is not a candidate for `Idempotency-Key` because the
   write is audited on every successful call — an identical repeated `PUT`
   writes another `artifact_kind_policy.set` row, recording the previous
-  default it found.
+  default it found. The same holds for the redaction rules the body may carry
+  (06.2.2): a list replaces the kind's declared set, `[]` clears it and an
+  omitted member leaves it untouched, so a replay stores the same set and the
+  rules never accumulate.
 - `POST /v1/auth/invite-token`, `POST /v1/auth/link/{provider}` — no resource
   is created: the first validates the presented token and stages it in the
   short-lived `__Host-evidgate_invite` cookie, the second answers a state cookie

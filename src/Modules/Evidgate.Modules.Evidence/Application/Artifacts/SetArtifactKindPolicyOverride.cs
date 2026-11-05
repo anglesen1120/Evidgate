@@ -8,6 +8,7 @@ using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Endpoints;
 using FluentValidation;
@@ -17,18 +18,25 @@ namespace Evidgate.Modules.Evidence.Application.Artifacts;
 
 /// <summary>
 /// The per-project override of one artifact kind's capture policy: the maximum size, the accepted media types, the
-/// default sensitivity, the capture switch and the secret-rejection switch, upserted on
-/// <c>(org, project, kind)</c>. It is the only route that can lower a kind whose static default is sensitive, which
-/// is why every write is audited with the previous sensitivity: a lowering can never happen by omission, and the
+/// default sensitivity, the capture switch, the secret-rejection switch and the kind's declared redaction rules,
+/// written on <c>(org, project, kind)</c>. It is the only route that can lower a kind whose static default is sensitive,
+/// which is why every write is audited with the previous sensitivity: a lowering can never happen by omission, and the
 /// chain shows who made it.
 /// </summary>
 /// <param name="ProjectId">The project whose policy is overridden.</param>
 /// <param name="Kind">One of the eight contract kinds; an unknown one is refused 422.</param>
 /// <param name="MaxBytes">The largest artifact of the kind the project accepts, greater than zero.</param>
-/// <param name="MediaTypes">The accepted media types, between one and 64.</param>
+/// <param name="MediaTypes">
+/// The accepted media types, between one and 64, each 1–255 characters with no control or format character.
+/// </param>
 /// <param name="DefaultSensitivity"><c>normal</c> or <c>sensitive</c>.</param>
 /// <param name="CaptureEnabled">False switches capture of the kind off for the project.</param>
 /// <param name="RejectOnSecret">True makes the project reject an artifact whose scan flags a secret.</param>
+/// <param name="RedactionRules">
+/// The kind's declared rules: a list replaces the stored set, an empty list clears it, and <c>null</c> leaves it
+/// untouched — a caller that only toggles a switch never deletes a privacy control it never sent. A rule type outside
+/// the contract list is refused 422 before anything is written.
+/// </param>
 internal sealed record SetArtifactKindPolicyOverride(
     Guid ProjectId,
     string Kind,
@@ -36,17 +44,22 @@ internal sealed record SetArtifactKindPolicyOverride(
     string[] MediaTypes,
     string DefaultSensitivity,
     bool CaptureEnabled,
-    bool RejectOnSecret)
+    bool RejectOnSecret,
+    IReadOnlyList<RedactionRule>? RedactionRules = null)
     : ICommand<Result<ArtifactKindPolicyView>>;
 
 /// <summary>
 /// Shape validation of <see cref="SetArtifactKindPolicyOverride"/> before the tenant transaction: the sensitivity is
-/// one of the column's two values, the media-type list is within the column's bounds and the size is positive and no
-/// larger than one stored object can be read. Unknown kinds are the handler's named 422 <c>kind_unknown</c>, not a
-/// validator reason, because the code has to survive a mature client.
+/// one of the column's two values, the media-type list is within the column's bounds and carries no control character,
+/// the size is positive and no larger than one stored object can be read, and every declared rule carries a name the
+/// column accepts and appears once. Unknown kinds and unknown rule types are the handler's named 422 codes, not
+/// validator reasons, because a client has to be able to act on them.
 /// </summary>
 internal sealed class SetArtifactKindPolicyOverrideValidator : AbstractValidator<SetArtifactKindPolicyOverride>
 {
+    /// <summary>The longest rule-type token the validator accepts before the handler judges its vocabulary.</summary>
+    private const int MaxRuleTypeLength = 32;
+
     /// <summary>Builds the rules.</summary>
     public SetArtifactKindPolicyOverrideValidator()
     {
@@ -65,21 +78,47 @@ internal sealed class SetArtifactKindPolicyOverrideValidator : AbstractValidator
             .Must(types => types is { Length: >= 1 and <= 64 })
             .WithErrorCode("out_of_range");
 
+        // A media type is stored verbatim and reaches the column through a jsonb cast, so a control character (a NUL
+        // above all) would fail inside the transaction, and a stored newline could never match an upload. The bounds
+        // and the character check are the artifact route's own shape helpers; a blank entry stays refused.
         RuleFor(command => command.MediaTypes)
-            .Must(types => types is null || types.All(type => !string.IsNullOrWhiteSpace(type) && type.Length <= 255))
+            .Must(types => types is null
+                || types.All(type => ArtifactShape.IsMediaType(type)
+                    && !string.IsNullOrWhiteSpace(type)
+                    && ArtifactShape.HasNoControlCharacter(type)))
             .WithErrorCode("invalid_format");
 
         RuleFor(command => command.DefaultSensitivity)
             .Must(sensitivity => sensitivity is ArtifactSensitivity.Normal or ArtifactSensitivity.Sensitive)
             .WithErrorCode("invalid_format");
+
+        RuleFor(command => command.RedactionRules)
+            .Must(rules => rules is null || rules.Count <= CapturePolicyLimits.MaxRedactionRules)
+            .WithErrorCode("out_of_range");
+
+        // One declaration is one row: a repeated pair would break the table's unique key inside the transaction, so the
+        // body is refused before any statement runs instead of surfacing as a constraint violation.
+        RuleFor(command => command.RedactionRules)
+            .Must(rules => rules is null
+                || rules.Select(rule => (rule.RuleType, rule.NamePattern)).Distinct().Count() == rules.Count)
+            .WithErrorCode("duplicate");
+
+        RuleForEach(command => command.RedactionRules)
+            .Must(rule => !string.IsNullOrWhiteSpace(rule.RuleType) && rule.RuleType.Length <= MaxRuleTypeLength)
+            .WithErrorCode("invalid_format");
+
+        RuleForEach(command => command.RedactionRules)
+            .Must(rule => RedactionRulePattern.IsValid(rule.NamePattern))
+            .WithErrorCode("invalid_format");
     }
 }
 
 /// <summary>
-/// Upserts the project's row for one kind. The writes of one kind serialize on an advisory lock taken before the
-/// previous value is read, so the audit records the value the write it queued behind actually left, an absent row
-/// included. The upsert follows on the row's unique key, and the answer carries the stored policy. <c>version</c>
-/// and <c>updated_at</c> are the trigger's, never the caller's.
+/// Writes the project's row for one kind and replaces the kind's declared rules in the same transaction. The writes of
+/// one kind serialize on an advisory lock taken before the previous value is read, so the audit records the value the
+/// write it queued behind actually left, an absent row included. The upsert follows on the row's unique key, the rules
+/// are deleted and re-inserted in one set-based statement, and the answer carries the stored policy and rules.
+/// <c>version</c> and <c>updated_at</c> are the trigger's, never the caller's.
 /// </summary>
 [AuditedAction("artifact_kind_policy.set")]
 [Permission(Permissions.Project.Write)]
@@ -105,6 +144,18 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
     /// </summary>
     private const string LockSql =
         "select pg_advisory_xact_lock(hashtext('evidgate.artifact_kind_policy'), hashtext(@lock_key))";
+
+    /// <summary>
+    /// The kind's declared rule count before the write, read under the same lock as
+    /// <see cref="PreviousSql"/> so the audit records the set this write actually replaced.
+    /// </summary>
+    private const string PreviousRuleCountSql = """
+        select count(*)
+          from public.redaction_rule
+         where org_id = @org_id
+           and project_id = @project_id
+           and kind = @kind
+        """;
 
     /// <summary>The project's status, so a missing or deleting project is a named refusal and not a foreign-key error.</summary>
     private const string ProjectStatusSql = """
@@ -134,6 +185,34 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
                capture_enabled = excluded.capture_enabled
         """;
 
+    /// <summary>The kind's declared set, cleared before the replacement is inserted: a rule is replaced, never edited.</summary>
+    private const string DeleteRulesSql = """
+        delete from public.redaction_rule
+         where org_id = @org_id
+           and project_id = @project_id
+           and kind = @kind
+        """;
+
+    /// <summary>
+    /// The replacement set in one statement: the rules travel as JSON text and become rows in a single insert, so the
+    /// number of statements does not grow with the number of rules.
+    /// </summary>
+    private const string InsertRulesSql = """
+        insert into public.redaction_rule (id, org_id, project_id, kind, rule_type, name_pattern)
+        select gen_random_uuid(), @org_id, @project_id, @kind, rule.rule_type, rule.name_pattern
+          from jsonb_to_recordset(@rules::jsonb) as rule(rule_type text, name_pattern text)
+        """;
+
+    /// <summary>The kind's rules after the write, ordered the way the read route serves them.</summary>
+    private const string SelectRulesSql = """
+        select rule_type as "RuleType", name_pattern as "NamePattern"
+          from public.redaction_rule
+         where org_id = @org_id
+           and project_id = @project_id
+           and kind = @kind
+         order by rule_type, name_pattern
+        """;
+
     /// <summary>The <c>project.status</c> that refuses a policy write.</summary>
     private const string ProjectDeleted = "deleted";
 
@@ -156,6 +235,13 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
         if (!ArtifactKind.IsKnown(command.Kind))
         {
             return Result.Failure<ArtifactKindPolicyView>(EvidenceErrors.KindUnknown);
+        }
+
+        // The allowlist is judged before any statement: an unknown rule type is the named 422 and never a row, so a
+        // client learns the vocabulary from the refusal rather than from a constraint violation.
+        if (command.RedactionRules is { } declared && declared.Any(rule => !RedactionRuleTypes.IsKnown(rule.RuleType)))
+        {
+            return Result.Failure<ArtifactKindPolicyView>(EvidenceErrors.RedactionRuleTypeUnknown);
         }
 
         var parameters = new
@@ -193,7 +279,46 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
         var previous = await db.QuerySingleOrDefaultAsync<string>(PreviousSql, parameters, cancellationToken)
             .ConfigureAwait(false);
 
+        // Only a write that replaces the declared set changes that control, so only it pays for the count, and it reads
+        // it under the same lock as the previous sensitivity: the pair the audit records is one row's state.
+        long? rulesBefore = null;
+        if (command.RedactionRules is not null)
+        {
+            rulesBefore = await db.ScalarAsync<long>(PreviousRuleCountSql, parameters, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         await db.ExecuteAsync(UpsertSql, parameters, cancellationToken).ConfigureAwait(false);
+
+        if (command.RedactionRules is { } rules)
+        {
+            await db.ExecuteAsync(DeleteRulesSql, parameters, cancellationToken).ConfigureAwait(false);
+
+            if (rules.Count > 0)
+            {
+                await db.ExecuteAsync(
+                    InsertRulesSql,
+                    new
+                    {
+                        org_id = context.OrgId,
+                        project_id = command.ProjectId,
+                        kind = command.Kind,
+                        rules = JsonSerializer.Serialize(rules.Select(rule => new
+                        {
+                            rule_type = rule.RuleType,
+                            name_pattern = rule.NamePattern,
+                        })),
+                    },
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        // The answer reports what the database holds, never what the caller sent: a write that left the rules alone
+        // answers the stored set, and a replacement answers the set it stored.
+        var stored = await db.QueryAsync<RedactionRule>(
+            SelectRulesSql,
+            new { org_id = context.OrgId, project_id = command.ProjectId, kind = command.Kind },
+            cancellationToken).ConfigureAwait(false);
 
         // The chain records which sensitivity the row carried before and which it carries now: a lowering of a
         // kind whose static default is sensitive is exactly the change an operator has to be able to find. A project
@@ -202,14 +327,24 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
             ?? ArtifactKindDefaults.Resolve(command.Kind, row: null)?.DefaultSensitivity
             ?? ArtifactSensitivity.ForKind(command.Kind);
 
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["previous_default_sensitivity"] = before,
+            ["status"] = command.DefaultSensitivity,
+        };
+
+        if (rulesBefore is { } beforeCount)
+        {
+            // Counts, never the patterns: the chain has to show that a privacy control changed hands, and how large it
+            // was on either side is the most a reviewer may need without the row itself.
+            metadata["redaction_rule_count_before"] = beforeCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            metadata["redaction_rule_count"] = stored.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
         audit.Describe(new AuditObject(
             "artifact_kind_policy",
             $"{command.ProjectId:D}:{command.Kind}",
-            Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["previous_default_sensitivity"] = before,
-                ["status"] = command.DefaultSensitivity,
-            }));
+            Metadata: metadata));
 
         return Result.Success(new ArtifactKindPolicyView(
             command.Kind,
@@ -217,6 +352,7 @@ internal sealed class SetArtifactKindPolicyOverrideHandler(
             command.MediaTypes,
             command.DefaultSensitivity,
             command.CaptureEnabled,
-            command.RejectOnSecret));
+            command.RejectOnSecret,
+            [.. stored.Select(rule => new RedactionRuleView(rule.RuleType, rule.NamePattern))]));
     }
 }
