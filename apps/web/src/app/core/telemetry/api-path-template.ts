@@ -60,6 +60,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'evidence-revisions',
   'export',
   'finalize',
+  'fixtures',
   'github',
   'head',
   'healing',
