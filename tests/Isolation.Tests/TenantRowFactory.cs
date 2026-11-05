@@ -610,6 +610,13 @@ internal sealed class TenantRowFactory
             ("public.artifact", "state") => "pending_upload",
             ("public.artifact_kind_policy", "kind") => "trace",
             ("public.artifact_kind_policy", "default_sensitivity") => "normal",
+            // redaction_rule (0071) closes `kind` to the eight contract kinds and `rule_type` to the four-type
+            // allowlist, so the generic text candidate is rejected by both CHECKs; `name_pattern` stays generic on
+            // purpose — 13 lowercase alphanumerics satisfy the 1..128 bounded-charset CHECK, and a value unique per
+            // generated row keeps the (org_id, project_id, kind, rule_type, name_pattern) key from colliding with the
+            // valid row the corrupt one is compared to.
+            ("public.redaction_rule", "kind") => "trace",
+            ("public.redaction_rule", "rule_type") => "header",
             ("public.producer_slot", "shard_index") => 1,
             ("public.feature_node", "kind") => "module",
             ("public.feature_node", "position") or ("public.checklist_item", "position") =>

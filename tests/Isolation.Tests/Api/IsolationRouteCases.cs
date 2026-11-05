@@ -896,6 +896,11 @@ public static class IsolationRouteCases
         // every probe because a foreign project is refused before the validator runs.
         ProjectCase("PUT", "/v1/projects/{p}/artifact-kind-policy/{kind}", p => new(HttpMethod.Put,
             $"/v1/projects/{p}/artifact-kind-policy/screenshot", KindPolicy())),
+        // The capture-options read names its project in {p}, so it takes the same project case: a project with no
+        // policy row answers every kind's default (a real 200 for the own-project control), and org A's project is the
+        // same 404 an unknown one gets.
+        ProjectCase("GET", "/v1/projects/{p}/artifact-kind-policy", p => new(HttpMethod.Get,
+            $"/v1/projects/{p}/artifact-kind-policy"), ownControl: true),
         // The two artifact reads name no project: their project comes from the credential, so they are covered by
         // the case below rather than by ProjectCase.
         ArtifactReadCase("GET", "/v1/artifacts/{a}", a => new(HttpMethod.Get, $"/v1/artifacts/{a}")),
