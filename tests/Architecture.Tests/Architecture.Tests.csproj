@@ -59,5 +59,8 @@
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Authoring\Evidgate.Modules.Authoring.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Authoring.Contracts\Evidgate.Modules.Authoring.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Evidgate.Evaluation\Evidgate.Evaluation.csproj" />
+    <!-- The golden-set harness is a production project in Evidgate.slnx, so the wiring guard
+         above requires it here; its assembly then passes through the reflection scan too. -->
+    <ProjectReference Include="..\..\src\Tools\Evidgate.GoldenHarness\Evidgate.GoldenHarness.csproj" />
   </ItemGroup>
 </Project>

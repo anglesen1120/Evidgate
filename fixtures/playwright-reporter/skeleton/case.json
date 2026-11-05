@@ -1,0 +1,7 @@
+{
+  "producer_id": "playwright-reporter",
+  "parser_id": "playwright-reporter",
+  "parser_version": "0.0.0-pending",
+  "rationale": "Pins the Playwright JSON reporter's suite/spec/test/result nesting with one passing test, so the reporter mapper has an event-level target before it lands.",
+  "parser_status": "pending"
+}

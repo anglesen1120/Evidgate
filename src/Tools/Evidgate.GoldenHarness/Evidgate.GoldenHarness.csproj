@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The golden-set harness: a console tool so CI can run one process over the committed corpus.
+       It ships no parser of its own — production parsers are registered by the projects that own them. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- RFC 8785 canonical bytes are the equality oracle of the event diff, so the tool uses the
+         repository's one canonicalizer rather than comparing JSON text itself. -->
+    <ProjectReference Include="..\..\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
+  </ItemGroup>
+</Project>

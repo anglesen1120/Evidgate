@@ -951,6 +951,12 @@
           "Evidgate.Modules.Evidence.Contracts": "[1.0.0, )"
         }
       },
+      "evidgate.goldenharness": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.Canonicalization": "[1.0.0, )"
+        }
+      },
       "evidgate.migrator": {
         "type": "Project",
         "dependencies": {

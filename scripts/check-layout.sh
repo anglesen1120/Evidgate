@@ -163,11 +163,13 @@ src/Modules/Evidgate.Modules.Tenancy.Contracts/Evidgate.Modules.Tenancy.Contract
 src/Modules/Evidgate.Modules.Tenancy/Evidgate.Modules.Tenancy.csproj
 src/Modules/Evidgate.Modules.Usage.Contracts/Evidgate.Modules.Usage.Contracts.csproj
 src/Modules/Evidgate.Modules.Usage/Evidgate.Modules.Usage.csproj
+src/Tools/Evidgate.GoldenHarness/Evidgate.GoldenHarness.csproj
 tests/Architecture.Tests/Architecture.Tests.csproj
 tests/Canonicalization.UnitTests/Canonicalization.UnitTests.csproj
 tests/Contract.Tests/Contract.Tests.csproj
 tests/Evaluation.UnitTests/Evaluation.UnitTests.csproj
 tests/Foundation.IntegrationTests/Foundation.IntegrationTests.csproj
+tests/GoldenHarness.UnitTests/GoldenHarness.UnitTests.csproj
 tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj
 tests/Identity.IntegrationTests/Identity.IntegrationTests.csproj
 tests/Isolation.Tests/Isolation.Tests.csproj
