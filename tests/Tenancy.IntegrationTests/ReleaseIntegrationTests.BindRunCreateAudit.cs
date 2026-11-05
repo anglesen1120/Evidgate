@@ -3,6 +3,10 @@
 // applied binding, written in the run's own transaction. Nothing here trusts the response: it reads the stored rows.
 #pragma warning disable CA1861
 using System.Net;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -126,5 +130,41 @@ public sealed partial class ReleaseIntegrationTests
             $"select payload::text from public.outbox where org_id = '{world.Org:D}' "
             + "and task_type = 'orchestrator.release.bound'"))
             .ShouldNotContain(Digest('a'), Case.Sensitive, "the event must not leak a digest");
+    }
+
+    /// <summary>
+    /// The binding's audit row is buffered, not written, so the failure is aimed one statement later than the rollback
+    /// case beside it: the audit flush runs before the commit, after both events were inserted. A throw there must leave
+    /// no run, plan, slot, binding, idempotency record, audit row or event - the flush, the events and the business rows
+    /// are one transaction.
+    /// </summary>
+    [Fact]
+    public async Task BindAtRunCreate_FailureFlushingTheAudit_RollsBackTheInsertedEventsToo()
+    {
+        await using var world = await RunCreationTests.StartAsync(_fixture);
+        var releaseId = await ReleaseWithAsync(
+            world, "run-create-audit-rollback", "active", ("web", 'a'), ("api", 'b'));
+        await using var crashing = world.Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<ITenantDb>();
+            services.AddSingleton<TenantDb>();
+            services.AddSingleton<ITenantDb>(provider =>
+                new ThrowingTenantDb(provider.GetRequiredService<TenantDb>(), "insert into public.audit_log"));
+        }));
+        using var client = crashing.CreateClient();
+        var key = NewKey();
+
+        var created = await RunCreationTests.CreateRunAsync(
+            world,
+            RunBodyWith(world.ManifestId, Components(("web", 'a'), ("api", 'b')), releaseId),
+            client: client,
+            idempotencyKey: key);
+
+        created.Status.ShouldBe(HttpStatusCode.InternalServerError, created.ErrorMessage);
+        await AssertNothingSurvivedAsync(world, key);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.outbox where org_id = '{world.Org:D}'"))
+            .ShouldBe(0, "both events were inserted before the flush failed, so the rollback must remove them");
     }
 }

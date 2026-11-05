@@ -62,9 +62,9 @@ public sealed partial class ReleaseIntegrationTests
     }
 
     /// <summary>
-    /// A service credential whose token scope is the request's project but which does not claim <c>run:create</c> is
-    /// refused before the handler: 403 with no body hint about the release, and no row. The claimable set is the
-    /// service ceiling, so a token that claims a member-only permission holds nothing at all.
+    /// The same project and the same credential, one claim shorter: a service token that holds another permission of
+    /// the service ceiling but not <c>run:create</c> is refused before the handler, so the 201 above is that claim and
+    /// not the identity. Nothing is written, and the answer says nothing about the release.
     /// </summary>
     [Fact]
     public async Task BindServiceScope_GrantedScopeWithoutThePermission_403NoRows()
@@ -73,36 +73,47 @@ public sealed partial class ReleaseIntegrationTests
         var releaseId = await ReleaseWithAsync(world, "bind-scope-denied", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
 
-        await using var host = ServiceHost(world, world.Project);
+        await using var host = ServiceHost(world, world.Project, ["event:write"]);
         using var client = host.CreateClient();
         var refused = await BindAsync(
             world,
             releaseId,
             runId,
-            caller: TenancyApiFactory.Resolved(
-                serviceOrg: world.Org,
-                serviceProject: world.Project,
-                servicePermissions: ["run:read"]),
+            caller: ServiceCaller(world.Project, ["event:write"]),
             client: client);
 
         refused.Status.ShouldBe(HttpStatusCode.Forbidden, refused.ErrorMessage);
         (await BindingCountAsync(world, releaseId, runId)).ShouldBe(0);
+        (await BindingCountAsync(world)).ShouldBe(0);
     }
 
-    /// <summary>A host whose published principal and request tenant scope are both <paramref name="project"/>.</summary>
+    /// <summary>
+    /// A host whose published principal and request tenant scope are both <paramref name="project"/>. The published
+    /// principal is what the pipeline evaluates, so the claim set is set here rather than through headers.
+    /// </summary>
     /// <param name="world">The suite's tenant.</param>
     /// <param name="project">The single project the credential and the request are bound to.</param>
-    private TenancyApiFactory ServiceHost(RunCreationTests.World world, Guid project) =>
+    /// <param name="permissions">The claims of the credential, all inside the service ceiling.</param>
+    private TenancyApiFactory ServiceHost(
+        RunCreationTests.World world,
+        Guid project,
+        IReadOnlyCollection<string>? permissions = null) =>
         TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database),
             world.Org,
             project,
-            RequestPrincipal.Service(project, ["run:create"], credentialId: $"svc-bind-{project:D}"));
+            RequestPrincipal.Service(
+                project,
+                permissions ?? ["run:create"],
+                credentialId: "svc-bind-scope"));
 
-    /// <summary>The headers of a service credential scoped to <paramref name="project"/>.</summary>
+    /// <summary>The headers of a service credential scoped to <paramref name="project"/>, for the client it rides on.</summary>
     /// <param name="project">The project the credential is minted for.</param>
-    private static Action<System.Net.Http.Headers.HttpRequestHeaders> ServiceCaller(Guid project) =>
-        TenancyApiFactory.Resolved(serviceProject: project, servicePermissions: ["run:create"]);
+    /// <param name="permissions">The claims the credential presents.</param>
+    private static Action<System.Net.Http.Headers.HttpRequestHeaders> ServiceCaller(
+        Guid project,
+        IReadOnlyCollection<string>? permissions = null) =>
+        TenancyApiFactory.Resolved(serviceProject: project, servicePermissions: permissions ?? ["run:create"]);
 
     /// <summary>A second project of the same org, created through the API because the schema requires a real one.</summary>
     /// <param name="world">The suite's tenant.</param>
