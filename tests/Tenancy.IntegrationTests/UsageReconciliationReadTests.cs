@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
+using Evidgate.Modules.Usage.Application.Queries;
 using Shouldly;
 using Xunit;
 
@@ -33,8 +34,10 @@ public sealed class UsageReconciliationReadTests
     public async Task Reconciliation_AgreeingSides_ReportMatchAndBothTotals()
     {
         await using var world = await UsageReadsWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
-        await world.SeedLedgerAsync(Ledger(world, "agree:1", 1m), Ledger(world, "agree:2", 2m));
-        await world.SeedRollupAsync(Rollup(world, "results", 3m, rowCount: 2));
+        await world.SeedLedgerAsync(
+            Ledger(world, "agree:1", 1m) with { Amount = 2m, Currency = "USD" },
+            Ledger(world, "agree:2", 2m) with { Amount = 3m, Currency = "USD" });
+        await world.SeedRollupAsync(Rollup(world, "results", 3m, rowCount: 2, amount: 5m, currency: "USD"));
 
         var answer = await world.GetAsync(world.ReconciliationUrl($"period={Period}"));
 
@@ -48,13 +51,83 @@ public sealed class UsageReconciliationReadTests
         unit.GetProperty("metric").GetString().ShouldBe("results");
         unit.GetProperty("ledger_total_quantity").GetDecimal().ShouldBe(3m);
         unit.GetProperty("ledger_row_count").GetInt64().ShouldBe(2);
+        unit.GetProperty("ledger_total_amount").GetDecimal().ShouldBe(5m);
+        unit.GetProperty("ledger_currency").GetString().ShouldBe("USD");
         unit.GetProperty("rollup_total_quantity").GetDecimal().ShouldBe(3m);
         unit.GetProperty("rollup_row_count").GetInt64().ShouldBe(2);
+        unit.GetProperty("rollup_total_amount").GetDecimal().ShouldBe(5m);
+        unit.GetProperty("rollup_currency").GetString().ShouldBe("USD");
         unit.GetProperty("rollup_computed_at").GetDateTimeOffset().ShouldBe(ComputedAt);
 
         answer.Body.GetProperty("gaps").GetArrayLength().ShouldBe(0);
         answer.Body.GetProperty("duplicate_attempts").GetArrayLength().ShouldBe(0);
         answer.Body.GetProperty("duplicate_attempts_truncated").GetBoolean().ShouldBeFalse();
+        answer.Body.GetProperty("units_truncated").GetBoolean().ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Reconciliation_DifferingAmount_NamesAmount()
+    {
+        await using var world = await UsageReadsWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+        await world.SeedLedgerAsync(
+            Ledger(world, "amount:1", 1m) with { Amount = 2m, Currency = "USD" },
+            Ledger(world, "amount:2", 2m) with { Amount = 3m, Currency = "USD" });
+        await world.SeedRollupAsync(Rollup(world, "results", 3m, rowCount: 2, amount: 6m, currency: "USD"));
+
+        var unit = SingleUnit(await world.GetAsync(world.ReconciliationUrl($"period={Period}")));
+
+        unit.GetProperty("matches").GetBoolean().ShouldBeFalse();
+        unit.GetProperty("mismatch").GetString().ShouldBe("amount");
+        unit.GetProperty("ledger_total_amount").GetDecimal().ShouldBe(5m);
+        unit.GetProperty("rollup_total_amount").GetDecimal().ShouldBe(6m);
+    }
+
+    [Fact]
+    public async Task Reconciliation_DifferingCurrency_NamesCurrency()
+    {
+        await using var world = await UsageReadsWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+        await world.SeedLedgerAsync(
+            Ledger(world, "currency:1", 1m) with { Amount = 2m, Currency = "USD" },
+            Ledger(world, "currency:2", 2m) with { Amount = 3m, Currency = "USD" });
+        await world.SeedRollupAsync(Rollup(world, "results", 3m, rowCount: 2, amount: 5m, currency: "EUR"));
+
+        var unit = SingleUnit(await world.GetAsync(world.ReconciliationUrl($"period={Period}")));
+
+        unit.GetProperty("matches").GetBoolean().ShouldBeFalse();
+        unit.GetProperty("mismatch").GetString().ShouldBe("currency");
+        unit.GetProperty("ledger_currency").GetString().ShouldBe("USD");
+        unit.GetProperty("rollup_currency").GetString().ShouldBe("EUR");
+    }
+
+    [Fact]
+    public async Task Reconciliation_PartiallyPricedLedger_LeavesTheAmountUnknown()
+    {
+        await using var world = await UsageReadsWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+        await world.SeedLedgerAsync(
+            Ledger(world, "partial:1", 1m) with { Amount = 2m, Currency = "USD" },
+            Ledger(world, "partial:2", 2m));
+        await world.SeedRollupAsync(Rollup(world, "results", 3m, rowCount: 2));
+
+        var unit = SingleUnit(await world.GetAsync(world.ReconciliationUrl($"period={Period}")));
+
+        unit.GetProperty("ledger_total_amount").ValueKind.ShouldBe(JsonValueKind.Null);
+        unit.GetProperty("ledger_currency").ValueKind.ShouldBe(JsonValueKind.Null);
+        unit.GetProperty("matches").GetBoolean().ShouldBeTrue(
+            "both sides are unknown, so the unpriced row is a gap in pricing, not a reconciliation mismatch");
+    }
+
+    [Fact]
+    public async Task Reconciliation_UnitBound_CutsAndReportsTheCut()
+    {
+        int[] three = [1, 2, 3];
+
+        var capped = PeriodReconciliationReader.Bound(three, 2, out var truncated);
+        var whole = PeriodReconciliationReader.Bound(three, 3, out var notTruncated);
+
+        capped.ShouldBe([1, 2]);
+        truncated.ShouldBeTrue("a cut list must say it was cut");
+        whole.ShouldBe(three);
+        notTruncated.ShouldBeFalse();
     }
 
     [Fact]
@@ -302,8 +375,16 @@ public sealed class UsageReconciliationReadTests
         key,
         new DateTimeOffset(2026, 10, 20, 8, 0, 0, TimeSpan.Zero));
 
-    private static RollupSeed Rollup(UsageReadsWorld world, string metric, decimal total, int rowCount, bool gapFlag = false) =>
-        new(Guid.CreateVersion7(), world.Project, Period, metric, total, rowCount, ComputedAt, gapFlag);
+    private static RollupSeed Rollup(
+        UsageReadsWorld world,
+        string metric,
+        decimal total,
+        int rowCount,
+        bool gapFlag = false,
+        decimal? amount = null,
+        string? currency = null) =>
+        new(Guid.CreateVersion7(), world.Project, Period, metric, total, rowCount, ComputedAt, gapFlag,
+            TotalAmount: amount, Currency: currency);
 
     private static string? MetricOf(JsonElement unit) => unit.GetProperty("metric").GetString();
 

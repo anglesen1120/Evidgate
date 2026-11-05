@@ -32,8 +32,9 @@ internal static class UsageRollupStore
     /// <summary>
     /// The aggregate of every period the ledger holds for the scope's tenant. Grouping happens on the stored
     /// <c>period</c>, so a late row for a closed month is recomputed by the same statement as the open month, and no
-    /// period needs a clock-derived window. <c>currency</c> is taken only when every row of the scope agrees on one:
-    /// mixed currencies are unknown, and an aggregate that guessed one would misstate a statement.
+    /// period needs a clock-derived window. Amount and currency are taken only when the whole scope is priced and
+    /// agrees on one currency: a partial sum would understate a statement without saying so, so an unpriced row leaves
+    /// both unknown.
     /// </summary>
     private const string RecomputeSql = """
         insert into public.usage_rollup (
@@ -48,8 +49,10 @@ internal static class UsageRollupStore
                 l.period,
                 l.metric,
                 sum(l.quantity) as total_quantity,
-                sum(l.amount) as total_amount,
-                case when count(distinct l.currency) = 1 then min(l.currency) end as currency,
+                case when count(*) = count(l.amount) and count(distinct l.currency) = 1
+                     then sum(l.amount) end as total_amount,
+                case when count(*) = count(l.amount) and count(distinct l.currency) = 1
+                     then min(l.currency) end as currency,
                 count(*)::integer as row_count
             from public.usage_ledger_entry l
             where l.org_id = @org_id
@@ -74,7 +77,9 @@ internal static class UsageRollupStore
     /// <summary>
     /// Flags a stored aggregate whose scope no longer has a ledger row. The recompute cannot insert such a row (the
     /// aggregate exists only because rows once did), so the flag is the one place a divergence stays visible; it is set
-    /// only while it is not already set, so a repeated fire changes nothing.
+    /// only while it is not already set, so a repeated fire changes nothing. The project key is normalised through the
+    /// same all-zero sentinel the unique index uses, so an org-level scope matches itself without an <c>is not distinct
+    /// from</c> predicate (D8's index-friendly equality).
     /// </summary>
     private const string FlagGapsSql = """
         update public.usage_rollup r
@@ -85,9 +90,10 @@ internal static class UsageRollupStore
             select 1
             from public.usage_ledger_entry l
             where l.org_id = r.org_id
-              and l.project_id is not distinct from r.project_id
               and l.period = r.period
-              and l.metric = r.metric)
+              and l.metric = r.metric
+              and coalesce(l.project_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                  = coalesce(r.project_id, '00000000-0000-0000-0000-000000000000'::uuid))
         """;
 
     /// <summary>

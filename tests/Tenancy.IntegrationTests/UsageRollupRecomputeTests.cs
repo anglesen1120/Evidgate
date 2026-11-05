@@ -225,7 +225,26 @@ public sealed class UsageRollupRecomputeTests
         await RecomputeAsync(world);
 
         var row = (await RowsAsync(world)).Single();
-        row.ShouldContain("|results|2|5|null|2|false|", Case.Sensitive);
+        row.ShouldContain("|results|2|null|null|2|false|", Case.Sensitive);
+    }
+
+    [Fact]
+    public async Task Recompute_PartiallyPricedScope_LeavesAmountAndCurrencyUnknown()
+    {
+        await using var world = await StartAsync();
+        var at = new DateTimeOffset(2026, 2, 3, 8, 0, 0, TimeSpan.Zero);
+        await SeedAsync(
+            world,
+            new LedgerRow(world.Project, "results", OpenPeriod, 2m, at, 4m, "USD"),
+            new LedgerRow(world.Project, "results", OpenPeriod, 3m, at));
+
+        await RecomputeAsync(world);
+
+        var row = (await RowsAsync(world)).Single();
+        row.ShouldContain(
+            "|results|5|null|null|2|false|",
+            Case.Sensitive,
+            "a partial sum would understate the scope without saying so");
     }
 
     // ------------------------------------------------------------------ AC7: the gap flag

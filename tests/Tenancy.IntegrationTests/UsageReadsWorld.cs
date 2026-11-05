@@ -217,9 +217,11 @@ internal sealed class UsageReadsWorld : IAsyncDisposable
             command.CommandText =
                 """
                 insert into public.usage_rollup
-                    (id, org_id, project_id, period, metric, total_quantity, row_count, gap_flag, computed_at)
+                    (id, org_id, project_id, period, metric, total_quantity, total_amount, currency, row_count,
+                     gap_flag, computed_at)
                 values
-                    (@id, @org_id, @project_id, @period, @metric, @total_quantity, @row_count, @gap_flag, @computed_at)
+                    (@id, @org_id, @project_id, @period, @metric, @total_quantity, @total_amount, @currency,
+                     @row_count, @gap_flag, @computed_at)
                 """;
             command.Parameters.Add(new NpgsqlParameter("id", row.Id));
             command.Parameters.Add(new NpgsqlParameter("org_id", row.Org ?? Org));
@@ -227,6 +229,8 @@ internal sealed class UsageReadsWorld : IAsyncDisposable
             command.Parameters.Add(new NpgsqlParameter("period", row.Period));
             command.Parameters.Add(new NpgsqlParameter("metric", row.Metric));
             command.Parameters.Add(new NpgsqlParameter("total_quantity", row.TotalQuantity));
+            command.Parameters.Add(new NpgsqlParameter("total_amount", (object?)row.TotalAmount ?? DBNull.Value));
+            command.Parameters.Add(new NpgsqlParameter("currency", (object?)row.Currency ?? DBNull.Value));
             command.Parameters.Add(new NpgsqlParameter("row_count", row.RowCount));
             command.Parameters.Add(new NpgsqlParameter("gap_flag", row.GapFlag));
             command.Parameters.Add(new NpgsqlParameter("computed_at", row.ComputedAt));
@@ -469,7 +473,9 @@ internal sealed record RollupSeed(
     int RowCount,
     DateTimeOffset ComputedAt,
     bool GapFlag = false,
-    Guid? Org = null);
+    Guid? Org = null,
+    decimal? TotalAmount = null,
+    string? Currency = null);
 
 /// <summary>One duplicate-attempt row to seed.</summary>
 internal sealed record DuplicateSeed(

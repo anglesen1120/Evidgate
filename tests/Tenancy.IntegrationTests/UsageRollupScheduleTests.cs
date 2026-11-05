@@ -5,6 +5,7 @@ using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Usage;
 using Evidgate.Modules.Usage.Application.Rollup;
+using Evidgate.Modules.Usage.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -53,11 +54,11 @@ public sealed class UsageRollupScheduleTests
         // Two runners, the same instant: the unique (schedule_name, fire_at) key elects one row.
         var runner = provider.GetRequiredService<TaskScheduleRunner>();
         await Task.WhenAll(runner.RunOnceAsync(FiresAt, Token), runner.RunOnceAsync(FiresAt, Token));
-        (await ScheduleRowsAsync(database)).ShouldBe([$"{UsageRollupSweeps.TaskType}|{UsageRollupSweeps.TaskType}|{EvidgateSweeps.MaintenanceQueue}"]);
+        (await ScheduleRowsAsync(database, UsageRollupSweeps.TaskType)).ShouldBe([$"{UsageRollupSweeps.TaskType}|{UsageRollupSweeps.TaskType}|{EvidgateSweeps.MaintenanceQueue}"]);
 
         // The next pass at the same instant finds the occurrence taken and inserts nothing.
         await runner.RunOnceAsync(FiresAt, Token);
-        (await ScheduleRowsAsync(database)).ShouldBe([$"{UsageRollupSweeps.TaskType}|{UsageRollupSweeps.TaskType}|{EvidgateSweeps.MaintenanceQueue}"]);
+        (await ScheduleRowsAsync(database, UsageRollupSweeps.TaskType)).ShouldBe([$"{UsageRollupSweeps.TaskType}|{UsageRollupSweeps.TaskType}|{EvidgateSweeps.MaintenanceQueue}"]);
     }
 
     [Fact]
@@ -108,18 +109,128 @@ public sealed class UsageRollupScheduleTests
             .ShouldBe(orgs.Count);
     }
 
-    private async Task<IReadOnlyList<string>> ScheduleRowsAsync(string database) =>
+    [Fact]
+    public async Task Handler_DrainsEveryPageUntilTheScanIsExhausted()
+    {
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
+        var orgs = await SeedOrgsAsync(database, count: 11);
+
+        await using var provider = StartHost(database);
+        var registry = provider.GetRequiredService<ITaskHandlerRegistry>();
+        registry.TryGet(UsageRollupSweeps.TaskType, out var invoker).ShouldBeTrue();
+
+        // One org per page over eleven orgs: a bounded fire would stop at the first page and starve ten tenants.
+        await invoker!.InvokeAsync("""{"org_batch":1}""", scope: null, Token);
+
+        (await _fixture.ColumnAsync<string>(
+            database,
+            "select org_id::text from public.usage_rollup order by org_id"))
+            .ShouldBe([.. orgs.Order().Select(org => org.ToString("D"))]);
+    }
+
+    [Fact]
+    public async Task Handler_RevisitsAnOrgWhoseLedgerRowsAreGone_AndFlagsTheStoredAggregate()
+    {
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
+        var orgs = await SeedOrgsAsync(database, count: 1);
+
+        await using var provider = StartHost(database);
+        var registry = provider.GetRequiredService<ITaskHandlerRegistry>();
+        registry.TryGet(UsageRollupSweeps.TaskType, out var invoker).ShouldBeTrue();
+
+        await invoker!.InvokeAsync("""{"org_batch":100}""", scope: null, Token);
+        (await _fixture.ScalarAsync<bool>(
+            database,
+            $"select gap_flag from public.usage_rollup where org_id = '{orgs[0]:D}'"))
+            .ShouldBeFalse();
+
+        // The org's last ledger row is gone: only the stored aggregate still names the tenant, and the scan must
+        // return it so the recompute can flag the total the facts no longer support.
+        await _fixture.ExecuteAsync(
+            database,
+            $"delete from public.usage_ledger_entry where org_id = '{orgs[0]:D}'");
+        await invoker.InvokeAsync("""{"org_batch":100}""", scope: null, Token);
+
+        (await _fixture.ScalarAsync<bool>(
+            database,
+            $"select gap_flag from public.usage_rollup where org_id = '{orgs[0]:D}'"))
+            .ShouldBeTrue("the scan walks orgs with an aggregate too, not only orgs with ledger rows");
+    }
+
+    [Fact]
+    public async Task Handler_OneFailingOrg_DoesNotStarveTheOrgsBehindIt()
+    {
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
+        var orgs = await SeedOrgsAsync(database, count: 3);
+        var failing = orgs.Order().First();
+
+        await using var provider = StartHost(database, new FailingRecompute(failing));
+        var registry = provider.GetRequiredService<ITaskHandlerRegistry>();
+        registry.TryGet(UsageRollupSweeps.TaskType, out var invoker).ShouldBeTrue();
+
+        var error = await Should.ThrowAsync<AggregateException>(
+            async () => await invoker!.InvokeAsync("""{"org_batch":1}""", scope: null, Token));
+
+        error.Message.ShouldContain("1 org(s)", Case.Sensitive);
+        error.Message.ShouldContain(failing.ToString("D"), Case.Sensitive);
+        error.InnerExceptions.Count.ShouldBe(1);
+
+        var rolledUp = await _fixture.ColumnAsync<string>(
+            database,
+            "select org_id::text from public.usage_rollup order by org_id");
+        rolledUp.ShouldBe(
+            [.. orgs.Order().Skip(1).Select(org => org.ToString("D"))],
+            "the fire continues past the failed tenant and the task queue is told to retry");
+    }
+
+    [Fact]
+    public async Task Schedule_PeriodClose_FiresOncePerOccurrence_WithTwoRunners()
+    {
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = dedicated.Name;
+        await using var provider = StartHost(database);
+
+        var schedules = provider.GetRequiredService<IScheduleRegistry>();
+        schedules.Schedules.ShouldContain(
+            schedule => schedule.Name == UsageRollupSweeps.PeriodCloseScheduleName,
+            "the month boundary has its own schedule, registered with the mechanism");
+        UsageRollupSweeps.PeriodCloseCron.ShouldBe("5 0 1 * *");
+        UsageRollupSweeps.ComputeOnPeriodClose.TaskType.ShouldBe(UsageRollupSweeps.TaskType);
+        UsageRollupSweeps.ComputeOnPeriodClose.Queue.ShouldBe(EvidgateSweeps.MaintenanceQueue);
+
+        // 2026-11-01 00:05 UTC: the first day of a month, five minutes after the close.
+        var closeFireAt = new DateTimeOffset(2026, 11, 1, 0, 5, 0, TimeSpan.Zero);
+        var runner = provider.GetRequiredService<TaskScheduleRunner>();
+        await Task.WhenAll(runner.RunOnceAsync(closeFireAt, Token), runner.RunOnceAsync(closeFireAt, Token));
+
+        (await ScheduleRowsAsync(database, UsageRollupSweeps.PeriodCloseScheduleName)).ShouldBe(
+            [$"{UsageRollupSweeps.PeriodCloseScheduleName}|{UsageRollupSweeps.TaskType}|{EvidgateSweeps.MaintenanceQueue}"]);
+
+        // A third pass at the same instant finds the occurrence taken and inserts nothing more.
+        await runner.RunOnceAsync(closeFireAt, Token);
+        (await ScheduleRowsAsync(database, UsageRollupSweeps.PeriodCloseScheduleName)).ShouldBe(
+            [$"{UsageRollupSweeps.PeriodCloseScheduleName}|{UsageRollupSweeps.TaskType}|{EvidgateSweeps.MaintenanceQueue}"]);
+        (await ScheduleRowsAsync(database, UsageRollupSweeps.TaskType)).ShouldBeEmpty(
+            "the daily schedule's 02:23 occurrence is outside the period-close window");
+    }
+
+    private async Task<IReadOnlyList<string>> ScheduleRowsAsync(string database, string scheduleName) =>
         await _fixture.ColumnAsync<string>(
             database,
             $"""
             select schedule_name || '|' || task_type || '|' || queue
             from public.task
-            where schedule_name = '{UsageRollupSweeps.TaskType}'
+            where schedule_name = '{scheduleName}'
             order by fire_at
             """);
 
     /// <summary>A host composing the production task mechanism over the module under test.</summary>
-    private ServiceProvider StartHost(string database)
+    /// <param name="database">The dedicated database.</param>
+    /// <param name="recompute">The recompute seam to substitute, or null for the production store.</param>
+    private ServiceProvider StartHost(string database, IUsageRollupRecompute? recompute = null)
     {
         var values = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -136,12 +247,27 @@ public sealed class UsageRollupScheduleTests
         services.AddEvidgateTasks(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
         services.AddUsageModule();
 
+        if (recompute is not null)
+        {
+            services.RemoveAll<IUsageRollupRecompute>();
+            services.AddSingleton(recompute);
+        }
+
         // The fixture mints no login for evidgate_worker_sched, and the production source refuses a credential that
         // names another role: the double opens a superuser connection and switches to the sweep role instead.
         services.RemoveAll<IWorkerSchedDataSource>();
         services.AddSingleton<IWorkerSchedDataSource>(_ => new SweepRoleDataSource(_fixture, database));
 
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>The production recompute, except for one org, whose fire fails before it writes anything.</summary>
+    private sealed class FailingRecompute(Guid orgId) : IUsageRollupRecompute
+    {
+        public Task RecomputeAsync(ITenantScope scope, CancellationToken cancellationToken) =>
+            scope.OrgId == orgId
+                ? throw new InvalidOperationException("the store refused this tenant")
+                : UsageRollupStore.RecomputeAsync(scope, cancellationToken);
     }
 
     /// <summary>Opens the sweep role's connection: a superuser connection switched with <c>set role</c>.</summary>

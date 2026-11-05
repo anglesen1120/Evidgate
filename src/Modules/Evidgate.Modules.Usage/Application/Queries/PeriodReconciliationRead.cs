@@ -17,6 +17,12 @@ internal static class ReconciliationMismatch
     /// <summary>The two totals differ.</summary>
     internal const string Quantity = "quantity";
 
+    /// <summary>The two priced amounts differ.</summary>
+    internal const string Amount = "amount";
+
+    /// <summary>The two currencies differ.</summary>
+    internal const string Currency = "currency";
+
     /// <summary>The totals agree but the row counts do not.</summary>
     internal const string RowCount = "row_count";
 
@@ -31,24 +37,34 @@ internal static class ReconciliationMismatch
 /// One reconciled <c>(project, metric)</c> of a period: the ledger's live totals beside the roll-up's
 /// stored ones. The ledger side is a sum over no rows (0) when the roll-up has a row it does not;
 /// the roll-up side is null when the roll-up has no row at all, which is what
-/// <see cref="RollupComputedAt"/> being null repeats for the caller.
+/// <see cref="RollupComputedAt"/> being null repeats for the caller. An amount and a currency are
+/// known only when every row of that side is priced and the side carries one currency; otherwise
+/// both are null.
 /// </summary>
 /// <param name="ProjectId">The project, or null for an org-level metric.</param>
 /// <param name="Metric">The wire metric name.</param>
 /// <param name="LedgerTotalQuantity">The live sum of the period's ledger rows, adjustments included.</param>
 /// <param name="LedgerRowCount">How many ledger rows that sum covers.</param>
+/// <param name="LedgerTotalAmount">The live priced sum, or null while a row of the scope is unpriced.</param>
+/// <param name="LedgerCurrency">The ledger's single currency, or null when unpriced or mixed.</param>
 /// <param name="RollupTotalQuantity">The stored roll-up total, or null without a roll-up row.</param>
 /// <param name="RollupRowCount">The stored row count, or null without a roll-up row.</param>
+/// <param name="RollupTotalAmount">The stored priced sum, or null without a roll-up row or priced scope.</param>
+/// <param name="RollupCurrency">The stored currency, or null without a roll-up row or a single currency.</param>
 /// <param name="RollupComputedAt">When the roll-up row was last computed, or null without one.</param>
-/// <param name="Matches">True when both sides exist and agree on the total and the row count.</param>
+/// <param name="Matches">True when both sides exist and agree on quantity, amount, currency and row count.</param>
 /// <param name="Mismatch">One of <see cref="ReconciliationMismatch"/>, or null when they agree.</param>
 internal sealed record ReconciliationUnit(
     Guid? ProjectId,
     string Metric,
     decimal LedgerTotalQuantity,
     long LedgerRowCount,
+    decimal? LedgerTotalAmount,
+    string? LedgerCurrency,
     decimal? RollupTotalQuantity,
     long? RollupRowCount,
+    decimal? RollupTotalAmount,
+    string? RollupCurrency,
     DateTimeOffset? RollupComputedAt,
     bool Matches,
     string? Mismatch);
@@ -72,9 +88,9 @@ internal sealed record ReconciliationGap(
 /// <c>(org_id, billing_key)</c> and recorded per attempt, so a retrying producer stays visible.
 /// </summary>
 /// <param name="BillingKey">The source metering key that was repeated.</param>
-/// <param name="Attempts">How many times the key was seen, the first write included.</param>
-/// <param name="FirstSeenAt">The first attempt.</param>
-/// <param name="LastSeenAt">The most recent attempt.</param>
+/// <param name="Attempts">How many replays were seen after the first write.</param>
+/// <param name="FirstSeenAt">The first replay.</param>
+/// <param name="LastSeenAt">The most recent replay.</param>
 internal sealed record DuplicateUsageAttempt(
     string BillingKey,
     int Attempts,
@@ -91,12 +107,14 @@ internal sealed record DuplicateUsageAttempt(
 /// <param name="Gaps">Roll-up rows the recompute flagged as incomplete.</param>
 /// <param name="DuplicateAttempts">Repeated billing keys, most recent attempt first.</param>
 /// <param name="DuplicateAttemptsTruncated">True when more duplicate keys exist than the list reports.</param>
+/// <param name="UnitsTruncated">True when more scopes exist than <paramref name="Units"/> reports.</param>
 internal sealed record PeriodReconciliation(
     string Period,
     IReadOnlyList<ReconciliationUnit> Units,
     IReadOnlyList<ReconciliationGap> Gaps,
     IReadOnlyList<DuplicateUsageAttempt> DuplicateAttempts,
-    bool DuplicateAttemptsTruncated);
+    bool DuplicateAttemptsTruncated,
+    bool UnitsTruncated);
 
 /// <summary>
 /// <c>GET /internal/operator/orgs/{o}/usage-reconciliation?period=</c>: the documented invoice query
@@ -113,6 +131,13 @@ internal sealed record PeriodReconciliation(
 /// recompute has not covered that metric yet, a missing ledger row means the roll-up holds a total
 /// the facts no longer support, and the duplicate list explains a period that took more attempts to
 /// arrive than it should have. Repairing either is a producer or recompute decision.
+/// <para>
+/// This read is the authoritative statement: the ledger page is a keyset walk of rows that keep
+/// arriving and is not a snapshot, while the reconciliation aggregates the period in one statement
+/// inside one transaction. Both lists are bounded — at most <see cref="MaxUnits"/> scopes and
+/// <see cref="MaxDuplicateAttempts"/> keys — and a cut is reported by its own flag rather than
+/// passed off as complete.
+/// </para>
 /// </remarks>
 internal sealed class PeriodReconciliationReader(
     ITenantScopeFactory scopes,
@@ -121,6 +146,9 @@ internal sealed class PeriodReconciliationReader(
     ITenantLimits limits,
     UsageReadStore store)
 {
+    /// <summary>Most reconciled scopes one read reports.</summary>
+    internal const int MaxUnits = 1000;
+
     /// <summary>Most duplicate keys one read reports.</summary>
     internal const int MaxDuplicateAttempts = 200;
 
@@ -167,8 +195,11 @@ internal sealed class PeriodReconciliationReader(
             return Result.Failure<PeriodReconciliation>(Error.NotFound("no such organization"));
         }
 
-        var rows = await store.ReadReconciliationAsync(orgId, period, cancellationToken).ConfigureAwait(false);
-        var units = rows.Select(Reconcile).ToArray();
+        // One row more than the report holds answers "are there more scopes?" without a count.
+        var rows = await store
+            .ReadReconciliationAsync(orgId, period, MaxUnits + 1, cancellationToken)
+            .ConfigureAwait(false);
+        var units = Bound(rows.Select(Reconcile).ToArray(), MaxUnits, out var unitsTruncated);
         var gaps = rows
             .Where(row => row.GapFlag && row.RollupComputedAt is { } computedAt)
             .Select(row => new ReconciliationGap(
@@ -178,18 +209,44 @@ internal sealed class PeriodReconciliationReader(
                 row.RollupComputedAt!.Value))
             .ToArray();
 
-        // One row more than the report holds answers "are there more?" the same way a page does.
+        // The duplicate list uses the same bound: one row more than the report holds is the answer.
         var attempts = await store
             .ReadDuplicateAttemptsAsync(orgId, period, MaxDuplicateAttempts + 1, cancellationToken)
             .ConfigureAwait(false);
-        var truncated = attempts.Count > MaxDuplicateAttempts;
-        var duplicates = attempts.Take(MaxDuplicateAttempts).Select(ToDuplicate).ToArray();
+        var duplicates = Bound(
+            attempts.Select(ToDuplicate).ToArray(),
+            MaxDuplicateAttempts,
+            out var duplicatesTruncated);
 
-        DescribeAudit(orgId, operatorId, period, units.Length, truncated);
+        DescribeAudit(orgId, operatorId, period, units.Count, unitsTruncated, duplicatesTruncated);
         await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result.Success(new PeriodReconciliation(period, units, gaps, duplicates, truncated));
+        return Result.Success(new PeriodReconciliation(
+            period,
+            units,
+            gaps,
+            duplicates,
+            duplicatesTruncated,
+            unitsTruncated));
+    }
+
+    /// <summary>
+    /// Cuts <paramref name="items"/> to <paramref name="max"/> and reports whether anything was
+    /// left out. One helper for both bounded lists, so a caller can never mistake a cut list for a
+    /// complete one.
+    /// </summary>
+    /// <typeparam name="T">The list's element type.</typeparam>
+    /// <param name="items">The fetched items, one more than the report holds when there are more.</param>
+    /// <param name="max">The most items the report holds.</param>
+    /// <param name="truncated">True when <paramref name="items"/> exceeded <paramref name="max"/>.</param>
+    internal static IReadOnlyList<T> Bound<T>(IReadOnlyList<T> items, int max, out bool truncated)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(max);
+
+        truncated = items.Count > max;
+        return truncated ? [.. items.Take(max)] : items;
     }
 
     /// <summary>
@@ -207,17 +264,25 @@ internal sealed class PeriodReconciliationReader(
                 ? ReconciliationMismatch.MissingLedger
                 : row.RollupTotalQuantity != ledgerTotal
                     ? ReconciliationMismatch.Quantity
-                    : row.RollupRowCount != ledgerRows
-                        ? ReconciliationMismatch.RowCount
-                        : null;
+                    : row.RollupTotalAmount != row.LedgerTotalAmount
+                        ? ReconciliationMismatch.Amount
+                        : !string.Equals(row.RollupCurrency, row.LedgerCurrency, StringComparison.Ordinal)
+                            ? ReconciliationMismatch.Currency
+                            : row.RollupRowCount != ledgerRows
+                                ? ReconciliationMismatch.RowCount
+                                : null;
 
         return new ReconciliationUnit(
             row.ProjectId,
             row.Metric,
             ledgerTotal,
             ledgerRows,
+            row.LedgerTotalAmount,
+            row.LedgerCurrency,
             row.RollupTotalQuantity,
             row.RollupRowCount,
+            row.RollupTotalAmount,
+            row.RollupCurrency,
             row.RollupComputedAt,
             Matches: mismatch is null,
             Mismatch: mismatch);
@@ -227,17 +292,29 @@ internal sealed class PeriodReconciliationReader(
         new(row.BillingKey, row.Attempts, row.FirstSeenAt, row.LastSeenAt);
 
     /// <summary>
-    /// Records the period, how many scopes were compared and whether the duplicate list was cut. No
-    /// total, amount or key reaches the audit chain: this row says which period was read, not what it
+    /// Records the period, how many scopes were compared and which bound cut the report. No total,
+    /// amount or key reaches the audit chain: this row says which period was read, not what it
     /// billed.
     /// </summary>
-    private void DescribeAudit(Guid orgId, Guid operatorId, string period, int units, bool truncated)
+    private void DescribeAudit(
+        Guid orgId,
+        Guid operatorId,
+        string period,
+        int units,
+        bool unitsTruncated,
+        bool duplicatesTruncated)
     {
+        var outcome = duplicatesTruncated
+            ? "duplicates_truncated"
+            : unitsTruncated
+                ? "units_truncated"
+                : "complete";
+
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["period"] = period,
             ["count"] = units.ToString(CultureInfo.InvariantCulture),
-            ["outcome"] = truncated ? "duplicates_truncated" : "complete",
+            ["outcome"] = outcome,
         };
 
         audit.Describe(new AuditObject("usage_rollup", orgId.ToString("D"), Metadata: metadata));

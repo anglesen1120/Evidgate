@@ -44,6 +44,12 @@ internal sealed record UsageLedgerRow(
     DateTimeOffset CreatedAt);
 
 /// <summary>One keyset page of the ledger, oldest first, with the next page's cursor when one exists.</summary>
+/// <remarks>
+/// A page is a walk of an append-only table, not a snapshot: rows written between two requests may
+/// appear on a later page, and the page set is only as consistent as the instants it was read at.
+/// A statement that must agree with itself — an invoice total — is the period reconciliation read,
+/// which aggregates one period inside one transaction and is the authoritative figure.
+/// </remarks>
 /// <param name="Items">The page's rows, in <c>(created_at, id)</c> order.</param>
 /// <param name="NextCursor">The continuation to hand back, or null on the last page.</param>
 internal sealed record UsageLedgerPage(IReadOnlyList<UsageLedgerRow> Items, string? NextCursor);
@@ -63,6 +69,13 @@ internal sealed record UsageLedgerPage(IReadOnlyList<UsageLedgerRow> Items, stri
 /// metric, page bound, whether a continuation was used). The audit row is written in the same
 /// transaction as the read, so a read whose audit row cannot be written fails instead of returning
 /// billing data nobody recorded, and a refused read (422, 400, 404) writes nothing at all.
+/// <para>
+/// The pages are not a snapshot: each request opens its own transaction, so a row a producer writes
+/// between two calls is visible to the later page and a row an adjustment corrects is not rewritten
+/// on the earlier one. The authoritative answer to "what does this period total" is the
+/// reconciliation read, which aggregates the whole period in one transaction; a caller that needs a
+/// consistent statement of an invoice takes that read, not a walk of this page.
+/// </para>
 /// </remarks>
 internal sealed class UsageLedgerReader(
     ITenantScopeFactory scopes,

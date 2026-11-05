@@ -1,15 +1,17 @@
 -- 0076_usage_rollup_job.sql
 --
--- The roll-up job's two missing pieces: a bounded cross-tenant org scan for the
--- platform task, and the table that records duplicate billing-key attempts, which
--- the ledger reports but until now did not persist. The recompute itself writes the
--- existing `usage_rollup` table (0047); its upsert arbiter is unchanged.
+-- The roll-up job's three missing pieces: a bounded cross-tenant org scan for the
+-- platform task, the table that records duplicate billing-key attempts, which the
+-- ledger reports but until now did not persist, and the ledger indexes the job's own
+-- reads need. The recompute itself writes the existing `usage_rollup` table (0047);
+-- its upsert arbiter is unchanged.
 --
 -- `usage_duplicate_attempt` exists because a duplicate is not a ledger row: the
 -- ledger answers `duplicates` for a replayed key and writes nothing, so the only
 -- evidence a source sent the same metering event twice is this counter. It is
 -- upserted in the caller's own tenant transaction by the same statement group as the
--- ledger insert, so a rolled-back batch leaves neither a row nor an attempt.
+-- ledger insert, so a rolled-back batch leaves neither a row nor an attempt. The
+-- tally references the ledger row whose key it counts, so it cannot outlive it.
 --
 -- Locks: `set local lock_timeout` bounds every DDL wait in one transaction.
 
@@ -35,6 +37,28 @@ create table if not exists public.usage_duplicate_attempt (
   constraint usage_duplicate_attempt_attempts_check check (attempts >= 1),
   constraint usage_duplicate_attempt_version_check check (version >= 1)
 );
+
+-- The recount only ever names a key the ledger already holds (a duplicate is
+-- detected after the first row exists), so the tally is a child of that row. The
+-- reference carries `org_id`, so a tally row can only point at its own tenant's
+-- ledger entry; the composite unique key behind it is
+-- `usage_ledger_entry_billing_key_key (org_id, billing_key)`. The same key on this
+-- side is the referencing index a foreign key needs.
+do $fk$
+begin
+  if not exists (
+    select 1
+      from pg_catalog.pg_constraint
+     where conrelid = 'public.usage_duplicate_attempt'::regclass
+       and conname = 'usage_duplicate_attempt_ledger_fk')
+  then
+    alter table public.usage_duplicate_attempt
+      add constraint usage_duplicate_attempt_ledger_fk
+      foreign key (org_id, billing_key)
+      references public.usage_ledger_entry (org_id, billing_key);
+  end if;
+end
+$fk$;
 
 -- The shared concurrency trigger of 0004: the database owns `updated_at` and the
 -- `version` increment, so the recount cannot leave a stale token behind.
@@ -71,21 +95,46 @@ grant update (attempts, last_seen_at) on public.usage_duplicate_attempt to evidg
 revoke all on public.usage_duplicate_attempt from evidgate_operator;
 revoke all on public.usage_duplicate_attempt from evidgate_worker_sched;
 
+-- Two ledger reads the roll-up job adds to the table's hot paths.
+--
+-- The operator's keyset page filters on `org_id` alone and orders by
+-- `(created_at, id)`: without this index a page of the oldest rows sorts the whole
+-- tenant. `idx_ledger_period` (0046) leads with `(org_id, project_id)`, so it cannot
+-- serve that order.
+create index if not exists idx_ledger_created
+  on public.usage_ledger_entry (org_id, created_at, id);
+
+-- The reconciliation aggregates one period's rows per `(project, metric)` within the
+-- org. `idx_ledger_period` has `project_id` before `period`, so a period filter
+-- cannot use it; this index puts the two filters first and leaves the grouping
+-- columns available to the aggregate.
+create index if not exists idx_ledger_reconcile
+  on public.usage_ledger_entry (org_id, period, metric, project_id);
+
 -- The roll-up task is a platform task: it cannot read any tenant's ledger row, so it
 -- learns which orgs have usage through this owner-owned projection — a bounded,
 -- ordered page of org ids and nothing else, the same footprint as 0015's
 -- `evidgate.audit_org_ids`. It then recomputes each org inside that org's own tenant
 -- scope, under RLS.
+--
+-- The scan walks the organization table rather than the ledger: a scope whose ledger
+-- rows have all been removed but whose aggregate still exists must be visited again,
+-- so its recompute can flag the gap. A ledger-only scan would never see that org
+-- again and the stale aggregate would stay unflagged. Both arms are indexed (the
+-- ledger by `idx_ledger_period`'s leading `org_id`, the aggregate by
+-- `usage_rollup_org_id_key`), so an idle org costs one anti-join probe per pass.
 create or replace function evidgate.usage_ledger_org_ids(p_after uuid, p_limit integer) returns setof uuid
   language sql
   stable
   security definer
   set search_path = ''
   as $$
-    select distinct l.org_id
-      from public.usage_ledger_entry l
-     where l.org_id > coalesce(p_after, '00000000-0000-0000-0000-000000000000'::uuid)
-     order by l.org_id
+    select o.id
+      from public.organization o
+     where o.id > coalesce(p_after, '00000000-0000-0000-0000-000000000000'::uuid)
+       and (exists (select 1 from public.usage_ledger_entry l where l.org_id = o.id)
+            or exists (select 1 from public.usage_rollup r where r.org_id = o.id))
+     order by o.id
      limit least(greatest(coalesce(p_limit, 100), 1), 1000)
   $$;
 

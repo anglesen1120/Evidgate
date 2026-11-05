@@ -48,18 +48,21 @@ internal sealed class UsageReadStore(ITenantDb db)
 
     /// <summary>
     /// Reads the period's comparison of the ledger against the roll-up: one row per
-    /// <c>(project, metric)</c> either side holds, aggregated in the database.
+    /// <c>(project, metric)</c> either side holds, aggregated in the database, at most
+    /// <paramref name="limit"/> rows; the caller asks for one more than it reports to detect truncation.
     /// </summary>
     /// <param name="orgId">The tenant of the open scope.</param>
     /// <param name="period">The period to reconcile.</param>
+    /// <param name="limit">Rows to fetch, already bounded by the caller.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     internal Task<IReadOnlyList<ReconciliationRow>> ReadReconciliationAsync(
         Guid orgId,
         string period,
+        int limit,
         CancellationToken cancellationToken) =>
         db.QueryAsync<ReconciliationRow>(
             UsageReadStoreSql.Reconciliation,
-            new { org_id = orgId, period },
+            new { org_id = orgId, period, limit },
             cancellationToken);
 
     /// <summary>
@@ -127,9 +130,17 @@ internal sealed class ReconciliationRow
 
     public long? LedgerRowCount { get; set; }
 
+    public decimal? LedgerTotalAmount { get; set; }
+
+    public string? LedgerCurrency { get; set; }
+
     public decimal? RollupTotalQuantity { get; set; }
 
     public long? RollupRowCount { get; set; }
+
+    public decimal? RollupTotalAmount { get; set; }
+
+    public string? RollupCurrency { get; set; }
 
     public DateTimeOffset? RollupComputedAt { get; set; }
 

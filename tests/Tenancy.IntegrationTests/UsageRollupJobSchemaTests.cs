@@ -37,6 +37,38 @@ public sealed class UsageRollupJobSchemaTests
         var constraints = await _fixture.ConstraintNamesAsync(database, Table);
         constraints.ShouldContain("u:usage_duplicate_attempt_org_id_key");
         constraints.ShouldContain("u:usage_duplicate_attempt_billing_key_key");
+        constraints.ShouldContain(
+            "f:usage_duplicate_attempt_ledger_fk",
+            "a counted attempt is a child of the ledger key it repeats");
+
+        // The reference is tenant-qualified: an attempt can only name its own org's ledger row.
+        var definition = (await _fixture.ConstraintsAsync(database, Table))
+            .Single(constraint => constraint.Contains("usage_duplicate_attempt_ledger_fk", StringComparison.Ordinal));
+        definition.ShouldContain("(org_id, billing_key)");
+        definition.ShouldContain("usage_ledger_entry(org_id, billing_key)");
+
+        // The referencing columns are the tally's own unique key, so the reference needs no second index.
+        var ledgerIndexes = await _fixture.IndexesAsync(database, "usage_ledger_entry");
+        ledgerIndexes.ShouldContain(
+            index => index.Contains("idx_ledger_created", StringComparison.Ordinal)
+                && index.Contains("(org_id, created_at, id)", StringComparison.Ordinal),
+            "the operator's keyset page orders by (created_at, id) within the org");
+        ledgerIndexes.ShouldContain(
+            index => index.Contains("idx_ledger_reconcile", StringComparison.Ordinal)
+                && index.Contains("(org_id, period, metric, project_id)", StringComparison.Ordinal),
+            "the reconciliation filters one period of the org before it groups");
+        ledgerIndexes.ShouldContain(
+            index => index.Contains("idx_ledger_period", StringComparison.Ordinal),
+            "0046's index is still the roll-up's filter index");
+
+        // A tally row without its ledger row is refused, so the counter cannot outlive the fact it explains.
+        var orphan = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(
+            database,
+            $"""
+            insert into public.usage_duplicate_attempt (id, org_id, billing_key, attempts, first_seen_at, last_seen_at)
+            values ('{Guid.CreateVersion7():D}', '{Guid.CreateVersion7():D}', 'never:written', 1, now(), now())
+            """));
+        orphan.SqlState.ShouldBe("23503");
 
         (await _fixture.RowSecurityAsync(database, Table)).ShouldBe((true, true));
         var policies = await _fixture.PoliciesAsync(database, Table);
@@ -99,15 +131,24 @@ public sealed class UsageRollupJobSchemaTests
         var database = dedicated.Name;
         var org = Guid.CreateVersion7();
         var project = Guid.CreateVersion7();
+
+        // An org that holds only a roll-up row: its ledger rows are gone (an erasure, a corrected import), and the
+        // scan must still name it so the recompute can flag the aggregate the facts no longer support.
+        var rollupOnly = Guid.CreateVersion7();
         await _fixture.ExecuteAsync(
             database,
             $"""
-            insert into public.organization (id, name, slug) values ('{org:D}', 'acme', 'acme-{org.ToString("N")[..8]}');
+            insert into public.organization (id, name, slug)
+            values ('{org:D}', 'acme', 'acme-{org.ToString("N")[..8]}'),
+                   ('{rollupOnly:D}', 'stale', 'stale-{rollupOnly.ToString("N")[..8]}');
             insert into public.project (id, org_id, name, slug) values ('{project:D}', '{org:D}', 'pp', 'pp-{org.ToString("N")[..8]}');
             insert into public.usage_ledger_entry
                 (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at)
             values ('{Guid.CreateVersion7():D}', '{org:D}', '{project:D}', 'results', 2, 'batch', '2026-02',
                     'scan:{Guid.CreateVersion7():N}', now());
+            insert into public.usage_rollup
+                (id, org_id, project_id, period, metric, total_quantity, row_count, computed_at)
+            values ('{Guid.CreateVersion7():D}', '{rollupOnly:D}', null, '2026-02', 'results', 2, 1, now());
             """);
 
         var (definer, owner, config) = await FunctionAsync(database);
@@ -129,11 +170,13 @@ public sealed class UsageRollupJobSchemaTests
             database,
             "select * from evidgate.usage_ledger_org_ids(null, 10)");
         page.ShouldContain(org, "the function returns the tenant that holds a ledger row");
+        page.ShouldContain(rollupOnly, "and the tenant whose rows are gone but whose aggregate is not");
 
-        // The keyset bound: after a page that ends on the org, the next page is empty.
+        // The keyset bound: after a page that ends on the last org, the next page is empty.
+        var last = page.Order().Last();
         (await _fixture.ColumnAsync<Guid>(
             database,
-            $"select * from evidgate.usage_ledger_org_ids('{org:D}', 10)")).ShouldBeEmpty();
+            $"select * from evidgate.usage_ledger_org_ids('{last:D}', 10)")).ShouldBeEmpty();
 
         // The app role is refused before the body runs.
         await using var app = await OpenAsync(_fixture.AppConnectionString(database));
