@@ -38,11 +38,13 @@
   <Project Path="src/Modules/Evidgate.Modules.Tenancy/Evidgate.Modules.Tenancy.csproj" />
   <Project Path="src/Modules/Evidgate.Modules.Usage.Contracts/Evidgate.Modules.Usage.Contracts.csproj" />
   <Project Path="src/Modules/Evidgate.Modules.Usage/Evidgate.Modules.Usage.csproj" />
+  <Project Path="src/Tools/Evidgate.GoldenHarness/Evidgate.GoldenHarness.csproj" />
   <Project Path="tests/Architecture.Tests/Architecture.Tests.csproj" />
   <Project Path="tests/Canonicalization.UnitTests/Canonicalization.UnitTests.csproj" />
   <Project Path="tests/Contract.Tests/Contract.Tests.csproj" />
   <Project Path="tests/Evaluation.UnitTests/Evaluation.UnitTests.csproj" />
   <Project Path="tests/Foundation.IntegrationTests/Foundation.IntegrationTests.csproj" />
+  <Project Path="tests/GoldenHarness.UnitTests/GoldenHarness.UnitTests.csproj" />
   <Project Path="tests/Hosts.IntegrationTests/Hosts.IntegrationTests.csproj" />
   <Project Path="tests/Identity.IntegrationTests/Identity.IntegrationTests.csproj" />
   <Project Path="tests/Isolation.Tests/Isolation.Tests.csproj" />
