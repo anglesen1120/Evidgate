@@ -65,6 +65,9 @@ public sealed class CatalogueTests : HarnessTest
     /// <summary>The fixed id of the fixture platform price row this suite seeds for the 0073 surface.</summary>
     private static readonly Guid UsagePriceRowId = Guid.Parse("44444444-4444-7444-8444-444444444444");
 
+    /// <summary>The fixed id of the built-in pytest parser this suite seeds for the 0075 surface.</summary>
+    private static readonly Guid ReportParserRowId = Guid.Parse("55555555-5555-7555-8555-555555555555");
+
     /// <summary>
     /// The catalogue surfaces AC5 names, with the clause that selects their built-in rows and the
     /// expression that yields a row key as text. <c>permission</c> has no <c>org_id</c> column, so
@@ -80,6 +83,8 @@ public sealed class CatalogueTests : HarnessTest
         ("public.healing_switch", "scope = 'system'", "id::text"),
         // 12.3.1 (0073): the platform rate card is the built-in row every tenant reads.
         ("public.usage_price", "org_id is null", "id::text"),
+        // 04.4.1 (0075): the seeded pytest parser is the built-in row every tenant resolves.
+        ("public.report_parser", "org_id is null", "parser_id || '/' || version"),
     ];
 
     private readonly ITestOutputHelper _output;
@@ -176,6 +181,7 @@ public sealed class CatalogueTests : HarnessTest
         await CheckRolePermissionWritesAsync(failures);
         await CheckHealingSwitchWritesAsync(failures);
         await CheckUsagePriceWritesAsync(failures);
+        await CheckReportParserWritesAsync(failures);
 
         failures.ShouldBeEmpty(
             $"the catalogue is not read-only for the application role:{Environment.NewLine}"
@@ -364,6 +370,17 @@ public sealed class CatalogueTests : HarnessTest
             """,
             [("id", UsagePriceRowId)],
             Token);
+
+        // 04.4.1 (0075) seeds the built-in pytest parser in the migration itself. This suite re-seeds it with a fixed
+        // id so the probe targets a known row regardless of that seed block's exact values.
+        await Fixture.SeedAsync(
+            """
+            insert into public.report_parser (id, org_id, parser_id, version, producer_kind, schema_version, notes)
+            values (@id, null, 'junit-pytest', '1.0.0', 'pytest-junitxml', 1, 'catalogue probe')
+            on conflict do nothing
+            """,
+            [("id", ReportParserRowId)],
+            Token);
     }
 
     /// <summary><c>public.permission</c>: 0010 revokes INSERT/UPDATE/DELETE from the app role, so every command is a 42501.</summary>
@@ -531,6 +548,36 @@ public sealed class CatalogueTests : HarnessTest
         AssertRefused(table, "DELETE of a platform row", delete, silentAllowed: true, failures);
 
         var truncate = await RefusalAsync("truncate public.usage_price");
+        AssertRefused(table, "TRUNCATE", truncate, silentAllowed: false, failures);
+
+        await AssertUnchangedAsync(table, "org_id is null", "id::text", before, failures);
+        _output.WriteLine("{0}: insert/update/delete/truncate refused; {1} built-in row(s) unchanged", table, before.Count);
+    }
+
+    /// <summary>
+    /// <c>public.report_parser</c> (04.4.1/0075): the registry is a platform catalogue, so the app role can neither insert
+    /// a parser row (the <c>WITH CHECK</c> never matches a NULL org) nor update or delete one (no privilege).
+    /// </summary>
+    private async Task CheckReportParserWritesAsync(List<string> failures)
+    {
+        const string table = "public.report_parser";
+        var before = await ReadKeysAsync(table, "org_id is null", "id::text");
+        before.ShouldNotBeEmpty($"{table}: the built-in parser row is missing — the write probe would have nothing to target");
+
+        // A parser id no row registers, so the only possible refusal is the policy, never the unique (parser_id, version).
+        var insert = await RefusalAsync(
+            "insert into public.report_parser (id, org_id, parser_id, version, producer_kind, schema_version, notes) values (@key::uuid, null, @parser_id, '1.0.0', 'probe', 1, 'probe')",
+            ("key", Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture)),
+            ("parser_id", "probe-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8]));
+        AssertRefused(table, "INSERT of a platform parser row", insert, silentAllowed: false, failures);
+
+        var update = await RefusalAsync("update public.report_parser set notes = notes where org_id is null");
+        AssertRefused(table, "UPDATE of a platform parser row", update, silentAllowed: true, failures);
+
+        var delete = await RefusalAsync("delete from public.report_parser where org_id is null");
+        AssertRefused(table, "DELETE of a platform parser row", delete, silentAllowed: true, failures);
+
+        var truncate = await RefusalAsync("truncate public.report_parser");
         AssertRefused(table, "TRUNCATE", truncate, silentAllowed: false, failures);
 
         await AssertUnchangedAsync(table, "org_id is null", "id::text", before, failures);

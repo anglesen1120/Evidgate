@@ -1,7 +1,6 @@
 {
   "producer_id": "junit-pytest",
   "parser_id": "junit-pytest",
-  "parser_version": "0.0.0-pending",
-  "rationale": "A document cut off inside the second testcase must stay honest: no events and a malformed raw-report status, never a silent pass.",
-  "parser_status": "pending"
+  "parser_version": "1.0.0",
+  "rationale": "A document cut off inside the second testcase must stay honest: no events and a malformed raw-report status, never a silent pass."
 }

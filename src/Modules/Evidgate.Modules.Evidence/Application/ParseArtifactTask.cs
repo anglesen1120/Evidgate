@@ -137,13 +137,6 @@ internal sealed partial class ParseArtifactTaskHandler(
     /// <summary>The parameter separator a declared media type may carry (<c>application/xml; charset=utf-8</c>).</summary>
     private const char ParameterSeparator = ';';
 
-    /// <summary>
-    /// The fixed first line of the exception a row raises whose stored <c>object_key</c> is not the key its own
-    /// coordinates mint. It names no key and no coordinate.
-    /// </summary>
-    private const string ObjectKeyMismatchMessage =
-        "the artifact's stored object key is not the key its row mints, so the report was not read; an operator must look at this artifact";
-
     /// <inheritdoc />
     public string TaskType => EvidenceTaskTypes.Parse;
 
@@ -204,12 +197,12 @@ internal sealed partial class ParseArtifactTaskHandler(
             return;
         }
 
-        if (!ObjectKeyIsMintedFor(artifact))
+        if (!ArtifactObjectKey.IsMintedFor(artifact))
         {
             // Defence in depth over the 0028 shape CHECK: the key a row holds must be the key this row mints, so a
             // parse can never read bytes another coordinate names. A row that fails this is corrupt or hand-written;
             // the attempt throws (redelivered, then dead-lettered) rather than reading an object it cannot vouch for.
-            throw new InvalidOperationException(ObjectKeyMismatchMessage);
+            throw new InvalidOperationException(ArtifactObjectKey.MismatchMessage);
         }
 
         var maxBytes = await MaxBytesAsync(context, artifact, cancellationToken).ConfigureAwait(false);
@@ -341,37 +334,6 @@ internal sealed partial class ParseArtifactTaskHandler(
             throw new InvalidOperationException(
                 "the parse verdict could not be written because the artifact changed while it was parsed, so the task is retried");
         }
-    }
-
-    /// <summary>
-    /// True when the row's stored <c>object_key</c> is exactly the final key the row's own coordinates mint
-    /// (<see cref="ArtifactKeyMinter.Mint"/>). The 0028 shape CHECK enforces this in the database; this is the same
-    /// statement in code, so the read never names an object the row does not own.
-    /// </summary>
-    /// <param name="artifact">The row about to be read.</param>
-    /// <returns><see langword="true"/> when the key is the row's minted final key.</returns>
-    private static bool ObjectKeyIsMintedFor(Artifact artifact)
-    {
-        string minted;
-
-        try
-        {
-            minted = ArtifactKeyMinter.Mint(
-                artifact.OrgId,
-                artifact.ProjectId,
-                artifact.RunId,
-                artifact.ExecutionKey,
-                artifact.AttemptNo,
-                artifact.Id);
-        }
-        catch (ArgumentException)
-        {
-            // Coordinates the CHECK constraints should have refused (a malformed execution key, attempt_no below 1):
-            // no key is minted for them, so the row is a mismatch rather than a read.
-            return false;
-        }
-
-        return string.Equals(artifact.ObjectKey, minted, StringComparison.Ordinal);
     }
 
     /// <summary>True when the artifact may still be parsed: <c>uploaded</c> or <c>ready</c>.</summary>

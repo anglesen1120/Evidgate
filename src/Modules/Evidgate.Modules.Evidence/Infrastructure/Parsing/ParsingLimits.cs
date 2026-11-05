@@ -18,6 +18,13 @@ internal static class ParsingLimits
     public static readonly TimeSpan ParseTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
+    /// The hard ceiling for one raw report's bytes, independent of a project's kind policy. A tighter
+    /// <c>artifact_kind_policy.max_bytes</c> is already enforced by the read that produced the stream; this
+    /// number exists so a seam that receives a stream indirectly still cannot be handed an unbounded report.
+    /// </summary>
+    public const long MaxReportBytes = 64L * 1024 * 1024;
+
+    /// <summary>
     /// The bounded prefix the media sniff reads (06.3.1-T1.2, 00 §5.7 P1): 4 KiB is enough for every magic
     /// byte the profile knows, so the <c>complete</c> hot path never pulls a whole object.
     /// </summary>

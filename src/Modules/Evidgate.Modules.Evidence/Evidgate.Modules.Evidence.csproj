@@ -41,5 +41,8 @@
     <!-- 06.3.6-T1.3: the parse runner's tests drive IParseRunner/ChildProcessParseRunner, which stay internal to
          this module (they are reached through its registration, not from another assembly's code). -->
     <InternalsVisibleTo Include="Parser.Tests" />
+    <!-- The golden corpus replays the producer mappers in-process through this module's own types; the console
+         tool composes those entry points and never runs in production. -->
+    <InternalsVisibleTo Include="Evidgate.GoldenHarness" />
   </ItemGroup>
 </Project>
