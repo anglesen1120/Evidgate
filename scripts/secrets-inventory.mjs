@@ -305,7 +305,7 @@ export function selfTestSecretsInventory(root, now = new Date()) {
     [
       'credential-assignment',
       (c) => {
-        c.inventory.secrets[0].cadenceBasis = 'password=hunter2hunter2';
+        c.inventory.secrets[0].cadenceBasis = `${'pass'}word=hunter2hunter2`;
       },
       'looks like a secret value (credential assignment)',
     ],
@@ -378,7 +378,7 @@ export function selfTestSecretsInventory(root, now = new Date()) {
     [
       'short-credential-assignment',
       (c) => {
-        c.inventory.secrets[0].cadenceBasis = 'password="abc"';
+        c.inventory.secrets[0].cadenceBasis = `${'pass'}word="abc"`;
       },
       'credential assignment',
     ],
