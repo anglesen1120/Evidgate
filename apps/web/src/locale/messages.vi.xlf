@@ -2633,6 +2633,19 @@
       <trans-unit id="settings.policy.conflict-not-set" datatype="html"><source>(not set)</source><target>(chưa đặt)</target></trans-unit>
       <trans-unit id="settings.policy.load-failed" datatype="html"><source>The policy revisions could not be loaded.</source><target>Không tải được các phiên bản chính sách.</target></trans-unit>
       <trans-unit id="settings.policy.load-retry" datatype="html"><source>Retry</source><target>Thử lại</target></trans-unit>
+      <trans-unit id="settings.policy.summary-title" datatype="html"><source>Project policy</source><target>Chính sách của dự án</target></trans-unit>
+      <trans-unit id="settings.policy.activation" datatype="html"><source>Activation</source><target>Kích hoạt</target></trans-unit>
+      <trans-unit id="settings.policy.activation-loading" datatype="html"><source>Reading the activation…</source><target>Đang đọc thông tin kích hoạt…</target></trans-unit>
+      <trans-unit id="settings.policy.activation-empty" datatype="html"><source>No activation: this project is not gated by a policy.</source><target>Chưa kích hoạt: dự án này không bị chính sách chặn.</target></trans-unit>
+      <trans-unit id="settings.policy.activation-forbidden" datatype="html"><source>You cannot read this project's activation.</source><target>Bạn không thể đọc thông tin kích hoạt của dự án này.</target></trans-unit>
+      <trans-unit id="settings.policy.head-revision" datatype="html"><source>Head revision</source><target>Phiên bản mới nhất</target></trans-unit>
+      <trans-unit id="settings.policy.head-loading" datatype="html"><source>Reading the head revision…</source><target>Đang đọc phiên bản mới nhất…</target></trans-unit>
+      <trans-unit id="settings.policy.head-empty" datatype="html"><source>No policy revisions yet.</source><target>Chưa có phiên bản chính sách nào.</target></trans-unit>
+      <trans-unit id="settings.policy.head-forbidden" datatype="html"><source>You cannot read this project's head revision.</source><target>Bạn không thể đọc phiên bản mới nhất của dự án này.</target></trans-unit>
+      <trans-unit id="settings.policy.activated-at" datatype="html"><source>Activated</source><target>Kích hoạt lúc</target></trans-unit>
+      <trans-unit id="settings.policy.read-failed" datatype="html"><source>The project's policy details could not be read.</source><target>Không đọc được thông tin chính sách của dự án.</target></trans-unit>
+      <trans-unit id="settings.policy.read-retry" datatype="html"><source>Reload policy details</source><target>Tải lại thông tin chính sách</target></trans-unit>
+      <trans-unit id="settings.policy.read-retry-waiting" datatype="html"><source>Reload available after the wait</source><target>Tải lại được sau khi hết thời gian chờ</target></trans-unit>
       <trans-unit id="settings.secrets.ci.title" datatype="html"><source>CI bindings</source><target>Liên kết CI</target></trans-unit>
       <trans-unit id="settings.secrets.ci.description" datatype="html"><source>Repository bindings and allowed CI references. Metadata only; bindings are managed during onboarding.</source><target>Liên kết kho mã và tham chiếu CI được phép. Chỉ hiển thị siêu dữ liệu; liên kết được quản lý trong quá trình thiết lập ban đầu.</target></trans-unit>
       <trans-unit id="settings.secrets.ci.provider" datatype="html"><source>Provider</source><target>Nhà cung cấp</target></trans-unit>

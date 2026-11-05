@@ -34,7 +34,7 @@
 import { TestBed } from '@angular/core/testing';
 import type {
   ErrorEnvelope,
-  PolicyActivationDto,
+  PolicyActivationStateDto,
   PolicyRevisionDto,
   PolicyRevisionSummaryDto,
 } from '@evidgate/sdk';
@@ -42,12 +42,14 @@ import type {
 import { MAX_CURSOR_PAGES } from '../../../core/data/identity-data.service';
 import {
   PolicyDataService,
+  type PolicyHead,
   type PolicyRevisionPage,
   type PublishedRevision,
 } from '../../../core/data/policy-data.service';
 import { ApiRequestError, type ApiErrorKind } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { policyModeView } from './policy-mode';
+import { PolicyProjectReads } from './policy-reads';
 import { PolicyStore } from './policy.store';
 
 const PROJECT_ID = '018f0000-0000-7000-8000-00000000p001';
@@ -58,6 +60,15 @@ const ANCHOR_ID = '018f0000-0000-7000-8000-0000000000a1';
 const HEAD_ID = '018f0000-0000-7000-8000-0000000000b2';
 /** A second revision, so `activeRevision` has something to move away from. */
 const SECOND_ID = '018f0000-0000-7000-8000-0000000000b3';
+/** The activation in force on the project the anchor belongs to. */
+const ACTIVATION: PolicyActivationStateDto = {
+  project_id: PROJECT_ID,
+  policy_revision_id: HEAD_ID,
+  hash: 'sha256:f250bbce48fca2a9a5f93b45236c0f330bb471f5d3f0d1396ddc5ac964928064',
+  mode: 'advisory',
+  activated_by: '018f0000-0000-7000-8000-0000000000e1',
+  activated_at: '2026-10-26T08:22:00Z',
+};
 
 /** One list row, as the list route serves them (no body). */
 function summary(
@@ -208,6 +219,25 @@ class FakePolicyDataService {
     return Promise.resolve(this.publishAnswer);
   }
 
+  /** The project reads the tab performs beside the list, each answer under the test's control. */
+  readonly activationCalls: string[] = [];
+  readonly headCalls: string[] = [];
+  activation: Promise<PolicyActivationStateDto> = Promise.resolve(ACTIVATION);
+  head: Promise<PolicyHead> = Promise.resolve({
+    revision: summary(HEAD_ID, 3, 'active'),
+    headRevisionId: HEAD_ID,
+  });
+
+  getActivation(projectId: string): Promise<PolicyActivationStateDto> {
+    this.activationCalls.push(projectId);
+    return this.activation;
+  }
+
+  getHead(projectId: string): Promise<PolicyHead> {
+    this.headCalls.push(projectId);
+    return this.head;
+  }
+
   /** Answers the n-th deferred revision read the way the server would. */
   settleGet(index: number, stored: PolicyRevisionDto): void {
     const pending = this.pendingGets[index];
@@ -296,6 +326,7 @@ describe('PolicyStore (09.7.1-T4)', () => {
     TestBed.configureTestingModule({
       providers: [
         PolicyStore,
+        PolicyProjectReads,
         { provide: PolicyDataService, useValue: data },
         { provide: SessionStore, useValue: session },
       ],
@@ -327,6 +358,83 @@ describe('PolicyStore (09.7.1-T4)', () => {
       expect(store.phase()).toBe('idle');
       expect(data.getCalls).toEqual([]);
       expect(data.listCalls).toEqual([]);
+      expect(data.activationCalls).toEqual([]);
+      expect(data.headCalls).toEqual([]);
+    });
+
+    it('reads the project activation and head beside the list, through the seam', async () => {
+      await store.open(ANCHOR_ID);
+      await flushMicrotasks();
+
+      expect(data.activationCalls).toEqual([PROJECT_ID]);
+      expect(data.headCalls).toEqual([PROJECT_ID]);
+      expect(store.reads.activation().phase).toBe('ready');
+      expect(store.activation()).toEqual(ACTIVATION);
+      expect(store.mode()).toBe('advisory');
+      expect(store.reads.head().value?.revision_no).toBe(3);
+    });
+
+    it('keeps the served list when both project reads fail', async () => {
+      data.activation = Promise.reject(
+        typedFailure(
+          {
+            error: {
+              code: 'rate_limited',
+              message: 'the read burst limit for this project was reached',
+              request_id: '018f0000-0000-7000-8000-00000000a10e',
+              retryable: true,
+            },
+          },
+          'rate_limited',
+          429,
+        ),
+      );
+      data.head = Promise.reject(
+        typedFailure(
+          {
+            error: {
+              code: 'unavailable',
+              message: 'a dependency is busy',
+              request_id: '018f0000-0000-7000-8000-00000000a10f',
+              retryable: true,
+            },
+          },
+          'unavailable',
+          503,
+        ),
+      );
+
+      await store.open(ANCHOR_ID);
+      await flushMicrotasks();
+
+      expect(store.phase()).toBe('ready');
+      expect(store.revisions().map((row) => row.id)).toEqual([ANCHOR_ID]);
+      expect(store.reads.activation().phase).toBe('error');
+      expect(store.reads.head().phase).toBe('error');
+      // A refused activation is not a mode: the chip falls back to "unavailable", never a guess.
+      expect(store.activation()).toBeNull();
+      expect(store.mode()).toBeNull();
+      // The list's own alert stays for the list: a failed summary read is the summary's state.
+      expect(store.loadError()).toBeNull();
+    });
+
+    it('re-reads the project activation and head on reload', async () => {
+      await store.open(ANCHOR_ID);
+
+      await store.reload();
+
+      expect(data.activationCalls).toEqual([PROJECT_ID, PROJECT_ID]);
+      expect(data.headCalls).toEqual([PROJECT_ID, PROJECT_ID]);
+    });
+
+    it('clears the project reads with the view', async () => {
+      await store.open(ANCHOR_ID);
+
+      store.reset();
+
+      expect(store.reads.activation().phase).toBe('idle');
+      expect(store.reads.head().phase).toBe('idle');
+      expect(store.activation()).toBeNull();
     });
 
     it('refuses a revision of a project this session is not in, with no list read', async () => {
@@ -916,7 +1024,7 @@ describe('PolicyStore (09.7.1-T4)', () => {
   });
 
   describe('applyActivation', () => {
-    function activation(mode: PolicyActivationDto['mode']): PolicyActivationDto {
+    function activation(mode: PolicyActivationStateDto['mode']): PolicyActivationStateDto {
       return {
         project_id: PROJECT_ID,
         policy_revision_id: ANCHOR_ID,
@@ -924,8 +1032,6 @@ describe('PolicyStore (09.7.1-T4)', () => {
         mode,
         activated_by: 'u-1',
         activated_at: '2026-10-20T06:05:00Z',
-        previous_policy_revision_id: null,
-        changed: true,
       };
     }
 
@@ -954,12 +1060,32 @@ describe('PolicyStore (09.7.1-T4)', () => {
       expect(policyModeView(store.mode())).toEqual({ kind: 'unavailable' });
     });
 
-    it('clears the activation when another revision is opened', async () => {
+    it('replaces an applied activation with the project’s own read on the next open', async () => {
       store.applyActivation(activation('enforcing'));
+
+      await store.open(ANCHOR_ID);
+      await flushMicrotasks();
+
+      // The tab never keeps a mode the server did not just confirm for the project on screen.
+      expect(store.activation()).toEqual(ACTIVATION);
+      expect(store.mode()).toBe('advisory');
+    });
+
+    it('clears the applied activation while the project read is still out', async () => {
+      let answer: (value: PolicyActivationStateDto) => void = () => undefined;
+      data.activation = new Promise<PolicyActivationStateDto>((resolve) => {
+        answer = resolve;
+      });
+      store.applyActivation(activation('enforcing'));
+
       await store.open(ANCHOR_ID);
 
       expect(store.activation()).toBeNull();
       expect(policyModeView(store.mode())).toEqual({ kind: 'unavailable' });
+
+      answer(ACTIVATION);
+      await flushMicrotasks();
+      expect(store.mode()).toBe('advisory');
     });
   });
 
@@ -988,8 +1114,11 @@ describe('PolicyStore (09.7.1-T4)', () => {
       };
 
       const result = await store.publish(bodyOfSize(64));
+      await flushMicrotasks();
 
       expect(result.kind).toBe('unchanged');
+      // Nothing was written, so the summary's head read is not issued again.
+      expect(data.headCalls).toEqual([PROJECT_ID]);
     });
 
     it('sends a compact body of exactly 65 536 bytes and refuses 65 537 without a request', async () => {
@@ -1248,6 +1377,40 @@ describe('PolicyStore (09.7.1-T4)', () => {
 
       expect(store.activeRevision()?.id).toBe(SECOND_ID);
       expect(store.headRevisionId()).toBe(newHead);
+    });
+
+    it('re-reads the head the answer superseded, so the summary advances with the list', async () => {
+      const nextHead = '018f0000-0000-7000-8000-0000000000cb';
+      const newRevision = summary(nextHead, 4, 'active');
+      data.head = Promise.resolve({ revision: newRevision, headRevisionId: nextHead });
+
+      const result = await store.publish(bodyOfSize(64));
+      await flushMicrotasks();
+
+      expect(result.kind).toBe('created');
+      // One read at open, one behind the publish answer: the summary names the new head.
+      expect(data.headCalls).toEqual([PROJECT_ID, PROJECT_ID]);
+      expect(store.reads.head().phase).toBe('ready');
+      expect(store.reads.head().value?.id).toBe(nextHead);
+    });
+
+    it('answers the publish before the head re-read settles', async () => {
+      let settle: (head: PolicyHead) => void = () => undefined;
+      data.head = new Promise<PolicyHead>((resolve) => {
+        settle = resolve;
+      });
+
+      const result = await store.publish(bodyOfSize(64));
+
+      expect(result.kind).toBe('created');
+      expect(store.reads.head().phase).toBe('loading');
+      expect(data.headCalls).toEqual([PROJECT_ID, PROJECT_ID]);
+
+      const newRevision = summary('018f0000-0000-7000-8000-0000000000cc', 4, 'active');
+      settle({ revision: newRevision, headRevisionId: newRevision.id });
+      await flushMicrotasks();
+
+      expect(store.reads.head().value?.id).toBe(newRevision.id);
     });
 
     it('keeps the stored revision when the refresh behind it fails', async () => {

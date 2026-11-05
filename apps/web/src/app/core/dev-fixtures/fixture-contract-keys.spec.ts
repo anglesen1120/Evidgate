@@ -443,4 +443,53 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       request_id: rateLimited.headers['X-Request-Id'],
     });
   });
+
+  it('pins the Policy tab’s head read to the project-keyed GET and its quoted ETag', () => {
+    // The tab shows the activation's mode beside the head revision, so the head read answers that
+    // same revision without the body, and issues the `ETag` a publish sends back as `If-Match`.
+    expect(FIXTURE_ROUTE_ROWS.find((route) => route.operationId === 'getPolicyHead')).toEqual({
+      operationId: 'getPolicyHead',
+      method: 'GET',
+      path: '/projects/{p}/policies/head',
+    });
+
+    for (const name of ['policy-head-read-ok', 'policy-head-read-not-found']) {
+      const document = corpusDocument(name);
+      expect(document.operation_id).toBe('getPolicyHead');
+      expect(
+        VALIDATOR.validateResponse('getPolicyHead', document.status, document.body).errors,
+        `fixtures/web-api/${name} no longer matches the getPolicyHead responses of contracts/openapi.yaml`,
+      ).toEqual([]);
+    }
+
+    // Same revision as the revision read answers: the head read is that document without its body,
+    // and a summary member the server cannot produce would make the tab's head a client claim.
+    const summary = corpusDocument('policy-head-read-ok');
+    const head = corpusDocument('policy-revision-head').body;
+    if (!isRecord(summary.body) || !isRecord(head)) {
+      throw new Error('the head read and the revision read must both answer a summary object');
+    }
+    expect(summary.body).toEqual({
+      id: head['id'],
+      revision_no: head['revision_no'],
+      hash: head['hash'],
+      state: head['state'],
+      created_by: head['created_by'],
+      created_at: head['created_at'],
+      version: head['version'],
+    });
+    // Quoted exactly as `GET /policies/{id}` issues it, so the tab's `If-Match` source is that id.
+    expect(summary.headers['ETag']).toBe(`"${String(head['id'])}"`);
+
+    // One undifferentiated 404: no revision, unknown, soft-deleted and other-tenant read alike.
+    const notFound = corpusDocument('policy-head-read-not-found');
+    expect([notFound.status, notFound.variant]).toEqual([404, 'not-found']);
+    expect(
+      isRecord(notFound.body) && isRecord(notFound.body['error']) ? notFound.body['error'] : null,
+    ).toMatchObject({
+      code: 'not_found',
+      retryable: false,
+      request_id: notFound.headers['X-Request-Id'],
+    });
+  });
 });

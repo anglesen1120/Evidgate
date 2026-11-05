@@ -199,6 +199,11 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   // 09.2.1-T5.2: step 5's read, the same path as the activation POST — the method is what tells
   // them apart, and neither row can match the other's request.
   { operationId: 'getPolicyActivation', method: 'GET', path: '/projects/{p}/policy-activation' },
+  // The Policy tab's head read. Its template has four segments where the append's has three and
+  // the revision read's two, so no row can match another's path; the path never names a revision,
+  // so both answers are selected by variant. The `ok` document is the summary of the same head the
+  // revision read issues, with the same quoted `ETag`.
+  { operationId: 'getPolicyHead', method: 'GET', path: '/projects/{p}/policies/head' },
   { operationId: 'getPolicyRevision', method: 'GET', path: '/policies/{id}', idKeyParameter: 'id' },
   { operationId: 'listPolicyRevisions', method: 'GET', path: '/policies/{id}/revisions' },
   // The pinned revision read of the composition screen. Its states are selected by variant, the
