@@ -1,12 +1,15 @@
 using Evidgate.BuildingBlocks.ObjectStorage;
+using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
+using Evidgate.Modules.Ingestion.Contracts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Evidence.Application;
 
@@ -101,8 +104,15 @@ internal sealed partial class ParseArtifactTaskHandler(
     ITenantDbContextFactory<EvidenceDbContext> contexts,
     IObjectStorage storage,
     IParseRunner runner,
+    IOptions<IngestionLimits> limits,
     ILogger<ParseArtifactTaskHandler> logger) : ITaskHandler<ParseArtifactPayload>
 {
+    /// <summary>The cap name a raw report over its byte budget carries in telemetry.</summary>
+    private const string ReportBytesCap = "report_bytes";
+
+    /// <summary>The cap name a raw report over its entry budget carries in telemetry.</summary>
+    private const string ReportCasesCap = "report_cases";
+
     /// <summary>The <c>application/xml</c> type of the XML family.</summary>
     private const string XmlType = "application/xml";
 
@@ -217,6 +227,7 @@ internal sealed partial class ParseArtifactTaskHandler(
             // Retrying cannot shrink them: the artifact is rejected, not retried towards a dead letter. A disposed
             // store is excluded by the filter: that is the host's fault (shutdown), never a property of the artifact.
             LogOversizeRejected(logger, artifact.Id, maxBytes);
+            EvidgateTelemetry.RecordIngestCapExceeded(ReportBytesCap);
             await RejectAsync(context, artifact, ArtifactFailureCode.TooLarge, cancellationToken).ConfigureAwait(false);
             return;
         }
@@ -233,7 +244,9 @@ internal sealed partial class ParseArtifactTaskHandler(
         await using var input = new MemoryStream(bytes, writable: false);
 
         var result = await runner
-            .RunAsync(new ParseRunRequest(profile, maxBytes, artifact.MediaType, input), cancellationToken)
+            .RunAsync(
+                new ParseRunRequest(profile, maxBytes, artifact.MediaType, input, limits.Value.MaxReportCases),
+                cancellationToken)
             .ConfigureAwait(false);
 
         if (result is not ParseRunFailed failed)
@@ -243,6 +256,12 @@ internal sealed partial class ParseArtifactTaskHandler(
             // the stream carries the child's own rejection record, which is this run's verdict.
             if (result is ParseRunSucceeded succeeded && ChildRejectionRecord.ReasonIn(succeeded) is { } reported)
             {
+                if (string.Equals(reported, ArtifactFailureCode.CapExceeded, StringComparison.Ordinal))
+                {
+                    // The only child-side cap_exceeded is the report entry budget, so the counter names it.
+                    EvidgateTelemetry.RecordIngestCapExceeded(ReportCasesCap);
+                }
+
                 LogChildRejected(logger, artifact.Id, reported, succeeded.ChildExitCode);
                 await RejectAsync(context, artifact, reported, cancellationToken).ConfigureAwait(false);
             }

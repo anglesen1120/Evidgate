@@ -30,6 +30,7 @@
     <!-- The run-decision wire DTO is the Policy module's own record (07.5.2 §5.1), so the spec schema is compared
          with the type the host serves rather than with a test-local copy of its shape. -->
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Policy.Contracts\Evidgate.Modules.Policy.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Ingestion.Contracts\Evidgate.Modules.Ingestion.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- The anonymous JSON probe the response-vs-spec suite POSTs to: a bad body must still answer the 00 §9.2 envelope. -->

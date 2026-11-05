@@ -92,6 +92,20 @@ internal static class ParsingFailure
                 Message(reason),
                 [new ErrorDetail("content", reason)]);
 
+    /// <summary>
+    /// The failure for a report carrying more entries than the profile admits: 422 <c>cap_exceeded</c> with the
+    /// cap's own name, its limit and the exact count the document declared. The values are our own numbers, never
+    /// anything the document supplied.
+    /// </summary>
+    /// <param name="limit">The configured entry count cap.</param>
+    /// <param name="actual">The entries the document carries.</param>
+    /// <returns>The 00 §9.2 failure, whose detail reason the child turns into the artifact's failure code.</returns>
+    public static Error CasesExceeded(long limit, long actual) =>
+        Error.Unprocessable(
+            ApiErrorCode.CapExceeded,
+            "the report carries more entries than the server-side parser profile allows",
+            [new ErrorDetail("report_cases", ApiErrorCode.CapExceeded, Limit: limit, Actual: actual)]);
+
     private static string Message(string reason) => reason switch
     {
         ParsingFailureReason.DtdProhibited =>

@@ -9,6 +9,7 @@ using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Evidence.Application;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
+using Evidgate.Modules.Ingestion.Contracts;
 using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -84,8 +85,10 @@ internal static class EvidenceModule
         // 06.3.1-T1.2: the one untrusted-parser profile (00 §5.7 S5), published on the module's .Contracts.
         // It has no consumer yet: the `complete` verifier uses the static MediaSniffer directly (06.3.1-T1),
         // and 04.4.1's report mapper is the first IParsing consumer, resolving this same singleton instead of
-        // building its own readers (00 §5.7 S4).
-        services.TryAddSingleton<IParsing, ParsingService>();
+        // building its own readers (00 §5.7 S4). The report entry cap is the host's configured one, so a
+        // deployment that publishes a lower cap refuses over-large reports here as well as in the child.
+        services.TryAddSingleton<IParsing>(provider =>
+            new ParsingService(provider.GetRequiredService<IOptions<IngestionLimits>>().Value.MaxReportCases));
 
         // 06.5.1-T1/T2: the one cross-module call 05's reconciler (05.3.2-T2) makes to freeze a run's evidence: the
         // ready set with (execution_key, attempt_no) resolved to case_attempt, the requirement gaps and the canonical

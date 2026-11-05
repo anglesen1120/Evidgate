@@ -52,7 +52,7 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// </para>
 /// </summary>
 /// <param name="ProjectId">The project from the route.</param>
-/// <param name="Body">The raw UTF-8 body, at most 64 KiB.</param>
+/// <param name="Body">The raw UTF-8 body, at most 64 KiB — the run-create transport cap the endpoint counts.</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c>.</param>
 /// <param name="CiRunBinding">
 /// The caller's verified CI run reference in the <see cref="CiRunReference.ToBindingReference"/> form
@@ -165,6 +165,7 @@ internal sealed class CreateRunCommandHandler(
     IProducerRegistry producers,
     IOutboxWriter outbox,
     IOptions<RunsOptions> options,
+    IOptions<IngestionLimits> ingestionLimits,
     IAuditTrail audit)
     : ICommandHandler<CreateRunCommand, Result<RunCreated>>
 {
@@ -402,7 +403,7 @@ internal sealed class CreateRunCommandHandler(
         }
 
         // (4) derive the planned executions (server-side execution_key, shard assignment) before any write.
-        var (planned, refusal) = await DeriveAsync(command.ProjectId, manifest, cancellationToken).ConfigureAwait(false);
+        var (planned, refusal) = await DeriveAsync(command.ProjectId, manifest, ingestionLimits.Value, cancellationToken).ConfigureAwait(false);
         if (refusal is not null)
         {
             return Result.Failure<RunCreated>(refusal);
@@ -592,6 +593,7 @@ internal sealed class CreateRunCommandHandler(
     private async ValueTask<(PlannedSet? Planned, Error? Refusal)> DeriveAsync(
         Guid projectId,
         ManifestRow manifest,
+        IngestionLimits limits,
         CancellationToken cancellationToken)
     {
         using var document = JsonDocument.Parse(manifest.Document);
@@ -599,7 +601,19 @@ internal sealed class CreateRunCommandHandler(
         var planned = root.GetProperty("planned_executions");
         var shards = root.GetProperty("shard_plan").GetProperty("shards");
 
+        // The counts are read from the stored document before any list is allocated for them: an over-cap
+        // manifest costs one property read and creates nothing, however large the document is.
         var count = planned.GetArrayLength();
+        if (count > limits.MaxManifestExecutions)
+        {
+            return (null, CapExceeded("manifest_executions", limits.MaxManifestExecutions, count));
+        }
+
+        var variants = root.GetProperty("matrix").GetProperty("variants").GetArrayLength();
+        if (variants > limits.MaxManifestVariants)
+        {
+            return (null, CapExceeded("manifest_variants", limits.MaxManifestVariants, variants));
+        }
         var caseRevisionIds = new List<Guid>(count);
         var variantParams = new List<JsonElement>(count);
         var targetEnvs = new List<string>(count);
@@ -701,6 +715,17 @@ internal sealed class CreateRunCommandHandler(
 
     private static Result<RunCreated> BodyInvalid(string message, IReadOnlyList<ErrorDetail> details) =>
         Result.Failure<RunCreated>(Error.Invalid(message, details));
+
+    /// <summary>The 422 a manifest over one published cap earns: the cap name, its limit and the declared count.</summary>
+    private static Error CapExceeded(string cap, long limit, long actual)
+    {
+        EvidgateTelemetry.RecordIngestCapExceeded(cap);
+
+        return Error.Unprocessable(
+            ApiErrorCode.CapExceeded,
+            string.Create(CultureInfo.InvariantCulture, $"the manifest exceeds the {cap} limit"),
+            [new ErrorDetail(cap, ApiErrorCode.CapExceeded, Limit: limit, Actual: actual)]);
+    }
 
     private static Result<RunCreated> ManifestInvalid(IReadOnlyList<ErrorDetail> details) =>
         Result.Failure<RunCreated>(ManifestInvalidError(details));

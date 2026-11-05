@@ -190,6 +190,13 @@ internal static class ArtifactFailureCode
     /// </summary>
     public const string TooLarge = "too_large";
 
+    /// <summary>
+    /// The artifact carried more report entries than the configured cap admits
+    /// (<c>ParsingFailure.CasesExceeded</c>): the report is a verdict, not a retry, because the document cannot
+    /// shrink itself.
+    /// </summary>
+    public const string CapExceeded = "cap_exceeded";
+
     /// <summary>Neither the staging object nor a matching final object exists in the store (T86).</summary>
     public const string ObjectMissing = "object_missing";
 

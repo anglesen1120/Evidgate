@@ -5,7 +5,7 @@
 // silently overwritten, cross-file $refs resolved from the loaded set only, and
 // the x-max-bytes cap. The per-vector verdicts of the documents that cross a file
 // boundary live in fixtures/contracts/vectors/execute.v1|collect.v1 (parity.test.ts).
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,9 +68,9 @@ describe('contract schema registry', () => {
       expect(schemas.has(key), `${key} must load from contracts/**`).toBe(true);
     }
 
-    // The transport caps the plans decide: 04.7.1 §8 (16 KiB) and 05.1.1 §8 (256 KiB).
+    // The CLI checks bodies against the embedded schemas' byte caps, so they must equal the server's: 16 KiB for a capability document, 32 MiB for a manifest.
     expect(schemas.maxBytes('capability.v1')).toBe(16384);
-    expect(schemas.maxBytes('manifest.v1')).toBe(262144);
+    expect(schemas.maxBytes('manifest.v1')).toBe(33554432);
   });
 
   it('resolves the operation envelope $ref from the loaded set, not the file system', () => {
@@ -154,11 +154,14 @@ describe('contract schema registry', () => {
       env_needs: { target_envs: [] },
     });
 
-    // 10 000 planned executions and 256 shards are the declared bounds (05.1.1-T1.2).
-    expect(schemas.validateParsed('manifest.v1', atBounds(10000, 256)).errors).toEqual([]);
-    expect(schemas.validateParsed('manifest.v1', atBounds(10001, 1)).errors).toEqual([
-      { index: null, path: '/planned_executions', reason: 'max_items' },
-    ]);
+    // The execution bound is the ceiling the configured cap may be raised to, so a plan past the retired 10 000
+    // bound is legal and only the runtime cap refuses it; 256 shards stays the schema's own bound.
+    const schema = JSON.parse(
+      readFileSync(join(repoRoot, 'contracts', 'manifest', 'manifest.v1.json'), 'utf8'),
+    ) as { properties: { planned_executions: { maxItems: number } } };
+
+    expect(schema.properties.planned_executions.maxItems).toBe(1_000_000);
+    expect(schemas.validateParsed('manifest.v1', atBounds(10001, 256)).errors).toEqual([]);
     expect(schemas.validateParsed('manifest.v1', atBounds(1, 257)).errors).toEqual([
       { index: null, path: '/shard_plan/shards', reason: 'max_items' },
     ]);

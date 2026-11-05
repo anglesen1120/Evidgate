@@ -5,6 +5,7 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 using Evidgate.Modules.Ingestion.Application;
+using Evidgate.Modules.Ingestion.Contracts;
 using Shouldly;
 using Xunit;
 

@@ -52,7 +52,7 @@ internal static class Program
     /// <summary>The one usage line; a fixed string, so it can never echo an argument.</summary>
     private const string UsageText =
         "evidgate-parser: usage: Evidgate.Parser --profile xml|json|archive --max-bytes <bytes> "
-        + "[--media-type <type>] [--cpu-seconds <seconds>] [--max-file-bytes <bytes>]";
+        + "[--max-cases <count>] [--media-type <type>] [--cpu-seconds <seconds>] [--max-file-bytes <bytes>]";
 
     /// <summary>The one internal-error line; a fixed string, so it can never echo an exception.</summary>
     private const string InternalText = "evidgate-parser: internal error";
@@ -150,7 +150,7 @@ internal static class Program
         }
         else
         {
-            var parsing = new ParsingService();
+            var parsing = new ParsingService(options.MaxCases);
 
             if (options.MediaType is { } declared
                 && parsing.SniffMediaType(declared, content.Prefix) == MediaSniffVerdict.Mismatch)

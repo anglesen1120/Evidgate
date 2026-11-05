@@ -5,7 +5,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.Collections.Generic;
 using System.Linq;
-using Evidgate.Modules.Ingestion.Application;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing;
+using Evidgate.Modules.Ingestion.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -15,8 +16,8 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The two gzip-decode caps of 04.1.1-T3: their defaults, their range validation, the section they bind
-/// from and the environment variable that overrides them.
+/// The ingestion caps: the two gzip-decode caps of 04.1.1-T3 and the manifest/report caps of 04.1.3-T1 — their
+/// defaults, their range validation, the section they bind from and the environment variable that overrides them.
 /// </summary>
 [Collection(ExclusiveTenancySuite.Name)]
 public sealed class IngestionLimitsOptionsTests
@@ -139,6 +140,90 @@ public sealed class IngestionLimitsOptionsTests
             () => provider.GetRequiredService<IOptions<IngestionLimits>>().Value);
         failure.Message.ShouldContain("EVIDGATE__INGESTION__MAXEXPANSIONRATIO");
     }
+
+    [Fact]
+    public void Cap_defaults_are_the_published_numbers()
+    {
+        var defaults = new IngestionLimits();
+
+        defaults.MaxManifestBytes.ShouldBe(32 * 1024 * 1024);
+        defaults.MaxManifestExecutions.ShouldBe(150_000);
+        defaults.MaxManifestVariants.ShouldBe(20);
+        defaults.MaxReportCases.ShouldBe(150_000);
+        Validate(defaults).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// The parser's own fallback entry cap is the published report cap, so the number the spec publishes
+    /// (<c>x-evidgate-limits.report_cases</c>) is the one the parser applies when nothing is configured.
+    /// </summary>
+    [Fact]
+    public void Parser_default_report_cap_is_the_published_cap()
+    {
+        ParsingService.DefaultMaxReportCases.ShouldBe(IngestionLimits.DefaultMaxReportCases);
+    }
+
+    [Theory]
+    [InlineData("MaxManifestBytes", 1)]
+    [InlineData("MaxManifestBytes", 33_554_432)]
+    [InlineData("MaxManifestExecutions", 1)]
+    [InlineData("MaxManifestExecutions", 1_000_000)]
+    [InlineData("MaxManifestVariants", 1)]
+    [InlineData("MaxManifestVariants", 1000)]
+    [InlineData("MaxReportCases", 1)]
+    [InlineData("MaxReportCases", 1_000_000)]
+    public void Cap_inside_its_bounds_is_accepted(string name, int value)
+    {
+        Validate(With(name, value)).ShouldBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("MaxManifestBytes", 0)]
+    [InlineData("MaxManifestBytes", 67_108_865)]
+    [InlineData("MaxManifestExecutions", 0)]
+    [InlineData("MaxManifestExecutions", 1_000_001)]
+    [InlineData("MaxManifestVariants", 0)]
+    [InlineData("MaxManifestVariants", 1001)]
+    [InlineData("MaxReportCases", 0)]
+    [InlineData("MaxReportCases", 1_000_001)]
+    public void Cap_outside_its_bounds_is_rejected_naming_its_key(string name, int value)
+    {
+        var key = "EVIDGATE__INGESTION__" + name.ToUpperInvariant();
+
+        Validate(With(name, value)).ShouldContain(message => message.Contains(key, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Cap_section_binding_and_environment_override()
+    {
+        const string name = "EVIDGATE__INGESTION__MAXMANIFESTEXECUTIONS";
+        var previous = Environment.GetEnvironmentVariable(name);
+        try
+        {
+            Environment.SetEnvironmentVariable(name, "5000");
+
+            var configuration = new ConfigurationBuilder().AddEnvironmentVariables().Build();
+            configuration["EVIDGATE:Ingestion:MaxManifestExecutions"].ShouldBe("5000");
+
+            var bound = Bind(configuration);
+            bound.MaxManifestExecutions.ShouldBe(5_000);
+            bound.MaxManifestBytes.ShouldBe(32 * 1024 * 1024, "an unset cap keeps its published default");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(name, previous);
+        }
+    }
+
+    /// <summary>One option set by name, so the bound tests do not repeat four setters.</summary>
+    private static IngestionLimits With(string name, int value) => name switch
+    {
+        "MaxManifestBytes" => new IngestionLimits { MaxManifestBytes = value },
+        "MaxManifestExecutions" => new IngestionLimits { MaxManifestExecutions = value },
+        "MaxManifestVariants" => new IngestionLimits { MaxManifestVariants = value },
+        "MaxReportCases" => new IngestionLimits { MaxReportCases = value },
+        _ => throw new ArgumentOutOfRangeException(nameof(name), name, "unknown cap"),
+    };
 
     /// <summary>Binds the section exactly as the module registers it.</summary>
     private static IngestionLimits Bind(IConfiguration configuration)

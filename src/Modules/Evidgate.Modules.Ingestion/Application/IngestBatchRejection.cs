@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Ingestion.Contracts;
 using Microsoft.Extensions.Logging;
 
 namespace Evidgate.Modules.Ingestion.Application;

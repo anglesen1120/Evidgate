@@ -26,8 +26,8 @@ import {
   useManifestSpec,
 } from './manifestsUpload.testing.js';
 
-/** The server's documented body cap (`createManifest`: "Body ≤ 256 KiB → 413"). */
-const maxManifestBytes = 256 * 1024;
+/** The server's published body cap (`x-evidgate-limits.manifest_bytes`, 32 MiB). */
+const maxManifestBytes = 32 * 1024 * 1024;
 
 describe('manifests upload', () => {
   const { tempDir, manifestFile, devEnv } = useManifestSpec();

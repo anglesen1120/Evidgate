@@ -45,6 +45,40 @@ internal static class IngestTelemetryCapture
     }
 
     /// <summary>
+    /// Listens for <c>evidgate_ingest_cap_exceeded_total</c> and collects the <c>cap</c> tag of every measurement taken
+    /// while the listener runs.
+    /// </summary>
+    internal static MeterListener Caps(out ConcurrentBag<string> caps)
+    {
+        var bag = new ConcurrentBag<string>();
+        caps = bag;
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == EvidgateTelemetry.MeterName
+                    && instrument.Name == EvidgateTelemetry.IngestCapExceededMetricName)
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            foreach (var tag in tags)
+            {
+                if (tag.Key == "cap" && tag.Value is string cap)
+                {
+                    bag.Add(cap);
+                }
+            }
+        });
+        listener.Start();
+
+        return listener;
+    }
+
+    /// <summary>
     /// Listens to every source, so the request's own server span (ASP.NET Core) and the application's
     /// module spans are captured alike.
     /// </summary>

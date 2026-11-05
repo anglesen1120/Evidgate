@@ -562,7 +562,7 @@ public sealed class RunCreationTests
         }
 
         var small = await CountAsync(1);
-        var large = await CountAsync(40); // 1 600 planned executions: the same statement count
+        var large = await CountAsync(20); // 800 planned executions (the variant cap): the same statement count
 
         large.ShouldBe(small);
         small.ShouldBeLessThanOrEqualTo(20, string.Join(Environment.NewLine, world.Api.Statements.Snapshot()));
