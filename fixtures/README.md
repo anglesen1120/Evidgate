@@ -57,6 +57,64 @@ Duplicate member names are refused by both loaders, in either JSON file, so a do
 
 Fixture review checklist (per 00 §5.7 S3): synthetic ids/emails only; provenance recorded in `meta.source`; `expected.json` regenerated through the canonicalizer, never hand-prettified.
 
+## `<producer>/<case>/` golden corpus (04.6.1-T1)
+
+Every producer format the ingestion path parses gets a case directory holding the original report plus the normalised events it must produce. `src/Tools/Evidgate.GoldenHarness` replays each case through that producer's in-process parser and diffs produced against expected; the console tool registers no parser, so the checked-in cases report `PENDING` until each mapper lands.
+
+This is _not_ the `<domain>/<name>/` corpus above: the harness treats a directory holding `case.json` or `expected.json` as a case, and a directory holding `meta.json` belongs to the older corpus and is skipped together with everything below it. The producer directory name is the parser registry key (`report_parser.parser_id`).
+
+### Layout
+
+```text
+fixtures/<producer>/<case>/
+  report.<ext>        # one or more original report files; any name but case.json, expected.json or README.md
+  case.json           # metadata
+  expected.json       # RFC 8785 canonical bytes (no trailing newline)
+```
+
+A case directory holds no `meta.json` and no file named `input.*`: `meta.json` would make the harness skip the directory as the older corpus, and `input.*` would make the other loaders read it as a `<domain>/<name>/` fixture. Every entry of a case is checked, and a symbolic link is refused rather than followed: a linked case directory, `case.json`, `expected.json`, a report file, `README.md` or a nested directory fails the scan as an `ERROR` naming the fixture and the link, so the entries directly inside a case cannot escape the corpus (links buried deeper inside a nested directory are not yet inspected). The canonical `expected.json` files are excluded from prettier by the existing `**/fixtures/**/expected.json` rule in `.prettierignore`.
+
+### `case.json`
+
+- `producer_id` — the producer the report came from; also the event `producer_id`.
+- `parser_id` — the registry key the harness resolves the in-process parser by.
+- `parser_version` — the parser version the expectation was captured against.
+- `rationale` — one sentence on what the case exists to catch.
+- `parser_status` — optional; the value `pending` marks a case whose parser has not landed.
+
+### `expected.json`
+
+`raw_report_status` (`parsed`, `malformed` or `unsupported`), `declared_count` (the producer's own declared case count) and `events[]`, each event carrying `producer_id`, `sequence`, `case_key`, `raw_status` and `normalised_status`. Events are compared after RFC 8785 canonicalisation and sorted by `(producer_id, sequence)`, so the order written in the file does not have to match the parser's output order. `producer_id` and `sequence` are also compared on their exact values before canonicalisation, because canonical form writes numbers as doubles and two sequences above 2^53 could otherwise canonicalise to the same bytes. A deliberately malformed report declares `raw_report_status: "malformed"` with `declared_count: 0` and no events; the loader refuses any expectation that is malformed and still counts or lists events, since it would pin two outcomes at once.
+
+### Verdicts
+
+- `PASS` — the parser's events equal `expected.json`.
+- `FAIL` — they differ; each difference names the fixture, the event index, the field and the reason (`count_mismatch`, `unmapped_case`, `status_mismatch`, `extra_event`, `missing_event`, `field_mismatch`, `malformed`).
+- `PENDING` — `parser_status: "pending"` and the parser id is not registered. Not a pass: the summary counts it separately, and `--strict` makes it exit 1.
+- `ERROR` — an unregistered parser id without `pending`, a layout violation (missing `case.json`, `expected.json` or report file, malformed JSON, duplicate member, BOM, an entry that is a symbolic link, or a malformed expectation that still counts or lists events), or a parser that throws anything except `ParseRefusedException`. Each names the fixture.
+- A registered parser that throws `ParseRefusedException` is the one exception treated as a declared refusal: `PASS` when the case declares a malformed report with `declared_count: 0` and no events, which is how `truncated/` passes, and `FAIL` (reason `malformed`) otherwise. Any other exception is `ERROR` with its type and message, even on a case that declares a malformed report, so a mapper bug cannot pass as the expected refusal.
+- Every value a verdict prints — fixture name, parser id, event field — has control characters escaped as `\uXXXX`, so an embedded newline or terminal escape sequence cannot add a row or repaint the terminal; the counts are computed from the cases, never from the printed text.
+
+Exit codes: `0` nothing failed, `1` any `FAIL`, `ERROR` or (under `--strict`) `PENDING`, `2` a usage error.
+
+### Running it
+
+```bash
+dotnet run --project src/Tools/Evidgate.GoldenHarness -- --fixtures fixtures
+dotnet run --project src/Tools/Evidgate.GoldenHarness -- --fixtures fixtures --producer junit-pytest
+dotnet run --project src/Tools/Evidgate.GoldenHarness -- --fixtures fixtures --strict
+```
+
+### Seeded cases
+
+The seeded corpus is **pending, not verified**: no production mapper is registered with the harness yet, so these cases document the expected event-level output without proving any adapter.
+
+- `junit-pytest/happy/` — pytest `junitxml`: one pass, one failure and one skip, `declared_count: 3`.
+- `junit-pytest/truncated/` — a document cut off inside a testcase stays honest: `raw_report_status: "malformed"`, zero events.
+- `playwright-reporter/skeleton/` — the Playwright JSON reporter's suite/spec/test/result nesting with one passing test.
+
+All synthetic (00 §5.7 S3): no real customer data.
+
 ## `web-api/` — the dev fixture backend corpus (09.1.1-T12)
 
 `web-api/<name>/` is an ordinary `<domain>/<name>/` corpus (exactly `input.json` + `meta.json`, `kind: api-response`, no `expected.json`), whose `input.json` is one recorded `/v1` response the web app can serve before the API exists (AC10):
