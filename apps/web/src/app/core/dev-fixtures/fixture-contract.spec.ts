@@ -170,6 +170,38 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     };
     expect(cells(large)).toBeGreaterThan(2500);
   });
+  // The envelope schema accepts any string `path`, so the generic loop below cannot tell `/version`
+  // from the bare `version` the dialog already read — while `e2e/shell/conflict-dialog.spec.ts`
+  // fails if this document drifts back to the bare name, or to a reason the policy store refuses as
+  // malformed (`PolicyStore.loadBody` reads the identifier a detail names). Both are pinned here.
+  it('serves the 412 concurrency token in the pointer spelling the dialog reads', () => {
+    const document = corpusDocument('policy-revision-create-version-pointer');
+    expect(document.operation_id).toBe('createPolicyRevision');
+    expect(document.variant).toBe('version-pointer');
+    expect(document.status).toBe(412);
+    const body = document.body;
+    if (!isRecord(body) || !isRecord(body['error'])) {
+      throw new Error('the pointer-form document carries no error envelope');
+    }
+    const error = body['error'];
+    expect(error['code']).toBe('precondition_failed');
+    const details: unknown = error['details'];
+    if (!Array.isArray(details)) {
+      throw new Error('the 412 envelope carries no details[] array');
+    }
+    const detailList: unknown[] = details;
+    expect(
+      detailList.map((detail) => (isRecord(detail) ? detail['path'] : undefined)),
+      'the details are the authoring stale pair: the If-Match snapshot plus the pointer /version',
+    ).toEqual(['/If-Match', '/version']);
+    const pointer = detailList[1];
+    const reason = isRecord(pointer) ? pointer['reason'] : undefined;
+    expect(
+      reason,
+      'the pointer detail must carry a revision id the conflict dialog can reload',
+    ).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  });
+
   for (const fixture of CORPUS) {
     it(`validates fixtures/web-api/${fixture.name} against contracts/openapi.yaml`, () => {
       const document = readDocument(fixture);

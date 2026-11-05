@@ -104,6 +104,12 @@ export const ACTIVATION_RATE_LIMITED = '?fixture.variant.getPolicyActivation=rat
 /** The project has no revision at all: the head read answers `404`. */
 export const HEAD_NOT_FOUND = '?fixture.variant.getPolicyHead=not-found';
 export const CREATE_412 = '?fixture.variant.createPolicyRevision=precondition_failed';
+/**
+ * The same `412` with the concurrency token in the pointer spelling (`details[].path` =
+ * `/version`): the shared conflict dialog reads the pointer and the bare name alike, so this is
+ * the served state its pointer branch is proven with.
+ */
+export const CREATE_VERSION_POINTER = '?fixture.variant.createPolicyRevision=version-pointer';
 export const CREATE_UNCHANGED = '?fixture.variant.createPolicyRevision=unchanged';
 export const CREATE_UNKNOWN_FIELD = '?fixture.variant.createPolicyRevision=unknown-field';
 export const CREATE_CRITICAL = '?fixture.variant.createPolicyRevision=critical-case-quarantined';
