@@ -520,7 +520,7 @@ public sealed class CatalogueTests : HarnessTest
         before.ShouldNotBeEmpty($"{table}: the platform price row is missing — the write probe would have nothing to target");
 
         var insert = await RefusalAsync(
-            "insert into public.usage_price (id, org_id, metric, unit_price, currency, effective_from, rate_card_version) values (@key::uuid, null, 'results', 1, 'USD', now(), 'probe')",
+            "insert into public.usage_price (id, org_id, metric, unit_price, currency, effective_from, rate_card_version) values (@key::uuid, null, 'egress_gb', 1, 'USD', now(), 'probe')",
             ("key", Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture)));
         AssertRefused(table, "INSERT of a platform row", insert, silentAllowed: false, failures);
 
