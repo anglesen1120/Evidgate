@@ -188,9 +188,19 @@ for (const locale of LOCALES) {
     await expect(page.locator(`${SUMMARY} [data-policy-reads-error]`)).toContainText(
       'rate_limited',
     );
-    const retried = page.waitForRequest((request) => request.url().includes('/policy-activation'));
+    // The fixture backend answers in-process, so no network request shows the re-read: record the
+    // state attribute instead and require the retry to pass through `loading` before it settles.
+    await page.locator(ACTIVATION).evaluate((element) => {
+      const seen: string[] = [];
+      Object.assign(window, { __activationStates: seen });
+      new MutationObserver(() => {
+        seen.push(element.getAttribute('data-policy-activation-state') ?? '');
+      }).observe(element, { attributes: true, attributeFilter: ['data-policy-activation-state'] });
+    });
     await page.locator(READS_RETRY).click();
-    await retried;
+    await expect
+      .poll(() => page.evaluate(() => Reflect.get(window, '__activationStates') as string[]))
+      .toContain('loading');
     // The variant still refuses, so the error stands: the retry re-issued the read, it did not
     // clear the state optimistically.
     await expect(page.locator(ACTIVATION)).toHaveAttribute('data-policy-activation-state', 'error');
