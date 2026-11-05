@@ -700,6 +700,39 @@ public sealed class TenantGucTests
             ("org_id", orgId),
             ("project_id", projectId));
 
+        // The release tables (migration 0072): one draft release with one component bound to the
+        // environment revision seeded above, and one release_run bound to the run seeded above. The draft
+        // state is what lets the component INSERT through the trigger; the release is created by the
+        // owner because the app role's INSERT grant omits `state` (it is always the default draft).
+        var releaseId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into public.release (id, org_id, project_id, name, created_by)
+            values (@id, @org_id, @project_id, 'probe-release', 'probe')
+            """,
+            ("id", releaseId),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.release_component (id, org_id, release_id, component_key, digest, environment_revision_id)
+            values (@id, @org_id, @release_id, 'web', @digest, @environment_revision_id)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("release_id", releaseId),
+            ("digest", "sha256:" + new string('a', 64)),
+            ("environment_revision_id", environmentRevisionId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.release_run (id, org_id, release_id, run_id, component_key)
+            values (@id, @org_id, @release_id, @run_id, 'web')
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("release_id", releaseId),
+            ("run_id", runId));
+
         await scope.CommitAsync();
     }
 }
