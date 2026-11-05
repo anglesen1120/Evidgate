@@ -32,6 +32,8 @@ public sealed class EnvelopeTransportTests
                 ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}",
                 ["DOTNET_ENVIRONMENT"] = "Production",
                 ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
+                ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
+                ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
                 ["EVIDGATE__CI__SIGNINGKEY"] = Convert.ToBase64String(new byte[32]),
                 ["EVIDGATE__CI__PEPPER"] = Convert.ToBase64String(new byte[32]),
                 ["EVIDGATE__CI__PEPPERVERSION"] = "1",

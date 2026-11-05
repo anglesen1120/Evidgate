@@ -18,13 +18,18 @@ internal static class CaseAttemptSql
     /// <c>order by r.execution_key, r.attempt_no</c> makes concurrent batches take the unique-key locks in one global
     /// <c>(execution_key, attempt_no)</c> order, so two transactions with overlapping slots cannot deadlock on the
     /// conflict check.
+    /// <para>
+    /// <c>after_cancel</c> is derived here, not passed in: the caller has taken the run row <c>FOR SHARE</c> in this
+    /// transaction, so the run join reads the row under that same lock and a cancel that commits first can never be
+    /// missed on an attempt it overtook.
+    /// </para>
     /// </summary>
     internal const string InsertAttempts = """
         insert into public.case_attempt
                (id, org_id, run_id, execution_key, case_id, attempt_no, raw_status, normalized_status,
-                started_at, finished_at, duration_ms, job_id)
+                started_at, finished_at, duration_ms, job_id, after_cancel)
         select r.id, @org_id, @run_id, r.execution_key, tr.case_id, r.attempt_no, r.raw_status, r.normalized_status,
-               r.started_at, r.finished_at, r.duration_ms, r.job_id
+               r.started_at, r.finished_at, r.duration_ms, r.job_id, ru.state = 'canceled'
           from jsonb_to_recordset(@rows::jsonb)
                as r(id uuid, execution_key text, attempt_no integer, raw_status text, normalized_status text,
                     started_at timestamptz, finished_at timestamptz, duration_ms integer, job_id uuid)
@@ -87,7 +92,9 @@ internal static class CaseAttemptSql
     /// plan, in another environment, or already attempted gets no row; the failed setup itself is excluded; the
     /// <c>NOT EXISTS</c> guard and the conflict clause make a repeated call write nothing (idempotent). The explicit
     /// <c>order by pe.execution_key</c> takes the unique-key locks in the same global order as
-    /// <see cref="InsertAttempts"/>, so the two statements cannot deadlock against each other.
+    /// <see cref="InsertAttempts"/>, so the two statements cannot deadlock against each other. The insert names no
+    /// <c>after_cancel</c>: a synthetic <c>blocked</c> row is not post-cancel evidence, and the resolver has no caller
+    /// yet (<see cref="ReconcileSql"/> records the same), so a flag here would be a claim no test can check.
     /// </summary>
     internal const string InsertBlockedAttempts = """
         insert into public.case_attempt

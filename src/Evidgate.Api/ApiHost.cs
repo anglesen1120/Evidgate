@@ -9,6 +9,7 @@ using Evidgate.BuildingBlocks.Persistence.Health;
 using Evidgate.BuildingBlocks.Persistence.Isolation;
 using Evidgate.BuildingBlocks.Persistence.Options;
 using Evidgate.BuildingBlocks.Persistence.Secrets;
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
@@ -74,6 +75,12 @@ public static partial class ApiHost
         // 10.1.1-T2: the single secret seam. Idempotent (TryAdd*), so the
         // composition extensions that also register it change nothing here.
         builder.Services.AddEvidgateSecrets(builder.Configuration);
+
+        // The cancel route writes its kill row itself, so this host reads the same
+        // EVIDGATE__TASKS__* group the Worker consumes: a producer that bound nothing would
+        // write into `default` while the Worker polls elsewhere and lose the kill. Options only —
+        // the claim loops and the dispatcher stay in the Worker.
+        builder.Services.AddEvidgateTaskOptions(builder.Configuration);
 
         var otel = builder.AddEvidgateTelemetry(ServiceName);
         // 10.3.1-T1.2 (F6, documented trade-off): the server instrumentation adopts an
@@ -303,6 +310,9 @@ public static partial class ApiHost
         _ = app.Services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
         _ = app.Services.GetRequiredService<IOptions<IsolationSelfCheckOptions>>().Value;
         _ = app.Services.GetRequiredService<IOptions<TelemetryOptions>>().Value;
+        // The cancel windows belong to the Orchestrator module and are read through its seam; the database group comes
+        // first so a missing connection string is still the key a host with no configuration at all reports.
+        app.Services.ValidateOrchestratorOptions();
     }
 
     /// <summary>

@@ -734,6 +734,8 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
                 ["EVIDGATE:Login:RetryAfterSeconds"] =
                     RetryAfterSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ["EVIDGATE:Database:ConnectionString"] = _connectionString,
+                ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+                ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
                 ["EVIDGATE:Isolation:SelfCheck"] = "Disabled",
                 // The session pepper is a secret (EVIDGATE__SESSION__PEPPER): the environment secret provider
                 // reads it from configuration by its own spelling, so an in-memory key resolves exactly as the

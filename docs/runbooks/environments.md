@@ -92,6 +92,14 @@ boot-required, because the missing value leaves the option valid: `EVIDGATE__WOR
 defaults to `0.0.0.0`, so an environment that says nothing boots, and the matrix records
 `requiredAtBoot: false` for it.
 
+The run-cancel windows are boot-required and carry no code default:
+`EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY` and `EVIDGATE__RUNS__CANCEL__KILLDELAY` are `TimeSpan`
+literals (`00:00:30` and `00:02:00` in dev, `env-file`; injected as plain variables in staging and
+prod), both greater than zero and at most 366 days, with the kill window at least the soft-stop one.
+A missing key binds to `00:00:00` and is refused like a configured zero or negative value, and an
+inverted pair is refused too — those two deadline columns are immutable once an operator has accepted
+a cancel, so a wrong pair must stop the host at boot rather than freeze an out-of-order schedule.
+
 A third mechanism exists for options a host may never touch: the object-storage options
 (`EVIDGATE__OBJECT__*`, 06.1.2-T1) are validated **lazily**, when `IObjectStorage` is first resolved,
 not at host start — so a host that never serves an upload boots with no object-storage configuration at

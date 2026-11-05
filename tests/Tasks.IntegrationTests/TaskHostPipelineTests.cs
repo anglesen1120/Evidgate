@@ -83,6 +83,8 @@ public sealed class TaskHostPipelineTests
             var host = WorkerHost.CreateBuilder(
             [
                 $"--EVIDGATE:Database:ConnectionString={_fixture.AppConnectionString(database)}",
+                "--EVIDGATE:Runs:Cancel:SoftStopDelay=00:00:30",
+                "--EVIDGATE:Runs:Cancel:KillDelay=00:02:00",
                 "--EVIDGATE:Worker:HealthAddress=127.0.0.1",
                 $"--EVIDGATE:Worker:HealthPort={FreePort()}",
                 "--EVIDGATE:Worker:ReadinessPollMilliseconds=100",

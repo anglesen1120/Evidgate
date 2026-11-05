@@ -1368,42 +1368,44 @@
     {
       "key": "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY",
       "scope": "runtime",
-      "consumers": ["api", "migrator", "worker"],
+      "consumers": ["api", "dev-stack", "migrator", "worker"],
       "type": "string",
-      "requiredAtBoot": false,
+      "requiredAtBoot": true,
+      "requiredBy": "src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/RunCancelOptions.cs",
       "constraints": {},
       "secret": false,
       "required": {
-        "dev": false,
-        "staging": false,
-        "prod": false
+        "dev": true,
+        "staging": true,
+        "prod": true
       },
       "source": {
-        "dev": "default",
-        "staging": "default",
-        "prod": "default"
+        "dev": "env-file",
+        "staging": "environment",
+        "prod": "environment"
       },
-      "note": "soft-stop window of an accepted run cancel (05.4.1): run_cancel_request.soft_stop_deadline_at = requested_at + this value. A TimeSpan literal (00:00:30 = 30 s, the default). Bounded at boot to more than 00:00:00 and at most 366 days by RunDurationAttribute, and required to be no longer than EVIDGATE__RUNS__CANCEL__KILLDELAY by RunCancelOptions: an inverted pair would stop execution before the graceful window it is meant to follow."
+      "note": "soft-stop window of an accepted run cancel (05.4.1): run_cancel_request.soft_stop_deadline_at = requested_at + this value. A TimeSpan literal (00:00:30 in dev). No default: a missing key binds to 00:00:00 and fails the boot, like a configured zero or negative value. Bounded at boot to more than 00:00:00 and at most 366 days by RunDurationAttribute, and required to be no longer than EVIDGATE__RUNS__CANCEL__KILLDELAY by RunCancelOptions: an inverted pair would stop execution before the graceful window it is meant to follow."
     },
     {
       "key": "EVIDGATE__RUNS__CANCEL__KILLDELAY",
       "scope": "runtime",
-      "consumers": ["api", "migrator", "worker"],
+      "consumers": ["api", "dev-stack", "migrator", "worker"],
       "type": "string",
-      "requiredAtBoot": false,
+      "requiredAtBoot": true,
+      "requiredBy": "src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/RunCancelOptions.cs",
       "constraints": {},
       "secret": false,
       "required": {
-        "dev": false,
-        "staging": false,
-        "prod": false
+        "dev": true,
+        "staging": true,
+        "prod": true
       },
       "source": {
-        "dev": "default",
-        "staging": "default",
-        "prod": "default"
+        "dev": "env-file",
+        "staging": "environment",
+        "prod": "environment"
       },
-      "note": "kill window of an accepted run cancel (05.4.1): run_cancel_request.kill_at = requested_at + this value, the instant execution is stopped whatever it is doing. A TimeSpan literal (00:02:00 = 2 min, the default, i.e. 90 s after the default soft-stop deadline). Bounded at boot to more than 00:00:00 and at most 366 days by RunDurationAttribute, and required to be at least EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY by RunCancelOptions."
+      "note": "kill window of an accepted run cancel (05.4.1): run_cancel_request.kill_at = requested_at + this value, the instant execution is stopped whatever it is doing and the moment the durable kill task becomes claimable. A TimeSpan literal (00:02:00 in dev). No default: a missing key binds to 00:00:00 and fails the boot, like a configured zero or negative value. Bounded at boot to more than 00:00:00 and at most 366 days by RunDurationAttribute, and required to be at least EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY by RunCancelOptions."
     },
     {
       "key": "EVIDGATE__RUNS__DEFAULTCOLLECTIONTIMEOUT",
