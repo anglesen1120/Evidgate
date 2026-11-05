@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="1" failures="0" errors="0" time="0.001104458">
+    <testsuite name="src/index.test.ts" timestamp="2026-11-05T05:06:35.477Z" hostname="host" tests="1" failures="0" errors="0" skipped="0" time="0.001104458">
+        <testcase classname="src/index.test.ts" name="@evidgate/adapter-junit entry point &gt; loads as an ES module namespace" time="0.000594833">
+        </testcase>
+    </testsuite>
+</testsuites>

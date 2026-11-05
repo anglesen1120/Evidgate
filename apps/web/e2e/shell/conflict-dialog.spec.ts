@@ -1,6 +1,20 @@
 // Real-browser coverage for Brain's modal overlay, focus trap, dismissal and restoration.
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
+import head from '../../../../fixtures/web-api/policy-revision-head/input.json';
+import versionPointer from '../../../../fixtures/web-api/policy-revision-create-version-pointer/input.json';
+
+import {
+  CONFLICT,
+  CONFLICT_DRAFT,
+  CREATE_412,
+  CREATE_VERSION_POINTER,
+  BODY as PUBLISH_BODY,
+  POLICY_WRITE,
+  SUBMIT as PUBLISH_SUBMIT,
+  openPublish,
+  visit,
+} from './settings-policy.support';
 import {
   axeScan,
   axeViolations,
@@ -12,6 +26,29 @@ import {
 
 const OPENER = '[data-demo="conflict-opener"]';
 const DIALOG = '[role="dialog"]:has(hlm-dialog-content)';
+
+/** The `details[].reason` of the served document's `/version` row: what the dialog must display. */
+const POINTER_REVISION = ((): string => {
+  const detail = versionPointer.body.error.details.find((row) => row.path === '/version');
+  if (detail === undefined) throw new Error('the pointer-form 412 document names no /version');
+  return detail.reason;
+})();
+
+/**
+ * The local/server pair of every compared field, in the order the dialog renders them: the browser
+ * proof that the server column was filled from a body the envelope's own identifier named.
+ */
+async function comparedFields(scope: Locator): Promise<readonly string[]> {
+  return scope
+    .locator('.field')
+    .evaluateAll((fields) =>
+      fields.map((field) =>
+        [...field.querySelectorAll('.local-value, .server-value')]
+          .map((value) => value.textContent?.trim() ?? '')
+          .join(' → '),
+      ),
+    );
+}
 
 /**
  * The gallery is review-only and has no shell (`/dev/ui-gallery`), so the theme is only the
@@ -225,6 +262,54 @@ for (const locale of LOCALES) {
         expect(box.left, `${box.name} starts inside the viewport`).toBeGreaterThanOrEqual(-0.5);
         expect(box.right, `${box.name} ends inside the viewport`).toBeLessThanOrEqual(box.limit);
       }
+    });
+  });
+}
+
+for (const locale of LOCALES) {
+  test.describe(`412 conflict dialog over a served 412, ${locale} bundle`, () => {
+    // The publish dialog is the one web screen that opens the shared dialog, and the corpus serves
+    // it a 412 whose detail names the concurrency token as `/version` — the pointer spelling the
+    // authoring routes emit — instead of the bare `revision_id`. Both documents name the same head,
+    // so the two runs must end in the same comparison: a matcher that dropped the pointer would
+    // show an unavailable head and one "Not compared" field instead.
+    test('the /version pointer detail fills the dialog like the bare name', async ({ page }) => {
+      await visit(page, locale, [POLICY_WRITE, CREATE_VERSION_POINTER]);
+      const dialog = await openPublish(page);
+      await dialog.locator(PUBLISH_BODY).fill(CONFLICT_DRAFT);
+      await dialog.locator(PUBLISH_SUBMIT).click();
+
+      const pointer = page.locator(CONFLICT);
+      await expect(pointer).toBeVisible();
+      // Nothing is inferred from the pointer's shape: the identifier the envelope names is what the
+      // dialog shows, and the server column came from the body that identifier addresses.
+      await expect(pointer.locator('.revision code')).toHaveText(POINTER_REVISION);
+      await expect(pointer.locator('.field')).toHaveCount(2);
+      const changed = pointer.locator('.field', { hasText: '/flaky_budget' });
+      await expect(changed.locator('.server-value')).toContainText(
+        String(head.body.body.flaky_budget),
+      );
+      await expect(changed.locator('.local-value')).toContainText('9');
+      const removed = pointer.locator('.field', { hasText: '/late_window_minutes' });
+      await expect(removed.locator('.server-value')).toContainText(
+        String(head.body.body.late_window_minutes),
+      );
+      const pointerComparison = await comparedFields(pointer);
+
+      // The same 412 with the token in the bare-name spelling: the same head, and every compared
+      // pair must match, so only the matched detail's spelling differs between the two runs.
+      await visit(page, locale, [POLICY_WRITE, CREATE_412]);
+      const bare = await openPublish(page);
+      await bare.locator(PUBLISH_BODY).fill(CONFLICT_DRAFT);
+      await bare.locator(PUBLISH_SUBMIT).click();
+      const conflict = page.locator(CONFLICT);
+      await expect(conflict).toBeVisible();
+      await expect(conflict.locator('.revision code')).toHaveText(POINTER_REVISION);
+      expect(
+        await comparedFields(conflict),
+        'the pointer-form 412 must compare exactly what the bare-name 412 compares',
+      ).toEqual(pointerComparison);
+      expect(pointerComparison).toHaveLength(2);
     });
   });
 }

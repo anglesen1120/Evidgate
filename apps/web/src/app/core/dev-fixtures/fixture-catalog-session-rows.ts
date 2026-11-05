@@ -83,6 +83,7 @@ import policyRevisionCreateCriticalCaseQuarantined from '../../../../../../fixtu
 import policyRevisionCreatePreconditionFailed from '../../../../../../fixtures/web-api/policy-revision-create-precondition-failed/input.json';
 import policyRevisionCreateUnchanged from '../../../../../../fixtures/web-api/policy-revision-create-unchanged/input.json';
 import policyRevisionCreateUnknownField from '../../../../../../fixtures/web-api/policy-revision-create-unknown-field/input.json';
+import policyRevisionCreateVersionPointer from '../../../../../../fixtures/web-api/policy-revision-create-version-pointer/input.json';
 import policyRevisionFirst from '../../../../../../fixtures/web-api/policy-revision-first/input.json';
 import policyRevisionHead from '../../../../../../fixtures/web-api/policy-revision-head/input.json';
 import policyRevisionPrevious from '../../../../../../fixtures/web-api/policy-revision-previous/input.json';
@@ -239,6 +240,7 @@ export const FIXTURE_CATALOG_SESSION_ROWS: readonly FixtureCatalogRow[] = [
   },
   { name: 'policy-revision-create-unchanged', document: policyRevisionCreateUnchanged },
   { name: 'policy-revision-create-unknown-field', document: policyRevisionCreateUnknownField },
+  { name: 'policy-revision-create-version-pointer', document: policyRevisionCreateVersionPointer },
   { name: 'policy-revision-first', document: policyRevisionFirst },
   { name: 'policy-revision-head', document: policyRevisionHead },
   { name: 'policy-revision-previous', document: policyRevisionPrevious },
