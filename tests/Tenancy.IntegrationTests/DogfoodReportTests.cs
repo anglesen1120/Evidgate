@@ -25,7 +25,9 @@ public sealed class DogfoodReportTests
     private static readonly string TestData = Path.Combine(RlsExceptionFile.RepositoryRoot, "scripts", "dogfood", "testdata");
 
     /// <summary>One row per producer.</summary>
-    public static TheoryData<string> Producers => new() { "xunit", "vitest", "playwright" };
+    public static TheoryData<string> Producers => [.. ProducerNames];
+
+    private static readonly string[] ProducerNames = ["xunit", "vitest", "playwright"];
 
     /// <summary>The real report parses through the profile and has the sample corpus's shape and counts.</summary>
     [Theory]
@@ -85,30 +87,83 @@ public sealed class DogfoodReportTests
     [Fact]
     public async Task Dogfood_Collect_ManifestListsAllProducers()
     {
-        var output = Path.Combine(Path.GetTempPath(), "dogfood-collect-" + Guid.NewGuid().ToString("N"));
-        try
+        await WithTempDirectory(async output =>
         {
-            using var process = Process.Start(new ProcessStartInfo("bash")
-            {
-                ArgumentList = { Path.Combine(RlsExceptionFile.RepositoryRoot, "scripts", "dogfood", "collect.sh"), "--src", TestData, "--out", output },
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            })!;
-            var token = TestContext.Current.CancellationToken;
-            var stderr = process.StandardError.ReadToEndAsync(token);
-            _ = await process.StandardOutput.ReadToEndAsync(token);
-            await process.WaitForExitAsync(token);
+            var (exit, stderr) = await RunCollect(TestData, output);
 
-            process.ExitCode.ShouldBe(0, await stderr);
-            using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(output, "manifest.json"), token));
+            exit.ShouldBe(0, stderr);
+            using var manifest = JsonDocument.Parse(
+                await File.ReadAllTextAsync(Path.Combine(output, "manifest.json"), TestContext.Current.CancellationToken));
             manifest.RootElement.GetProperty("producers").EnumerateArray()
                 .Select(p => p.GetProperty("producer").GetString())
                 .ShouldBe(["xunit", "vitest", "playwright"]);
             Directory.GetFiles(output).Length.ShouldBe(4);
+        });
+    }
+
+    /// <summary>A DOCTYPE in any encoding is refused: a UTF-16 document hides it from a byte search.</summary>
+    [Fact]
+    public async Task Dogfood_Collect_RefusesUtf16Doctype()
+    {
+        await WithTempDirectory(async source =>
+        {
+            foreach (var name in ProducerNames)
+            {
+                File.Copy(Path.Combine(TestData, name + ".junit.xml"), Path.Combine(source, name + ".junit.xml"));
+            }
+
+            const string Hostile = "<!DOCTYPE testsuites [<!ENTITY a \"a\">]><testsuites tests=\"1\"><testsuite><testcase name=\"&a;\"/></testsuite></testsuites>";
+            await File.WriteAllBytesAsync(
+                Path.Combine(source, "vitest.junit.xml"),
+                [.. System.Text.Encoding.Unicode.GetPreamble(), .. System.Text.Encoding.Unicode.GetBytes(Hostile)],
+                TestContext.Current.CancellationToken);
+
+            await WithTempDirectory(async output =>
+            {
+                var (exit, stderr) = await RunCollect(source, output);
+
+                exit.ShouldBe(1);
+                stderr.ShouldContain("DOCTYPE");
+            });
+        });
+    }
+
+    private static async Task WithTempDirectory(Func<string, Task> body)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "dogfood-collect-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(path);
+        try
+        {
+            await body(path);
         }
         finally
         {
-            Directory.Delete(output, recursive: true);
+            Directory.Delete(path, recursive: true);
+        }
+    }
+
+    private static async Task<(int Exit, string Stderr)> RunCollect(string source, string output)
+    {
+        var token = TestContext.Current.CancellationToken;
+        using var process = Process.Start(new ProcessStartInfo("bash")
+        {
+            ArgumentList = { Path.Combine(RlsExceptionFile.RepositoryRoot, "scripts", "dogfood", "collect.sh"), "--src", source, "--out", output },
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        })!;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(60));
+        try
+        {
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            _ = await process.StandardOutput.ReadToEndAsync(timeout.Token);
+            await process.WaitForExitAsync(timeout.Token);
+            return (process.ExitCode, await stderr);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw;
         }
     }
 }

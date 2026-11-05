@@ -12,8 +12,10 @@
 #   --produce   run the three small producers into --src first (needs a built workspace and the
 #               Playwright fixtures bundle prerequisites)
 #
-# Exit 1: a producer's report is missing, is not well-formed XML with a testsuite and a testcase, or
-# declares a DOCTYPE (a runner never emits one). The server-side parse of the same bytes is the
+# Exit 1: a producer's report is missing, is larger than the 8 MiB report cap, is not well-formed XML
+# with a testsuite and a testcase, or declares a DOCTYPE in any encoding (a runner never emits one).
+# A producer that exits non-zero because tests failed still has its report collected; the script then
+# exits with that producer's status after the manifest is written. The server-side parse of the same bytes is the
 # Evidence parser profile, covered by tests/Tenancy.IntegrationTests (DogfoodReportTests).
 set -euo pipefail
 
@@ -32,21 +34,42 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-if [[ "$PRODUCE" == "1" ]]; then
-  mkdir -p "$SRC"
-  # xUnit v3 console runner's own JUnit writer (the MTP --report-* flags exist only under `dotnet test`).
-  dotnet run --project "$ROOT/tests/Canonicalization.UnitTests" -c Release -- \
-    -result-junit "$SRC/xunit.junit.xml"
-  (cd "$ROOT/packages/adapter-junit" && npx vitest run --reporter=junit --outputFile="$SRC/vitest.junit.xml")
-  (cd "$ROOT/apps/web" && npx playwright test -c playwright.fixtures.config.ts e2e/shell/settings-policy \
-    --reporter=junit >"$SRC/playwright.junit.xml")
+# Absolute before any producer changes directory.
+mkdir -p "$SRC" "$OUT"
+SRC="$(cd "$SRC" && pwd)"
+OUT="$(cd "$OUT" && pwd)"
+if [[ "$SRC" == "$OUT" ]]; then
+  echo "collect.sh: --src and --out must differ" >&2
+  exit 2
 fi
 
-mkdir -p "$OUT"
+PRODUCER_STATUS=0
+if [[ "$PRODUCE" == "1" ]]; then
+  # xUnit v3 console runner's own JUnit writer (the MTP --report-* flags exist only under `dotnet test`).
+  # A failing test still writes a valid report, so every producer runs and the first non-zero status is
+  # returned once the upload set is assembled; a producer that wrote no report fails the collection below.
+  dotnet run --project "$ROOT/tests/Canonicalization.UnitTests" -c Release -- \
+    -result-junit "$SRC/xunit.junit.xml" || PRODUCER_STATUS=$?
+  (cd "$ROOT/packages/adapter-junit" && npx vitest run --reporter=junit --outputFile="$SRC/vitest.junit.xml") \
+    || { s=$?; [[ "$PRODUCER_STATUS" != 0 ]] || PRODUCER_STATUS=$s; }
+  (cd "$ROOT/apps/web" && npx playwright test -c playwright.fixtures.config.ts e2e/shell/settings-policy \
+    --reporter=junit >"$SRC/playwright.junit.xml") \
+    || { s=$?; [[ "$PRODUCER_STATUS" != 0 ]] || PRODUCER_STATUS=$s; }
+fi
+
 python3 - "$SRC" "$OUT" <<'PY'
-import hashlib, json, shutil, sys
+import hashlib, json, sys
 import xml.etree.ElementTree as ET
+from xml.parsers import expat
 from pathlib import Path
+
+MAX_BYTES = 8 * 1024 * 1024
+
+
+def refuse_doctype(*_):
+    # expat reports the declaration whatever the encoding, unlike a byte search.
+    sys.exit("collect.sh: report declares a DOCTYPE")
+
 
 src, out = Path(sys.argv[1]), Path(sys.argv[2])
 producers = ["xunit", "vitest", "playwright"]
@@ -56,11 +79,16 @@ for producer in producers:
     path = src / name
     if not path.is_file():
         sys.exit(f"collect.sh: {producer}: missing report {path}")
+    if path.stat().st_size > MAX_BYTES:
+        sys.exit(f"collect.sh: {producer}: report exceeds {MAX_BYTES} bytes")
     data = path.read_bytes()
-    if b"<!DOCTYPE" in data:
-        sys.exit(f"collect.sh: {producer}: report declares a DOCTYPE")
     try:
+        scanner = expat.ParserCreate()
+        scanner.StartDoctypeDeclHandler = refuse_doctype
+        scanner.Parse(data, True)
         root = ET.fromstring(data)
+    except expat.ExpatError as error:
+        sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
     except ET.ParseError as error:
         sys.exit(f"collect.sh: {producer}: not well-formed XML ({error})")
     suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
@@ -76,8 +104,9 @@ for producer in producers:
         "failed": sum(1 for c in cases if c.find("failure") is not None or c.find("error") is not None),
         "skipped": sum(1 for c in cases if c.find("skipped") is not None),
     })
-    shutil.copyfile(path, out / name)
+    (out / name).write_bytes(data)
 manifest = {"schema": "dogfood-collect/1", "producers": entries}
 (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(manifest, indent=2))
 PY
+exit "$PRODUCER_STATUS"
