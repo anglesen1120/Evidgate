@@ -35,7 +35,11 @@ public sealed record ErrorDetail(
     string Path,
     string Reason,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    int? Index = null);
+    int? Index = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    long? Limit = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    long? Actual = null);
 
 /// <summary>Stable error codes shared by the pipeline's Result mapping and endpoint filters so failures use one wire vocabulary.</summary>
 public static class ApiErrorCode
@@ -160,6 +164,9 @@ public static class ApiErrorCode
 
     /// <summary>The request body exceeds the endpoint's limit (00 §9.2: 413 too large).</summary>
     public const string PayloadTooLarge = "payload_too_large";
+
+    /// <summary>422: an ingestion count exceeds its configured budget.</summary>
+    public const string CapExceeded = "cap_exceeded";
 
     /// <summary>422: a PATCH named an identity field of a test case (<c>annotation_id</c>, <c>file_path</c>, …) that never changes (03.1.1 §5).</summary>
     public const string CaseFieldImmutable = "case_field_immutable";

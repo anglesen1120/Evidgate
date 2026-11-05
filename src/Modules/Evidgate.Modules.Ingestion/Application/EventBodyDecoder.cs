@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Compression;
+using Evidgate.Modules.Ingestion.Contracts;
 
 namespace Evidgate.Modules.Ingestion.Application;
 

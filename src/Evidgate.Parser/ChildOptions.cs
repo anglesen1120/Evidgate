@@ -46,16 +46,19 @@ internal sealed class ChildOptions
     private const string MediaTypeOption = "--media-type";
     private const string CpuSecondsOption = "--cpu-seconds";
     private const string MaxFileBytesOption = "--max-file-bytes";
+    private const string MaxCasesOption = "--max-cases";
 
     private ChildOptions(
         ParseProfile profile,
         long maxBytes,
         string? mediaType,
         long? cpuSeconds,
-        long? maxFileBytes)
+        long? maxFileBytes,
+        long maxCases)
     {
         Profile = profile;
         MaxBytes = maxBytes;
+        MaxCases = maxCases;
         MediaType = mediaType;
         CpuSeconds = cpuSeconds;
         MaxFileBytes = maxFileBytes;
@@ -63,6 +66,9 @@ internal sealed class ChildOptions
 
     /// <summary>Which arm of the profile this run applies.</summary>
     public ParseProfile Profile { get; }
+
+    /// <summary>The report entry cap (<c>--max-cases</c>), defaulting to the profile's published value.</summary>
+    public long MaxCases { get; }
 
     /// <summary>
     /// The per-kind byte cap from <c>artifact_kind_policy.max_bytes</c> (always positive), clamped to the largest
@@ -109,6 +115,7 @@ internal sealed class ChildOptions
         var mediaTypeGiven = false;
         long? cpuSeconds = null;
         long? maxFileBytes = null;
+        long? maxCases = null;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -170,8 +177,20 @@ internal sealed class ChildOptions
                     maxFileBytes = parsedMaxFileBytes;
                     break;
 
+                case MaxCasesOption:
+                    if (maxCases is not null
+                        || !TryTakeValue(args, ref index, out var maxCasesValue)
+                        || !long.TryParse(maxCasesValue, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedMaxCases)
+                        || parsedMaxCases <= 0)
+                    {
+                        return false;
+                    }
+
+                    maxCases = parsedMaxCases;
+                    break;
+
                 default:
-                    // A positional argument or an unknown switch: the contract has exactly five options.
+                    // A positional argument or an unknown switch: the contract has exactly six options.
                     return false;
             }
         }
@@ -181,7 +200,13 @@ internal sealed class ChildOptions
             return false;
         }
 
-        options = new ChildOptions(profile.Value, maxBytes.Value, mediaType, cpuSeconds, maxFileBytes);
+        options = new ChildOptions(
+            profile.Value,
+            maxBytes.Value,
+            mediaType,
+            cpuSeconds,
+            maxFileBytes,
+            maxCases ?? ParsingService.DefaultMaxReportCases);
 
         return true;
     }

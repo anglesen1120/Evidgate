@@ -64,7 +64,7 @@ internal static class ReleaseEndpoints
         }
 
         var (bytes, tooLarge) = await OrchestratorEndpoints
-            .ReadBodyAsync(context, MaxReleaseBytes, cancellationToken)
+            .ReadBodyAsync(context, MaxReleaseBytes, null, cancellationToken)
             .ConfigureAwait(false);
         if (tooLarge is not null)
         {

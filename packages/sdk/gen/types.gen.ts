@@ -17,6 +17,14 @@ export type ErrorEnvelope = {
             index?: number;
             path?: string;
             reason: string;
+            /**
+             * The cap that refused the value, present only when the reason names one (`cap_exceeded`, `payload_too_large`); omitted otherwise.
+             */
+            limit?: number;
+            /**
+             * The value the server measured against `limit`, present only alongside it: the declared length, or the bytes counted when the overrun was seen; omitted otherwise.
+             */
+            actual?: number;
         }>;
     };
 };
@@ -2502,7 +2510,7 @@ export type CapabilityV1 = {
 /**
  * Manifest v1
  *
- * The run manifest accepted by POST /v1/projects/{p}/manifests (05.1.1-T1.1/T1.2, 00 §9.3). It declares the suite revision, the planned executions (case revision × variant params × target env), the matrix those executions cover, the shard plan that partitions them and the per-environment needs. Bounds are encoded here: at most 10000 planned executions, 256 shards, 32 target environments, 32 variant params; the transport cap is 256 KiB [DECISION 05.1.1 §8]. Semantic checks — unknown case revision, secret literal in variant params, matrix coverage — are 05.1.1-T2's; this schema only fixes the shape.
+ * The run manifest accepted by POST /v1/projects/{p}/manifests (05.1.1-T1.1/T1.2, 00 §9.3). It declares the suite revision, the planned executions (case revision × variant params × target env), the matrix those executions cover, the shard plan that partitions them and the per-environment needs. Bounds are encoded here: at most 1000000 planned executions and 1000000 matrix case revisions (the largest configurable MaxManifestExecutions), 256 shards, 32 target environments, 1000 variants in the matrix (the largest configurable MaxManifestVariants); the transport cap is 33554432 bytes (32 MiB, the published manifest_bytes cap of 04.1.3-T1, which a deployment may lower through EVIDGATE__INGESTION__MAXMANIFESTBYTES). The configured caps are what refuse a plan over their value, with 422 cap_exceeded. Semantic checks — unknown case revision, secret literal in variant params, matrix coverage — are 05.1.1-T2's; this schema only fixes the shape.
  */
 export type ManifestV1 = {
     schema_version: 1;
@@ -3439,11 +3447,11 @@ export type ExchangeCiTokenErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -3560,11 +3568,11 @@ export type StageInviteTokenData = {
 
 export type StageInviteTokenErrors = {
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -3601,11 +3609,11 @@ export type CreateDevSessionErrors = {
      */
     403: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -3661,11 +3669,11 @@ export type StartProviderLinkErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -3884,11 +3892,11 @@ export type UpdateMyProfileErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4016,11 +4024,11 @@ export type RevokeAllSessionsErrors = {
      */
     403: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4116,11 +4124,11 @@ export type CreateManifestErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4209,7 +4217,7 @@ export type ListRunsErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4270,11 +4278,11 @@ export type CreateRunErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4370,7 +4378,7 @@ export type ListRunAttemptsErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4430,7 +4438,7 @@ export type ListEvidenceRevisionsErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4491,11 +4499,11 @@ export type CancelRunErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4550,11 +4558,11 @@ export type PostRunEventsErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4636,11 +4644,11 @@ export type FinalizeRunErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4706,11 +4714,11 @@ export type CreateArtifactUploadUrlErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4771,7 +4779,7 @@ export type CompleteArtifactErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4878,7 +4886,7 @@ export type RerunRunErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -4942,11 +4950,11 @@ export type CreateEnvironmentRevisionErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -5100,11 +5108,11 @@ export type ActivatePolicyRevisionErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -5165,11 +5173,11 @@ export type CreatePolicyRevisionErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -5322,7 +5330,7 @@ export type ListPolicyRevisionsErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -5435,7 +5443,7 @@ export type ReprocessRunErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -5604,7 +5612,7 @@ export type BindReleaseRunErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -5951,7 +5959,7 @@ export type SetRetentionPolicyErrors = {
      */
     415: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -5994,7 +6002,7 @@ export type ListMyOrganizationsErrors = {
      */
     403: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -6049,7 +6057,7 @@ export type CreateOrganizationErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -6161,7 +6169,7 @@ export type UpdateOrganizationErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -6214,7 +6222,7 @@ export type ListProjectsErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -6275,7 +6283,7 @@ export type CreateProjectErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -6387,7 +6395,7 @@ export type UpdateProjectErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -6440,7 +6448,7 @@ export type ListMembershipsErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -6501,7 +6509,7 @@ export type CreateMembershipErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -6673,7 +6681,7 @@ export type UpdateMembershipErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -6843,7 +6851,7 @@ export type GrantMembershipRoleErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -6949,7 +6957,7 @@ export type ListPermissionsErrors = {
      */
     403: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -6996,7 +7004,7 @@ export type ListRolesErrors = {
      */
     403: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7051,7 +7059,7 @@ export type CreateRoleErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7116,7 +7124,7 @@ export type UpdateRoleErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7169,7 +7177,7 @@ export type ListCiBindingsErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7226,7 +7234,7 @@ export type CreateCiBindingErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7348,7 +7356,7 @@ export type UpdateCiBindingErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7401,7 +7409,7 @@ export type ListIngestTokensErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7454,7 +7462,7 @@ export type CreateIngestTokenErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7624,7 +7632,7 @@ export type ListAuditErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7684,7 +7692,7 @@ export type ExportAuditErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7743,7 +7751,7 @@ export type RequestSupportGrantErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7802,7 +7810,7 @@ export type ApproveSupportGrantErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7928,7 +7936,7 @@ export type ListSecurityEventsErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -7983,7 +7991,7 @@ export type ListCasesErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -8049,7 +8057,7 @@ export type SetCaseRequirementRefErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -8161,7 +8169,7 @@ export type UpdateCaseErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -8214,7 +8222,7 @@ export type ListCaseRevisionsErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -8279,7 +8287,7 @@ export type ListSuitesErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -8340,7 +8348,7 @@ export type CreateSuiteErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -8449,7 +8457,7 @@ export type CreateSuiteRevisionErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -8545,7 +8553,7 @@ export type GetSuiteRevisionDiffErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -8585,7 +8593,7 @@ export type ReceiveGithubWebhookErrors = {
      */
     401: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -8858,7 +8866,7 @@ export type LabelIncidentErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -8996,7 +9004,7 @@ export type ClaimJobErrors = {
      */
     403: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -9113,7 +9121,7 @@ export type ApproveHealingCandidateErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -9174,7 +9182,7 @@ export type RevokeHealingCandidateErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -9325,7 +9333,7 @@ export type RejectHealingCandidateErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -9424,7 +9432,7 @@ export type SetHealingSwitchErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -9483,7 +9491,7 @@ export type CreateWaiverErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -9650,7 +9658,7 @@ export type ListProjectWaiversErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -9709,7 +9717,7 @@ export type CreateQuarantineEntryErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -9815,7 +9823,7 @@ export type ListQuarantineEntriesErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -9880,7 +9888,7 @@ export type ListAuthoringTreeErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -9945,11 +9953,11 @@ export type CreateAuthoringNodeErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10026,11 +10034,11 @@ export type DeleteAuthoringNodeErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10107,11 +10115,11 @@ export type UpdateAuthoringNodeErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10188,11 +10196,11 @@ export type ReorderAuthoringNodesErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10269,7 +10277,7 @@ export type RestoreAuthoringNodeErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10334,7 +10342,7 @@ export type ListChecklistItemsErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10399,11 +10407,11 @@ export type CreateChecklistItemErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10480,11 +10488,11 @@ export type DeleteChecklistItemErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10561,11 +10569,11 @@ export type UpdateChecklistItemErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10642,7 +10650,7 @@ export type RestoreChecklistItemErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10711,7 +10719,7 @@ export type ListAuthoringChangesErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10776,11 +10784,11 @@ export type QueueAuthoringChangeErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10896,7 +10904,7 @@ export type DiscardAuthoringChangeErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -10969,11 +10977,11 @@ export type ApplyAuthoringChangesErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -11050,7 +11058,7 @@ export type ListManualCasesErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -11115,11 +11123,11 @@ export type CreateManualCaseErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -11196,11 +11204,11 @@ export type DeleteManualCaseErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -11324,11 +11332,11 @@ export type UpdateManualCaseErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -11405,11 +11413,11 @@ export type SetManualCaseStateErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -11486,11 +11494,11 @@ export type MoveManualCaseErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -11567,7 +11575,7 @@ export type RestoreManualCaseErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -11636,11 +11644,11 @@ export type LinkManualCaseErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -11790,7 +11798,7 @@ export type ListAuthoringVersionsErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -11906,7 +11914,7 @@ export type RestoreAuthoringVersionErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -11980,11 +11988,11 @@ export type ImportAuthoringErrors = {
      */
     409: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -12044,11 +12052,11 @@ export type ExportAuthoringErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -12164,11 +12172,11 @@ export type SaveProjectAiSettingsErrors = {
      */
     412: ErrorEnvelope;
     /**
-     * 413 too large (00 §9.2)
+     * 413 too large (00 §9.2): a request body over its published cap. For the caps that carry numbers (`manifest_bytes`, `run_body_bytes`, and the raw-report byte cap behind `report_bytes`) the one detail names the cap in `path` and carries `limit` and `actual`; `actual` is the declared length when the declaration alone was over, otherwise the bytes counted when the overrun was seen, so a missing or short `Content-Length` never hides it.
      */
     413: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**
@@ -12225,7 +12233,7 @@ export type ListProjectAiSettingsVersionsErrors = {
      */
     404: ErrorEnvelope;
     /**
-     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2)
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
     /**

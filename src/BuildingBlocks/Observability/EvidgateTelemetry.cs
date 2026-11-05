@@ -40,8 +40,15 @@ public static class EvidgateTelemetry
     /// <summary>Counter of adapter capabilities refused at first send, tagged by code and protocol-major bucket (04.7.1-T2).</summary>
     public const string AdapterCapabilityRejectedMetricName = "evidgate_adapter_capability_rejected_total";
 
-    /// <summary>Counter of event batches refused by a transport or decode cap, tagged by reason (04.1.1-T3).</summary>
+    /// <summary>Counter of event batches refused by a transport or decode cap, tagged by reason.</summary>
     public const string IngestBatchRejectedMetricName = "evidgate_ingest_batch_rejected_total";
+
+    /// <summary>
+    /// Counter of ingestion requests refused by one published cap, tagged by the cap name only
+    /// (<c>manifest_bytes</c>, <c>manifest_executions</c>, <c>manifest_variants</c>, <c>report_cases</c>,
+    /// <c>report_bytes</c>, <c>run_body_bytes</c>). Never labelled with a value, an id or a body.
+    /// </summary>
+    public const string IngestCapExceededMetricName = "evidgate_ingest_cap_exceeded_total";
 
     /// <summary>Counter of case attempts written inside a caller's tenant transaction, tagged by normalised status (05.3.3-T2.1).</summary>
     public const string CaseAttemptWrittenMetricName = "evidgate_case_attempt_written_total";
@@ -117,6 +124,11 @@ public static class EvidgateTelemetry
         IngestBatchRejectedMetricName,
         unit: "{batch}",
         description: "Event batches refused by a transport or decode cap, by reason (04.1.1). Never labelled with a body, an event id or any request value.");
+
+    private static readonly Counter<long> IngestCapExceeded = Meter.CreateCounter<long>(
+        IngestCapExceededMetricName,
+        unit: "{request}",
+        description: "Ingestion requests refused by one published cap, by cap name. Never labelled with a value, an id or a body.");
 
     private static readonly Counter<long> CaseAttemptsWritten = Meter.CreateCounter<long>(
         CaseAttemptWrittenMetricName,
@@ -208,6 +220,23 @@ public static class EvidgateTelemetry
     /// <param name="reason">The reason token; never a value from the manifest.</param>
     public static void RecordManifestRejected(string reason) =>
         ManifestRejections.Add(1, new KeyValuePair<string, object?>("reason", reason));
+
+    /// <summary>Span tag carrying the cap that refused an ingestion request, e.g. <c>manifest_bytes</c>.</summary>
+    public const string IngestCapTag = "ingest.cap";
+
+    /// <summary>Counts one ingestion request refused by <paramref name="cap"/> and tags its trace, so a refusal shows in both.</summary>
+    /// <param name="cap">One of the closed cap names; never a value from the request.</param>
+    public static void RecordIngestCapExceeded(string cap)
+    {
+        // A name outside the closed set collapses to "other" so a refusal path never throws and the label stays bounded.
+        cap = IsCapName(cap) ? cap : "other";
+
+        IngestCapExceeded.Add(1, new KeyValuePair<string, object?>("cap", cap));
+        Activity.Current?.SetTag(IngestCapTag, cap);
+    }
+
+    private static bool IsCapName(string cap) =>
+        cap is "manifest_bytes" or "manifest_executions" or "manifest_variants" or "report_cases" or "report_bytes" or "run_body_bytes";
 
     /// <summary>
     /// Counts one adapter capability refused at first send (04.7.1-T2), tagged by the
