@@ -1,0 +1,24 @@
+{
+  "operation_id": "getRunDecision",
+  "variant": "evaluated-fail-missing-shard",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000dc02"
+  },
+  "latency_ms": 0,
+  "body": {
+    "status": "evaluated",
+    "decision": "FAIL",
+    "evaluation_id": "018f0000-0000-7000-8000-0000000e0002",
+    "evidence_revision": 2,
+    "completeness": "incomplete",
+    "outcome": "has_failures",
+    "missing": ["missing_shard"],
+    "reasons": ["missing_shard"],
+    "policy_hash": "sha256:018f00000000000000000000000000000000000000000000000000000000a004",
+    "manifest_hash": "sha256:018f000000000000000000000000000000000000000000000000000000000000",
+    "evaluator_version": "evidgate-evaluator/1.4.0",
+    "mode": "live",
+    "url": "https://app.evidgate.example/runs/018f0000-0000-7000-8000-000000000071"
+  }
+}

@@ -8,7 +8,7 @@
 // where the label itself is the contract (the newer-revision banner), and then both locales are
 // asserted separately.
 import { expect, test, type Page } from '@playwright/test';
-import { EVIDENCE_REVISIONS_PAGE } from '../../src/app/core/dev-fixtures/evidence-revision-fixtures';
+import revisionsDocument from '../../../../fixtures/web-api/run-evidence-revisions/input.json';
 import {
   runDetailPath,
   type RunDecisionVariant,
@@ -23,7 +23,7 @@ import {
 } from './support';
 
 /** Revisions arrive newest first: the newest is the default pin, the incomplete one is 2. */
-const REVISIONS = EVIDENCE_REVISIONS_PAGE.items;
+const REVISIONS = revisionsDocument.body.items;
 const NEWEST_REVISION = REVISIONS[0]!;
 const INCOMPLETE_REVISION = REVISIONS[1]!;
 const OLDEST_REVISION = REVISIONS[2]!;

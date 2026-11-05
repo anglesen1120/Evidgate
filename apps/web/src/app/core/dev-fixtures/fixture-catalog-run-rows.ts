@@ -7,6 +7,14 @@ import runAttemptsEmpty from '../../../../../../fixtures/web-api/run-attempts-em
 import runAttemptsPage1 from '../../../../../../fixtures/web-api/run-attempts-page-1/input.json';
 import runAttemptsPage2 from '../../../../../../fixtures/web-api/run-attempts-page-2/input.json';
 import runAttemptsUnavailable from '../../../../../../fixtures/web-api/run-attempts-unavailable/input.json';
+import runDecision from '../../../../../../fixtures/web-api/run-decision/input.json';
+import runDecisionEvaluatedFailMissingShard from '../../../../../../fixtures/web-api/run-decision-evaluated-fail-missing-shard/input.json';
+import runDecisionEvaluatedPass from '../../../../../../fixtures/web-api/run-decision-evaluated-pass/input.json';
+import runDecisionShadowRefused from '../../../../../../fixtures/web-api/run-decision-shadow-refused/input.json';
+import runDecisionUnavailable from '../../../../../../fixtures/web-api/run-decision-unavailable/input.json';
+import runEvidenceRevisions from '../../../../../../fixtures/web-api/run-evidence-revisions/input.json';
+import runEvidenceRevisionsEmpty from '../../../../../../fixtures/web-api/run-evidence-revisions-empty/input.json';
+import runEvidenceRevisionsUnavailable from '../../../../../../fixtures/web-api/run-evidence-revisions-unavailable/input.json';
 import runDetail from '../../../../../../fixtures/web-api/run-detail/input.json';
 import runDetailForbidden from '../../../../../../fixtures/web-api/run-detail-forbidden/input.json';
 import runDetailNotFound from '../../../../../../fixtures/web-api/run-detail-not-found/input.json';
@@ -36,9 +44,6 @@ import suiteRevisionNotFound from '../../../../../../fixtures/web-api/suite-revi
 import suiteRevisionPublished from '../../../../../../fixtures/web-api/suite-revision-published/input.json';
 import suiteRevisionUnavailable from '../../../../../../fixtures/web-api/suite-revision-unavailable/input.json';
 
-import { DECISION_DOCUMENTS } from './decision-fixtures';
-import { EVIDENCE_REVISION_DOCUMENTS } from './evidence-revision-fixtures';
-
 import type { FixtureCatalogRow } from './fixture-document';
 
 export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
@@ -51,40 +56,22 @@ export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
     cursor: 'attempts-cursor-after-checkout-2',
   },
   { name: 'run-attempts-unavailable', document: runAttemptsUnavailable },
-  { name: 'run-decision', document: DECISION_DOCUMENTS['run-decision'] },
+  { name: 'run-decision', document: runDecision },
   {
     name: 'run-decision-evaluated-fail-missing-shard',
-    document: DECISION_DOCUMENTS['run-decision-evaluated-fail-missing-shard'],
+    document: runDecisionEvaluatedFailMissingShard,
   },
-  {
-    name: 'run-decision-evaluated-pass',
-    document: DECISION_DOCUMENTS['run-decision-evaluated-pass'],
-  },
-  {
-    name: 'run-decision-shadow-refused',
-    document: DECISION_DOCUMENTS['run-decision-shadow-refused'],
-  },
-  {
-    name: 'run-decision-unavailable',
-    document: DECISION_DOCUMENTS['run-decision-unavailable'],
-  },
+  { name: 'run-decision-evaluated-pass', document: runDecisionEvaluatedPass },
+  { name: 'run-decision-shadow-refused', document: runDecisionShadowRefused },
+  { name: 'run-decision-unavailable', document: runDecisionUnavailable },
   { name: 'run-detail', document: runDetail },
   { name: 'run-detail-forbidden', document: runDetailForbidden },
   { name: 'run-detail-not-found', document: runDetailNotFound },
   { name: 'run-detail-null-evidence', document: runDetailNullEvidence },
   { name: 'run-detail-ref-format', document: runDetailRefFormat },
-  {
-    name: 'run-evidence-revisions',
-    document: EVIDENCE_REVISION_DOCUMENTS['run-evidence-revisions'],
-  },
-  {
-    name: 'run-evidence-revisions-empty',
-    document: EVIDENCE_REVISION_DOCUMENTS['run-evidence-revisions-empty'],
-  },
-  {
-    name: 'run-evidence-revisions-unavailable',
-    document: EVIDENCE_REVISION_DOCUMENTS['run-evidence-revisions-unavailable'],
-  },
+  { name: 'run-evidence-revisions', document: runEvidenceRevisions },
+  { name: 'run-evidence-revisions-empty', document: runEvidenceRevisionsEmpty },
+  { name: 'run-evidence-revisions-unavailable', document: runEvidenceRevisionsUnavailable },
   { name: 'run-list', document: runList },
   { name: 'run-list-250', document: runList250 },
   { name: 'run-list-empty', document: runListEmpty },
