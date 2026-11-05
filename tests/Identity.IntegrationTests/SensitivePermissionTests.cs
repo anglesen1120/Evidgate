@@ -302,8 +302,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         ];
 
         // The routes whose path names a resource the identity routes do not create:
-        // a case, a suite, two of its revisions, an environment revision and a policy
-        // revision. Seeded here so the scan addresses every served GET route.
+        // a case, a suite, two of its revisions, a fixture, an environment revision and a
+        // policy revision. Seeded here so the scan addresses every served GET route.
         var seeded = await SeedReadableResourcesAsync(factory, client, org, project);
 
         var served = ServedRouteTable.From(factory.Services)
@@ -370,6 +370,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ("/v1/suites/{s}", seeded.SuiteId),
             ("/v1/suite-revisions/{r}", seeded.SuiteRevisionId),
             ("/v1/suite-revisions/{r}/diff", seeded.OtherSuiteRevisionId),
+            ("/v1/fixtures/{f}", seeded.FixtureId),
             ("/v1/environment-revisions/{id}", seeded.EnvironmentRevisionId),
             ("/v1/policies/{id}", seeded.PolicyRevisionId),
             ("/v1/policies/{id}/revisions", seeded.PolicyRevisionId),
@@ -434,10 +435,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     /// <summary>
     /// The served GET routes this scan addresses with the ids it really has: the
     /// seeded org and project, the seeded membership, the two created objects' list
-    /// routes, and the case, suite, suite revisions, environment revision, policy
-    /// revision and run <see cref="SeedReadableResourcesAsync"/> arranges. Keyed by the
-    /// normalised template <see cref="ServedRouteTable"/> reports, valued by the URL
-    /// to call.
+    /// routes, and the case, suite, suite revisions, fixture, environment revision,
+    /// policy revision and run <see cref="SeedReadableResourcesAsync"/> arranges.
+    /// Keyed by the normalised template <see cref="ServedRouteTable"/> reports,
+    /// valued by the URL to call.
     /// </summary>
     private static Dictionary<string, string> CallableGetRoutes(
         Guid org,
@@ -503,6 +504,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/suite-revisions/{r}"] = $"/v1/suite-revisions/{seeded.SuiteRevisionId}",
             ["/v1/suite-revisions/{r}/diff"] =
                 $"/v1/suite-revisions/{seeded.SuiteRevisionId}/diff?against={seeded.OtherSuiteRevisionId}",
+            // The fixture list and detail: one fixture was created with its first revision, so the list carries a
+            // row and the detail answers its head revision — ids, keys, a hash and a `body_ref` pointer, no secret.
+            ["/v1/projects/{p}/fixtures"] = $"/v1/projects/{project}/fixtures",
+            ["/v1/fixtures/{f}"] = $"/v1/fixtures/{seeded.FixtureId}",
             ["/v1/environment-revisions/{id}"] = $"/v1/environment-revisions/{seeded.EnvironmentRevisionId}",
             ["/v1/policies/{id}"] = $"/v1/policies/{seeded.PolicyRevisionId}",
             ["/v1/policies/{id}/revisions"] = $"/v1/policies/{seeded.PolicyRevisionId}/revisions",
@@ -530,7 +535,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     /// skipped: a case and its revision through the catalog module's own discovery
     /// service (03.1.1 — no served route creates a case), a suite and two of its
     /// revisions through the served routes as the same <c>tenant_admin</c> (it holds
-    /// <c>suite:write</c>), an environment revision through the served route (which
+    /// <c>suite:write</c>), a fixture with its first revision (the same role holds
+    /// <c>fixture:write</c>), an environment revision through the served route (which
     /// creates its environment), and a policy revision through the harness's owner
     /// seam (<c>tenant_admin</c> does not hold <c>policy:write</c>, 00 §2). The run of
     /// 05.3.1 needs a verified manifest, so one is uploaded and one run created
@@ -556,6 +562,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         var environmentRevisionId = await CreateEnvironmentRevisionAsync(client, project);
         var policyRevisionId = await SeedPolicyRevisionAsync(org, project);
 
+        // A fixture with its first revision, so the list answers a row and the detail answers it with its head;
+        // `tenant_admin` holds `fixture:write`, so the served create route is the seeding path.
+        var fixtureId = await CreateFixtureAsync(client, project);
+
         // 05.3.1-T1: a manifest and one run of it. Nothing else creates a run (the
         // create route needs a verified manifest), so GET /v1/runs/{r} would be
         // unaddressable — and the scan would miss the route — without both.
@@ -574,7 +584,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             environmentRevisionId,
             policyRevisionId,
             runId,
-            releaseId);
+            releaseId,
+            fixtureId);
     }
 
     /// <summary>
@@ -655,6 +666,20 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
 
         using var document = JsonDocument.Parse(text);
         return document.RootElement.GetProperty("suite_revision_id").GetGuid();
+    }
+
+    /// <summary>Creates a fixture with its first revision through the served route and returns its id.</summary>
+    private static async Task<Guid> CreateFixtureAsync(HttpClient client, Guid project)
+    {
+        var (status, body) = await PostAsync(
+            client,
+            $"/v1/projects/{project}/fixtures",
+            new { FixtureKey = "ac5-probe", SeedVersion = "v1", BodyRef = "fixtures/ac5-probe.json" });
+
+        status.ShouldBe(HttpStatusCode.Created, body);
+
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("fixture_id").GetGuid();
     }
 
     /// <summary>
@@ -839,7 +864,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         Guid EnvironmentRevisionId,
         Guid PolicyRevisionId,
         Guid RunId,
-        Guid ReleaseId);
+        Guid ReleaseId,
+        Guid FixtureId);
 
     /// <summary>The id of the seeded member's membership, read under RLS as the org.</summary>
     private async Task<Guid> MembershipIdAsync(Guid org, Guid userId)

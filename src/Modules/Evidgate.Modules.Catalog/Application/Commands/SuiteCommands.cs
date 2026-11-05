@@ -176,6 +176,7 @@ internal sealed class CreateSuiteRevisionCommandHandler(
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant,
     SuiteRevisionPlanner planner,
+    IFixtureRegistry fixtures,
     IAuditTrail audit)
     : ICommandHandler<CreateSuiteRevisionCommand, Result<SuiteRevisionHead>>
 {
@@ -203,7 +204,7 @@ internal sealed class CreateSuiteRevisionCommandHandler(
         // The taxonomy the suite held at the peek. A request that omits a member inherits it, so it must inherit from
         // the row the write commits against, not from a row a concurrent revision may have replaced (see the re-plan).
         var peekedTaxonomy = peek.AsTaxonomy();
-        var planned = await planner.PlanAsync(db, peek.ProjectId, command.Body, peekedTaxonomy, cancellationToken).ConfigureAwait(false);
+        var planned = await planner.PlanAsync(db, fixtures, peek.ProjectId, command.Body, peekedTaxonomy, cancellationToken).ConfigureAwait(false);
         if (!planned.IsSuccess)
         {
             return Result.Failure<SuiteRevisionHead>(planned.Error!);
@@ -240,7 +241,7 @@ internal sealed class CreateSuiteRevisionCommandHandler(
         // `purpose` would silently revert the newer value and the hash would pin the reverted taxonomy.
         if (suite.AsTaxonomy() != peekedTaxonomy)
         {
-            var replanned = await planner.PlanAsync(db, suite.ProjectId, command.Body, suite.AsTaxonomy(), cancellationToken).ConfigureAwait(false);
+            var replanned = await planner.PlanAsync(db, fixtures, suite.ProjectId, command.Body, suite.AsTaxonomy(), cancellationToken).ConfigureAwait(false);
             if (!replanned.IsSuccess)
             {
                 return Result.Failure<SuiteRevisionHead>(replanned.Error!);

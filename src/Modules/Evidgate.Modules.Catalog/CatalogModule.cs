@@ -27,6 +27,8 @@ internal static class CatalogModule
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<UpdateCaseCommand>, UpdateCaseCommandValidator>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateSuiteCommand>, CreateSuiteCommandValidator>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateFixtureCommand>, CreateFixtureCommandValidator>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateFixtureRevisionCommand>, CreateFixtureRevisionCommandValidator>());
 
         // The sidecar reader validates against contracts/catalog/sidecar.v1.json; the compiled set is built on first
         // use, so a host that never syncs a tree pays nothing at start-up.
@@ -41,6 +43,10 @@ internal static class CatalogModule
         services.TryAddScoped<ITestRevisionStore, TestRevisionStore>();
         services.TryAddSingleton<SuiteRevisionPlanner>();
         services.TryAddScoped<ICatalogContracts, CatalogContracts>();
+
+        // The suite write path asks this for the fixture references a revision authors; it reads inside the caller's
+        // tenant transaction, like every other catalog read.
+        services.TryAddScoped<IFixtureRegistry, FixtureRegistry>();
 
         return services;
     }

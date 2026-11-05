@@ -165,6 +165,14 @@ internal static class SchemaConventionScan
             "public.release_run",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only binding rows (05.6.1-T1 table, T2 writer; migration 0072): the app role holds SELECT + INSERT and UPDATE/DELETE are revoked, and the `release_run_immutable` trigger refuses both for every role, so a binding is written once and keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs (release, run), uniqueness and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.fixture",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "A fixture is an identity that never changes (03.3.1-T1; migration 0074): the app role holds SELECT + INSERT, UPDATE/DELETE are revoked, and `fixture_immutable` raises 23514 for every role, so the row keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs, the four-column identity key and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.fixture_revision",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only fixture versions (03.3.1-T1; migration 0074): the app role holds SELECT + INSERT, UPDATE/DELETE are revoked and `fixture_revision_immutable` raises 23514 for every role, so a revision is written once and keeps created_at only — no updated_at/version and no version trigger. Identical content is answered by `fixture_revision_hash_key` instead of a version bump. Its tenant key, composite FK (fixture, project and key in one key) and RLS are NOT exempt."),
     ];
 
     /// <summary>
