@@ -878,6 +878,77 @@ export type PolicyRevisionListResponse = {
  */
 export type JsonElement = unknown;
 
+export type FixtureDto = {
+    id: string;
+    org_id: string;
+    project_id: string;
+    fixture_key: string;
+    head_revision_id?: string | null;
+    head_revision_no?: number | null;
+    head_revision_hash?: string | null;
+    created_at: string;
+};
+
+export type FixtureListResponse = {
+    items: Array<FixtureDto>;
+    next_cursor: string | null;
+};
+
+/**
+ * One immutable fixture revision; `body_ref` is a pointer, never the body.
+ */
+export type FixtureRevisionDto = {
+    id: string;
+    fixture_id: string;
+    revision_no: number;
+    revision_hash: string;
+    seed_version: string;
+    timeout_s: number;
+    cleanup_policy: 'drop' | 'truncate' | 'none';
+    resource_prefix: string;
+    body_ref: string;
+    created_at: string;
+};
+
+export type FixtureDetailDto = {
+    id: string;
+    org_id: string;
+    project_id: string;
+    fixture_key: string;
+    created_at: string;
+    head?: FixtureRevisionDto | null;
+};
+
+export type CreateFixtureRequest = {
+    fixture_key: string;
+    seed_version: string;
+    /**
+     * A repository-relative path or an artifact id; never inline content (no whitespace).
+     */
+    body_ref: string;
+    timeout_s?: number;
+    cleanup_policy?: 'drop' | 'truncate' | 'none';
+};
+
+export type CreateFixtureRevisionRequest = {
+    seed_version: string;
+    /**
+     * A repository-relative path or an artifact id; never inline content (no whitespace).
+     */
+    body_ref: string;
+    timeout_s?: number;
+    cleanup_policy?: 'drop' | 'truncate' | 'none';
+};
+
+export type FixtureRevisionHead = {
+    fixture_id: string;
+    fixture_key: string;
+    revision_id: string;
+    revision_no: number;
+    revision_hash: string;
+    created: boolean;
+};
+
 export type SuiteDto = {
     id: string;
     org_id: string;
@@ -3238,6 +3309,8 @@ export type EnvironmentSlug = string;
 export type SupportGrantId = string;
 
 export type SuiteId = string;
+
+export type FixtureId = string;
 
 export type CaseStatusFilter = 'active' | 'missing' | 'archived';
 
@@ -8245,6 +8318,224 @@ export type ListCaseRevisionsResponses = {
 };
 
 export type ListCaseRevisionsResponse = ListCaseRevisionsResponses[keyof ListCaseRevisionsResponses];
+
+export type ListFixturesData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/fixtures';
+};
+
+export type ListFixturesErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListFixturesError = ListFixturesErrors[keyof ListFixturesErrors];
+
+export type ListFixturesResponses = {
+    /**
+     * Page of fixtures
+     */
+    200: FixtureListResponse;
+};
+
+export type ListFixturesResponse = ListFixturesResponses[keyof ListFixturesResponses];
+
+export type CreateFixtureData = {
+    body: CreateFixtureRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/fixtures';
+};
+
+export type CreateFixtureErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateFixtureError = CreateFixtureErrors[keyof CreateFixtureErrors];
+
+export type CreateFixtureResponses = {
+    /**
+     * The fixture with its first revision
+     */
+    201: FixtureRevisionHead;
+};
+
+export type CreateFixtureResponse = CreateFixtureResponses[keyof CreateFixtureResponses];
+
+export type GetFixtureData = {
+    body?: never;
+    path: {
+        f: string;
+    };
+    query?: never;
+    url: '/fixtures/{f}';
+};
+
+export type GetFixtureErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetFixtureError = GetFixtureErrors[keyof GetFixtureErrors];
+
+export type GetFixtureResponses = {
+    /**
+     * The fixture and its head revision
+     */
+    200: FixtureDetailDto;
+};
+
+export type GetFixtureResponse = GetFixtureResponses[keyof GetFixtureResponses];
+
+export type CreateFixtureRevisionData = {
+    body: CreateFixtureRevisionRequest;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        f: string;
+    };
+    query?: never;
+    url: '/fixtures/{f}/revisions';
+};
+
+export type CreateFixtureRevisionErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateFixtureRevisionError = CreateFixtureRevisionErrors[keyof CreateFixtureRevisionErrors];
+
+export type CreateFixtureRevisionResponses = {
+    /**
+     * Existing revision with identical content
+     */
+    200: FixtureRevisionHead;
+    /**
+     * Revision appended
+     */
+    201: FixtureRevisionHead;
+};
+
+export type CreateFixtureRevisionResponse = CreateFixtureRevisionResponses[keyof CreateFixtureRevisionResponses];
 
 export type ListSuitesData = {
     body?: never;

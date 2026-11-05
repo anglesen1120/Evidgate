@@ -317,7 +317,8 @@ internal sealed class PreviewSuiteRevisionQueryHandler(
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant,
-    SuiteRevisionPlanner planner)
+    SuiteRevisionPlanner planner,
+    IFixtureRegistry fixtures)
     : IQueryHandler<PreviewSuiteRevisionQuery, Result<SuiteRevisionHead>>
 {
     /// <inheritdoc />
@@ -337,7 +338,7 @@ internal sealed class PreviewSuiteRevisionQueryHandler(
             return Result.Failure<SuiteRevisionHead>(SuiteErrors.Archived);
         }
 
-        var planned = await planner.PlanAsync(db, suite.ProjectId, query.Body, suite.AsTaxonomy(), cancellationToken).ConfigureAwait(false);
+        var planned = await planner.PlanAsync(db, fixtures, suite.ProjectId, query.Body, suite.AsTaxonomy(), cancellationToken).ConfigureAwait(false);
         if (!planned.IsSuccess)
         {
             return Result.Failure<SuiteRevisionHead>(planned.Error!);
