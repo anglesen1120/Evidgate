@@ -40,8 +40,8 @@ public sealed partial class ReleaseIntegrationTests
         release.GetProperty("created_by").GetString().ShouldBe($"user:{world.User:D}");
         release.GetProperty("created_at").GetDateTimeOffset().ShouldBeGreaterThan(DateTimeOffset.UtcNow.AddMinutes(-15));
         release.GetProperty("version").GetInt32().ShouldBe(1);
-        release.TryGetProperty("bound_runs", out _).ShouldBeFalse("a release read carries no bound run");
-        release.TryGetProperty("runs", out _).ShouldBeFalse("a release read carries no bound run");
+        release.GetProperty("bound_runs").GetArrayLength().ShouldBe(0, "a release with no bind has an empty bound-run list");
+        release.TryGetProperty("runs", out _).ShouldBeFalse("the bound runs are `bound_runs`, not a second spelling");
 
         var components = release.GetProperty("components").EnumerateArray()
             .ToDictionary(

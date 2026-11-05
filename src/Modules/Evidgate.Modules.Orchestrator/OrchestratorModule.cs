@@ -3,6 +3,7 @@ using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Orchestrator.Application.Attempts;
 using Evidgate.Modules.Orchestrator.Application.Evaluation;
 using Evidgate.Modules.Orchestrator.Application.Runs;
+using Evidgate.Modules.Orchestrator.Application.Releases;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +26,14 @@ internal static class OrchestratorModule
         // 06.1.2-T1: the read-only run-scope lookup upload-url needs (00 §5.5 C5: another module reaches the
         // Orchestrator only through its .Contracts project).
         services.TryAddScoped<IRunPlanReader, RunPlanReader>();
+
+        // The digest-match surface the evaluation path reads (build_mismatch): the stored bindings of a release/run
+        // pair and the release components the run does not match, derived on read from the two rows, never stored.
+        services.TryAddScoped<IReleaseBindingReader, ReleaseBindingReader>();
+
+        // The release read's binding section: insertion order over the binding key, so no query here can become a
+        // "latest run" join.
+        services.TryAddScoped<BoundRunsQuery>();
 
         // The plan the Policy evaluator judges a run against: the run's pinned scope, the manifest's planned count and
         // every planned execution, read over the ambient tenant scope through Orchestrator.Contracts only.

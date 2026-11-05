@@ -66,6 +66,36 @@ internal static class OrchestratorErrors
         ApiErrorCode.ReleaseNameConflict,
         "the project already declares a release with that name");
 
+    /// <summary>404 <c>not_found</c>: no run with that id is visible in the release's project.</summary>
+    internal static Error RunNotFound => Error.NotFound("no run with that id is visible to this tenant");
+
+    /// <summary>
+    /// 404 <c>not_found</c> for a bind, release and run alike: one message, so a same-org caller cannot tell a
+    /// sibling-project id from an unknown one, or which of the two ids the tenant check refused.
+    /// </summary>
+    internal static Error BindTargetNotFound => Error.NotFound("no release or run with those ids is visible to this tenant");
+
+    /// <summary>422 <c>release_not_active</c>: a <c>draft</c> release accepts no binds, at run create or explicitly.</summary>
+    internal static Error ReleaseNotActive => Error.Unprocessable(
+        ApiErrorCode.ReleaseNotActive,
+        "a draft release accepts no run binds");
+
+    /// <summary>409 <c>release_bind_closed</c>: the run already has a live evaluation, so its binding can no longer move.</summary>
+    internal static Error ReleaseBindClosed => Error.Conflict(
+        ApiErrorCode.ReleaseBindClosed,
+        "the run already has a live evaluation, so its release binding is closed");
+
+    /// <summary>422 <c>release_component_mismatch</c>: no digest matched, so nothing could be bound.</summary>
+    internal static Error ReleaseComponentMismatch(IReadOnlyList<ErrorDetail> details) => Error.Unprocessable(
+        ApiErrorCode.ReleaseComponentMismatch,
+        "no component of the run matches the release's digests",
+        details);
+
+    /// <summary>422 <c>fork_run_not_bindable</c>: a fork run's identity is advisory-only, so it pins to no release.</summary>
+    internal static Error ForkRunNotBindable => Error.Unprocessable(
+        ApiErrorCode.ForkRunNotBindable,
+        "a fork run is advisory-only and cannot be bound to a release");
+
     internal static Error RevisionConflict(int next) => new(
         ApiErrorCode.RevisionConflict,
         "the environment's next revision number is not the one the request expected",

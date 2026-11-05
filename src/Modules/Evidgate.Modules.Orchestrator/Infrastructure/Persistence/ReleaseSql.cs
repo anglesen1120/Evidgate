@@ -68,18 +68,114 @@ internal static class ReleaseSql
     internal const string ReleaseById = """
         select r.id as release_id, r.org_id, r.project_id, r.name, r.state, r.created_by, r.created_at, r.version
           from public.release r
-         where r.id = @release_id
+         where r.id = @release_id and r.org_id = @org_id
         """;
 
     /// <summary>
     /// The release's components in <c>component_key</c> order — a total order with no tie, so the read is deterministic
-    /// and the response shape stable. The second and last statement of the read path: the bound-runs section
-    /// belongs to the bind path and is not read here.
+    /// and the response shape stable. The second of the read path's three statements; the bind path reads the same rows
+    /// through the same statement, so a release is compared exactly as it is declared.
     /// </summary>
     internal const string ComponentsByRelease = """
         select c.component_key, c.digest, c.environment_revision_id
           from public.release_component c
          where c.org_id = @org_id and c.release_id = @release_id
          order by c.component_key
+        """;
+
+    /// <summary>
+    /// The release a run create may bind to: one row when the id is in the caller's org and the run's project, nothing
+    /// otherwise. The project predicate is what makes another project's release the same 404 an unknown id answers, so
+    /// a run never binds to a sibling project's declaration.
+    /// </summary>
+    internal const string RunReleaseTarget = """
+        select r.state
+          from public.release r
+         where r.id = @release_id and r.org_id = @org_id and r.project_id = @project_id
+        """;
+
+    /// <summary>
+    /// The run's recorded <c>components</c> as text, plus the two identity facts a bind must refuse on, matched on the
+    /// caller's org and the release's project. A fork run is advisory-only identity, and a replay run re-executes a
+    /// stored run's inputs rather than this release's, so neither may be pinned to a release.
+    /// </summary>
+    internal const string RunComponents = """
+        select r.components::text as components, r.is_fork, r.purpose
+          from public.run r
+         where r.id = @run_id and r.org_id = @org_id and r.project_id = @project_id
+        """;
+
+    /// <summary>
+    /// Locks the run row of an explicit bind for the rest of its transaction. An evaluation row's composite foreign key
+    /// takes <c>FOR KEY SHARE</c> on its run, which conflicts with <c>FOR UPDATE</c>: a concurrent live evaluation is
+    /// therefore either committed before the guard reads it or blocked until this bind commits.
+    /// </summary>
+    internal const string LockRun = """
+        select 1
+          from public.run r
+         where r.id = @run_id and r.org_id = @org_id
+         for update
+        """;
+
+    /// <summary>
+    /// One <c>release_run</c> row per matched component, in one batch. <c>on conflict do nothing</c> on
+    /// <c>(org_id, release_id, run_id, component_key)</c> is what makes a re-bind of an existing pair a no-op instead of
+    /// a 23505: the keys it already holds insert nothing, and the handler answers all rows the pair holds afterwards.
+    /// </summary>
+    internal const string InsertBindings = """
+        insert into public.release_run (id, org_id, release_id, run_id, component_key)
+        select b.id, @org_id, @release_id, @run_id, b.component_key
+          from jsonb_to_recordset(@rows::jsonb) as b(id uuid, component_key text)
+        on conflict (org_id, release_id, run_id, component_key) do nothing
+        """;
+
+    /// <summary>Every component bound for one pair, with its digest, ordered by component key.</summary>
+    internal const string BoundComponentsByPair = """
+        select c.component_key, c.digest
+          from public.release_run rr
+          join public.release_component c
+            on c.org_id = rr.org_id and c.release_id = rr.release_id and c.component_key = rr.component_key
+         where rr.org_id = @org_id and rr.release_id = @release_id and rr.run_id = @run_id
+         order by c.component_key
+        """;
+
+    /// <summary>The bound component keys of one pair, ordered by key; the read seam other modules call.</summary>
+    internal const string BoundKeys = """
+        select rr.component_key
+          from public.release_run rr
+         where rr.org_id = @org_id and rr.release_id = @release_id and rr.run_id = @run_id
+         order by rr.component_key
+        """;
+
+    /// <summary>
+    /// The release's bindings ordered by <c>created_at</c> then id: insertion order over the
+    /// <c>(org_id, release_id)</c> prefix of the binding key, never a "latest run" selection.
+    /// </summary>
+    internal const string BoundRuns = """
+        select rr.run_id, rr.component_key, rr.created_at
+          from public.release_run rr
+         where rr.org_id = @org_id and rr.release_id = @release_id
+         order by rr.created_at, rr.id
+        """;
+
+    /// <summary>
+    /// The two sides of the match for one pair in one row — the run's recorded <c>components</c> once, and the release's
+    /// components aggregated into one document in <c>component_key</c> order — so the read seam derives a mismatch list
+    /// in one round trip without repeating the run document per component.
+    /// </summary>
+    internal const string MismatchSource = """
+        select ru.components::text as run_components,
+               coalesce(
+                   jsonb_agg(
+                       jsonb_build_object('component_key', c.component_key, 'digest', c.digest)
+                       order by c.component_key),
+                   '[]'::jsonb)::text as release_components
+          from public.release_component c
+          join public.release rel
+            on rel.org_id = c.org_id and rel.id = c.release_id
+          join public.run ru
+            on ru.org_id = c.org_id and ru.id = @run_id and ru.project_id = rel.project_id
+         where c.org_id = @org_id and c.release_id = @release_id
+         group by ru.components
         """;
 }

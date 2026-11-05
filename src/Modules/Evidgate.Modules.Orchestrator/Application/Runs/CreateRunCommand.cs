@@ -33,7 +33,8 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// (like <see cref="Manifests.UploadManifestCommand"/>): the handler parses and validates it after the C2 pipeline
 /// authorized the caller, so an anonymous or unauthorized request costs no parse.
 /// <para>
-/// Besides <c>manifest_id</c>, <c>release</c> and <c>components</c>, the body may carry <c>purpose</c>
+/// Besides <c>manifest_id</c>, <c>components</c> and an optional <c>release_id</c>, the body may carry the legacy
+/// <c>release</c> name — permanently unresolvable, because a run binds to a release by id — plus <c>purpose</c>
 /// (<c>regular</c>, the default, or <c>replay</c>) and <c>replay_grant_id</c> (05.2.1-T5): a <c>replay</c> request is
 /// refused 422 before any read, and a <c>replay_grant_id</c> is only meaningful for one.
 /// </para>
@@ -232,7 +233,7 @@ internal sealed class CreateRunCommandHandler(
 
         foreach (var member in body.EnumerateObject())
         {
-            if (member.Name is not ("manifest_id" or "release" or "components" or "purpose" or "replay_grant_id" or "ref"))
+            if (member.Name is not ("manifest_id" or "release" or "release_id" or "components" or "purpose" or "replay_grant_id" or "ref"))
             {
                 return BodyInvalid("the request body carries an unknown field", [new ErrorDetail($"/{member.Name}", "additional_properties")]);
             }
@@ -302,9 +303,9 @@ internal sealed class CreateRunCommandHandler(
 
         if (purpose == ReplayPurpose)
         {
-            // AC9: a replay run re-executes a stored run's inputs, so it may not also name a release; this refusal wins
-            // over the grant check below.
-            if (release is not null)
+            // A replay run re-executes a stored run's inputs, so it may not also name a release — by legacy name or by
+            // id; this refusal wins over the grant check below. The member is checked on the body, before its shape.
+            if (release is not null || body.TryGetProperty("release_id", out _))
             {
                 return Result.Failure<RunCreated>(OrchestratorErrors.ReplayReleaseNotAllowed);
             }
@@ -348,6 +349,14 @@ internal sealed class CreateRunCommandHandler(
             components = componentsElement;
         }
 
+        // (1b2) the release the run wants to be bound to. Shape only here — the uuid and nothing else — because an
+        // unknown, foreign or draft release is a database answer (404/422) that needs the tenant scope below.
+        var (releaseId, releaseIdError) = RunReleaseBinding.ParseReleaseId(body);
+        if (releaseIdError is not null)
+        {
+            return Result.Failure<RunCreated>(releaseIdError);
+        }
+
         // (1c) the run-identity block (05.2.2-T1.3, AC4): shape-checked here — before the database reads below and long
         // before the write — whether or not a verified claim later overrides one of its members. An invalid member is
         // 422 request_invalid naming its pointer, exactly like the rest of this body parse.
@@ -357,7 +366,8 @@ internal sealed class CreateRunCommandHandler(
             return BodyInvalid("the request body carries an invalid ref", refErrors);
         }
 
-        // AC10: a syntactically valid release is still unresolvable at M1 (the bind path lands with 05.6.1).
+        // The legacy `release` name stays permanently unresolvable: a release is addressed by id, and a name would make
+        // the binding depend on a mutable lookup rather than the immutable row the caller chose.
         if (release is not null)
         {
             return Result.Failure<RunCreated>(OrchestratorErrors.ReleaseUnresolvable);
@@ -439,6 +449,24 @@ internal sealed class CreateRunCommandHandler(
             return BodyInvalid("the run identity is invalid", [violation]);
         }
 
+        // (5c) a fork run's identity is advisory-only, so it may not be pinned to a release; the refusal runs before
+        // the release read and long before the writes, so a fork request leaves nothing behind.
+        if (identity.IsFork && releaseId is not null)
+        {
+            return Result.Failure<RunCreated>(OrchestratorErrors.ForkRunNotBindable);
+        }
+
+        // (5d) the release the run asks to be bound to: resolved inside this project before any write, so an unknown,
+        // foreign or draft release leaves no run, execution or slot behind. A release that resolves but shares no
+        // digest never refuses the run — the binding is partial or empty, and the mismatch is read back from the pair.
+        var (bindReleaseId, releaseError) = await RunReleaseBinding
+            .ResolveAsync(releaseId, command.ProjectId, orgId, db, cancellationToken)
+            .ConfigureAwait(false);
+        if (releaseError is not null)
+        {
+            return Result.Failure<RunCreated>(releaseError);
+        }
+
         // (6) the writes, all inside the one C2 tenant transaction.
         var runId = Guid.CreateVersion7();
         var ciRun = principal?.CiRun;
@@ -499,6 +527,27 @@ internal sealed class CreateRunCommandHandler(
         if (!slots.IsSuccess)
         {
             return Result.Failure<RunCreated>(slots.Error!);
+        }
+
+        // The run's release binding, in the same transaction as the run, its executions and its slots: a failure after
+        // this point rolls the binding back with the run, and a caller that replayed its Idempotency-Key never reaches
+        // here at all (the idempotency stage answers the stored response).
+        if (bindReleaseId is { } boundReleaseId)
+        {
+            // The binding writes its own audit row and outbox event here, in this transaction: a run create that pinned a
+            // release changed the same rows an explicit bind would, so the chain must say so either way.
+            await RunReleaseBinding
+                .BindAsync(
+                    boundReleaseId,
+                    runId,
+                    orgId,
+                    components,
+                    db,
+                    outbox,
+                    audit,
+                    AuditActorResolver.From(principals.Current),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
         await outbox.EnqueueAsync(
