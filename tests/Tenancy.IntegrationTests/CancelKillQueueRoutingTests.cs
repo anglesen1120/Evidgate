@@ -8,6 +8,7 @@ using Xunit;
 
 namespace Tenancy.IntegrationTests;
 
+[Trait("Category", "Docker")]
 public sealed class CancelKillQueueRoutingTests(PostgresTenancyFixture fixture)
 {
     /// <summary>The queue a Worker polls when the deployment configures no route for the kill type.</summary>

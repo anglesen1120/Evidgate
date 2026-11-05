@@ -13,6 +13,7 @@ using Xunit;
 
 namespace Tenancy.IntegrationTests;
 
+[Trait("Category", "Docker")]
 public sealed class CancelRunKillScheduleTests(PostgresTenancyFixture fixture)
 {
     /// <summary>The queue an unrouted task type lands in (<c>TasksOptions.DispatchDefaultQueue</c>).</summary>

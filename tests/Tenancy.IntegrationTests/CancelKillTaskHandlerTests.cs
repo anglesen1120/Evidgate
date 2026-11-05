@@ -11,6 +11,7 @@ using Xunit;
 
 namespace Tenancy.IntegrationTests;
 
+[Trait("Category", "Docker")]
 public sealed class CancelKillTaskHandlerTests(PostgresTenancyFixture fixture)
 {
     [Fact]
