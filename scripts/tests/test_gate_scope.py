@@ -93,7 +93,9 @@ class PathClasses(unittest.TestCase):
         "artifacts/licence-report.json",
         "docs/design/landing-page.html",
         "docs/README.txt",
+        "docs/security/alert-rules.md",
         "docs/security/audit-and-deletion-rule.md",
+        "docs/security/security-event-baseline.md",
         "fixtures/web-api/requests.json",
         ".omp/coordinator/prompt.md",
         "unknown-root-file",
@@ -298,6 +300,7 @@ class ChangeSet(Repository):
         for path in (
             "tools/Legacy.fsproj", "Legacy.sln", ".globalconfig", "style.ruleset",
             "fixtures/web-api/requests.json", "docs/security/audit-and-deletion-rule.md",
+            "docs/security/alert-rules.md", "docs/security/security-event-baseline.md",
         ):
             with self.subTest(path=path):
                 self.assertEqual(self.tier_of((path, "// x\n")).tier, "full")
