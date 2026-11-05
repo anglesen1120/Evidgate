@@ -21,6 +21,9 @@ import {
   summary,
 } from './policy.store.testing';
 
+// The wire type narrows the mode to two values; parsing lets the test supply a third.
+const UNDECLARED_MODE = JSON.parse('"permissive"') as PolicyActivationStateDto['mode'];
+
 describe('PolicyStore (09.7.1-T4)', () => {
   let data: FakePolicyDataService;
   let session: FakeSessionStore;
@@ -59,7 +62,7 @@ describe('PolicyStore (09.7.1-T4)', () => {
       { label: 'advisory', mode: 'advisory' as const, kind: 'advisory' },
       // The wire type narrows the mode, but a server-declared third value must never be rounded
       // into one of the two the chip knows: it is shown as unknown with its own text.
-      { label: 'an undeclared mode', mode: 'permissive' as unknown as 'advisory', kind: 'unknown' },
+      { label: 'an undeclared mode', mode: UNDECLARED_MODE, kind: 'unknown' },
     ])('maps $label through applyActivation to the $kind chip', ({ mode, kind }) => {
       store.applyActivation(activation(mode));
 
@@ -68,7 +71,7 @@ describe('PolicyStore (09.7.1-T4)', () => {
     });
 
     it('keeps the raw undeclared value so the chip can show the server’s own text', () => {
-      store.applyActivation(activation('permissive' as unknown as 'advisory'));
+      store.applyActivation(activation(UNDECLARED_MODE));
 
       expect(policyModeView(store.mode())).toEqual({ kind: 'unknown', raw: 'permissive' });
     });
