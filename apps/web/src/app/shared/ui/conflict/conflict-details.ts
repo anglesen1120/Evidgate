@@ -2,6 +2,13 @@ import type { ErrorEnvelopeDetail } from '@evidgate/sdk';
 
 import type { ApiError } from '../../../core/http/api-error';
 
+// The server writes these as top-level JSON pointers (`/version`, `/order`); the bare
+// names stay accepted. Nested pointers such as `/items/0/version` locate a body
+// member, not the resource's concurrency token, so they never match.
+const metadataPaths: ReadonlySet<string> = new Set(
+  ['revision_id', 'version', 'order'].flatMap((name) => [name, `/${name}`]),
+);
+
 export interface ConflictField {
   readonly id: string;
   readonly label: string;
@@ -25,9 +32,8 @@ export function conflictFromError(
     error.kind === 'precondition_failed'
       ? error.details.find(
           (detail) =>
-            (detail.path === 'revision_id' ||
-              detail.path === 'version' ||
-              detail.path === 'order') &&
+            detail.path !== undefined &&
+            metadataPaths.has(detail.path) &&
             detail.reason.trim().length > 0,
         )
       : undefined;
