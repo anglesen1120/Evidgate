@@ -93,6 +93,7 @@ const EXPECTED = [
   ['/releases/{id}/decision', 'get', 'decision:read', 'v1'],
   ['/artifacts/{a}', 'get', 'artifact:read', 'v1'],
   ['/artifacts/{a}/download-url', 'get', 'artifact:read', 'v1'],
+  ['/projects/{p}/artifact-kind-policy', 'get', 'project:read', 'v1'],
   ['/projects/{p}/artifact-kind-policy/{kind}', 'put', 'project:write', 'v1'],
   ['/orgs', 'get', 'authenticated', 'v1'],
   ['/orgs', 'post', 'authenticated', 'v1'],

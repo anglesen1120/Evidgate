@@ -34,14 +34,14 @@ public sealed partial class EvidenceSensitivityTests
             HttpMethod.Put,
             PolicyUrl(world.Project, ArtifactKind.Trace),
             member.Caller,
-            PaddedPolicyBody(ArtifactSensitivity.Normal, UploadUrlLimits.MaxBodyBytes));
+            PaddedPolicyBody(ArtifactSensitivity.Normal, CapturePolicyLimits.MaxBodyBytes));
         declared.Status.ShouldBe(HttpStatusCode.OK, declared.ErrorMessage);
 
         var streamed = await SendLengthlessAsync(
             member.Client,
             member.Caller,
             PolicyUrl(world.Project, ArtifactKind.Trace),
-            Encoding.UTF8.GetBytes(PaddedPolicyBody(ArtifactSensitivity.Sensitive, UploadUrlLimits.MaxBodyBytes)));
+            Encoding.UTF8.GetBytes(PaddedPolicyBody(ArtifactSensitivity.Sensitive, CapturePolicyLimits.MaxBodyBytes)));
         streamed.Status.ShouldBe(HttpStatusCode.OK, streamed.ErrorMessage);
 
         (await PolicyRowsAsync(world, world.Project)).ShouldBe(["trace|2048|sensitive|true|false"]);
@@ -62,7 +62,7 @@ public sealed partial class EvidenceSensitivityTests
             member.Client,
             member.Caller,
             PolicyUrl(world.Project, ArtifactKind.Trace),
-            Encoding.UTF8.GetBytes(PaddedPolicyBody(ArtifactSensitivity.Normal, UploadUrlLimits.MaxBodyBytes + 1)));
+            Encoding.UTF8.GetBytes(PaddedPolicyBody(ArtifactSensitivity.Normal, CapturePolicyLimits.MaxBodyBytes + 1)));
 
         answer.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("payload_too_large");

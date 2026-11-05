@@ -811,6 +811,8 @@ internal static class RouteRequests
         Add("GET", "/v1/artifacts/{a}", _ => new(HttpMethod.Get, $"/v1/artifacts/{Guid.CreateVersion7()}"));
         Add("GET", "/v1/artifacts/{a}/download-url", _ => new(HttpMethod.Get,
             $"/v1/artifacts/{Guid.CreateVersion7()}/download-url"));
+        Add("GET", "/v1/projects/{p}/artifact-kind-policy", ctx => new(HttpMethod.Get,
+            $"/v1/projects/{ctx.ProjectId}/artifact-kind-policy"));
         Add("PUT", "/v1/projects/{p}/artifact-kind-policy/{kind}", ctx => new(HttpMethod.Put,
             $"/v1/projects/{ctx.ProjectId}/artifact-kind-policy/screenshot",
             new JsonObject

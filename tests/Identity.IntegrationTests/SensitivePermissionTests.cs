@@ -468,6 +468,10 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // The retention windows: a project with no `retention_policy` row answers the configured platform
             // defaults, so the route is callable here like the lists above (two integers, no secret).
             ["/v1/projects/{p}/retention"] = $"/v1/projects/{project}/retention",
+            // The capture-options read beside the write above: a project with no `artifact_kind_policy` row answers every
+            // contract kind's static default with an empty rule list, so the route is callable here like the retention
+            // read above — kind names, the effective switch and rule type/name pairs, no secret among them.
+            ["/v1/projects/{p}/artifact-kind-policy"] = $"/v1/projects/{project}/artifact-kind-policy",
             ["/v1/projects/{p}/quarantine"] = $"/v1/projects/{project}/quarantine",
             ["/v1/projects/{p}/runs"] = $"/v1/projects/{project}/runs",
             // 13.1.1-T2's three authoring lists: one page each, empty for a project with no authoring rows, so the
