@@ -747,6 +747,11 @@ internal static class RouteRequests
         Add("POST", "/v1/projects/{p}/releases", ctx => new(HttpMethod.Post,
             $"/v1/projects/{ctx.ProjectId}/releases", ReleaseCreate(ctx), IdempotencyKey: Key()));
         Add("GET", "/v1/releases/{id}", _ => new(HttpMethod.Get, $"/v1/releases/{Guid.CreateVersion7()}"));
+        // The explicit bind addresses the release in the path and the run in the body, both fresh here, so a granted
+        // caller reaches the visibility probe and answers the 404 `not_found` the matrix classifies; nothing is
+        // created, and the recipe never becomes an oracle over an existing release or run.
+        Add("POST", "/v1/releases/{id}/runs", _ => new(HttpMethod.Post, $"/v1/releases/{Guid.CreateVersion7()}/runs",
+            new JsonObject { ["run_id"] = Guid.CreateVersion7().ToString() }, IdempotencyKey: Key()));
 
         // 05.3.2-T1: the finalize route is the events route's twin — a resolved member session reaches the C2 pipeline's
         // `event:write` gate, which answers the matrix's 403, so the recipe uses a fresh run id and a shape-valid body:
