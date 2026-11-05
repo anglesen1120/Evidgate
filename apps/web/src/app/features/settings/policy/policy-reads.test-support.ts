@@ -1,6 +1,8 @@
-// The harness the two project-reads specs share: one project, the typed failures the adapter
-// builds from a server envelope, and a data service whose two answers the test controls.
+// The harness the policy specs share: one project, the typed failures the adapter builds from a
+// server envelope, a data service whose two answers the test controls, and the typed root a
+// rendered fixture hands to its queries.
 
+import type { ComponentFixture } from '@angular/core/testing';
 import type {
   ErrorEnvelope,
   PolicyActivationStateDto,
@@ -126,12 +128,16 @@ export type Deferred<T> = {
 
 /**
  * One deferred answer, so a test controls exactly when a read settles. The project's lib target is
- * ES2022, so `Promise.withResolvers` is not available: the executor form is how the resolve/reject
- * handles escape to the test.
+ * ES2022, so `Promise.withResolvers` is not available: the executor runs synchronously and
+ * reassigns both handles, and the throwing defaults keep the type total without a `!`.
  */
 export function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
+  let resolve: (value: T) => void = () => {
+    throw new Error('deferred(): the promise executor did not capture resolve');
+  };
+  let reject: (error: unknown) => void = () => {
+    throw new Error('deferred(): the promise executor did not capture reject');
+  };
   const promise = new Promise<T>((settle, fail) => {
     resolve = settle;
     reject = fail;
@@ -166,4 +172,16 @@ export async function flushMicrotasks(): Promise<void> {
   for (let tick = 0; tick < 4; tick += 1) {
     await Promise.resolve();
   }
+}
+
+/**
+ * The rendered fixture's host as an `HTMLElement`. `nativeElement` is `any`, so a cast would accept
+ * any root silently; narrowing keeps the queries typed and fails on a root that is not an element.
+ */
+export function rootElement(fixture: ComponentFixture<unknown>): HTMLElement {
+  const root: unknown = fixture.nativeElement;
+  if (!(root instanceof HTMLElement)) {
+    throw new Error('rootElement(): the fixture root is not an HTMLElement');
+  }
+  return root;
 }

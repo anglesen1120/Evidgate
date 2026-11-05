@@ -4,6 +4,7 @@ import type { PolicyRevisionDto } from '@evidgate/sdk';
 import { expect, vi } from 'vitest';
 import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
+import { rootElement } from './policy-reads.test-support';
 import { PolicyStore, type PublishResult } from './policy.store';
 import { PublishDialogComponent } from './publish-dialog.component';
 
@@ -66,7 +67,7 @@ export async function render() {
   fixture.detectChanges();
   const root = document.body;
   const opener = document.createElement('button');
-  (fixture.nativeElement as HTMLElement).append(opener);
+  rootElement(fixture).append(opener);
   await fixture.componentInstance.open(revision.id, opener);
   fixture.detectChanges();
   await fixture.whenStable();

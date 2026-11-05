@@ -3,6 +3,7 @@ import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { TestBed } from '@angular/core/testing';
 import type { PolicyRevisionSummaryDto } from '@evidgate/sdk';
+import { rootElement } from './policy-reads.test-support';
 import { RevisionListComponent } from './revision-list.component';
 
 const row: PolicyRevisionSummaryDto = {
@@ -30,7 +31,7 @@ describe('RevisionListComponent', () => {
     fixture.componentRef.setInput('rows', [row]);
     fixture.componentRef.setInput('headId', row.id);
     fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
+    const root = rootElement(fixture);
     const revision = root.querySelector<HTMLElement>('[data-policy-revision]');
     expect(revision?.dataset['revisionNo']).toBe('3');
     expect(revision?.dataset['revisionState']).toBe(row.state);
@@ -53,7 +54,7 @@ describe('RevisionListComponent', () => {
     const more = vi.fn();
     fixture.componentInstance.loadMore.subscribe(more);
     fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
+    const root = rootElement(fixture);
     expect(root.querySelectorAll('[data-policy-revision]')).toHaveLength(0);
     expect(root.querySelector('p')?.textContent).toMatch(/\S/);
     expect(root.querySelector('button')).toBeNull();

@@ -11,6 +11,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { PolicyPage } from './policy.page';
 import type { PolicyReadView } from './policy-reads';
+import { rootElement } from './policy-reads.test-support';
 import { PolicyStore, type PublishResult } from './policy.store';
 
 provideLayoutTestStubs();
@@ -119,7 +120,7 @@ describe('PolicyPage', () => {
     const fixture = TestBed.createComponent(PolicyPage);
     fixture.detectChanges();
     await fixture.whenStable();
-    return { fixture, root: fixture.nativeElement as HTMLElement };
+    return { fixture, root: rootElement(fixture) };
   }
   it('uses an h2 heading and shows revision metadata with the activation mode', async () => {
     const { root } = await render();
