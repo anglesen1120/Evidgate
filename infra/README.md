@@ -116,6 +116,16 @@ repository's head (01.1.2-T1.3); and `docker run <migrator> --help` prints the
 compose.dev.yml pin): `--status` on an empty journal, a real apply, `--status`
 again, then the Api answering `/internal/health/live` and `/ready`.
 
+## Secret inventory (10.1.2-T1)
+
+`infra/secrets-inventory.json` (shape: `infra/secrets-inventory.schema.json`) names every
+`secret: true` key of `config-matrix.json` with owner, store, rotation cadence and
+break-glass holder, and never a value. `scripts/secrets-inventory.mjs` runs inside the
+`check-env-matrix` stage: a secret missing from the inventory, an entry the matrix does
+not have (unless `external: true`), a placeholder owner, a missing runbook link or a
+value-looking string fails the gate; an overdue rotation is a warning in dev and an error
+for a key staging or prod requires.
+
 ## Pins
 
 Base images are pinned to mcr.microsoft.com **manifest-list digests**, resolved on
