@@ -227,6 +227,16 @@ internal static class TenantFkScan
 
             if (!isTenantKey)
             {
+                // A key to a catalogue parent cannot be composite when the built-in row carries `org_id`
+                // IS NULL (the composite reference could never match it), so the one documented allowance
+                // below takes the plain identity key; the caller's own trigger refuses another org's row.
+                if (CatalogueKeyAllowlist.Contains((table, foreignKey.Name))
+                    && foreignKey.PrincipalColumns.AsSpan().SequenceEqual(CatalogueKeyIdentity)
+                    && IsCataloguePrincipal(exceptions, foreignKey.PrincipalTable))
+                {
+                    continue;
+                }
+
                 findings.Add(new TenantFkFinding(
                     table,
                     TenantFkRule.CompositeForeignKey,
@@ -246,6 +256,27 @@ internal static class TenantFkScan
         && exceptions.Any(exception =>
             string.Equals(exception.Table, principal, StringComparison.Ordinal)
             && string.Equals(exception.Kind, "platform", StringComparison.Ordinal));
+
+    /// <summary>
+    /// The plain identity key a tenant table may hold to a <c>catalogue</c> parent, keyed by
+    /// (table, constraint): a built-in catalogue row carries <c>org_id IS NULL</c>, so the composite tenant key
+    /// rule 2 wants could never match it. Each entry names the trigger that refuses another org's row on the
+    /// referencing table, which is the half a foreign key cannot express.
+    /// </summary>
+    private static readonly (string Table, string Constraint)[] CatalogueKeyAllowlist =
+    [
+        ("public.usage_ledger_entry", "usage_ledger_entry_price_fk"),
+    ];
+
+    /// <summary>The principal columns of an allowed catalogue key: the parent's own identity, never <c>org_id</c>.</summary>
+    private static readonly string[] CatalogueKeyIdentity = [TenantKeyColumn];
+
+    /// <summary>True when <paramref name="principal"/> is a <c>catalogue</c> table: nullable <c>org_id</c>, read by every org.</summary>
+    private static bool IsCataloguePrincipal(IReadOnlyList<RlsException> exceptions, string principal) =>
+        exceptions.Any(exception =>
+            string.Equals(exception.Table, principal, StringComparison.Ordinal)
+            && string.Equals(exception.Kind, "catalogue", StringComparison.Ordinal));
+
 
     /// <summary>
     /// <c>org_id</c> pairs with <c>org_id</c> and the referenced <c>id</c> pairs

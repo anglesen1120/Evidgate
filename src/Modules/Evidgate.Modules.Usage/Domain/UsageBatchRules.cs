@@ -65,7 +65,7 @@ internal static class UsageBatchRules
             {
                 (violations ??= []).Add(new UsageViolation(index, "billing_key", "required"));
             }
-            else if (!IsDatabaseText(entry.BillingKey))
+            else if (!PostgresText.IsStorable(entry.BillingKey))
             {
                 (violations ??= []).Add(new UsageViolation(index, "billing_key", "invalid_value"));
             }
@@ -83,7 +83,7 @@ internal static class UsageBatchRules
             {
                 (violations ??= []).Add(new UsageViolation(index, "unit", "required"));
             }
-            else if (!IsDatabaseText(entry.Unit))
+            else if (!PostgresText.IsStorable(entry.Unit))
             {
                 (violations ??= []).Add(new UsageViolation(index, "unit", "invalid_value"));
             }
@@ -94,38 +94,6 @@ internal static class UsageBatchRules
         }
 
         return violations ?? [];
-    }
-
-    /// <summary>
-    /// Whether <paramref name="value"/> is text PostgreSQL can store: U+0000 is forbidden in <c>text</c>, and so is a
-    /// UTF-16 surrogate that is not the first half of a real pair, because it has no UTF-8 encoding to write.
-    /// </summary>
-    private static bool IsDatabaseText(string value)
-    {
-        for (var index = 0; index < value.Length; index++)
-        {
-            var character = value[index];
-
-            if (character == '\0' || char.IsLowSurrogate(character))
-            {
-                return false;
-            }
-
-            if (!char.IsHighSurrogate(character))
-            {
-                continue;
-            }
-
-            // A high surrogate is storable only as the first half of a pair.
-            if (index + 1 == value.Length || !char.IsLowSurrogate(value[index + 1]))
-            {
-                return false;
-            }
-
-            index++;
-        }
-
-        return true;
     }
 
     /// <summary>

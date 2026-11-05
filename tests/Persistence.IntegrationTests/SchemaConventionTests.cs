@@ -534,6 +534,7 @@ public sealed class SchemaConventionAllowListTests
                 ("public.authoring_code_counter", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.rls_probe", SchemaRule.VersionTrigger),
                 ("public.role_permission", SchemaRule.CompositeForeignKey),
+                ("public.usage_ledger_entry", SchemaRule.CompositeForeignKey),
                 ("public.evidence_revision", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.evaluation", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.project_ai_settings", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
