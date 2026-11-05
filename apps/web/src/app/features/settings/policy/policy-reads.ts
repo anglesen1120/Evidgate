@@ -14,8 +14,8 @@
 //    renders, so a stale mode can never outlive the project it belonged to.
 //
 // The explicit retry is the only way either read runs again: it is inert while a read is in
-// flight, and a server `Retry-After` keeps it closed until that interval ends, with one timer and
-// no attempt started from here.
+// flight, and a served `Retry-After` keeps it closed until that interval ends. A later failure
+// never cancels or shortens a wait already running, and one timer carries it, starting no read.
 
 import { computed, inject, Injectable, signal } from '@angular/core';
 import type { PolicyActivationStateDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
@@ -95,7 +95,10 @@ export class PolicyProjectReads {
   readonly busy = computed(
     () => this.activationSignal().phase === 'loading' || this.headSignal().phase === 'loading',
   );
-  /** The server's `Retry-After` of the last failure, in whole seconds; `null` when it gave none. */
+  /**
+   * The `Retry-After` that set the current deadline, in whole seconds; a later shorter interval
+   * leaves it unchanged. `null` until a failure serves one; start, retry and clear reset it.
+   */
   readonly retryAfterSeconds = this.retryAfterState.asReadonly();
   /** True until a server `Retry-After` wait is over; nothing retries on its own while it runs. */
   readonly waiting = computed(() => {
@@ -172,10 +175,13 @@ export class PolicyProjectReads {
 
   /**
    * One timer for the failure's `Retry-After`, never a poll and never a retry: it only reopens
-   * the control when the server's interval has passed.
+   * the control when the server's interval has passed. The two reads fail independently, so a
+   * failure never cancels a wait the other one armed: an answer without a usable interval leaves
+   * the wait alone, and a shorter interval never shortens a longer one already in force.
+   *
+   * Returns whether it armed or extended the wait.
    */
   private noteRetryAfter(error: ApiError | null): boolean {
-    this.clearWait();
     const seconds = error?.retryAfterSeconds ?? null;
     if (error === null || seconds === null || !Number.isFinite(seconds) || seconds <= 0) {
       return false;
@@ -183,8 +189,16 @@ export class PolicyProjectReads {
     // A delay above the timer maximum fires immediately in browsers and warns in Node, which
     // would turn a hostile interval into no wait at all; clamp it instead.
     const delayMs = Math.min(seconds * 1000, MAX_TIMER_DELAY_MS);
+    const deadline = Date.now() + delayMs;
+    const current = this.waitDeadline();
+    if (current !== null && current >= deadline) {
+      return false;
+    }
+    // Replacing the timer is what makes an extension safe: the earlier one would end the wait at
+    // its own, shorter deadline.
+    this.cancelWait?.();
     this.retryAfterState.set(seconds);
-    this.waitDeadline.set(Date.now() + delayMs);
+    this.waitDeadline.set(deadline);
     const timer = setTimeout(() => {
       this.cancelWait = null;
       this.waitDeadline.set(null);

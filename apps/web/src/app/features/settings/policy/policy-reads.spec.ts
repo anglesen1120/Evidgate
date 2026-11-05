@@ -1,182 +1,29 @@
 // The Policy tab's two project-level reads, in isolation: what each answer settles to, that a read
 // of an older generation writes nothing, that a head refresh after a publish discards the answer it
-// superseded, and that a server `Retry-After` closes the retry until its interval ends. The request
-// side is `policy-data.service.spec.ts`; the tab that renders these states is
-// `policy-summary.component.spec.ts`.
+// superseded, and that a server `Retry-After` closes the retry until its interval ends. Two
+// failures sharing one wait are `policy-reads.retry-after.spec.ts`, the harness both specs use is
+// `policy-reads.test-support.ts`, the request side is `policy-data.service.spec.ts`, and the tab
+// that renders these states is `policy-summary.component.spec.ts`.
 
 import { TestBed } from '@angular/core/testing';
-import type {
-  ErrorEnvelope,
-  PolicyActivationStateDto,
-  PolicyRevisionSummaryDto,
-} from '@evidgate/sdk';
+import type { PolicyActivationStateDto, PolicyRevisionSummaryDto } from '@evidgate/sdk';
 
 import { PolicyDataService, type PolicyHead } from '../../../core/data/policy-data.service';
-import { ApiRequestError, type ApiErrorKind } from '../../../core/http/api-error';
 import { PolicyProjectReads } from './policy-reads';
-
-const PROJECT_ID = '018f0000-0000-7000-8000-000000000011';
-const OTHER_PROJECT_ID = '018f0000-0000-7000-8000-000000000012';
-
-const ACTIVATION: PolicyActivationStateDto = {
-  project_id: PROJECT_ID,
-  policy_revision_id: '018f0000-0000-7000-8000-00000000a004',
-  hash: 'sha256:f250bbce48fca2a9a5f93b45236c0f330bb471f5d3f0d1396ddc5ac964928064',
-  mode: 'advisory',
-  activated_by: '018f0000-0000-7000-8000-0000000000e1',
-  activated_at: '2026-10-26T08:22:00Z',
-};
-
-const HEAD: PolicyRevisionSummaryDto = {
-  id: '018f0000-0000-7000-8000-00000000a003',
-  revision_no: 3,
-  hash: 'sha256:d05c091a94bfe1c59087f5a38ef026b200d2edcbee0fab69a8d080fb461e377e',
-  state: 'active',
-  created_by: '018f0000-0000-7000-8000-0000000000e1',
-  created_at: '2026-10-08T06:45:00Z',
-  version: 2,
-};
-
-/** The typed failure the adapter builds from one envelope. */
-function typedFailure(
-  envelope: ErrorEnvelope,
-  kind: ApiErrorKind,
-  status: number,
-  retryAfterSeconds: number | null = null,
-): ApiRequestError {
-  return new ApiRequestError({
-    kind,
-    status,
-    code: envelope.error.code,
-    message: envelope.error.message,
-    requestId: envelope.error.request_id,
-    retryable: envelope.error.retryable,
-    details: envelope.error.details ?? [],
-    retryAfterSeconds,
-  });
-}
-
-const NOT_FOUND = typedFailure(
-  {
-    error: {
-      code: 'not_found',
-      message: 'the requested resource does not exist',
-      request_id: '018f0000-0000-7000-8000-00000000a10c',
-      retryable: false,
-      details: [],
-    },
-  },
-  'not_found',
-  404,
-);
-
-const FORBIDDEN = typedFailure(
-  {
-    error: {
-      code: 'forbidden',
-      message: 'the principal is not allowed to perform this operation',
-      request_id: '018f0000-0000-7000-8000-00000000a10d',
-      retryable: false,
-      details: [],
-    },
-  },
-  'forbidden',
-  403,
-);
-
-const RATE_LIMITED = typedFailure(
-  {
-    error: {
-      code: 'rate_limited',
-      message: 'the read burst limit for this project was reached',
-      request_id: '018f0000-0000-7000-8000-00000000a10e',
-      retryable: true,
-      details: [],
-    },
-  },
-  'rate_limited',
-  429,
-);
-
-/** The same 429 as the server sends it: with its own `Retry-After`, which closes the retry. */
-const THROTTLED = typedFailure(
-  {
-    error: {
-      code: 'rate_limited',
-      message: 'the read burst limit for this project was reached',
-      request_id: '018f0000-0000-7000-8000-00000000a10e',
-      retryable: true,
-      details: [],
-    },
-  },
-  'rate_limited',
-  429,
-  30,
-);
-
-const UNAVAILABLE = typedFailure(
-  {
-    error: {
-      code: 'unavailable',
-      message: 'a dependency is busy',
-      request_id: '018f0000-0000-7000-8000-00000000a10f',
-      retryable: true,
-      details: [],
-    },
-  },
-  'unavailable',
-  503,
-);
-
-type Deferred<T> = {
-  readonly promise: Promise<T>;
-  readonly resolve: (value: T) => void;
-  readonly reject: (error: unknown) => void;
-};
-
-/**
- * One deferred answer, so a test controls exactly when a read settles. The project's lib target is
- * ES2022, so `Promise.withResolvers` is not available: the executor form is how the resolve/reject
- * handles escape to the test (the same spelling `policy.store.spec.ts` uses).
- */
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((settle, fail) => {
-    resolve = settle;
-    reject = fail;
-  });
-  return { promise, resolve, reject };
-}
-
-/** The two project reads the tab performs, each answer under the test's control. */
-class FakePolicyDataService {
-  readonly activationCalls: string[] = [];
-  readonly headCalls: string[] = [];
-  activation: () => Promise<PolicyActivationStateDto> = () => Promise.resolve(ACTIVATION);
-  head: () => Promise<PolicyHead> = () =>
-    Promise.resolve({ revision: HEAD, headRevisionId: HEAD.id });
-
-  getActivation(projectId: string): Promise<PolicyActivationStateDto> {
-    this.activationCalls.push(projectId);
-    return this.activation();
-  }
-
-  getHead(projectId: string): Promise<PolicyHead> {
-    this.headCalls.push(projectId);
-    return this.head();
-  }
-}
-
-/**
- * Both reads are fire-and-forget, so a test has to let the queued microtasks run before it can see
- * what an answer wrote. Four ticks cover the `settledRead` hop plus the read's own `await`.
- */
-async function flushMicrotasks(): Promise<void> {
-  for (let tick = 0; tick < 4; tick += 1) {
-    await Promise.resolve();
-  }
-}
+import {
+  ACTIVATION,
+  FORBIDDEN,
+  HEAD,
+  NOT_FOUND,
+  OTHER_PROJECT_ID,
+  PROJECT_ID,
+  RATE_LIMITED,
+  THROTTLED,
+  UNAVAILABLE,
+  deferred,
+  FakePolicyDataService,
+  flushMicrotasks,
+} from './policy-reads.test-support';
 
 describe('PolicyProjectReads', () => {
   let data: FakePolicyDataService;
