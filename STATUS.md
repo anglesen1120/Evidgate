@@ -230,7 +230,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 06.2.3-T1 | M | Async secret-scan `task` handler (outbox row written by `complete`): scan the object, set `scan_state`, write `masking_event`, enforce `reject_on_secret`; LANDED by S214 (#450, 4d2b26ae, migration 0066; AC4 stays with 06.2.1, residuals in the carried rows) | yes | yes (0049+) | no | n/a | yes |
 | 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1; partial: T1.1-T1.2 landed by S145 (#306, f8fd2f56; `healing_llm_call`, `healing_llm_budget`, provider seam, migration 0054), T1.3-T1.7 open | yes | yes (0049+) | no | T1.1-T1.2 ; T1.3-T1.4 ; T1.5-T1.6-T1.7 | yes (dep 12.3.1-T1 merged; `MockHealingLlmProvider` covers tests) |
 | 10.1.1-T3 | L | Environment bootstrap automation | yes | no | no | T3.1-T3.2 ; T3.3-T3.4 | yes for the scripts; AC5 needs a live instance |
-| 10.1.2-T1 | M | Secret inventory and CI check | yes | no | no | n/a | yes |
+| 10.1.2-T1 | M | Secret inventory and CI check | yes | no | no | n/a | yes PARTIAL (S250, #516): AC1 runbook anchors open |
 | 10.1.2-T2 | XS | Repository secret scanning and push protection | yes | no | no | n/a | yes (needs repo-admin token; ⚠️ plan feature availability) |
 | 10.2.1-T1 | L (rem T1.4) | Partial: T1.1–T1.3 images/SBOM shipped; T1.4 web bundle hosting and edge CSP/CORS deploy remain. | yes | no | S91: `infra/config-matrix.json` (telemetry endpoint/connect-src keys) | n/a — rem is T1.4 alone (S) | yes for edge config/checks; live publish needs a hosting target (vendor still undecided, 10.8.1) |
 | 11.2.1-T2 | M | Fork-PR credential-reachability test | yes | no | no | n/a | yes |

@@ -347,7 +347,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
                 violations.Add($"{template} answered {(int)response.StatusCode} {response.StatusCode} instead of 200");
             }
 
-            violations.AddRange(SecretScanner.Scan(body, secrets).Select(violation => $"{template}: {violation}"));
+            violations.AddRange(SecretScanner.Scan(body, secrets, template).Select(violation => $"{template}: {violation}"));
         }
 
         violations.ShouldBeEmpty(
@@ -376,6 +376,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ("/v1/projects/{p}/policies/head", seeded.PolicyRevisionId),
             ("/v1/projects/{p}/policy-activation", seeded.PolicyRevisionId),
             ("/v1/runs/{r}", seeded.RunId),
+            ("/v1/releases/{id}", seeded.ReleaseId),
         ];
 
         foreach (var (template, id) in seededRoutes)
@@ -519,6 +520,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             // The run's decision: a pending body carries no verdict, hash or reason yet, so it is clean by construction
             // and the scan still covers the route.
             ["/v1/runs/{r}/decision"] = $"/v1/runs/{seeded.RunId}/decision",
+            // The release read answers its component list — a name, a digest and ids, no secret — and carries no
+            // bound run, so it is clean by construction while the scan still covers the route.
+            ["/v1/releases/{id}"] = $"/v1/releases/{seeded.ReleaseId}",
         };
 
     /// <summary>
@@ -557,6 +561,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // unaddressable — and the scan would miss the route — without both.
         var manifestId = await CreateManifestAsync(client, project, suiteRevisionId, [caseRevisionId], environmentRevisionId);
         var runId = await CreateRunAsync(client, project, manifestId);
+        // One release of the same environment revision, so GET /v1/releases/{id} answers 200 with its component
+        // list (a name, a digest and two ids: no secret) instead of the 404 the scan would report.
+        var releaseId = await CreateReleaseAsync(client, project, environmentRevisionId);
 
         return new SeededResources(
             caseId,
@@ -566,7 +573,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             otherSuiteRevisionId,
             environmentRevisionId,
             policyRevisionId,
-            runId);
+            runId,
+            releaseId);
     }
 
     /// <summary>
@@ -732,6 +740,38 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     }
 
     /// <summary>
+    /// Creates a release of the seeded environment revision through the served route and
+    /// returns its id: the smallest accepted body, one component keyed <c>web</c> at a
+    /// well-formed digest, with the default <c>draft</c> state.
+    /// </summary>
+    private static async Task<Guid> CreateReleaseAsync(HttpClient client, Guid project, Guid environmentRevision)
+    {
+        var (status, body) = await PostAsync(
+            client,
+            $"/v1/projects/{project}/releases",
+            new
+            {
+                // A unique name: the release name is unique per project, so a rerun against a shared fixture database
+                // must not collide with an earlier seed's 409 `release_name_conflict`.
+                Name = "ac5-release " + Guid.CreateVersion7().ToString("N"),
+                Components = new[]
+                {
+                    new
+                    {
+                        ComponentKey = "web",
+                        Digest = "sha256:" + new string('a', 64),
+                        EnvironmentRevisionId = environmentRevision,
+                    },
+                },
+            });
+
+        status.ShouldBe(HttpStatusCode.Created, body);
+
+        using var document = JsonDocument.Parse(body);
+        return document.RootElement.GetProperty("release_id").GetGuid();
+    }
+
+    /// <summary>
     /// Arranges one policy revision through the harness's owner seam: the served
     /// create route needs <c>policy:write</c>, which the 00 §2 matrix does not give
     /// <c>tenant_admin</c>, so the row is arranged like the policy suites arrange it.
@@ -798,7 +838,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         Guid OtherSuiteRevisionId,
         Guid EnvironmentRevisionId,
         Guid PolicyRevisionId,
-        Guid RunId);
+        Guid RunId,
+        Guid ReleaseId);
 
     /// <summary>The id of the seeded member's membership, read under RLS as the org.</summary>
     private async Task<Guid> MembershipIdAsync(Guid org, Guid userId)
@@ -1028,13 +1069,13 @@ internal static partial class SecretScanner
     /// JSON document or NDJSON (the audit export streams one object per line); a body
     /// that parses as neither contributes nothing.
     /// </summary>
-    private static IReadOnlyList<string> MemberViolations(string body)
+    private static IReadOnlyList<string> MemberViolations(string body, string? routeTemplate)
     {
         var violations = new SortedSet<string>(StringComparer.Ordinal);
 
         foreach (var element in Elements(body))
         {
-            Collect(element, violations);
+            Collect(element, violations, routeTemplate);
         }
 
         return [.. violations];
@@ -1078,11 +1119,14 @@ internal static partial class SecretScanner
     /// plaintext or a JWT-shaped value, and one when a non-empty body is neither JSON
     /// nor NDJSON.
     /// </summary>
-    internal static IReadOnlyList<string> Scan(string body, IReadOnlyCollection<string> secretValues)
+    internal static IReadOnlyList<string> Scan(
+        string body,
+        IReadOnlyCollection<string> secretValues,
+        string? routeTemplate = null)
     {
         ArgumentNullException.ThrowIfNull(secretValues);
 
-        var violations = MemberViolations(body).ToList();
+        var violations = MemberViolations(body, routeTemplate).ToList();
 
         if (!string.IsNullOrWhiteSpace(body) && !IsJsonOrNdjson(body))
         {
@@ -1156,14 +1200,14 @@ internal static partial class SecretScanner
         }
     }
 
-    private static void Collect(JsonElement element, SortedSet<string> violations)
+    private static void Collect(JsonElement element, SortedSet<string> violations, string? routeTemplate)
     {
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
                 foreach (var property in element.EnumerateObject())
                 {
-                    if (IsForbidden(property.Name))
+                    if (IsForbidden(property.Name) && !IsBuildDigestExemption(routeTemplate, property))
                     {
                         violations.Add($"a JSON member named '{property.Name}' is on the secret deny-list");
                     }
@@ -1173,7 +1217,7 @@ internal static partial class SecretScanner
                         CollectSecretRefs(property.Value, violations);
                     }
 
-                    Collect(property.Value, violations);
+                    Collect(property.Value, violations, routeTemplate);
                 }
 
                 break;
@@ -1181,7 +1225,7 @@ internal static partial class SecretScanner
             case JsonValueKind.Array:
                 foreach (var item in element.EnumerateArray())
                 {
-                    Collect(item, violations);
+                    Collect(item, violations, routeTemplate);
                 }
 
                 break;
@@ -1212,6 +1256,26 @@ internal static partial class SecretScanner
     private static bool IsForbidden(string member) =>
         !AllowedMembers.Contains(member)
         && DenyTerms.Any(term => member.Contains(term, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The one path-scoped exemption from the deny list: <c>GET /v1/releases/{id}</c> returns each component's build
+    /// digest, which is <c>sha256:</c> + 64 lower-case hex over a build — an identifier that already appears in CI
+    /// logs, never key material. It is narrower than <see cref="AllowedMembers"/> on purpose: the member must be
+    /// <c>digest</c>, on that route only, and its value must be exactly that shape (the create route's
+    /// <c>release_invalid</c> rule), so no secret can be carried under the name elsewhere or with another value.
+    /// </summary>
+    private static bool IsBuildDigestExemption(string? routeTemplate, JsonProperty property) =>
+        routeTemplate == "/v1/releases/{id}"
+        && property.Name.Equals("digest", StringComparison.OrdinalIgnoreCase)
+        && property.Value.ValueKind == JsonValueKind.String
+        && BuildDigest().IsMatch(property.Value.GetString()!);
+
+    /// <summary>A build digest: <c>sha256:</c> + 64 lower-case hex, the shape the create route stores.</summary>
+    [GeneratedRegex(
+        "^sha256:[0-9a-f]{64}$",
+        RegexOptions.CultureInvariant,
+        matchTimeoutMilliseconds: 100)]
+    private static partial Regex BuildDigest();
 }
 
 /// <summary>
@@ -1286,5 +1350,31 @@ public sealed class SecretScannerTests
 
         SecretScanner.Scan(string.Empty, [])
             .ShouldBeEmpty("an empty body is not a violation");
+    }
+
+    /// <summary>
+    /// The build-digest exemption is path- and shape-scoped: a real <c>sha256:</c> digest on the release read route is
+    /// clean, while the same member name on another route, or a value that is not a build digest, still fires.
+    /// </summary>
+    [Fact]
+    public void Scan_Exempts_Only_A_Build_Digest_On_The_Release_Route()
+    {
+        var digest = "sha256:" + new string('a', 64);
+        var release = $$"""{"release_id":"{{Guid.Empty:D}}","components":[{"component_key":"web","digest":"{{digest}}"}]}""";
+
+        SecretScanner.Scan(release, [], "/v1/releases/{id}")
+            .ShouldBeEmpty("a build digest on the release read route is an identifier, not a secret");
+
+        SecretScanner.Scan(release, [], "/v1/runs/{r}")
+            .ShouldNotBeEmpty("the exemption is scoped to the release read route");
+
+        SecretScanner.Scan(
+                $$"""{"components":[{"digest":"{{new string('b', 64)}}"}]}""",
+                [],
+                "/v1/releases/{id}")
+            .ShouldNotBeEmpty("only the sha256:<64 hex> shape is exempt, so a bare hash still fires");
+
+        SecretScanner.Scan("""{"digest":"not a digest"}""", [], "/v1/releases/{id}")
+            .ShouldNotBeEmpty("a digest member carrying any other value is on the deny list as before");
     }
 }

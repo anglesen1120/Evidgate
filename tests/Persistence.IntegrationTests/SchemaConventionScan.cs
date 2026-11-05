@@ -153,6 +153,14 @@ internal static class SchemaConventionScan
             "public.masking_event",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only scan findings (06.2.3-T1; migration 0066): the app role holds SELECT + INSERT and UPDATE/DELETE/TRUNCATE are revoked, so a finding is written once and never rewritten — the row keeps created_at only, with no updated_at/version and no version trigger. A replayed scan is answered by `masking_event_artifact_pattern_key` (on conflict do nothing) rather than by a version bump. Its tenant key, composite FK, closed CHECKs and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.release_component",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Immutable component rows (05.6.1-T1; migration 0072): the app role holds SELECT + INSERT, UPDATE and DELETE are revoked, and the `release_component_guard` trigger refuses both for every role (it raises `release_component_immutable`) and refuses INSERT once the release is `active`, so a component is written once at create and keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs (release, environment_revision), same-project guard and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.release_run",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only binding rows (05.6.1-T1 table, T2 writer; migration 0072): the app role holds SELECT + INSERT and UPDATE/DELETE are revoked, and the `release_run_immutable` trigger refuses both for every role, so a binding is written once and keeps created_at only — no updated_at/version and no version trigger. Its tenant key, composite FKs (release, run), uniqueness and RLS are NOT exempt."),
     ];
 
     /// <summary>

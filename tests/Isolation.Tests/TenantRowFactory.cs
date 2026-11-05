@@ -735,6 +735,12 @@ internal sealed class TenantRowFactory
             // satisfies `hit_count > 0`. The composite FK fills `artifact_id` from the parent's tenant.
             ("public.masking_event", "pattern_class") => "aws_access_key",
             ("public.masking_event", "action") => "flagged",
+            // release_component (0072) closes `digest` to the content-address grammar (CHECK
+            // ^sha256:[0-9a-f]{64}$), which the generic text candidate satisfies nowhere. `component_key`'s
+            // candidate is 13 lowercase alphanumerics and fits the key grammar; the composite FKs fill
+            // `release_id` and `environment_revision_id` from parents of the same org, and the trigger allows
+            // the insert because every generated parent release is a draft.
+            ("public.release_component", "digest") => "sha256:" + new string('e', 64),
             _ => (object?)null,
         };
 
