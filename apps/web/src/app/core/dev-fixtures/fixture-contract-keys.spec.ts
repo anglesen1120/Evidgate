@@ -290,9 +290,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
   });
 
   it('pins at most one ok variant per operation and the 403 and 412 error fixtures (AC10)', () => {
-    // The served set, not the corpus directory: the decision and evidence-revision documents are
-    // typed modules (`./decision-fixtures`, `./evidence-revision-fixtures`), and a routed operation
-    // must resolve its variants here whether or not `fixtures/web-api` holds a directory for it.
+    // The served set: a routed operation must resolve its variants here.
     const documents = CATALOG.map((entry) => ({ name: entry.name, document: entry.document }));
 
     const variantsByOperation = new Map<string, string[]>();

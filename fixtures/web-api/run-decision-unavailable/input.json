@@ -1,0 +1,19 @@
+{
+  "operation_id": "getRunDecision",
+  "variant": "unavailable",
+  "status": 503,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-00000000dc05",
+    "Retry-After": "5"
+  },
+  "latency_ms": 0,
+  "body": {
+    "error": {
+      "code": "unavailable",
+      "message": "the decision service is unavailable for this request",
+      "request_id": "018f0000-0000-7000-8000-00000000dc05",
+      "retryable": true,
+      "details": []
+    }
+  }
+}

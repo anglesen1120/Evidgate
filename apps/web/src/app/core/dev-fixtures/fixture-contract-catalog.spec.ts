@@ -14,35 +14,12 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       new Set(catalogNames).size,
       `FIXTURE_CATALOG lists a fixture twice: ${catalogNames.join(', ')}`,
     ).toBe(catalogNames.length);
-    // The decision and evidence-revision documents are typed modules
-    // (`./decision-fixtures`, `./evidence-revision-fixtures`) rather than corpus directories until
-    // the reconciled `Decision` schema lands — a `pending` body needs `reasons: null`, which today's
-    // non-nullable `Decision.reasons` refuses. They are exempt from the directory equality and from
-    // the body check above, and the reconciliation deletes this list together with the modules.
-    const TYPED_MODULE_DOCUMENTS: readonly string[] = [
-      'run-decision',
-      'run-decision-evaluated-fail-missing-shard',
-      'run-decision-evaluated-pass',
-      'run-decision-shadow-refused',
-      'run-decision-unavailable',
-      'run-evidence-revisions',
-      'run-evidence-revisions-empty',
-      'run-evidence-revisions-unavailable',
-    ];
-    const fromModules = new Set(TYPED_MODULE_DOCUMENTS);
     expect(
-      [...catalogNames].filter((name) => !fromModules.has(name)).sort(),
+      [...catalogNames].sort(),
       'FIXTURE_CATALOG and fixtures/web-api hold different fixtures — the explicit input.json imports drifted from the corpus',
     ).toEqual([...corpusByName.keys()].sort());
-    expect(
-      catalogNames.filter((name) => fromModules.has(name)).sort(),
-      'FIXTURE_CATALOG no longer serves one of the typed-module documents',
-    ).toEqual([...fromModules].sort());
 
     for (const entry of CATALOG) {
-      if (fromModules.has(entry.name)) {
-        continue;
-      }
       const fixture = corpusByName.get(entry.name);
       if (fixture === undefined) {
         throw new Error(
