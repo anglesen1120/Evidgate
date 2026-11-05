@@ -451,7 +451,8 @@ public sealed class UsagePriceSchemaTests
         // The platform card and the org's own rows are both legal references.
         var ownRow = Guid.CreateVersion7();
         await InsertAsync(database, orgA, LedgerRow(ownRow, orgA, globalId));
-        await InsertAsync(database, orgA, LedgerRow(Guid.CreateVersion7(), orgA, priceA));
+        var overrideRow = Guid.CreateVersion7();
+        await InsertAsync(database, orgA, LedgerRow(overrideRow, orgA, priceA));
         await InsertAsync(database, orgA, LedgerRow(Guid.CreateVersion7(), orgA, null));
 
         // The guard also runs on an update that rewrites the reference or the tenant, so a repair
@@ -470,7 +471,7 @@ public sealed class UsagePriceSchemaTests
         {
             var retenanted = await owner.CaptureErrorAsync(
                 "update public.usage_ledger_entry set org_id = @org::uuid where id = @id::uuid",
-                new (string Name, object Value)[] { ("org", orgB), ("id", ownRow) });
+                new (string Name, object Value)[] { ("org", orgB), ("id", overrideRow) });
             retenanted.SqlState.ShouldBe(
                 "23503",
                 "moving a row to another tenant would leave it naming the old org's price");

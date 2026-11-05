@@ -194,7 +194,7 @@ DEFINER_AUDIT_EXEMPT = {
         "the exemption is recorded rather than the row"
     ),
     "evidgate.usage_price_insert_global": (
-        "created 0073_usage_price.sql:185 (uuid, text, numeric, text, timestamptz, timestamptz, numeric, text): the "
+        "created 0073_usage_price.sql:215 (uuid, text, numeric, text, timestamptz, timestamptz, numeric, text): the "
         "rate-card loader stands in for the migration role, because a global price belongs to no tenant and the "
         "app role is refused a global row by row level security. The configuration act has no org chain to append "
         "to: the durable record is the immutable `usage_price` row it writes (scope, metric, amount, window and "
