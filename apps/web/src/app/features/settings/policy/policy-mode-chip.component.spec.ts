@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { PolicyModeChipComponent } from './policy-mode-chip.component';
+import { rootElement } from './policy-reads.test-support';
 
 describe('PolicyModeChipComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
@@ -14,7 +15,7 @@ describe('PolicyModeChipComponent', () => {
     const fixture = TestBed.createComponent(PolicyModeChipComponent);
     fixture.componentRef.setInput('mode', mode);
     fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
+    const root = rootElement(fixture);
     const chip = root.querySelector<HTMLElement>('[data-policy-mode]');
     expect(chip?.dataset['mode']).toBe(dataMode);
     expect(chip?.textContent).toMatch(/\S/);
@@ -28,7 +29,7 @@ describe('PolicyModeChipComponent', () => {
     const fixture = TestBed.createComponent(PolicyModeChipComponent);
     fixture.componentRef.setInput('mode', '');
     fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
+    const root = rootElement(fixture);
     // The empty string is `unavailable`, not "a mode whose name is empty": the attribute is the
     // token the e2e suite reads, and an empty one would read as a raw mode nobody declared.
     expect(root.querySelector('[data-policy-mode]')?.getAttribute('data-mode')).toBe('unavailable');
@@ -37,7 +38,7 @@ describe('PolicyModeChipComponent', () => {
     const fixture = TestBed.createComponent(PolicyModeChipComponent);
     fixture.componentRef.setInput('mode', '<img src=x onerror=1>');
     fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
+    const root = rootElement(fixture);
     expect(root.textContent).toContain('<img src=x onerror=1>');
     expect(root.querySelector('img')).toBeNull();
   });
