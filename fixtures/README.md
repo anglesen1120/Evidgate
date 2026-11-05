@@ -59,7 +59,7 @@ Fixture review checklist (per 00 §5.7 S3): synthetic ids/emails only; provenanc
 
 ## `<producer>/<case>/` golden corpus (04.6.1-T1)
 
-Every producer format the ingestion path parses gets a case directory holding the original report plus the normalised events it must produce. `src/Tools/Evidgate.GoldenHarness` replays each case through that producer's in-process parser and diffs produced against expected; the console tool registers no parser, so the checked-in cases report `PENDING` until each mapper lands.
+Every producer format the ingestion path parses gets a case directory holding the original report plus the normalised events it must produce. `src/Tools/Evidgate.GoldenHarness` replays each case through that producer's in-process parser and diffs produced against expected; the console tool registers only the producers whose mapper has landed (`GoldenParsers`), so a case whose parser is still missing reports `PENDING`.
 
 This is _not_ the `<domain>/<name>/` corpus above: the harness treats a directory holding `case.json` or `expected.json` as a case, and a directory holding `meta.json` belongs to the older corpus and is skipped together with everything below it. The producer directory name is the parser registry key (`report_parser.parser_id`).
 
@@ -107,9 +107,11 @@ dotnet run --project src/Tools/Evidgate.GoldenHarness -- --fixtures fixtures --s
 
 ### Seeded cases
 
-The seeded corpus is **pending, not verified**: no production mapper is registered with the harness yet, so these cases document the expected event-level output without proving any adapter.
+The pytest cases are **verified**: `junit-pytest` is registered against the real mapper (version `1.0.0`), so they
+must `PASS`. The Playwright case is still **pending, not verified**: no Playwright mapper is registered yet, so it
+documents the expected event-level output without proving an adapter.
 
-- `junit-pytest/happy/` — pytest `junitxml`: one pass, one failure and one skip, `declared_count: 3`.
+- `junit-pytest/happy/` — pytest `junitxml`: one pass, one failure and one skip, `declared_count: 3`; raw statuses are the producer's own words (`passed`, `failure`, `skipped`).
 - `junit-pytest/truncated/` — a document cut off inside a testcase stays honest: `raw_report_status: "malformed"`, zero events.
 - `playwright-reporter/skeleton/` — the Playwright JSON reporter's suite/spec/test/result nesting with one passing test.
 

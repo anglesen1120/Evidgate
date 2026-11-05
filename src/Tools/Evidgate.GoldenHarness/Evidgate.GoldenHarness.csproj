@@ -8,5 +8,8 @@
     <!-- RFC 8785 canonical bytes are the equality oracle of the event diff, so the tool uses the
          repository's one canonicalizer rather than comparing JSON text itself. -->
     <ProjectReference Include="..\..\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />
+    <!-- The corpus replays each producer's real mapper in-process, and the mappers live in the module that
+         owns them; the fixture table in GoldenParsers registers them. -->
+    <ProjectReference Include="..\..\Modules\Evidgate.Modules.Evidence\Evidgate.Modules.Evidence.csproj" />
   </ItemGroup>
 </Project>
