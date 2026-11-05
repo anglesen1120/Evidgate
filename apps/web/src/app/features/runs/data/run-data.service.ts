@@ -51,8 +51,8 @@ export class RunDataService {
   /**
    * The run's live decision body, validated: `null` when the served value is not a contract body.
    *
-   * The gateway hands the value over untyped because the generated `Decision` type is stale (see
-   * `core/data/runs-data.service.ts#getDecision`). `readDecisionBody` is the one place that turns it
+   * The gateway hands the value over untyped (see `core/data/runs-data.service.ts#getDecision`), so
+   * `readDecisionBody` is the one place that turns it
    * into named members, so neither the store nor a component has to trust a wire value. A refusal
    * still arrives as the gateway's typed `ApiRequestError`; only a 2xx body reaches the parser.
    */
