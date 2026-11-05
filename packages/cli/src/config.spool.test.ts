@@ -15,7 +15,8 @@ import {
   resolveSpoolSettings,
   spoolDirMissingError,
 } from './config.js';
-import { baseEnv, captureCliError } from './config.testing.js';
+import { baseEnv } from './config.testing.js';
+import { captureCliError } from './commands/cliSpec.testing.js';
 import { resetSecrets } from './redact.js';
 
 // The spool surface is resolved LAZILY by `config.spoolSettings()` (or

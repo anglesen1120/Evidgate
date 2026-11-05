@@ -13,8 +13,9 @@
   },
   "include": ["src"],
   // 01.6.1-T1.2: specs and the Vitest config are type-checked by tsconfig.spec.json and
-  // must never be emitted into dist.
-  "exclude": ["src/**/*.test.ts", "vitest.config.ts"],
+  // must never be emitted into dist. The fixture modules the specs share (`*.testing.ts`)
+  // are test-only too, so they stay out of the shipped `dist` as well.
+  "exclude": ["src/**/*.test.ts", "src/**/*.testing.ts", "vitest.config.ts"],
   // 04.3.3-T2.2: @evidgate/cli workspace dependency — the build must see its emitted
   // declarations (src/attach.ts types against the CLI's attachment facade,
   // `createAttachmentUploader`/`AttachmentUploader`, which wraps `uploadFile()`; npm

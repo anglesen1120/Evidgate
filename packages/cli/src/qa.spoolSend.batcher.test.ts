@@ -8,7 +8,6 @@ import { describe, expect, it } from 'vitest';
 import { OversizedEventError, maxBatchBytes, maxBatchEvents, packBatches } from './batcher.js';
 
 import {
-  collect,
   eventIdFor,
   eventsOf,
   moderatelyCompressiblePad,
@@ -17,6 +16,7 @@ import {
   runId,
   synth,
 } from './qa.spoolSend.testing.js';
+import { collect } from './spool.testing.js';
 
 describe('batcher: boundaries (04.2.3 AC4, contracts/cli.md §11)', () => {
   it.each([
