@@ -5,9 +5,10 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 /// (<c>failure</c>, <c>error</c>, <c>skipped</c>, or the implicit <c>passed</c>), and the normalised value is
 /// what the event stores; keeping both means a reader can always see the producer's own spelling.
 /// <para>
-/// Where one testcase carries more than one outcome element (a retried or doubly reported case), the more severe
-/// one wins — <c>error</c>, then <c>failure</c>, then <c>skipped</c> — so the choice is deterministic and never
-/// understates a failure.
+/// Where one planned execution carries more than one result — several outcome elements on one testcase, or a
+/// testcase the report repeats (a retry) — the most severe result wins: <c>error</c>, then <c>failed</c>, then
+/// <c>skipped</c>, then <c>passed</c>. The choice is deterministic and never understates a failure, and it is the
+/// same order whichever result the document lists first.
 /// </para>
 /// </summary>
 internal static class PytestStatus
@@ -46,4 +47,22 @@ internal static class PytestStatus
 
         return sawSkipped ? (Skipped, Skipped) : (Passed, Passed);
     }
+
+    /// <summary>The severity order of the stored status values: <c>error</c> &gt; <c>failed</c> &gt; <c>skipped</c> &gt; <c>passed</c>.</summary>
+    /// <param name="normalized">A normalised status value.</param>
+    /// <returns>The severity rank; an unknown value ranks with <c>passed</c>, so it never outranks a reported result.</returns>
+    public static int Severity(string normalized) => normalized switch
+    {
+        Error => 3,
+        Failed => 2,
+        Skipped => 1,
+        _ => 0,
+    };
+
+    /// <summary>True when <paramref name="normalized"/> reports a more severe result than <paramref name="than"/>.</summary>
+    /// <param name="normalized">The candidate status to store for the execution.</param>
+    /// <param name="than">The status already kept for the same execution.</param>
+    /// <returns>True when the candidate must replace the kept status.</returns>
+    public static bool IsMoreSevere(string normalized, string than) =>
+        Severity(normalized) > Severity(than);
 }

@@ -55,8 +55,8 @@ internal sealed record JUnitMapContext(
 /// <param name="RawStatus">The producer's own status word, verbatim (<c>failure</c>, <c>error</c>, <c>skipped</c>, <c>passed</c>).</param>
 /// <param name="Normalized">The stored status: <c>passed</c>, <c>failed</c>, <c>error</c> or <c>skipped</c>.</param>
 /// <param name="DurationMs">The testcase's wall time in whole milliseconds, or <see langword="null"/> when absent or unusable.</param>
-/// <param name="Classname">The raw <c>classname</c> attribute (empty when absent).</param>
-/// <param name="Name">The raw <c>name</c> attribute (empty when absent).</param>
+/// <param name="Classname">The raw <c>classname</c> attribute (empty when absent), bounded to the mapper's echo cap.</param>
+/// <param name="Name">The raw <c>name</c> attribute (empty when absent), bounded to the mapper's echo cap.</param>
 /// <param name="Sequence">1-based document position among the report's <c>testcase</c> elements.</param>
 internal sealed record MappedCase(
     string ExecutionKey,
@@ -96,7 +96,10 @@ internal static class JUnitDiscrepancies
     /// <summary>The report named a testcase the run planned no execution for; no event was emitted.</summary>
     public const string UnmappedCase = "unmapped_case";
 
-    /// <summary>Two testcases resolved to one execution key; the later one was skipped.</summary>
+    /// <summary>
+    /// Two testcases resolved to one execution key. One event is emitted for the execution; the case keeps the
+    /// earlier testcase's position and identity, and takes the more severe of the two statuses.
+    /// </summary>
     public const string DuplicateCase = "duplicate_case";
 
     /// <summary>The declared <c>tests</c> counter differs from the testcases the document actually carries.</summary>

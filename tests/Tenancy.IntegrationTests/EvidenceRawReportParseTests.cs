@@ -1,8 +1,8 @@
-// 04.4.1-T1.4 on the path the acceptance criteria name: the `raw_report_parse` task handler over the real Api
-// composition, a real PostgreSQL and a real SeaweedFS container. The handler is resolved from the production service
-// collection, so the tests also prove the registration (transactionless handler, resolver, mapper enumerable) rather
-// than the handler's constructor. Expectations come from the plan (04.4.1 §2 AC3/AC4/AC7, §3-§5) and the coordinator
-// decision that migration 0075 ships `report_parser` only (no `raw_report` row in this task).
+// The `raw_report_parse` task handler over the real Api composition, a real PostgreSQL and a real SeaweedFS
+// container: the handler is resolved from the production service collection, so these tests also prove the
+// registration (transactionless handler, resolver, mapper enumerable, attempt writer) rather than the constructor.
+// Expectations come from the feature plan (AC1/AC3/AC7, the handler task) and the coordinator decision that the
+// migration ships `report_parser` only.
 using System.Globalization;
 using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
@@ -11,6 +11,7 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.Modules.Evidence.Application;
 using Evidgate.Modules.Evidence.Domain;
+using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -19,20 +20,21 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The <c>raw_report_parse</c> handler (04.4.1-T1) against the shared migrated database and one SeaweedFS container:
-/// a resolvable report writes its mapped <c>test.finished</c> events and the freeze trigger's outbox row in one commit,
-/// a replay writes nothing new, an unknown producer kind and a malformed document write nothing at all, and a report
-/// whose artifact belongs to another run writes nothing either.
+/// The <c>raw_report_parse</c> handler against the shared migrated database and one SeaweedFS container: a resolvable
+/// report writes its mapped <c>test.finished</c> events, their case attempts, a closed synthetic producer slot and the
+/// reconcile trigger in one commit; a replay writes nothing new unless the bytes changed; the run's admission rules
+/// refuse a closed run and a deleted or suspended project; and an unknown producer kind or a malformed document writes
+/// nothing at all.
 /// </summary>
 /// <remarks>
-/// The mapper and the parser registry are production: the built-in <c>junit-pytest/1.0.0</c> row comes from migration
-/// 0075, and the run's one planned execution is seeded as the owner seam, the way the run's other parents are.
+/// The mapper and the parser registry are production: the built-in <c>junit-pytest/1.0.0</c> row comes from the
+/// migration, and the run's one planned execution is seeded as the owner seam, the way the run's other parents are.
 /// </remarks>
 [Trait("Category", "Docker")]
 public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
     : IClassFixture<SeaweedFsStore>
 {
-    /// <summary>The registry's producer kind for a pytest JUnit XML report (0075 seed).</summary>
+    /// <summary>The registry's producer kind for a pytest JUnit XML report.</summary>
     private const string ProducerKind = "pytest-junitxml";
 
     /// <summary>A producer kind no parser registers.</summary>
@@ -44,14 +46,25 @@ public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, 
     private static readonly string ExecutionKey = new('a', 64);
 
     /// <summary>
-    /// One case that resolves (its <c>name</c> is the seeded case's name) and one that cannot (no planned execution
-    /// carries that name), so one run proves both the insert and the <c>unmapped_case</c> path.
+    /// One case that resolves by its bare name (the seeded plan's case is named <c>probe</c>) and one that cannot (no
+    /// planned execution carries that name), so one run proves both the insert and the <c>unmapped_case</c> path.
     /// </summary>
     private static readonly byte[] ReportBody = """
         <?xml version="1.0" encoding="utf-8"?>
         <testsuites>
           <testsuite name="pytest" tests="2">
-            <testcase classname="tests.test_payments" name="probe" time="0.012"/>
+            <testcase name="probe" time="0.012"/>
+            <testcase classname="tests.test_payments" name="ghost_case" time="0.003"/>
+          </testsuite>
+        </testsuites>
+        """u8.ToArray();
+
+    /// <summary>The same report with a different duration: the same identities, a different payload hash.</summary>
+    private static readonly byte[] ChangedDurationBody = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <testsuites>
+          <testsuite name="pytest" tests="2">
+            <testcase name="probe" time="0.020"/>
             <testcase classname="tests.test_payments" name="ghost_case" time="0.003"/>
           </testsuite>
         </testsuites>
@@ -77,7 +90,7 @@ public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, 
     }
 
     [Fact]
-    public async Task Mapped_Report_Writes_One_Event_Per_Resolved_Case_And_One_Outbox_Row()
+    public async Task Mapped_Report_Writes_Its_Event_Attempt_Closed_Slot_And_One_Reconcile_Trigger()
     {
         var world = await StartAsync();
         await using var _ = world;
@@ -100,10 +113,48 @@ public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, 
             world.Database,
             $"select execution_key from public.event where artifact_ids = array['{artifactId:D}'::uuid]");
         key.ShouldBe(ExecutionKey);
+
+        // The finish is also the plan's attempt: the report path feeds the same writer the event batch route does.
+        (await CountAsync(world, "case_attempt")).ShouldBe(1);
+        (await _fixture.ScalarAsync<int>(
+            world.Database,
+            $"select attempt_no from public.case_attempt where org_id = '{world.Org:D}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            $"select raw_status from public.case_attempt where org_id = '{world.Org:D}'")).ShouldBe("passed");
+
+        // The synthetic slot is closed and declared in the same commit, so no finalize has to close a report's shard.
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            $"select closed_at is not null from public.producer_slot where org_id = '{world.Org:D}'")).ShouldBeTrue();
+        (await _fixture.ScalarAsync<int>(
+            world.Database,
+            $"select declared_count from public.producer_slot where org_id = '{world.Org:D}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select declared_last_sequence from public.producer_slot where org_id = '{world.Org:D}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            $"select producer_id from public.producer_slot where org_id = '{world.Org:D}'"))
+            .ShouldBe("junit-" + artifactId.ToString("D", CultureInfo.InvariantCulture));
+
+        // An ordinary run gets the ordinary trigger: the reconciler already sees a closed shard, and the trigger
+        // carries the slot's declaration rather than a late-evidence marker.
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            $"select task_type from public.outbox where org_id = '{world.Org:D}'"))
+            .ShouldBe(RunReconcileContract.OutboxTaskType);
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            $"select payload ? 'late_evidence' from public.outbox where org_id = '{world.Org:D}'")).ShouldBeFalse();
+        (await _fixture.ScalarAsync<int>(
+            world.Database,
+            $"select (payload ->> 'declared_count')::int from public.outbox where org_id = '{world.Org:D}'"))
+            .ShouldBe(1);
     }
 
     [Fact]
-    public async Task Replay_Of_The_Same_Bytes_Writes_No_Second_Event_And_No_Second_Outbox_Row()
+    public async Task Replay_Of_The_Same_Bytes_Writes_No_Second_Event_Attempt_Or_Outbox_Row()
     {
         var world = await StartAsync();
         await using var _ = world;
@@ -117,7 +168,119 @@ public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, 
         second.Status.ShouldBe(ParseRawReportOutcome.Parsed);
         second.Events.ShouldBe(0);
         (await CountAsync(world, "event", artifactId)).ShouldBe(1);
+        (await CountAsync(world, "case_attempt")).ShouldBe(1);
         (await CountAsync(world, "outbox")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Replay_Whose_Bytes_Changed_Refuses_The_Whole_Attempt_And_Keeps_The_Stored_Evidence()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, ReportBody);
+        await ParseAsync(world, artifactId, ProducerKind);
+
+        // The same artifact and the same testcase names, with a different duration: the identity is unchanged and the
+        // substantive hash is not, so the replay must refuse instead of overwriting immutable evidence.
+        await StoreAsync(world, artifactId, ChangedDurationBody);
+        var outcome = await ParseAsync(world, artifactId, ProducerKind);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
+        outcome.Reason.ShouldBe("duplicate_different_payload");
+        outcome.Events.ShouldBe(0);
+        (await CountAsync(world, "event", artifactId)).ShouldBe(1);
+        (await CountAsync(world, "case_attempt")).ShouldBe(1);
+        (await CountAsync(world, "outbox")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long?>(
+            world.Database,
+            $"select duration_ms from public.event where artifact_ids = array['{artifactId:D}'::uuid]"))
+            .ShouldBe(12L);
+    }
+
+    [Fact]
+    public async Task Complete_Run_Refuses_The_Report_And_Writes_Nothing()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, ReportBody);
+        await SetRunStateAsync(world, "update public.run set state = 'complete'");
+
+        var outcome = await ParseAsync(world, artifactId, ProducerKind);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
+        outcome.Reason.ShouldBe(RunAdmissionPolicy.RunClosed);
+        await AssertNothingWrittenAsync(world, artifactId);
+    }
+
+    [Fact]
+    public async Task Incomplete_Run_Past_Its_Late_Window_Refuses_The_Report_And_Writes_Nothing()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, ReportBody);
+        await SetRunStateAsync(
+            world,
+            "update public.run set state = 'incomplete', collection_deadline_at = now() - interval '2 days', late_window_minutes = 1");
+
+        var outcome = await ParseAsync(world, artifactId, ProducerKind);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
+        outcome.Reason.ShouldBe(RunAdmissionPolicy.RunClosed);
+        await AssertNothingWrittenAsync(world, artifactId);
+    }
+
+    [Fact]
+    public async Task Canceled_Run_Accepts_The_Report_And_Marks_It_After_Cancel()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, ReportBody);
+        await SetRunStateAsync(world, "update public.run set state = 'canceled'");
+
+        var outcome = await ParseAsync(world, artifactId, ProducerKind);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
+        outcome.Events.ShouldBe(1);
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            $"select after_cancel from public.event where artifact_ids = array['{artifactId:D}'::uuid]")).ShouldBeTrue();
+        (await CountAsync(world, "outbox")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Suspended_Project_Refuses_The_Report_And_Writes_Nothing()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, ReportBody);
+        await _fixture.ExecuteAsync(world.Database, $"update public.project set status = 'suspended' where id = '{world.Project:D}'");
+
+        var outcome = await ParseAsync(world, artifactId, ProducerKind);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
+        outcome.Reason.ShouldBe(RunAdmissionPolicy.ProjectSuspended);
+        await AssertNothingWrittenAsync(world, artifactId);
+    }
+
+    [Fact]
+    public async Task Deleted_Project_Refuses_The_Report_And_Writes_Nothing()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, ReportBody);
+        await _fixture.ExecuteAsync(world.Database, $"update public.project set status = 'deleted' where id = '{world.Project:D}'");
+
+        var outcome = await ParseAsync(world, artifactId, ProducerKind);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
+        outcome.Reason.ShouldBe(RunAdmissionPolicy.ProjectDeleted);
+        await AssertNothingWrittenAsync(world, artifactId);
     }
 
     [Fact]
@@ -219,7 +382,7 @@ public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, 
 
     /// <summary>
     /// One planned execution for the run, pointing at the case and revision <see cref="RunRowSeeder"/> seeds (name
-    /// <c>probe</c>, path <c>a</c>): the report's <c>name="probe"</c> is the one hint that must resolve.
+    /// <c>probe</c>, path <c>a</c>): the report's bare-name testcase is the one hint that must resolve.
     /// </summary>
     private async Task SeedPlanAsync(World world)
     {
@@ -239,7 +402,7 @@ public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, 
     private async Task<Guid> SeedArtifactAsync(World world, byte[] body)
     {
         var artifactId = Guid.CreateVersion7();
-        var key = $"org/{world.Org:D}/project/{world.Project:D}/run/{world.RunId:D}/attempt/{ExecutionKey}/1/{artifactId:D}";
+        var key = ObjectKeyFor(world, artifactId);
         var checksum = "sha256:" + Convert.ToHexStringLower(
             System.Security.Cryptography.SHA256.HashData(body));
 
@@ -254,6 +417,27 @@ public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, 
             + $"'{ArtifactState.Ready}', {body.LongLength.ToString(CultureInfo.InvariantCulture)}, null)");
 
         return artifactId;
+    }
+
+    /// <summary>Replaces the stored bytes of an artifact, the way a re-upload of the same coordinate would.</summary>
+    private async Task StoreAsync(World world, Guid artifactId, byte[] body) =>
+        await _store.PutAsync(ObjectKeyFor(world, artifactId), body);
+
+    /// <summary>The final key the artifact row mints, so a test writes and the handler reads the same object.</summary>
+    private static string ObjectKeyFor(World world, Guid artifactId) =>
+        $"org/{world.Org:D}/project/{world.Project:D}/run/{world.RunId:D}/attempt/{ExecutionKey}/1/{artifactId:D}";
+
+    /// <summary>Moves the seeded run into one state, as the owner seam the reconciler's tests also use.</summary>
+    private async Task SetRunStateAsync(World world, string sql) =>
+        await _fixture.ExecuteAsync(world.Database, sql + $" where id = '{world.RunId:D}'");
+
+    /// <summary>Asserts a refusal left no event, attempt, slot or trigger behind in this tenant.</summary>
+    private async Task AssertNothingWrittenAsync(World world, Guid artifactId)
+    {
+        (await CountAsync(world, "event", artifactId)).ShouldBe(0);
+        (await CountAsync(world, "case_attempt")).ShouldBe(0);
+        (await CountAsync(world, "outbox")).ShouldBe(0);
+        (await CountAsync(world, "producer_slot")).ShouldBe(0);
     }
 
     /// <summary>

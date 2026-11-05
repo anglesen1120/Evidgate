@@ -4,7 +4,9 @@ using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Orchestrator.Contracts;
@@ -39,7 +41,10 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
     /// <summary>No parser is registered for the producer kind, or none is loaded; zero events.</summary>
     public const string Unsupported = "unsupported";
 
-    /// <summary>There was nothing to parse (absent, not ready, another run's report, no free producer slot).</summary>
+    /// <summary>
+    /// There was nothing this attempt could store: the artifact, the run or the producer slot was absent or taken, the
+    /// run no longer admits evidence, or a replay disagreed with the stored rows. Zero events; terminal.
+    /// </summary>
     public const string Skipped = "skipped";
 
     /// <summary>True when the attempt left no event row because the document was refused.</summary>
@@ -47,27 +52,42 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 }
 
 /// <summary>
-/// Maps one stored raw report to <c>test.finished</c> events under the parser its producer kind registers
-/// (04.4.1-T1.4): the registry decides the parser pair, the mapper decides the cases, and this handler decides what may
-/// be written and in which transaction.
+/// Maps one stored raw report to <c>test.finished</c> events under the parser its producer kind registers: the registry
+/// decides the parser pair, the mapper decides the cases, and this handler decides what may be written and in which
+/// transaction.
 /// <para>
-/// <b>The bytes are read and parsed before any write transaction opens.</b> One short read-only scope resolves what
-/// the fetch needs (the artifact, the kind's byte cap, the parser pair, the run's plan), then closes; the object is
-/// fetched and the document mapped with no scope open (00 §5.7 P5). Only after the mapping succeeded does a second
-/// scope open, and that one holds the run's lock, the synthetic producer slot, every event in one statement, and the
-/// reconcile trigger — all committed together or not at all.
+/// <b>The bytes are read, the event rows are serialized and hashed, and only then does a write transaction open.</b>
+/// One short read-only scope resolves what the fetch needs (the artifact, the kind's byte cap, the parser pair, the
+/// run's plan), then closes; the object is fetched and the document mapped with no scope open (00 §5.7 P5). The
+/// serialized rows — including every payload hash and every case-attempt input — are computed with no scope open too,
+/// so the transaction that follows holds a connection only for its writes.
+/// </para>
+/// <para>
+/// <b>Admission is the event batch route's, decided once under the run's lock.</b> A complete run, an incomplete run
+/// past its late window, and a deleted or suspended project refuse the write as a terminal named outcome; a canceled
+/// run accepts it and marks it <c>after_cancel</c>, an incomplete run inside its window accepts it and marks it
+/// <c>late</c>. The rule itself is <see cref="RunAdmissionPolicy"/>, shared with the ingest path.
+/// </para>
+/// <para>
+/// <b>One transaction writes the slot, the events, the attempts and the trigger.</b> The synthetic producer's slot is
+/// created already closed and declared, because no producer will ever finalize a report, and only then can the
+/// reconciler compare this shard instead of waiting on an open one. Every newly inserted finish also becomes a
+/// <c>case_attempt</c> row through the existing writer, and one reconcile trigger is enqueued — the late-evidence one
+/// for a run that already finished as incomplete, the ordinary one for every other run.
+/// </para>
+/// <para>
+/// <b>A replay is a no-op only when it is the same evidence.</b> The producer id is synthetic and per report
+/// (<c>junit-&lt;artifact id&gt;</c>) and the sequence is the testcase's document position, so
+/// <c>event_run_producer_sequence_key</c> matches the stored rows of a second parse. Each matched row's stored payload
+/// hash is compared with the one this parse computed over the execution key, the statuses, the duration and the
+/// <c>ext</c> document: identical hashes make the attempt a no-op, and a different hash refuses the whole attempt
+/// transactionally instead of overwriting immutable evidence.
 /// </para>
 /// <para>
 /// <b>A refused document writes nothing.</b> <see cref="JUnitParseRefusedException"/> is the mapper's only way to
-/// report a refusal (DTD, truncation, cap, timeout), and it becomes a named <c>malformed</c> outcome with zero events.
-/// No other exception is read as a verdict: a resolver or storage fault must surface so the queue retries instead of
-/// recording a document as broken.
-/// </para>
-/// <para>
-/// <b>A replay is a no-op.</b> The producer id is synthetic and per report (<c>junit-&lt;artifact id&gt;</c>), and the
-/// sequence is the testcase's document position, so <c>event_run_producer_sequence_key</c> makes the second insert of
-/// the same event set match no row: the slot's high-water mark and the reconcile trigger are written only when at
-/// least one event was new.
+/// report a refusal (DTD, truncation, cap), and it becomes a named <c>malformed</c> outcome with zero events — except a
+/// wall-clock <c>timeout</c>, which is an infrastructure abandon rather than a verdict and is thrown so the queue
+/// retries it. No other exception is read as a verdict: a resolver or storage fault must surface.
 /// </para>
 /// <para>
 /// <b>A report whose artifact belongs to another run, or another tenant, yields no event.</b> The payload's run id is
@@ -81,6 +101,7 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// <param name="storage">The object store the report's bytes are read from, capped by the kind policy.</param>
 /// <param name="parsers">The parser registry read (producer kind → parser pair).</param>
 /// <param name="mappers">The loaded JUnit mappers; the one whose pair the registry names does the mapping.</param>
+/// <param name="attempts">The case-attempt writer; it joins this handler's transaction and never commits.</param>
 /// <param name="outbox">The reconcile trigger's transactional outbox writer.</param>
 /// <param name="logger">The one structured line each attempt writes.</param>
 internal sealed partial class ParseRawReportHandler(
@@ -90,17 +111,21 @@ internal sealed partial class ParseRawReportHandler(
     IObjectStorage storage,
     IReportParserResolver parsers,
     IEnumerable<IJUnitMapper> mappers,
+    ICaseAttemptWriter attempts,
     IOutboxWriter outbox,
     ILogger<ParseRawReportHandler> logger) : ITransactionlessTaskHandler<ParseRawReportPayload>
 {
     /// <summary>The cap name a report over its byte budget carries in telemetry.</summary>
     private const string ReportBytesCap = "report_bytes";
 
-    /// <summary>The one event type a mapped testcase becomes.</summary>
-    private const string TestFinished = "test.finished";
-
     /// <summary>The prefix of the synthetic producer id; the artifact id makes it unique per report.</summary>
     private const string ProducerPrefix = "junit-";
+
+    /// <summary>
+    /// The binding the synthetic slot carries: no credential writes this producer, so the slot is bound to a value no
+    /// token can hold and a producer with the same id is refused rather than silently inheriting the report's shard.
+    /// </summary>
+    private const string SyntheticBinding = "synthetic:junit-report";
 
     /// <summary>The most shards a run's manifest may declare (contracts/manifest shard_plan).</summary>
     private const int MaxShardIndex = 256;
@@ -122,7 +147,7 @@ internal sealed partial class ParseRawReportHandler(
     }
 
     /// <summary>
-    /// One parse attempt: prepare, fetch, map, write. The named outcome is the same value the task line logs.
+    /// One parse attempt: prepare, fetch, map, serialize, write. The named outcome is the same value the task line logs.
     /// </summary>
     /// <param name="payload">The run, artifact and producer kind.</param>
     /// <param name="orgId">The tenant the claimed task row names.</param>
@@ -170,6 +195,15 @@ internal sealed partial class ParseRawReportHandler(
                 input,
                 new JUnitMapContext(payload.ArtifactId, prepared.Plan.Resolve));
         }
+        catch (JUnitParseRefusedException refused) when (string.Equals(
+            refused.Reason, ParsingFailureReason.Timeout, StringComparison.Ordinal))
+        {
+            // A wall-clock abandon says nothing about the document: it may parse on a less loaded attempt, so the task
+            // is retried rather than recorded as malformed evidence.
+            throw new InvalidOperationException(
+                "the raw report parse timed out before the document was judged, so the report was not parsed; the task is retried",
+                refused);
+        }
         catch (JUnitParseRefusedException refused)
         {
             LogRefused(logger, payload.ArtifactId, refused.Reason);
@@ -182,7 +216,13 @@ internal sealed partial class ParseRawReportHandler(
             .Where(item => !string.IsNullOrEmpty(item.ExecutionKey))
             .ToArray();
 
-        return await WriteAsync(orgId, payload, prepared, cases, cancellationToken).ConfigureAwait(false);
+        var producerId = ProducerPrefix + payload.ArtifactId.ToString("D", CultureInfo.InvariantCulture);
+
+        // The section that costs the most work (canonical hashing and serialization of every row) runs here, with no
+        // scope open, and the write transaction only carries the rows.
+        var events = SerializeEvents(payload.ArtifactId, producerId, prepared, cases);
+
+        return await WriteAsync(orgId, payload, producerId, events, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -228,6 +268,14 @@ internal sealed partial class ParseRawReportHandler(
             return (null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "foreign_run"));
         }
 
+        if (!ArtifactObjectKey.IsMintedFor(artifact))
+        {
+            // Defence in depth over the 0028 shape CHECK: the key a row holds must be the key this row mints, so a
+            // parse can never read bytes another coordinate names. A row that fails this is corrupt or hand-written;
+            // the attempt throws (redelivered, then dead-lettered) rather than reading an object it cannot vouch for.
+            throw new InvalidOperationException(ArtifactObjectKey.MismatchMessage);
+        }
+
         var resolution = await parsers.ResolveAsync(payload.ProducerKind, cancellationToken).ConfigureAwait(false);
         if (!resolution.IsResolved)
         {
@@ -247,10 +295,13 @@ internal sealed partial class ParseRawReportHandler(
             return (null, new ParseRawReportOutcome(ParseRawReportOutcome.Unsupported, "parser_unavailable"));
         }
 
-        var maxBytes = (await ArtifactCapturePolicy
+        // The kind policy caps one kind; the profile's hard ceiling caps every report whatever its kind says, so the
+        // read is bounded by the tighter of the two and a widened kind policy cannot raise the platform limit.
+        var kindMaxBytes = (await ArtifactCapturePolicy
                 .ResolveAsync(context, artifact.ProjectId, artifact.Kind, cancellationToken)
                 .ConfigureAwait(false))
             .MaxBytes;
+        var maxBytes = Math.Min(kindMaxBytes, ParsingLimits.MaxReportBytes);
 
         var hints = await db
             .QueryAsync<PlannedExecutionHint>(
@@ -262,132 +313,5 @@ internal sealed partial class ParseRawReportHandler(
         return (
             new Prepared(artifact.ObjectKey, maxBytes, resolution.ParserId!, resolution.Version!, mapper, PlannedExecutionIndex.Build(hints)),
             null);
-    }
-
-    /// <summary>
-    /// The one write transaction: the run's lock, the synthetic producer slot, every event in one statement, and the
-    /// reconcile trigger when the run is in its late window — committed together or not at all.
-    /// </summary>
-    /// <param name="orgId">The tenant the claimed task row names.</param>
-    /// <param name="payload">The run, artifact and producer kind.</param>
-    /// <param name="prepared">The parser pair the attempt resolved.</param>
-    /// <param name="cases">The mapped cases with a resolved execution key.</param>
-    /// <param name="cancellationToken">Cancels the writes.</param>
-    /// <returns>The named outcome of the write.</returns>
-    private async Task<ParseRawReportOutcome> WriteAsync(
-        Guid orgId,
-        ParseRawReportPayload payload,
-        Prepared prepared,
-        MappedCase[] cases,
-        CancellationToken cancellationToken)
-    {
-        await using var scope = await scopes
-            .BeginAsync(orgId, projectId: null, readOnlyTransaction: false, cancellationToken)
-            .ConfigureAwait(false);
-        await using var context = contexts.Create();
-
-        // Read again inside the write scope rather than trusting the preparation: a concurrent attempt may have
-        // decided the artifact while the bytes were mapped, and a report that left `ready` is out of evidence.
-        var artifact = await context.Artifacts
-            .AsNoTracking()
-            .SingleOrDefaultAsync(row => row.Id == payload.ArtifactId, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (artifact is null
-            || !string.Equals(artifact.State, ArtifactState.Ready, StringComparison.Ordinal)
-            || !string.Equals(artifact.Kind, ArtifactKind.RawReport, StringComparison.Ordinal)
-            || artifact.RunId != payload.RunId)
-        {
-            LogSkipped(logger, payload.ArtifactId, "left_ready");
-            return new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "left_ready");
-        }
-
-        // The run lock serialises two reports of one run, so the slot's next shard index cannot be taken twice, and it
-        // also tells this attempt whether the run is in its late window (the same rule the ingest path applies).
-        var run = await db
-            .QuerySingleOrDefaultAsync<RunGate>(RunGateSql, new { org_id = orgId, run_id = payload.RunId }, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (run is null)
-        {
-            LogSkipped(logger, payload.ArtifactId, "run_absent");
-            return new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "run_absent");
-        }
-
-        if (cases.Length == 0)
-        {
-            // Nothing mapped (every testcase unmapped, or a document with no testcase): no slot, no event, no trigger.
-            LogMapped(logger, payload.ArtifactId, 0, 0);
-            await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return new ParseRawReportOutcome(ParseRawReportOutcome.Parsed, Events: 0);
-        }
-
-        var producerId = ProducerPrefix + payload.ArtifactId.ToString("D", CultureInfo.InvariantCulture);
-        var shardIndex = await db
-            .ScalarAsync<int?>(NextShardIndexSql, new { org_id = orgId, run_id = payload.RunId }, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (shardIndex is null or > MaxShardIndex)
-        {
-            // Every manifest shard index is taken, so no slot can name this synthetic producer. Retrying cannot free
-            // one; the attempt is reported for an operator instead of silently dropping the report.
-            LogSkipped(logger, payload.ArtifactId, "no_producer_slot");
-            return new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "no_producer_slot");
-        }
-
-        await db.ExecuteAsync(
-                InsertSlotSql,
-                new
-                {
-                    id = Guid.CreateVersion7(),
-                    org_id = orgId,
-                    run_id = payload.RunId,
-                    shard_index = shardIndex.Value,
-                    producer_id = producerId,
-                },
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        var maxSequence = cases.Max(item => item.Sequence);
-        var inserted = await db.ExecuteAsync(
-                InsertEventsSql,
-                new
-                {
-                    org_id = orgId,
-                    run_id = payload.RunId,
-                    after_cancel = run.AfterCancel,
-                    late = run.Late,
-                    events = SerializeEvents(payload.ArtifactId, producerId, prepared, cases),
-                },
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        if (inserted > 0)
-        {
-            await db.ExecuteAsync(
-                    UpdateSlotSql,
-                    new { org_id = orgId, run_id = payload.RunId, producer_id = producerId, last_sequence = maxSequence },
-                    cancellationToken)
-                .ConfigureAwait(false);
-
-            if (run.Late)
-            {
-                // The run already finished as incomplete, so no finalize will compare these events: one trigger per
-                // report, keyed by the report's producer and its high-water mark, is what appends the next revision.
-                await outbox.EnqueueAsync(
-                        RunReconcileContract.OutboxTaskType,
-                        RunReconcileContract.LatePayloadJson(payload.RunId, producerId),
-                        RunReconcileContract.AggregateType,
-                        payload.RunId,
-                        RunReconcileContract.LateIdempotencyKey(payload.RunId, producerId, maxSequence),
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
-        }
-
-        await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
-        LogMapped(logger, payload.ArtifactId, cases.Length, inserted);
-
-        return new ParseRawReportOutcome(ParseRawReportOutcome.Parsed, Events: inserted);
     }
 }

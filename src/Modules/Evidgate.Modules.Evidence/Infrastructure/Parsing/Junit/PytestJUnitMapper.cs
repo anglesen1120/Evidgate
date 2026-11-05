@@ -23,6 +23,18 @@ internal sealed class PytestJUnitMapper : IJUnitMapper
     /// <summary>The dialect version this mapper implements; a behaviour change is a new version, never a rewrite.</summary>
     public const string PytestVersion = "1.0.0";
 
+    /// <summary>
+    /// The most characters of a testcase's own <c>classname</c>/<c>name</c> this mapper echoes into a case. The
+    /// attribute is the producer's text and can be any length the report allows, so the echo — which travels into
+    /// the event's metadata — is bounded; the report artifact keeps the raw document, and resolution still reads the
+    /// attribute as written. The cap sits below the resolver's own identity bound so a long but resolvable identity is
+    /// echoed bounded rather than refused.
+    /// </summary>
+    public const int MaxEchoedIdentityLength = 256;
+
+    /// <summary>What replaces the tail of an echoed identity string longer than <see cref="MaxEchoedIdentityLength"/>.</summary>
+    public const string TruncationMarker = "[truncated]";
+
     private const string TestCaseElement = "testcase";
     private const string TestSuiteElement = "testsuite";
     private const string TestSuitesElement = "testsuites";
@@ -88,7 +100,7 @@ internal sealed class PytestJUnitMapper : IJUnitMapper
     {
         var cases = new List<MappedCase>();
         var discrepancies = new List<string>();
-        var resolved = new HashSet<string>(StringComparer.Ordinal);
+        var resolved = new Dictionary<string, int>(StringComparer.Ordinal);
         var counters = new CounterReader();
         var testcases = 0;
 
@@ -128,14 +140,16 @@ internal sealed class PytestJUnitMapper : IJUnitMapper
 
     /// <summary>
     /// Maps one <c>testcase</c> and consumes its subtree, so an outcome element's text is never mistaken for a
-    /// sibling testcase. A testcase that cannot resolve, or that repeats an already-resolved key, emits nothing
-    /// and records why: emitting a second event for one execution would break the event's own uniqueness.
+    /// sibling testcase. A testcase that cannot resolve emits nothing and records why. A testcase that repeats an
+    /// already-mapped <c>execution_key</c> records <c>duplicate_case</c> and emits no second event — one execution
+    /// owns one event — but a more severe repeat still decides the result: the kept case keeps its position, its
+    /// document sequence and its identity echo, and takes the repeat's raw and normalised status.
     /// </summary>
     private static void MapTestCase(
         XmlReader reader,
         int sequence,
         JUnitMapContext context,
-        HashSet<string> resolved,
+        Dictionary<string, int> resolved,
         List<MappedCase> cases,
         List<string> discrepancies)
     {
@@ -151,13 +165,50 @@ internal sealed class PytestJUnitMapper : IJUnitMapper
             return;
         }
 
-        if (!resolved.Add(executionKey))
+        if (!resolved.TryGetValue(executionKey, out var kept))
         {
-            discrepancies.Add(JUnitDiscrepancies.DuplicateCase);
+            // The echo is bounded here, after resolution: the resolver judged the attribute as written.
+            resolved.Add(executionKey, cases.Count);
+            cases.Add(new MappedCase(
+                executionKey,
+                rawStatus,
+                normalized,
+                duration,
+                BoundedEcho(classname),
+                BoundedEcho(name),
+                sequence));
             return;
         }
 
-        cases.Add(new MappedCase(executionKey, rawStatus, normalized, duration, classname, name, sequence));
+        discrepancies.Add(JUnitDiscrepancies.DuplicateCase);
+
+        if (PytestStatus.IsMoreSevere(normalized, cases[kept].Normalized))
+        {
+            cases[kept] = cases[kept] with { RawStatus = rawStatus, Normalized = normalized };
+        }
+    }
+
+    /// <summary>
+    /// Bounds an identity string for the event's metadata: the leading characters plus
+    /// <see cref="TruncationMarker"/> when it is over <see cref="MaxEchoedIdentityLength"/>, never split mid-pair.
+    /// </summary>
+    /// <param name="value">The raw <c>classname</c> or <c>name</c> attribute.</param>
+    /// <returns>The value, or its bounded prefix with the truncation marker.</returns>
+    internal static string BoundedEcho(string value)
+    {
+        if (value.Length <= MaxEchoedIdentityLength)
+        {
+            return value;
+        }
+
+        var length = MaxEchoedIdentityLength - TruncationMarker.Length;
+        if (char.IsHighSurrogate(value[length - 1]))
+        {
+            // A cut between the halves of a surrogate pair would leave text no encoder accepts.
+            length--;
+        }
+
+        return string.Concat(value.AsSpan(0, length), TruncationMarker.AsSpan());
     }
 
     /// <summary>

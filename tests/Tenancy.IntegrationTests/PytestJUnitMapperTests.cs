@@ -164,7 +164,7 @@ public sealed class PytestJUnitMapperTests
     }
 
     [Fact]
-    public void DuplicateCase_LaterTestcaseSkippedWithDiscrepancyAndGap()
+    public void DuplicateCase_LaterFailurePromotesTheKeptCaseWithoutMovingIt()
     {
         const string Report =
             """
@@ -179,9 +179,10 @@ public sealed class PytestJUnitMapperTests
 
         result.Cases.Select(mapped => (mapped.ExecutionKey, mapped.RawStatus, mapped.Sequence)).ShouldBe(
         [
-            ("M::test_retried", "passed", 1),
+            ("M::test_retried", "failure", 1),
             ("M::test_other", "passed", 3),
         ]);
+        result.Cases[0].DurationMs.ShouldBe(100L);
         result.Discrepancies.ShouldBe([JUnitDiscrepancies.DuplicateCase]);
     }
 
