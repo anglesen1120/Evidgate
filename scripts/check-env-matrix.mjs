@@ -1702,10 +1702,10 @@ if (printDiscovered) {
 }
 
 const summary = lint(root);
-// The inventory lives in the real repository only; the --root fixture trees carry none.
+// Fixture trees carry no inventory; the real repository and any tree that has one are checked.
 let inventory = null;
-if (root === join(DEFAULT_ROOT, '.')) {
-  inventory = checkSecretsInventory(DEFAULT_ROOT);
+if (root === join(DEFAULT_ROOT, '.') || existsSync(join(root, 'infra/secrets-inventory.json'))) {
+  inventory = checkSecretsInventory(root);
   for (const line of inventory.warnings) console.warn(line);
   errors.push(...inventory.errors);
 }

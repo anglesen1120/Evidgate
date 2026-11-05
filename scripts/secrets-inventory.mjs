@@ -27,6 +27,8 @@ const PLACEHOLDERS = new Set([
   'xxx',
   'tba',
 ]);
+const PLACEHOLDER_WORDS =
+  /\b(tbd|todo|unknown|unassigned|assigned|determined|placeholder|none|team)\b/i;
 const DAY_MS = 86_400_000;
 
 // A value, not a name: long unbroken base64/hex, PEM armour, userinfo in a URL, or an
@@ -35,7 +37,7 @@ const VALUE_PATTERNS = [
   [/[A-Za-z0-9+/=_-]{32,}/, 'long base64/hex-like run'],
   [/-----BEGIN [A-Z ]+-----/, 'PEM armour'],
   [/\/\/[^\s/@:]+:[^\s/@]+@/, 'URL with userinfo'],
-  [/\b(password|pwd|secret|token|key)\s*[=:]\s*\S{8,}/i, 'credential assignment'],
+  [/\b(password|pwd|secret|token|key)\s*[=:]\s*["']?\S{3,}/i, 'credential assignment'],
 ];
 
 function githubSlug(heading) {
@@ -46,27 +48,53 @@ function githubSlug(heading) {
     .replace(/ /g, '-');
 }
 
+// Same rules GitHub applies: headings inside fenced code do not count and a repeated
+// heading gets a -1, -2 ... suffix.
 function headingSlugs(text) {
   const slugs = new Set();
+  const counts = new Map();
+  let fence = null;
   for (const line of text.split('\n')) {
+    const marker = /^\s*(```+|~~~+)/.exec(line);
+    if (marker) {
+      if (fence === null) fence = marker[1][0];
+      else if (marker[1][0] === fence) fence = null;
+      continue;
+    }
+    if (fence !== null) continue;
     const match = /^#{1,6}\s+(.*)$/.exec(line);
-    if (match) slugs.add(githubSlug(match[1]));
+    if (!match) continue;
+    const slug = githubSlug(match[1]);
+    const seen = counts.get(slug) ?? 0;
+    counts.set(slug, seen + 1);
+    slugs.add(seen === 0 ? slug : `${slug}-${seen}`);
   }
   return slugs;
 }
 
-function* stringFields(entry) {
-  for (const [field, value] of Object.entries(entry)) {
-    // `name` and `runbook` are constrained by a schema pattern, not scanned.
-    if (field === 'name' || field === 'runbook') continue;
-    if (typeof value === 'string') yield [field, value];
+// Every free-text string of the inventory; fields a schema pattern or enum already
+// constrains (`name`, `runbook`, `store`, `id`) are not scanned.
+const CONSTRAINED = new Set(['name', 'runbook', 'store', 'id']);
+function* allStrings(value, path) {
+  if (typeof value === 'string') yield [path, value];
+  else if (Array.isArray(value)) {
+    for (const [i, item] of value.entries()) yield* allStrings(item, `${path}[${i}]`);
+  } else if (value !== null && typeof value === 'object') {
+    for (const [field, item] of Object.entries(value)) {
+      if (!CONSTRAINED.has(field))
+        yield* allStrings(item, path === '' ? field : `${path}.${field}`);
+    }
   }
 }
 
+const validators = new WeakMap();
 function compileSchema(schema) {
+  if (validators.has(schema)) return validators.get(schema);
   const ajv = new Ajv2020({ strict: false, allErrors: true });
   addFormats(ajv);
-  return ajv.compile(schema);
+  const validate = ajv.compile(schema);
+  validators.set(schema, validate);
+  return validate;
 }
 
 // Pure evaluation: readText(relativePath) returns file text or undefined.
@@ -84,6 +112,13 @@ export function evaluateInventory({ matrix, inventory, schema, readText, now }) 
   const matrixSecrets = new Map(
     matrix.keys.filter((row) => row.secret === true).map((row) => [row.key, row]),
   );
+  for (const [path, value] of allStrings(inventory, '')) {
+    for (const [pattern, label] of VALUE_PATTERNS) {
+      if (pattern.test(value)) {
+        errors.push(`E secrets-inventory: ${path} looks like a secret value (${label})`);
+      }
+    }
+  }
   const seen = new Set();
   for (const entry of inventory.secrets) {
     const where = `infra/secrets-inventory.json ${entry.name}`;
@@ -94,18 +129,15 @@ export function evaluateInventory({ matrix, inventory, schema, readText, now }) 
         `E secrets-inventory: ${where} is not a secret: true key of infra/config-matrix.json (set external: true for a repo-level secret)`,
       );
     }
+    for (const field of ['owner', 'breakGlassHolder']) {
+      if (PLACEHOLDER_WORDS.test(entry[field])) {
+        errors.push(`E secrets-inventory: ${where} ${field} is a placeholder '${entry[field]}'`);
+      }
+    }
     if (entry.owner !== entry.breakGlassHolder && inventory.soleOperator === true) {
       errors.push(
         `E secrets-inventory: ${where} owner and breakGlassHolder differ but soleOperator is true`,
       );
-    }
-    for (const [field, value] of stringFields(entry)) {
-      for (const [pattern, label] of VALUE_PATTERNS) {
-        if (pattern.test(value))
-          errors.push(
-            `E secrets-inventory: ${where} ${field} looks like a secret value (${label})`,
-          );
-      }
     }
     const [file, anchor] = entry.runbook.split('#');
     const text = readText(file);
@@ -115,10 +147,18 @@ export function evaluateInventory({ matrix, inventory, schema, readText, now }) 
       errors.push(`E secrets-inventory: ${where} runbook heading #${anchor} not found in ${file}`);
     }
     if (entry.lastRotated !== null) {
+      if (Date.parse(entry.lastRotated) > now.getTime()) {
+        errors.push(
+          `E secrets-inventory: ${where} lastRotated ${entry.lastRotated} is in the future`,
+        );
+      }
       const due = Date.parse(entry.lastRotated) + entry.rotationDays * DAY_MS;
       if (due < now.getTime()) {
         const row = matrixSecrets.get(entry.name);
-        const deployed = row?.required?.staging === true || row?.required?.prod === true;
+        // Deployed = required at boot, or sourced from anything but the dev default.
+        const deployed = ['staging', 'prod'].some(
+          (env) => row?.required?.[env] === true || (row?.source?.[env] ?? 'default') !== 'default',
+        );
         const message = `${where} rotation overdue since ${new Date(due).toISOString().slice(0, 10)}`;
         (deployed ? errors : warnings).push(
           `${deployed ? 'E' : 'W'} secrets-inventory: ${message}`,
@@ -299,6 +339,69 @@ export function selfTestSecretsInventory(root, now = new Date()) {
       'rotation overdue since',
     ],
     [
+      'whitespace-rotation-reason',
+      (c) => {
+        c.inventory.secrets[0].lastRotatedReason = '          ';
+      },
+      'lastRotatedReason',
+    ],
+    [
+      'future-rotation-date',
+      (c) => {
+        Object.assign(c.inventory.secrets[0], { lastRotated: '2999-01-01' });
+        delete c.inventory.secrets[0].lastRotatedReason;
+      },
+      'is in the future',
+    ],
+    [
+      'multi-word-placeholder-owner',
+      (c) => {
+        c.inventory.secrets[0].owner = 'Not Assigned';
+        c.inventory.secrets[0].breakGlassHolder = 'Not Assigned';
+      },
+      "owner is a placeholder 'Not Assigned'",
+    ],
+    [
+      'value-in-open-text',
+      (c) => {
+        c.inventory.open[0].text = 'recovery wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY99 note';
+      },
+      'open[0].text looks like a secret value',
+    ],
+    [
+      'value-in-sole-operator-note',
+      (c) => {
+        c.inventory.soleOperatorNote = 'wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY99';
+      },
+      'soleOperatorNote looks like a secret value',
+    ],
+    [
+      'short-credential-assignment',
+      (c) => {
+        c.inventory.secrets[0].cadenceBasis = 'password="abc"';
+      },
+      'credential assignment',
+    ],
+    [
+      'runbook-anchor-only-in-code-fence',
+      (c) => {
+        c.inventory.secrets[0].runbook =
+          'docs/runbooks/environments.md#per-environment-smoke-against-a-running-environment';
+      },
+      'runbook heading #per-environment-smoke',
+    ],
+    [
+      'overdue-optional-deployed-key-is-error',
+      (c) => {
+        const e = c.inventory.secrets.find(
+          (x) => x.name === 'EVIDGATE__OIDC__GOOGLE__CLIENTSECRET',
+        );
+        Object.assign(e, { lastRotated: '2000-01-01' });
+        delete e.lastRotatedReason;
+      },
+      'EVIDGATE__OIDC__GOOGLE__CLIENTSECRET rotation overdue',
+    ],
+    [
       'open-item-placeholder-receiver',
       (c) => {
         c.inventory.open[0].receiver = 'TBD';
@@ -323,7 +426,11 @@ export function selfTestSecretsInventory(root, now = new Date()) {
   // Overdue only in dev: a key no deployed environment requires is a warning.
   const devOnly = clone(
     base.matrix.keys.find(
-      (row) => row.secret === true && row.required?.staging !== true && row.required?.prod !== true,
+      (row) =>
+        row.secret === true &&
+        ['staging', 'prod'].every(
+          (env) => row.required?.[env] !== true && row.source?.[env] === 'default',
+        ),
     ),
   );
   const devCopy = { ...base, matrix: clone(base.matrix), inventory: clone(base.inventory) };
