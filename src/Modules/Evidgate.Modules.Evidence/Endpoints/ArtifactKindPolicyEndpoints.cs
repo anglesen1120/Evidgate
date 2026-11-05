@@ -109,30 +109,10 @@ public static class ArtifactKindPolicyEndpoints
             return Result.Failure<ArtifactKindPolicyView>(Error.BadRequest("the request body is required"));
         }
 
-        // A null element binds as a null in the array, and the mapping below would fault on it: the shape is refused
-        // here, before the command exists, so a caller learns which entry is wrong and no statement runs. The count is
-        // judged here for the same reason and one more: the validator's per-element rules would answer a failure per
-        // entry, so an over-long list would turn a bounded body into an unbounded refusal.
-        if (body.RedactionRules is { } rules)
+        var ruleShape = CheckRedactionRuleShape(body.RedactionRules);
+        if (ruleShape is not null)
         {
-            if (rules.Length > CapturePolicyLimits.MaxRedactionRules)
-            {
-                return Result.Failure<ArtifactKindPolicyView>(Error.Invalid(
-                    string.Create(
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        $"a kind declares at most {CapturePolicyLimits.MaxRedactionRules} redaction rules"),
-                    [new ErrorDetail("/redaction_rules", "out_of_range")]));
-            }
-
-            for (var index = 0; index < rules.Length; index++)
-            {
-                if (rules[index] is null)
-                {
-                    return Result.Failure<ArtifactKindPolicyView>(Error.Invalid(
-                        "every redaction rule must be an object with rule_type and name_pattern",
-                        [new ErrorDetail($"/redaction_rules/{index}", "invalid_type")]));
-                }
-            }
+            return Result.Failure<ArtifactKindPolicyView>(ruleShape);
         }
 
         // A media type arrives as a token, so an entry the typed reader would have faulted on is the request's shape
@@ -154,6 +134,40 @@ public static class ArtifactKindPolicyEndpoints
                 body.RejectOnSecret,
                 body.RedactionRules?.Select(rule => new RedactionRule(rule.RuleType ?? string.Empty, rule.NamePattern ?? string.Empty)).ToArray()),
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Refuses a rule list the mapping would fault on or that is unbounded: a null element binds as a null in the array,
+    /// and the validator's per-element rules would answer one failure per entry, so an over-long list would turn a
+    /// bounded body into an unbounded refusal. No statement runs for either.
+    /// </summary>
+    private static Error? CheckRedactionRuleShape(RedactionRuleBody[]? rules)
+    {
+        if (rules is null)
+        {
+            return null;
+        }
+
+        if (rules.Length > CapturePolicyLimits.MaxRedactionRules)
+        {
+            return Error.Invalid(
+                string.Create(
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    $"a kind declares at most {CapturePolicyLimits.MaxRedactionRules} redaction rules"),
+                [new ErrorDetail("/redaction_rules", "out_of_range")]);
+        }
+
+        for (var index = 0; index < rules.Length; index++)
+        {
+            if (rules[index] is null)
+            {
+                return Error.Invalid(
+                    "every redaction rule must be an object with rule_type and name_pattern",
+                    [new ErrorDetail($"/redaction_rules/{index}", "invalid_type")]);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
