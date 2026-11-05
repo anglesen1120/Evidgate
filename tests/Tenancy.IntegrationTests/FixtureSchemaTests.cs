@@ -21,7 +21,7 @@ public sealed class FixtureSchemaTests
     [
         "fixture|fixture_app_tenant|evidgate_app|ALL",
         "fixture|fixture_owner_backfill|evidgate_owner|ALL",
-        "fixture_revision|fixture_app_tenant|evidgate_app|ALL",
+        "fixture_revision|fixture_revision_app_tenant|evidgate_app|ALL",
         "fixture_revision|fixture_revision_owner_backfill|evidgate_owner|ALL",
     ];
 

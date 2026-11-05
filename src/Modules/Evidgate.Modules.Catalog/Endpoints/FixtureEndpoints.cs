@@ -13,13 +13,13 @@ using Microsoft.AspNetCore.Routing;
 namespace Evidgate.Modules.Catalog.Endpoints;
 
 /// <summary>
-/// The fixture routes of 03.3.1 §5, mapped into the catalog group. Like the rest of the module the delegates only bind
-/// 00 §9.1's parameters and answer in <see cref="Result"/> terms: authorization is the C2 pipeline, the tenant is the
-/// request's, and the body is read raw so an unknown member can be named in the 422.
+/// The fixture routes, mapped into the catalog group. The delegates only bind and answer in <see cref="Result"/> terms:
+/// authorization is the pipeline, the tenant is the request's, and the body is read raw so an unknown member can be
+/// named in the 422.
 /// </summary>
 internal static class FixtureEndpoints
 {
-    /// <summary>A fixture body is a pointer and a handful of scalars; 64 KiB is far above any legal one (00 §5.7 P8).</summary>
+    /// <summary>A fixture body is a pointer and a handful of scalars; 64 KiB is far above any legal one.</summary>
     internal const int MaxBodyBytes = 64 * 1024;
 
     private static readonly string[] CreateMembers = ["fixture_key", "seed_version", "body_ref", "timeout_s", "cleanup_policy"];

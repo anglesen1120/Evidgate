@@ -5,10 +5,9 @@ using Evidgate.BuildingBlocks.Canonicalization;
 namespace Evidgate.Modules.Catalog.Domain;
 
 /// <summary>
-/// The identity of one fixture revision (03.3.1): its content hash and the resource prefix the executor names objects
-/// with. Both are pure functions of the fixture and the request, so a retry, a preview and a concurrent create of the
-/// same content agree without coordination — and the prefix in particular is never taken from a caller, because a
-/// caller-chosen prefix would let one tenant's cleanup reach objects that are not its own.
+/// The identity of one fixture revision: its content hash and the resource prefix the executor names objects with. Both
+/// are pure functions of the fixture and the request, and the prefix is never caller-chosen — otherwise one tenant's
+/// cleanup could reach objects that are not its own.
 /// </summary>
 internal static class FixtureHasher
 {

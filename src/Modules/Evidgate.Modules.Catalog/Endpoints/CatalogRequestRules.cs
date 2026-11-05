@@ -8,9 +8,8 @@ using Microsoft.AspNetCore.Http;
 namespace Evidgate.Modules.Catalog.Endpoints;
 
 /// <summary>
-/// The reading rules every catalog write shares (00 §9.1): a capped raw body, a closed set of body members and a bounded
-/// page size. The body is read raw, not model-bound, because the answer for an unknown member must name it — a model
-/// bound with <c>Disallow</c> can only say that the document did not match.
+/// The reading rules every catalog write shares: a capped raw body, a closed set of body members and a bounded page size.
+/// The body is read raw, not model-bound, because an unknown member must be named in the answer.
 /// </summary>
 internal static class CatalogRequestRules
 {

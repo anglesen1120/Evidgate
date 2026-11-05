@@ -12,7 +12,7 @@ using Mediator;
 
 namespace Evidgate.Modules.Catalog.Application.Queries;
 
-/// <summary>Cursor page of a project's fixtures (<c>GET /v1/projects/{p}/fixtures</c>, 03.3.1 §5).</summary>
+/// <summary>Cursor page of a project's fixtures (<c>GET /v1/projects/{p}/fixtures</c>).</summary>
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="Cursor">Opaque cursor, or null.</param>
 /// <param name="Limit">Page size, 1–200.</param>
@@ -73,7 +73,7 @@ internal sealed class ListFixturesQueryHandler(
     }
 }
 
-/// <summary>One fixture with its head revision (<c>GET /v1/fixtures/{f}</c>, 03.3.1 §5).</summary>
+/// <summary>One fixture with its head revision (<c>GET /v1/fixtures/{f}</c>).</summary>
 /// <param name="FixtureId">The fixture from the route.</param>
 internal sealed record GetFixtureQuery(Guid FixtureId) : IQuery<Result<FixtureDetailDto>>;
 

@@ -1,12 +1,9 @@
 namespace Evidgate.Modules.Catalog.Infrastructure.Persistence;
 
-/// <summary>
-/// The Dapper statements of the fixture side (00 §5.5 C5), one statement per handler step (P3).
-/// </summary>
+/// <summary>The Dapper statements of the fixture side, one statement per handler step.</summary>
 /// <remarks>
-/// A fixture has no head column: its row is immutable, so a head pointer could never move. The head is therefore the
-/// revision with the greatest number, read through one lateral join that the revision index
-/// <c>(org_id, fixture_id, revision_no desc)</c> serves, and every read below uses that shape.
+/// A fixture row is immutable and has no head column, so the head is the revision with the greatest number, read
+/// through the lateral join that the <c>(org_id, fixture_id, revision_no desc)</c> index serves.
 /// </remarks>
 internal static class FixtureReadSql
 {
@@ -69,16 +66,19 @@ internal static class FixtureReadSql
          where r.id = @revision_id
         """;
 
+    /// <summary>Bounds the wait for the revision lock, so a holder that never finishes cannot park the request forever.</summary>
+    internal const string LockTimeout = "select set_config('lock_timeout', '5000', true)";
+
     /// <summary>
     /// Takes the per-fixture transaction lock that serialises <c>revision_no</c> allocation and the hash dedupe, and
     /// holds it until the request's transaction ends.
     /// </summary>
     /// <remarks>
-    /// Deliberately not <c>select … for update</c>: a row lock needs UPDATE privilege on the table, and the app role
-    /// holds select and insert only (the revision history is append-only for every role). An advisory lock needs no
-    /// table privilege, and the fixture row it stands for is immutable, so it can never be locked away from a reader.
+    /// Not <c>select … for update</c>: a row lock needs UPDATE on the table, and the app role holds select and insert
+    /// only. The key carries its purpose so it cannot collide with another advisory lock taken on the same id.
     /// </remarks>
-    internal const string AcquireFixtureLock = "select pg_advisory_xact_lock(hashtextextended(@fixture_id::text, 0))";
+    internal const string AcquireFixtureLock =
+        "select pg_advisory_xact_lock(hashtextextended('fixture_revision:' || @fixture_id::text, 0))";
 
     /// <summary>The fixture row a revision write reads under the advisory lock: its identity never changes, so a plain read is enough.</summary>
     internal const string FixtureForRead = """

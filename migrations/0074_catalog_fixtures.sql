@@ -31,6 +31,11 @@
 -- IMMUTABILITY. Both tables are append-only for every role: UPDATE and DELETE raise 23514
 -- `revision_immutable` from a BEFORE trigger, and the app role's grants leave it no UPDATE/DELETE to
 -- attempt. A fixture with no revisions cannot be created, so there is always a head to point at.
+--
+-- LOCKS: `set local lock_timeout` bounds the DDL's wait, so a busy database fails the migration for a retry instead of
+-- stalling writes. Everything here is a catalogue write on a new relation.
+
+set local lock_timeout = '5s';
 
 create table if not exists public.fixture (
   id uuid not null,
@@ -131,5 +136,7 @@ create policy fixture_revision_owner_backfill on public.fixture_revision for all
 grant select, insert on public.fixture, public.fixture_revision to evidgate_app;
 revoke update, delete on public.fixture, public.fixture_revision from evidgate_app;
 
+-- `evidgate_operator` keeps its default SELECT and holds no policy on these tables, so until the
+-- grant-gated operator policy lands it reads zero rows (0028/0069's posture, recorded here as a decision).
 grant select on public.fixture, public.fixture_revision to evidgate_operator;
 revoke all on public.fixture, public.fixture_revision from evidgate_worker_sched;

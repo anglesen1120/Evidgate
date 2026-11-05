@@ -3,7 +3,6 @@ using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
-using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
@@ -17,7 +16,7 @@ using Npgsql;
 
 namespace Evidgate.Modules.Catalog.Application.Commands;
 
-/// <summary>Create a fixture with its first revision (<c>POST /v1/projects/{p}/fixtures</c>, 03.3.1 §5).</summary>
+/// <summary>Create a fixture with its first revision (<c>POST /v1/projects/{p}/fixtures</c>).</summary>
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="FixtureKey">Key, unique in the project.</param>
 /// <param name="SeedVersion">Version of the data the body seeds.</param>
@@ -82,7 +81,21 @@ internal sealed class CreateFixtureCommandHandler(
             return Result.Failure<FixtureRevisionHead>(CatalogErrors.ProjectNotFound);
         }
 
+        var revision = RevisionInput.From(command.SeedVersion, command.BodyRef, command.TimeoutS, command.CleanupPolicy);
+        var revisionHash = FixtureHasher.Hash(command.FixtureKey, revision.SeedVersion, revision.TimeoutS, revision.CleanupPolicy, revision.BodyRef);
+
+        return await CreateFirstRevisionAsync(command, revision, revisionHash, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Inserts the fixture and its first revision; a taken key is the caller's 409, never a retried insert.</summary>
+    private async Task<Result<FixtureRevisionHead>> CreateFirstRevisionAsync(
+        CreateFixtureCommand command,
+        RevisionInput revision,
+        string revisionHash,
+        CancellationToken cancellationToken)
+    {
         var fixtureId = Guid.CreateVersion7();
+        var orgId = scopes.Require().OrgId;
         try
         {
             await db.ExecuteAsync(
@@ -90,7 +103,7 @@ internal sealed class CreateFixtureCommandHandler(
                 new
                 {
                     id = fixtureId,
-                    org_id = scopes.Require().OrgId,
+                    org_id = orgId,
                     project_id = command.ProjectId,
                     fixture_key = command.FixtureKey,
                     created_by = principals.Current?.UserId,
@@ -103,28 +116,10 @@ internal sealed class CreateFixtureCommandHandler(
             return Result.Failure<FixtureRevisionHead>(FixtureErrors.KeyTaken);
         }
 
-        var revision = RevisionInput.From(command.SeedVersion, command.BodyRef, command.TimeoutS, command.CleanupPolicy);
-        var revisionHash = FixtureHasher.Hash(command.FixtureKey, revision.SeedVersion, revision.TimeoutS, revision.CleanupPolicy, revision.BodyRef);
         var revisionId = Guid.CreateVersion7();
-
-        await db.ExecuteAsync(
-            FixtureReadSql.InsertRevision,
-            new
-            {
-                id = revisionId,
-                org_id = scopes.Require().OrgId,
-                fixture_id = fixtureId,
-                project_id = command.ProjectId,
-                fixture_key = command.FixtureKey,
-                revision_no = 1,
-                revision_hash = revisionHash,
-                seed_version = revision.SeedVersion,
-                timeout_s = revision.TimeoutS,
-                cleanup_policy = revision.CleanupPolicy,
-                resource_prefix = FixtureHasher.ResourcePrefix(fixtureId, revisionHash),
-                body_ref = revision.BodyRef,
-                created_by = principals.Current?.UserId,
-            },
+        await FixtureRevisionWriter.InsertAsync(
+            db,
+            new RevisionRow(revisionId, orgId, fixtureId, command.ProjectId, command.FixtureKey, 1, revision, revisionHash, principals.Current?.UserId),
             cancellationToken).ConfigureAwait(false);
 
         audit.Describe(new AuditObject("fixture", fixtureId.ToString("D")));
@@ -133,7 +128,7 @@ internal sealed class CreateFixtureCommandHandler(
     }
 }
 
-/// <summary>Append a revision to an existing fixture (<c>POST /v1/fixtures/{f}/revisions</c>, 03.3.1 §5).</summary>
+/// <summary>Append a revision to an existing fixture (<c>POST /v1/fixtures/{f}/revisions</c>).</summary>
 /// <param name="FixtureId">The fixture from the route.</param>
 /// <param name="Body">The revision to append.</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c>.</param>
@@ -160,10 +155,8 @@ internal sealed class CreateFixtureRevisionCommandValidator : AbstractValidator<
 }
 
 /// <summary>
-/// Handler of <see cref="CreateFixtureRevisionCommand"/>. The per-fixture advisory lock serialises the allocation of
-/// <c>revision_no</c> and the hash dedupe: two concurrent appends get n and n+1, and identical content answers the
-/// existing revision instead of allocating another. Everything read-only — validation, the hash, the resource prefix —
-/// happens before the lock, so the lock covers statements only.
+/// Handler of <see cref="CreateFixtureRevisionCommand"/>: the per-fixture advisory lock serialises the number
+/// allocation and the hash dedupe, and everything read-only happens before it so the lock covers statements only.
 /// </summary>
 [AuditedAction("fixture_revision.create")]
 [Permission(Permissions.Fixture.Write)]
@@ -180,7 +173,6 @@ internal sealed class CreateFixtureRevisionCommandHandler(
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Catalog, nameof(CreateFixtureRevisionCommand));
 
-        var orgId = scopes.Require().OrgId;
         var peek = await db.QuerySingleOrDefaultAsync<FixtureRow>(FixtureReadSql.FixtureForRead, new { fixture_id = command.FixtureId }, cancellationToken).ConfigureAwait(false);
         if (peek is null || CatalogScope.Project(peek.ProjectId, principals, tenant) is not null)
         {
@@ -190,27 +182,52 @@ internal sealed class CreateFixtureRevisionCommandHandler(
         var revision = RevisionInput.From(command.Body.SeedVersion, command.Body.BodyRef, command.Body.TimeoutS, command.Body.CleanupPolicy);
         var revisionHash = FixtureHasher.Hash(peek.FixtureKey, revision.SeedVersion, revision.TimeoutS, revision.CleanupPolicy, revision.BodyRef);
 
-        // ---- under the lock: numbering, dedupe, the insert. A bounded wait turns a stuck holder into 503 + retry.
-        await db.ExecuteAsync("select set_config('lock_timeout', '5000', true)", null, cancellationToken).ConfigureAwait(false);
+        var locked = await LockAndReadAsync(command.FixtureId, cancellationToken).ConfigureAwait(false);
+        if (locked.Error is { } lockError)
+        {
+            return Result.Failure<FixtureRevisionHead>(lockError);
+        }
+
+        return await AppendAsync(locked.Value, scopes.Require().OrgId, revision, revisionHash, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Takes the per-fixture lock and re-reads the row under it. The bounded wait makes a holder that never finishes a
+    /// 503 the client may retry, instead of a request parked for as long as the holder lives.
+    /// </summary>
+    private async Task<Result<FixtureRow>> LockAndReadAsync(Guid fixtureId, CancellationToken cancellationToken)
+    {
         FixtureRow? fixture;
         try
         {
-            await db.ExecuteAsync(FixtureReadSql.AcquireFixtureLock, new { fixture_id = command.FixtureId }, cancellationToken).ConfigureAwait(false);
-            fixture = await db.QuerySingleOrDefaultAsync<FixtureRow>(FixtureReadSql.FixtureForRead, new { fixture_id = command.FixtureId }, cancellationToken).ConfigureAwait(false);
+            await db.ExecuteAsync(FixtureReadSql.LockTimeout, null, cancellationToken).ConfigureAwait(false);
+            await db.ExecuteAsync(FixtureReadSql.AcquireFixtureLock, new { fixture_id = fixtureId }, cancellationToken).ConfigureAwait(false);
+            fixture = await db.QuerySingleOrDefaultAsync<FixtureRow>(FixtureReadSql.FixtureForRead, new { fixture_id = fixtureId }, cancellationToken).ConfigureAwait(false);
         }
-        catch (PostgresException exception) when (exception.SqlState == "55P03")
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.LockNotAvailable)
         {
-            return Result.Failure<FixtureRevisionHead>(new Error(ApiErrorCode.Unavailable, "the fixture is being changed by another request; retry shortly", 503));
+            return Result.Failure<FixtureRow>(FixtureErrors.Contended);
         }
 
         if (fixture is null)
         {
-            return Result.Failure<FixtureRevisionHead>(FixtureErrors.NotFound);
+            return Result.Failure<FixtureRow>(FixtureErrors.NotFound);
         }
 
+        return Result.Success(fixture);
+    }
+
+    /// <summary>The dedupe, the number and the insert, all inside the lock the caller holds.</summary>
+    private async Task<Result<FixtureRevisionHead>> AppendAsync(
+        FixtureRow fixture,
+        Guid orgId,
+        RevisionInput revision,
+        string revisionHash,
+        CancellationToken cancellationToken)
+    {
         var existing = await db.QuerySingleOrDefaultAsync<ExistingRevision>(
             FixtureReadSql.ExistingByHash,
-            new { org_id = orgId, fixture_id = command.FixtureId, revision_hash = revisionHash },
+            new { org_id = orgId, fixture_id = fixture.Id, revision_hash = revisionHash },
             cancellationToken).ConfigureAwait(false);
         if (existing is not null)
         {
@@ -219,27 +236,11 @@ internal sealed class CreateFixtureRevisionCommandHandler(
             return Result.Success(new FixtureRevisionHead(fixture.Id, fixture.FixtureKey, existing.Id, existing.RevisionNo, revisionHash, false));
         }
 
-        var revisionNo = await db.ScalarAsync<int>(FixtureReadSql.NextRevisionNo, new { org_id = orgId, fixture_id = command.FixtureId }, cancellationToken).ConfigureAwait(false);
+        var revisionNo = await db.ScalarAsync<int>(FixtureReadSql.NextRevisionNo, new { org_id = orgId, fixture_id = fixture.Id }, cancellationToken).ConfigureAwait(false);
         var revisionId = Guid.CreateVersion7();
-
-        await db.ExecuteAsync(
-            FixtureReadSql.InsertRevision,
-            new
-            {
-                id = revisionId,
-                org_id = orgId,
-                fixture_id = command.FixtureId,
-                project_id = fixture.ProjectId,
-                fixture_key = fixture.FixtureKey,
-                revision_no = revisionNo,
-                revision_hash = revisionHash,
-                seed_version = revision.SeedVersion,
-                timeout_s = revision.TimeoutS,
-                cleanup_policy = revision.CleanupPolicy,
-                resource_prefix = FixtureHasher.ResourcePrefix(fixture.Id, revisionHash),
-                body_ref = revision.BodyRef,
-                created_by = principals.Current?.UserId,
-            },
+        await FixtureRevisionWriter.InsertAsync(
+            db,
+            new RevisionRow(revisionId, orgId, fixture.Id, fixture.ProjectId, fixture.FixtureKey, revisionNo, revision, revisionHash, principals.Current?.UserId),
             cancellationToken).ConfigureAwait(false);
 
         audit.Describe(new AuditObject("fixture_revision", revisionId.ToString("D")));
@@ -282,4 +283,50 @@ internal sealed record RevisionInput(string SeedVersion, string BodyRef, int Tim
             bodyRef,
             timeoutS ?? FixtureRules.DefaultTimeoutSeconds,
             cleanupPolicy ?? FixtureRules.DefaultCleanupPolicy);
+}
+
+/// <summary>One revision row exactly as it is stored; the row both create paths build, so their columns cannot drift.</summary>
+/// <param name="Id">Revision id.</param>
+/// <param name="OrgId">Owning organization.</param>
+/// <param name="FixtureId">The fixture the revision belongs to.</param>
+/// <param name="ProjectId">The fixture's project.</param>
+/// <param name="FixtureKey">The fixture's key, denormalised onto the revision.</param>
+/// <param name="RevisionNo">The number allocated under the per-fixture lock.</param>
+/// <param name="Revision">The normalised request.</param>
+/// <param name="RevisionHash">The content identity.</param>
+/// <param name="CreatedBy">The caller's user id, when known.</param>
+internal sealed record RevisionRow(
+    Guid Id,
+    Guid OrgId,
+    Guid FixtureId,
+    Guid ProjectId,
+    string FixtureKey,
+    int RevisionNo,
+    RevisionInput Revision,
+    string RevisionHash,
+    Guid? CreatedBy);
+
+/// <summary>The single revision insert, so a column added to the table cannot be missed by one of the two create paths.</summary>
+internal static class FixtureRevisionWriter
+{
+    public static Task<int> InsertAsync(ITenantDb db, RevisionRow row, CancellationToken cancellationToken) =>
+        db.ExecuteAsync(
+            FixtureReadSql.InsertRevision,
+            new
+            {
+                id = row.Id,
+                org_id = row.OrgId,
+                fixture_id = row.FixtureId,
+                project_id = row.ProjectId,
+                fixture_key = row.FixtureKey,
+                revision_no = row.RevisionNo,
+                revision_hash = row.RevisionHash,
+                seed_version = row.Revision.SeedVersion,
+                timeout_s = row.Revision.TimeoutS,
+                cleanup_policy = row.Revision.CleanupPolicy,
+                resource_prefix = FixtureHasher.ResourcePrefix(row.FixtureId, row.RevisionHash),
+                body_ref = row.Revision.BodyRef,
+                created_by = row.CreatedBy,
+            },
+            cancellationToken);
 }

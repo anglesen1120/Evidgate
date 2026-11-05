@@ -3,10 +3,8 @@ using Evidgate.BuildingBlocks.SharedKernel.Security;
 namespace Evidgate.Modules.Catalog.Domain;
 
 /// <summary>
-/// The closed shape of a fixture request (03.3.1): the key grammar, the seed version, the timeout, the cleanup
-/// policy and the body pointer. Every rule here is the same rule as the CHECK constraint of
-/// <c>public.fixture</c>/<c>public.fixture_revision</c>, so a request the API accepts is a row the database accepts —
-/// a mismatch would surface as a 500 instead of the 422 that names the field.
+/// The closed shape of a fixture request: the key grammar, the seed version, the timeout, the cleanup policy and the
+/// body pointer. Each rule mirrors the column's CHECK, so a request the API accepts is a row the database accepts.
 /// </summary>
 internal static class FixtureRules
 {
@@ -45,18 +43,30 @@ internal static class FixtureRules
         value is not null && Array.IndexOf(CleanupPolicies, value) >= 0;
 
     /// <summary>
-    /// True for a body pointer: a repository-relative path (<see cref="RepoPath"/>) or an artifact id, never longer
-    /// than the column and never carrying ASCII whitespace. Whitespace is the one difference that separates a pointer
-    /// from an inline body — a body has it, a path or an id cannot — so a value that carries any is refused here and by
-    /// the CHECK, rather than stored and quietly treated as a path.
+    /// True for a body pointer: a repository-relative path (<see cref="RepoPath"/>) or an artifact id, never longer than
+    /// the column and free of any whitespace — the one difference between a pointer and an inline body, and the reason a
+    /// value carrying some is refused here and by the CHECK rather than stored and quietly read as a path.
     /// </summary>
     public static bool IsValidBodyRef(string? value) =>
         value is not null
         && value.Length <= MaxBodyRefLength
-        && !HasAsciiWhitespace(value)
+        && !HasWhitespace(value)
         && (RepoPath.IsValid(value) || Guid.TryParseExact(value, "D", out _));
 
-    /// <summary>The ASCII whitespace set of the column's <c>\s</c>: the only characters whose presence would make a pointer read as content.</summary>
-    private static bool HasAsciiWhitespace(string value) =>
-        value.AsSpan().IndexOfAny(" \t\n\v\f\r".AsSpan()) >= 0;
+    /// <summary>
+    /// True for any whitespace or separator, not only ASCII: the column's <c>\s</c> is Unicode-aware, so a no-break space
+    /// must be refused here instead of failing the insert as a 500.
+    /// </summary>
+    private static bool HasWhitespace(string value)
+    {
+        foreach (var character in value)
+        {
+            if (char.IsWhiteSpace(character))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
