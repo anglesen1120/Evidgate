@@ -59,6 +59,16 @@ public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, 
         </testsuites>
         """u8.ToArray();
 
+    /// <summary>A failing case: pytest's raw <c>failure</c> word must reach the attempt as <c>failed</c>, not <c>error</c>.</summary>
+    private static readonly byte[] FailingBody = """
+        <?xml version="1.0" encoding="utf-8"?>
+        <testsuites>
+          <testsuite name="pytest" tests="1" failures="1">
+            <testcase name="probe" time="0.012"><failure message="boom"/></testcase>
+          </testsuite>
+        </testsuites>
+        """u8.ToArray();
+
     /// <summary>The same report with a different duration: the same identities, a different payload hash.</summary>
     private static readonly byte[] ChangedDurationBody = """
         <?xml version="1.0" encoding="utf-8"?>
@@ -87,6 +97,26 @@ public sealed class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, 
         Guid RunId) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync() => await Host.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Failing_Case_Persists_Its_Attempt_As_Failed_And_The_Raw_Word_On_The_Event()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, FailingBody);
+
+        var outcome = await ParseAsync(world, artifactId, ProducerKind);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            $"select raw_status from public.case_attempt where org_id = '{world.Org:D}'")).ShouldBe("failed");
+        (await _fixture.ScalarAsync<string?>(
+            world.Database,
+            $"select raw_status from public.event where artifact_ids = array['{artifactId:D}'::uuid]"))
+            .ShouldBe("failure");
     }
 
     [Fact]

@@ -93,14 +93,15 @@ internal sealed partial class ParseRawReportHandler
                 payload,
                 [artifactId]);
 
-            // A passed/failed/error/skipped finish is exactly the attempt the plan records; a duration past the
-            // attempt column's int range is dropped rather than truncated (the event row keeps the exact value).
+            // The attempt carries the normalized spelling: the generic writer folds an unknown raw word such as
+            // pytest's "failure" to error, while the event keeps the raw word. A duration past the attempt
+            // column's int range is dropped rather than truncated (the event row keeps the exact value).
             var duration = item.DurationMs is >= 0 and <= int.MaxValue ? (int)item.DurationMs.Value : (int?)null;
             events[index] = new SerializedEvent(
                 rows[index],
-                string.IsNullOrEmpty(item.RawStatus)
+                string.IsNullOrEmpty(item.Normalized)
                     ? null
-                    : new CaseAttemptInput(item.ExecutionKey, AttemptNo: 1, item.RawStatus, DurationMs: duration));
+                    : new CaseAttemptInput(item.ExecutionKey, AttemptNo: 1, item.Normalized, DurationMs: duration));
         }
 
         // A report that maps nothing still hashes and serializes, so its empty set is decided by the write half rather
