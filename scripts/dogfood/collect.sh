@@ -46,6 +46,8 @@ fi
 PRODUCER_STATUS=0
 if [[ "$PRODUCE" == "1" ]]; then
   # xUnit v3 console runner's own JUnit writer (the MTP --report-* flags exist only under `dotnet test`).
+  # An old report must never stand in for a producer that failed to start.
+  rm -f "$SRC/xunit.junit.xml" "$SRC/vitest.junit.xml" "$SRC/playwright.junit.xml"
   # A failing test still writes a valid report, so every producer runs and the first non-zero status is
   # returned once the upload set is assembled; a producer that wrote no report fails the collection below.
   dotnet run --project "$ROOT/tests/Canonicalization.UnitTests" -c Release -- \
@@ -79,9 +81,10 @@ for producer in producers:
     path = src / name
     if not path.is_file():
         sys.exit(f"collect.sh: {producer}: missing report {path}")
-    if path.stat().st_size > MAX_BYTES:
+    with path.open("rb") as handle:
+        data = handle.read(MAX_BYTES + 1)
+    if len(data) > MAX_BYTES:
         sys.exit(f"collect.sh: {producer}: report exceeds {MAX_BYTES} bytes")
-    data = path.read_bytes()
     try:
         scanner = expat.ParserCreate()
         scanner.StartDoctypeDeclHandler = refuse_doctype
