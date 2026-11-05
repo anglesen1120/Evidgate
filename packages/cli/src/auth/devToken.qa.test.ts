@@ -4,9 +4,10 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { capture, jsonResponse } from '../commands/cliSpec.testing.js';
 import { resolveConfig } from '../config.js';
 import { main } from '../main.js';
-import { redact, resetSecrets, type Io } from '../redact.js';
+import { redact, resetSecrets } from '../redact.js';
 
 import { getToken } from './getToken.js';
 import { tokenCachePath, writeCachedToken } from './tokenCache.js';
@@ -29,26 +30,20 @@ const createArgv = [
   '--verbose',
 ];
 
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json', 'retry-after': '1' },
-  });
-}
+/** The refusals these cases drive carry a `Retry-After`, so each answer keeps one. */
+const refusalHeaders = { 'retry-after': '1' };
 
 function success(): Response {
-  return jsonResponse(200, {
-    token: bearer,
-    expires_at: expiresAt,
-    project_id: projectId,
-    permission_set: [],
-  });
-}
-
-function capture(): { io: Io; stdout: string[]; stderr: string[] } {
-  const stdout: string[] = [];
-  const stderr: string[] = [];
-  return { io: { stdout: (s) => stdout.push(s), stderr: (s) => stderr.push(s) }, stdout, stderr };
+  return jsonResponse(
+    200,
+    {
+      token: bearer,
+      expires_at: expiresAt,
+      project_id: projectId,
+      permission_set: [],
+    },
+    refusalHeaders,
+  );
 }
 
 function transport(handler: (request: Request) => Response | Promise<Response>): {
@@ -90,7 +85,11 @@ describe('dev-token exchange through CLI entry points', () => {
     const stub = transport((request) =>
       new URL(request.url).pathname === '/v1/ci/token'
         ? success()
-        : jsonResponse(201, { run_id: runId, state: 'queued', unverified_ref: false }),
+        : jsonResponse(
+            201,
+            { run_id: runId, state: 'queued', unverified_ref: false },
+            refusalHeaders,
+          ),
     );
     const out = capture();
 
@@ -176,15 +175,19 @@ describe('dev-token exchange through CLI entry points', () => {
     'exchange HTTP %i exits 3 with %s and exactly %i request(s)',
     async (status, code, attempts) => {
       const stub = transport(() =>
-        jsonResponse(status, {
-          error: {
-            code,
-            message: `refused ${devToken}\n::error::no`,
-            request_id: `req-${devToken}`,
-            retryable: true,
-            details: [{ reason: devToken }],
+        jsonResponse(
+          status,
+          {
+            error: {
+              code,
+              message: `refused ${devToken}\n::error::no`,
+              request_id: `req-${devToken}`,
+              retryable: true,
+              details: [{ reason: devToken }],
+            },
           },
-        }),
+          refusalHeaders,
+        ),
       );
       const out = capture();
       const sleeps: number[] = [];
@@ -236,7 +239,9 @@ describe('dev-token exchange through CLI entry points', () => {
   });
 
   it('rejects malformed success without caching or printing either credential', async () => {
-    const stub = transport(() => jsonResponse(200, { token: bearer, expires_at: 'invalid' }));
+    const stub = transport(() =>
+      jsonResponse(200, { token: bearer, expires_at: 'invalid' }, refusalHeaders),
+    );
     const out = capture();
 
     expect(
@@ -276,14 +281,18 @@ describe('dev-token exchange through CLI entry points', () => {
     const stub = transport((request) =>
       new URL(request.url).pathname === '/v1/ci/token'
         ? success()
-        : jsonResponse(401, {
-            error: {
-              code: 'token_expired',
-              message: `expired ${bearer}`,
-              request_id: 'req-401',
-              retryable: false,
+        : jsonResponse(
+            401,
+            {
+              error: {
+                code: 'token_expired',
+                message: `expired ${bearer}`,
+                request_id: 'req-401',
+                retryable: false,
+              },
             },
-          }),
+            refusalHeaders,
+          ),
     );
     const out = capture();
 

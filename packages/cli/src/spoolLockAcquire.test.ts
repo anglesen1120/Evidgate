@@ -31,15 +31,8 @@ import {
   spoolLockFileName,
   withSpoolLock,
 } from './spoolLock.js';
-import {
-  deadPid,
-  expectError,
-  failureOf,
-  fixedIso,
-  fixedNow,
-  makeFifo,
-  sampleLockPid,
-} from './spoolLock.kit.test.js';
+import { deadPid, fixedIso, fixedNow, makeFifo, sampleLockPid } from './spoolLock.testing.js';
+import { expectError, failureOf } from './spool.testing.js';
 
 describe('withSpoolLock', () => {
   let root: string;

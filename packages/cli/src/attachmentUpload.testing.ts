@@ -300,6 +300,13 @@ export function useAttachmentUploadSpec(onRoot?: (directory: string) => void) {
     );
   });
 
+  /** Another temporary root beside the upload root, removed after this test. */
+  async function tempRoot(prefix: string): Promise<string> {
+    const directory = await mkdtemp(join(tmpdir(), prefix));
+    directories.push(directory);
+    return directory;
+  }
+
   /** The dev-token surface: loopback API, a project, a private cache dir, no spool. */
   function env(
     overrides: Record<string, string | undefined> = {},
@@ -338,5 +345,5 @@ export function useAttachmentUploadSpec(onRoot?: (directory: string) => void) {
     return { path, content: bytes };
   }
 
-  return { directories, env, uploader, attachment };
+  return { directories, tempRoot, env, uploader, attachment };
 }

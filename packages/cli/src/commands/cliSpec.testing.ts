@@ -1,12 +1,15 @@
-// The output and `fetch` doubles every command spec shares: a captured `Io`, a recording
-// `fetch` stub with one recorded-request shape, the dev-token exchange it can answer in front
-// of the command's own requests, and the JSON answer builder. A command spec imports these
-// through its own fixture module (or `gate.kit.testing`) instead of carrying a copy.
+// The output, error and `fetch` doubles every command spec shares: a captured `Io`, the
+// `CliError` a refusal throws, a recording `fetch` stub with one recorded-request shape, the
+// dev-token exchange it can answer in front of the command's own requests, and the JSON answer
+// builder. A command spec imports these through its own fixture module (or `gate.kit.testing`)
+// instead of carrying a copy.
 //
 // This file is not a spec: the shared Vitest base collects `src/**/*.test.ts` only. It is
 // also excluded from the emitting project in tsconfig.json, so it never reaches `dist`; the
 // no-emit tsconfig.spec.json is the project that type-checks it.
 import { gunzipSync } from 'node:zlib';
+
+import { CliError } from '../errors.js';
 
 import type { Io } from '../redact.js';
 
@@ -25,6 +28,32 @@ export function capture(): Captured {
     stdout,
     stderr,
   };
+}
+
+/** The `CliError` a refusal threw; a call that returns normally is a spec bug. */
+export function captureCliError(run: () => unknown): CliError {
+  try {
+    run();
+  } catch (error) {
+    if (error instanceof CliError) {
+      return error;
+    }
+    throw error;
+  }
+  throw new Error('expected the call to throw a CliError');
+}
+
+/** `captureCliError` for an async refusal: the call is awaited inside the guard. */
+export async function captureCliErrorAsync(run: () => Promise<unknown>): Promise<CliError> {
+  try {
+    await run();
+  } catch (error) {
+    if (error instanceof CliError) {
+      return error;
+    }
+    throw error;
+  }
+  throw new Error('expected the call to throw a CliError');
 }
 
 /** One recorded request: the request itself, what it carried and what a spec asserts on. */
@@ -98,6 +127,28 @@ export function stubFetch(handler: StubHandler, options: StubOptions = {}): Stub
     return handler(call, calls.length - 1);
   };
   return { fetchImpl, calls, exchanges };
+}
+
+/** One recorded request and its body as text: the shape an auth spec answers from. */
+export interface RequestCall {
+  readonly request: Request;
+  readonly body: string;
+}
+
+/**
+ * `stubFetch` for a spec that answers from the `Request` and asserts on its text body: the
+ * recording is the same one, projected to the request and the decoded bytes as UTF-8.
+ */
+export function stubRequestFetch(handler: (request: Request) => Response | Promise<Response>): {
+  readonly fetchImpl: typeof fetch;
+  readonly calls: RequestCall[];
+} {
+  const calls: RequestCall[] = [];
+  const { fetchImpl } = stubFetch((call) => {
+    calls.push({ request: call.request, body: call.body.toString('utf8') });
+    return handler(call.request);
+  });
+  return { fetchImpl, calls };
 }
 
 export function jsonResponse(

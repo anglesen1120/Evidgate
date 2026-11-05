@@ -89,7 +89,7 @@ describe('spool notices (04.3.3-T2)', () => {
     // One line per chunk: the second flush rotates, which is the only write point that can
     // fail without failing the flush that just made the batch durable (F2).
     const writer = new SpoolWriter(options(spool, { chunkMaxLines: 1 }));
-    // The obstacle `shards-store.test.ts` uses for the same failure: a directory planted at
+    // The obstacle the shards record spec uses for the same failure: a directory planted at
     // the staging name makes every record write fail (EISDIR/EPERM).
     mkdirSync(join(producerDir(spool), SHARDS_TMP_FILE), { recursive: true });
 

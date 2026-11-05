@@ -16,6 +16,7 @@ import { afterEach } from 'vitest';
 import { packBatches } from './batcher.js';
 import { jsonResponse } from './commands/cliSpec.testing.js';
 import { ProducerSpool } from './spool.js';
+import { collect } from './spool.testing.js';
 
 import type { Batch } from './batcher.js';
 import type { SendDeps } from './sender.js';
@@ -106,14 +107,6 @@ export async function* eventsOf<T>(list: readonly T[]): AsyncGenerator<T> {
 }
 
 export const ackNothing = (): Promise<void> => Promise.resolve();
-
-export async function collect<T>(gen: AsyncIterable<T>): Promise<T[]> {
-  const out: T[] = [];
-  for await (const item of gen) {
-    out.push(item);
-  }
-  return out;
-}
 
 export async function openSpool(
   spoolDir: string,

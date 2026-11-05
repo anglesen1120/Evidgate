@@ -4,8 +4,8 @@ import { join } from 'node:path';
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { captureCliError } from '../commands/cliSpec.testing.js';
 import { resolveConfig, type ResolvedConfig } from '../config.js';
-import { CliError } from '../errors.js';
 import { resetSecrets } from '../redact.js';
 
 import { resolveDevToken } from './devToken.js';
@@ -19,18 +19,6 @@ const baseEnv = {
 
 function configFor(env: Record<string, string | undefined>): ResolvedConfig {
   return resolveConfig({ env });
-}
-
-function captureCliError(run: () => unknown): CliError {
-  try {
-    run();
-  } catch (error) {
-    if (error instanceof CliError) {
-      return error;
-    }
-    throw error;
-  }
-  throw new Error('expected the call to throw a CliError');
 }
 
 // 04.2.1-T2.2 / AC8: the dev token is the bearer only on `EVIDGATE_ENV=dev`.

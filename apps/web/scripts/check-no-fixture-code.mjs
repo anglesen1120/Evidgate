@@ -51,7 +51,7 @@
 // `npm ci --ignore-scripts` needs nothing extra. The dist directory is resolved from this file's
 // own location (`apps/web/dist/browser`), so the answer does not depend on the caller's cwd.
 // `EVIDGATE_WEB_DIST_DIR` and `EVIDGATE_WEB_FIXTURE_DIR` exist ONLY to run the synthetic proofs of
-// this gate (packages/cli/src/webFixtureLeakGate.test.ts); they are not build knobs.
+// this gate (packages/cli/src/webFixtureLeakGate{,.needles,.runViews,.signIn}.test.ts); they are not build knobs.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -31,14 +31,8 @@ import {
   spoolLockFileMode,
   writerLockFileName,
 } from './spoolLock.js';
-import {
-  deadPid,
-  expectError,
-  failureOf,
-  fixedIso,
-  makeFifo,
-  writerLockRecord,
-} from './spoolLock.kit.test.js';
+import { deadPid, fixedIso, makeFifo, writerLockRecord } from './spoolLock.testing.js';
+import { expectError, failureOf } from './spool.testing.js';
 import { UploadJournal } from './uploadJournal.js';
 
 describe('writer.lock — the reporter side (D-S56-Q8)', () => {

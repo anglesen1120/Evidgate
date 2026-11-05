@@ -7,6 +7,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { capture, jsonResponse, type Captured } from '../commands/cliSpec.testing.js';
 import {
   devStubFetch,
   devToken,
@@ -14,7 +15,7 @@ import {
   mintedToken,
 } from '../commands/devExchange.testing.js';
 import { main } from '../main.js';
-import { resetSecrets, type Io } from '../redact.js';
+import { resetSecrets } from '../redact.js';
 
 import { setCacheWarningWriter, writeCachedToken, type TokenCacheConfig } from './tokenCache.js';
 
@@ -28,32 +29,9 @@ const manifestHash = `sha256:${'a'.repeat(64)}`;
 /** The `run_id` the stubbed create answers with (openapi `RunCreated`). */
 const runId = '3f1c2b4a-5d6e-4f70-8192-a3b4c5d6e7f8';
 
-interface Captured {
-  readonly io: Io;
-  readonly stdout: string[];
-  readonly stderr: string[];
-}
-
-function capture(): Captured {
-  const stdout: string[] = [];
-  const stderr: string[] = [];
-  return {
-    io: { stdout: (text) => stdout.push(text), stderr: (text) => stderr.push(text) },
-    stdout,
-    stderr,
-  };
-}
-
 /** The warning lines of one run; exactly one is the contract. */
 function warnings(out: Captured): string[] {
   return out.stderr.filter((line) => line.startsWith('evidgate: warning: '));
-}
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
 }
 
 /** The dev source: a loopback api URL and `EVIDGATE_ENV=dev`, which the dev guard requires. */
