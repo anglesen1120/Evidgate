@@ -75,7 +75,7 @@ export interface FakeProject {
   use?: unknown;
 }
 
-export interface FakeTestInput {
+interface FakeTestInput {
   id?: string;
   title?: string;
   file?: string;

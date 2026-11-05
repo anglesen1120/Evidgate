@@ -32,8 +32,8 @@ import { EvidgateReporter, type EvidgateReporterOptions } from './reporter.js';
 export const RUN_ID = 'run-attach-1';
 export const PRODUCER_ID = 'shard-1';
 export const EXECUTION_KEY = 'a1'.repeat(32);
-export const CASE_ID = '0f9a6c3e-1b2d-4c5e-8f70-a1b2c3d4e5f6';
-export const VARIANT_HASH = `sha256:${'cd'.repeat(32)}`;
+const CASE_ID = '0f9a6c3e-1b2d-4c5e-8f70-a1b2c3d4e5f6';
+const VARIANT_HASH = `sha256:${'cd'.repeat(32)}`;
 /** Two artifact ids in canonical UUID form; the fake uploader answers with these. */
 export const ARTIFACT_A = '11111111-1111-4111-8111-111111111111';
 export const ARTIFACT_B = '22222222-2222-4222-8222-222222222222';
@@ -44,7 +44,7 @@ export const fakePresigned = `https://store.test/put?X-Amz-Signature=${'abc123'}
 const tempDirs: string[] = [];
 
 /** Removes every directory `tempDir` created; the hook below runs it after each case. */
-export function cleanupTempDirs(): void {
+function cleanupTempDirs(): void {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 }
 
@@ -67,7 +67,7 @@ export function attachment(path: string, name: string, contentType: string): Pla
   return { name, path, body: undefined, contentType };
 }
 
-export interface FakeUploader {
+interface FakeUploader {
   uploader: AttachmentUploader;
   /** Every input the uploader was asked for, in call order. */
   calls: AttachmentUploadInput[];
@@ -77,7 +77,7 @@ export interface FakeUploader {
   readonly peak: number;
 }
 
-export interface FakeUploaderOptions {
+interface FakeUploaderOptions {
   readonly uploads?: (
     input: AttachmentUploadInput,
     index: number,
@@ -141,7 +141,7 @@ export function fakeCli(factory: () => AttachmentUploader): CliModule {
   });
 }
 
-export interface Harness {
+interface Harness {
   readonly pipeline: AttachmentPipeline;
   readonly uploader: FakeUploader;
   readonly root: string;
@@ -257,7 +257,7 @@ export async function endOfRun(reporter: EvidgateReporter): Promise<unknown> {
   return await reporter.onEnd(fullResult());
 }
 
-export function spoolDirOf(spool: string): string {
+function spoolDirOf(spool: string): string {
   return join(spool, RUN_ID, PRODUCER_ID);
 }
 
