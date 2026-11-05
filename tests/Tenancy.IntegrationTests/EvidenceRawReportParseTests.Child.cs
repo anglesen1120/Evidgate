@@ -21,8 +21,8 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// The raw-report handler's child seam: every byte of the report reaches a runner and nothing else, a child that
-/// crashes, runs out of memory or times out becomes a named refusal with nothing written, and the child's own
-/// rejection record (a document type, an entry budget) is the verdict.
+/// crashes, runs out of memory or times out becomes a named refusal whose only row is the report's own, and the child's
+/// own rejection record (a document type, an entry budget) is the verdict.
 /// </summary>
 public sealed partial class EvidenceRawReportParseTests
 {
@@ -74,7 +74,7 @@ public sealed partial class EvidenceRawReportParseTests
     [InlineData(nameof(ParseRunFailureKind.WallClockExceeded), 137, ParseRunRejection.Timeout)]
     [InlineData(nameof(ParseRunFailureKind.OutputBytesExceeded), 0, ParseRunRejection.Crashed)]
     [InlineData(nameof(ParseRunFailureKind.MalformedOutput), 0, ParseRunRejection.Crashed)]
-    public async Task A_Failed_Child_Is_A_Named_Refusal_And_Writes_Nothing(
+    public async Task A_Failed_Child_Is_A_Named_Refusal_And_Writes_No_Event(
         string kind,
         int exitCode,
         string reason)
@@ -107,7 +107,7 @@ public sealed partial class EvidenceRawReportParseTests
     }
 
     [Fact]
-    public async Task A_Document_Type_Is_Refused_By_The_Child_And_Writes_Nothing()
+    public async Task A_Document_Type_Is_Refused_By_The_Child_And_Writes_No_Event()
     {
         var world = await StartAsync();
         await using var _ = world;
@@ -230,14 +230,14 @@ public sealed partial class EvidenceRawReportParseTests
 
     private static ParseRecord Record(string json) => new(Encoding.UTF8.GetBytes(json));
 
-    private static ParseRawReportHandler CreateHandler(World world, IParseRunner? runner)
+    private static ParseRawReportHandler CreateHandler(World world, IParseRunner? runner, ITenantDb? db = null)
     {
         var services = world.Host.Services;
 
         return new ParseRawReportHandler(
             services.GetRequiredService<ITenantScopeFactory>(),
             services.GetRequiredService<ITenantDbContextFactory<EvidenceDbContext>>(),
-            services.GetRequiredService<ITenantDb>(),
+            db ?? services.GetRequiredService<ITenantDb>(),
             services.GetRequiredService<IObjectStorage>(),
             services.GetRequiredService<IReportParserResolver>(),
             runner ?? new EmulatedChildRunner(services.GetRequiredService<IParsing>()),
