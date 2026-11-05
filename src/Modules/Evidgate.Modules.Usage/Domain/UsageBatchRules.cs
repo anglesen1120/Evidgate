@@ -148,4 +148,30 @@ internal static class UsageBatchRules
 /// <param name="RepeatedBillingKeys">The distinct billing keys the request repeated.</param>
 internal sealed record UsageBatch(
     IReadOnlyList<PendingUsageEntry> Rows,
-    IReadOnlyList<string> RepeatedBillingKeys);
+    IReadOnlyList<string> RepeatedBillingKeys)
+{
+    /// <summary>
+    /// The billing keys of this batch a caller must report as duplicates, in request order: a key the insert skipped
+    /// because it was already on file, and a key the request itself repeated even when its first occurrence inserted.
+    /// The one classification the write path and its answer share, so a recorded attempt can never disagree with the
+    /// duplicates a caller was told about.
+    /// </summary>
+    /// <param name="insertedKeys">The billing keys the insert statement returned.</param>
+    internal IReadOnlyList<string> DuplicateBillingKeys(IReadOnlySet<string> insertedKeys)
+    {
+        ArgumentNullException.ThrowIfNull(insertedKeys);
+
+        var repeated = RepeatedBillingKeys.ToHashSet(StringComparer.Ordinal);
+        List<string>? duplicates = null;
+
+        foreach (var row in Rows)
+        {
+            if (!insertedKeys.Contains(row.BillingKey) || repeated.Contains(row.BillingKey))
+            {
+                (duplicates ??= []).Add(row.BillingKey);
+            }
+        }
+
+        return duplicates ?? [];
+    }
+}

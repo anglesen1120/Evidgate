@@ -361,6 +361,65 @@ public sealed class CompositeFkTests : HarnessTest
             .ShouldBeNull();
     }
 
+    /// <summary>
+    /// The fourth negative fixture, pinning the half the first three cannot reach: a two-column key to an
+    /// org-scoped parent must pair <c>org_id</c> with the parent's <c>org_id</c> position by position. The
+    /// parent's <c>(org_id, id)</c> primary key is a legal target whatever order the columns are named in,
+    /// so <c>(org_id, parent_id) → (id, org_id)</c> is valid SQL that references the same column set while
+    /// pairing this row's org with the parent's row id — it can never match a row, and it is exactly the
+    /// shape the narrow-unique-key allowance of 0076's <c>usage_duplicate_attempt_ledger_fk</c> must not
+    /// bless: the allowance adds "references the parent's own unique key" as an alternative to the
+    /// <c>(org_id, id)</c> pairing, never as a replacement for the <c>org_id</c> pairing itself.
+    /// </summary>
+    [Fact]
+    public async Task NegativeFixture_MispairedOrgKey_IsDetected()
+    {
+        await using var connection = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await connection.OpenAsync(Token);
+
+        await using (var transaction = await connection.BeginTransactionAsync(Token))
+        {
+            await ExecuteAsync(
+                connection,
+                transaction,
+                """
+                create table public.composite_fk_fixture_mispaired_parent (
+                  org_id uuid not null,
+                  id uuid not null,
+                  label text not null,
+                  constraint composite_fk_fixture_mispaired_parent_pkey primary key (org_id, id)
+                );
+                create table public.composite_fk_fixture_mispaired_child (
+                  org_id uuid not null,
+                  id uuid not null,
+                  parent_id uuid not null,
+                  constraint composite_fk_fixture_mispaired_child_pkey primary key (org_id, id),
+                  constraint composite_fk_fixture_mispaired_child_mispaired_fk
+                    foreign key (org_id, parent_id)
+                    references public.composite_fk_fixture_mispaired_parent (id, org_id)
+                );
+                """);
+
+            var scan = await TenantFkScan.RunAsync(connection, Token, transaction);
+
+            scan.TenantTables.ShouldContain("public.composite_fk_fixture_mispaired_child");
+            scan.TenantTables.ShouldContain("public.composite_fk_fixture_mispaired_parent");
+
+            // The parent is a legal composite-FK target (its primary key is the tenant key), so only the
+            // mispaired columns are a finding — never the parent.
+            var finding = scan.Findings.ShouldHaveSingleItem();
+            finding.Table.ShouldBe("public.composite_fk_fixture_mispaired_child");
+            finding.Rule.ShouldBe(TenantFkRule.CompositeForeignKey);
+            finding.Detail.ShouldContain("composite_fk_fixture_mispaired_child_mispaired_fk");
+            finding.Detail.ShouldContain("org_id");
+
+            TenantFkScan.Describe(scan.Findings).ShouldContain("public.composite_fk_fixture_mispaired_child");
+        }
+
+        (await ScalarAsync(connection, "select to_regclass('public.composite_fk_fixture_mispaired_child')::text"))
+            .ShouldBeNull();
+    }
+
     /// <summary>Reads the catalogue through the app role, exactly as the suite's own read path does.</summary>
     private async Task<TenantFkScanResult> ScanAsync()
     {

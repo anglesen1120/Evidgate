@@ -1,5 +1,8 @@
+using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Usage.Application;
+using Evidgate.Modules.Usage.Application.Queries;
+using Evidgate.Modules.Usage.Application.Rollup;
 using Evidgate.Modules.Usage.Contracts;
 using Evidgate.Modules.Usage.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +35,22 @@ internal static class UsageModule
         services.TryAddScoped<UsagePriceStore>();
         services.TryAddScoped<IUsagePriceResolver, UsagePriceResolver>();
         services.TryAddScoped<UsagePriceLoader>();
+
+        // The billing operator's two audited reads: one Dapper store over the tenant scope, and the services that own
+        // their bounds, audit row and transaction boundary.
+        services.TryAddScoped<UsageReadStore>();
+        services.TryAddScoped<UsageLedgerReader>();
+        services.TryAddScoped<PeriodReconciliationReader>();
+
+        // The roll-up job: the aggregate store seam, its platform handler and the two schedules (daily and on period
+        // close). The datasource is the sweep role the mechanism's other platform tasks read through; `AddTaskSchedule`
+        // is idempotent per host and the schedule row's unique (schedule_name, fire_at) key is what makes one fire
+        // happen once.
+        services.TryAddSingleton<IWorkerSchedDataSource, WorkerSchedDataSource>();
+        services.TryAddSingleton<IUsageRollupRecompute, UsageRollupRecompute>();
+        services.AddTaskHandler<UsageRollupPayload, UsageRollupTaskHandler>();
+        services.AddTaskSchedule(UsageRollupSweeps.Compute);
+        services.AddTaskSchedule(UsageRollupSweeps.ComputeOnPeriodClose);
 
         // IQuotaGate stays unregistered until 12.3.1-T4 implements it: a hot path that asks for it must fail at
         // resolution rather than meter against a stub that always answers Ok. Fail closed is the contract (IQuotaGate's

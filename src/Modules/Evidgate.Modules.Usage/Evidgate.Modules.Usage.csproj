@@ -7,6 +7,9 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Usage.Contracts\Evidgate.Modules.Usage.Contracts.csproj" />
+    <!-- The billing operator's reads answer 404 for an org that does not exist, through the registry's Contracts
+         surface; a module never reads another module's tables. -->
+    <ProjectReference Include="..\Evidgate.Modules.Tenancy.Contracts\Evidgate.Modules.Tenancy.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <!-- 12.3.1-T1.4: the ledger write is raw Npgsql SQL over the module's EF DbContext/tenant transaction (00 §5.5 C3/C5). -->
     <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />

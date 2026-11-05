@@ -89,9 +89,10 @@ internal sealed class RecordUsageBatchHandler(
 
         var batch = UsageBatchRules.Prepare(command.Entries);
 
-        // (d) One statement for the batch (plan §8 P2); the returning set is the inserted half of the answer.
+        // (d) One statement for the batch (plan §8 P2); the returning set is the inserted half of the answer. The
+        // duplicate keys of the same call are counted in this transaction, so a refusal never leaves a tally behind.
         var inserted = await store
-            .InsertAsync(orgId, batch.Rows, cancellationToken)
+            .RecordBatchAsync(orgId, batch, cancellationToken)
             .ConfigureAwait(false);
         var result = UsageBatchOutcome.Merge(batch, inserted);
 

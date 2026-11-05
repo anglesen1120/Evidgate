@@ -295,12 +295,17 @@ internal static class SchemaConventionScan
             // org_id pairs with the principal's org_id: `case_attempt_planned_execution_fk
             // (org_id, run_id, execution_key) -> planned_execution (org_id, run_id,
             // execution_key)` (0032) is exactly that — the principal's own unique key,
-            // so no row can point at another org's planned execution.
+            // so no row can point at another org's planned execution. The same holds
+            // for a two-column key to a narrower unique key than `(org_id, id)`:
+            // `usage_duplicate_attempt_ledger_fk (org_id, billing_key) ->
+            // usage_ledger_entry (org_id, billing_key)` can only match its own
+            // tenant's row, because that pair is the ledger's own unique key.
             var isCompositeTenantKey = referenced.AsSpan().Contains("org_id", StringComparer.Ordinal)
                 && PairsOrgId(foreignKey.Columns, foreignKey.PrincipalColumns)
-                && (foreignKey.Columns.Length == 2
-                    ? referenced.AsSpan().SequenceEqual(TenantKeyColumns) && PairsTenantKey(foreignKey.Columns, foreignKey.PrincipalColumns)
-                    : ReferencesUniqueKey(uniqueKeys, foreignKey));
+                && ((foreignKey.Columns.Length == 2
+                        && referenced.AsSpan().SequenceEqual(TenantKeyColumns)
+                        && PairsTenantKey(foreignKey.Columns, foreignKey.PrincipalColumns))
+                    || ReferencesUniqueKey(uniqueKeys, foreignKey));
 
             if (!isCompositeTenantKey)
             {

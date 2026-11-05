@@ -72,14 +72,19 @@ internal sealed record TenantFkScanResult(
 /// referencing the target's <c>(org_id, id)</c> key (00 §5.4.1). A set comparison is
 /// not enough: a key declared <c>(org_id, project_id) → (id, org_id)</c> references
 /// the same column set while pairing the org with the target's id, and can never
-/// match a row. The principal side is scoped by the presence of the <c>org_id</c>
-/// column, which is what "org-scoped parent" means in 00 §5.4.6 — not by
-/// tenant-set membership. That scoping is what makes the failure message the right
-/// instruction: a tenant table pointing at a catalogue row through a plain key is
-/// told to use the composite form (plan 02 §4.1 requires exactly that for a future
-/// <c>membership.role_id → role (org_id, id)</c>), where the org-column rule would
-/// tell it to point at the parent through its own <c>org_id</c> — an instruction
-/// that cannot be right for a catalogue row. The <em>dependent</em> side is the
+/// match a row. A wider key, or a narrower one than the tenant key, is the same shape
+/// when it references a unique key of the principal that includes <c>org_id</c> and its
+/// <c>org_id</c> pairs with the dependent's: 0032's
+/// <c>(org_id, run_id, execution_key)</c> and 0076's
+/// <c>(org_id, billing_key) → usage_ledger_entry (org_id, billing_key)</c> can only
+/// match a row of the dependent's own tenant. The principal side is scoped by the
+/// presence of the <c>org_id</c> column, which is what "org-scoped parent" means in
+/// 00 §5.4.6 — not by tenant-set membership. That scoping is what makes the failure
+/// message the right instruction: a tenant table pointing at a catalogue row through
+/// a plain key is told to use the composite form (plan 02 §4.1 requires exactly that
+/// for a future <c>membership.role_id → role (org_id, id)</c>), where the org-column
+/// rule would tell it to point at the parent through its own <c>org_id</c> — an
+/// instruction that cannot be right for a catalogue row. The <em>dependent</em> side is the
 /// exception-subtracted tenant set, so a catalogue table's own outbound key
 /// (0010's <c>role_permission.role_id → role (id)</c>, whose built-in rows have
 /// <c>org_id</c> NULL and are exempted in
@@ -219,11 +224,17 @@ internal static class TenantFkScan
             // principal's org_id: `case_attempt_planned_execution_fk (org_id, run_id, execution_key)
             // -> planned_execution (org_id, run_id, execution_key)` (0032) is exactly that — the
             // principal's own unique key, so no row can point at another org's planned execution.
+            // The same holds for a two-column key to a narrower unique key than (org_id, id):
+            // `usage_duplicate_attempt_ledger_fk (org_id, billing_key) -> usage_ledger_entry
+            // (org_id, billing_key)` (0076) can only match its own tenant's ledger row, because that
+            // pair is the ledger's own unique key — the rule `SchemaConventionScan` of
+            // Persistence.IntegrationTests applies to the same key.
             var isTenantKey = referenced.AsSpan().Contains(TenantColumn, StringComparer.Ordinal)
                 && PairsOrgId(foreignKey.Columns, foreignKey.PrincipalColumns)
-                && (foreignKey.Columns.Length == 2
-                    ? referenced.AsSpan().SequenceEqual(TenantKeyColumns) && PairsTenantKey(foreignKey.Columns, foreignKey.PrincipalColumns)
-                    : ReferencesUniqueKey(schema, foreignKey));
+                && ((foreignKey.Columns.Length == 2
+                        && referenced.AsSpan().SequenceEqual(TenantKeyColumns)
+                        && PairsTenantKey(foreignKey.Columns, foreignKey.PrincipalColumns))
+                    || ReferencesUniqueKey(schema, foreignKey));
 
             if (!isTenantKey)
             {
@@ -327,7 +338,8 @@ internal static class TenantFkScan
     /// <summary>
     /// The key's principal columns are exactly a unique key of the principal table (order-insensitive),
     /// so the reference can only ever match a row of the dependent's own org — the multi-column form of
-    /// the composite tenant key (0032's <c>case_attempt_planned_execution_fk</c>).
+    /// the composite tenant key (0032's <c>case_attempt_planned_execution_fk</c>) and the two-column key
+    /// to a narrower unique key than <c>(org_id, id)</c> (0076's <c>usage_duplicate_attempt_ledger_fk</c>).
     /// </summary>
     private static bool ReferencesUniqueKey(TenantSchema schema, ScannedForeignKey foreignKey)
     {

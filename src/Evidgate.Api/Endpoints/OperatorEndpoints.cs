@@ -52,6 +52,11 @@ public static class OperatorEndpoints
             .AddEndpointFilter<ResultEndpointFilter>();
 
         healing.MapPost("/switch", SetHealingSwitchSystemAsync);
+
+        // The billing operator's audited reads (12.4.1's invoice statement and its reconciliation). Same gate and
+        // envelope, same exclusion from the served document; the routes own the org segment because an operator read
+        // is not scoped to one tenant by the request pipeline.
+        app.MapUsageOperatorEndpoints();
     }
 
     /// <summary>

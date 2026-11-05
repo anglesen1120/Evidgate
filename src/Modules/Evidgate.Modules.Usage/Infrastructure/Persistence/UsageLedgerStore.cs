@@ -65,6 +65,26 @@ internal sealed class UsageLedgerStore(
         """;
 
     /// <summary>
+    /// Counts every duplicate billing-key attempt of one batch, in the same transaction as the ledger insert.
+    /// <c>attempts = attempts + 1</c> on conflict is the whole tally — a replayed key increments the counter it already
+    /// has — and only the counter and the last sighting are written: the key of a duplicate row never moves, so a
+    /// reconciliation join on <c>(org_id, billing_key)</c> stays valid. Rows go in billing-key order for the same reason
+    /// the ledger's do: two concurrent batches take the unique-key locks in one global order.
+    /// </summary>
+    private const string RecordDuplicatesSql = """
+        insert into public.usage_duplicate_attempt (
+            id, org_id, billing_key, attempts, first_seen_at, last_seen_at)
+        select
+            x.id, @org_id, x.billing_key, 1, now(), now()
+        from unnest(@ids::uuid[], @billing_keys::text[])
+            with ordinality as x (id, billing_key, position)
+        order by x.billing_key
+        on conflict (org_id, billing_key) do update
+        set attempts = public.usage_duplicate_attempt.attempts + 1,
+            last_seen_at = now()
+        """;
+
+    /// <summary>
     /// Reads the row <paramref name="orgId"/>'s tenant holds under <paramref name="billingKey"/>, or null when it holds
     /// none. One indexed read on the caller's tenant transaction: row security makes another org's key an absence, and the
     /// read takes no lock, so a caller comparing a duplicate key never blocks the writer that created it.
@@ -160,6 +180,58 @@ internal sealed class UsageLedgerStore(
         }
 
         return violations ?? [];
+    }
+
+    /// <summary>
+    /// Records <paramref name="batch"/> for <paramref name="orgId"/>: the ledger insert, then one statement counting the
+    /// keys the batch reported as duplicates. The tally shares the caller's transaction, so a batch that rolls back
+    /// leaves neither a ledger row nor an attempt — the reconciliation cannot report a duplicate that was never
+    /// accepted. A batch with no duplicate writes nothing beyond its insert.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope (never a value from the batch).</param>
+    /// <param name="batch">The prepared batch to record.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <returns>The billing keys the insert statement inserted, for <c>UsageBatchOutcome.Merge</c>.</returns>
+    internal async Task<IReadOnlyList<string>> RecordBatchAsync(
+        Guid orgId,
+        UsageBatch batch,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+
+        var inserted = await InsertAsync(orgId, batch.Rows, cancellationToken).ConfigureAwait(false);
+        var duplicates = batch.DuplicateBillingKeys(inserted.ToHashSet(StringComparer.Ordinal));
+
+        if (duplicates.Count > 0)
+        {
+            await RecordDuplicateAttemptsAsync(orgId, duplicates, cancellationToken).ConfigureAwait(false);
+        }
+
+        return inserted;
+    }
+
+    private async Task RecordDuplicateAttemptsAsync(
+        Guid orgId,
+        IReadOnlyList<string> billingKeys,
+        CancellationToken cancellationToken)
+    {
+        var ordered = billingKeys.Order(StringComparer.Ordinal).ToArray();
+        var ids = new Guid[ordered.Length];
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            ids[index] = Guid.CreateVersion7();
+        }
+
+        await using var context = contexts.Create();
+        var scope = scopes.Require();
+
+        await using var command = (NpgsqlCommand)context.Database.GetDbConnection().CreateCommand();
+        command.CommandText = RecordDuplicatesSql;
+        command.Transaction = (NpgsqlTransaction)scope.Transaction;
+        command.Parameters.Add(new NpgsqlParameter("org_id", NpgsqlDbType.Uuid) { Value = orgId });
+        command.Parameters.Add(new NpgsqlParameter("ids", NpgsqlDbType.Array | NpgsqlDbType.Uuid) { Value = ids });
+        command.Parameters.Add(new NpgsqlParameter("billing_keys", NpgsqlDbType.Array | NpgsqlDbType.Text) { Value = ordered });
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
