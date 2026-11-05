@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic pytest junitxml report: one pass, one failure and one skip, no customer data. -->
+<testsuites>
+  <testsuite name="pytest" errors="0" failures="1" skipped="1" tests="3" time="0.081" timestamp="2026-01-01T00:00:00.000000" hostname="ci-runner">
+    <testcase classname="tests.test_payments" name="test_capture_succeeds" time="0.010" />
+    <testcase classname="tests.test_payments" name="test_capture_declined" time="0.021">
+      <failure message="AssertionError: expected DECLINED, got CAPTURED">assert status == "DECLINED"</failure>
+    </testcase>
+    <testcase classname="tests.test_payments" name="test_refund_after_capture" time="0.000">
+      <skipped message="requires the sandbox gateway" type="pytest.skip" />
+    </testcase>
+  </testsuite>
+</testsuites>

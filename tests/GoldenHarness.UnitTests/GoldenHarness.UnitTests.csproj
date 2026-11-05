@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Unit tests for the golden fixture layout and the event diff. Not named Evidgate.* so the
+       Architecture.Tests reflection scan never picks it up; OutputType, Microsoft.NET.Test.Sdk,
+       xunit.v3, xunit.runner.visualstudio and Shouldly come from tests/Directory.Build.props. -->
+  <PropertyGroup>
+    <RootNamespace>GoldenHarness.UnitTests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Tools\Evidgate.GoldenHarness\Evidgate.GoldenHarness.csproj" />
+  </ItemGroup>
+</Project>
