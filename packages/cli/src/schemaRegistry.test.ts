@@ -68,7 +68,7 @@ describe('contract schema registry', () => {
       expect(schemas.has(key), `${key} must load from contracts/**`).toBe(true);
     }
 
-    // The transport caps the plans decide: 04.7.1 §8 (16 KiB) and 04.1.3-T1 (32 MiB manifest body).
+    // The CLI checks bodies against the embedded schemas' byte caps, so they must equal the server's: 16 KiB for a capability document, 32 MiB for a manifest.
     expect(schemas.maxBytes('capability.v1')).toBe(16384);
     expect(schemas.maxBytes('manifest.v1')).toBe(33554432);
   });

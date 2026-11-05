@@ -4,7 +4,7 @@ namespace Evidgate.Modules.Ingestion.Contracts;
 
 /// <summary>
 /// The ingestion budgets, bound from <c>EVIDGATE:Ingestion</c> and validated at boot like every other
-/// <c>EVIDGATE__*</c> group (01.1.2-T1).
+/// <c>EVIDGATE__*</c> group.
 /// <para>
 /// It lives in the module's contracts so the run-create endpoint (manifest bytes), the run-create handler
 /// (manifest executions and the variant axis) and the report parser read one set of numbers. The defaults are
