@@ -26,7 +26,14 @@ internal sealed partial class ParseRawReportHandler
         Prepared? Prepared,
         ParseRawReportOutcome? Stopped,
         string? ParserId = null,
-        string? ParserVersion = null);
+        string? ParserVersion = null)
+    {
+        /// <summary>
+        /// The project whose counter the report's events would charge, read from the artifact row: the pre-check asks
+        /// about that counter before the bytes are fetched, and a stopped preparation never asks.
+        /// </summary>
+        public Guid ProjectId { get; init; }
+    }
 
     /// <summary>
     /// The one read-only scope: the artifact, its kind's cap, the parser pair and the run's plan. It closes before the
@@ -78,7 +85,10 @@ internal sealed partial class ParseRawReportHandler
 
         return new Preparation(
             await ResolveFetchAsync(context, orgId, artifact, payload, resolution, mapper, cancellationToken).ConfigureAwait(false),
-            null);
+            null)
+        {
+            ProjectId = artifact.ProjectId,
+        };
     }
 
     /// <summary>

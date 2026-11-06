@@ -234,7 +234,7 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), ProjectId: null, Period(world), "results", 1m, 1m, WarnRatio, Org: world.Org));
+            Guid.CreateVersion7(), ProjectId: null, await PeriodAsync(world), "results", 1m, 1m, WarnRatio, Org: world.Org));
 
         // Only the organization's counter exists: the project has no limit, so the batch is admitted or refused by the
         // org-wide row alone and charged there alone.
@@ -428,22 +428,22 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
             world.Org,
             Token);
 
-    /// <summary>Seeds one project-scoped counter for the billing month the host's clock is in.</summary>
-    private static Task<Guid> SeedCounterAsync(UsageQuotaWorld counters, World world, decimal used, decimal limit) =>
-        counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), world.Project, Period(world), "results", used, limit, WarnRatio, Org: world.Org));
+    /// <summary>Seeds one project-scoped counter for the DB transaction's month, which is the month the gate charges.</summary>
+    private async Task<Guid> SeedCounterAsync(UsageQuotaWorld counters, World world, decimal used, decimal limit) =>
+        await counters.SeedCounterAsync(new CounterSeed(
+            Guid.CreateVersion7(), world.Project, await PeriodAsync(world), "results", used, limit, WarnRatio, Org: world.Org));
 
-    private static Task<CounterState?> ReadCounterAsync(UsageQuotaWorld counters, World world) =>
-        counters.CounterAsync(org: world.Org, project: world.Project, period: Period(world), metric: "results");
+    private async Task<CounterState?> ReadCounterAsync(UsageQuotaWorld counters, World world) =>
+        await counters.CounterAsync(org: world.Org, project: world.Project, period: await PeriodAsync(world), metric: "results");
 
-    private static Task<CounterState?> ReadTenantCounterAsync(UsageQuotaWorld counters, World world) =>
-        counters.CounterAsync(org: world.Org, project: null, period: Period(world), metric: "results");
+    private async Task<CounterState?> ReadTenantCounterAsync(UsageQuotaWorld counters, World world) =>
+        await counters.CounterAsync(org: world.Org, project: null, period: await PeriodAsync(world), metric: "results");
 
     /// <summary>
     /// The audited operator raise, run in process against the counters world's permissive host: the ingest suite's own
     /// seam, which also proves the raise clears the stamp a block left behind.
     /// </summary>
-    private static async Task<Result<QuotaRaiseResult>> RaiseAsync(
+    private async Task<Result<QuotaRaiseResult>> RaiseAsync(
         UsageQuotaWorld counters,
         World world,
         Guid? project,
@@ -456,13 +456,15 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
             .Publish(RequestPrincipal.Service(project, [Permissions.Billing.Write]));
 
         return await provider.GetRequiredService<IMediator>().Send(
-            new RaiseQuotaLimit(project, Period(world), UsageMetric.Results, limit, RaiseReason),
+            new RaiseQuotaLimit(project, await PeriodAsync(world), UsageMetric.Results, limit, RaiseReason),
             Token);
     }
 
-    private static string Period(World world) =>
-        world.Host.Services.GetRequiredService<TimeProvider>().GetUtcNow()
-            .ToString("yyyy-MM", CultureInfo.InvariantCulture);
+    /// <summary>The month the gate charges: the database's UTC month, which the host's clock cannot move.</summary>
+    private Task<string> PeriodAsync(World world) =>
+        _fixture.ScalarAsync<string>(
+            world.Database,
+            "select to_char(now() at time zone 'UTC', 'YYYY-MM')");
 
     private Task<long> CountAsync(World world, string table, Guid artifactId) =>
         _fixture.ScalarAsync<long>(
