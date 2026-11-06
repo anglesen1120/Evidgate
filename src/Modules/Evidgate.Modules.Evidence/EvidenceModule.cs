@@ -90,6 +90,10 @@ internal static class EvidenceModule
         services.TryAddSingleton<IReportParserResolver, ReportParserResolver>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IJUnitMapper, PytestJUnitMapper>());
 
+        // The producer kind a raw report is parsed under is the run's manifest declaration, read inside the
+        // completion's own tenant transaction; scoped like every reader bound to the ambient scope.
+        services.TryAddScoped<IRawReportProducerKindReader, RawReportProducerKindReader>();
+
         // 06.3.1-T1.2: the one untrusted-parser profile (00 §5.7 S5), published on the module's .Contracts.
         // It has no consumer yet: the `complete` verifier uses the static MediaSniffer directly (06.3.1-T1),
         // and 04.4.1's report mapper is the first IParsing consumer, resolving this same singleton instead of
@@ -114,9 +118,9 @@ internal static class EvidenceModule
         // so a runner registered here would be resolvable from the Api again.
 
         // 06.3.6-T1.4: the runner's options, bound in BOTH hosts because `complete` reads the one switch that decides
-        // whether a raw report schedules the parse task (`EVIDGATE__PARSE__OUTOFPROCESS`) — the Api commits that row
-        // even though only the Worker runs it. Binding them registers no capability: the runner and its task handler
-        // stay in AddParseRunner, Worker-only and flag-on.
+        // whether a raw report schedules its parse rows (`EVIDGATE__PARSE__OUTOFPROCESS`) — the parse of its bytes and
+        // the mapping of its records — the Api commits those rows even though only the Worker runs them. Binding them
+        // registers no capability: the runner and its task handlers stay in AddParseRunner, Worker-only and flag-on.
         services.AddOptions<ParseRunnerOptions>().BindConfiguration(ParseRunnerOptions.SectionName);
 
         // The retention window's floor, ceiling and platform defaults, owner-configurable per deployment. Bound in

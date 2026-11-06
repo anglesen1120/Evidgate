@@ -19,7 +19,8 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// The enqueue half of 06.3.6-T1.4: <c>POST /v1/artifacts/{a}/complete</c> writes the <c>artifact_parse</c> row for a
 /// <c>raw_report</c> artifact when out-of-process parsing is composed, and nothing extra otherwise — the two existing
-/// rows of 06.1.2-T2 are untouched, so the flag-off composition is the in-process rollback 06.3.6 §11 names.
+/// rows of 06.1.2-T2 are untouched, so the flag-off composition is the in-process rollback 06.3.6 §11 names. The same
+/// switch also schedules the report's mapping row, which has its own suite.
 /// </summary>
 /// <remarks>
 /// The whole path is production: the mint, the presigned <c>PUT</c>, the check/copy verification, the conditional state
@@ -100,7 +101,7 @@ public sealed class EvidenceParseEnqueueTests(PostgresTenancyFixture fixture, Se
     }
 
     /// <summary>
-    /// With the flag on, the same completion adds the third row: type <c>artifact_parse</c>, payload exactly
+    /// With the flag on, the same completion adds the parse row: type <c>artifact_parse</c>, payload exactly
     /// <c>{artifact_id}</c>, idempotency key per artifact — and a replayed completion adds no second row.
     /// </summary>
     [Fact]
@@ -115,7 +116,8 @@ public sealed class EvidenceParseEnqueueTests(PostgresTenancyFixture fixture, Se
         (await OutboxPayloadAsync(world, ParseTask, artifactId)).ShouldBe(ParsePayload(artifactId));
         (await OutboxIdempotencyKeyAsync(world, ParseTask, artifactId))
             .ShouldBe($"evidence:artifact:{artifactId:D}:parse");
-        (await ScheduleCountAsync(world, artifactId)).ShouldBe(3);
+        (await ScheduleCountAsync(world, artifactId))
+            .ShouldBe(4, "the two 06.1.2 rows, the artifact parse and the report's mapping row");
 
         // The same completion replayed (same Idempotency-Key) answers from the stored outcome and adds no row.
         await CompleteSucceedsAsync(world, artifactId);
