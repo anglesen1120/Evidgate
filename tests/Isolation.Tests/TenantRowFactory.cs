@@ -467,6 +467,24 @@ internal sealed class TenantRowFactory
             values["artifact_id"] = ownArtifact.Values[TenantFkScan.TenantKeyColumn];
         }
 
+        // raw_report_reprocess (0081) pins the release it will parse with, so a generated row must name one the
+        // migration seeded: the catalogue is owner-written, so the factory cannot mint a pair. Its natural key is a
+        // plain unique (no partial index), so a corrupt row reusing the valid row's artifact needs a second artifact
+        // of its own org for the same reason as raw_report's, and a source report of its own too.
+        if (string.Equals(table, "public.raw_report_reprocess", StringComparison.Ordinal))
+        {
+            values["parser_id"] = "junit-pytest";
+            values["parser_version"] = "1.0.0";
+        }
+
+        if (corruptedForeignKey is not null
+            && string.Equals(table, "public.raw_report_reprocess", StringComparison.Ordinal)
+            && !string.Equals(corruptedForeignKey, "raw_report_reprocess_artifact_fk", StringComparison.Ordinal))
+        {
+            var ownArtifact = await CreateBesideCacheAsync("public.artifact", org, cancellationToken);
+            values["artifact_id"] = ownArtifact.Values[TenantFkScan.TenantKeyColumn];
+        }
+
         foreach (var column in _schema.ColumnsOf(table))
         {
             if (values.ContainsKey(column.Name) || !column.NotNull || column.HasDefault)

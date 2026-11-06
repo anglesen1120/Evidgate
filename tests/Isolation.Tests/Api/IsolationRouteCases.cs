@@ -864,6 +864,15 @@ public static class IsolationRouteCases
         // CancelRunEndpointTests instead).
         ObjectCase("POST", "/v1/runs/{r}/cancel", p => [("run", p.RunId)], id =>
             new(HttpMethod.Post, $"/v1/runs/{id}/cancel", new JsonObject { ["reason"] = "isolation probe" })),
+        // The reprocess command addresses the run in the path and the report in the body. The probe names a fresh
+        // report id, so the foreign answer is the handler's one 404 for a report of a run the caller cannot see, and
+        // the body never becomes an oracle over an existing report.
+        ObjectCase("POST", "/v1/runs/{r}/reprocess", p => [("run", p.RunId)], id =>
+            new(HttpMethod.Post, $"/v1/runs/{id}/reprocess", new JsonObject
+            {
+                ["raw_report_id"] = Guid.CreateVersion7().ToString(),
+                ["parser_version"] = "1.1.0",
+            })),
         // 05.2.2-T2: the project-scoped run list. As a list, its positive control is the full-pagination walk
         // (Lists); the extra probes pin the ref_name filter, which must not widen tenancy.
         ProjectCase("GET", "/v1/projects/{p}/runs", p => new(HttpMethod.Get, $"/v1/projects/{p}/runs"), list: true,

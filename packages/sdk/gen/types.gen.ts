@@ -258,6 +258,13 @@ export type EvidenceRevisionPage = {
 };
 
 /**
+ * Body of `POST /v1/runs/{r}/reprocess`: the id the accepted reprocess writes its `raw_report` row under. It is minted when the request is accepted, so the caller can poll the report before the parse runs, and a replay of the request returns the same id.
+ */
+export type ReprocessResponse = {
+    parsing_id: string;
+};
+
+/**
  * Body of `GET /v1/runs/{r}/reports/{report_id}/comparison`: one `raw_report` row (0078) compared with the `event` rows its parser produced. The counts stay declared beside observed instead of being folded into a verdict, so a client can show which side disagreed, and the raw bytes, object key and checksum are never part of the body.
  */
 export type ReportComparison = {
@@ -5780,6 +5787,10 @@ export type ReprocessRunData = {
 
 export type ReprocessRunErrors = {
     /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
      * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
     401: ErrorEnvelope;
@@ -5813,10 +5824,12 @@ export type ReprocessRunError = ReprocessRunErrors[keyof ReprocessRunErrors];
 
 export type ReprocessRunResponses = {
     /**
-     * Reprocess accepted; new evidence revision labelled `reprocessed`
+     * Reprocess accepted; the id the report row will be written under
      */
-    202: unknown;
+    202: ReprocessResponse;
 };
+
+export type ReprocessRunResponse = ReprocessRunResponses[keyof ReprocessRunResponses];
 
 export type CreateReleaseData = {
     body: ReleaseCreateRequest;

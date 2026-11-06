@@ -59,6 +59,10 @@ public static class EvidenceEndpoints
             .Produces<ReportComparison>(StatusCodes.Status200OK)
             .WithSummary("Compare one stored report's declared counters with the cases its parse observed");
 
+        group.MapPost("/runs/{r:guid}/reprocess", ReprocessEndpoints.ReprocessAsync)
+            .Produces<ReprocessResponse>(StatusCodes.Status202Accepted)
+            .WithSummary("Reprocess one stored raw report with a newer parser release");
+
         return group;
     }
 
@@ -264,7 +268,7 @@ public static class EvidenceEndpoints
             cancellationToken).ConfigureAwait(false);
     }
 
-    private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
+    internal static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
 
     /// <summary>00 §7 / the <c>idempotency_record</c> key column: the C2 idempotency stage's own bound (T92).</summary>
     private const int MaxIdempotencyKeyLength = 128;
@@ -277,7 +281,7 @@ public static class EvidenceEndpoints
     /// produces, so the two ends cannot disagree. Null means the key is acceptable.
     /// </summary>
     /// <param name="context">The request carrying the header.</param>
-    private static Error? IdempotencyKeyError(HttpContext context)
+    internal static Error? IdempotencyKeyError(HttpContext context)
     {
         var key = IdempotencyKey(context);
 
@@ -288,7 +292,7 @@ public static class EvidenceEndpoints
             : null;
     }
 
-    private static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();
+    internal static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();
 
     /// <summary>
     /// The comparison page size: absent or blank keeps the default. A value that is not the canonical decimal
@@ -471,3 +475,4 @@ public sealed record DownloadUrlResponse(
     [property: JsonPropertyName("artifact_id")] Guid ArtifactId,
     [property: JsonPropertyName("download_url")] Uri DownloadUrl,
     [property: JsonPropertyName("expires_at")] DateTimeOffset ExpiresAt);
+
