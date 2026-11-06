@@ -81,4 +81,10 @@ public sealed partial class TaskConsumer
         Level = LogLevel.Information,
         Message = "Shutdown: task {TaskId} ({TaskType}) was cancelled mid-handler and released; its attempt is given back")]
     private partial void LogReleasedOnShutdown(Guid taskId, string taskType);
+
+    [LoggerMessage(
+        EventId = 2315,
+        Level = LogLevel.Information,
+        Message = "Task {TaskId} ({TaskType}) deferred for {DelaySeconds}s at the handler's request; the attempt is given back and nothing failed")]
+    private partial void LogDeferred(Guid taskId, string taskType, double delaySeconds);
 }
