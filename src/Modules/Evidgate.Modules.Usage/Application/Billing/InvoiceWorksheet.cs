@@ -1,0 +1,251 @@
+using System.Globalization;
+using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Api;
+using Evidgate.BuildingBlocks.SharedKernel.Modules;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Tenancy.Contracts;
+using Evidgate.Modules.Usage.Application.Queries;
+using Evidgate.Modules.Usage.Domain;
+using Evidgate.Modules.Usage.Infrastructure.Persistence;
+
+namespace Evidgate.Modules.Usage.Application.Billing;
+
+/// <summary>
+/// One ledger row as the worksheet renders it: the priced facts of one unit of usage, or of the correction
+/// that adjusts another row. <see cref="AdjustmentOf"/> and <see cref="Reason"/> are set on a correction only.
+/// </summary>
+/// <param name="Id">The ledger row's id.</param>
+/// <param name="ProjectId">The project, or null for an org-level metric.</param>
+/// <param name="Metric">The wire metric name.</param>
+/// <param name="Quantity">The quantity the row records; negative on a correction.</param>
+/// <param name="Unit">The unit the quantity is expressed in.</param>
+/// <param name="BillingKey">The producer's deduplication key.</param>
+/// <param name="OccurredAt">When the usage happened.</param>
+/// <param name="PriceRef">The rate-card row the amount came from, or null while unpriced.</param>
+/// <param name="Amount">The priced amount, or null while the row holds no price.</param>
+/// <param name="Currency">The amount's currency, or null while unpriced.</param>
+/// <param name="AdjustmentOf">The row this one corrects, or null for usage of the period itself.</param>
+/// <param name="Reason">Why the correction was recorded, or null on a usage row.</param>
+internal sealed record WorksheetLine(
+    Guid Id,
+    Guid? ProjectId,
+    string Metric,
+    decimal Quantity,
+    string Unit,
+    string BillingKey,
+    DateTimeOffset OccurredAt,
+    Guid? PriceRef,
+    decimal? Amount,
+    string? Currency,
+    Guid? AdjustmentOf,
+    string? Reason);
+
+/// <summary>
+/// The invoice worksheet of one closed period: every ledger row that bills, the corrections beside it, and the
+/// period's own totals as the ledger aggregates them.
+/// </summary>
+/// <remarks>
+/// A total is null where it cannot be stated: <see cref="LineTotal"/> and <see cref="AdjustmentTotal"/> stay null
+/// while any row of their list is unpriced, and <see cref="Total"/> stays null while any reconciled scope is
+/// unpriced or the period's rows carry more than one currency. <see cref="Reconciled"/> says whether the rows
+/// agree with the ledger side the reconciliation reports; <see cref="Truncated"/> says the row bound cut the
+/// lists, so a truncated worksheet is never issuable.
+/// </remarks>
+/// <param name="Period">The period, <c>YYYY-MM</c>.</param>
+/// <param name="Currency">The period's single currency, or null when it holds no rows or more than one.</param>
+/// <param name="Lines">The period's usage rows, ordered by metric, project, occurrence and id.</param>
+/// <param name="Adjustments">The period's corrections, in the same order, each naming the row it corrects.</param>
+/// <param name="LineTotal">The corrections-excluded priced sum, or null while a line is unpriced.</param>
+/// <param name="AdjustmentTotal">The corrections' priced sum, or null while a correction is unpriced.</param>
+/// <param name="Total">The authoritative total from the ledger's per-scope sums, or null while one is unknown.</param>
+/// <param name="LineCount">How many usage rows <see cref="Lines"/> holds.</param>
+/// <param name="UnpricedLineCount">How many rows of both lists carry no price or no currency.</param>
+/// <param name="Truncated">True when the period holds more rows than the worksheet can carry.</param>
+/// <param name="Reconciled">True when the rows agree on count and, where known, on amount and currency.</param>
+/// <param name="ContentHash">SHA-256 (lowercase hex) of <see cref="InvoiceWorksheetCanonical"/>'s text.</param>
+internal sealed record InvoiceWorksheet(
+    string Period,
+    string? Currency,
+    IReadOnlyList<WorksheetLine> Lines,
+    IReadOnlyList<WorksheetLine> Adjustments,
+    decimal? LineTotal,
+    decimal? AdjustmentTotal,
+    decimal? Total,
+    int LineCount,
+    int UnpricedLineCount,
+    bool Truncated,
+    bool Reconciled,
+    string ContentHash);
+
+/// <summary>
+/// What a period would invoice, read on demand: <c>GET /internal/operator/orgs/{o}/invoice-worksheet?period=</c>.
+/// <para>
+/// The rows and their totals come from one read inside the org's scope, and the total is never re-derived from
+/// the rows: it is the ledger side of <see cref="PeriodReconciliationReader"/>'s units, so the worksheet and the
+/// reconciliation can only ever disagree by reporting it. The read is audited like the reconciliation beside it —
+/// one row per read, in the read's own transaction, naming the period and how many rows it described, never an
+/// amount.
+/// </para>
+/// </summary>
+/// <remarks>
+/// A worksheet is a snapshot of what the period holds at the instant it is read; issuing a statement freezes it,
+/// which is why this read never claims a period is issuable. It reports what the issuer's rules then judge.
+/// The bound is <see cref="MaxLines"/> rows plus one, so a period past it is reported as truncated instead of
+/// being passed off as complete.
+/// </remarks>
+internal sealed class InvoiceWorksheetReader(
+    ITenantScopeFactory scopes,
+    ITenantDb db,
+    IAuditTrail audit,
+    ITenantLimits limits,
+    UsageReadStore store,
+    PeriodReconciliationReader reconciliation)
+{
+    /// <summary>Most ledger rows one worksheet carries; a period past it is truncated and unissuable.</summary>
+    internal const int MaxLines = 10_000;
+
+    /// <summary>The audited action of one worksheet read.</summary>
+    internal const string Action = "usage.invoice_worksheet_read";
+
+    /// <summary>The object type the read's audit row names.</summary>
+    internal const string ObjectType = "usage_ledger_entry";
+
+    /// <summary>
+    /// Validates the period, opens the org's scope, assembles the worksheet and writes the audit row of that read
+    /// inside the same transaction.
+    /// </summary>
+    /// <param name="orgId">The org the route names.</param>
+    /// <param name="operatorId">The authenticated operator, the audit row's actor.</param>
+    /// <param name="period">The worksheet's period, <c>YYYY-MM</c>.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal async Task<Result<InvoiceWorksheet>> ExecuteAsync(
+        Guid orgId,
+        Guid operatorId,
+        string? period,
+        CancellationToken cancellationToken)
+    {
+        using var activity = EvidgateTelemetry.StartModuleActivity(
+            ModuleName.Usage,
+            nameof(InvoiceWorksheetReader));
+
+        var validated = Validate(period);
+        if (validated.Error is { } invalid)
+        {
+            return Result.Failure<InvoiceWorksheet>(invalid);
+        }
+
+        using var unit = audit.BeginUnit();
+        await using var scope = await scopes.BeginAsync(orgId, null, false, cancellationToken).ConfigureAwait(false);
+
+        if (await limits.ForOrganizationAsync(cancellationToken).ConfigureAwait(false) is null)
+        {
+            return Result.Failure<InvoiceWorksheet>(Error.NotFound("no such organization"));
+        }
+
+        var worksheet = await BuildAsync(orgId, validated.Value, cancellationToken).ConfigureAwait(false);
+
+        DescribeAudit(orgId, operatorId, worksheet);
+        await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
+        await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        return Result.Success(worksheet);
+    }
+
+    /// <summary>
+    /// Assembles the worksheet of one period inside the caller's already-open tenant scope. It writes nothing and
+    /// audits nothing, so the read route and the issuer that freezes a worksheet build it through one code path.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope.</param>
+    /// <param name="period">The period, already validated as <c>YYYY-MM</c>.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal async Task<InvoiceWorksheet> BuildAsync(Guid orgId, string period, CancellationToken cancellationToken)
+    {
+        // One row more than the worksheet holds answers "was the list cut?" without a count.
+        var read = await store
+            .ReadWorksheetLinesAsync(orgId, period, MaxLines + 1, cancellationToken)
+            .ConfigureAwait(false);
+        var truncated = read.Count > MaxLines;
+        IReadOnlyList<WorksheetLineRow> rows = truncated ? [.. read.Take(MaxLines)] : read;
+
+        var lines = rows.Where(row => row.AdjustmentOf is null).Select(ToLine).ToArray();
+        var adjustments = rows.Where(row => row.AdjustmentOf is not null).Select(ToLine).ToArray();
+
+        var compared = await reconciliation
+            .ReadUnitsAsync(orgId, period, cancellationToken)
+            .ConfigureAwait(false);
+        var ledgerSide = WorksheetTotals.FromUnits(compared);
+        var rowSide = WorksheetTotals.FromRows(lines, adjustments);
+
+        var draft = new InvoiceWorksheet(
+            period,
+            ledgerSide.Currency,
+            lines,
+            adjustments,
+            rowSide.LineTotal,
+            rowSide.AdjustmentTotal,
+            ledgerSide.Total,
+            lines.Length,
+            rowSide.UnpricedCount,
+            truncated,
+            WorksheetTotals.IsReconciled(ledgerSide, rowSide, compared.Truncated),
+            ContentHash: string.Empty);
+
+        // The hash covers the canonical text and nothing else, so it is computed once the text is final.
+        return draft with { ContentHash = InvoiceWorksheetCanonical.Hash(draft) };
+    }
+
+    /// <summary>Validates the period, or names the member that fails the request.</summary>
+    private static Result<string> Validate(string? period) =>
+        period is null
+            ? Result.Failure<string>(Error.Invalid(
+                "the period is required",
+                [new ErrorDetail("period", "required")]))
+            : !UsagePeriod.IsWellFormed(period)
+                ? Result.Failure<string>(Error.Invalid(
+                    "the period is not a YYYY-MM billing month",
+                    [new ErrorDetail("period", "format")]))
+                : Result.Success(period);
+
+    private static WorksheetLine ToLine(WorksheetLineRow row) => new(
+        row.Id,
+        row.ProjectId,
+        row.Metric,
+        row.Quantity,
+        row.Unit,
+        row.BillingKey,
+        row.OccurredAt,
+        row.PriceRef,
+        row.Amount,
+        row.Currency,
+        row.AdjustmentOf,
+        row.Reason);
+
+    /// <summary>
+    /// Records which period was read, how many rows it described and which bound shaped the answer. No amount
+    /// reaches the audit chain: this row says what was read, not what it billed.
+    /// </summary>
+    private void DescribeAudit(Guid orgId, Guid operatorId, InvoiceWorksheet worksheet)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["period"] = worksheet.Period,
+            ["count"] = (worksheet.LineCount + worksheet.Adjustments.Count)
+                .ToString(CultureInfo.InvariantCulture),
+            ["outcome"] = Outcome(worksheet),
+        };
+
+        audit.Describe(new AuditObject(ObjectType, orgId.ToString("D"), Metadata: metadata));
+        audit.Record(Action, new AuditActor(AuditActorTypes.PlatformOperator, operatorId.ToString("D")));
+    }
+
+    private static string Outcome(InvoiceWorksheet worksheet) =>
+        worksheet.Truncated
+            ? "truncated"
+            : !worksheet.Reconciled
+                ? "unreconciled"
+                : worksheet.UnpricedLineCount > 0
+                    ? "unpriced"
+                    : "complete";
+}

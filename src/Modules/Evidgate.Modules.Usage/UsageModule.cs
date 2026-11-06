@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Usage.Application;
+using Evidgate.Modules.Usage.Application.Billing;
 using Evidgate.Modules.Usage.Application.Queries;
 using Evidgate.Modules.Usage.Application.Quota;
 using Evidgate.Modules.Usage.Application.Rollup;
@@ -42,6 +43,12 @@ internal static class UsageModule
         services.TryAddScoped<UsageReadStore>();
         services.TryAddScoped<UsageLedgerReader>();
         services.TryAddScoped<PeriodReconciliationReader>();
+
+        // The invoice worksheet is the same read path over the ledger's rows, and the statement is the one write that
+        // freezes a worksheet: both ride on the scope and the audit unit the reads above open.
+        services.TryAddScoped<InvoiceWorksheetReader>();
+        services.TryAddScoped<StatementIssuer>();
+        services.TryAddScoped<BillingStatementStore>();
 
         // The roll-up job: the aggregate store seam, its platform handler and the two schedules (daily and on period
         // close). The datasource is the sweep role the mechanism's other platform tasks read through; `AddTaskSchedule`
