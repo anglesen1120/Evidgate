@@ -125,6 +125,27 @@ internal static class UsageReadStoreSql
         """;
 
     /// <summary>
+    /// The ledger rows of one period in the order a worksheet prints them: metric, then the
+    /// organization-level rows (a null project) before every project's, then the instant and the id
+    /// as the tie-breakers two rows of one batch share.
+    /// </summary>
+    /// <remarks>
+    /// The order is total, so two reads of an unchanged period answer the same sequence and the
+    /// document hash of an issued statement is stable. Adjustment rows are part of the read: they
+    /// carry <c>adjustment_of</c> and <c>reason</c>, which is how the caller separates the two totals.
+    /// </remarks>
+    internal const string WorksheetLines =
+        """
+        select id, project_id, metric, quantity, unit, billing_key, occurred_at, price_ref, amount,
+               currency, adjustment_of, reason
+          from public.usage_ledger_entry
+         where org_id = @org_id
+           and period = @period
+         order by metric, project_id nulls first, occurred_at, id
+         limit @limit
+        """;
+
+    /// <summary>
     /// The current period's counters and roll-ups for one org: the organization-wide counter row per metric
     /// (<c>quota_counter.project_id</c> null), one row per project that has a counter or a roll-up in the period,
     /// and the roll-up total as the fallback for a scope the month has no counter for. A project filter adds that

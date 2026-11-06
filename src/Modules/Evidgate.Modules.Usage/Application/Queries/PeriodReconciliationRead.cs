@@ -117,6 +117,21 @@ internal sealed record PeriodReconciliation(
     bool UnitsTruncated);
 
 /// <summary>
+/// The period's reconciled scopes, bounded to <see cref="PeriodReconciliationReader.MaxUnits"/>, the roll-up rows
+/// that flagged themselves incomplete, and whether the bound left scopes out. A caller that needs the ledger side
+/// without the report the route renders (the invoice worksheet) reads it through
+/// <see cref="PeriodReconciliationReader.ReadUnitsAsync"/>.
+/// </summary>
+/// <param name="Units">Per <c>(project, metric)</c> comparison, ordered by metric then project.</param>
+/// <param name="Gaps">Roll-up rows the recompute flagged as incomplete.</param>
+/// <param name="Truncated">True when more scopes exist than <paramref name="Units"/> reports.</param>
+internal sealed record ReconciliationUnits(
+    IReadOnlyList<ReconciliationUnit> Units,
+    IReadOnlyList<ReconciliationGap> Gaps,
+    bool Truncated);
+
+
+/// <summary>
 /// <c>GET /internal/operator/orgs/{o}/usage-reconciliation?period=</c>: the documented invoice query
 /// (12.4.1's statement), answered from the live ledger and the stored roll-up in the same read.
 /// <para>
@@ -196,18 +211,10 @@ internal sealed class PeriodReconciliationReader(
         }
 
         // One row more than the report holds answers "are there more scopes?" without a count.
-        var rows = await store
-            .ReadReconciliationAsync(orgId, period, MaxUnits + 1, cancellationToken)
-            .ConfigureAwait(false);
-        var units = Bound(rows.Select(Reconcile).ToArray(), MaxUnits, out var unitsTruncated);
-        var gaps = rows
-            .Where(row => row.GapFlag && row.RollupComputedAt is { } computedAt)
-            .Select(row => new ReconciliationGap(
-                row.ProjectId,
-                row.Metric,
-                row.RollupTotalQuantity ?? 0m,
-                row.RollupComputedAt!.Value))
-            .ToArray();
+        var compared = await ReadUnitsAsync(orgId, period, cancellationToken).ConfigureAwait(false);
+        var units = compared.Units;
+        var gaps = compared.Gaps;
+        var unitsTruncated = compared.Truncated;
 
         // The duplicate list uses the same bound: one row more than the report holds is the answer.
         var attempts = await store
@@ -229,6 +236,36 @@ internal sealed class PeriodReconciliationReader(
             duplicates,
             duplicatesTruncated,
             unitsTruncated));
+    }
+
+    /// <summary>
+    /// Reads the period's reconciled scopes inside the caller's already-open tenant scope: the comparison rows,
+    /// the roll-up's own gap flags and whether the scope bound cut them. It writes nothing and audits nothing, so
+    /// the route's report and the invoice worksheet read the ledger side through one implementation.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope.</param>
+    /// <param name="period">The reconciled period, already validated as <c>YYYY-MM</c>.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal async Task<ReconciliationUnits> ReadUnitsAsync(
+        Guid orgId,
+        string period,
+        CancellationToken cancellationToken)
+    {
+        // One row more than the report holds answers "are there more scopes?" without a count.
+        var rows = await store
+            .ReadReconciliationAsync(orgId, period, MaxUnits + 1, cancellationToken)
+            .ConfigureAwait(false);
+        var units = Bound(rows.Select(Reconcile).ToArray(), MaxUnits, out var truncated);
+        var gaps = rows
+            .Where(row => row.GapFlag && row.RollupComputedAt is not null)
+            .Select(row => new ReconciliationGap(
+                row.ProjectId,
+                row.Metric,
+                row.RollupTotalQuantity ?? 0m,
+                row.RollupComputedAt!.Value))
+            .ToArray();
+
+        return new ReconciliationUnits(units, gaps, truncated);
     }
 
     /// <summary>

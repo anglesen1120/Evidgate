@@ -780,6 +780,14 @@ internal sealed class TenantRowFactory
             // `release_id` and `environment_revision_id` from parents of the same org, and the trigger allows
             // the insert because every generated parent release is a draft.
             ("public.release_component", "digest") => "sha256:" + new string('e', 64),
+            // billing_statement closes `kind` to the one statement kind, `period` to the `YYYY-MM` shape,
+            // `currency` to three uppercase letters and `content_hash` to the lowercase sha256 hex, so the
+            // generic text candidate satisfies none of them. The generic `{}` candidate is an object and
+            // inside the document's size cap, and `total_amount`/`line_count` accept the generic numbers.
+            ("public.billing_statement", "kind") => "invoice",
+            ("public.billing_statement", "period") => "2026-10",
+            ("public.billing_statement", "currency") => "USD",
+            ("public.billing_statement", "content_hash") => new string('a', 64),
             _ => (object?)null,
         };
 
