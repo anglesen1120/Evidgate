@@ -93,6 +93,10 @@ evg_db_create_owner_and_database() {
 -- a superuser session may turn both off, which is what this connection is.
 set log_statement = 'none';
 set log_min_error_statement = 'panic';
+set log_min_duration_statement = -1;
+set log_min_duration_sample = -1;
+set log_statement_sample_rate = 0;
+set log_transaction_sample_rate = 0;
 
 \getenv owner_password EVIDGATE_OWNER_PASSWORD
 
@@ -119,6 +123,10 @@ evg_db_grant_application_logins() {
 -- Same reason as the owner step: the three ALTERs carry passwords.
 set log_statement = 'none';
 set log_min_error_statement = 'panic';
+set log_min_duration_statement = -1;
+set log_min_duration_sample = -1;
+set log_statement_sample_rate = 0;
+set log_transaction_sample_rate = 0;
 
 \getenv app_password EVIDGATE_APP_PASSWORD
 \getenv operator_password EVIDGATE_OPERATOR_PASSWORD
