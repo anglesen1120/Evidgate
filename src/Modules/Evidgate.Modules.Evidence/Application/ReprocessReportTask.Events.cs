@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Canonicalization;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
-using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.Extensions.Logging;
 
 namespace Evidgate.Modules.Evidence.Application;
@@ -18,43 +17,20 @@ namespace Evidgate.Modules.Evidence.Application;
 /// </summary>
 internal sealed partial class ReprocessReportHandler
 {
-    /// <summary>The event rows and their attempt inputs, serialized once before the write scope opens.</summary>
+    /// <summary>The event rows, serialized once before the write scope opens.</summary>
     /// <param name="Events">One entry per event, in this producer's sequence order.</param>
     /// <param name="Json">The rows as one <c>jsonb</c> parameter (the recordset's column names).</param>
     /// <param name="MaxSequence">The highest sequence of the set (the slot's declared high-water mark).</param>
-    private sealed record SerializedEventSet(SerializedEvent[] Events, string Json, long MaxSequence)
+    private sealed record SerializedEventSet(EventRow[] Events, string Json, long MaxSequence)
     {
         /// <summary>How many events this reprocess declares it sent (the slot's declared count).</summary>
         public int DeclaredCount => Events.Length;
     }
 
-    /// <summary>One event row and the <c>case_attempt</c> it writes when it is newly inserted.</summary>
-    /// <param name="Row">The row as the insert reads it.</param>
-    /// <param name="Attempt">The attempt input of a resolved finish, or null when the report gave no status.</param>
-    private sealed record SerializedEvent(EventRow Row, CaseAttemptInput? Attempt);
-
     /// <summary>One stored row read back to tell a replay from a reused identity.</summary>
     /// <param name="EventId">The stored event's producer id (the deterministic identity).</param>
     /// <param name="PayloadHash">The hash of the stored payload.</param>
     private sealed record StoredEventRow(Guid EventId, string PayloadHash);
-
-    /// <summary>One execution key whose attempt this run already holds.</summary>
-    /// <param name="ExecutionKey">The planned execution the existing attempt belongs to.</param>
-    private sealed record AttemptedExecutionRow(string ExecutionKey);
-
-    /// <summary>
-    /// The executions this set names that already carry an attempt, at most one row per key. The keys are the report's
-    /// own, so the read walks the unique <c>(org_id, run_id, execution_key, attempt_no)</c> index instead of every
-    /// attempt of the run.
-    /// </summary>
-    private const string AttemptedExecutionsSql = """
-        select distinct ca.execution_key as "ExecutionKey"
-          from public.case_attempt ca
-         where ca.org_id = @org_id
-           and ca.run_id = @run_id
-           and ca.execution_key in (
-               select key from jsonb_array_elements_text(@execution_keys::jsonb) as key)
-        """;
 
     /// <summary>The next free shard index of the run (1 when the run has no slot yet).</summary>
     private const string NextShardIndexSql = """
@@ -108,9 +84,9 @@ internal sealed partial class ReprocessReportHandler
         """;
 
     /// <summary>
-    /// Builds every row of the reprocessed report, its substantive payload hash and its attempt input, so the write
-    /// transaction only carries parameters. Sequences are this producer's own 1..n, which is what keeps a case the
-    /// original report already holds from colliding with it.
+    /// Builds every row of the reprocessed report and its substantive payload hash, so the write transaction only carries
+    /// parameters. Sequences are this producer's own 1..n, which is what keeps a case the original report already holds
+    /// from colliding with it.
     /// </summary>
     /// <param name="prepared">The pinned parser release and the synthetic producer id the rows carry.</param>
     /// <param name="cases">The mapped cases with a resolved key.</param>
@@ -118,7 +94,6 @@ internal sealed partial class ReprocessReportHandler
     private static SerializedEventSet SerializeEvents(Prepared prepared, MappedCase[] cases)
     {
         var parser = prepared.ParserId + "/" + prepared.ParserVersion;
-        var events = new SerializedEvent[cases.Length];
         var rows = new EventRow[cases.Length];
 
         for (var index = 0; index < cases.Length; index++)
@@ -154,23 +129,13 @@ internal sealed partial class ReprocessReportHandler
                 CanonicalHash.Compute(hashDocument),
                 payload,
                 [prepared.ArtifactId]);
-
-            // The attempt carries the normalized spelling: the generic writer folds an unknown raw word such as
-            // pytest's "failure" to error, while the event keeps the raw word. A duration past the attempt column's int
-            // range is dropped rather than truncated (the event row keeps the exact value).
-            var duration = item.DurationMs is >= 0 and <= int.MaxValue ? (int)item.DurationMs.Value : (int?)null;
-            events[index] = new SerializedEvent(
-                rows[index],
-                string.IsNullOrEmpty(item.Normalized)
-                    ? null
-                    : new CaseAttemptInput(item.ExecutionKey, AttemptNo: 1, item.Normalized, DurationMs: duration));
         }
 
         // A report that maps nothing still serializes, so its empty set is decided by the write half rather than thrown
         // out of the mapping; the high-water mark of nothing is 0, never an exception.
         var maxSequence = cases.Length == 0 ? 0L : cases.Length;
 
-        return new SerializedEventSet(events, JsonSerializer.Serialize(rows), maxSequence);
+        return new SerializedEventSet(rows, JsonSerializer.Serialize(rows), maxSequence);
     }
 
     /// <summary>The event ids as the <c>jsonb_to_recordset</c> argument the stored-hash read takes.</summary>
@@ -178,12 +143,6 @@ internal sealed partial class ReprocessReportHandler
     /// <returns>A JSON array of <c>{"event_id": …}</c> objects.</returns>
     private static string SerializeEventIds(IEnumerable<Guid> eventIds) =>
         JsonSerializer.Serialize(eventIds.Select(eventId => new { event_id = eventId }));
-
-    /// <summary>The execution keys as one <c>jsonb</c> array, which the tenant Dapper path accepts where it refuses a client array.</summary>
-    /// <param name="inputs">The attempt inputs whose execution keys the read names.</param>
-    /// <returns>A JSON array of strings, each key once.</returns>
-    private static string SerializeExecutionKeys(IEnumerable<CaseAttemptInput> inputs) =>
-        JsonSerializer.Serialize(inputs.Select(item => item.ExecutionKey).Distinct(StringComparer.Ordinal));
 
     /// <summary>The deterministic event id of one (producer, sequence) pair, so a replay hashes to the same identity.</summary>
     /// <param name="producerId">The synthetic producer id.</param>
@@ -282,10 +241,4 @@ internal sealed partial class ReprocessReportHandler
         Level = LogLevel.Warning,
         Message = "raw report reprocess {ParsingId} refused the report as too_large: the stored object is larger than the kind's {MaxBytes}-byte cap, so it was not read")]
     private static partial void LogOversize(ILogger logger, Guid parsingId, long maxBytes);
-
-    [LoggerMessage(
-        EventId = 2474,
-        Level = LogLevel.Warning,
-        Message = "raw report reprocess {ParsingId} did not commit: the case-attempt writer refused the plan as {Status}")]
-    private static partial void LogAttemptRefused(ILogger logger, Guid parsingId, string status);
 }

@@ -9,7 +9,6 @@ using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Ingestion.Contracts;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -37,6 +36,12 @@ internal sealed record ReprocessReportPayload(Guid ParsingId)
 /// turns that into the next <c>evidence_revision</c>.
 /// </para>
 /// <para>
+/// <b>It writes no <c>case_attempt</c>.</b> A reprocess adds events and a revision, never an attempt row: an attempt is
+/// stamped with its transaction's start, which can fall inside an older revision's frozen window and change what that
+/// revision recomputes. Which verdict a re-read row carries is a freeze-contract question, settled when a revision is
+/// frozen, not by a second writer of the attempt table.
+/// </para>
+/// <para>
 /// <b>Synthetic producer, never a CI producer.</b> The events carry <c>reprocess-&lt;parsing id&gt;</c> and sequences
 /// from 1, so they cannot collide with the shard that delivered the original report. The slot that identity needs is
 /// written closed and declared in the same commit and carries no CI run reference, so it registers no producer and can
@@ -56,7 +61,6 @@ internal sealed record ReprocessReportPayload(Guid ParsingId)
 /// <param name="runner">The resource-limited child the untrusted report is parsed in; this process never parses it.</param>
 /// <param name="limits">The host's ingest caps; the report entry budget is handed to the child.</param>
 /// <param name="mappers">The loaded JUnit mappers; the one whose pair the request pinned does the mapping.</param>
-/// <param name="scopeFactory">Reaches the scoped case-attempt writer: handlers are singletons, and the writer joins the ambient tenant transaction and never commits.</param>
 /// <param name="outbox">The reconcile trigger's transactional outbox writer.</param>
 /// <param name="logger">The one structured line each attempt writes.</param>
 internal sealed partial class ReprocessReportHandler(
@@ -67,7 +71,6 @@ internal sealed partial class ReprocessReportHandler(
     IParseRunner runner,
     IOptions<IngestionLimits> limits,
     IEnumerable<IJUnitMapper> mappers,
-    IServiceScopeFactory scopeFactory,
     IOutboxWriter outbox,
     ILogger<ReprocessReportHandler> logger) : ITransactionlessTaskHandler<ReprocessReportPayload>
 {

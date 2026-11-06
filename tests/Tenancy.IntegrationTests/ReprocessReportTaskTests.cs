@@ -181,7 +181,7 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
         replay.Status.ShouldBe(ParseRawReportOutcome.Parsed);
         replay.Events.ShouldBe(0);
         (await CountAsync(world, "event")).ShouldBe(1);
-        (await CountAsync(world, "case_attempt")).ShouldBe(1);
+        (await CountAsync(world, "case_attempt")).ShouldBe(0, "a reprocess writes events and a revision, never an attempt");
         (await CountAsync(world, "producer_slot")).ShouldBe(1);
         (await CountAsync(world, "raw_report")).ShouldBe(2);
         (await _fixture.ScalarAsync<int>(
@@ -371,7 +371,6 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
             new EmulatedChildRunner(services.GetRequiredService<IParsing>()),
             services.GetRequiredService<IOptions<IngestionLimits>>(),
             services.GetServices<IJUnitMapper>(),
-            services.GetRequiredService<IServiceScopeFactory>(),
             services.GetRequiredService<IOutboxWriter>(),
             NullLogger<ReprocessReportHandler>.Instance);
     }

@@ -3,15 +3,14 @@ using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Evidgate.Modules.Evidence.Application;
 
 /// <summary>
 /// The write half of <see cref="ReprocessReportHandler"/>: one transaction that admits the evidence, writes the closed
-/// synthetic slot and the event set, attempts what no earlier report attempted, enqueues the reconcile trigger and stores
-/// the report's own row — or commits nothing. The run's state machine, its batch receipts and its metering are not part
-/// of it: a reprocess adds evidence, it never re-drives the run.
+/// synthetic slot and the event set, enqueues the reconcile trigger and stores the report's own row — or commits nothing.
+/// The run's state machine, its batch receipts and its metering are not part of it: a reprocess adds evidence, it never
+/// re-drives the run.
 /// </summary>
 internal sealed partial class ReprocessReportHandler
 {
@@ -26,9 +25,6 @@ internal sealed partial class ReprocessReportHandler
     /// cannot free one.
     /// </summary>
     private const int MaxShardIndex = 256;
-
-    /// <summary>The reason the case-attempt writer refused this set, so nothing of the attempt is committed.</summary>
-    private const string CaseAttemptConflict = "case_attempt_conflict";
 
     /// <summary>
     /// The run's state, its project's state and its late window, read under the run's own lock (the same admission facts
@@ -54,9 +50,8 @@ internal sealed partial class ReprocessReportHandler
 
     /// <summary>
     /// The one write transaction. Its order is the order the locks and keys require: the artifact is re-read, the run's
-    /// row is locked, the admission policy decides, the slot and the events go in, the attempts follow the events that
-    /// were really inserted, the trigger names the batch, and the report's own row is the last verdict — so a row that
-    /// already holds a refusal rolls every write above it back.
+    /// row is locked, the admission policy decides, the slot and the events go in, the trigger names the batch, and the
+    /// report's own row is the last verdict — so a row that already holds a refusal rolls every write above it back.
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="prepared">The pinned release, the producer identity and the run the writes name.</param>
@@ -97,11 +92,6 @@ internal sealed partial class ReprocessReportHandler
         var compared = false;
         if (inserted.Count > 0)
         {
-            if (!await WriteAttemptsAsync(orgId, prepared, events, inserted, cancellationToken).ConfigureAwait(false))
-            {
-                return new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, CaseAttemptConflict);
-            }
-
             // One identity for this attempt's accepted set: the reconcile trigger is named by it, so it cannot collide
             // with a later attempt's trigger for this same request.
             await EnqueueReconcileAsync(prepared, Guid.CreateVersion7(), cancellationToken).ConfigureAwait(false);
@@ -337,127 +327,26 @@ internal sealed partial class ReprocessReportHandler
                     org_id = orgId,
                     run_id = prepared.RunId,
                     events = SerializeEventIds(events.Events
-                        .Where(item => !insertedIds.Contains(item.Row.EventId))
-                        .Select(item => item.Row.EventId)),
+                        .Where(row => !insertedIds.Contains(row.EventId))
+                        .Select(row => row.EventId)),
                 },
                 cancellationToken).ConfigureAwait(false))
             .ToDictionary(row => row.EventId, row => row.PayloadHash);
 
-        foreach (var item in events.Events)
+        foreach (var row in events.Events)
         {
-            if (insertedIds.Contains(item.Row.EventId))
+            if (insertedIds.Contains(row.EventId))
             {
                 continue;
             }
 
-            if (!stored.TryGetValue(item.Row.EventId, out var storedHash)
-                || !string.Equals(storedHash, item.Row.PayloadHash, StringComparison.Ordinal))
+            if (!stored.TryGetValue(row.EventId, out var storedHash)
+                || !string.Equals(storedHash, row.PayloadHash, StringComparison.Ordinal))
             {
                 return false;
             }
         }
 
         return true;
-    }
-
-    /// <summary>
-    /// Writes one attempt per newly inserted event, through the shared writer, in batches the writer accepts. An execution
-    /// that already carries an attempt keeps it untouched: an attempt row is never rewritten, and a second row for the
-    /// same execution would change what the frozen evidence of an earlier revision recomputes. A refusal is reported to
-    /// the caller, which then commits nothing.
-    /// </summary>
-    /// <param name="orgId">The tenant the claimed task row names.</param>
-    /// <param name="prepared">The run the attempts are written under.</param>
-    /// <param name="events">The serialized set, whose attempt inputs were built with the rows.</param>
-    /// <param name="insertedIds">The event ids this attempt inserted.</param>
-    /// <param name="cancellationToken">Cancels the writes.</param>
-    /// <returns>True when the writer accepted every attempt, false when it refused one.</returns>
-    private async Task<bool> WriteAttemptsAsync(
-        Guid orgId,
-        Prepared prepared,
-        SerializedEventSet events,
-        HashSet<Guid> insertedIds,
-        CancellationToken cancellationToken)
-    {
-        var inputs = events.Events
-            .Where(item => insertedIds.Contains(item.Row.EventId) && item.Attempt is not null)
-            .Select(item => item.Attempt!)
-            .ToArray();
-        if (inputs.Length == 0)
-        {
-            return true;
-        }
-
-        var attempted = new HashSet<string>(
-            (await db.QueryAsync<AttemptedExecutionRow>(
-                    AttemptedExecutionsSql,
-                    new
-                    {
-                        org_id = orgId,
-                        run_id = prepared.RunId,
-                        execution_keys = SerializeExecutionKeys(inputs),
-                    },
-                    cancellationToken)
-                .ConfigureAwait(false))
-            .Select(row => row.ExecutionKey),
-            StringComparer.Ordinal);
-
-        var pending = FirstAttempts(inputs, attempted);
-        if (pending.Length == 0)
-        {
-            return true;
-        }
-
-        await using var attemptScope = scopeFactory.CreateAsyncScope();
-        var attempts = attemptScope.ServiceProvider.GetRequiredService<ICaseAttemptWriter>();
-
-        for (var offset = 0; offset < pending.Length; offset += ICaseAttemptWriter.MaxBatchSize)
-        {
-            var batch = pending
-                .Skip(offset)
-                .Take(ICaseAttemptWriter.MaxBatchSize)
-                .ToArray();
-            var outcomes = await attempts
-                .WriteAttemptsAsync(prepared.RunId, batch, cancellationToken)
-                .ConfigureAwait(false);
-
-            for (var index = 0; index < outcomes.Count; index++)
-            {
-                if (!outcomes[index].IsRefusal)
-                {
-                    continue;
-                }
-
-                LogAttemptRefused(logger, prepared.ParsingId, outcomes[index].Status.ToString());
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /// <summary>
-    /// One attempt per execution key of the set, for the executions that carry none yet. A key is reported once: the first
-    /// occurrence is the report's own answer for it.
-    /// </summary>
-    /// <param name="inputs">The attempt inputs of the newly inserted events, in the report's order.</param>
-    /// <param name="attempted">The execution keys the run already holds an attempt for.</param>
-    /// <returns>The attempts to write.</returns>
-    private static CaseAttemptInput[] FirstAttempts(CaseAttemptInput[] inputs, HashSet<string> attempted)
-    {
-        var pending = new List<CaseAttemptInput>(inputs.Length);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var input in inputs)
-        {
-            if (!seen.Add(input.ExecutionKey) || attempted.Contains(input.ExecutionKey))
-            {
-                continue;
-            }
-
-            pending.Add(input);
-        }
-
-        return [.. pending];
     }
 }
