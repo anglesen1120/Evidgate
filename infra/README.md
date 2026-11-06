@@ -116,14 +116,14 @@ Variables (staging and prod require all five and fall back to nothing; dev also
 accepts the `EVIDGATE_S3_*` names, and its endpoint/bucket/region defaults are
 the local stack's):
 
-| Variable                          | Meaning                                                              |
-| --------------------------------- | -------------------------------------------------------------------- |
-| `EVIDGATE__OBJECT__BUCKET`        | bucket to create and verify                                          |
-| `EVIDGATE__OBJECT__ENDPOINT`      | absolute S3 endpoint; this script requires it (https outside dev)    |
-| `EVIDGATE__OBJECT__REGION`        | SigV4 signing region                                                 |
-| `EVIDGATE__OBJECT__ACCESSKEY`     | signing identity (secret store on staging/prod)                      |
-| `EVIDGATE__OBJECT__SECRETKEY`     | signing secret (secret store on staging/prod)                        |
-| `EVIDGATE_BOOTSTRAP_CONFIRM_ENV`  | must be `prod` for a prod run; read from the environment, no default |
+| Variable                         | Meaning                                                              |
+| -------------------------------- | -------------------------------------------------------------------- |
+| `EVIDGATE__OBJECT__BUCKET`       | bucket to create and verify                                          |
+| `EVIDGATE__OBJECT__ENDPOINT`     | absolute S3 endpoint; this script requires it (https outside dev)    |
+| `EVIDGATE__OBJECT__REGION`       | SigV4 signing region                                                 |
+| `EVIDGATE__OBJECT__ACCESSKEY`    | signing identity (secret store on staging/prod)                      |
+| `EVIDGATE__OBJECT__SECRETKEY`    | signing secret (secret store on staging/prod)                        |
+| `EVIDGATE_BOOTSTRAP_CONFIRM_ENV` | must be `prod` for a prod run; read from the environment, no default |
 
 The bootstrap requires the endpoint in every environment: it signs requests
 against a concrete host, so an empty value is a missing key here, not a request
