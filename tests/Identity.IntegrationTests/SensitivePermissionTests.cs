@@ -457,6 +457,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/roles"] = "/v1/roles",
             ["/v1/orgs/{o}/audit"] = $"/v1/orgs/{org}/audit",
             ["/v1/orgs/{o}/audit/export"] = $"/v1/orgs/{org}/audit/export",
+            ["/v1/orgs/{o}/usage/summary"] = $"/v1/orgs/{org}/usage/summary",
 
             // 11.5.1-T5.2: the security-events page. Scanned like the audit list: its items are ids, a closed
             // type/severity pair, an actor `{kind, id}` and details restricted to ids, hashes and counts, and this
