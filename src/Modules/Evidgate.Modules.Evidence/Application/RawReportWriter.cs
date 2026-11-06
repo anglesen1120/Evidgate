@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.Modules.Evidence.Application.Freeze;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
@@ -34,9 +33,6 @@ internal static class RawReportOutcomes
 /// </summary>
 internal sealed partial class ParseRawReportHandler
 {
-    /// <summary>The longest producer kind the row's shape CHECK admits.</summary>
-    private const int MaxProducerKindLength = 64;
-
     /// <summary>The most distinct discrepancy codes the row's shape CHECK admits.</summary>
     private const int MaxDiscrepancyCodes = 16;
 
@@ -171,7 +167,9 @@ internal sealed partial class ParseRawReportHandler
 
     /// <summary>
     /// The one write of a refused report's row, in its own short transaction: a refusal produces no event, no slot and
-    /// no trigger, so nothing else of the attempt is stored.
+    /// no trigger, so nothing else of the attempt is stored. The row is written for a report that is still this run's
+    /// <c>ready</c> raw report, and for one its own <c>artifact_parse</c> verdict rejected (see
+    /// <see cref="IsParseRejected"/>); any other artifact state stores nothing.
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
@@ -194,27 +192,30 @@ internal sealed partial class ParseRawReportHandler
             .ConfigureAwait(false);
         await using var context = contexts.Create();
 
-        // The only fact the row needs beyond the payload: the artifact is still this run's ready raw report. A report
-        // that left `ready` while the bytes were parsed is out of evidence, so it gets no row either.
+        // The only fact the row needs beyond the payload: the artifact is still this run's raw report, and it is either
+        // still `ready` or was rejected by its own parse verdict. A report that left `ready` for any other reason is
+        // out of evidence — an upload-reason rejection means no report was ever validly uploaded — so it gets no row.
         var artifact = await context.Artifacts
             .AsNoTracking()
             .SingleOrDefaultAsync(row => row.Id == payload.ArtifactId, cancellationToken)
             .ConfigureAwait(false);
 
         if (artifact is null
-            || !string.Equals(artifact.State, ArtifactState.Ready, StringComparison.Ordinal)
             || !string.Equals(artifact.Kind, ArtifactKind.RawReport, StringComparison.Ordinal)
-            || artifact.RunId != payload.RunId)
+            || artifact.RunId != payload.RunId
+            || !(string.Equals(artifact.State, ArtifactState.Ready, StringComparison.Ordinal)
+                || IsParseRejected(artifact)))
         {
             LogSkipped(logger, payload.ArtifactId, "left_ready");
             return;
         }
 
-        if (!IsStorableProducerKind(payload.StoredProducerKind))
+        if (!RawReportProducerKindShape.IsStorable(payload.StoredProducerKind))
         {
-            // The column admits only the registry's own kind vocabulary: a payload whose kind cannot be stored gets no
-            // row rather than failing the refusal write.
-            LogSkipped(logger, payload.ArtifactId, "unstorable_producer_kind");
+            // The column admits only the registry's own kind vocabulary: a payload whose kind cannot be stored (a
+            // hand-written one, never the lookup's own output) gets no row rather than failing the refusal write. The
+            // skip is loud because the report's durable refusal is then only the task's outcome; no kind text is logged.
+            LogUnstorableProducerKind(logger, payload.ArtifactId);
             return;
         }
 
@@ -408,17 +409,6 @@ internal sealed partial class ParseRawReportHandler
     /// <returns>A word matching the column's <c>^[a-z][a-z0-9_]{0,63}$</c> shape.</returns>
     private static string RefusalReason(string outcome, string? reason) =>
         reason is not null && EvidenceFreeze.IsReasonCode(reason) ? reason : outcome;
-
-    /// <summary>
-    /// The producer kind column's shape, <c>^[a-z][a-z0-9-]*$</c> in one to 64 characters. The shared forward pass
-    /// carries the bounds and the later characters; its first class also admits a digit, which this column does not.
-    /// </summary>
-    /// <param name="kind">The kind the report declared.</param>
-    /// <returns>True when the registry vocabulary admits the kind.</returns>
-    private static bool IsStorableProducerKind(string kind) =>
-        kind.Length > 0
-        && char.IsAsciiLetterLower(kind[0])
-        && AsciiShape.IsMatch(kind, 1, MaxProducerKindLength, AsciiShape.LowerAlnum, AsciiShape.LowerAlnumDash);
 
     /// <summary>
     /// The mapper's discrepancy codes grouped into <c>{code, count}</c> objects, in the order the codes first appear and

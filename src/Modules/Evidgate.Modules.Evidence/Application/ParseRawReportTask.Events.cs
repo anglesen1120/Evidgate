@@ -323,4 +323,10 @@ internal sealed partial class ParseRawReportHandler
         Level = LogLevel.Warning,
         Message = "raw report parse of artifact {ArtifactId} was refused by the case-attempt writer as {Status}, so no event of the attempt was committed")]
     private static partial void LogAttemptRefused(ILogger logger, Guid artifactId, string status);
+
+    [LoggerMessage(
+        EventId = 2466,
+        Level = LogLevel.Warning,
+        Message = "raw report refusal for artifact {ArtifactId} left no raw_report row: the report's producer kind cannot be stored, so the refusal is only the task's own outcome")]
+    private static partial void LogUnstorableProducerKind(ILogger logger, Guid artifactId);
 }

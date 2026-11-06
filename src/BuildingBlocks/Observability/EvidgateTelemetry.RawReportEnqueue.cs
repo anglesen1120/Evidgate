@@ -12,7 +12,7 @@ public static partial class EvidgateTelemetry
     /// <summary>Counter of completed <c>raw_report</c> artifacts scheduled for parsing, tagged by the lookup's issue code.</summary>
     public const string RawReportEnqueuedMetricName = "evidgate_raw_report_enqueued_total";
 
-    /// <summary>Tag carrying the producer lookup's outcome, one of <c>resolved</c> and the two issue codes.</summary>
+    /// <summary>Tag carrying the producer lookup's outcome, one of <c>resolved</c> and its three issue codes.</summary>
     public const string RawReportProducerIssueTag = "issue";
 
     private static readonly Counter<long> RawReportEnqueued = Meter.CreateCounter<long>(
@@ -35,6 +35,7 @@ public static partial class EvidgateTelemetry
         {
             null => "resolved",
             "producer_unknown" => "producer_unknown",
+            "producer_invalid" => "producer_invalid",
             "producer_ambiguous" => "producer_ambiguous",
             _ => "other",
         };

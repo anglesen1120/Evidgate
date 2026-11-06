@@ -4,10 +4,15 @@ using System.Text.Json;
 namespace Evidgate.Modules.Ingestion.Contracts;
 
 /// <summary>
-/// The one metered source event of an accepted batch: the <c>usage.batch_accepted</c> outbox row's task type, payload
-/// shape, aggregate and idempotency key. It lives in the contracts because two writers commit an accepted batch — the
-/// event batch route and the raw report parse task — and both must emit the row the metering handler binds, with the
-/// batch receipt as its aggregate.
+/// The metered source event of an accepted batch: the <c>usage.batch_accepted</c> outbox row's task type, payload
+/// shape, aggregate and idempotency key. Two writers commit an accepted batch — the event batch route and the raw
+/// report parse task — and both must emit the row the metering handler binds, with the batch receipt as its aggregate.
+/// <para>
+/// Only the report path reads this contract. The ingest route keeps its own literals
+/// (<c>IngestEventBatchHandler.UsageTaskType</c> and <c>UsageMetric</c>, the first of which the metering handler also
+/// takes its task type from), and a parity test pins this contract's values equal to them, so the two spellings cannot
+/// drift silently; moving the ingest literal onto this contract is the events-route owner's follow-up.
+/// </para>
 /// </summary>
 public static class UsageBatchAcceptedContract
 {

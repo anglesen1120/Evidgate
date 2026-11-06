@@ -1,3 +1,4 @@
+using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
@@ -51,8 +52,29 @@ internal sealed partial class ParseRawReportHandler
         }
 
         // The attempt's guard has already refused a report without one kind, so the registry is only ever asked about a
-        // kind the manifest really declared.
+        // kind the manifest really declared. It is asked before an artifact verdict is turned into an outcome, because
+        // the refusal row's key is the parser pair and only an `unsupported` row may carry none.
         var resolution = await parsers.ResolveAsync(payload.ProducerKind!, cancellationToken).ConfigureAwait(false);
+
+        if (stopped is not null)
+        {
+            // The report's own `artifact_parse` judged the bytes unparseable and left the artifact rejected: the report
+            // task records that verdict as its `malformed` row without reading a byte, because the parse that would
+            // have judged it already ran. A kind no registry row names cannot carry a pair, so the row is the
+            // `unsupported` one it would have been.
+            if (!resolution.IsResolved)
+            {
+                LogUnsupported(logger, payload.ArtifactId, resolution.UnsupportedReason!);
+                return new Preparation(
+                    null,
+                    new ParseRawReportOutcome(ParseRawReportOutcome.Unsupported, resolution.UnsupportedReason),
+                    null,
+                    null);
+            }
+
+            return new Preparation(null, stopped.Stopped, resolution.ParserId, resolution.Version);
+        }
+
         if (!resolution.IsResolved)
         {
             // A kind no registry row names has no pair, so the refusal row's key is the kind the report declared.
@@ -97,14 +119,16 @@ internal sealed partial class ParseRawReportHandler
     }
 
     /// <summary>
-    /// The artifact checks of the read scope: this tenant's, ready, of the raw-report kind and this run's. A row whose
-    /// object key is not the key it mints is corrupt, so the attempt throws rather than reading an object it cannot vouch
-    /// for.
+    /// The artifact checks of the read scope: this tenant's, of the raw-report kind and this run's. A row whose object
+    /// key is not the key it mints is corrupt, so the attempt throws rather than reading an object it cannot vouch for.
+    /// A <c>ready</c> row continues the attempt; a row its own <c>artifact_parse</c> verdict rejected (see
+    /// <see cref="IsParseRejected"/>) stops it with the <c>malformed</c> outcome of that verdict and is returned as
+    /// well, so the caller can resolve the parser pair the refusal row carries; every other state is a skip.
     /// </summary>
     /// <param name="context">The tenant write model the artifact is read through.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
-    /// <returns>The artifact, or the skipped outcome that ended the attempt.</returns>
+    /// <returns>The artifact when the attempt continues or stops on its verdict, or the skipped outcome that ended it.</returns>
     private async Task<(Artifact? Artifact, Preparation? Stopped)> ReadArtifactAsync(
         EvidenceDbContext context,
         ParseRawReportPayload payload,
@@ -121,8 +145,7 @@ internal sealed partial class ParseRawReportHandler
             return (null, new Preparation(null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "absent")));
         }
 
-        if (!string.Equals(artifact.State, ArtifactState.Ready, StringComparison.Ordinal)
-            || !string.Equals(artifact.Kind, ArtifactKind.RawReport, StringComparison.Ordinal))
+        if (!string.Equals(artifact.Kind, ArtifactKind.RawReport, StringComparison.Ordinal))
         {
             LogSkipped(logger, payload.ArtifactId, "not_a_ready_raw_report");
             return (null, new Preparation(null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "not_a_ready_raw_report")));
@@ -135,6 +158,21 @@ internal sealed partial class ParseRawReportHandler
             return (null, new Preparation(null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "foreign_run")));
         }
 
+        if (IsParseRejected(artifact))
+        {
+            // The bytes were already judged: `artifact_parse` read this report first (the completion schedules both in
+            // one transaction) and rejected it, so the report task records the same verdict as its own refusal instead
+            // of stopping at a state that is no longer `ready` and leaving no report row at all.
+            LogRefused(logger, payload.ArtifactId, artifact.FailureCode!);
+            return (artifact, new Preparation(null, new ParseRawReportOutcome(ParseRawReportOutcome.Malformed, artifact.FailureCode)));
+        }
+
+        if (!string.Equals(artifact.State, ArtifactState.Ready, StringComparison.Ordinal))
+        {
+            LogSkipped(logger, payload.ArtifactId, "not_a_ready_raw_report");
+            return (null, new Preparation(null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "not_a_ready_raw_report")));
+        }
+
         if (!ArtifactObjectKey.IsMintedFor(artifact))
         {
             throw new InvalidOperationException(ArtifactObjectKey.MismatchMessage);
@@ -142,4 +180,39 @@ internal sealed partial class ParseRawReportHandler
 
         return (artifact, null);
     }
+
+    /// <summary>
+    /// The codes <c>artifact_parse</c> writes when it refuses bytes: its own verdicts and the profile words a child's
+    /// rejection record carries. The column also holds the completion's upload refusals, so this set, not the state
+    /// alone, tells a judged report from one that never became evidence.
+    /// </summary>
+    private static readonly HashSet<string> ParseVerdictCodes = new(StringComparer.Ordinal)
+    {
+        ArtifactFailureCode.TooLarge,
+        ArtifactFailureCode.CapExceeded,
+        ArtifactFailureCode.ParseOom,
+        ArtifactFailureCode.ParseTimeout,
+        ArtifactFailureCode.ParseCrashed,
+        ParsingFailureReason.DtdProhibited,
+        ParsingFailureReason.DepthExceeded,
+        ParsingFailureReason.SizeExceeded,
+        ParsingFailureReason.Timeout,
+        ParsingFailureReason.Malformed,
+        ParsingFailureReason.UnsafeEntryName,
+        ParsingFailureReason.DuplicateEntry,
+        ParsingFailureReason.EntryCountExceeded,
+        ParsingFailureReason.CompressionRatioExceeded,
+        ParsingFailureReason.NestingExceeded,
+    };
+
+    /// <summary>
+    /// True when the artifact is a report its own parse already judged unparseable — the state and code
+    /// <c>artifact_parse</c> leaves behind. <c>too_large</c> counts either way: over the cap, no parser could read it.
+    /// </summary>
+    /// <param name="artifact">The artifact row this attempt read.</param>
+    /// <returns>True when the rejection came from the parse of the report's own bytes.</returns>
+    private static bool IsParseRejected(Artifact artifact) =>
+        string.Equals(artifact.State, ArtifactState.Rejected, StringComparison.Ordinal)
+        && artifact.FailureCode is { } code
+        && ParseVerdictCodes.Contains(code);
 }

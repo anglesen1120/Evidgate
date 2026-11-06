@@ -46,6 +46,8 @@ public sealed partial class EvidenceRawReportEnqueueTests(PostgresTenancyFixture
 
     private const string ProducerUnknown = "producer_unknown";
 
+    private const string ProducerInvalid = "producer_invalid";
+
     private const string ProducerAmbiguous = "producer_ambiguous";
 
     /// <summary>The switch that composes out-of-process parsing; the completion reads it for both parse rows.</summary>
@@ -199,11 +201,12 @@ public sealed partial class EvidenceRawReportEnqueueTests(PostgresTenancyFixture
     }
 
     /// <summary>
-    /// A hint at the contract's 64-character ceiling, shaped like a statement fragment, is carried verbatim as data:
-    /// the payload names it and the counter tags only the outcome, never the hint.
+    /// A hint at the contract's 64-character ceiling, shaped like a statement fragment, never becomes a kind: the
+    /// column's shape does not admit it, so the payload carries the invalid issue and no kind, and the report task has a
+    /// refusal to write. The value stays untrusted data — it is a lookup key the lookup refused, never a metric tag.
     /// </summary>
     [Fact]
-    public async Task Complete_With_A_Hostile_Hint_Carries_It_Verbatim()
+    public async Task Complete_With_A_Hostile_Hint_Schedules_The_Invalid_Issue()
     {
         var prefix = "'||(select pg_sleep(5))||'--";
         var hostile = prefix + new string('x', 64 - prefix.Length);
@@ -216,17 +219,19 @@ public sealed partial class EvidenceRawReportEnqueueTests(PostgresTenancyFixture
         using var listener = CaptureIssues(out var issues);
         await CompleteSucceedsAsync(world, artifactId);
 
-        (await PayloadFieldAsync(world, artifactId, "producer_kind")).ShouldBe(hostile);
-        (await PayloadFieldAsync(world, artifactId, "producer_issue")).ShouldBeNull();
+        (await OutboxCountAsync(world, ReportParseTask, artifactId)).ShouldBe(1);
+        (await PayloadFieldAsync(world, artifactId, "producer_kind")).ShouldBeNull();
+        (await PayloadFieldAsync(world, artifactId, "producer_issue")).ShouldBe(ProducerInvalid);
+        issues.ShouldContain(ProducerInvalid);
         issues.ShouldNotContain(hostile, "the hint is untrusted plan text and never becomes a metric tag");
     }
 
     /// <summary>
-    /// A hint past the declared maximum never becomes a kind: a restored or hand-seeded manifest can hold one, so the
-    /// read bounds it and the payload reports the unknown code.
+    /// A hint past the declared maximum never becomes a kind: a restored or hand-seeded manifest can hold one, the
+    /// column's shape cannot store it, and dropping it would leave the report without its refusal.
     /// </summary>
     [Fact]
-    public async Task Complete_With_An_Oversized_Hint_Schedules_The_Unknown_Issue()
+    public async Task Complete_With_An_Oversized_Hint_Schedules_The_Invalid_Issue()
     {
         var oversized = new string('k', 65);
 
@@ -237,7 +242,7 @@ public sealed partial class EvidenceRawReportEnqueueTests(PostgresTenancyFixture
         await CompleteSucceedsAsync(world, artifactId);
 
         (await PayloadFieldAsync(world, artifactId, "producer_kind")).ShouldBeNull();
-        (await PayloadFieldAsync(world, artifactId, "producer_issue")).ShouldBe(ProducerUnknown);
+        (await PayloadFieldAsync(world, artifactId, "producer_issue")).ShouldBe(ProducerInvalid);
     }
 
     /// <summary>

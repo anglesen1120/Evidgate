@@ -30,8 +30,9 @@ namespace Evidgate.Modules.Evidence.Application;
 /// no single producer kind, which <paramref name="ProducerIssue"/> then explains.
 /// </param>
 /// <param name="ProducerIssue">
-/// The code word of a manifest whose shards do not name one producer kind (<see cref="ProducerUnknown"/> or
-/// <see cref="ProducerAmbiguous"/>). Such a report is refused without being read, because no parser can be chosen.
+/// The code word of a manifest whose shards do not name one storable producer kind (<see cref="ProducerUnknown"/>,
+/// <see cref="ProducerInvalid"/> or <see cref="ProducerAmbiguous"/>). Such a report is refused without being read,
+/// because no parser can be chosen.
 /// </param>
 internal sealed record ParseRawReportPayload(
     Guid RunId,
@@ -41,6 +42,14 @@ internal sealed record ParseRawReportPayload(
 {
     /// <summary>The issue of a manifest whose shards declare no producer hint at all.</summary>
     public const string ProducerUnknown = "producer_unknown";
+
+    /// <summary>
+    /// The issue of a manifest whose shards agree on one hint that the column's shape cannot store
+    /// (<c>^[a-z][a-z0-9-]*$</c> in one to 64 characters): a dialect word outside the registry's vocabulary, such as a
+    /// mixed-case word with an underscore. The hint is still only a lookup key, so it never reaches the payload as a
+    /// kind; the refusal row then carries this issue rather than disappearing.
+    /// </summary>
+    public const string ProducerInvalid = "producer_invalid";
 
     /// <summary>The issue of a manifest whose shards declare more than one distinct producer hint.</summary>
     public const string ProducerAmbiguous = "producer_ambiguous";
@@ -131,8 +140,11 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// <c>parse_timeout</c>) becomes a named <c>malformed</c> outcome with zero events, exactly as for an artifact parse;
 /// what the parser decided is stored in one short write of its own, so a report nobody could parse still leaves
 /// evidence of who judged it and why. A producer kind with no loaded parser is stored the same way as
-/// <c>unsupported</c>. Only a child that never started is retried, and it writes nothing. No other exception is read as
-/// a verdict: a resolver or storage fault must surface.
+/// <c>unsupported</c>. A report whose bytes its own <c>artifact_parse</c> already judged — the artifact is
+/// <c>rejected</c> with that verdict, because the completion schedules both tasks in one transaction — stores the same
+/// verdict as its <c>malformed</c> row without reading a byte and without an event; a rejected artifact of any other
+/// reason is a skip, because no report was ever validly uploaded. Only a child that never started is retried, and it
+/// writes nothing. No other exception is read as a verdict: a resolver or storage fault must surface.
 /// </para>
 /// <para>
 /// <b>A report whose artifact belongs to another run, or another tenant, yields no event.</b> The payload's run id is
