@@ -9,7 +9,7 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The per-tenant cost read over the real host and a real PostgreSQL: the eight lines' sums against their seeded
+/// The per-tenant cost read over the real host and a real PostgreSQL: the five lines' sums against their seeded
 /// sources, the fixed line order, and the ways an input with no source is reported as null with a reason instead of
 /// being passed off as a measured zero.
 /// </summary>
@@ -151,6 +151,34 @@ public sealed class UsageCostPerTenantTests
 
         answer.Status.ShouldBe(HttpStatusCode.OK);
         AssertAvailable(answer, "ai_tokens", 30m, "tokens", "healing_llm_call.tokens");
+    }
+
+    [Fact]
+    public async Task CostPerTenant_HealingAttemptsWithoutKnownTokens_AreUnavailable()
+    {
+        await using (var unknown = await StartAsync())
+        {
+            await unknown.SeedHealingCallsAsync(Healing(0, "timeout", 7, 30));
+
+            var answer = await unknown.GetAsync(unknown.CostUrl($"period={Period}"));
+
+            answer.Status.ShouldBe(HttpStatusCode.OK);
+            var line = Line(answer, "ai_tokens");
+            line.GetProperty("quantity").ValueKind.ShouldBe(
+                JsonValueKind.Null,
+                "a failed attempt that reported no tokens says nothing about how many it burned");
+            line.GetProperty("unavailable_reason").GetString().ShouldNotBeNullOrWhiteSpace();
+        }
+
+        await using (var known = await StartAsync())
+        {
+            await known.SeedHealingCallsAsync(Healing(0, "ok", 7, 30));
+
+            var answer = await known.GetAsync(known.CostUrl($"period={Period}"));
+
+            answer.Status.ShouldBe(HttpStatusCode.OK);
+            AssertAvailable(answer, "ai_tokens", 0m, "tokens", "healing_llm_call.tokens");
+        }
     }
 
     [Fact]

@@ -204,12 +204,14 @@ internal sealed class CostPerTenantReader(
     }
 
     /// <summary>
-    /// The token line: the ledger's <c>ai_tokens</c> rows while it holds one, otherwise every attempt the healing
-    /// gateway recorded in the month — a failed attempt burned its tokens too, so every status counts. The two
-    /// sources are never added together, which would bill the same tokens twice once the ledger's emitter lands.
+    /// The token line: the ledger's <c>ai_tokens</c> rows while it holds one, otherwise the attempts the healing
+    /// gateway recorded in the month whose token use is known — a failed attempt that reported tokens burned them,
+    /// while one that reported none says nothing and is not a measured zero. The two sources are never added
+    /// together, which would bill the same tokens twice once the ledger's emitter lands; the read skips the healing
+    /// aggregate altogether while the ledger holds the metric, so its sum arrives null then and is never read.
     /// </summary>
     /// <param name="ledger">The ledger's sums by wire metric name.</param>
-    /// <param name="healing">The gateway's token sum and attempt count for the month.</param>
+    /// <param name="healing">The gateway's token sum and known-usage attempt count for the month.</param>
     private static TenantCostLine Tokens(
         Dictionary<string, TenantCostRow> ledger,
         TenantCostRow healing)
@@ -221,8 +223,8 @@ internal sealed class CostPerTenantReader(
             return new TenantCostLine(AiTokensLine, row.Quantity, "tokens", $"{LedgerSource}:{wire}", null);
         }
 
-        return healing.RowCount > 0
-            ? new TenantCostLine(AiTokensLine, healing.Quantity, "tokens", HealingSource, null)
+        return healing is { RowCount: > 0, Quantity: { } tokens }
+            ? new TenantCostLine(AiTokensLine, tokens, "tokens", HealingSource, null)
             : new TenantCostLine(
                 AiTokensLine,
                 null,

@@ -130,7 +130,9 @@ internal sealed class UsageReadStore(ITenantDb db)
 
     /// <summary>
     /// Reads the cost inputs of one closed period: the ledger's sum and row count per metric, and the healing
-    /// gateway's token sum and attempt count over the month's half-open UTC range.
+    /// gateway's token sum plus the count of attempts whose token use is known, over the month's half-open UTC
+    /// range. The healing half is skipped while the ledger holds <c>ai_tokens</c> for the period, and its sum is
+    /// null then.
     /// </summary>
     /// <param name="orgId">The tenant of the open scope.</param>
     /// <param name="period">The closed period, <c>YYYY-MM</c>.</param>
@@ -155,8 +157,11 @@ internal sealed class UsageReadStore(ITenantDb db)
 /// <param name="Kind">The side the row came from, <see cref="UsageReadStore.LedgerKind"/> or
 /// <see cref="UsageReadStore.HealingKind"/>.</param>
 /// <param name="Line">The metric's wire name, or <c>healing</c> for the gateway's row.</param>
-/// <param name="Quantity">The sum, or null when the side holds no row in the period.</param>
-/// <param name="RowCount">How many source rows the sum covers; zero says nothing was written.</param>
+/// <param name="Quantity">The sum, or null when the side holds no row it could measure.</param>
+/// <param name="RowCount">
+/// The ledger's rows the sum covers, or the healing attempts whose token use is known: zero says nothing was
+/// measured, which is not the same as a measured zero.
+/// </param>
 internal sealed record TenantCostRow(string Kind, string Line, decimal? Quantity, long RowCount);
 
 /// <summary>Dapper shape of one <c>usage_ledger_entry</c> worksheet row, adjustment fields included.</summary>

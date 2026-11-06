@@ -148,14 +148,23 @@ internal static class UsageReadStoreSql
 
     /// <summary>
     /// The cost inputs of one closed period in one statement: the ledger's sum and row count per metric, and the
-    /// healing gateway's token sum and attempt count over the same month.
+    /// healing gateway's token sum and known-usage attempt count over the same month.
     /// </summary>
     /// <remarks>
     /// A row count is returned beside each sum so the caller can tell "no producer wrote this" from a producer
-    /// whose rows net to zero. The two sides filter by different columns on purpose: a ledger row carries its
-    /// billing <c>period</c>, while a healing attempt carries only when it happened, so its window is the
-    /// half-open range of the month in UTC and the <c>(org_id, project_id, created_at)</c> index serves it. Both
-    /// sides name <c>org_id</c> as well as the open scope's row security, so no argument widens the tenant.
+    /// whose rows net to zero. The healing count is narrower than its sum: an attempt whose status failed and whose
+    /// provider reported no tokens says nothing about how many it burned, so it is not a measured zero and does not
+    /// count as a measurement — only an <c>ok</c> attempt or one that reported tokens does.
+    /// <para>
+    /// The two sides filter by different columns on purpose: a ledger row carries its billing <c>period</c>, while a
+    /// healing attempt carries only when it happened, so its window is the half-open range of the month in UTC. No
+    /// <c>(org_id, created_at)</c> index exists, so that org-level range reads the org's healing history rather than
+    /// a contiguous slab of it; it is skipped entirely while the ledger holds <c>ai_tokens</c> rows for the period,
+    /// which is also when the caller would ignore its sum.
+    /// </para>
+    /// <para>
+    /// Both sides name <c>org_id</c> as well as the open scope's row security, so no argument widens the tenant.
+    /// </para>
     /// </remarks>
     internal const string TenantCost =
         """
@@ -165,11 +174,18 @@ internal static class UsageReadStoreSql
            and period = @period
          group by metric
         union all
-        select 'healing'::text, 'healing'::text, sum(tokens)::numeric, count(*)
+        select 'healing'::text, 'healing'::text, sum(tokens)::numeric,
+               count(*) filter (where status = 'ok' or tokens > 0)
           from public.healing_llm_call
          where org_id = @org_id
            and created_at >= @month_start
            and created_at < @month_end
+           and not exists (
+               select 1
+                 from public.usage_ledger_entry as l
+                where l.org_id = @org_id
+                  and l.period = @period
+                  and l.metric = 'ai_tokens')
         """;
 
     /// <summary>
