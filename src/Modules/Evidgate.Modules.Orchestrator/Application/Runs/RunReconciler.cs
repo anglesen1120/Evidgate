@@ -8,7 +8,8 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// The Dapper read behind <see cref="IRunReconciler"/>: statements in a fixed order over the ambient tenant scope, so it
 /// joins the caller's transaction and RLS scopes every row, exactly like <see cref="RunEventScopeReader"/>. The run row
 /// is locked first and the state decides the outcome: only a <c>collecting</c> run — a <c>queued</c> or <c>running</c> one
-/// past its collection deadline, or a finished <c>incomplete</c> one this attempt carries late evidence for — is compared,
+/// past its collection deadline, a finished <c>incomplete</c> one this attempt carries late evidence for, or a
+/// <c>canceled</c> one it carries reprocessed evidence for — is compared,
 /// and nothing is read beyond its state,
 /// because an enqueued finalize trigger is not evidence that the run is collectable. Read-only by construction — it never
 /// writes and never changes the run state; the work after the lock is the slot list, the one grouped event aggregate and,
@@ -33,6 +34,7 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
     public async ValueTask<ReconcileOutcome> ReconcileAsync(
         Guid runId,
         bool lateTrigger,
+        bool reprocessTrigger,
         CancellationToken cancellationToken)
     {
         var orgId = scopes.Require().OrgId;
@@ -54,8 +56,14 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         // and the queue's delay cannot withdraw it — a late batch accepted at the edge of the window must still reach a
         // revision. An ordinary trigger carries no evidence and appends a revision with nothing behind it, so it stays
         // uncollectable.
-        var late = lateTrigger
+        // A reprocess of an incomplete run is that same evidence — its admission marks those rows late — so its marker
+        // answers the late path too. Only a canceled run, which no later trigger can revive, needs a disposition of its
+        // own: the re-read rows of its own stored report are admitted after cancel, and they count through a revision
+        // while the run stays canceled.
+        var late = (lateTrigger || reprocessTrigger)
             && string.Equals(locked.State, RunStates.Incomplete, StringComparison.Ordinal);
+        var reprocess = reprocessTrigger
+            && string.Equals(locked.State, RunStates.Canceled, StringComparison.Ordinal);
 
         // A queued or running run past its collection deadline is decided too: no finalize will enqueue the attempt
         // that could close it, and the deadline is the run's promise to the caller. Before it the run stays
@@ -66,7 +74,7 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
                 || string.Equals(locked.State, RunStates.Running, StringComparison.Ordinal));
 
         // Statement 2 never runs for a run outside its collection states: nothing to compare, nothing to change.
-        if (!late && !overdue && !string.Equals(locked.State, RunStates.Collecting, StringComparison.Ordinal))
+        if (!late && !reprocess && !overdue && !string.Equals(locked.State, RunStates.Collecting, StringComparison.Ordinal))
         {
             return new ReconcileOutcome(ReconcileDisposition.NotCollectable, Comparison: null);
         }
@@ -113,8 +121,9 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         // A waiting attempt returns here, before the coverage read: it decides nothing, and coverage cannot turn a wait
         // into a verdict, so the bounded read of the plan is spent only on the attempt that compares for real.
         // A finished run never waits: its verdict is already written, its open shard would never close now that no
-        // finalize is accepted, and waiting would leave the late evidence unread for good.
-        if (!late && HasOpenShard(planned) && !locked.DeadlinePassed)
+        // finalize is accepted, and waiting would leave the late evidence unread for good. A canceled run has the same
+        // reason: no finalize will ever close what it left open.
+        if (!late && !reprocess && HasOpenShard(planned) && !locked.DeadlinePassed)
         {
             return new ReconcileOutcome(
                 ReconcileDisposition.Pending,
@@ -127,9 +136,11 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
 
         var disposition = late
             ? ReconcileDisposition.ComparedLate
-            : overdue
-                ? ReconcileDisposition.ComparedOverdue
-                : ReconcileDisposition.Compared;
+            : reprocess
+                ? ReconcileDisposition.ComparedReprocess
+                : overdue
+                    ? ReconcileDisposition.ComparedOverdue
+                    : ReconcileDisposition.Compared;
 
         return new ReconcileOutcome(
             disposition,

@@ -171,7 +171,8 @@ internal enum ReconcileDisposition
     RunNotFound,
 
     /// <summary>
-    /// The run cannot be compared by this trigger: it is terminal (<c>complete</c>, <c>canceled</c>), or <c>created</c>,
+    /// The run cannot be compared by this trigger: it is terminal (<c>complete</c>, or <c>canceled</c> for a trigger that
+    /// carries no reprocess evidence), or <c>created</c>,
     /// or <c>queued</c>/<c>running</c> with its collection deadline still ahead (a verdict there would close a run that
     /// is still starting), or finished <c>incomplete</c> while this trigger carries no late evidence or the run's late
     /// window is closed. Nothing is compared, nothing changes.
@@ -203,6 +204,15 @@ internal enum ReconcileDisposition
     ComparedLate,
 
     /// <summary>
+    /// The comparison ran on a run that had already been <c>canceled</c>, for a reprocess its admission accepted: the
+    /// re-reading of the run's own stored report wrote new rows after cancel, so the attempt appends revision N+1 and
+    /// moves the run's pointer to it, and the run stays <c>canceled</c> — a canceled run is terminal and never becomes
+    /// complete, whatever its evidence now says (00 §8.1). Like the late path, the revision is the only place
+    /// this evidence ever counts.
+    /// </summary>
+    ComparedReprocess,
+
+    /// <summary>
     /// The comparison ran on a <c>queued</c> or <c>running</c> run whose <c>collection_deadline_at</c> has passed: its
     /// producers never started or never finalized, so no finalize will ever enqueue the reconcile that decides such a
     /// run, and the deadline is the run's promise to the caller. The attempt closes it <c>incomplete</c> with the
@@ -218,7 +228,8 @@ internal enum ReconcileDisposition
 /// <param name="Disposition">What happened.</param>
 /// <param name="Comparison">
 /// Set when <paramref name="Disposition"/> is <see cref="ReconcileDisposition.Compared"/>,
-/// <see cref="ReconcileDisposition.ComparedLate"/> or <see cref="ReconcileDisposition.ComparedOverdue"/> — and also
+/// <see cref="ReconcileDisposition.ComparedLate"/>, <see cref="ReconcileDisposition.ComparedReprocess"/> or
+/// <see cref="ReconcileDisposition.ComparedOverdue"/> — and also
 /// for <see cref="ReconcileDisposition.Pending"/>, whose comparison is the event evidence alone (its counts are the
 /// attempt's log line): a waiting attempt reads no plan coverage, because coverage cannot turn a wait into a verdict.
 /// A pending attempt finishes nothing: only the compared dispositions reach the finisher.
@@ -232,11 +243,15 @@ internal interface IRunReconciler
     /// Locks the run row <c>FOR NO KEY UPDATE</c>, lists the planned shards, reads the observed events per producer in
     /// one statement and compares; an attempt that decides reads the plan's executions with no recorded attempt in one
     /// more statement first. A run that finished as <c>incomplete</c> is compared too — late evidence is only counted
-    /// through a revision — but only for an attempt that <paramref name="lateTrigger"/> marks as carrying late evidence;
-    /// that attempt answers <see cref="ReconcileDisposition.ComparedLate"/> and never waits, because its verdict is
-    /// written and no finalize can close a shard any more. The window that evidence was admitted in is the ingest
-    /// route's decision, already taken when it accepted the batch, so a late trigger is honoured whatever the clock says
-    /// when the queue reaches it. A <c>queued</c> or <c>running</c> run is compared once
+    /// through a revision — but only for an attempt that <paramref name="lateTrigger"/> (or
+    /// <paramref name="reprocessTrigger"/>) marks as carrying admitted evidence; that attempt answers
+    /// <see cref="ReconcileDisposition.ComparedLate"/> and never waits, because its verdict is written and no finalize can
+    /// close a shard any more. The window that evidence was admitted in is the ingest route's decision, already taken
+    /// when it accepted the batch, so a late trigger is honoured whatever the clock says when the queue reaches it. A
+    /// <c>canceled</c> run is compared for a trigger that <paramref name="reprocessTrigger"/> marks, and answers
+    /// <see cref="ReconcileDisposition.ComparedReprocess"/>: a reprocess re-reads bytes the run already holds, and its new
+    /// rows reach a revision like late evidence does, while the run stays terminal. A <c>queued</c> or <c>running</c> run
+    /// is compared once
     /// <c>collection_deadline_at</c> has passed (<see cref="ReconcileDisposition.ComparedOverdue"/>): its producers never
     /// started or never finalized, so no finalize will enqueue the reconcile that closes it, and the deadline settles it
     /// <c>incomplete</c>; before its deadline the same run stays <see cref="ReconcileDisposition.NotCollectable"/> —
@@ -253,6 +268,16 @@ internal interface IRunReconciler
     /// Whether this trigger was enqueued for late evidence the ingest route accepted (only that producer sets it). It is
     /// a precondition, not a verdict: the run must also still be <c>incomplete</c>.
     /// </param>
+    /// <param name="reprocessTrigger">
+    /// Whether this trigger was enqueued for a reprocess the run's admission accepted after cancellation (only the
+    /// reprocess task sets it). A precondition too: it moves an <c>incomplete</c> run onto the same path as
+    /// <paramref name="lateTrigger"/>, and only a <c>canceled</c> run answers
+    /// <see cref="ReconcileDisposition.ComparedReprocess"/>.
+    /// </param>
     /// <param name="cancellationToken">Cancelled on shutdown or lease loss.</param>
-    ValueTask<ReconcileOutcome> ReconcileAsync(Guid runId, bool lateTrigger, CancellationToken cancellationToken);
+    ValueTask<ReconcileOutcome> ReconcileAsync(
+        Guid runId,
+        bool lateTrigger,
+        bool reprocessTrigger,
+        CancellationToken cancellationToken);
 }

@@ -74,6 +74,20 @@ public static class RunReconcileContract
             $"orchestrator:run:{runId:D}:reconcile:late:{producerId}:{batchId:D}");
 
     /// <summary>
+    /// The reprocess shape of <see cref="BatchIdempotencyKey"/>:
+    /// <c>orchestrator:run:{run}:reconcile:reprocess:{producer}:{batch}</c>. One trigger per accepted reprocess set,
+    /// for the same reason a late batch names its own: the reprocess writes its own synthetic producer and its own
+    /// batch, and a trigger that may compare a <c>canceled</c> run is not an ordinary one.
+    /// </summary>
+    /// <param name="runId">The run the re-read evidence belongs to.</param>
+    /// <param name="producerId">The synthetic producer the reprocess wrote its rows under.</param>
+    /// <param name="batchId">The accepted set's own idempotency id, which the same commit mints.</param>
+    public static string ReprocessBatchIdempotencyKey(Guid runId, string producerId, Guid batchId) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"orchestrator:run:{runId:D}:reconcile:reprocess:{producerId}:{batchId:D}");
+
+    /// <summary>
     /// The producer id the collection-deadline trigger writes in its payload: a sweep names no shard,
     /// so the reconciler reads no declaration (the deadline path never compares a shard's high-water
     /// mark).
@@ -159,6 +173,20 @@ public static class RunReconcileContract
             PayloadOptions);
 
     /// <summary>
+    /// The payload of the reprocess trigger: the run and the synthetic producer the re-read rows were written under, with
+    /// the two declaration fields a payload of this type always carries, at zero, and
+    /// <see cref="RunReconcilePayload.ReprocessEvidence"/> set. Only the reprocess task builds it, and only for a run its
+    /// admission accepted after cancellation: a canceled run has no forward edge, so its new evidence counts through a
+    /// revision alone, which is why the marker exists.
+    /// </summary>
+    /// <param name="runId">The run the re-read evidence belongs to.</param>
+    /// <param name="producerId">The synthetic producer the reprocess wrote its rows under.</param>
+    public static string ReprocessPayloadJson(Guid runId, string producerId) =>
+        JsonSerializer.Serialize(
+            new RunReconcilePayload(runId, producerId, 0, 0) { ReprocessEvidence = true },
+            PayloadOptions);
+
+    /// <summary>
     /// The task type (and schedule name) of the collection deadline sweep: a platform task that scans
     /// every tenant's overdue runs and enqueues one <see cref="OutboxTaskType"/> row per run. It is a
     /// separate type from the trigger it produces, so an unregistered handler parks the sweep without
@@ -199,4 +227,13 @@ public sealed record RunReconcilePayload(
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool LateEvidence { get; init; }
+
+    /// <summary>
+    /// <c>reprocess_evidence</c>: set only by the trigger the reprocess task enqueues when its admission accepted the
+    /// re-read evidence of a <c>canceled</c> run. Every other producer leaves it absent, so a canceled run is compared
+    /// only for a deliberate re-reading of its own stored report — the one path a canceled run still takes — while a redelivered
+    /// or replayed ordinary, late or finalize trigger stays not collectable.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ReprocessEvidence { get; init; }
 }
