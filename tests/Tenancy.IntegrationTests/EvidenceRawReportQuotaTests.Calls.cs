@@ -270,13 +270,16 @@ public sealed partial class EvidenceRawReportQuotaTests
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
 
-        // The queue's own trace of the earlier attempt: this row deferred, so it carries the fixed deferral message.
+        // The queue's own trace of the earlier attempt, keyed and worded exactly as the upload and the consumer write it.
+        // The text carries an apostrophe ("handler's"), so it is escaped for the literal before it goes into the statement.
+        var persistedError = TaskDeferredException.PersistedError.Replace("'", "''", StringComparison.Ordinal);
         await _fixture.ExecuteAsync(
             world.Database,
             "insert into public.task (id, org_id, queue, task_type, payload, idempotency_key, state, last_error) values "
             + $"('{Guid.CreateVersion7():D}', '{world.Org:D}', 'tasks', '{EvidenceTaskTypes.ReportParse}', "
             + $"'{{\"run_id\":\"{world.RunId:D}\",\"artifact_id\":\"{artifactId:D}\"}}'::jsonb, "
-            + $"'quota-deferral-{artifactId:D}', 'retry', '{TaskDeferredException.DeferredMessage.Replace("'", "''", StringComparison.Ordinal)}')");
+            + $"'evidence:artifact:{artifactId:D}:{EvidenceTaskTypes.ReportParse}', 'retry', "
+            + $"'{persistedError}')");
         await _fixture.ExecuteAsync(
             world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
 
@@ -289,6 +292,41 @@ public sealed partial class EvidenceRawReportQuotaTests
             line => line.Contains("quota_blocked_then_closed", StringComparison.Ordinal),
             "a batch the period refused and the run then closed is a loss, not an ordinary late report");
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_Real_Consumer_Deferral_Then_A_Closed_Run_Reports_Blocked_Then_Closed()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedPlanAsync(world);
+        var artifact = await SeedArtifactAsync(world, OneEventBody);
+        await SeedCounterAsync(counters, world, used: 1m, limit: 1m);
+        var queue = "report-quota-closed";
+        var taskId = Guid.CreateVersion7();
+        await _fixture.ExecuteAsync(world.Database, $$"""
+            insert into public.task (id, org_id, queue, task_type, payload, idempotency_key)
+            values ('{{taskId:D}}', '{{world.Org:D}}', '{{queue}}', '{{EvidenceTaskTypes.ReportParse}}',
+                '{"run_id":"{{world.RunId:D}}","artifact_id":"{{artifact:D}}","producer_kind":"pytest-junitxml"}'::jsonb,
+                'evidence:artifact:{{artifact:D}}:{{EvidenceTaskTypes.ReportParse}}')
+            """);
+        await using var worker = StartReportWorker(world);
+        var consumer = worker.GetRequiredService<TaskConsumer>();
+
+        (await consumer.PollOnceAsync(queue, Token)).ShouldBe(1);
+        (await TaskStateAsync(world, taskId)).ShouldBe("retry");
+        (await _fixture.ScalarAsync<string>(
+                world.Database, $"select last_error from public.task where id = '{taskId:D}'"))
+            .ShouldBe(TaskDeferredException.PersistedError, "the probe compares the text the consumer really writes");
+
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
+        var log = new CapturedLog();
+        var outcome = await ParseAsync(world, artifact, log);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
+        log.Lines.ShouldContain(line => line.Contains("quota_blocked_then_closed", StringComparison.Ordinal));
     }
 
     [Fact]

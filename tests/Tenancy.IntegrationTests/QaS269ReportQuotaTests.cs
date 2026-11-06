@@ -6,6 +6,7 @@ using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -49,7 +50,10 @@ public sealed partial class EvidenceRawReportQuotaTests
     [InlineData(8)]
     public async Task ReportTask_DeferredThenRaisedAndDue_CompletesAtOriginalAttempt(int maxAttempts)
     {
-        await using var world = await StartAsync();
+        // A pinned mid-month clock: the gate's wait is deterministic, so a run on the last day of a month cannot turn
+        // this case's deferral into a sub-minute one. The billing period follows the same clock everywhere here.
+        await using var world = await StartAsync(
+            services => UseClock(services, new FakeTimeProvider(MidMarch)));
         await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
         await SeedPlanAsync(world);
         var artifact = await SeedArtifactAsync(world, OneEventBody);

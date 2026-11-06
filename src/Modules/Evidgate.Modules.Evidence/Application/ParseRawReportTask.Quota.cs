@@ -154,7 +154,7 @@ internal sealed partial class ParseRawReportHandler
     /// <summary>
     /// Logs a terminal admission refusal on the refusal path only, naming a loss the plain code word hides: a report
     /// the queue had deferred and the run closed before its retry. The task row is the deferral's only durable trace,
-    /// and it is one indexed probe by the row's own artifact id.
+    /// and its idempotency key is the one the upload enqueues, so the probe is the queue's own unique index.
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="artifactId">The report artifact, the only id the line names.</param>
@@ -172,17 +172,15 @@ internal sealed partial class ParseRawReportHandler
                 select exists (
                     select 1
                     from public.task
-                    where org_id = @org_id
-                      and task_type = @task_type
-                      and last_error = @last_error
-                      and payload ->> 'artifact_id' = @artifact_id)
+                    where idempotency_key = @idempotency_key
+                      and org_id = @org_id
+                      and last_error = @last_error)
                 """,
                 new
                 {
+                    idempotency_key = ReportParseKey(artifactId),
                     org_id = orgId,
-                    task_type = EvidenceTaskTypes.ReportParse,
-                    last_error = TaskDeferredException.DeferredMessage,
-                    artifact_id = artifactId.ToString("D"),
+                    last_error = TaskDeferredException.PersistedError,
                 },
                 cancellationToken)
             .ConfigureAwait(false);
@@ -197,6 +195,10 @@ internal sealed partial class ParseRawReportHandler
         EvidgateTelemetry.RecordIngestQuotaDenied(BlockedThenClosed);
         LogBlockedThenClosed(logger, artifactId, BlockedThenClosed, reason);
     }
+
+    /// <summary>The idempotency key the upload enqueues this report's task with, the row the probe looks for.</summary>
+    private static string ReportParseKey(Guid artifactId) =>
+        $"evidence:artifact:{artifactId:D}:{EvidenceTaskTypes.ReportParse}";
 
     /// <summary>The gate's wait as whole seconds for the refusal line; zero when it named none.</summary>
     private static int RetrySeconds(TimeSpan? retryAfter) =>

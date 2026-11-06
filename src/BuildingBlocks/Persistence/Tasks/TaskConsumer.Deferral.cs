@@ -29,7 +29,7 @@ public sealed partial class TaskConsumer
         try
         {
             var written = await _leases
-                .DeferAsync(claim, delay, TaskErrorText.Redact(deferred), budget.Token)
+                .DeferAsync(claim, delay, TaskDeferredException.PersistedError, budget.Token)
                 .ConfigureAwait(false);
 
             if (!written)

@@ -27,6 +27,12 @@ public sealed class TaskDeferredException : Exception
     /// <summary>How long the row waits before it is claimable again.</summary>
     public TimeSpan Delay { get; }
 
+    /// <summary>
+    /// The text the consumer persists as the row's <c>last_error</c> for a deferral: one fixed string, so a reader of
+    /// the row can tell "this work waited" without repeating the redaction format, and the writer cannot drift from it.
+    /// </summary>
+    public static string PersistedError => TaskErrorText.Redact(new TaskDeferredException(MinimumDelay));
+
     /// <summary>The delay the queue uses for a requested <paramref name="delay"/>.</summary>
     internal static TimeSpan Clamp(TimeSpan delay) => delay < MinimumDelay ? MinimumDelay : delay;
 }
