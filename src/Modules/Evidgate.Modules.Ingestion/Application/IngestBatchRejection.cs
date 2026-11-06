@@ -13,7 +13,7 @@ namespace Evidgate.Modules.Ingestion.Application;
 /// <para>
 /// The reason vocabulary is closed: the edge's caps (<see cref="BodyTooLarge"/>, <see cref="EventCount"/>,
 /// <see cref="ExpandedTooLarge"/>, <see cref="RatioExceeded"/>, <see cref="EncodingUnsupported"/>,
-/// <see cref="GzipInvalid"/>, <see cref="RateLimited"/>) and the handler's own outcomes, mapped from the
+/// <see cref="GzipInvalid"/>, <see cref="RateLimited"/>, <see cref="QuotaExceeded"/>) and the handler's own outcomes, mapped from the
 /// stable error code by <see cref="ReasonFor"/>. Neither the counter nor the log ever carries the body, a
 /// header value or any other tenant-controlled text — only the echoed request id, the route's run id and
 /// byte counts.
@@ -41,6 +41,9 @@ internal static partial class IngestBatchRejection
 
     /// <summary>The project and token exceeded their fixed-window burst budget, so the body was never read.</summary>
     public const string RateLimited = "rate_limited";
+
+    /// <summary>The project's billing-period quota is used up: the batch was refused before any write (429).</summary>
+    public const string QuotaExceeded = "quota_exceeded";
 
     /// <summary>The batch's events were refused by the contract or the run's plan (422).</summary>
     public const string EventInvalid = "event_invalid";
@@ -75,6 +78,7 @@ internal static partial class IngestBatchRejection
             ApiErrorCode.Forbidden or ApiErrorCode.ProjectScopeMismatch or ApiErrorCode.NoMembership
                 or ApiErrorCode.OrgSuspended => Forbidden,
             ApiErrorCode.RunClosed => RunClosed,
+            ApiErrorCode.QuotaExceeded => QuotaExceeded,
             ApiErrorCode.NotFound => NotFound,
             ApiErrorCode.Unauthenticated => Unauthenticated,
             _ => Other,

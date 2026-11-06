@@ -98,6 +98,7 @@ internal sealed class IngestEventBatchHandler(
     FirstSendCapabilityService firstSend,
     IRunEventScope runScopes,
     IRunStateTransition runStates,
+    IngestQuotaAdmission quota,
     IProducerRegistry producers,
     ICaseAttemptWriter attempts,
     IOutboxWriter outbox,
@@ -146,9 +147,6 @@ internal sealed class IngestEventBatchHandler(
         string payload_hash,
         string payload,
         IReadOnlyList<Guid> artifact_ids);
-
-    /// <summary>One already-stored event of the batch, read back to tell a duplicate from a reused sequence.</summary>
-    private sealed record StoredEvent(Guid EventId, string PayloadHash);
 
     /// <summary>One producer slot's high-water mark of this batch.</summary>
     private sealed record SlotMax(string producer_id, long max_sequence);
@@ -232,6 +230,17 @@ internal sealed class IngestEventBatchHandler(
         activity?.SetTag(EvidgateTelemetry.ProducerIdTag, producerId);
         activity?.SetTag(EvidgateTelemetry.EventCountTag, events.Count);
         var orgId = scopes.Require().OrgId;
+
+        // (a2) Quota, one gate call per batch and never per event (ruling T53): the body is parsed and
+        // canonicalised, and the run row is not read yet, so the reservation is ordered before every lock the
+        // batch takes and a blocked batch never drives the queued -> running transition. The reservation lives
+        // in this request's tenant transaction, so a batch refused further down leaves no counter row behind.
+        if (await quota
+                .AdmitAsync(orgId, principal.ProjectScope, command.RunId, events, cancellationToken)
+                .ConfigureAwait(false) is { } quotaRefusal)
+        {
+            return Result.Failure<BatchAckResult>(quotaRefusal);
+        }
 
         // (b1) Lock order (04.1.1-T4, ruling T13 + the 05.3.1 lock-order rule; see the class doc): the first
         // accepted batch of a queued run moves it queued -> running through 05's IRunStateTransition, which
@@ -463,19 +472,14 @@ internal sealed class IngestEventBatchHandler(
         }
         else
         {
-            var stored = (await db.QueryAsync<StoredEvent>(
-                StoredEventsSql,
-                new
-                {
-                    org_id = orgId,
-                    run_id = command.RunId,
-                    // jsonb_to_recordset takes an array of OBJECTS, not an array of strings: a bare uuid
-                    // array answers 22023 'argument of jsonb_to_recordset must be an array of objects'.
-                    ids = JsonSerializer.Serialize(
-                        toInsert.Where(e => !insertedIds.Contains(e.EventId)).Select(e => new { event_id = e.EventId })),
-                },
-                cancellationToken).ConfigureAwait(false))
-                .ToDictionary(row => row.EventId, row => row.PayloadHash);
+            var stored = await IngestEventReads
+                .ReadStoredAsync(
+                    db,
+                    orgId,
+                    command.RunId,
+                    toInsert.Where(e => !insertedIds.Contains(e.EventId)).Select(e => e.EventId),
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             foreach (var e in toInsert)
             {
@@ -707,14 +711,6 @@ internal sealed class IngestEventBatchHandler(
             duration_ms bigint, occurred_at timestamptz, payload_hash text, payload text, artifact_ids uuid[])
         on conflict do nothing
         returning event_id
-        """;
-
-    /// <summary>The bounded read-back of the events this batch did not insert (duplicate vs reused sequence).</summary>
-    private const string StoredEventsSql = """
-        select e.event_id as "EventId", e.payload_hash as "PayloadHash"
-        from public.event e
-        join jsonb_to_recordset(@ids::jsonb) as i (event_id uuid) on i.event_id = e.event_id
-        where e.org_id = @org_id and e.run_id = @run_id
         """;
 
     /// <summary>The high-water mark of every producer of the batch (the <c>last_sequence</c> column grant).</summary>

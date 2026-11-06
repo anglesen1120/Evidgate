@@ -70,9 +70,14 @@ public static class IngestionEndpoints
         HttpContext context,
         IRequestPrincipalAccessor principals,
         IMediator mediator,
+        IngestQuotaVeto quotaVeto,
         CancellationToken cancellationToken)
     {
         var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(IngestionEndpoints));
+
+        // The quota block's Retry-After is decided inside the handler's tenant transaction; the carrier's
+        // per-request slot is what brings it back out to the header this response writes.
+        using var vetoScope = quotaVeto.BeginRequest();
 
         // AC7: a refusal never reaches the handler's module span, so the run id and the request id
         // go on the request span first. Neither the token id nor any other credential value is tagged.
@@ -165,7 +170,8 @@ public static class IngestionEndpoints
                     logger,
                     context,
                     r,
-                    bytesIn);
+                    bytesIn,
+                    quotaVeto);
             }
 
             using var decoded = EventBodyDecoder.DecodeGzip(bytes, limits);
@@ -188,7 +194,8 @@ public static class IngestionEndpoints
                 logger,
                 context,
                 r,
-                bytesIn);
+                bytesIn,
+                quotaVeto);
         }
         finally
         {
@@ -200,20 +207,30 @@ public static class IngestionEndpoints
     /// <summary>
     /// Counts one rejection for a failure the pipeline or handler returned, under
     /// <see cref="IngestBatchRejection.ReasonFor"/>'s closed vocabulary. A
-    /// <c>batch_too_large</c> is skipped because the cap that refused it already counted it.
+    /// <c>batch_too_large</c> is skipped because the cap that refused it already counted it. A quota refusal
+    /// carries the gate's own <c>Retry-After</c>, which the carrier holds for this request.
     /// </summary>
     private static Result<BatchAckResult> Counted(
         Result<BatchAckResult> result,
         ILogger logger,
         HttpContext context,
         Guid runId,
-        int bytesIn)
+        int bytesIn,
+        IngestQuotaVeto quotaVeto)
     {
-        if (result.Error is { } error
-            && !string.Equals(error.Code, ApiErrorCode.BatchTooLarge, StringComparison.Ordinal))
+        if (result.Error is { } error)
         {
-            IngestBatchRejection.Record(
-                logger, IngestBatchRejection.ReasonFor(error), context.TraceIdentifier, runId, bytesIn, 0);
+            if (string.Equals(error.Code, ApiErrorCode.QuotaExceeded, StringComparison.Ordinal)
+                && quotaVeto.RetryAfterSeconds is { } retryAfter)
+            {
+                context.Response.Headers.RetryAfter = RetryAfterHeader.Format(retryAfter);
+            }
+
+            if (!string.Equals(error.Code, ApiErrorCode.BatchTooLarge, StringComparison.Ordinal))
+            {
+                IngestBatchRejection.Record(
+                    logger, IngestBatchRejection.ReasonFor(error), context.TraceIdentifier, runId, bytesIn, 0);
+            }
         }
 
         return result;
