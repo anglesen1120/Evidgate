@@ -236,7 +236,8 @@ public sealed partial class IngestQuotaTests
         (await ReadAsync(counters, world)).ShouldBe(
             stamped, "a refusal whose stamp already exists writes nothing, so it cannot bump the version");
         (await CounterXminAsync(world)).ShouldBe(
-            before, "and the stamp statement leaves an already-stamped counter unlocked and unwritten");
+            before, "a new tuple version would mean the stamp wrote the row; the lock it must not take is proved "
+            + "in UsageQuotaStampTests against a holder's single-row lock");
     }
 
     /// <summary>The counter's tuple version: an update writes a new tuple with a new <c>xmin</c>, so an equal value proves no write.</summary>
@@ -294,7 +295,7 @@ public sealed partial class IngestQuotaTests
         (await PostBatchAsync(world, (Guid.CreateVersion7(), 1L))).Status.ShouldBe(HttpStatusCode.TooManyRequests);
         (await ReadAsync(counters, world)).ShouldNotBeNull().BlockedAt.ShouldNotBeNull();
 
-        var raised = await RaiseAsync(world, limit: 20m);
+        var raised = await RaiseAsync(counters, world, limit: 20m);
 
         raised.IsSuccess.ShouldBeTrue($"the operator raise must apply: {raised.Error?.Message}");
         (await ReadAsync(counters, world)).ShouldNotBeNull().BlockedAt.ShouldBeNull(
@@ -307,13 +308,13 @@ public sealed partial class IngestQuotaTests
     }
 
     /// <summary>The audited operator raise, run in process against the world's own composition.</summary>
-    private static async Task<Result<QuotaRaiseResult>> RaiseAsync(IngestTestWorld world, decimal limit)
+    private static async Task<Result<QuotaRaiseResult>> RaiseAsync(UsageQuotaWorld counters, IngestTestWorld world, decimal limit)
     {
-        await using var services = world.Host.Services.CreateAsyncScope();
+        // The ingest host runs the real permission evaluator, which refuses a service principal here; the counters
+        // world's permissive command host is the precedent for driving the audited raise in process.
+        await using var services = counters.Commands.Services.CreateAsyncScope();
         var provider = services.ServiceProvider;
-        // The addressed project must be the principal's own scope: the evaluator denies a service principal whose
-        // project scope differs from the open tenant context's project.
-        using var tenant = provider.GetRequiredService<IRequestTenantContextSetter>().Publish(world.Org, world.Project);
+        using var tenant = provider.GetRequiredService<IRequestTenantContextSetter>().Publish(world.Org, null);
         using var principal = provider.GetRequiredService<IRequestPrincipalSetter>()
             .Publish(RequestPrincipal.Service(world.Project, [Permissions.Billing.Write]));
 
