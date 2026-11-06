@@ -98,6 +98,7 @@ internal sealed class IngestEventBatchHandler(
     FirstSendCapabilityService firstSend,
     IRunEventScope runScopes,
     IRunStateTransition runStates,
+    IngestQuotaAdmission quota,
     IProducerRegistry producers,
     ICaseAttemptWriter attempts,
     IOutboxWriter outbox,
@@ -146,9 +147,6 @@ internal sealed class IngestEventBatchHandler(
         string payload_hash,
         string payload,
         IReadOnlyList<Guid> artifact_ids);
-
-    /// <summary>One already-stored event of the batch, read back to tell a duplicate from a reused sequence.</summary>
-    private sealed record StoredEvent(Guid EventId, string PayloadHash);
 
     /// <summary>One producer slot's high-water mark of this batch.</summary>
     private sealed record SlotMax(string producer_id, long max_sequence);
@@ -463,19 +461,14 @@ internal sealed class IngestEventBatchHandler(
         }
         else
         {
-            var stored = (await db.QueryAsync<StoredEvent>(
-                StoredEventsSql,
-                new
-                {
-                    org_id = orgId,
-                    run_id = command.RunId,
-                    // jsonb_to_recordset takes an array of OBJECTS, not an array of strings: a bare uuid
-                    // array answers 22023 'argument of jsonb_to_recordset must be an array of objects'.
-                    ids = JsonSerializer.Serialize(
-                        toInsert.Where(e => !insertedIds.Contains(e.EventId)).Select(e => new { event_id = e.EventId })),
-                },
-                cancellationToken).ConfigureAwait(false))
-                .ToDictionary(row => row.EventId, row => row.PayloadHash);
+            var stored = await IngestEventReads
+                .ReadStoredAsync(
+                    db,
+                    orgId,
+                    command.RunId,
+                    toInsert.Where(e => !insertedIds.Contains(e.EventId)).Select(e => e.EventId),
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             foreach (var e in toInsert)
             {
@@ -565,10 +558,15 @@ internal sealed class IngestEventBatchHandler(
             }
         }
 
-        // (h) The producer's high-water mark, one statement for every producer of the batch. Only newly
+        // (g1) The producer's high-water mark, one statement for every producer of the batch. Only newly
         // accepted events count, and a batch that accepted nothing (every event a duplicate of an earlier
         // batch) writes no slot row at all: the update would be a no-op that still bumps
         // producer_slot.version through the shared trigger (P2).
+        //
+        // It runs before the quota reservation on purpose: every transaction that reaches the counter holds
+        // this slot row first, so the counter stays the last lock a batch takes and no admitted batch can take
+        // the slot while another admitted batch waits for the counter with the slot already held (a 40P01
+        // deadlock between racing batches of one producer). A blocked batch's update rolls back with the batch.
         var slotMaxima = accepted > 0
             ? toInsert
                 .Where(e => insertedIds.Contains(e.EventId))
@@ -588,6 +586,18 @@ internal sealed class IngestEventBatchHandler(
                     slots = JsonSerializer.Serialize(slotMaxima),
                 },
                 cancellationToken).ConfigureAwait(false);
+        }
+
+        // (g2) Quota, one gate call per batch and never per event (ruling T53), made last: the insert above has
+        // already answered how many units this batch adds, so the reservation charges exactly the rows that
+        // commit and two identical racing batches charge the batch once between them. Every step that can still
+        // refuse the batch runs before this, and a block returns a failure, so the tenant transaction rolls the
+        // inserted events back and the 429 commits no event.
+        if (await quota
+                .AdmitAsync(principal.ProjectScope, insertedIds.Count, cancellationToken)
+                .ConfigureAwait(false) is { } quotaRefusal)
+        {
+            return Result.Failure<BatchAckResult>(quotaRefusal);
         }
 
         // (h2) Late evidence needs a reader: the run already finished as incomplete, so no finalize will close another
@@ -707,14 +717,6 @@ internal sealed class IngestEventBatchHandler(
             duration_ms bigint, occurred_at timestamptz, payload_hash text, payload text, artifact_ids uuid[])
         on conflict do nothing
         returning event_id
-        """;
-
-    /// <summary>The bounded read-back of the events this batch did not insert (duplicate vs reused sequence).</summary>
-    private const string StoredEventsSql = """
-        select e.event_id as "EventId", e.payload_hash as "PayloadHash"
-        from public.event e
-        join jsonb_to_recordset(@ids::jsonb) as i (event_id uuid) on i.event_id = e.event_id
-        where e.org_id = @org_id and e.run_id = @run_id
         """;
 
     /// <summary>The high-water mark of every producer of the batch (the <c>last_sequence</c> column grant).</summary>

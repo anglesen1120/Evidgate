@@ -105,6 +105,15 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
     }
 
     /// <summary>
+    /// How many gate questions one test may have in flight. Each opens its own tenant scope and so its own
+    /// connection, and the container answers 53300 (no slots for a non-superuser) long before a fifty-caller race has
+    /// raced anything; the bound keeps the race and stays inside that budget.
+    /// </summary>
+    private const int GateCallConcurrency = 8;
+
+    private static readonly SemaphoreSlim GateCalls = new(GateCallConcurrency);
+
+    /// <summary>
     /// Asks the registered gate one question inside its own tenant scope and commits unless the test asks
     /// otherwise — the caller's transaction of the real hot path.
     /// </summary>
@@ -118,19 +127,28 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
     {
         var token = TestContext.Current.CancellationToken;
 
-        await using var services = Api.Services.CreateAsyncScope();
-        var provider = services.ServiceProvider;
-        var scopes = provider.GetRequiredService<ITenantScopeFactory>();
-        await using var scope = await scopes.BeginAsync(org ?? Org, null, false, token);
-        var gate = provider.GetRequiredService<IQuotaGate>();
+        await GateCalls.WaitAsync(token).ConfigureAwait(false);
 
-        var result = await gate.CheckAsync(request, token).ConfigureAwait(false);
-        if (commit)
+        try
         {
-            await scope.CommitAsync(token).ConfigureAwait(false);
-        }
+            await using var services = Api.Services.CreateAsyncScope();
+            var provider = services.ServiceProvider;
+            var scopes = provider.GetRequiredService<ITenantScopeFactory>();
+            await using var scope = await scopes.BeginAsync(org ?? Org, null, false, token);
+            var gate = provider.GetRequiredService<IQuotaGate>();
 
-        return result;
+            var result = await gate.CheckAsync(request, token).ConfigureAwait(false);
+            if (commit)
+            {
+                await scope.CommitAsync(token).ConfigureAwait(false);
+            }
+
+            return result;
+        }
+        finally
+        {
+            GateCalls.Release();
+        }
     }
 
     /// <summary>
@@ -253,6 +271,57 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
         _fixture.ScalarAsync<long>(
             Database,
             $"select count(*) from public.quota_counter where org_id = '{(org ?? Org):D}'");
+
+    /// <summary>The id of one scope's counter, or null when the scope holds none.</summary>
+    /// <param name="org">The tenant, or null for this world's org.</param>
+    /// <param name="project">The project, null for the tenant-level counter.</param>
+    /// <param name="period">The billing month.</param>
+    /// <param name="metric">The wire metric name.</param>
+    internal async Task<Guid?> CounterIdAsync(
+        Guid? org = null,
+        Guid? project = null,
+        string period = "2026-10",
+        string metric = "results")
+    {
+        var scope = $"{(project ?? Guid.Empty):D}";
+        var rows = await _fixture.ColumnAsync<string>(
+                Database,
+                $"""
+                select id::text from public.quota_counter
+                where org_id = '{(org ?? Org):D}'
+                  and coalesce(project_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                      = '{scope}'::uuid
+                  and period = '{period}'
+                  and metric = '{metric}'
+                """)
+            .ConfigureAwait(false);
+
+        return rows.Count == 0 ? null : Guid.Parse(rows[0]);
+    }
+
+    /// <summary>How many outbox rows of one task type the org holds.</summary>
+    /// <param name="taskType">The outbox task type.</param>
+    /// <param name="org">The tenant, or null for this world's org.</param>
+    internal Task<long> OutboxCountAsync(string taskType, Guid? org = null) =>
+        _fixture.ScalarAsync<long>(
+            Database,
+            $"select count(*) from public.outbox where org_id = '{(org ?? Org):D}' and task_type = '{taskType}'");
+
+    /// <summary>
+    /// The org's outbox rows of one task type, as <c>task_type|aggregate_type|aggregate_id|payload</c>,
+    /// oldest first: what a consumer would read.
+    /// </summary>
+    /// <param name="taskType">The outbox task type.</param>
+    /// <param name="org">The tenant, or null for this world's org.</param>
+    internal Task<IReadOnlyList<string>> OutboxRowsAsync(string taskType, Guid? org = null) =>
+        _fixture.ColumnAsync<string>(
+            Database,
+            $"""
+            select task_type || '|' || aggregate_type || '|' || aggregate_id::text || '|' || payload::text
+            from public.outbox
+            where org_id = '{(org ?? Org):D}' and task_type = '{taskType}'
+            order by created_at, id
+            """);
 
     /// <summary>How many audit rows one action of the org wrote.</summary>
     /// <param name="org">The tenant, or null for this world's org.</param>

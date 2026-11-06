@@ -58,6 +58,8 @@ internal static class UsageModule
         // `EVIDGATE:Usage:QuotaGate:Enabled` switch is the only way it answers Ok without a write.
         services.TryAddScoped<QuotaCounterStore>();
         services.TryAddScoped<IQuotaGate, QuotaGate>();
+        // The refusal stamp a caller that answers a block by rolling back discards, written in a scope of its own.
+        services.TryAddScoped<IQuotaBlockStamp, QuotaBlockStamp>();
         services.TryAddScoped<QuotaLimitWriter>();
         services.TryAddScoped<QuotaLimitRaiser>();
         services.AddOptions<QuotaGateOptions>()

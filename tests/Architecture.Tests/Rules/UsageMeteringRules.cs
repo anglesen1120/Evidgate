@@ -68,6 +68,50 @@ public static class UsageMeteringRules
     private static readonly string[] RouteMappings =
         ["MapGet(", "MapPost(", "MapPut(", "MapPatch(", "MapDelete(", "MapGroup("];
 
+    /// <summary>The gate question a hot path builds before it commits metered work.</summary>
+    private const string GateQuestion = "new QuotaCheckRequest(";
+
+    /// <summary>The member that decides whether the organization-wide counter is charged as well.</summary>
+    private const string ScopeMember = "IncludeTenantScope";
+
+    /// <summary>
+    /// Gate questions that leave the scope to the record's default, one violation each. The default asks about one
+    /// scope; a hot path that meters a project's work has to decide whether the organization's cap applies to it too,
+    /// and a silent default is how that decision is forgotten — the gate then admits work no org-wide limit counts.
+    /// </summary>
+    /// <param name="files">The scanned sources, repo-relative.</param>
+    /// <returns>One violation per question that does not name its scope.</returns>
+    public static IReadOnlyList<string> FindImplicitScopeViolations(IEnumerable<(string Path, string Text)> files) =>
+        [.. files
+            .Where(file => InSourceRoot(file.Path))
+            .SelectMany(file => Questions(file.Text)
+                .Where(arguments => !arguments.Contains(ScopeMember, StringComparison.Ordinal))
+                .Select(_ => $"{file.Path} builds a QuotaCheckRequest without {ScopeMember}: the scope it charges must be named"))];
+
+    /// <summary>The argument list of every gate question in the file, with its comments removed.</summary>
+    private static IEnumerable<string> Questions(string text)
+    {
+        var code = Code(text);
+
+        for (var at = code.IndexOf(GateQuestion, StringComparison.Ordinal);
+             at >= 0;
+             at = code.IndexOf(GateQuestion, at + GateQuestion.Length, StringComparison.Ordinal))
+        {
+            var depth = 0;
+
+            for (var index = at + GateQuestion.Length - 1; index < code.Length; index++)
+            {
+                depth += code[index] switch { '(' => 1, ')' => -1, _ => 0 };
+
+                if (depth == 0)
+                {
+                    yield return code[(at + GateQuestion.Length)..index];
+                    break;
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// Files that name the ledger from an HTTP surface, one violation each. This holds inside the allowed modules too:
     /// metering is an internal module call (00 §9.1), so a route that billed directly would be a second, unguarded path.

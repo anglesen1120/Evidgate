@@ -29,7 +29,10 @@ internal sealed class IngestionRateLimits : IValidatableObject
     [Range(1, 400_000, ErrorMessage = "EVIDGATE__INGESTION__RATELIMIT__PROJECTPERMITLIMIT must be between 1 and 400000")]
     public int ProjectPermitLimit { get; init; } = 480;
 
-    /// <summary>Length of the fixed window in seconds (default 60); it is also the ceiling of every <c>Retry-After</c>.</summary>
+    /// <summary>
+    /// Length of the fixed window in seconds (default 60); it is the ceiling of this limiter's own
+    /// <c>Retry-After</c>, never of the quota block's, whose wait runs to the end of the billing period.
+    /// </summary>
     [Range(1, 3600, ErrorMessage = "EVIDGATE__INGESTION__RATELIMIT__WINDOWSECONDS must be between 1 and 3600")]
     public int WindowSeconds { get; init; } = 60;
 

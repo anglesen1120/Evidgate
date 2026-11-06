@@ -58,6 +58,7 @@ public sealed class MetricCardinalityTests
         "written",
         "cap",
         "issue",
+        "kind",
     };
 
     /// <summary>Id-shaped key names that must never become a label (they would be one series per row).</summary>
@@ -157,6 +158,7 @@ public sealed class MetricCardinalityTests
         Assert.Contains("change_type", observedKeys);
         Assert.Contains("trigger", observedKeys);
         Assert.Contains("written", observedKeys);
+        Assert.Contains("kind", observedKeys);
 
         AssertInstrumentInventory(
             published.ToArray(),
