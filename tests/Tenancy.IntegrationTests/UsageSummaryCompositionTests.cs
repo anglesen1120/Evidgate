@@ -190,4 +190,19 @@ public sealed class UsageSummaryCompositionTests
                 QuotaLimit = limit,
             };
     }
+
+    /// <summary>Every refusal branch of the project-scope rule, and the one answer that lets the read through.</summary>
+    [Fact]
+    public void ProjectScope_RefusesEveryOutOfScopeCombination()
+    {
+        var own = Guid.CreateVersion7();
+        var other = Guid.CreateVersion7();
+
+        UsageProjectScope.Project(own, null, null).ShouldBeNull();
+        UsageProjectScope.Project(own, own, own).ShouldBeNull();
+        UsageProjectScope.Project(own, other, null)!.Code.ShouldBe("project_scope_mismatch");
+        UsageProjectScope.Project(own, null, other)!.Code.ShouldBe("project_scope_mismatch");
+        UsageProjectScope.Project(own, own, other)!.Code.ShouldBe("project_scope_mismatch");
+        UsageProjectScope.Project(own, other, own)!.Code.ShouldBe("project_scope_mismatch");
+    }
 }

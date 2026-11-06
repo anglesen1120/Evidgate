@@ -219,6 +219,57 @@ public sealed class UsageSummaryReadTests
         answer.ErrorCode.ShouldBe("forbidden");
     }
 
+    [Fact]
+    public async Task Summary_MemberWithoutUsageRead_Is403()
+    {
+        await using var world = await StartAsync();
+
+        var answer = await world.GetAsMemberWithRoleAsync(_fixture, "viewer", world.SummaryUrl());
+
+        answer.Status.ShouldBe(HttpStatusCode.Forbidden);
+        answer.ErrorCode.ShouldBe("forbidden");
+    }
+
+    /// <summary>A member naming an org it does not belong to is refused by the tenant pipeline (403), before the handler; 404 is for object ids.</summary>
+    [Fact]
+    public async Task Summary_ForeignOrgNamedInTheRoute_IsRefusedByTheTenantPipeline()
+    {
+        await using var world = await StartAsync();
+        var (otherOrg, _) = await world.AddOtherOrgAsync();
+
+        var answer = await world.Client.SendAsync(
+            HttpMethod.Get,
+            $"/v1/orgs/{otherOrg:D}/usage/summary",
+            TenancyApiFactory.Resolved(user: world.User, orgHeader: otherOrg));
+
+        answer.Status.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task Summary_UnknownProjectInOwnOrg_IsTheSame404AsAForeignProject()
+    {
+        await using var world = await StartAsync();
+        var (_, otherProject) = await world.AddOtherOrgAsync();
+
+        var unknown = await world.GetAsMemberAsync(world.SummaryUrl(Guid.CreateVersion7()));
+        var foreign = await world.GetAsMemberAsync(world.SummaryUrl(otherProject));
+
+        unknown.Status.ShouldBe(HttpStatusCode.NotFound);
+        foreign.Status.ShouldBe(unknown.Status);
+        foreign.ErrorCode.ShouldBe(unknown.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Summary_ServiceCredentialBoundToAnotherProject_IsRefusedByTheCeiling()
+    {
+        await using var world = await StartAsync();
+        var otherProject = await RegistryApi.CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("sibling"));
+
+        var answer = await world.GetAsServiceAsync(world.SummaryUrl(otherProject), Permissions.Usage.Read);
+
+        answer.Status.ShouldBe(HttpStatusCode.Forbidden);
+    }
+
     /// <summary>One world whose host reports <see cref="Fixed"/> as the current instant.</summary>
     private Task<UsageReadsWorld> StartAsync()
     {

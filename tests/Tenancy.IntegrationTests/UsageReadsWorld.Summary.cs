@@ -20,6 +20,17 @@ internal sealed partial class UsageReadsWorld
     internal Task<ApiAnswer> GetAsMemberAsync(string url) =>
         Client.SendAsync(HttpMethod.Get, url, TenancyApiFactory.Resolved(user: User, orgHeader: Org));
 
+    /// <summary>Sends a GET as a member of this world's org who holds only the given built-in role.</summary>
+    /// <param name="fixture">The fixture that owns the database.</param>
+    /// <param name="roleCode">The built-in role code granted to the new member.</param>
+    /// <param name="url">The route.</param>
+    internal async Task<ApiAnswer> GetAsMemberWithRoleAsync(PostgresTenancyFixture fixture, string roleCode, string url)
+    {
+        var member = await RegistryApi.AddMemberAsync(
+            fixture, Client, Database.Name, Org, TenancyApiFactory.Resolved(user: User, orgHeader: Org), roleCode);
+        return await Client.SendAsync(HttpMethod.Get, url, TenancyApiFactory.Resolved(user: member, orgHeader: Org));
+    }
+
     /// <summary>Sends a GET as a service credential naming this org and project with the given permissions.</summary>
     /// <param name="url">The route.</param>
     /// <param name="permissions">The permissions the credential asks for.</param>
