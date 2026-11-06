@@ -158,7 +158,22 @@ public sealed partial class IngestQuotaTests
         var answer = await PostAsync(world, EventBatch(world, 1, 3));
 
         answer.Status.ShouldBe(enabled ? HttpStatusCode.TooManyRequests : HttpStatusCode.OK, answer.ErrorMessage);
-        (await ReadAsync(counters, world)).ShouldBe(before);
+        var after = (await ReadAsync(counters, world)).ShouldNotBeNull();
+
+        if (enabled)
+        {
+            // The refusal is what a switched-on gate answers, and the stamp the route writes after the rollback is the
+            // only counter write it leaves: the switch itself neither charges nor warns.
+            after.Used.ShouldBe(before.Used);
+            after.WarnedAt.ShouldBeNull();
+            after.BlockedAt.ShouldNotBeNull("the refusal is stamped durably, after the batch's rollback");
+            after.Version.ShouldBe(before.Version + 1, "and the stamp is the one write the refusal made");
+        }
+        else
+        {
+            after.ShouldBe(before, "a switched-off gate reads and writes no counter");
+        }
+
         (await WarningRowsAsync(world)).ShouldBe(0L);
         (await EventRowsAsync(world)).ShouldBe(enabled ? 0 : 3);
     }

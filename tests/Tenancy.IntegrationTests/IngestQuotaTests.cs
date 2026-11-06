@@ -325,6 +325,11 @@ public sealed partial class IngestQuotaTests
         world.Host.Services.GetRequiredService<TimeProvider>().GetUtcNow()
             .ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
+    /// <summary>The billing month before <see cref="Period"/>: the month a rollover carries its limit from.</summary>
+    private static string PreviousMonth(IngestTestWorld world) =>
+        world.Host.Services.GetRequiredService<TimeProvider>().GetUtcNow().AddMonths(-1)
+            .ToString("yyyy-MM", CultureInfo.InvariantCulture);
+
     private static int SecondsUntilNextPeriod(IngestTestWorld world)
     {
         var now = world.Host.Services.GetRequiredService<TimeProvider>().GetUtcNow();

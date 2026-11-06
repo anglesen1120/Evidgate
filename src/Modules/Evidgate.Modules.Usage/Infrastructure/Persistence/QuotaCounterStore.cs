@@ -173,25 +173,25 @@ internal sealed class QuotaCounterStore(ITenantDb db)
             cancellationToken);
 
     /// <summary>
-    /// Carries one scope's latest earlier month's limit and warning line into <paramref name="period"/>, with no usage
-    /// and no threshold stamp. Nothing is written when the period already has a counter or the scope has no earlier
-    /// one; the caller re-runs the reservation either way, so one carried row is what every concurrent first caller of
-    /// the month reads.
+    /// Carries every scope's latest earlier month's limit and warning line into <paramref name="period"/>, with no
+    /// usage and no threshold stamp, in lock order and before any counter is locked. Nothing is written for a scope
+    /// that already has a counter of the period or has no earlier one; the caller re-runs the reservation either way,
+    /// so one carried row per scope is what every concurrent first caller of the month reads.
     /// </summary>
     /// <param name="orgId">The tenant of the open scope.</param>
     /// <param name="period">The billing month, <c>YYYY-MM</c>.</param>
     /// <param name="metric">The wire metric name.</param>
-    /// <param name="scopeKey">The one scope to carry, a key from the reservation's answer.</param>
+    /// <param name="scopeKeys">The scopes the call charges, the tenant's first.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     internal Task<int> CarryForwardAsync(
         Guid orgId,
         string period,
         string metric,
-        Guid scopeKey,
+        Guid[] scopeKeys,
         CancellationToken cancellationToken) =>
         db.ExecuteAsync(
             UsageQuotaGateSql.CarryForward,
-            new { org_id = orgId, scope_key = scopeKey, period, metric },
+            new { org_id = orgId, scope_keys = scopeKeys, period, metric },
             cancellationToken);
 
     /// <summary>

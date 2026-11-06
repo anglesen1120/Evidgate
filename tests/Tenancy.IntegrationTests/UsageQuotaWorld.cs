@@ -105,6 +105,15 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
     }
 
     /// <summary>
+    /// How many gate questions one test may have in flight. Each opens its own tenant scope and so its own
+    /// connection, and the container answers 53300 (no slots for a non-superuser) long before a fifty-caller race has
+    /// raced anything; the bound keeps the race and stays inside that budget.
+    /// </summary>
+    private const int GateCallConcurrency = 8;
+
+    private static readonly SemaphoreSlim GateCalls = new(GateCallConcurrency);
+
+    /// <summary>
     /// Asks the registered gate one question inside its own tenant scope and commits unless the test asks
     /// otherwise — the caller's transaction of the real hot path.
     /// </summary>
@@ -118,19 +127,28 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
     {
         var token = TestContext.Current.CancellationToken;
 
-        await using var services = Api.Services.CreateAsyncScope();
-        var provider = services.ServiceProvider;
-        var scopes = provider.GetRequiredService<ITenantScopeFactory>();
-        await using var scope = await scopes.BeginAsync(org ?? Org, null, false, token);
-        var gate = provider.GetRequiredService<IQuotaGate>();
+        await GateCalls.WaitAsync(token).ConfigureAwait(false);
 
-        var result = await gate.CheckAsync(request, token).ConfigureAwait(false);
-        if (commit)
+        try
         {
-            await scope.CommitAsync(token).ConfigureAwait(false);
-        }
+            await using var services = Api.Services.CreateAsyncScope();
+            var provider = services.ServiceProvider;
+            var scopes = provider.GetRequiredService<ITenantScopeFactory>();
+            await using var scope = await scopes.BeginAsync(org ?? Org, null, false, token);
+            var gate = provider.GetRequiredService<IQuotaGate>();
 
-        return result;
+            var result = await gate.CheckAsync(request, token).ConfigureAwait(false);
+            if (commit)
+            {
+                await scope.CommitAsync(token).ConfigureAwait(false);
+            }
+
+            return result;
+        }
+        finally
+        {
+            GateCalls.Release();
+        }
     }
 
     /// <summary>

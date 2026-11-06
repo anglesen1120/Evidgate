@@ -7,12 +7,17 @@ namespace Evidgate.Modules.Usage.Application.Quota;
 
 /// <summary>
 /// <see cref="IQuotaBlockStamp"/>: the gate's refusal stamp, written after its caller rolled the transaction that held
-/// it back. The scope is the service's own — a refusal has already ended the caller's — and the statement is the
+/// it back. The scope is the service's own — a refusal has already ended the caller's — and the statements are the
 /// gate's, so the stamp names exactly the counters the refused call charged.
+/// <para>
+/// A refusal at the first call of a period is carried by the same rollback, so the stamp creates the call's missing
+/// counters first (from the previous period, in lock order, before any is locked) and stamps the ones without room in
+/// the same transaction: without the carry the stamp would match no row and no operator would ever see the block.
+/// </para>
 /// <para>
 /// The stamp is a report of a refusal that already happened, not part of the decision: a scope that the block did not
 /// leave without room, a counter that already carries the stamp and a scope with no counter row all write nothing, so a
-/// repeated refusal costs one statement and no version bump.
+/// repeated refusal costs one statement and no lock at all.
 /// </para>
 /// </summary>
 internal sealed class QuotaBlockStamp(ITenantScopeFactory scopes, QuotaCounterStore store) : IQuotaBlockStamp
@@ -22,25 +27,26 @@ internal sealed class QuotaBlockStamp(ITenantScopeFactory scopes, QuotaCounterSt
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // A call that could not add a unit was never refused by a limit, and the statement's predicate would agree
-        // with an empty quantity: skipping it keeps a caller bug (the gate throws on it) from writing a stamp.
-        if (request.Quantity <= 0)
+        // A question the gate would have refused before writing cannot have produced a block, so a stamp for it
+        // would report nothing: the same bound the gate enforces keeps a caller bug from writing a counter here.
+        if (!QuotaCheckRequestRules.IsValid(request))
         {
             return;
         }
+
+        var scopeKeys = QuotaScopeKeys.Of(request);
+        var metric = UsageMetricWire.ToWireValue(request.Metric);
 
         await using var scope = await scopes
             .BeginAsync(orgId, projectId: null, readOnlyTransaction: false, cancellationToken)
             .ConfigureAwait(false);
 
         await store
-            .StampBlockedAsync(
-                orgId,
-                request.Period,
-                UsageMetricWire.ToWireValue(request.Metric),
-                QuotaScopeKeys.Of(request),
-                request.Quantity,
-                cancellationToken)
+            .CarryForwardAsync(orgId, request.Period, metric, scopeKeys, cancellationToken)
+            .ConfigureAwait(false);
+
+        await store
+            .StampBlockedAsync(orgId, request.Period, metric, scopeKeys, request.Quantity, cancellationToken)
             .ConfigureAwait(false);
 
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);

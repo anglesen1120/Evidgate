@@ -54,10 +54,11 @@ public sealed partial class UsageQuotaGateTests
         project.Used.ShouldBe(0m, "and never leaks into the scope that had room");
         project.BlockedAt.ShouldBeNull("a counter with room is not the one the refusal names");
 
-        // The positive control: one unit fits both scopes, and both are charged.
+        // The positive control: one unit fits both scopes, and both are charged. It takes the organization's counter
+        // to 9 of 10, which is over its warning line, so the call is admitted with a warning rather than plain Ok.
         var fits = await world.CheckAsync(OrgRequest(world, 1m));
 
-        fits.Decision.ShouldBe(QuotaDecision.Ok);
+        fits.Decision.ShouldBe(QuotaDecision.Warn);
         (await world.CounterAsync(project: null)).ShouldNotBeNull().Used.ShouldBe(9m);
         (await world.CounterAsync(project: world.Project)).ShouldNotBeNull().Used.ShouldBe(1m);
     }
@@ -80,9 +81,10 @@ public sealed partial class UsageQuotaGateTests
         (await world.CounterAsync(project: null)).ShouldNotBeNull().Used.ShouldBe(
             0m, "the organization counter is never charged for work it refused");
 
+        // The unit is admitted and takes the project's counter to 10 of 10: the last unit inside the limit warns.
         var fits = await world.CheckAsync(OrgRequest(world, 1m));
 
-        fits.Decision.ShouldBe(QuotaDecision.Ok);
+        fits.Decision.ShouldBe(QuotaDecision.Warn);
         (await world.CounterAsync(project: world.Project)).ShouldNotBeNull().Used.ShouldBe(Limit);
         (await world.CounterAsync(project: null)).ShouldNotBeNull().Used.ShouldBe(1m);
     }
@@ -214,7 +216,8 @@ public sealed partial class UsageQuotaGateTests
             2m, "the scope that already had a counter is charged once, not once before the carry and once after");
         (await world.CounterAsync(project: world.Project, period: Period)).ShouldNotBeNull().Used.ShouldBe(
             2m, "and the carried scope pays the same units");
-        (await world.CounterCountAsync()).ShouldBe(4L, "two scopes, two periods");
+        (await world.CounterCountAsync()).ShouldBe(
+            3L, "the tenant's current counter and the project's carried one, beside the project's previous counter");
     }
 
     [Fact]
@@ -232,7 +235,8 @@ public sealed partial class UsageQuotaGateTests
             2m, "the current counter is charged once for the call");
         (await world.CounterAsync(project: null, period: Period)).ShouldNotBeNull().Used.ShouldBe(
             2m, "and the carried organization counter pays the same units");
-        (await world.CounterCountAsync()).ShouldBe(4L, "two scopes, two periods");
+        (await world.CounterCountAsync()).ShouldBe(
+            3L, "the project's current counter and the tenant's carried one, beside the tenant's previous counter");
     }
 
     [Fact]
@@ -254,11 +258,58 @@ public sealed partial class UsageQuotaGateTests
         carried.Used.ShouldBe(0m);
         carried.BlockedAt.ShouldNotBeNull("the refusal is stamped on the scope that refused");
 
+        // The unit is the only one the carried project limit has room for, so it is admitted and warns.
         var fits = await world.CheckAsync(OrgRequest(world, 1m));
 
-        fits.Decision.ShouldBe(QuotaDecision.Ok);
+        fits.Decision.ShouldBe(QuotaDecision.Warn);
         (await world.CounterAsync(project: null, period: Period)).ShouldNotBeNull().Used.ShouldBe(1m);
         (await world.CounterAsync(project: world.Project, period: Period)).ShouldNotBeNull().Used.ShouldBe(1m);
+    }
+
+    [Fact]
+    public async Task QuotaGate_Rollover_CreatesTheOrganizationCounterBeforeItTakesTheProjectLock()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedAsync(world, used: 0m, limit: Limit);
+        await world.SeedCounterAsync(new CounterSeed(
+            Guid.CreateVersion7(), ProjectId: null, PreviousPeriod, "results", 0m, Limit, WarnRatio));
+
+        // The other first caller of the month, holding its own uncommitted organization counter: it takes the
+        // organization's side of the lock order first and the project's second, as every charging call does. A gate
+        // that locked the project before it created the missing organization counter would wait for this caller's
+        // commit while holding the row this caller is about to ask for, and the two would deadlock.
+        await using var other = await world.BeginAppScopeAsync();
+        (await other.ExecuteAsync(
+            "insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit, warn_ratio) "
+            + "values (uuidv7(), @org_id, null, @period, 'results', 0, @limit, @warn_ratio)",
+            ("org_id", world.Org),
+            ("period", Period),
+            ("limit", Limit),
+            ("warn_ratio", WarnRatio))).ShouldBe(1);
+        var otherBackend = await other.ScalarAsync<int>("select pg_backend_pid()");
+
+        var rollover = world.CheckAsync(OrgRequest(world, 1m));
+
+        // Deterministic: the rollover is inside its carry-forward, waiting for that caller's transaction, before the
+        // caller asks for the project's row.
+        await world.WaitForBlockedByAsync(otherBackend);
+        (await other.ExecuteAsync(
+            "select 1 from public.quota_counter "
+            + "where org_id = @org_id and project_id = @project_id and period = @period for update",
+            ("org_id", world.Org),
+            ("project_id", world.Project),
+            ("period", Period))).ShouldBe(1);
+        await other.CommitAsync();
+
+        var answer = await rollover;
+
+        answer.Decision.ShouldBe(QuotaDecision.Ok);
+        var tenant = (await world.CounterAsync(project: null, period: Period)).ShouldNotBeNull();
+        tenant.Used.ShouldBe(1m, "the rollover charged the carried counter, not a second copy of it");
+        tenant.Limit.ShouldBe(Limit);
+        (await world.CounterAsync(project: world.Project, period: Period)).ShouldNotBeNull().Used.ShouldBe(1m);
+        (await world.CounterCountAsync()).ShouldBe(
+            3L, "the project's current counter and the carried organization counter, beside the previous month's");
     }
 
     [Fact]

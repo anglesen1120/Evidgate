@@ -49,6 +49,33 @@ public class UsageMeteringBoundaryTests
     }
 
     [Fact]
+    public void Every_Gate_Question_Names_The_Scope_It_Charges()
+    {
+        var files = SourceFiles();
+
+        UsageMeteringRules.FindImplicitScopeViolations(files)
+            .ShouldBeEmpty(string.Join(Environment.NewLine, UsageMeteringRules.FindImplicitScopeViolations(files)));
+
+        // Non-vacuity: the ingest admission is the question this rule was written for, and an empty list means it saw
+        // the call and the call named both of its scopes.
+        files.ShouldContain(file => file.Path.EndsWith("IngestQuotaAdmission.cs", StringComparison.Ordinal)
+            && file.Text.Contains("new QuotaCheckRequest(", StringComparison.Ordinal)
+            && file.Text.Contains("IncludeTenantScope: true", StringComparison.Ordinal));
+
+        // The default is how a new hot path forgets the organization's counter, and a comment naming the type is not
+        // a call.
+        var implicitScope = UsageMeteringRules.FindImplicitScopeViolations(
+        [
+            ("src/Modules/Evidgate.Modules.Ingestion/Application/OtherAdmission.cs",
+                "var question = new QuotaCheckRequest(UsageMetric.Results, period, project, quantity);"),
+            ("src/Modules/Evidgate.Modules.Usage/Application/Quota/Notes.cs",
+                "// new QuotaCheckRequest(UsageMetric.Results, period, project, quantity) is the old shape"),
+        ]);
+
+        implicitScope.ShouldHaveSingleItem().ShouldContain("IncludeTenantScope");
+    }
+
+    [Fact]
     public void Metering_Handler_Reaches_No_Http_Client()
     {
         var handler = SourceFiles().Where(file => file.Path == UsageMeteringRules.MeteringHandlerPath).ShouldHaveSingleItem();

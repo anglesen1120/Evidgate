@@ -4,6 +4,7 @@
 using System.Net;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Usage.Application.Commands;
 using Evidgate.Modules.Usage.Application.Quota;
@@ -101,12 +102,7 @@ public sealed partial class IngestQuotaTests
 
         // A second project of the same org, with its own run and its own producer token: the org-wide counter is what
         // both projects' batches have to fit in.
-        using var setup = world.Api.CreateClient();
-        var secondProject = await RegistryApi.CreateProjectAsync(
-            setup, world.User, world.Org, Unique.Slug("shared-cap"));
-        var secondPlan = await world.SeedRunInProjectAsync(secondProject);
-        await counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), secondProject, Period(world), "results", 0m, 100m, WarnRatio, Org: world.Org));
+        var (secondProject, secondPlan) = await SeedSecondProjectAsync(world, counters, "shared-cap");
 
         var (otherOrg, otherProject) = await world.CreateOtherOrgAsync(Unique.Slug("quota-foreign"));
         await counters.SeedCounterAsync(new CounterSeed(
@@ -149,6 +145,30 @@ public sealed partial class IngestQuotaTests
         (await counters.CounterAsync(otherOrg, project: null, Period(world))).ShouldBe(foreignTenant);
     }
 
+    /// <summary>
+    /// Another project of this org with a run of its own: the run gets a producer slot, because the events route binds
+    /// one before it reads any counter and a run without one answers <c>422 unknown_producer</c>.
+    /// </summary>
+    /// <param name="world">The world whose org the project joins.</param>
+    /// <param name="counters">The quota world that seeds the project's own counter.</param>
+    /// <param name="slug">The project's slug suffix.</param>
+    private async Task<(Guid Project, PlannedExecutionSeeder.SeededRun Plan)> SeedSecondProjectAsync(
+        IngestTestWorld world,
+        UsageQuotaWorld counters,
+        string slug)
+    {
+        using var setup = world.Api.CreateClient();
+        var project = await RegistryApi.CreateProjectAsync(setup, world.User, world.Org, Unique.Slug(slug));
+        var plan = await world.SeedRunInProjectAsync(project);
+
+        await IngestTestWorld.SeedSlotsAsync(
+            _fixture, world.Database, world.Org, plan.RunId, count: 1, boundJti: null);
+        await counters.SeedCounterAsync(new CounterSeed(
+            Guid.CreateVersion7(), project, Period(world), "results", 0m, 100m, WarnRatio, Org: world.Org));
+
+        return (project, plan);
+    }
+
     [Fact]
     public async Task IngestEvents_FirstQuotaBlock_StampsBlockedAtDurably()
     {
@@ -171,6 +191,35 @@ public sealed partial class IngestQuotaTests
     }
 
     [Fact]
+    public async Task IngestEvents_FirstBatchOfANewPeriod_StampsTheCarriedCounter()
+    {
+        await using var world = await StartIngestAsync();
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+
+        // The period has no counter yet: its limit is the previous month's, and that limit has room for one of the
+        // batch's two units.
+        await SeedTenantAsync(counters, world, used: 0m, limit: 100m);
+        await counters.SeedCounterAsync(new CounterSeed(
+            Guid.CreateVersion7(), world.Project, PreviousMonth(world), "results", 0m, 1m, WarnRatio,
+            Org: world.Org));
+
+        var refused = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L));
+
+        refused.Status.ShouldBe(HttpStatusCode.TooManyRequests, refused.ErrorMessage);
+        refused.ErrorCode.ShouldBe("quota_exceeded");
+
+        // The batch rolled back, and the counter the gate stamped rolled back with it: the route's own stamp creates
+        // the carried counter and stamps that one, or no operator would ever see this block.
+        var carried = (await ReadAsync(counters, world)).ShouldNotBeNull();
+        carried.Used.ShouldBe(0m, "the refused batch charged nothing");
+        carried.Limit.ShouldBe(1m, "the carried limit is the previous month's");
+        carried.BlockedAt.ShouldNotBeNull("the refusal is stamped on the counter the stamp created");
+        (await ReadTenantAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(0m, "nor did it charge the tenant");
+        (await EventRowsAsync(world)).ShouldBe(0);
+        (await BatchRowsAsync(world)).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task IngestEvents_RepeatedBlock_DoesNotRewriteTheStamp()
     {
         await using var world = await StartIngestAsync();
@@ -179,13 +228,22 @@ public sealed partial class IngestQuotaTests
 
         (await PostBatchAsync(world, (Guid.CreateVersion7(), 1L))).Status.ShouldBe(HttpStatusCode.TooManyRequests);
         var stamped = (await ReadAsync(counters, world)).ShouldNotBeNull();
+        var before = await CounterXminAsync(world);
 
         var again = await PostBatchAsync(world, (Guid.CreateVersion7(), 2L));
 
         again.Status.ShouldBe(HttpStatusCode.TooManyRequests, again.ErrorMessage);
         (await ReadAsync(counters, world)).ShouldBe(
             stamped, "a refusal whose stamp already exists writes nothing, so it cannot bump the version");
+        (await CounterXminAsync(world)).ShouldBe(
+            before, "and the stamp statement leaves an already-stamped counter unlocked and unwritten");
     }
+
+    /// <summary>The counter's tuple version: an update writes a new tuple with a new <c>xmin</c>, so an equal value proves no write.</summary>
+    private static Task<string> CounterXminAsync(IngestTestWorld world) =>
+        world.ScalarAsync<string>(
+            $"select xmin::text from public.quota_counter where org_id = '{world.Org:D}' "
+            + $"and project_id = '{world.Project:D}' and period = '{Period(world)}' and metric = 'results'");
 
     [Fact]
     public async Task IngestEvents_BlockedByTenantScope_StampsTheTenantCounter()
@@ -255,7 +313,7 @@ public sealed partial class IngestQuotaTests
         var provider = services.ServiceProvider;
         using var tenant = provider.GetRequiredService<IRequestTenantContextSetter>().Publish(world.Org, null);
         using var principal = provider.GetRequiredService<IRequestPrincipalSetter>()
-            .Publish(RequestPrincipal.Member(world.User));
+            .Publish(RequestPrincipal.Service(world.Project, [Permissions.Billing.Write]));
 
         return await provider.GetRequiredService<IMediator>().Send(
             new RaiseQuotaLimit(world.Project, Period(world), UsageMetric.Results, limit, RaiseReason),

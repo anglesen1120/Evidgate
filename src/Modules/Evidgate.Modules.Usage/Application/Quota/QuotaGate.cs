@@ -45,9 +45,10 @@ internal sealed class QuotaGateOptions
 /// <para>
 /// A month starts with no counter, so the gate carries each scope's previous month's limit and warning line into it
 /// before answering, and only the scopes that need it: a configured limit covers every later month instead of lapsing
-/// at the rollover. The call that moves a counter's warning stamp from null to a value also enqueues one warning task
-/// per such counter in the same transaction, so the announcement and the counter it announces commit or roll back
-/// together.
+/// at the rollover. The carry runs before any counter is locked, and it creates every missing counter of the call in
+/// lock order, so a rollover never waits for the organization's row while holding the project's. The call that moves a
+/// counter's warning stamp from null to a value also enqueues one warning task per such counter in the same transaction,
+/// so the announcement and the counter it announces commit or roll back together.
 /// </para>
 /// </summary>
 internal sealed class QuotaGate(
@@ -67,7 +68,7 @@ internal sealed class QuotaGate(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        Validate(request);
+        QuotaCheckRequestRules.EnsureValid(request);
 
         if (!options.Value.Enabled)
         {
@@ -92,8 +93,9 @@ internal sealed class QuotaGate(
     }
 
     /// <summary>
-    /// The first statement, plus the one carry-forward a month without a counter needs per scope: each scope's latest
-    /// earlier month lends it its limit, and the same statement runs again against the rows that left.
+    /// The first statement, plus the one carry-forward a month without a counter needs for the call's scopes: each
+    /// scope's latest earlier month lends it its limit, every missing counter of the period is created at once in lock
+    /// order, and the same statement runs again against rows that now all exist.
     /// </summary>
     private async Task<IReadOnlyList<QuotaCounterRow>> ReserveWithCarryAsync(
         Guid orgId,
@@ -104,20 +106,17 @@ internal sealed class QuotaGate(
     {
         var answer = await ReserveAsync(orgId, request, metric, scopeKeys, cancellationToken).ConfigureAwait(false);
 
-        var carrying = answer.Where(row => row.NeedsCarry).ToList();
-        if (carrying.Count == 0)
+        if (!answer.Any(row => row.NeedsCarry))
         {
             return answer;
         }
 
-        // One carry per scope that has a limit to inherit: the statement copies exactly one row, so two scopes need
-        // two runs and neither can borrow the other's limit.
-        foreach (var scope in carrying)
-        {
-            await store
-                .CarryForwardAsync(orgId, request.Period, metric, scope.ScopeKey, cancellationToken)
-                .ConfigureAwait(false);
-        }
+        // Carried before any scope is locked, and one statement for every missing scope: the reservation holds no
+        // counter while it creates the others, so a rollover cannot take the project's lock and then wait for the
+        // organization's, which is the order a second caller's charge takes.
+        await store
+            .CarryForwardAsync(orgId, request.Period, metric, scopeKeys, cancellationToken)
+            .ConfigureAwait(false);
 
         answer = await ReserveAsync(orgId, request, metric, scopeKeys, cancellationToken).ConfigureAwait(false);
 
@@ -268,26 +267,6 @@ internal sealed class QuotaGate(
             counterId,
             QuotaWarningTask.IdempotencyKey(counterId),
             cancellationToken);
-
-    /// <summary>The caller bugs a request is refused for, before any statement runs.</summary>
-    private static void Validate(QuotaCheckRequest request)
-    {
-        if (request.Quantity <= 0)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(request),
-                request.Quantity,
-                "a quota check reserves a strictly positive quantity");
-        }
-
-        if (!UsagePeriod.IsQuotaPeriod(request.Period))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(request),
-                request.Period,
-                "a quota check reserves usage of one YYYY-MM billing month from 2000-01 to 2999-12");
-        }
-    }
 
     /// <summary>The audited operator path a blocked caller is told about.</summary>
     private static string RaisePath(Guid orgId) => $"/internal/operator/billing/orgs/{orgId:D}/quota-raise";
