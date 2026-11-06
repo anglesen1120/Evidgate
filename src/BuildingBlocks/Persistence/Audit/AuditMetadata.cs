@@ -202,46 +202,6 @@ public static partial class AuditMetadata
         return metadata;
     }
 
-    /// <summary>
-    /// The verdict on one metadata value on its own. <see cref="Validate"/> applies this same rule to every value
-    /// it accepts; a command that puts caller text into an audit row calls it up front, so that text is refused as
-    /// the request's own violation instead of failing the row after the write.
-    /// </summary>
-    /// <param name="value">The candidate value.</param>
-    /// <returns>The outcome, one of <see cref="MetadataValueOutcome"/>.</returns>
-    public static MetadataValueOutcome ValueOutcome(string? value)
-    {
-        if (value is null)
-        {
-            return MetadataValueOutcome.Missing;
-        }
-
-        if (value.Length > MaxValueLength)
-        {
-            return MetadataValueOutcome.TooLong;
-        }
-
-        return SecretShaped().IsMatch(value)
-            ? MetadataValueOutcome.SecretShaped
-            : MetadataValueOutcome.Accepted;
-    }
-
-    /// <summary>Why a metadata value would be refused: the rule <see cref="Validate"/> enforces on every value.</summary>
-    public enum MetadataValueOutcome
-    {
-        /// <summary>The value fits the rule.</summary>
-        Accepted = 0,
-
-        /// <summary>The value is null.</summary>
-        Missing,
-
-        /// <summary>The value is longer than <see cref="MaxValueLength"/> characters.</summary>
-        TooLong,
-
-        /// <summary>The value is shaped like a credential.</summary>
-        SecretShaped,
-    }
-
     // A long unbroken run of token characters, a JWT, or an authorization scheme prefix.
     [GeneratedRegex(@"(?i)(bearer\s+\S+|eyJ[\w-]{10,}\.|[A-Za-z0-9+/_\-]{40,}={0,2}|(secret|password|token)\s*[=:])", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex SecretShaped();
