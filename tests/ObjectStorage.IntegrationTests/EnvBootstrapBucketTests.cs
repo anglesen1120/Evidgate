@@ -10,11 +10,13 @@ namespace ObjectStorage.IntegrationTests;
 
 /// <summary>
 /// The per-environment bucket bootstrap against the SeaweedFS fixture: provision
-/// is re-runnable, verify reads the committed lifecycle rule back and refuses an
-/// anonymous read, and the production presigner uploads into the bucket the
-/// script created. The staging/prod public-access block is not exercised here:
-/// the emulator has no such sub-resource, and a real cloud is [OPEN] until the
-/// provider is picked (infra/README.md, "Bucket bootstrap").
+/// is re-runnable, verify requires one enabled <c>pending/</c> 1-day lifecycle
+/// rule and proves a canary object it stores is refused to an unsigned reader,
+/// and the production presigner uploads into the bucket the script created.
+/// A GetObject-only bucket policy is how a real deployment can make a stored
+/// object public, so a test publishes one and requires verify to refuse; the
+/// emulator's block-public-access sub-resource stays untested, and
+/// infra/README.md records that it is verified only on a real cloud.
 /// </summary>
 [Collection(SeaweedFsCollectionDefinition.Name)]
 [Trait("Category", "Docker")]
@@ -115,6 +117,15 @@ public sealed class EnvBootstrapBucketTests(SeaweedFsFixture fixture) : IDisposa
     [Fact]
     public async Task Verify_With_A_Wrong_Secret_Fails_Without_Printing_The_Secret()
     {
+        var bucket = FreshBucketName();
+        var provision = await RunScriptAsync("dev", "provision", bucket);
+        provision.ExitCode.ShouldBe(0, provision.Describe());
+
+        // The positive control: with the fixture's own secret the same bucket
+        // verifies, so the refusal below can only come from the wrong secret.
+        var control = await RunScriptAsync("dev", "verify", bucket);
+        control.ExitCode.ShouldBe(0, control.Describe());
+
         // Built at run time: a literal that looks like a credential would trip the
         // repository's secret-literal scan for no reason.
         var wrongSecret = $"wrong-{Guid.NewGuid():N}-credential";
@@ -122,11 +133,122 @@ public sealed class EnvBootstrapBucketTests(SeaweedFsFixture fixture) : IDisposa
         var result = await RunScriptAsync(
             "dev",
             "verify",
-            FreshBucketName(),
+            bucket,
             ("EVIDGATE__OBJECT__SECRETKEY", wrongSecret));
 
         result.ExitCode.ShouldNotBe(0);
         result.Output.ShouldNotContain(wrongSecret);
+        result.Output.ShouldNotContain(fixture.Target.SecretKey);
+    }
+
+    [Fact]
+    public async Task Verify_With_A_Disabled_Pending_Rule_Fails_On_The_Rule()
+    {
+        var bucket = FreshBucketName();
+        var provision = await RunScriptAsync("dev", "provision", bucket);
+        provision.ExitCode.ShouldBe(0, provision.Describe());
+
+        var control = await RunScriptAsync("dev", "verify", bucket);
+        control.ExitCode.ShouldBe(0, control.Describe());
+
+        var put = await SignedCurlAsync(
+            "PUT",
+            $"{fixture.Target.ServiceUrl.TrimEnd('/')}/{bucket}?lifecycle=",
+            LifecycleDocument(PendingRule("Disabled", "pending/", "1")));
+        put.ExitCode.ShouldBe(0, put.Describe());
+        put.Output.Trim().ShouldBe("200", put.Describe());
+
+        var result = await RunScriptAsync("dev", "verify", bucket);
+        result.ExitCode.ShouldNotBe(0);
+        result.Output.ShouldContain("lifecycle");
+        result.Output.ShouldNotContain(fixture.Target.SecretKey);
+    }
+
+    [Fact]
+    public async Task Verify_Refuses_A_Canary_Published_By_A_GetObject_Bucket_Policy()
+    {
+        var bucket = FreshBucketName();
+        var provision = await RunScriptAsync("dev", "provision", bucket);
+        provision.ExitCode.ShouldBe(0, provision.Describe());
+
+        var control = await RunScriptAsync("dev", "verify", bucket);
+        control.ExitCode.ShouldBe(0, control.Describe());
+
+        // GetObject only, on the prefix verify stores its canary under: the
+        // bucket stays unlistable, the stored object becomes readable by anyone.
+        var policy =
+            $$"""
+            {"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::{{bucket}}/bootstrap-verify/*"}]}
+            """;
+        var putPolicy = await SignedCurlAsync(
+            "PUT",
+            $"{fixture.Target.ServiceUrl.TrimEnd('/')}/{bucket}?policy=",
+            policy);
+        putPolicy.ExitCode.ShouldBe(0, putPolicy.Describe());
+        int.Parse(putPolicy.Output.Trim(), System.Globalization.CultureInfo.InvariantCulture)
+            .ShouldBeInRange(200, 299, putPolicy.Describe());
+
+        // Proof the policy took effect on an object of ours, so a later pass of
+        // verify cannot be explained away as "the emulator ignored the policy".
+        var probeKey = $"bootstrap-verify/published-{Guid.NewGuid():N}";
+        var probeUrl = $"{fixture.Target.ServiceUrl.TrimEnd('/')}/{bucket}/{probeKey}";
+        var putProbe = await SignedCurlAsync("PUT", probeUrl, "published canary");
+        putProbe.Output.Trim().ShouldBe("200", putProbe.Describe());
+        using var anonymous = await _http.GetAsync(
+            new Uri(probeUrl), TestContext.Current.CancellationToken);
+        ((int)anonymous.StatusCode).ShouldBe(
+            200, "the bucket policy must publish this key, or verify cannot detect a public canary");
+
+        var result = await RunScriptAsync("dev", "verify", bucket);
+        result.ExitCode.ShouldNotBe(0);
+        result.Output.ShouldContain("anonymous");
+        result.Output.ShouldNotContain(fixture.Target.SecretKey);
+    }
+
+    [Fact]
+    public async Task Verify_In_Staging_With_An_Http_Endpoint_Is_Refused()
+    {
+        var result = await RunScriptAsync(
+            "staging",
+            "verify",
+            FreshBucketName(),
+            ("EVIDGATE__OBJECT__ENDPOINT", "http://127.0.0.1:1"));
+
+        result.ExitCode.ShouldNotBe(0);
+        result.Output.ShouldContain("https");
+        result.Output.ShouldNotContain(fixture.Target.SecretKey);
+    }
+
+    [Fact]
+    public async Task Bootstrap_With_Endpoint_Userinfo_Is_Refused_Without_Printing_It()
+    {
+        var password = $"s3cr3t-{Guid.NewGuid():N}";
+        var userInfo = "bootstrap-user:" + password;
+
+        var result = await RunScriptAsync(
+            "dev",
+            "verify",
+            FreshBucketName(),
+            ("EVIDGATE__OBJECT__ENDPOINT", "http://" + userInfo + "@127.0.0.1:8333"));
+
+        result.ExitCode.ShouldNotBe(0);
+        result.Output.ShouldContain("credentials");
+        result.Output.ShouldNotContain(password);
+        result.Output.ShouldNotContain(fixture.Target.SecretKey);
+    }
+
+    [Fact]
+    public async Task Bootstrap_With_Endpoint_Starting_With_A_Dash_Is_Refused()
+    {
+        var result = await RunScriptAsync(
+            "dev",
+            "verify",
+            FreshBucketName(),
+            ("EVIDGATE__OBJECT__ENDPOINT", "-o/tmp/evidgate-bootstrap-endpoint"));
+
+        result.ExitCode.ShouldNotBe(0);
+        result.Output.ShouldContain("must not start with");
+        result.Output.ShouldNotContain(fixture.Target.SecretKey);
     }
 
     private async Task<ScriptResult> RunScriptAsync(
@@ -161,9 +283,7 @@ public sealed class EnvBootstrapBucketTests(SeaweedFsFixture fixture) : IDisposa
 
         // A cleared environment: an inherited EVIDGATE_* value must not reach the
         // script, or a failing case could pass on the machine's own configuration.
-        startInfo.Environment.Clear();
-        startInfo.Environment["PATH"] =
-            Environment.GetEnvironmentVariable("PATH") ?? "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+        ClearEnvironment(startInfo);
         foreach (var (name, value) in variables)
         {
             if (value is not null)
@@ -172,8 +292,70 @@ public sealed class EnvBootstrapBucketTests(SeaweedFsFixture fixture) : IDisposa
             }
         }
 
+        return await ExecuteAsync(startInfo, null, $"bootstrap-bucket.sh {environment} {action}");
+    }
+
+    /// <summary>
+    /// Sends one signed curl request and returns the HTTP status it printed: the
+    /// credentials ride a configuration on stdin, so they never reach the
+    /// process arguments.
+    /// </summary>
+    private async Task<ScriptResult> SignedCurlAsync(string method, string url, string? body)
+    {
+        var startInfo = new ProcessStartInfo("curl")
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        ClearEnvironment(startInfo);
+        foreach (var argument in new[]
+        {
+            "--config", "-",
+            "--request", method,
+            "--silent", "--show-error",
+            "--output", "/dev/null",
+            "--write-out", "%{http_code}",
+            url,
+        })
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        var config =
+            $"aws-sigv4 = \"aws:amz:{fixture.Target.Region}:s3\"\n" +
+            $"user = \"{fixture.Target.AccessKey}:{fixture.Target.SecretKey}\"\n";
+        if (body is not null)
+        {
+            config += $"data-binary = \"{CurlConfigValue(body)}\"\n";
+        }
+
+        return await ExecuteAsync(startInfo, config, $"{method} {url}");
+    }
+
+    /// <summary>
+    /// Escapes a value for a curl configuration line: an unescaped quote or
+    /// backslash would end or alter the value, and a JSON policy carries both.
+    /// </summary>
+    private static string CurlConfigValue(string value) =>
+        value.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal);
+
+    private static async Task<ScriptResult> ExecuteAsync(
+        ProcessStartInfo startInfo,
+        string? standardInput,
+        string label)
+    {
         using var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("could not start bootstrap-bucket.sh");
+            ?? throw new InvalidOperationException($"could not start {label}");
+        if (standardInput is not null)
+        {
+            await process.StandardInput.WriteAsync(standardInput.AsMemory(), CancellationToken.None);
+            await process.StandardInput.FlushAsync(CancellationToken.None);
+            process.StandardInput.Close();
+        }
+
         var stdout = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
         var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
 
@@ -186,13 +368,30 @@ public sealed class EnvBootstrapBucketTests(SeaweedFsFixture fixture) : IDisposa
         {
             process.Kill(entireProcessTree: true);
             throw new InvalidOperationException(
-                $"bootstrap-bucket.sh {environment} {action} did not finish within {ScriptTimeout.TotalSeconds}s");
+                $"{label} did not finish within {ScriptTimeout.TotalSeconds}s");
         }
 
         var output = await stdout;
         output += await stderr;
 
         return new ScriptResult(process.ExitCode, output);
+    }
+
+    private static string LifecycleDocument(string rules) =>
+        $"<LifecycleConfiguration>{rules}</LifecycleConfiguration>";
+
+    private static string PendingRule(string status, string prefix, string days) =>
+        $"<Rule><ID>evidgate-pending-24h</ID><Filter><Prefix>{prefix}</Prefix></Filter>" +
+        $"<Status>{status}</Status><Expiration><Days>{days}</Days></Expiration></Rule>";
+
+    // A cleared environment: an inherited EVIDGATE_*, proxy or S3 setting must
+    // not reach the child, or a failing case could pass on the machine's own
+    // configuration and a passing one could depend on it.
+    private static void ClearEnvironment(ProcessStartInfo startInfo)
+    {
+        startInfo.Environment.Clear();
+        startInfo.Environment["PATH"] =
+            Environment.GetEnvironmentVariable("PATH") ?? "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
     }
 
     private S3ObjectStorage Adapter(string bucket) => new(Options.Create(new ObjectStorageOptions

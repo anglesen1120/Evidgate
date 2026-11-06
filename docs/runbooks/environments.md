@@ -298,12 +298,24 @@ steps, run in this order because each one's evidence depends on the previous one
    password for those three roles. It refuses, naming the missing roles, until
    step 2 has run.
 4. `scripts/env/bootstrap-db.sh <env> verify` — read-only assertions as superuser:
-   the role set, the least-privilege attributes, `evidgate_app` owning nothing, and
-   ENABLE + FORCE row level security on every `public` table that
+   the role set, the least-privilege attributes (all four may log in; none carries
+   SUPERUSER, BYPASSRLS, REPLICATION, CREATEDB or CREATEROLE beyond the owner's
+   CREATEROLE), no application role being a member of any other role,
+   `evidgate_app` owning nothing, and ENABLE + FORCE row level security on every
+   `public` table that
    [`../../contracts/rls-exceptions.txt`](../../contracts/rls-exceptions.txt) does
    not list as `mechanism`. It prints one `PASS`/`FAIL` line per check and exits
-   non-zero on any failure, naming the offender (a role, an attribute, an object
-   or a table).
+   non-zero on any failure, naming the offender (a role, an attribute, a
+   membership, an object or a table). Any membership of an application role in
+   another role fails, because `SET ROLE` into it is that role for every policy:
+   that covers the owner, another application role, a `pg_*` role, the bootstrap
+   superuser and a provider-supplied role alike, whether the edge is direct or
+   reached through a chain of `SET`/`INHERIT` edges. The one accepted edge is the
+   admin-only record PostgreSQL writes when `evidgate_owner` creates the three
+   application roles (no `inherit_option`, no `set_option`), which lets the owner
+   administer them but not act as them. This is why a managed environment that
+   grants a provider role to `evidgate_owner` on purpose must record that decision:
+   `verify` fails and names it rather than assuming it is safe.
 
 The same two superuser statements run inside `scripts/dev/db-init.sh`, which
 sources [`../../scripts/env/lib-db.sh`](../../scripts/env/lib-db.sh). There is no
@@ -317,7 +329,7 @@ drift apart.
 | `EVIDGATE_DB_NAME` | `evidgate` | `evidgate_staging` | `evidgate_prod` |
 | `EVIDGATE_DB_SUPERUSER` | `postgres` | required, no default | required, no default |
 | `EVIDGATE_DB_SUPERUSER_PASSWORD` | `postgres` | required, no default | required, no default |
-| `EVIDGATE_DB_CONTAINER` | optional: run `psql` through `docker exec -i <name>` | unset | unset |
+| `EVIDGATE_DB_CONTAINER` | optional: run `psql` through `docker exec -i <name>` | refused | refused |
 | `EVIDGATE_BOOTSTRAP_CONFIRM_ENV` | — | — | must be exactly `prod` |
 
 `database` reads `EVIDGATE_OWNER_PASSWORD`; `credentials` reads
@@ -334,6 +346,33 @@ stack. `EVIDGATE_DB_PORT` and `EVIDGATE_DB_SUPERUSER_PASSWORD` are `dev-stack`
 rows of the matrix; the rest of the table is read by the bootstrap script only,
 not by a .NET host, so those rows are outside the matrix for the same reason the
 web CSP input and the test switches are (see above).
+
+Four guards run before the script connects, so a refused bootstrap has created
+nothing:
+
+- **Every environment needs its own cluster.** `evidgate_owner` and the three
+  application roles are cluster-wide, so two environments on one server would
+  share them: the prod roles would carry whatever staging granted, and the other
+  way round. `staging` therefore refuses `EVIDGATE_DB_NAME=evidgate_prod` and
+  `prod` refuses `evidgate_staging`, and the same rule is why a separate server,
+  not another database, is what separates the two.
+- **`EVIDGATE_DB_CONTAINER` is dev-only.** In staging and prod it is refused by
+  name: `docker exec` would run `psql` in a local container and bootstrap the
+  wrong database. In dev it is the normal path on a host without `psql`, and it
+  also bypasses the host rule below.
+- **Dev connects to loopback only** unless `EVIDGATE_DB_CONTAINER` is set. A
+  `EVIDGATE_DB_HOST` such as a shared server is refused by name, so a dev
+  bootstrap cannot create the four roles on a server someone else uses.
+- **`EVIDGATE_DB_NAME` must be a plain identifier**, matching
+  `^[a-z_][a-z0-9_]{0,62}$`; anything else is refused naming the key.
+
+Staging and prod export `PGSSLMODE=require` when the deploy has not set it, so a
+managed server never receives the superuser password over an unencrypted
+connection. The value the deploy sets wins, which keeps a provider that requires
+a different mode (`verify-full` with its CA) in charge of its own policy. The
+shared [`../../scripts/env/lib-db.sh`](../../scripts/env/lib-db.sh) disables
+statement and error-statement logging in the session that sets the four role
+passwords, so neither the `ALTER` nor a failure of it can reach a server log.
 
 **Only the deploy identity runs `database` and `credentials`.** They create or
 alter roles as the database superuser, and no runtime process holds that

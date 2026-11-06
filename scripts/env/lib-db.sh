@@ -88,6 +88,12 @@ evg_db_psql() {
 # rerun changes no attribute.
 evg_db_create_owner_and_database() {
   evg_db_psql postgres -v db_name="$1" <<'SQL'
+-- A password must not reach a server log: log_statement would record the ALTER
+-- itself, and log_min_error_statement would record it again if it failed. Only
+-- a superuser session may turn both off, which is what this connection is.
+set log_statement = 'none';
+set log_min_error_statement = 'panic';
+
 \getenv owner_password EVIDGATE_OWNER_PASSWORD
 
 do $$
@@ -110,6 +116,10 @@ SQL
 # superuser and never in a migration (00 §5.7 S3).
 evg_db_grant_application_logins() {
   evg_db_psql postgres <<'SQL'
+-- Same reason as the owner step: the three ALTERs carry passwords.
+set log_statement = 'none';
+set log_min_error_statement = 'panic';
+
 \getenv app_password EVIDGATE_APP_PASSWORD
 \getenv operator_password EVIDGATE_OPERATOR_PASSWORD
 \getenv worker_sched_password EVIDGATE_WORKER_SCHED_PASSWORD

@@ -86,10 +86,21 @@ environment side of the same bucket: `provision` creates the bucket if it is
 absent, replaces its lifecycle configuration with
 `infra/seaweedfs/pending-lifecycle.xml` (the `pending/` prefix, one-day expiry),
 and for staging and prod also puts the public-access block (all four flags
-true); `verify` reads the lifecycle rule back, requires an anonymous bucket GET
-and an anonymous object GET to be refused with 401/403, then proves a signed
-HEAD of the bucket is accepted. Both actions are re-runnable: an existing bucket
-is accepted and the rule is replaced with identical content.
+true). Replacing, not merging: `PUT ?lifecycle=` overwrites the bucket's whole
+lifecycle configuration, so a re-run drops any rule this file does not carry.
+Both actions are re-runnable: an existing bucket is accepted and the rule is
+replaced with identical content.
+
+`verify` reads the lifecycle configuration back and requires **one** rule
+carrying all three of `Status Enabled`, `Prefix pending/` and
+`Expiration Days 1`: a disabled rule expires nothing, and a predicate assembled
+from two different rules would not exist. It then requires an anonymous bucket
+GET to be refused (401/403), stores a canary object under `bootstrap-verify/`
+with a signed PUT, reads it back, requires an anonymous GET of that same stored
+key to be refused, deletes the canary (a trap deletes it after any later
+failure), and finally proves a signed HEAD of the bucket is accepted. The
+canary sits outside `pending/` on purpose: the lifecycle rule must not expire
+the object under test.
 
 ```console
 # dev: reads the same .env.dev / EVIDGATE_S3_* values scripts/dev/up.sh exports
@@ -108,24 +119,39 @@ the local stack's):
 | Variable                          | Meaning                                                              |
 | --------------------------------- | -------------------------------------------------------------------- |
 | `EVIDGATE__OBJECT__BUCKET`        | bucket to create and verify                                          |
-| `EVIDGATE__OBJECT__ENDPOINT`      | absolute http(s) S3 endpoint; empty selects the provider endpoint     |
+| `EVIDGATE__OBJECT__ENDPOINT`      | absolute S3 endpoint; this script requires it (https outside dev)    |
 | `EVIDGATE__OBJECT__REGION`        | SigV4 signing region                                                 |
 | `EVIDGATE__OBJECT__ACCESSKEY`     | signing identity (secret store on staging/prod)                      |
 | `EVIDGATE__OBJECT__SECRETKEY`     | signing secret (secret store on staging/prod)                        |
 | `EVIDGATE_BOOTSTRAP_CONFIRM_ENV`  | must be `prod` for a prod run; read from the environment, no default |
 
+The bootstrap requires the endpoint in every environment: it signs requests
+against a concrete host, so an empty value is a missing key here, not a request
+for the provider's own endpoint. (The deployed `EVIDGATE:Object` option keeps
+its documented fallback to the AWS regional endpoint; only this script needs the
+literal URL.) Every environment refuses an endpoint that starts with `-` (curl
+would read it as an option) or that carries credentials before its first `/`;
+staging and prod additionally refuse a plain-`http` endpoint, because the signing
+credentials would cross the link in clear.
+
 Signing goes through a curl configuration on stdin, so no credential reaches
 argv, `ps`, a temporary file or an output line; a missing variable is reported
-by name only. Staging and prod refuse a bucket name that
+by name only. Every request carries `--connect-timeout 10 --max-time 60`, so an
+unresponsive endpoint fails the run instead of hanging it, and a staging/prod
+request may not fall back to `http`. Staging and prod refuse a bucket name that
 `infra/<other>/environment.json` declares literally (a file that takes the name
 from the environment has no literal to compare, so that case is not checked).
 
 Two limits until the provider is chosen (O3): the staging/prod
 `PutPublicAccessBlock` request has not been exercised against a real cloud (the
 shape follows the S3 API; the emulator has no such sub-resource), and `verify`
-does not read that sub-resource back. `infra/seaweedfs/pending-lifecycle.xml`
-stays the single source of the lifecycle rule for every environment, so the dev
-stack, the fixture suites and this bootstrap cannot drift apart.
+does not read that sub-resource back. The same applies to the create path: on an
+`*.amazonaws.com` endpoint outside `us-east-1` the script sends
+`CreateBucketConfiguration/LocationConstraint` in the `CreateBucket` body, a
+cloud path that no test has run against AWS — the emulator path (no body) is the
+one the suites cover. `infra/seaweedfs/pending-lifecycle.xml` stays the single
+source of the lifecycle rule for every environment, so the dev stack, the
+fixture suites and this bootstrap cannot drift apart.
 
 # Container images (10.2.1-T1)
 

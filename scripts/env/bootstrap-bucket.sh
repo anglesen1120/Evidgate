@@ -4,17 +4,24 @@
 # outside dev, and verify what the store now answers.
 #
 # Idempotent: a bucket that already exists is accepted, and the lifecycle rule
-# is replaced with the same content on every run.
+# is replaced with the same content on every run, because provision replaces the
+# bucket's whole lifecycle configuration, not one rule inside it.
 #
 # usage: scripts/env/bootstrap-bucket.sh <dev|staging|prod> <provision|verify> [--help]
 #
 #   provision  create the bucket, put the lifecycle rule, and for staging/prod
 #              PUT the public-access block (all four flags true)
-#   verify     read the lifecycle rule back, prove an anonymous bucket/object
-#              read is refused, then HEAD the bucket with a signed request
+#   verify     require one enabled pending/ 1-day lifecycle rule, prove an
+#              anonymous bucket GET is refused, store a canary object under
+#              bootstrap-verify/ with a signed PUT, read it back, prove an
+#              anonymous GET of that same key is refused, delete the canary, and
+#              HEAD the bucket with a signed request
 #
-# Configuration, read from the environment only (staging and prod have no
-# defaults; dev falls back to the EVIDGATE_S3_* names scripts/dev/up.sh exports):
+# Configuration, read from the environment only (staging and prod take every
+# value from it, nothing falls back; dev falls back to the EVIDGATE_S3_* names
+# and local defaults scripts/dev/up.sh uses). The endpoint is required in every
+# environment: this script signs a concrete host, unlike the deployed
+# EVIDGATE:Object option, which may fall back to the AWS regional endpoint:
 #   EVIDGATE__OBJECT__BUCKET       EVIDGATE__OBJECT__ENDPOINT
 #   EVIDGATE__OBJECT__REGION       EVIDGATE__OBJECT__ACCESSKEY
 #   EVIDGATE__OBJECT__SECRETKEY
@@ -40,16 +47,25 @@ usage: scripts/env/bootstrap-bucket.sh <dev|staging|prod> <provision|verify> [--
   provision  create the bucket, put the pending/ 1-day lifecycle rule from
              infra/seaweedfs/pending-lifecycle.xml, and for staging/prod put the
              public-access block (BlockPublicAcls, IgnorePublicAcls,
-             BlockPublicPolicy, RestrictPublicBuckets all true)
-  verify     read the lifecycle rule back, require an anonymous bucket GET and
-             anonymous object GET to be refused (401/403), then HEAD the bucket
-             with a signed request
+             BlockPublicPolicy, RestrictPublicBuckets all true). The whole
+             lifecycle configuration is replaced, not one rule inside it.
+  verify     require one Enabled rule scoped to pending/ with Expiration Days 1,
+             require an anonymous bucket GET to be refused (401/403), then store
+             a canary object under bootstrap-verify/ with a signed PUT, read it
+             back, require an anonymous GET of that same key to be refused,
+             delete the canary, and HEAD the bucket with a signed request
 
-Environment (staging and prod require every key; dev falls back to the
-EVIDGATE_S3_* names scripts/dev/up.sh exports):
+Environment (staging and prod require every key and fall back to nothing; dev
+falls back to the EVIDGATE_S3_* names scripts/dev/up.sh exports):
   EVIDGATE__OBJECT__BUCKET       bucket name
-  EVIDGATE__OBJECT__ENDPOINT     absolute http(s) S3 endpoint; empty selects the
-                                 provider endpoint in a real cloud
+  EVIDGATE__OBJECT__ENDPOINT     absolute S3 endpoint, required here in every
+                                 environment: the script signs a concrete host,
+                                 while the deployed EVIDGATE:Object option keeps
+                                 its fallback to the AWS regional endpoint.
+                                 staging and prod accept https only; dev may use
+                                 http on loopback. A value that starts with '-'
+                                 or carries credentials in its authority is
+                                 refused.
   EVIDGATE__OBJECT__REGION       SigV4 signing region
   EVIDGATE__OBJECT__ACCESSKEY    signing identity
   EVIDGATE__OBJECT__SECRETKEY    signing secret
@@ -126,7 +142,10 @@ missing=""
 [ -n "$access" ] || missing="$missing EVIDGATE__OBJECT__ACCESSKEY"
 [ -n "$sign_key" ] || missing="$missing EVIDGATE__OBJECT__SECRETKEY"
 if [ -n "$missing" ]; then
-  die "missing required environment:$missing (no value is used for a missing key)"
+  hint=""
+  [ -n "$endpoint" ] ||
+    hint=" (this script needs an explicit endpoint: the EVIDGATE:Object option's AWS regional fallback does not apply here)"
+  die "missing required environment:$missing$hint (no value is used for a missing key)"
 fi
 
 # Staging and prod must not share a bucket. A file that takes the name from the
@@ -157,7 +176,12 @@ if [ "$env_name" != "dev" ]; then
   fi
 fi
 
-evg_s3_configure "$access" "$sign_key" "$region"
+https_only=0
+if [ "$env_name" != "dev" ]; then
+  https_only=1
+fi
+evg_s3_validate_endpoint "$endpoint" "$https_only"
+evg_s3_configure "$access" "$sign_key" "$region" "$https_only"
 
 if [ "$action" = "provision" ]; then
   info "provisioning bucket '$bucket' at $endpoint ($env_name)"
@@ -172,16 +196,68 @@ if [ "$action" = "provision" ]; then
   exit 0
 fi
 
-lifecycle_out="$(mktemp "${TMPDIR:-/tmp}/evidgate-bucket-verify.XXXXXX")"
-trap 'rm -f "$lifecycle_out"' EXIT
+# The whole lifecycle configuration is replaced on provision, so verify demands
+# the one rule this repository ships: enabled, scoped to pending/, one day. A
+# disabled rule never expires anything, whatever its prefix or days say.
+verify_lifecycle() {
+  local out="$1"
 
-evg_s3_get_lifecycle "$bucket" "$endpoint" "$lifecycle_out"
-if ! grep -Fq '<Prefix>pending/</Prefix>' "$lifecycle_out"; then
-  die "bucket '$bucket' has no pending/ lifecycle rule"
-fi
-if ! grep -Fq '<Days>1</Days>' "$lifecycle_out"; then
-  die "the pending/ lifecycle rule of bucket '$bucket' is not a 1-day expiry"
-fi
+  evg_s3_get_lifecycle "$bucket" "$endpoint" "$out"
+  if ! evg_s3_lifecycle_rule_enabled_pending_1day "$out"; then
+    die "bucket '$bucket' has no enabled pending/ 1-day lifecycle rule: one rule must carry Status Enabled, Prefix pending/ and Expiration Days 1"
+  fi
+}
+
+# A signed write of a fresh key proves the credentials may store objects, its
+# signed read-back proves the bytes survive, and the same key read unsigned must
+# be refused — probing an absent key would pass even on a bucket that publishes
+# everything it holds.
+verify_private_object() {
+  local bucket_url="$1" anonymous code
+  local body="evidgate-bootstrap-canary ${RANDOM}${RANDOM}"
+
+  VERIFY_CANARY_KEY="bootstrap-verify/canary-${RANDOM}${RANDOM}"
+  code="$(evg_s3_request PUT "$bucket_url/$VERIFY_CANARY_KEY" "$body" /dev/null)"
+  case "$code" in
+    2[0-9][0-9]) ;;
+    *) die "a signed PUT of the canary key '$VERIFY_CANARY_KEY' in bucket '$bucket' answered HTTP $code" ;;
+  esac
+
+  code="$(evg_s3_request GET "$bucket_url/$VERIFY_CANARY_KEY" '' "$VERIFY_CANARY_OUT")"
+  [ "$code" = "200" ] || die "a signed GET of the canary key '$VERIFY_CANARY_KEY' in bucket '$bucket' answered HTTP $code"
+  [ "$(<"$VERIFY_CANARY_OUT")" = "$body" ] ||
+    die "the signed GET of the canary key '$VERIFY_CANARY_KEY' in bucket '$bucket' did not return what the PUT stored"
+
+  anonymous="$(evg_s3_anonymous_status GET "$bucket_url/$VERIFY_CANARY_KEY")"
+  case "$anonymous" in
+    401 | 403) ;;
+    *) die "an anonymous GET of the stored key '$VERIFY_CANARY_KEY' in bucket '$bucket' answered HTTP ${anonymous:-none}: the bucket must refuse unauthenticated reads" ;;
+  esac
+
+  code="$(evg_s3_request DELETE "$bucket_url/$VERIFY_CANARY_KEY" '' /dev/null)"
+  case "$code" in
+    2[0-9][0-9]) ;;
+    *) die "deleting the canary key '$VERIFY_CANARY_KEY' in bucket '$bucket' answered HTTP $code" ;;
+  esac
+  VERIFY_CANARY_KEY=""
+}
+
+VERIFY_LIFECYCLE_OUT="$(mktemp "${TMPDIR:-/tmp}/evidgate-bucket-verify.XXXXXX")"
+VERIFY_CANARY_OUT="$(mktemp "${TMPDIR:-/tmp}/evidgate-bucket-canary.XXXXXX")"
+VERIFY_CANARY_KEY=""
+
+# A failed verify must not leave the canary behind: the trap deletes it whenever
+# the key is still set, so both a failed PUT and a later failed check clean up.
+verify_cleanup() {
+  trap - EXIT
+  rm -f "$VERIFY_LIFECYCLE_OUT" "$VERIFY_CANARY_OUT"
+  if [ -n "$VERIFY_CANARY_KEY" ]; then
+    evg_s3_request DELETE "$(evg_s3_bucket_url "$endpoint" "$bucket")/$VERIFY_CANARY_KEY" '' /dev/null >/dev/null 2>&1 || true
+  fi
+}
+trap verify_cleanup EXIT
+
+verify_lifecycle "$VERIFY_LIFECYCLE_OUT"
 
 bucket_url="$(evg_s3_bucket_url "$endpoint" "$bucket")"
 anonymous_bucket="$(evg_s3_anonymous_status GET "$bucket_url")"
@@ -190,12 +266,7 @@ case "$anonymous_bucket" in
   *) die "an anonymous GET of bucket '$bucket' answered HTTP ${anonymous_bucket:-none}: the bucket must refuse unauthenticated reads" ;;
 esac
 
-probe_key="pending/env-bootstrap-verify-${RANDOM}${RANDOM}"
-anonymous_object="$(evg_s3_anonymous_status GET "$bucket_url/$probe_key")"
-case "$anonymous_object" in
-  401 | 403) ;;
-  *) die "an anonymous GET of an object key in bucket '$bucket' answered HTTP ${anonymous_object:-none}: the bucket must refuse unauthenticated reads" ;;
-esac
+verify_private_object "$bucket_url"
 
 evg_s3_signed_bucket_head "$bucket" "$endpoint"
-info "bucket '$bucket' verified: pending/ 1-day lifecycle rule, anonymous reads refused, signed access accepted"
+info "bucket '$bucket' verified: enabled pending/ 1-day lifecycle rule, anonymous reads refused, signed write/read/delete accepted"

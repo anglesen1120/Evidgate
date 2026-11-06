@@ -1,18 +1,16 @@
 using System.Diagnostics;
 using System.Globalization;
+using Npgsql;
 using Shouldly;
 using Xunit;
 
 namespace Migrator.IntegrationTests;
 
-/// <summary>
-/// <c>scripts/env/bootstrap-db.sh</c> against a real PostgreSQL 18: the two
-/// superuser steps around the real migrations, the read-only verifier, and its
-/// refusals. This host has no <c>psql</c>, so every run uses the script's
-/// container mode against the fixture's container and the fixture's role
-/// passwords, which keeps a rerun from changing the credential the other tests in
-/// this collection connect with.
-/// </summary>
+/// <summary><c>scripts/env/bootstrap-db.sh</c> against a real PostgreSQL 18: the
+/// two superuser steps around the real migrations, the verifier and its refusals.
+/// This host has no <c>psql</c>, so every run uses the script's container mode
+/// against the fixture's container and passwords, which keeps a rerun from
+/// changing the credential the other tests in this collection connect with.</summary>
 [Collection(MigratorPostgresSuite.Name)]
 [Trait("Category", "Docker")]
 public sealed class EnvBootstrapDatabaseTests
@@ -52,6 +50,7 @@ public sealed class EnvBootstrapDatabaseTests
         verify.ExitCode.ShouldBe(0, verify.Output);
         verify.Output.ShouldContain("PASS roles:");
         verify.Output.ShouldContain("PASS attributes:");
+        verify.Output.ShouldContain("PASS memberships:");
         verify.Output.ShouldContain("PASS ownership:");
         verify.Output.ShouldContain("PASS rls:");
     }
@@ -172,6 +171,158 @@ public sealed class EnvBootstrapDatabaseTests
         run.Output.ShouldContain("EVIDGATE_DB_SUPERUSER_PASSWORD");
     }
 
+    [Theory]
+    [InlineData(
+        "revoke evidgate_app from evidgate_owner; grant evidgate_owner to evidgate_app",
+        "revoke evidgate_owner from evidgate_app; grant evidgate_app to evidgate_owner with admin true, inherit false, set false",
+        "evidgate_app is a member of evidgate_owner")]
+    [InlineData("grant evidgate_operator to evidgate_app", "revoke evidgate_operator from evidgate_app", "evidgate_app is a member of evidgate_operator")]
+    [InlineData("grant pg_read_all_data to evidgate_worker_sched with admin true, inherit false, set false", "revoke pg_read_all_data from evidgate_worker_sched", "evidgate_worker_sched is a member of pg_read_all_data")]
+    [InlineData("grant postgres to evidgate_app", "revoke postgres from evidgate_app", "evidgate_app is a member of postgres")]
+    public async Task Verify_NamesAnApplicationRoleGrantedMembershipInAnotherRole(
+        string escalation, string restore, string expected)
+    {
+        // A member acts as that role for every grant and policy, so the superuser
+        // and an admin-only pg_* grant must fail too. app -> owner needs the
+        // implicit owner -> app edge lifted first; the finally restores it exactly.
+        var database = await MigratedDatabaseAsync();
+        await ExecuteSuperuserAsync(database, escalation);
+        try
+        {
+            var verify = await RunBootstrapAsync("dev", "verify", DevEnvironment(database));
+            verify.ExitCode.ShouldNotBe(0);
+            verify.Output.ShouldContain(expected);
+        }
+        finally
+        {
+            await ExecuteSuperuserAsync(database, restore);
+        }
+    }
+
+    [Fact]
+    public async Task Verify_NamesAnApplicationRoleThatCannotLogIn()
+    {
+        var database = await MigratedDatabaseAsync();
+        await ExecuteSuperuserAsync(database, "alter role evidgate_app nologin");
+        try
+        {
+            var verify = await RunBootstrapAsync("dev", "verify", DevEnvironment(database));
+            verify.ExitCode.ShouldNotBe(0);
+            verify.Output.ShouldContain("evidgate_app: rolcanlogin must be true");
+        }
+        finally
+        {
+            await ExecuteSuperuserAsync(database, "alter role evidgate_app login");
+        }
+    }
+
+    [Fact]
+    public async Task Verify_NamesATableWhoseForcedRlsIsDisabled()
+    {
+        // A forced table with a policy: mechanism exceptions carry no policy, so
+        // this discovery cannot pick one of them.
+        var database = await MigratedDatabaseAsync();
+        var table = await _fixture.ScalarAsync<string>(database, ForcedRlsTableSql);
+        table.ShouldNotBeNullOrWhiteSpace();
+        await ExecuteSuperuserAsync(database, $"alter table public.{table} no force row level security");
+        try
+        {
+            var verify = await RunBootstrapAsync("dev", "verify", DevEnvironment(database));
+            verify.ExitCode.ShouldNotBe(0);
+            verify.Output.ShouldContain($"{table}(rowsecurity=t,forcerowsecurity=f)");
+        }
+        finally
+        {
+            await ExecuteSuperuserAsync(database, $"alter table public.{table} force row level security");
+        }
+    }
+
+    [Fact]
+    public async Task Credentials_WithQuotesSemicolonsAndBackslashes_RoundTrip()
+    {
+        // Every character a hand-built SQL or DSN string breaks on: psql reads it via \getenv.
+        const string tricky = "pa'ss;word\\\"x";
+        var database = await MigratedDatabaseAsync();
+        var environment = DevEnvironment(database);
+        environment["EVIDGATE_APP_PASSWORD"] = tricky;
+        environment["EVIDGATE_OPERATOR_PASSWORD"] = tricky + "1";
+        environment["EVIDGATE_WORKER_SCHED_PASSWORD"] = tricky + "2";
+        try
+        {
+            AssertSucceeded(await RunBootstrapAsync("dev", "credentials", environment));
+            var verify = await RunBootstrapAsync("dev", "verify", environment);
+            verify.ExitCode.ShouldBe(0, verify.Output);
+
+            await using var connection = AppConnection(database, tricky);
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "select current_user";
+            var user = await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
+            user.ShouldBe("evidgate_app");
+        }
+        finally
+        {
+            AssertSucceeded(await RunBootstrapAsync("dev", "credentials", DevEnvironment(database)));
+        }
+    }
+
+    [Theory]
+    [InlineData("staging")]
+    [InlineData("prod")]
+    public async Task ManagedEnvironment_WithAContainer_IsRefusedNamingTheKey(string environment)
+    {
+        // The fixture's container is running, so the refusal is about the
+        // environment, not about a container that cannot be reached.
+        var variables = ManagedEnvironment(environment);
+        variables["EVIDGATE_DB_CONTAINER"] = _fixture.ContainerName;
+        var refused = await RunBootstrapAsync(environment, "database", variables);
+
+        refused.ExitCode.ShouldNotBe(0);
+        refused.Output.ShouldContain("refusing EVIDGATE_DB_CONTAINER");
+        // Positive control: the same variables minus that key clear the refusal.
+        variables.Remove("EVIDGATE_DB_CONTAINER");
+        var control = await RunBootstrapAsync(environment, "database", variables);
+        control.Output.ShouldNotContain("refusing EVIDGATE_DB_CONTAINER");
+    }
+
+    [Theory]
+    [InlineData("staging", "evidgate_prod")]
+    [InlineData("prod", "evidgate_staging")]
+    public async Task ManagedEnvironment_RefusesTheOtherEnvironmentsDatabaseName(string environment, string database)
+    {
+        var variables = ManagedEnvironment(environment);
+        variables["EVIDGATE_DB_NAME"] = database;
+        var refused = await RunBootstrapAsync(environment, "database", variables);
+
+        refused.ExitCode.ShouldNotBe(0);
+        refused.Output.ShouldContain("separate clusters");
+    }
+
+    [Fact]
+    public async Task Dev_WithoutAContainer_RefusesANonLoopbackHost()
+    {
+        // The class's other dev runs are the control: same command, same loopback host.
+        var environment = DevEnvironment(NewDatabaseName());
+        environment.Remove("EVIDGATE_DB_CONTAINER");
+        environment["EVIDGATE_DB_HOST"] = "db.example.com";
+        var refused = await RunBootstrapAsync("dev", "database", environment);
+
+        refused.ExitCode.ShouldNotBe(0);
+        refused.Output.ShouldContain("refusing EVIDGATE_DB_HOST 'db.example.com'");
+    }
+
+    [Theory]
+    [InlineData("Evidgate")]
+    [InlineData("evidgate-prod")]
+    [InlineData("evidgate;drop database postgres")]
+    [InlineData("-evidgate")]
+    public async Task Bootstrap_WithAnInvalidDatabaseName_IsRefusedNamingTheKey(string database)
+    {
+        var run = await RunBootstrapAsync("dev", "database", DevEnvironment(database));
+        run.ExitCode.ShouldNotBe(0);
+        run.Output.ShouldContain("EVIDGATE_DB_NAME");
+    }
+
     private static string NewDatabaseName() =>
         "evg_boot_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..8];
 
@@ -181,6 +332,9 @@ public sealed class EnvBootstrapDatabaseTests
         AssertSucceeded(await RunBootstrapAsync("dev", "database", DevEnvironment(database)));
         var migration = ApplyMigrations(database);
         migration.ExitCode.ShouldBe(0, migration.Transcript);
+        // The verifier asserts the post-credentials state, so the baseline is
+        // green before a test changes the one thing it is about.
+        AssertSucceeded(await RunBootstrapAsync("dev", "credentials", DevEnvironment(database)));
         return database;
     }
 
@@ -196,6 +350,25 @@ public sealed class EnvBootstrapDatabaseTests
         ["EVIDGATE_OPERATOR_PASSWORD"] = _fixture.OperatorPassword,
         ["EVIDGATE_WORKER_SCHED_PASSWORD"] = _fixture.WorkerSchedPassword,
     };
+
+    /// <summary>Staging or prod values at a closed port: a run past the guards fails at the connection.</summary>
+    private static Dictionary<string, string?> ManagedEnvironment(string environment) => new(StringComparer.Ordinal)
+    {
+        ["EVIDGATE_DB_HOST"] = "127.0.0.1",
+        ["EVIDGATE_DB_PORT"] = "1",
+        ["EVIDGATE_DB_SUPERUSER"] = "evidgate_admin",
+        ["EVIDGATE_DB_SUPERUSER_PASSWORD"] = "unused-by-the-guards",
+        ["EVIDGATE_OWNER_PASSWORD"] = "unused-by-the-guards",
+        ["EVIDGATE_BOOTSTRAP_CONFIRM_ENV"] = environment,
+    };
+
+    /// <summary>The application role's connection with a password the fixture does not hold.</summary>
+    private NpgsqlConnection AppConnection(string database, string password) =>
+        new(new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database))
+        {
+            Password = password,
+            Pooling = false,
+        }.ConnectionString);
 
     private static async Task<RunResult> RunBootstrapAsync(
         string environment,
@@ -269,6 +442,17 @@ public sealed class EnvBootstrapDatabaseTests
     }
 
     private static void AssertSucceeded(RunResult run) => run.ExitCode.ShouldBe(0, run.Output);
+
+    /// <summary>A forced table with a policy, which the mechanism exceptions never carry.</summary>
+    private const string ForcedRlsTableSql = """
+        select c.relname
+          from pg_catalog.pg_class c
+          join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relkind = 'r'
+           and c.relrowsecurity and c.relforcerowsecurity
+           and exists (select 1 from pg_catalog.pg_policy p where p.polrelid = c.oid)
+         order by c.relname limit 1
+        """;
 
     /// <summary>
     /// The rerun contract: every role attribute, the database owner and the

@@ -63,10 +63,10 @@ check_migrator_apply() {
 check_api_health() {
   local reference="$1" host_port deadline live ready
   echo "-- starting the Api image against the migrated database"
-  # 0001_foundation_roles.sql deliberately creates evidgate_app with nologin and
-  # no password (a password in a migration would live in git history); the deploy
-  # bootstrap grants them, and so does this check (scripts/env/lib-db.sh).
-  # The Api refuses to serve as any other role (00 §5.4.3), which its own log shows.
+  # 0001_foundation_roles.sql creates evidgate_app with nologin and no password
+  # (a password in a migration would live in git history). The deploy bootstrap
+  # grants both; this check repeats that ALTER for its throwaway database. The
+  # Api refuses to serve as any other role (00 §5.4.3), which its own log shows.
   docker exec "$db_container" psql -U postgres -d evidgate -v ON_ERROR_STOP=1 -q \
     -c "alter role evidgate_app login password '$APP_PASSWORD';" >/dev/null
   # The two cancel windows have no option default: an Api booted without them binds 00:00:00 and

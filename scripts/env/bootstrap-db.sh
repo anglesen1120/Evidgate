@@ -44,9 +44,12 @@ steps, one per run, in this order:
                 * the non-built-in roles are exactly the four evidgate_* roles
                   (anything else is named; pg_* and the bootstrap superuser are
                   allowed);
-                * evidgate_app/operator/worker_sched carry no SUPERUSER,
-                  BYPASSRLS, CREATEDB or CREATEROLE; evidgate_owner carries
-                  CREATEROLE only;
+                * all four may log in, and none carries SUPERUSER, BYPASSRLS,
+                  REPLICATION, CREATEDB or CREATEROLE; only evidgate_owner
+                  carries CREATEROLE;
+                * no application role is a member of any other role, apart from
+                  the owner's admin-only record of the three roles it creates
+                  (no INHERIT, no SET);
                 * evidgate_app owns no object in the database;
                 * every public table is not an exceptions entry of kind
                   `mechanism` in contracts/rls-exceptions.txt and carries both
@@ -61,13 +64,22 @@ required environment, per step (values are never printed):
 
 per-environment variables (a bracketed value is the dev-only default; staging
 and prod have no host, superuser or superuser-password default):
-  EVIDGATE_DB_HOST [127.0.0.1]           staging/prod: required
+  EVIDGATE_DB_HOST [127.0.0.1]           staging/prod: required; dev: loopback
+                                         only unless EVIDGATE_DB_CONTAINER is set
   EVIDGATE_DB_PORT [5432]
   EVIDGATE_DB_NAME [evidgate, evidgate_staging, evidgate_prod]
+                                         ^[a-z_][a-z0-9_]{0,62}$; staging refuses
+                                         evidgate_prod and prod refuses
+                                         evidgate_staging, because the roles are
+                                         cluster-wide and the two environments
+                                         need their own server
   EVIDGATE_DB_SUPERUSER [postgres]       staging/prod: required
   EVIDGATE_DB_SUPERUSER_PASSWORD [postgres]
                                          staging/prod: required
-  EVIDGATE_DB_CONTAINER                  dev: run psql via `docker exec -i <name>`
+  EVIDGATE_DB_CONTAINER                  dev: run psql via `docker exec -i <name>`;
+                                         staging/prod: refused (the environment's
+                                         own server, never a local container)
+  PGSSLMODE                              staging/prod: set to require when unset
   EVIDGATE_BOOTSTRAP_CONFIRM_ENV         prod: must be exactly prod
 USAGE
 }
@@ -130,6 +142,43 @@ case "$ENVIRONMENT" in
     ;;
 esac
 DB_CONTAINER="${EVIDGATE_DB_CONTAINER:-}"
+
+# Every guard below runs before anything connects.
+if [[ ! "$DB_NAME" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]; then
+  evg_db_die "refusing EVIDGATE_DB_NAME '$DB_NAME': the name must match ^[a-z_][a-z0-9_]{0,62}\$"
+fi
+
+# The four roles are cluster-wide, so two environments on one server would share
+# them: prod would carry whatever staging granted, and the other way round.
+case "$ENVIRONMENT:$DB_NAME" in
+  staging:evidgate_prod | prod:evidgate_staging)
+    evg_db_die "refusing EVIDGATE_DB_NAME '$DB_NAME' for $ENVIRONMENT: staging and prod need
+     separate clusters, because evidgate_owner and the application roles are cluster-wide"
+    ;;
+esac
+
+# A managed environment reaches its own server, never a local container.
+if [[ "$ENVIRONMENT" != dev && -n "$DB_CONTAINER" ]]; then
+  evg_db_die "refusing EVIDGATE_DB_CONTAINER '$DB_CONTAINER' for $ENVIRONMENT: unset it, or use the dev environment for a local container"
+fi
+
+# Container mode ignores the host, so this is the only case where a dev
+# bootstrap connects to whatever EVIDGATE_DB_HOST names.
+if [[ "$ENVIRONMENT" == dev && -z "$DB_CONTAINER" ]]; then
+  case "$DB_HOST" in
+    127.0.0.1 | localhost | ::1) ;;
+    *)
+      evg_db_die "refusing EVIDGATE_DB_HOST '$DB_HOST' for dev: dev bootstraps the local stack —
+       use a loopback host, or set EVIDGATE_DB_CONTAINER to run psql inside the container"
+      ;;
+  esac
+fi
+
+# The TLS policy of the environment's server is not this script's to relax, so
+# require TLS unless the deploy already chose a mode.
+if [[ "$ENVIRONMENT" != dev && -z "${PGSSLMODE:-}" ]]; then
+  export PGSSLMODE=require
+fi
 
 case "$STEP" in
   database)
@@ -211,17 +260,17 @@ SQL
 }
 
 evg_db_verify_role_attributes() {
-  local before="$verify_failures" rows name is_super bypass createdb createrole count=0
+  local before="$verify_failures" rows name is_super bypass createdb createrole replication canlogin count=0
 
   rows="$(evg_db_psql "$DB_NAME" -t -A -F '|' <<'SQL'
-select rolname, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole
+select rolname, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole, rolreplication, rolcanlogin
   from pg_catalog.pg_roles
  where rolname in ('evidgate_owner', 'evidgate_app', 'evidgate_operator', 'evidgate_worker_sched')
  order by rolname
 SQL
 )"
 
-  while IFS='|' read -r name is_super bypass createdb createrole; do
+  while IFS='|' read -r name is_super bypass createdb createrole replication canlogin; do
     if [[ -z "$name" ]]; then
       continue
     fi
@@ -232,8 +281,15 @@ SQL
     if [[ "$bypass" != f ]]; then
       verify_fail "attributes" "$name: rolbypassrls must be false (found true)"
     fi
+    if [[ "$replication" != f ]]; then
+      verify_fail "attributes" "$name: rolreplication must be false (found true)"
+    fi
     if [[ "$createdb" != f ]]; then
       verify_fail "attributes" "$name: rolcreatedb must be false (found true)"
+    fi
+    # verify runs after `credentials`, so every role has to carry LOGIN by now.
+    if [[ "$canlogin" != t ]]; then
+      verify_fail "attributes" "$name: rolcanlogin must be true (found false) — run the credentials step"
     fi
     if [[ "$name" == evidgate_owner ]]; then
       if [[ "$createrole" != t ]]; then
@@ -249,7 +305,62 @@ SQL
     return 0
   fi
   if [[ "$verify_failures" == "$before" ]]; then
-    verify_pass "attributes" "no SUPERUSER, BYPASSRLS or CREATEDB on any role; CREATEROLE only on evidgate_owner"
+    verify_pass "attributes" "all four may log in; no SUPERUSER, BYPASSRLS, REPLICATION or CREATEDB on any role; CREATEROLE only on evidgate_owner"
+  fi
+}
+
+# Any membership of an application role in another role makes the app role that
+# role through SET ROLE, so every such edge fails except the admin-only record
+# PostgreSQL writes when evidgate_owner creates the three application roles.
+evg_db_verify_role_memberships() {
+  local before="$verify_failures" offenders
+
+  offenders="$(evg_db_psql "$DB_NAME" -t -A <<'SQL'
+with recursive members(oid, rolname) as (
+  select oid, rolname
+    from pg_catalog.pg_roles
+   where rolname in ('evidgate_owner', 'evidgate_app', 'evidgate_operator', 'evidgate_worker_sched')
+), walk(origin, reached) as (
+  select oid, oid from members
+  union
+  select w.origin, am.roleid
+    from walk w
+    join pg_catalog.pg_auth_members am on am.member = w.reached
+   where am.inherit_option or am.set_option
+), offender(role_oid, target_oid) as (
+  select am.member, am.roleid
+    from pg_catalog.pg_auth_members am
+   where am.member in (select oid from members)
+     and not (
+       -- The owner created the three application roles, and PG records that as an
+       -- admin-only edge: it lets the owner administer them, not act as them.
+       am.member = (select oid from pg_catalog.pg_roles where rolname = 'evidgate_owner')
+       and am.roleid in (select oid from pg_catalog.pg_roles
+                          where rolname in ('evidgate_app', 'evidgate_operator', 'evidgate_worker_sched'))
+       and am.admin_option
+       and not am.inherit_option
+       and not am.set_option
+     )
+  union
+  -- Authority reached through a chain of SET or INHERIT edges, whatever the hop.
+  select w.origin, w.reached
+    from walk w
+   where w.reached <> w.origin
+)
+select string_agg(hit, '; ' order by hit)
+  from (
+    select distinct format('%s is a member of %s', m.rolname, g.rolname) as hit
+      from offender o
+      join pg_catalog.pg_roles m on m.oid = o.role_oid
+      join pg_catalog.pg_roles g on g.oid = o.target_oid
+  ) hits
+SQL
+)"
+
+  if [[ -n "$offenders" ]]; then
+    verify_fail "memberships" "$offenders"
+  elif [[ "$verify_failures" == "$before" ]]; then
+    verify_pass "memberships" "no application role is a member of the owner, of another application role, of a pg_* role or of $DB_SUPERUSER"
   fi
 }
 
@@ -353,6 +464,7 @@ SQL
 evg_db_verify() {
   evg_db_verify_roles
   evg_db_verify_role_attributes
+  evg_db_verify_role_memberships
   evg_db_verify_app_ownership
   evg_db_verify_force_rls
 
