@@ -270,16 +270,22 @@ public sealed partial class EvidenceRawReportQuotaTests
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
 
-        // The queue's own trace of the earlier attempt, keyed and worded exactly as the upload and the consumer write it.
-        // The text carries an apostrophe ("handler's"), so it is escaped for the literal before it goes into the statement.
+        // The production relation, reproduced: one outbox row keyed by the artifact, and the task the dispatcher makes
+        // from it, whose key is 'outbox:' || outbox.id. The text carries an apostrophe, so it is escaped for the literal.
         var persistedError = TaskDeferredException.PersistedError.Replace("'", "''", StringComparison.Ordinal);
+        var outboxId = Guid.CreateVersion7();
+        var payload = $"'{{\"run_id\":\"{world.RunId:D}\",\"artifact_id\":\"{artifactId:D}\"}}'::jsonb";
+        await _fixture.ExecuteAsync(
+            world.Database,
+            "insert into public.outbox (id, org_id, aggregate_type, aggregate_id, task_type, payload, idempotency_key) "
+            + $"values ('{outboxId:D}', '{world.Org:D}', 'artifact', '{artifactId:D}', "
+            + $"'{EvidenceTaskTypes.ReportParse}', {payload}, "
+            + $"'evidence:artifact:{artifactId:D}:{EvidenceTaskTypes.ReportParse}')");
         await _fixture.ExecuteAsync(
             world.Database,
             "insert into public.task (id, org_id, queue, task_type, payload, idempotency_key, state, last_error) values "
-            + $"('{Guid.CreateVersion7():D}', '{world.Org:D}', 'tasks', '{EvidenceTaskTypes.ReportParse}', "
-            + $"'{{\"run_id\":\"{world.RunId:D}\",\"artifact_id\":\"{artifactId:D}\"}}'::jsonb, "
-            + $"'evidence:artifact:{artifactId:D}:{EvidenceTaskTypes.ReportParse}', 'retry', "
-            + $"'{persistedError}')");
+            + $"('{Guid.CreateVersion7():D}', '{world.Org:D}', 'tasks', '{EvidenceTaskTypes.ReportParse}', {payload}, "
+            + $"'outbox:{outboxId:D}', 'retry', '{persistedError}')");
         await _fixture.ExecuteAsync(
             world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
 
@@ -305,11 +311,18 @@ public sealed partial class EvidenceRawReportQuotaTests
         await SeedCounterAsync(counters, world, used: 1m, limit: 1m);
         var queue = "report-quota-closed";
         var taskId = Guid.CreateVersion7();
+        var outboxId = Guid.CreateVersion7();
+        var payload = $$"""
+            {"run_id":"{{world.RunId:D}}","artifact_id":"{{artifact:D}}","producer_kind":"pytest-junitxml"}
+            """;
         await _fixture.ExecuteAsync(world.Database, $$"""
+            insert into public.outbox (id, org_id, aggregate_type, aggregate_id, task_type, payload, idempotency_key)
+            values ('{{outboxId:D}}', '{{world.Org:D}}', 'artifact', '{{artifact:D}}', '{{EvidenceTaskTypes.ReportParse}}',
+                '{{payload}}'::jsonb, 'evidence:artifact:{{artifact:D}}:{{EvidenceTaskTypes.ReportParse}}');
+
             insert into public.task (id, org_id, queue, task_type, payload, idempotency_key)
             values ('{{taskId:D}}', '{{world.Org:D}}', '{{queue}}', '{{EvidenceTaskTypes.ReportParse}}',
-                '{"run_id":"{{world.RunId:D}}","artifact_id":"{{artifact:D}}","producer_kind":"pytest-junitxml"}'::jsonb,
-                'evidence:artifact:{{artifact:D}}:{{EvidenceTaskTypes.ReportParse}}')
+                '{{payload}}'::jsonb, 'outbox:{{outboxId:D}}')
             """);
         await using var worker = StartReportWorker(world);
         var consumer = worker.GetRequiredService<TaskConsumer>();

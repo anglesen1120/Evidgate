@@ -154,7 +154,8 @@ internal sealed partial class ParseRawReportHandler
     /// <summary>
     /// Logs a terminal admission refusal on the refusal path only, naming a loss the plain code word hides: a report
     /// the queue had deferred and the run closed before its retry. The task row is the deferral's only durable trace,
-    /// and its idempotency key is the one the upload enqueues, so the probe is the queue's own unique index.
+    /// and its idempotency key is derived from the outbox row (<c>'outbox:' || outbox.id</c>), so the probe joins the
+    /// two on that derivation: both sides are unique-index lookups.
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="artifactId">The report artifact, the only id the line names.</param>
@@ -171,15 +172,18 @@ internal sealed partial class ParseRawReportHandler
                 """
                 select exists (
                     select 1
-                    from public.task
-                    where idempotency_key = @idempotency_key
-                      and org_id = @org_id
-                      and last_error = @last_error)
+                    from public.outbox as o
+                    join public.task as t
+                      on t.idempotency_key = 'outbox:' || o.id::text
+                     and t.org_id = o.org_id
+                    where o.org_id = @org_id
+                      and o.idempotency_key = @idempotency_key
+                      and t.last_error = @last_error)
                 """,
                 new
                 {
-                    idempotency_key = ReportParseKey(artifactId),
                     org_id = orgId,
+                    idempotency_key = ReportParseKey(artifactId),
                     last_error = TaskDeferredException.PersistedError,
                 },
                 cancellationToken)
