@@ -140,7 +140,7 @@ internal sealed class CompleteArtifactUploadValidator : AbstractValidator<Comple
 /// <param name="db">The Dapper path, used only for the project-status guard.</param>
 /// <param name="parseOptions">
 /// The parse runner's options, read for the one switch that decides whether a <c>raw_report</c> schedules its parse
-/// rows (<c>EVIDGATE__PARSE__OUTOFPROCESS</c>, 06.3.6 §11). Both hosts bind them, because the Api commits the rows
+/// rows (<c>EVIDGATE__PARSE__OUTOFPROCESS</c>). Both hosts bind them, because the Api commits the rows
 /// even though only the Worker runs the tasks.
 /// </param>
 /// <param name="producerKinds">

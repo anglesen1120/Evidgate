@@ -16,7 +16,7 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 public sealed partial class EvidenceRawReportParseTests
 {
-    /// <summary>The usage task the ingest route writes and this handler must write identically (04.8.1 §4).</summary>
+    /// <summary>The usage task the ingest route writes and this handler must write identically.</summary>
     private const string UsageTask = "usage.batch_accepted";
 
     /// <summary>

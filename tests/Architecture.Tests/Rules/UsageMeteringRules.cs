@@ -5,7 +5,7 @@ namespace Architecture.Tests.Rules;
 /// <summary>
 /// 00 §9.1: usage metering is an internal module call, never a public endpoint. Only the Usage module that owns the
 /// ledger and the Ingestion module that meters an accepted batch may name <c>IUsageLedger</c>, and the metering handler
-/// itself is DB-to-DB (00 §5.7 P5), so no HTTP client may appear in it. The usage task type has one owner,
+/// itself is DB-to-DB, so no HTTP client may appear in it. The usage task type has one owner,
 /// <c>UsageBatchAcceptedContract</c>, which the raw report's evidence transaction reads; the ingest route keeps its own
 /// literal (<c>IngestEventBatchHandler.UsageTaskType</c>, which the metering handler also takes its task type from) and
 /// a parity test pins the two spellings equal, so the rule below allow-lists the files of both. It has exactly two

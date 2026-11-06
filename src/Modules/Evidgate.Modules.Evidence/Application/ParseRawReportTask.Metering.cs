@@ -13,10 +13,10 @@ namespace Evidgate.Modules.Evidence.Application;
 /// </summary>
 internal sealed partial class ParseRawReportHandler
 {
-    /// <summary>The 00 §8.1 state whose first evidence moves the run on (the event batch route's own edge).</summary>
+    /// <summary>The run state whose first evidence moves it on (the event batch route's own edge).</summary>
     private const string QueuedState = "queued";
 
-    /// <summary>The 00 §8.1 state the first accepted evidence of a queued run moves it to.</summary>
+    /// <summary>The run state the first accepted evidence of a queued run moves it to.</summary>
     private const string RunningState = "running";
 
     /// <summary>The prefix of the batch receipt's request id; the report artifact makes it unique per report.</summary>
@@ -32,7 +32,7 @@ internal sealed partial class ParseRawReportHandler
         """;
 
     /// <summary>
-    /// The batch's own audit row, the ingest route's statement shape (04.1.1 §4, C5): the receipt the response's
+    /// The batch's own audit row, in the ingest route's statement shape: the receipt the response's
     /// <c>batch_id</c> names there is here the receipt the usage row meters.
     /// </summary>
     private const string InsertBatchSql = """

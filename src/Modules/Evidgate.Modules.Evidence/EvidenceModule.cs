@@ -54,22 +54,22 @@ internal static class EvidenceModule
     /// <param name="services">The host's service collection.</param>
     private static void RegisterArtifacts(IServiceCollection services)
     {
-        // The EF write model of artifacts and their kind policies (00 §5.5 C4).
+        // The EF write model of artifacts and their kind policies.
         services.AddEvidgateDbContext<EvidenceDbContext>(typeof(EvidenceDbContext).Assembly);
 
-        // C2 stage-2 shape validation of the mint command (resolved by ValidationBehaviour).
+        // Validator of the mint command (resolved by ValidationBehaviour).
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateArtifactRecord>, CreateArtifactRecordValidator>());
 
-        // C2 stage-2 shape validation of the upload-url command.
+        // Validator of the upload-url command.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<RequestArtifactUploadUrl>, RequestArtifactUploadUrlValidator>());
 
         // The mint core shared by both artifact commands.
         services.TryAddScoped<ArtifactMinter>();
 
-        // The S3-compatible presign adapter, bound from EVIDGATE__OBJECT__* (00 §9.3).
+        // The S3-compatible presign adapter, bound from EVIDGATE__OBJECT__*.
         services.AddEvidgateObjectStorage();
 
-        // C2 stage-2 shape validation of the completion command.
+        // Validator of the completion command.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CompleteArtifactUpload>, CompleteArtifactUploadValidator>());
 
         // The endpoint-side verification: one row read in a read-only scope, then the
@@ -118,11 +118,11 @@ internal static class EvidenceModule
         // completion's own tenant transaction; scoped like every reader bound to the ambient scope.
         services.TryAddScoped<IRawReportProducerKindReader, RawReportProducerKindReader>();
 
-        // The one untrusted-parser profile (00 §5.7 S5), published on the module's .Contracts.
-        // It has no consumer yet: the `complete` verifier uses the static MediaSniffer directly,
-        // and the report mapper is the first IParsing consumer, resolving this same singleton instead of
-        // building its own readers (00 §5.7 S4). The report entry cap is the host's configured one, so a
-        // deployment that publishes a lower cap refuses over-large reports here as well as in the child.
+        // The one untrusted-parser profile, published on the module's .Contracts. It has no consumer yet: the
+        // `complete` verifier uses the static MediaSniffer directly, and the report mapper is the first IParsing
+        // consumer, resolving this same singleton instead of building its own readers. The report entry cap is the
+        // host's configured one, so a deployment that publishes a lower cap refuses over-large reports here as well
+        // as in the child.
         services.TryAddSingleton<IParsing>(provider =>
             new ParsingService(provider.GetRequiredService<IOptions<IngestionLimits>>().Value.MaxReportCases));
     }
@@ -141,10 +141,9 @@ internal static class EvidenceModule
         // key had when it froze. Scoped like every other module service and bound to the ambient tenant scope.
         services.TryAddScoped<IFrozenEvidence, FrozenEvidence>();
 
-        // The out-of-process parse runner is deliberately NOT registered here. It spawns processes, so
-        // only the Worker composes it, through ParseRunnerServiceCollectionExtensions.AddParseRunner (the review found:
-        // the Api process must not hold a process-spawn capability). This shared registration is what both hosts call,
-        // so a runner registered here would be resolvable from the Api again.
+        // The out-of-process parse runner is deliberately NOT registered here: it spawns processes, so only the
+        // Worker composes it (ParseRunnerServiceCollectionExtensions.AddParseRunner). This registration is shared by
+        // both hosts, so a runner registered here would be resolvable from the Api, which must hold no spawn capability.
 
         // The runner's options, bound in BOTH hosts because `complete` reads the one switch that decides
         // whether a raw report schedules its parse rows (`EVIDGATE__PARSE__OUTOFPROCESS`) — the parse of its bytes and

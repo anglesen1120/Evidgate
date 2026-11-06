@@ -16,10 +16,10 @@ namespace Evidgate.Modules.Ingestion.Contracts;
 /// </summary>
 public static class UsageBatchAcceptedContract
 {
-    /// <summary>The outbox task type of the usage row (04.8.1 §4, 04.1.1 §7).</summary>
+    /// <summary>The outbox task type of the usage row.</summary>
     public const string TaskType = "usage.batch_accepted";
 
-    /// <summary>The V1 usage metric name: one metric, <c>event</c> (04.8.1 §4).</summary>
+    /// <summary>The usage metric name: there is one, <c>event</c>.</summary>
     public const string Metric = "event";
 
     /// <summary>The outbox aggregate the row names: the <c>event_batch</c> receipt it meters.</summary>
