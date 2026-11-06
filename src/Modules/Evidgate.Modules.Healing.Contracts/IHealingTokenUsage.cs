@@ -1,8 +1,8 @@
 namespace Evidgate.Modules.Healing.Contracts;
 
 /// <summary>
-/// The in-module read another module asks for one org's healing token spend over a month (00 §5.5, the Contracts
-/// seam): the ledger of attempts is Healing's table, so the aggregate that answers a cost question is served here
+/// The read another module asks of Healing for one org's token spend over a month: the attempts ledger is
+/// Healing's table, so the aggregate that answers a cost question is served here
 /// rather than read across a module boundary.
 /// </summary>
 /// <remarks>
