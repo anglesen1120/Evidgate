@@ -79,6 +79,54 @@ staging objects under `pending/` after 24 h on the dev stack. (The provider-side
 smoke test of the same behaviour stays with 10.6.1-T2 — local green does not
 replace it.)
 
+## Bucket bootstrap (dev, staging, prod)
+
+`scripts/env/bootstrap-bucket.sh <dev|staging|prod> <provision|verify>` is the
+environment side of the same bucket: `provision` creates the bucket if it is
+absent, replaces its lifecycle configuration with
+`infra/seaweedfs/pending-lifecycle.xml` (the `pending/` prefix, one-day expiry),
+and for staging and prod also puts the public-access block (all four flags
+true); `verify` reads the lifecycle rule back, requires an anonymous bucket GET
+and an anonymous object GET to be refused with 401/403, then proves a signed
+HEAD of the bucket is accepted. Both actions are re-runnable: an existing bucket
+is accepted and the rule is replaced with identical content.
+
+```console
+# dev: reads the same .env.dev / EVIDGATE_S3_* values scripts/dev/up.sh exports
+scripts/env/bootstrap-bucket.sh dev provision
+scripts/env/bootstrap-bucket.sh dev verify
+
+# staging and prod: every value comes from the deploy environment, no default
+scripts/env/bootstrap-bucket.sh staging provision
+EVIDGATE_BOOTSTRAP_CONFIRM_ENV=prod scripts/env/bootstrap-bucket.sh prod provision
+```
+
+Variables (staging and prod require all five and fall back to nothing; dev also
+accepts the `EVIDGATE_S3_*` names, and its endpoint/bucket/region defaults are
+the local stack's):
+
+| Variable                          | Meaning                                                              |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `EVIDGATE__OBJECT__BUCKET`        | bucket to create and verify                                          |
+| `EVIDGATE__OBJECT__ENDPOINT`      | absolute http(s) S3 endpoint; empty selects the provider endpoint     |
+| `EVIDGATE__OBJECT__REGION`        | SigV4 signing region                                                 |
+| `EVIDGATE__OBJECT__ACCESSKEY`     | signing identity (secret store on staging/prod)                      |
+| `EVIDGATE__OBJECT__SECRETKEY`     | signing secret (secret store on staging/prod)                        |
+| `EVIDGATE_BOOTSTRAP_CONFIRM_ENV`  | must be `prod` for a prod run; read from the environment, no default |
+
+Signing goes through a curl configuration on stdin, so no credential reaches
+argv, `ps`, a temporary file or an output line; a missing variable is reported
+by name only. Staging and prod refuse a bucket name that
+`infra/<other>/environment.json` declares literally (a file that takes the name
+from the environment has no literal to compare, so that case is not checked).
+
+Two limits until the provider is chosen (O3): the staging/prod
+`PutPublicAccessBlock` request has not been exercised against a real cloud (the
+shape follows the S3 API; the emulator has no such sub-resource), and `verify`
+does not read that sub-resource back. `infra/seaweedfs/pending-lifecycle.xml`
+stays the single source of the lifecycle rule for every environment, so the dev
+stack, the fixture suites and this bootstrap cannot drift apart.
+
 # Container images (10.2.1-T1)
 
 `infra/docker/` holds the three deployable images of the area plan §3 (ruling
