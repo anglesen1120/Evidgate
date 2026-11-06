@@ -12,8 +12,8 @@ namespace Evidgate.Modules.Evidence.Application;
 
 /// <summary>
 /// The write half of <see cref="ParseRawReportHandler"/>: the event rows, the deterministic identities, the one
-/// <c>unnest</c> statement that inserts them and the slot rows. Kept beside the handler it serves so the pipeline's
-/// shape stays readable in one file and the SQL stays in one place.
+/// <c>unnest</c> statement that inserts them, the slot rows and the reconcile trigger those events raise. Kept beside
+/// the handler it serves so the pipeline's shape stays readable in one file and the SQL stays in one place.
 /// </summary>
 internal sealed partial class ParseRawReportHandler
 {
@@ -323,4 +323,55 @@ internal sealed partial class ParseRawReportHandler
         Level = LogLevel.Warning,
         Message = "raw report parse of artifact {ArtifactId} was refused by the case-attempt writer as {Status}, so no event of the attempt was committed")]
     private static partial void LogAttemptRefused(ILogger logger, Guid artifactId, string status);
+
+    [LoggerMessage(
+        EventId = 2466,
+        Level = LogLevel.Warning,
+        Message = "raw report refusal for artifact {ArtifactId} left no raw_report row: the report's producer kind cannot be stored, so the refusal is only the task's own outcome")]
+    private static partial void LogUnstorableProducerKind(ILogger logger, Guid artifactId);
+
+    /// <summary>
+    /// Enqueues the one reconcile trigger this attempt's new events need: the late-evidence shape for a run that already
+    /// finished as incomplete, the ordinary slot-closed shape for every other run, so the freeze path sees the events
+    /// without waiting for a finalize that a synthetic producer can never trigger.
+    /// </summary>
+    /// <param name="payload">The run, artifact and producer kind.</param>
+    /// <param name="producerId">The synthetic producer id of this report.</param>
+    /// <param name="events">The serialized set, whose declared pair the trigger names.</param>
+    /// <param name="late">True when this evidence arrived after the run finished incomplete.</param>
+    /// <param name="batchId">The accepted batch's receipt id, which keys the trigger for both shapes.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    private async Task EnqueueReconcileAsync(
+        ParseRawReportPayload payload,
+        string producerId,
+        SerializedEventSet events,
+        bool late,
+        Guid batchId,
+        CancellationToken cancellationToken)
+    {
+        var taskType = RunReconcileContract.OutboxTaskType;
+        var aggregateType = RunReconcileContract.AggregateType;
+
+        if (late)
+        {
+            await outbox.EnqueueAsync(
+                    taskType,
+                    RunReconcileContract.LatePayloadJson(payload.RunId, producerId),
+                    aggregateType,
+                    payload.RunId,
+                    RunReconcileContract.LateBatchIdempotencyKey(payload.RunId, producerId, batchId),
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        await outbox.EnqueueAsync(
+                taskType,
+                RunReconcileContract.PayloadJson(payload.RunId, producerId, events.MaxSequence, events.DeclaredCount),
+                aggregateType,
+                payload.RunId,
+                RunReconcileContract.BatchIdempotencyKey(payload.RunId, producerId, batchId),
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
 }

@@ -1,5 +1,6 @@
 using System.Text;
 using Evidgate.Modules.Evidence.Application;
+using Evidgate.Modules.Orchestrator.Contracts;
 using Shouldly;
 using Xunit;
 
@@ -86,6 +87,11 @@ public sealed partial class EvidenceRawReportParseTests
         }
 
         Discrepancies(row).ShouldBeEmpty();
-        await AssertNothingWrittenAsync(world, artifact);
+        // Nothing but the report's row and the run's own queued -> running edge: no event, attempt, slot or receipt.
+        (await CountAsync(world, "event", artifact)).ShouldBe(0);
+        (await CountAsync(world, "case_attempt")).ShouldBe(0);
+        (await CountAsync(world, "event_batch")).ShouldBe(0);
+        (await CountAsync(world, "producer_slot")).ShouldBe(0);
+        (await OutboxRowsAsync(world, RunStateTransitionContract.OutboxTaskType)).ShouldBe(1);
     }
 }

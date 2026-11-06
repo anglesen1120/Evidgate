@@ -57,6 +57,7 @@ public sealed class MetricCardinalityTests
         "trigger",
         "written",
         "cap",
+        "issue",
         "kind",
     };
 

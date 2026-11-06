@@ -119,11 +119,12 @@ internal sealed class CompleteArtifactUploadValidator : AbstractValidator<Comple
 /// the row once, guards its state (the endpoint's verdict is derived from facts read before this transaction
 /// opened, so it is never trusted for the state), re-reads the project's status so a project that flipped to
 /// <c>deleted</c> since the verifier cannot commit, writes the outcome and — for a verified object — the outbox
-/// rows (the scan and the staging delete, plus the parse row of a raw report when out-of-process parsing is on,
-/// 06.3.6-T1.4), in one commit (C7). A row that already holds <c>ready</c>/<c>rejected</c> is returned unchanged: a
-/// fresh key on a completed artifact is a no-op, never a second scan, a second staging delete or a second parse
-/// (T19/T86). The staging object is deleted only by the <see cref="ArtifactStagingDeleteTaskHandler"/>, after this
-/// transaction commits, and the parse runs only in the Worker (<c>ParseArtifactTaskHandler</c>).
+/// rows (the scan and the staging delete, plus the parse rows of a raw report when out-of-process parsing is on),
+/// in one commit (C7). A row that already holds <c>ready</c>/<c>rejected</c> is returned unchanged: a fresh key on
+/// a completed artifact is a no-op, never a second scan, a second staging delete or a second parse. The
+/// staging object is deleted only by the <see cref="ArtifactStagingDeleteTaskHandler"/>,
+/// after this transaction commits, and the parse runs only in the Worker (<c>ParseArtifactTaskHandler</c> and
+/// <see cref="ParseRawReportHandler"/>).
 /// </summary>
 /// <remarks>
 /// The version column is the concurrency token (migration 0028's trigger owns the increment) and the artifact
@@ -138,9 +139,13 @@ internal sealed class CompleteArtifactUploadValidator : AbstractValidator<Comple
 /// <param name="audit">The trail the completed command is recorded on.</param>
 /// <param name="db">The Dapper path, used only for the project-status guard.</param>
 /// <param name="parseOptions">
-/// The parse runner's options, read for the one switch that decides whether a <c>raw_report</c> schedules the parse
-/// task (<c>EVIDGATE__PARSE__OUTOFPROCESS</c>, 06.3.6 §11). Both hosts bind them, because the Api commits the row
-/// even though only the Worker runs the task.
+/// The parse runner's options, read for the one switch that decides whether a <c>raw_report</c> schedules its parse
+/// rows (<c>EVIDGATE__PARSE__OUTOFPROCESS</c>). Both hosts bind them, because the Api commits the rows
+/// even though only the Worker runs the tasks.
+/// </param>
+/// <param name="producerKinds">
+/// The run's manifest-declared producer kind, read in this transaction's tenant scope: the report's dialect is server
+/// truth, never a value the upload declared.
 /// </param>
 [AuditedAction("artifact.complete")]
 [Permission(Permissions.Artifact.Write)]
@@ -149,7 +154,8 @@ internal sealed class CompleteArtifactUploadHandler(
     IOutboxWriter outbox,
     IAuditTrail audit,
     ITenantDb db,
-    IOptions<ParseRunnerOptions> parseOptions)
+    IOptions<ParseRunnerOptions> parseOptions,
+    IRawReportProducerKindReader producerKinds)
     : ICommandHandler<CompleteArtifactUpload, Result<CompleteResponse>>
 {
     /// <summary>The outbox aggregate the rows belong to (00 §5.3).</summary>
@@ -353,6 +359,37 @@ internal sealed class CompleteArtifactUploadHandler(
                 artifact.Id,
                 $"evidence:artifact:{artifact.Id:D}:parse",
                 cancellationToken).ConfigureAwait(false);
+
+            await EnqueueReportParseAsync(artifact, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// The mapping row of a raw report: always written for the one kind that has one, because a report whose dialect
+    /// cannot be resolved still leaves a report row the comparison read can show. The lookup answers the kind or the
+    /// closed issue code that stood in its place, and the task carries whichever it got; the payload's names are the
+    /// task's own wire shape (<c>snake_case</c>), the same text the handler binds.
+    /// </summary>
+    /// <param name="artifact">The row that just became <c>ready</c>; its run is the manifest read's key.</param>
+    /// <param name="cancellationToken">Cancels the read and the statement.</param>
+    private async Task EnqueueReportParseAsync(Artifact artifact, CancellationToken cancellationToken)
+    {
+        var producer = await producerKinds.ReadAsync(artifact.RunId, cancellationToken).ConfigureAwait(false);
+
+        await outbox.EnqueueAsync(
+            EvidenceTaskTypes.ReportParse,
+            JsonSerializer.Serialize(new
+            {
+                run_id = artifact.RunId,
+                artifact_id = artifact.Id,
+                producer_kind = producer.Kind,
+                producer_issue = producer.Issue,
+            }),
+            AggregateType,
+            artifact.Id,
+            $"evidence:artifact:{artifact.Id:D}:raw_report_parse",
+            cancellationToken).ConfigureAwait(false);
+
+        EvidgateTelemetry.RecordRawReportEnqueued(producer.Issue);
     }
 }

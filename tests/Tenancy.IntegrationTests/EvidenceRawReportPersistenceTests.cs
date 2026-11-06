@@ -146,7 +146,10 @@ public sealed partial class EvidenceRawReportParseTests
 
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
         (await CountAsync(world, "producer_slot")).ShouldBe(0);
-        (await CountAsync(world, "outbox")).ShouldBe(0);
+        // The report moved the run on, so the commit's only outbox row is its queued -> running edge: no trigger and
+        // nothing metered.
+        (await OutboxRowsAsync(world, RunStateTransitionContract.OutboxTaskType)).ShouldBe(1);
+        (await OutboxRowsAsync(world, RunReconcileContract.OutboxTaskType)).ShouldBe(0);
     }
 
     [Fact]
@@ -377,7 +380,9 @@ public sealed partial class EvidenceRawReportParseTests
         (await CountAsync(world, "event", artifactId)).ShouldBe(1);
         (await CountAsync(world, "case_attempt")).ShouldBe(1);
         (await CountAsync(world, "producer_slot")).ShouldBe(1);
-        (await CountAsync(world, "outbox")).ShouldBe(1);
+        // The one committed set leaves its three rows: the run's queued -> running edge, the reconcile trigger and the
+        // batch's usage row.
+        (await CountAsync(world, "outbox")).ShouldBe(3);
     }
 
     /// <summary>One refusal's row: the outcome word, its reason, the parser release that judged it and nothing else.</summary>
