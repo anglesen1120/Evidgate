@@ -488,10 +488,12 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
 
     /// <summary>
     /// The immutable request a command would have committed, with the id the task writes its report row under, and the
-    /// test-only release it pins registered for its kind. The row is written (or re-dated) behind the built-in one on
-    /// purpose: the registry resolves a producer kind to its <em>most recent</em> row, and the report a run already holds
-    /// was parsed at the built-in <c>1.0.0</c>, so the newer release must never win that resolution — it is only named by
-    /// the request, which pins its pair exactly.
+    /// release it pins registered as this org's own release under exactly that version: the catalogue's
+    /// <c>(parser_id, version)</c> key is global, so the row is re-owned by the world that pins it and the global
+    /// catalogue — and therefore every other suite's resolution of the built-in <c>1.0.0</c> — stays untouched. It is
+    /// written (or re-dated) behind the built-in release on purpose: the registry resolves a producer kind to its
+    /// <em>most recent</em> row, and the report a run already holds was parsed at the built-in <c>1.0.0</c>, so the newer
+    /// release must never win that resolution — it is only named by the request, which pins its pair exactly.
     /// </summary>
     private async Task<Guid> SeedRequestAsync(World world, Guid artifactId, Guid sourceReportId, string pinVersion)
     {
@@ -501,9 +503,10 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
             world.Database,
             "insert into public.report_parser "
             + "(id, org_id, parser_id, version, producer_kind, schema_version, notes, created_at) values "
-            + $"('{Guid.CreateVersion7():D}', null, '{ParserId}', '{PinVersion}', '{ProducerKind}', 1, "
+            + $"('{Guid.CreateVersion7():D}', '{world.Org:D}', '{ParserId}', '{pinVersion}', '{ProducerKind}', 1, "
             + "'test release', '2000-01-01T00:00:00Z') "
-            + "on conflict (parser_id, version) do update set created_at = excluded.created_at");
+            + "on conflict (parser_id, version) do update "
+            + "set org_id = excluded.org_id, created_at = excluded.created_at");
 
         await _fixture.ExecuteAsync(
             world.Database,

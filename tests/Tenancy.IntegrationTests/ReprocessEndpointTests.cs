@@ -128,7 +128,7 @@ public sealed class ReprocessEndpointTests
         var other = await PostAsync(world, runId, reportId, version: "1.2.0", key: key);
 
         other.Status.ShouldBe(HttpStatusCode.Conflict);
-        other.Text("code").ShouldBe("idempotency_conflict");
+        other.ErrorCode.ShouldBe("idempotency_conflict");
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public sealed class ReprocessEndpointTests
         var answer = await PostAsync(world, runId, reportId);
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        answer.Text("code").ShouldBe("parser_version_unknown");
+        answer.ErrorCode.ShouldBe("parser_version_unknown");
         (await ReprocessTasksAsync(world)).ShouldBe(0);
     }
 
@@ -174,7 +174,7 @@ public sealed class ReprocessEndpointTests
         var answer = await PostAsync(world, foreignRun, reportId);
 
         answer.Status.ShouldBe(HttpStatusCode.NotFound);
-        answer.Text("code").ShouldBe("not_found");
+        answer.ErrorCode.ShouldBe("not_found");
         (await ReprocessTasksAsync(world)).ShouldBe(0);
     }
 
@@ -189,7 +189,7 @@ public sealed class ReprocessEndpointTests
         var answer = await PostAsync(world, runId, reportId);
 
         answer.Status.ShouldBe(HttpStatusCode.NotFound);
-        answer.Text("code").ShouldBe("not_found");
+        answer.ErrorCode.ShouldBe("not_found");
         (await ReprocessTasksAsync(world)).ShouldBe(0);
     }
 
@@ -202,7 +202,7 @@ public sealed class ReprocessEndpointTests
         var answer = await PostAsync(world, runId, Guid.CreateVersion7());
 
         answer.Status.ShouldBe(HttpStatusCode.NotFound);
-        answer.Text("code").ShouldBe("not_found");
+        answer.ErrorCode.ShouldBe("not_found");
     }
 
     [Fact]
@@ -215,7 +215,7 @@ public sealed class ReprocessEndpointTests
         var answer = await PostAsync(world, runId, reportId);
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        answer.Text("code").ShouldBe("raw_report_unprocessable");
+        answer.ErrorCode.ShouldBe("raw_report_unprocessable");
         (await ReprocessTasksAsync(world)).ShouldBe(0);
     }
 
@@ -233,7 +233,7 @@ public sealed class ReprocessEndpointTests
         var answer = await PostAsync(world, runId, reportId, version: version);
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        answer.Text("code").ShouldBe("parser_version_unknown");
+        answer.ErrorCode.ShouldBe("parser_version_unknown");
         (await ReprocessTasksAsync(world)).ShouldBe(0);
     }
 
@@ -251,7 +251,7 @@ public sealed class ReprocessEndpointTests
             new { raw_report_id = reportId, parser_version = NewerVersion });
 
         answer.Status.ShouldBe(HttpStatusCode.BadRequest);
-        answer.Text("code").ShouldBe("request_invalid");
+        answer.ErrorCode.ShouldBe("request_invalid");
         (await ReprocessTasksAsync(world)).ShouldBe(0);
     }
 
@@ -370,7 +370,9 @@ public sealed class ReprocessEndpointTests
 
     /// <summary>
     /// One report whose artifact belongs to <paramref name="runId"/>: the row the route reprocesses, written at the
-    /// release the migration seeds so a newer version is a real reprocess.
+    /// release the migration seeds so a newer version is a real reprocess. An <c>unsupported</c> outcome carries no
+    /// parser pair and the refusal's code word — <c>raw_report_reason_check</c> admits no reasonless refusal — and
+    /// the reason is the resolver's own <c>unknown_producer_kind</c>.
     /// </summary>
     private async Task<Guid> SeedReportAsync(
         World world,
@@ -400,9 +402,10 @@ public sealed class ReprocessEndpointTests
         (await scope.ExecuteAsync(
             """
             insert into public.raw_report
-            (id, org_id, run_id, artifact_id, producer_kind, parser_id, parser_version, outcome,
+            (id, org_id, run_id, artifact_id, producer_kind, parser_id, parser_version, outcome, reason,
             observed_tests, observed_failures)
-            values (@id, @org, @run, @artifact, @producer_kind, @parser_id::text, @parser_version::text, @outcome, 0, 0)
+            values (@id, @org, @run, @artifact, @producer_kind, @parser_id::text, @parser_version::text, @outcome,
+            @reason::text, 0, 0)
             """,
             ("id", reportId),
             ("org", world.Org),
@@ -411,7 +414,8 @@ public sealed class ReprocessEndpointTests
             ("producer_kind", ProducerKind),
             ("parser_id", outcome == "unsupported" ? (object)DBNull.Value : world.ParserId),
             ("parser_version", outcome == "unsupported" ? (object)DBNull.Value : version),
-            ("outcome", outcome))).ShouldBe(1);
+            ("outcome", outcome),
+            ("reason", outcome == "unsupported" ? "unknown_producer_kind" : (object)DBNull.Value))).ShouldBe(1);
         await scope.CommitAsync();
         return reportId;
     }

@@ -51,8 +51,9 @@ public sealed partial class ReconcileRunTests
             "canceled",
             "a canceled run is terminal: the revision carries the new evidence, the state does not move");
         (await VersionAsync(world, arranged.RunId)).ShouldBe(
-            arranged.Version,
-            "no guarded transition ran, so the row was not rewritten");
+            arranged.Version + 1,
+            "the appended revision moves the run's evidence pointer in the same transaction — the row's only write, "
+            + "since no guarded transition ran");
         (await StateChangeAuditCountAsync(world, arranged.RunId)).ShouldBe(
             arranged.StateChangeAuditRows,
             "an appended revision takes no edge, so it audits none");
