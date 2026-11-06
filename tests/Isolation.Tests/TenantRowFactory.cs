@@ -443,7 +443,7 @@ internal sealed class TenantRowFactory
             values["case_id"] = ownCase.Values[TenantFkScan.TenantKeyColumn];
         }
 
-        // raw_report (0077) names a parser release in the append-only report_parser catalogue, which the app
+        // raw_report (0078) names a parser release in the append-only report_parser catalogue, which the app
         // role may read but never write (0075), so a generated pair would have to be a release the migration
         // seeded. `unsupported` is the outcome whose row needs no parser at all: the pair stays null and the
         // refusal carries the empty counters and discrepancy list the factory already produces.

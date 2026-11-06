@@ -537,7 +537,7 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("artifact_id", artifactId));
-        // 0077's raw_report: one parse record naming that artifact and its run, under the parser release the
+        // 0078's raw_report: one parse record naming that artifact and its run, under the parser release the
         // migration seeds, so the newly discovered tenant table is not empty for the fail-closed-zero read.
         await scope.ExecuteAsync(
             """

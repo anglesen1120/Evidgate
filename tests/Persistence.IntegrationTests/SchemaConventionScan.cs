@@ -176,7 +176,7 @@ internal static class SchemaConventionScan
         new SchemaExemption(
             "public.raw_report",
             SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
-            "Append-only parse records (04.4.1-T4.1; migration 0077): the app role holds SELECT + INSERT, UPDATE/DELETE/TRUNCATE are revoked and `raw_report_immutable` raises 23514 for every role, so a parse is written once and keeps created_at only — no updated_at/version and no version trigger. Its reference to `report_parser` is deliberately `(parser_id, parser_version) -> (parser_id, version)`: a built-in parser row carries `org_id IS NULL`, so the composite tenant key could never match one, and the registry is written only by the migration and the owner role (0075), so no tenant can register a release a row names. Its tenant key, its composite run and artifact FKs and RLS are NOT exempt."),
+            "Append-only parse records (04.4.1-T4.1; migration 0078): the app role holds SELECT + INSERT, UPDATE/DELETE/TRUNCATE are revoked and `raw_report_immutable` raises 23514 for every role, so a parse is written once and keeps created_at only — no updated_at/version and no version trigger. Its reference to `report_parser` is deliberately `(parser_id, parser_version) -> (parser_id, version)`: a built-in parser row carries `org_id IS NULL`, so the composite tenant key could never match one, and the registry is written only by the migration and the owner role (0075), so no tenant can register a release a row names. Its tenant key, its composite run and artifact FKs and RLS are NOT exempt."),
     ];
 
     /// <summary>

@@ -351,7 +351,7 @@ internal static class TenantFkScan
     /// so the reference can only ever match a row of the dependent's own org — the multi-column form of
     /// the composite tenant key (0032's <c>case_attempt_planned_execution_fk</c>), the two-column key
     /// to a narrower unique key than <c>(org_id, id)</c> (0076's <c>usage_duplicate_attempt_ledger_fk</c>),
-    /// and 0077's <c>raw_report_artifact_fk (org_id, artifact_id, run_id) → artifact (org_id, id, run_id)</c>,
+    /// and 0078's <c>raw_report_artifact_fk (org_id, artifact_id, run_id) → artifact (org_id, id, run_id)</c>,
     /// which also pins the artifact to the report's own run.
     /// </summary>
     private static bool ReferencesUniqueKey(TenantSchema schema, ScannedForeignKey foreignKey)
