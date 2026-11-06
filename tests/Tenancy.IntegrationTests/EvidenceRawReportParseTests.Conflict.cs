@@ -10,8 +10,8 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// The report row as a verdict, not only a record: once an attempt has committed a refusal for an (artifact, parser
 /// release) key, a later attempt that parses the same report may not commit the events it mapped, because the refusal is
-/// immutable and the two would contradict each other. The redelivery is refused whole, exactly as a refusal leaves
-/// nothing behind.
+/// immutable and the two would contradict each other. The redelivery is refused whole, exactly as a refusal leaves no
+/// event behind.
 /// </summary>
 public sealed partial class EvidenceRawReportParseTests
 {
@@ -53,7 +53,8 @@ public sealed partial class EvidenceRawReportParseTests
 
         (await ParseAsync(world, artifactId, ProducerKind)).Status.ShouldBe(ParseRawReportOutcome.Malformed);
 
-        // A report that maps nothing takes the same path: its own row is the only write, so the stored refusal decides.
+        // A report that maps nothing takes the same path: its own row and trigger are the only writes, so the stored
+        // refusal decides.
         await StoreAsync(world, artifactId, UnmappedBody);
         var redelivery = await ParseAsync(world, artifactId, ProducerKind);
 

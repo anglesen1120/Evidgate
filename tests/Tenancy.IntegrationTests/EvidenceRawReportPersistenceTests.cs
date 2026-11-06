@@ -13,7 +13,7 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// The <c>raw_report</c> half of the <c>raw_report_parse</c> handler, against the shared migrated database: what each
 /// outcome stores about the report itself, and when it stores nothing. A parsed report's row commits with its events,
-/// a refused report's row commits alone, and a skipped attempt leaves no row at all.
+/// a refused report's row commits with the one reconcile trigger it leaves, and a skipped attempt leaves no row at all.
 /// </summary>
 /// <remarks>
 /// Rows are read back over the harness's owner connection, the way the events are read: the row is what a reviewer sees,

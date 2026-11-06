@@ -347,7 +347,8 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         outcome.Reason.ShouldNotBeNullOrWhiteSpace();
         outcome.Events.ShouldBe(0);
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
-        (await CountAsync(world, "outbox")).ShouldBe(0);
+        // The refusal row commits with its one reconcile trigger; the run was never moved, so nothing else is written.
+        (await OutboxRowsAsync(world, RunReconcileContract.OutboxTaskType)).ShouldBe(1);
     }
 
     [Fact]
@@ -365,7 +366,8 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         outcome.Status.ShouldBe(ParseRawReportOutcome.Malformed);
         outcome.Events.ShouldBe(0);
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
-        (await CountAsync(world, "outbox")).ShouldBe(0);
+        // The row and its trigger are the whole refusal: no event, slot or receipt, and no run transition either.
+        (await OutboxRowsAsync(world, RunReconcileContract.OutboxTaskType)).ShouldBe(1);
     }
 
     [Fact]
@@ -445,16 +447,33 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         await _fixture.ExecuteAsync(world.Database, sql + $" where id = '{world.RunId:D}'");
 
     /// <summary>
-    /// Asserts a refusal left no event, attempt, slot, receipt or trigger behind in this tenant: the refusal's rollback
-    /// covers the batch receipt and its usage row too.
+    /// Asserts a refused or skipped attempt left no evidence behind in this tenant: no event, attempt, receipt or slot,
+    /// and exactly the outbox rows its own committed refusal row earns — one reconcile trigger for a refusal, none for a
+    /// skip — with no other outbox row of any kind.
     /// </summary>
     private async Task AssertNothingWrittenAsync(World world, Guid artifactId)
     {
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
         (await CountAsync(world, "case_attempt")).ShouldBe(0);
         (await CountAsync(world, "event_batch")).ShouldBe(0);
-        (await CountAsync(world, "outbox")).ShouldBe(0);
         (await CountAsync(world, "producer_slot")).ShouldBe(0);
+
+        var ownTrigger = $"task_type = '{RunReconcileContract.OutboxTaskType}' "
+            + $"and (payload ->> 'producer_id') = 'junit-{artifactId:D}'";
+        var refusals = await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.raw_report where org_id = '{world.Org:D}' "
+            + $"and artifact_id = '{artifactId:D}'");
+
+        // One trigger per committed refusal row, so a skip still proves exactly zero and a refusal exactly one.
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.outbox where org_id = '{world.Org:D}' and {ownTrigger}"))
+            .ShouldBe(refusals);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.outbox where org_id = '{world.Org:D}' and not ({ownTrigger})"))
+            .ShouldBe(0);
     }
 
     /// <summary>
