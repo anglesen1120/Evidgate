@@ -59,6 +59,21 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
     /// <summary>Connection string for the application role (used once logins are enabled).</summary>
     public string AppConnectionString(string database) => Build("evidgate_app", _appPassword, database);
 
+    /// <summary>Container name, for a test that drives a shell script through <c>docker exec</c>.</summary>
+    public string ContainerName => _container.Name;
+
+    /// <summary>The migration role's password, so a bootstrap that re-sets it keeps this fixture's credential.</summary>
+    public string OwnerPassword => _ownerPassword;
+
+    /// <summary>The application role's password.</summary>
+    public string AppPassword => _appPassword;
+
+    /// <summary>The audited read-only role's password.</summary>
+    public string OperatorPassword => _operatorPassword;
+
+    /// <summary>The sweep role's password.</summary>
+    public string WorkerSchedPassword => _workerPassword;
+
     public async ValueTask InitializeAsync()
     {
         await _container.StartAsync().ConfigureAwait(false);

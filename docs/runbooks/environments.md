@@ -282,6 +282,85 @@ where the edge is what keeps the path off the public ingress; the Api serves the
 `ASPNETCORE_URLS` endpoint. `ready` is 200 only with a reachable database and the
 migration journal at the expected head, and 503 otherwise (01.1.2-T1's checks).
 
+### Database bootstrap
+
+Each environment gets its database and its roles from
+[`../../scripts/env/bootstrap-db.sh`](../../scripts/env/bootstrap-db.sh), in four
+steps, run in this order because each one's evidence depends on the previous one:
+
+1. `scripts/env/bootstrap-db.sh <env> database` — as the database superuser:
+   creates `evidgate_owner` (LOGIN + CREATEROLE, never SUPERUSER/BYPASSRLS/CREATEDB)
+   and the database that role owns, then stops.
+2. The environment's deploy job runs `Evidgate.Migrator` against the owner
+   connection. Migration `0001` creates `evidgate_app`, `evidgate_operator` and
+   `evidgate_worker_sched` without LOGIN.
+3. `scripts/env/bootstrap-db.sh <env> credentials` — as superuser: LOGIN + a
+   password for those three roles. It refuses, naming the missing roles, until
+   step 2 has run.
+4. `scripts/env/bootstrap-db.sh <env> verify` — read-only assertions as superuser:
+   the role set, the least-privilege attributes, `evidgate_app` owning nothing, and
+   ENABLE + FORCE row level security on every `public` table that
+   [`../../contracts/rls-exceptions.txt`](../../contracts/rls-exceptions.txt) does
+   not list as `mechanism`. It prints one `PASS`/`FAIL` line per check and exits
+   non-zero on any failure, naming the offender (a role, an attribute, an object
+   or a table).
+
+The same two superuser statements run inside `scripts/dev/db-init.sh`, which
+sources [`../../scripts/env/lib-db.sh`](../../scripts/env/lib-db.sh). There is no
+second copy of the role SQL, so the dev stack and an environment bootstrap cannot
+drift apart.
+
+| Variable | dev | staging | prod |
+|---|---|---|---|
+| `EVIDGATE_DB_HOST` | `127.0.0.1` | required, no default | required, no default |
+| `EVIDGATE_DB_PORT` | `5432` | `5432` | `5432` |
+| `EVIDGATE_DB_NAME` | `evidgate` | `evidgate_staging` | `evidgate_prod` |
+| `EVIDGATE_DB_SUPERUSER` | `postgres` | required, no default | required, no default |
+| `EVIDGATE_DB_SUPERUSER_PASSWORD` | `postgres` | required, no default | required, no default |
+| `EVIDGATE_DB_CONTAINER` | optional: run `psql` through `docker exec -i <name>` | unset | unset |
+| `EVIDGATE_BOOTSTRAP_CONFIRM_ENV` | — | — | must be exactly `prod` |
+
+`database` reads `EVIDGATE_OWNER_PASSWORD`; `credentials` reads
+`EVIDGATE_APP_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD` and
+`EVIDGATE_WORKER_SCHED_PASSWORD`; `verify` reads no role password at all. A
+missing variable fails naming the key, never a value, and no password reaches a
+command line or the output: the script exports each variable to the `psql` child,
+which reads it with `\getenv`.
+
+Staging and prod take the server and its superuser from the environment, with no
+`localhost`/`postgres` default, so a missing or mistyped value fails instead of
+bootstrapping a developer's local server; dev keeps the local defaults of the dev
+stack. `EVIDGATE_DB_PORT` and `EVIDGATE_DB_SUPERUSER_PASSWORD` are `dev-stack`
+rows of the matrix; the rest of the table is read by the bootstrap script only,
+not by a .NET host, so those rows are outside the matrix for the same reason the
+web CSP input and the test switches are (see above).
+
+**Only the deploy identity runs `database` and `credentials`.** They create or
+alter roles as the database superuser, and no runtime process holds that
+credential: staging and prod resolve the superuser password from the provider's
+secret store at deploy time, the database admin port is reachable from the deploy
+identity only (10.1.1-T3.4), and `Evidgate.Api`, `Evidgate.Worker` and the
+migrator keep their own least-privilege roles. The prod bootstrap additionally
+refuses to run unless `EVIDGATE_BOOTSTRAP_CONFIRM_ENV=prod`.
+
+**AC5 says three roles; the bootstrap verifies four.** AC5 names the owner, app
+and operator roles, while the bootstrap creates and verifies the four roles of
+01.4.1: `evidgate_owner`, `evidgate_app`, `evidgate_operator` and
+`evidgate_worker_sched`, because the sweep role of TL T80 belongs to the same role
+split. `verify` also accepts PostgreSQL's own `pg_*` roles and the bootstrap
+superuser it connected as; every other role is an offender, which is what makes a
+stray grant or a leftover verification role visible. A managed provider that
+ships maintenance roles of its own would therefore be named as offenders: the
+provider and its role model are 10.8.1's choice (O3), and this check is revisited
+with it.
+
+**Rotating these credentials** follows
+[`key-rotation.md`](key-rotation.md) §2.5 (database credentials), in its order:
+replace the credential in the database, then the environment's secret, then
+restart the affected process. `credentials` is not a rotation path for a running
+environment on its own: it re-grants the same role with the new password, and the
+restart is what makes the processes use it.
+
 ## 3. The ingress rule
 
 00 §9.1: `/internal/health/live`, `/internal/health/ready` and `/metrics` are outside `/v1`, carry no
