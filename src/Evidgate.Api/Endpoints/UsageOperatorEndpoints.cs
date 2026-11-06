@@ -12,8 +12,8 @@ using Evidgate.Modules.Usage.Application.Quota;
 namespace Evidgate.Api.Endpoints;
 
 /// <summary>
-/// The billing operator's surface on the operator ingress: one org's audited ledger page, period reconciliation and
-/// invoice worksheet, the audited quota raise and the statement it issues. All of them sit under
+/// The billing operator's surface on the operator ingress: one org's audited ledger page, period reconciliation,
+/// invoice worksheet and per-tenant cost, the audited quota raise and the statement it issues. All of them sit under
 /// <c>/internal/operator/*</c> for the same reason the platform routes do — they serve the operator, not a tenant
 /// caller — and all are excluded from the served OpenAPI document, the SDK and the permission catalogue, because the
 /// operator surface is not a tenant contract.
@@ -53,6 +53,7 @@ internal static class UsageOperatorEndpoints
         usage.MapGet("/usage-ledger", ListUsageLedgerAsync);
         usage.MapGet("/usage-reconciliation", GetPeriodReconciliationAsync);
         usage.MapGet("/invoice-worksheet", GetInvoiceWorksheetAsync);
+        usage.MapGet("/cost", GetCostPerTenantAsync);
 
         // The write side of the billing operator's surface: one scope's limit, with a reason the audit row
         // keeps and the response of the counter it left behind; and the statement that freezes a closed
@@ -135,6 +136,27 @@ internal static class UsageOperatorEndpoints
         if (!TryReadOperator(context, out var operatorId))
         {
             return Result.Failure<InvoiceWorksheet>(Unattributable);
+        }
+
+        return await reader
+            .ExecuteAsync(orgId, operatorId, period, context.RequestAborted)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <c>GET /internal/operator/orgs/{o}/cost?period=</c> → the audited cost of one closed period: the five cost
+    /// lines with the source each number came from, and the reason in place of a number when its source holds no
+    /// row.
+    /// </summary>
+    private static async Task<Result<TenantCost>> GetCostPerTenantAsync(
+        Guid orgId,
+        string? period,
+        CostPerTenantReader reader,
+        HttpContext context)
+    {
+        if (!TryReadOperator(context, out var operatorId))
+        {
+            return Result.Failure<TenantCost>(Unattributable);
         }
 
         return await reader
