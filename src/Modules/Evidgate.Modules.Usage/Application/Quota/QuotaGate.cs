@@ -27,13 +27,15 @@ internal sealed class QuotaGateOptions
 }
 
 /// <summary>
-/// <see cref="IQuotaGate"/>: one conditional statement that both checks and reserves, inside the
-/// caller's tenant transaction.
+/// <see cref="IQuotaGate"/>: one conditional statement that both checks and reserves, inside the caller's
+/// tenant transaction, and one more only when the scope has a counter the call did not fit into.
 /// <para>
 /// A call within the limit increments <c>used</c> and answers Ok or Warn; a call that would pass it
-/// writes nothing but the refusal stamp and answers Block, which the caller turns into 429 without
+/// writes only the first refusal stamp and answers Block, which the caller turns into 429 without
 /// rolling its committed work back. A scope with no counter row has no configured limit and answers Ok
-/// once the reservation found nothing to increment — the gate still ran.
+/// — the gate still ran, and it says so after one statement. A call the increment found no room for is
+/// settled by the second statement, which reserves it when an operator raise committed in between, so a
+/// raised counter never refuses work it now has room for and never drops the usage it admitted.
 /// </para>
 /// </summary>
 internal sealed class QuotaGate(
@@ -44,8 +46,8 @@ internal sealed class QuotaGate(
 {
     /// <inheritdoc />
     /// <exception cref="ArgumentOutOfRangeException">
-    /// A non-positive quantity or a period that is not <c>YYYY-MM</c> is a caller bug: it is refused before
-    /// any statement runs rather than silently granting or charging the wrong amount.
+    /// A non-positive quantity or a period outside <c>2000-01</c>..<c>2999-12</c> is a caller bug: it is
+    /// refused before any statement runs rather than silently granting or charging the wrong amount.
     /// </exception>
     public async Task<QuotaCheckResult> CheckAsync(
         QuotaCheckRequest request,
@@ -61,12 +63,12 @@ internal sealed class QuotaGate(
                 "a quota check reserves a strictly positive quantity");
         }
 
-        if (!UsagePeriod.IsWellFormed(request.Period))
+        if (!UsagePeriod.IsQuotaPeriod(request.Period))
         {
             throw new ArgumentOutOfRangeException(
                 nameof(request),
                 request.Period,
-                "a quota check reserves usage of one YYYY-MM billing month");
+                "a quota check reserves usage of one YYYY-MM billing month from 2000-01 to 2999-12");
         }
 
         if (!options.Value.Enabled)
@@ -77,35 +79,53 @@ internal sealed class QuotaGate(
         var orgId = scopes.Require().OrgId;
         var metric = UsageMetricWire.ToWireValue(request.Metric);
 
-        var reserved = await store
+        var answer = await store
             .ReserveAsync(orgId, request.Period, metric, request.ProjectId, request.Quantity, cancellationToken)
             .ConfigureAwait(false);
 
-        if (reserved is not null)
+        if (answer is null)
         {
-            return new QuotaCheckResult(
-                reserved.IsAtOrAboveWarnLine ? QuotaDecision.Warn : QuotaDecision.Ok,
-                reserved.Used,
-                reserved.QuotaLimit);
+            return new QuotaCheckResult(QuotaDecision.Ok);
         }
 
-        var blocked = await store
-            .MarkBlockedAsync(orgId, request.Period, metric, request.ProjectId, cancellationToken)
+        if (answer.Reserved)
+        {
+            return new QuotaCheckResult(
+                answer.IsAtOrAboveWarnLine ? QuotaDecision.Warn : QuotaDecision.Ok,
+                answer.Used,
+                answer.QuotaLimit);
+        }
+
+        var settled = await store
+            .StampRefusalAsync(orgId, request.Period, metric, request.ProjectId, request.Quantity, cancellationToken)
             .ConfigureAwait(false);
 
-        return blocked is null
-            ? new QuotaCheckResult(QuotaDecision.Ok)
-            : new QuotaCheckResult(
-                QuotaDecision.Block,
-                blocked.Used,
-                blocked.QuotaLimit,
-                RetryUntilNextPeriod(request.Period),
-                $"/internal/operator/billing/orgs/{orgId:D}/quota-raise");
+        if (settled is null)
+        {
+            return new QuotaCheckResult(QuotaDecision.Ok);
+        }
+
+        if (!settled.Blocked)
+        {
+            return new QuotaCheckResult(
+                settled.IsAtOrAboveWarnLine ? QuotaDecision.Warn : QuotaDecision.Ok,
+                settled.Used,
+                settled.QuotaLimit);
+        }
+
+        return new QuotaCheckResult(
+            QuotaDecision.Block,
+            settled.Used,
+            settled.QuotaLimit,
+            RetryUntilNextPeriod(request.Period),
+            $"/internal/operator/billing/orgs/{orgId:D}/quota-raise");
     }
 
     /// <summary>
     /// The wait a blocked caller is told: the next month starts the fresh counter that makes the same
     /// call fit again. At least one second, so a caller never reads <c>Retry-After: 0</c> as "retry now".
+    /// The caller has already restricted the period to 2000-01..2999-12, so both the parse and the
+    /// following month stay inside <see cref="DateTimeOffset"/> and this method never throws.
     /// </summary>
     private TimeSpan RetryUntilNextPeriod(string period)
     {

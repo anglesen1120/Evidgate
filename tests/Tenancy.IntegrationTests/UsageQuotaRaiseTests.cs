@@ -23,7 +23,7 @@ namespace Tenancy.IntegrationTests;
 /// move a limit under the usage a period already holds.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class UsageQuotaRaiseTests
+public sealed partial class UsageQuotaRaiseTests
 {
     private const string Period = "2026-10";
     private const string Action = "usage.quota_raise";
@@ -157,6 +157,94 @@ public sealed class UsageQuotaRaiseTests
     }
 
     [Fact]
+    public async Task RaiseQuotaLimit_ReasonOfSupplementaryCharacters_422Not500()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedAsync(world, used: 10m, limit: 20m);
+
+        // 129 supplementary characters are 129 runes but 258 UTF-16 units: the command's own rune cap passes them and
+        // the audit row's 256-character cap refuses them. Checked only when the row is described, that refusal would
+        // arrive after the limit had moved, as a 500 rather than the field's 422.
+        var reason = string.Concat(Enumerable.Repeat("\U0001F600", 129));
+
+        var refused = await SendAsync(world, Raise(world, 30m, reason: reason));
+
+        var error = refused.Error.ShouldNotBeNull();
+        error.Status.ShouldBe(422);
+        error.Code.ShouldBe("request_invalid");
+        error.Details.ShouldNotBeNull().ShouldContain(
+            detail => detail.Path == "reason" && detail.Reason == "too_long");
+        (await world.CounterAsync(project: world.Project)).ShouldNotBeNull().Limit.ShouldBe(20m);
+        (await world.AuditCountAsync(null, Action)).ShouldBe(0L);
+    }
+
+    [Theory]
+    [InlineData("pilot\r\nraise")]
+    [InlineData("pilot\traise")]
+    [InlineData("pilot\u202Eraise")]
+    [InlineData("pilot\u2028raise")]
+    [InlineData("pilot\u2029raise")]
+    [InlineData("\r\npilot extension")]
+    [InlineData("pilot extension\n")]
+    [InlineData("pilot extension\u202E")]
+    [InlineData("token=abcdef")]
+    public async Task RaiseQuotaLimit_UnreadableOrCredentialShapedReason_422(string reason)
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedAsync(world, used: 10m, limit: 20m);
+
+        var refused = await SendAsync(world, Raise(world, 30m, reason: reason));
+
+        var error = refused.Error.ShouldNotBeNull();
+        error.Status.ShouldBe(422, "a body that parsed is the field's 422, never the 400 of a malformed request");
+        error.Code.ShouldBe("request_invalid");
+        error.Details.ShouldNotBeNull().ShouldContain(
+            detail => detail.Path == "reason" && detail.Reason == "invalid_value",
+            "a reason that breaks or reorders a line, padding included, or looks like a credential is refused as the field's own violation");
+        (await world.CounterAsync(project: world.Project)).ShouldNotBeNull().Limit.ShouldBe(20m);
+        (await world.AuditCountAsync(null, Action)).ShouldBe(0L);
+    }
+
+    [Fact]
+    public async Task RaiseQuotaLimit_ValidReason_KeptTrimmedInTheAuditRow()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+
+        var answer = await world.PostRaiseAsync(new
+        {
+            project_id = world.Project,
+            period = Period,
+            metric = "results",
+            new_limit = 30m,
+            reason = $"  {Reason}  ",
+        });
+
+        answer.Status.ShouldBe(HttpStatusCode.OK);
+        var rows = await world.AuditRowsAsync(null, Action);
+        rows.Count.ShouldBe(1);
+        rows[0].ShouldContain($"\"reason\": \"{Reason}\"");
+        rows[0].ShouldNotContain(
+            $"  {Reason}", Case.Sensitive, "the row keeps the trimmed reason, never the caller's padding");
+    }
+
+    [Theory]
+    [InlineData("0000-01")]
+    [InlineData("9999-12")]
+    public async Task RaiseQuotaLimit_PeriodOutsideSupportedYears_422(string period)
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+
+        var refused = await SendAsync(world, Raise(world, 20m, period: period));
+
+        var error = refused.Error.ShouldNotBeNull();
+        error.Status.ShouldBe(422);
+        error.Code.ShouldBe("request_invalid");
+        error.Details.ShouldNotBeNull().ShouldContain(
+            detail => detail.Path == "period" && detail.Reason == "invalid_value");
+        (await world.CounterCountAsync()).ShouldBe(0L, "a month the counter cannot hold never reaches a statement");
+    }
+
+    [Fact]
     public async Task RaiseQuotaLimit_WithoutBillingWrite_Refused()
     {
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);
@@ -216,6 +304,14 @@ public sealed class UsageQuotaRaiseTests
         await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Refused);
         await SeedAsync(world, used: 10m, limit: 10m);
 
+        // The gate answers before the body is read, so even a body that is not JSON is a 403 for this caller: a
+        // 400 here would tell an unadmitted caller that its body parsed, and the parse would have run anyway.
+        var malformed = await world.Client.SendRawAsync(
+            HttpMethod.Post, world.RaiseUrl(), _ => { }, "{ \"project_id\": ");
+
+        malformed.Status.ShouldBe(HttpStatusCode.Forbidden);
+        malformed.ErrorCode.ShouldBe("forbidden");
+
         var answer = await world.PostRaiseAsync(new
         {
             project_id = world.Project,
@@ -226,6 +322,22 @@ public sealed class UsageQuotaRaiseTests
         });
 
         answer.Status.ShouldBe(HttpStatusCode.Forbidden);
+        (await world.CounterAsync(project: world.Project)).ShouldNotBeNull().Limit.ShouldBe(10m);
+        (await world.AuditCountAsync(null, Action)).ShouldBe(0L);
+    }
+
+    [Fact]
+    public async Task RaiseQuotaLimit_OperatorRoute_AnonymousMalformedBody_401()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedAsync(world, used: 10m, limit: 10m);
+
+        var malformed = await world.Client.SendRawAsync(
+            HttpMethod.Post, world.RaiseUrl(), _ => { }, "{ \"project_id\": ");
+
+        malformed.Status.ShouldBe(HttpStatusCode.Unauthorized,
+            "the gate decides before the body is parsed, so an anonymous caller cannot learn its body was malformed");
+        malformed.ErrorCode.ShouldBe("unauthenticated");
         (await world.CounterAsync(project: world.Project)).ShouldNotBeNull().Limit.ShouldBe(10m);
         (await world.AuditCountAsync(null, Action)).ShouldBe(0L);
     }
@@ -254,7 +366,8 @@ public sealed class UsageQuotaRaiseTests
         untouched.Used.ShouldBe(5m);
         untouched.BlockedAt.ShouldBeNull();
 
-        // Naming the other org's project from this org's scope is a refusal, not a write somewhere else.
+        // Naming the other org's project from this org's scope is a refusal, not a write somewhere else, and it is
+        // the same 404 an unknown id gets: the route is never an oracle for which ids exist in another tenant.
         var crossed = await world.PostRaiseAsync(new
         {
             project_id = otherProject,
@@ -263,11 +376,48 @@ public sealed class UsageQuotaRaiseTests
             new_limit = 40m,
             reason = Reason,
         });
-        crossed.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        crossed.ErrorCode.ShouldBe("request_invalid");
+        crossed.Status.ShouldBe(HttpStatusCode.NotFound);
+        crossed.ErrorCode.ShouldBe("not_found");
 
         (await world.CounterAsync(org: otherOrg, project: otherProject)).ShouldNotBeNull().Limit.ShouldBe(10m);
         (await world.CounterAsync(project: world.Project)).ShouldNotBeNull().Limit.ShouldBe(40m);
+    }
+
+    [Fact]
+    public async Task RaiseQuotaLimit_UnknownOrForeignProject_404Indistinguishable()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+        var (_, otherProject) = await world.AddOtherOrgAsync();
+        await SeedAsync(world, used: 10m, limit: 20m);
+
+        var unknown = await world.PostRaiseAsync(new
+        {
+            project_id = Guid.CreateVersion7(),
+            period = Period,
+            metric = "results",
+            new_limit = 30m,
+            reason = Reason,
+        });
+        var foreign = await world.PostRaiseAsync(new
+        {
+            project_id = otherProject,
+            period = Period,
+            metric = "results",
+            new_limit = 30m,
+            reason = Reason,
+        });
+
+        unknown.Status.ShouldBe(HttpStatusCode.NotFound);
+        unknown.ErrorCode.ShouldBe("not_found");
+        foreign.Status.ShouldBe(unknown.Status);
+        foreign.ErrorCode.ShouldBe(unknown.ErrorCode);
+        foreign.ErrorMessage.ShouldBe(
+            unknown.ErrorMessage,
+            "an unknown id and another tenant's id must answer the same body");
+
+        (await world.CounterCountAsync()).ShouldBe(1L, "only the seeded counter exists: a refused raise writes none");
+        (await world.CounterAsync(project: world.Project)).ShouldNotBeNull().Limit.ShouldBe(20m);
+        (await world.AuditCountAsync(null, Action)).ShouldBe(0L);
     }
 
     // ------------------------------------------------------------------ a raise racing the gate

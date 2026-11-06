@@ -32,19 +32,20 @@ public sealed partial class UsageQuotaSchemaTests
             await set.ExecuteScalarAsync(TestContext.Current.CancellationToken);
         }
 
-        // Both shapes of the tenant-level limit (null project) and the project-scoped one.
+        // Both shapes of the tenant-level limit (null project) and the project-scoped one, for the two
+        // statements the gate serves: the reservation and the refusal.
         var tenantLevel = await ExplainAsync(
-            connection, transaction, UsageQuotaGateSql.Increment, org, projectId: null, "2026-10", "results", quantity: 1m);
+            connection, transaction, UsageQuotaGateSql.Reserve, org, projectId: null, "2026-10", "results", quantity: 1m);
         var projectScoped = await ExplainAsync(
-            connection, transaction, UsageQuotaGateSql.Increment, org, project, "2026-10", "results", quantity: 1m);
-        var refusalStamp = await ExplainAsync(
-            connection, transaction, UsageQuotaGateSql.Block, org, projectId: null, "2026-10", "results", quantity: null);
+            connection, transaction, UsageQuotaGateSql.Reserve, org, project, "2026-10", "results", quantity: 1m);
+        var refusal = await ExplainAsync(
+            connection, transaction, UsageQuotaGateSql.StampRefusal, org, projectId: null, "2026-10", "results", quantity: 1m);
 
         var plans = new List<(string Label, (List<string> NodeTypes, List<string> IndexNames, List<string> SequentialScanRelations) Nodes)>
         {
-            ("the increment", tenantLevel),
-            ("the project-scoped increment", projectScoped),
-            ("the refusal stamp", refusalStamp),
+            ("the tenant-level reservation", tenantLevel),
+            ("the project-scoped reservation", projectScoped),
+            ("the refusal stamp", refusal),
         };
 
         foreach (var (label, plan) in plans)
@@ -58,6 +59,11 @@ public sealed partial class UsageQuotaSchemaTests
     /// <summary>
     /// Fills the table with the counters of many periods and every metric for one org, then ANALYZEs it: the
     /// planner prefers the scope index on statistics like that without any planner switch, which is the point.
+    /// <para>
+    /// The periods stay inside the counter's own year bound (<c>2000-01</c>..<c>2999-12</c>): a volume that
+    /// starts earlier is refused by <c>quota_counter_period_check</c>, and the seed must be rows the table
+    /// accepts.
+    /// </para>
     /// </summary>
     private async Task SeedCounterVolumeAsync(string database, Guid org, Guid project)
     {
@@ -67,8 +73,8 @@ public sealed partial class UsageQuotaSchemaTests
             insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit)
             select gen_random_uuid(), '{org:D}', null, months.period, metrics.metric, 0, 1000
               from (
-                select to_char(make_date(1900 + (n / 12)::int, 1 + (n % 12)::int, 1), 'YYYY-MM') as period
-                  from generate_series(0, 2399) as n
+                select to_char(make_date(2000 + (n / 12)::int, 1 + (n % 12)::int, 1), 'YYYY-MM') as period
+                  from generate_series(0, 1199) as n
               ) as months
               cross join (values ('results'), ('artifact_gb_month'), ('egress_gb'), ('ai_tokens'),
                                  ('support_hours'), ('runner_minutes'), ('device_minutes')) as metrics (metric);

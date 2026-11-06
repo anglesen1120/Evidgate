@@ -299,14 +299,28 @@ public sealed partial class UsageQuotaSchemaTests
         await ExecuteAsync(app, org, QuotaInsert(Guid.CreateVersion7(), org, project, used: 0m, quotaLimit: 0m, period: "2025-01", warnRatio: 0.0001m));
         await ExecuteAsync(app, org, QuotaInsert(Guid.CreateVersion7(), org, project, used: 0m, quotaLimit: 0m, period: "2025-02", warnRatio: 0.9999m));
 
+        // PostgreSQL stores NaN and Infinity in a numeric column and orders NaN above every number, so only an
+        // explicit CHECK refuses them; the connection cannot carry those values as a parameter that reads.
+        string RawInsert(string period, string used, string quotaLimit) =>
+            $"insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit, warn_ratio) "
+            + $"values ('{Guid.CreateVersion7()}', '{org}', '{project}', '{period}', 'results', {used}, {quotaLimit}, 0.8)";
+
+        var noParameters = Array.Empty<(string Name, object Value)>();
+
         var cases = new List<(string Label, (string Sql, (string Name, object Value)[] Parameters) Insert, string Constraint)>
         {
             ("a single-digit month", QuotaInsert(Guid.CreateVersion7(), org, project, period: "2025-3"), "quota_counter_period_check"),
             ("a thirteenth month", QuotaInsert(Guid.CreateVersion7(), org, project, period: "2025-13"), "quota_counter_period_check"),
             ("a period with a suffix", QuotaInsert(Guid.CreateVersion7(), org, project, period: "2025-01-01"), "quota_counter_period_check"),
+            ("a period before the counter's year range", QuotaInsert(Guid.CreateVersion7(), org, project, period: "1999-12"), "quota_counter_period_check"),
+            ("a period after the counter's year range", QuotaInsert(Guid.CreateVersion7(), org, project, period: "3000-01"), "quota_counter_period_check"),
             ("an undeclared metric", QuotaInsert(Guid.CreateVersion7(), org, project, period: "2025-04", metric: "requests"), "quota_counter_metric_check"),
             ("a negative consumed quantity", QuotaInsert(Guid.CreateVersion7(), org, project, period: "2025-05", used: -1m), "quota_counter_used_check"),
+            ("a NaN consumed quantity", (RawInsert("2025-11", "'NaN'::numeric", "100"), noParameters), "quota_counter_used_check"),
+            ("an infinite consumed quantity", (RawInsert("2025-12", "'Infinity'::numeric", "100"), noParameters), "quota_counter_used_check"),
             ("a negative limit", QuotaInsert(Guid.CreateVersion7(), org, project, period: "2025-06", quotaLimit: -1m), "quota_counter_quota_limit_check"),
+            ("a NaN limit", (RawInsert("2026-01", "0", "'NaN'::numeric"), noParameters), "quota_counter_quota_limit_check"),
+            ("an infinite limit", (RawInsert("2026-02", "0", "'Infinity'::numeric"), noParameters), "quota_counter_quota_limit_check"),
             ("a zero warning line", QuotaInsert(Guid.CreateVersion7(), org, project, period: "2025-07", warnRatio: 0m), "quota_counter_warn_ratio_check"),
             ("a warning line at the limit", QuotaInsert(Guid.CreateVersion7(), org, project, period: "2025-08", warnRatio: 1m), "quota_counter_warn_ratio_check"),
             ("a warning line above the limit", QuotaInsert(Guid.CreateVersion7(), org, project, period: "2025-09", warnRatio: 1.2m), "quota_counter_warn_ratio_check"),

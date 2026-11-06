@@ -75,9 +75,9 @@ internal sealed class QuotaLimitWriter(QuotaCounterStore store, ITenantDb db)
 
             if (!visible.Contains(projectId))
             {
-                return Result.Failure<QuotaRaiseResult>(Error.Invalid(
-                    QuotaRaiseRules.InvalidMessage,
-                    [new ErrorDetail("project_id", "invalid_value")]));
+                // Unknown and another tenant's project answer one 404, so the route is never an oracle for which
+                // ids exist somewhere else, and a raise can never be aimed at a counter this tenant cannot see.
+                return Result.Failure<QuotaRaiseResult>(Error.NotFound("no such project"));
             }
         }
 

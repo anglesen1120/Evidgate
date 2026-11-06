@@ -207,7 +207,7 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            select used, quota_limit, warn_ratio, warned_at, blocked_at
+            select used, quota_limit, warn_ratio, warned_at, blocked_at, version
             from public.quota_counter
             where org_id = @org_id
               and coalesce(project_id, '00000000-0000-0000-0000-000000000000'::uuid)
@@ -234,7 +234,8 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
             reader.GetDecimal(1),
             reader.GetDecimal(2),
             await StampAsync(reader, 3, token).ConfigureAwait(false),
-            await StampAsync(reader, 4, token).ConfigureAwait(false));
+            await StampAsync(reader, 4, token).ConfigureAwait(false),
+            reader.GetInt32(5));
     }
 
     /// <summary>A nullable instant column, read without blocking the flow.</summary>
@@ -281,6 +282,41 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
     internal IReadOnlyList<string> CounterStatements() =>
         [.. Api.Statements.Snapshot().Where(statement =>
             statement.Contains("public.quota_counter", StringComparison.Ordinal))];
+
+    /// <summary>Forgets the statements captured so far, so a test can budget one call.</summary>
+    internal void ClearStatementLog() => Api.Statements.Clear();
+
+    /// <summary>
+    /// Opens one app-role tenant transaction the test drives by hand: the caller's side of a race with the
+    /// gate, committed or rolled back when the test says so.
+    /// </summary>
+    internal Task<TenantScope> BeginAppScopeAsync() =>
+        TenantScope.BeginAsync(_fixture.AppConnectionString(Database), Org);
+
+    /// <summary>
+    /// Waits until some backend is blocked by <paramref name="blockerPid"/>, the observable condition of a
+    /// statement queued behind that transaction's row lock. Polling with a deadline, never a fixed sleep.
+    /// </summary>
+    /// <param name="blockerPid">The backend whose lock another statement waits on.</param>
+    internal async Task WaitForBlockedByAsync(int blockerPid)
+    {
+        for (var attempt = 0; attempt < 400; attempt++)
+        {
+            var blocked = await _fixture.ScalarAsync<long>(
+                    Database,
+                    $"select count(*) from pg_stat_activity where {blockerPid} = any(pg_blocking_pids(pid))")
+                .ConfigureAwait(false);
+
+            if (blocked > 0)
+            {
+                return;
+            }
+
+            await Task.Delay(25, TestContext.Current.CancellationToken).ConfigureAwait(false);
+        }
+
+        throw new TimeoutException($"no statement waited on backend {blockerPid}");
+    }
 
     /// <summary>The operator route of one org's quota raise.</summary>
     /// <param name="org">The org the route names, or null for this world's org.</param>
@@ -365,9 +401,11 @@ internal sealed record CounterSeed(
 /// <param name="WarnRatio">The warning line.</param>
 /// <param name="WarnedAt">The warning stamp.</param>
 /// <param name="BlockedAt">The refusal stamp.</param>
+/// <param name="Version">The row's concurrency token, moved by every write.</param>
 internal sealed record CounterState(
     decimal Used,
     decimal Limit,
     decimal WarnRatio,
     DateTimeOffset? WarnedAt,
-    DateTimeOffset? BlockedAt);
+    DateTimeOffset? BlockedAt,
+    int Version);

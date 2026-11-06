@@ -22,7 +22,7 @@ namespace Evidgate.Modules.Usage.Application.Commands;
 /// <param name="Period">The billing month, <c>YYYY-MM</c>.</param>
 /// <param name="Metric">The metered metric the limit applies to.</param>
 /// <param name="NewLimit">The new limit; it must exceed the stored one, so a raise can never lower a limit below usage.</param>
-/// <param name="Reason">Why the limit was raised, 1..200 characters, recorded in the audit row.</param>
+/// <param name="Reason">Why the limit was raised, 1..200 characters of plain text; surrounding whitespace is trimmed before the audit row keeps it.</param>
 internal sealed record RaiseQuotaLimit(
     Guid? ProjectId,
     string? Period,
@@ -45,7 +45,9 @@ internal static class QuotaRaiseRules
 
     /// <summary>
     /// Validates the typed command and turns it into the wire change. The metric member is checked before it
-    /// is mapped, so an undeclared member is a refusal rather than an exception on the way to SQL.
+    /// is mapped, so an undeclared member is a refusal rather than an exception on the way to SQL; the reason is
+    /// trimmed and checked against the audit row's own value rule here, because that row is written after the
+    /// counter and a reason the row refuses would otherwise be a failure with the limit already moved.
     /// </summary>
     /// <param name="command">The raise to validate.</param>
     internal static Result<QuotaLimitChange> Prepare(RaiseQuotaLimit command)
@@ -67,7 +69,7 @@ internal static class QuotaRaiseRules
             (violations ??= []).Add(new ErrorDetail("new_limit", "invalid_value"));
         }
 
-        ValidateReason(command.Reason, ref violations);
+        var reason = NormalizeReason(command.Reason, ref violations);
 
         if (violations is not null)
         {
@@ -79,7 +81,7 @@ internal static class QuotaRaiseRules
             command.Period ?? string.Empty,
             UsageMetricWire.ToWireValue(command.Metric),
             command.NewLimit,
-            command.Reason ?? string.Empty));
+            reason ?? string.Empty));
     }
 
     /// <summary>The same rules for a wire request, whose metric travels as its name.</summary>
@@ -111,7 +113,7 @@ internal static class QuotaRaiseRules
         {
             (violations ??= []).Add(new ErrorDetail("period", "required"));
         }
-        else if (!UsagePeriod.IsWellFormed(period))
+        else if (!UsagePeriod.IsQuotaPeriod(period))
         {
             (violations ??= []).Add(new ErrorDetail("period", "invalid_value"));
         }
@@ -125,20 +127,53 @@ internal static class QuotaRaiseRules
         }
     }
 
-    private static void ValidateReason(string? reason, ref List<ErrorDetail>? violations)
+    /// <summary>
+    /// Checks the caller's reason and answers it trimmed. The text PostgreSQL keeps and the one-line rule are checked
+    /// on the caller's own text <em>before</em> the trim, because trimming would silently accept a leading line break
+    /// or a trailing bidi mark the rule refuses; the rune cap and the audit metadata value rule then apply to the
+    /// trimmed value, which is what the row records. The first rule the reason breaks is the one detail the caller gets.
+    /// </summary>
+    /// <param name="reason">The caller's reason.</param>
+    /// <param name="violations">The details collected so far.</param>
+    /// <returns>The trimmed reason, or null when it is refused.</returns>
+    private static string? NormalizeReason(string? reason, ref List<ErrorDetail>? violations)
     {
-        if (string.IsNullOrWhiteSpace(reason))
+        if (string.IsNullOrEmpty(reason))
         {
             (violations ??= []).Add(new ErrorDetail("reason", "required"));
+            return null;
         }
-        else if (!PostgresText.IsStorable(reason))
+
+        if (!PostgresText.IsStorable(reason) || !PostgresText.IsPlain(reason))
         {
             (violations ??= []).Add(new ErrorDetail("reason", "invalid_value"));
+            return null;
         }
-        else if (reason.EnumerateRunes().Count() > MaxReasonLength)
+
+        var trimmed = reason.Trim();
+        if (trimmed.Length == 0)
+        {
+            (violations ??= []).Add(new ErrorDetail("reason", "required"));
+            return null;
+        }
+
+        if (trimmed.EnumerateRunes().Count() > MaxReasonLength)
         {
             (violations ??= []).Add(new ErrorDetail("reason", "too_long"));
+            return null;
         }
+
+        var outcome = AuditMetadata.ValueOutcome(trimmed);
+        if (outcome == AuditMetadata.MetadataValueOutcome.Accepted)
+        {
+            return trimmed;
+        }
+
+        (violations ??= []).Add(new ErrorDetail(
+            "reason",
+            outcome == AuditMetadata.MetadataValueOutcome.TooLong ? "too_long" : "invalid_value"));
+
+        return null;
     }
 }
 

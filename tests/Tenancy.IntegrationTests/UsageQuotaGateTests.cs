@@ -148,6 +148,10 @@ public sealed class UsageQuotaGateTests
         await Should.ThrowAsync<ArgumentOutOfRangeException>(() => world.CheckAsync(Request(world, -1m)));
         await Should.ThrowAsync<ArgumentOutOfRangeException>(
             () => world.CheckAsync(Request(world, 1m, period: "2026-13")));
+        await Should.ThrowAsync<ArgumentOutOfRangeException>(
+            () => world.CheckAsync(Request(world, 1m, period: "1999-12")));
+        await Should.ThrowAsync<ArgumentOutOfRangeException>(
+            () => world.CheckAsync(Request(world, 1m, period: "3000-01")));
 
         (await world.CounterAsync(project: world.Project)).ShouldNotBeNull().Used.ShouldBe(0m);
         world.CounterStatements().ShouldBeEmpty("a caller bug is refused before any statement runs");
@@ -167,8 +171,98 @@ public sealed class UsageQuotaGateTests
         answer.RaisePath.ShouldBeNull();
 
         (await world.CounterCountAsync()).ShouldBe(0, "the gate never creates a counter");
+        world.CounterStatements().Count.ShouldBe(1, "one statement answers both the check and the absence");
         world.CounterStatements().ShouldNotContain(
             statement => statement.Contains("insert", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task QuotaGate_AcceptedCall_IsOneStatement()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedAsync(world, used: 0m);
+
+        world.ClearStatementLog();
+        var answer = await world.CheckAsync(Request(world, 1m));
+
+        answer.Decision.ShouldBe(QuotaDecision.Ok);
+        world.CounterStatements().Count.ShouldBe(1, "a reservation is the check, never a read followed by a write");
+    }
+
+    [Fact]
+    public async Task QuotaGate_RepeatedRefusal_StampsOnceAndKeepsTheVersion()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedAsync(world, used: Limit);
+
+        var first = await world.CheckAsync(Request(world, 1m));
+
+        first.Decision.ShouldBe(QuotaDecision.Block);
+        var stamped = (await world.CounterAsync(project: world.Project)).ShouldNotBeNull();
+        stamped.BlockedAt.ShouldNotBeNull("the first refusal stamps when the scope was blocked");
+        stamped.Version.ShouldBe(2, "one write: the stamp");
+
+        world.ClearStatementLog();
+        var again = await world.CheckAsync(Request(world, 1m));
+
+        again.Decision.ShouldBe(QuotaDecision.Block);
+        again.Used.ShouldBe(Limit);
+        again.Limit.ShouldBe(Limit);
+        again.RetryAfter.ShouldNotBeNull();
+        world.CounterStatements().Count.ShouldBe(
+            2,
+            "the reservation statement answers the scope and the refusal statement answers it without a "
+            + "write; a third command would be a separate re-check of a counter that already refused");
+        (await world.CounterAsync(project: world.Project)).ShouldBe(
+            stamped,
+            "a refusal whose stamp already exists writes nothing, so it cannot bump the version");
+    }
+
+    [Fact]
+    public async Task QuotaGate_PeriodUpperBound_BlockStillAnswersRetry()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        const string lastPeriod = "2999-12";
+        await SeedAsync(world, used: Limit, period: lastPeriod);
+
+        var answer = await world.CheckAsync(Request(world, 1m, period: lastPeriod));
+
+        answer.Decision.ShouldBe(QuotaDecision.Block);
+        answer.Used.ShouldBe(Limit);
+        answer.RetryAfter.ShouldNotBeNull().ShouldBeGreaterThanOrEqualTo(TimeSpan.FromSeconds(1));
+        (await world.CounterAsync(project: world.Project, period: lastPeriod)).ShouldNotBeNull()
+            .BlockedAt.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task QuotaGate_RaiseBeforeTheStamp_LeavesNoBlockOnTheRaisedCounter()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedAsync(world, used: Limit - 1m);
+
+        // The operator's raise commits between the gate reading the scope and its refusal stamp: here the
+        // raise holds the row lock, so the gate's statement has to wait and re-check the capacity it saw.
+        await using var raising = await world.BeginAppScopeAsync();
+        (await raising.ExecuteAsync(
+            "update public.quota_counter set quota_limit = 20, blocked_at = null "
+            + "where org_id = @org_id and project_id = @project_id and period = @period and metric = 'results'",
+            ("org_id", world.Org),
+            ("project_id", world.Project),
+            ("period", Period))).ShouldBe(1);
+        var blocker = await raising.ScalarAsync<int>("select pg_backend_pid()");
+
+        var check = world.CheckAsync(Request(world, 2m));
+        await world.WaitForBlockedByAsync(blocker);
+        await raising.CommitAsync();
+
+        var answer = await check;
+        answer.Decision.ShouldBe(QuotaDecision.Ok, "the raise left room for the same call");
+        var stored = (await world.CounterAsync(project: world.Project)).ShouldNotBeNull();
+        stored.Limit.ShouldBe(20m);
+        stored.Used.ShouldBe(
+            Limit - 1m + 2m,
+            "the call the retry statement served is counted, so a raised counter never loses admitted usage");
+        stored.BlockedAt.ShouldBeNull("a counter with room is never left blocked by the racing refusal");
     }
 
     [Fact]

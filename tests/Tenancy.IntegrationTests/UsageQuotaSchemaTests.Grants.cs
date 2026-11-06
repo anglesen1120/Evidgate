@@ -4,7 +4,7 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The quota counter's write surface: the app role may set the five columns the increment and a raise own and
+/// The quota counter's write surface: the app role may set the four columns the check and a raise own and
 /// nothing else, no role removes a counter, and no platform role reaches it — asserted in execution as well as in
 /// the catalogue, because a table-wide grant says nothing about a column grant.
 /// </summary>
@@ -20,11 +20,11 @@ public sealed partial class UsageQuotaSchemaTests
 
         await ExecuteAsync(_fixture.AppConnectionString(database), org, QuotaInsert(id, org, project, used: 3m));
 
-        // The positive control: the five columns the increment and a raise write are inside the grant.
+        // The positive control: the four columns the check and a raise write are inside the grant.
         await using (var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org))
         {
             (await app.ExecuteAsync(
-                $"update public.quota_counter set used = 4, quota_limit = 120, warn_ratio = 0.9, "
+                $"update public.quota_counter set used = 4, quota_limit = 120, "
                 + $"warned_at = now(), blocked_at = now() where id = '{id}'"))
                 .ShouldBe(1);
             await app.CommitAsync();
@@ -37,6 +37,7 @@ public sealed partial class UsageQuotaSchemaTests
             ("move the counter to another project", $"update public.quota_counter set project_id = '{Guid.CreateVersion7()}' where id = '{id}'"),
             ("move the counter to another period", $"update public.quota_counter set period = '2026-11' where id = '{id}'"),
             ("move the counter to another metric", $"update public.quota_counter set metric = 'ai_tokens' where id = '{id}'"),
+            ("rewrite the warning line", $"update public.quota_counter set warn_ratio = 0.9 where id = '{id}'"),
             ("backdate the row", $"update public.quota_counter set created_at = now() - interval '1 day' where id = '{id}'"),
             ("rewrite the update stamp", $"update public.quota_counter set updated_at = now() - interval '1 day' where id = '{id}'"),
             ("rewrite the concurrency token", $"update public.quota_counter set version = 1 where id = '{id}'"),
@@ -71,7 +72,7 @@ public sealed partial class UsageQuotaSchemaTests
         }
 
         // UPDATE is table-level FALSE because the grant is per column; both halves say what the counter owns.
-        foreach (var column in new[] { "used", "quota_limit", "warn_ratio", "warned_at", "blocked_at" })
+        foreach (var column in new[] { "used", "quota_limit", "warned_at", "blocked_at" })
         {
             (await _fixture.ScalarAsync<bool>(
                 database,
@@ -79,12 +80,15 @@ public sealed partial class UsageQuotaSchemaTests
                 .ShouldBeTrue($"the counter writes {column}");
         }
 
-        foreach (var column in new[] { "id", "org_id", "project_id", "period", "metric", "created_at", "updated_at", "version" })
+        foreach (var column in new[]
+        {
+            "id", "org_id", "project_id", "period", "metric", "warn_ratio", "created_at", "updated_at", "version",
+        })
         {
             (await _fixture.ScalarAsync<bool>(
                 database,
                 $"select has_column_privilege('evidgate_app', 'public.quota_counter', '{column}', 'UPDATE')"))
-                .ShouldBeFalse($"a counter's scope and audit columns never move ({column})");
+                .ShouldBeFalse($"nothing writes {column} after the row exists");
         }
     }
 }
