@@ -50,7 +50,19 @@ public sealed class UsageStatementQaBoundaryTests(PostgresTenancyFixture fixture
         document.RootElement.GetProperty("lines")[0].GetProperty("amount").GetString().ShouldBe("10.5");
         document.RootElement.GetProperty("adjustments")[0].GetProperty("amount").GetString().ShouldBe("-3.25");
         document.RootElement.GetProperty("total").GetString().ShouldBe("7.25");
-        (await world.GetTextAsync(world.WorksheetUrl($"period={Period}"))).Text.ShouldBe(before.Text);
+
+        var after = await world.GetTextAsync(world.WorksheetUrl($"period={Period}"));
+        using var beforeDocument = JsonDocument.Parse(before.Text);
+        using var afterDocument = JsonDocument.Parse(after.Text);
+        afterDocument.RootElement.GetProperty("content_hash").GetString()
+            .ShouldBe(beforeDocument.RootElement.GetProperty("content_hash").GetString(),
+                "issuing freezes the document without moving the figures the worksheet renders");
+        afterDocument.RootElement.GetProperty("total").GetDecimal()
+            .ShouldBe(beforeDocument.RootElement.GetProperty("total").GetDecimal());
+        afterDocument.RootElement.GetProperty("issued").GetProperty("statement_id").GetGuid()
+            .ShouldBe(issued.Body.GetProperty("id").GetGuid(),
+                "the read reports the statement beside the same figures instead of replacing them");
+        afterDocument.RootElement.GetProperty("drifted_since_issue").GetBoolean().ShouldBeFalse();
     }
 
     [Fact]

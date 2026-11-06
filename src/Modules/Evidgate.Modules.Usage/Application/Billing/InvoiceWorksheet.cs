@@ -43,6 +43,22 @@ internal sealed record WorksheetLine(
     string? Reason);
 
 /// <summary>
+/// The statement one period was issued under, as the worksheet read reports it beside the live figures: what was
+/// frozen, never what the period sums to now.
+/// </summary>
+/// <param name="StatementId">The statement row's id.</param>
+/// <param name="ContentHash">The worksheet's canonical hash as issued.</param>
+/// <param name="TotalAmount">The total the statement froze.</param>
+/// <param name="Currency">The currency that total is expressed in.</param>
+/// <param name="IssuedAt">When the statement was issued.</param>
+internal sealed record IssuedWorksheetStatement(
+    Guid StatementId,
+    string ContentHash,
+    decimal TotalAmount,
+    string Currency,
+    DateTimeOffset IssuedAt);
+
+/// <summary>
 /// The invoice worksheet of one closed period: every ledger row that bills, the corrections beside it, and the
 /// period's own totals as the ledger aggregates them.
 /// </summary>
@@ -71,6 +87,11 @@ internal sealed record WorksheetLine(
 /// <param name="Truncated">True when the period holds more rows than the worksheet can carry.</param>
 /// <param name="Reconciled">True when the rows agree on count and, where known, on amount and currency.</param>
 /// <param name="ContentHash">SHA-256 (lowercase hex) of <see cref="InvoiceWorksheetCanonical"/>'s text.</param>
+/// <param name="Issued">The period's issued statement, or null while the period was never issued.</param>
+/// <param name="DriftedSinceIssue">
+/// True when the period was issued and this read no longer hashes to what was issued, so a row or a correction
+/// reached the period after the statement froze it. Always false without an issued statement.
+/// </param>
 internal sealed record InvoiceWorksheet(
     string Period,
     string? Currency,
@@ -84,7 +105,9 @@ internal sealed record InvoiceWorksheet(
     int SourceGapCount,
     bool Truncated,
     bool Reconciled,
-    string ContentHash);
+    string ContentHash,
+    IssuedWorksheetStatement? Issued = null,
+    bool DriftedSinceIssue = false);
 
 /// <summary>
 /// What a period would invoice, read on demand: <c>GET /internal/operator/orgs/{o}/invoice-worksheet?period=</c>.
@@ -101,6 +124,12 @@ internal sealed record InvoiceWorksheet(
 /// which is why this read never claims a period is issuable. It reports what the issuer's rules then judge.
 /// The bound is <see cref="MaxLines"/> rows plus one, so a period past it is reported as truncated instead of
 /// being passed off as complete.
+/// <para>
+/// A period that was already issued is answered with the statement it froze beside the live figures, so a row or
+/// a correction that reached the period after the issue is reported as a drift instead of silently moving the
+/// total the org was billed. The comparison is made against the canonical hash the statement stored; neither
+/// the issued values nor the flag are part of that document.
+/// </para>
 /// </remarks>
 internal sealed class InvoiceWorksheetReader(
     ITenantScopeFactory scopes,
@@ -108,7 +137,8 @@ internal sealed class InvoiceWorksheetReader(
     IAuditTrail audit,
     ITenantLimits limits,
     UsageReadStore store,
-    PeriodReconciliationReader reconciliation)
+    PeriodReconciliationReader reconciliation,
+    BillingStatementStore statements)
 {
     /// <summary>Most ledger rows one worksheet carries; a period past it is truncated and unissuable.</summary>
     internal const int MaxLines = 10_000;
@@ -152,6 +182,7 @@ internal sealed class InvoiceWorksheetReader(
         }
 
         var worksheet = await BuildAsync(orgId, validated.Value, cancellationToken).ConfigureAwait(false);
+        worksheet = await DescribeIssueAsync(orgId, worksheet, cancellationToken).ConfigureAwait(false);
 
         DescribeAudit(orgId, operatorId, worksheet);
         await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
@@ -163,6 +194,8 @@ internal sealed class InvoiceWorksheetReader(
     /// <summary>
     /// Assembles the worksheet of one period inside the caller's already-open tenant scope. It writes nothing and
     /// audits nothing, so the read route and the issuer that freezes a worksheet build it through one code path.
+    /// The issued statement is attached by the read and never here: the issuer's own build pays no second read, and
+    /// the document it freezes carries the live figures alone.
     /// </summary>
     /// <param name="orgId">The tenant of the open scope.</param>
     /// <param name="period">The period, already validated as <c>YYYY-MM</c>.</param>
@@ -204,6 +237,40 @@ internal sealed class InvoiceWorksheetReader(
         return draft with { ContentHash = InvoiceWorksheetCanonical.Hash(draft) };
     }
 
+    /// <summary>
+    /// Answers what the period was issued as, when it was: one indexed read of the statement the period already
+    /// froze, taken inside the caller's scope and only after the live worksheet was built, so an unissued period
+    /// pays nothing for it. The issued values are reported beside the live ones and never replace them — a row
+    /// that reached the period late cannot move what the org was billed, it only says the two disagree.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope.</param>
+    /// <param name="worksheet">The worksheet as the period reads now.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async Task<InvoiceWorksheet> DescribeIssueAsync(
+        Guid orgId,
+        InvoiceWorksheet worksheet,
+        CancellationToken cancellationToken)
+    {
+        var issued = await statements
+            .FindAsync(orgId, worksheet.Period, BillingStatementStore.InvoiceKind, cancellationToken)
+            .ConfigureAwait(false);
+        if (issued is null)
+        {
+            return worksheet;
+        }
+
+        return worksheet with
+        {
+            Issued = new IssuedWorksheetStatement(
+                issued.Id,
+                issued.ContentHash,
+                issued.TotalAmount,
+                issued.Currency,
+                issued.IssuedAt),
+            DriftedSinceIssue = !string.Equals(issued.ContentHash, worksheet.ContentHash, StringComparison.Ordinal),
+        };
+    }
+
     /// <summary>Validates the period, or names the member that fails the request.</summary>
     private static Result<string> Validate(string? period) =>
         period is null
@@ -231,8 +298,9 @@ internal sealed class InvoiceWorksheetReader(
         row.Reason);
 
     /// <summary>
-    /// Records which period was read, how many rows it described and which bound shaped the answer. No amount
-    /// reaches the audit chain: this row says what was read, not what it billed.
+    /// Records which period was read, how many rows it described, which bound shaped the answer and whether the
+    /// period has moved since it was issued. No amount reaches the audit chain: this row says what was read, not
+    /// what it billed.
     /// </summary>
     private void DescribeAudit(Guid orgId, Guid operatorId, InvoiceWorksheet worksheet)
     {
@@ -248,14 +316,21 @@ internal sealed class InvoiceWorksheetReader(
         audit.Record(Action, new AuditActor(AuditActorTypes.PlatformOperator, operatorId.ToString("D")));
     }
 
+    /// <summary>
+    /// The read's own verdict, in one word, still amount-free: a period that no longer matches the statement it
+    /// was issued under is reported as drifted ahead of how complete the worksheet is, because it is the stronger
+    /// statement about the period — the org was billed something this read no longer describes.
+    /// </summary>
     private static string Outcome(InvoiceWorksheet worksheet) =>
-        worksheet.Truncated
-            ? "truncated"
-            : worksheet.SourceGapCount > 0
-                ? "source_gaps"
-                : !worksheet.Reconciled
-                    ? "unreconciled"
-                    : worksheet.UnpricedLineCount > 0
-                        ? "unpriced"
-                        : "complete";
+        worksheet.DriftedSinceIssue
+            ? "drifted"
+            : worksheet.Truncated
+                ? "truncated"
+                : worksheet.SourceGapCount > 0
+                    ? "source_gaps"
+                    : !worksheet.Reconciled
+                        ? "unreconciled"
+                        : worksheet.UnpricedLineCount > 0
+                            ? "unpriced"
+                            : "complete";
 }
