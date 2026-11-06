@@ -1,6 +1,7 @@
 using System.Globalization;
 using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -20,12 +21,49 @@ namespace Evidgate.Modules.Evidence.Application;
 
 /// <summary>
 /// Payload of the <c>raw_report_parse</c> task: the run the report belongs to, the stored artifact and the producer
-/// kind its report declares. The tenant comes from the task row, never from the payload.
+/// kind its run's manifest declares. The tenant comes from the task row, never from the payload.
 /// </summary>
 /// <param name="RunId">The run the report was uploaded for; a report of another run yields no event.</param>
 /// <param name="ArtifactId">The raw report artifact; also the synthetic producer id's suffix.</param>
-/// <param name="ProducerKind">The report dialect, e.g. <c>pytest-junitxml</c>; resolved against the parser registry.</param>
-internal sealed record ParseRawReportPayload(Guid RunId, Guid ArtifactId, string ProducerKind);
+/// <param name="ProducerKind">
+/// The report dialect, e.g. <c>pytest-junitxml</c>; resolved against the parser registry. Null when the manifest named
+/// no single producer kind, which <paramref name="ProducerIssue"/> then explains.
+/// </param>
+/// <param name="ProducerIssue">
+/// The code word of a manifest whose shards do not name one storable producer kind (<see cref="ProducerUnknown"/>,
+/// <see cref="ProducerInvalid"/> or <see cref="ProducerAmbiguous"/>). Such a report is refused without being read,
+/// because no parser can be chosen.
+/// </param>
+internal sealed record ParseRawReportPayload(
+    Guid RunId,
+    Guid ArtifactId,
+    string? ProducerKind,
+    string? ProducerIssue = null)
+{
+    /// <summary>The issue of a manifest whose shards declare no producer hint at all.</summary>
+    public const string ProducerUnknown = "producer_unknown";
+
+    /// <summary>
+    /// The issue of a manifest whose shards agree on one hint that the column's shape cannot store
+    /// (<c>^[a-z][a-z0-9-]*$</c> in one to 64 characters): a dialect word outside the registry's vocabulary, such as a
+    /// mixed-case word with an underscore. The hint is still only a lookup key, so it never reaches the payload as a
+    /// kind; the refusal row then carries this issue rather than disappearing.
+    /// </summary>
+    public const string ProducerInvalid = "producer_invalid";
+
+    /// <summary>The issue of a manifest whose shards declare more than one distinct producer hint.</summary>
+    public const string ProducerAmbiguous = "producer_ambiguous";
+
+    /// <summary>
+    /// The producer kind an issue row stores, because <c>raw_report.producer_kind</c> is not null and admits only
+    /// <c>^[a-z][a-z0-9-]*$</c>. No registry kind is spelled this way, and one issue row per artifact is all the
+    /// table's (org, artifact, producer kind) key allows when the parser pair is absent.
+    /// </summary>
+    public const string UnresolvedProducerKind = "producer-unresolved";
+
+    /// <summary>The producer kind the report's own row stores: the declared one, or the reserved word of an issue row.</summary>
+    public string StoredProducerKind => ProducerKind is { Length: > 0 } kind ? kind : UnresolvedProducerKind;
+}
 
 /// <summary>
 /// What one parse attempt produced, named so a caller (and a test) can tell a stored event set from a refusal.
@@ -81,6 +119,13 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// <c>raw_report</c> row is the last write before the commit, so a refusal anywhere in the transaction leaves none.
 /// </para>
 /// <para>
+/// <b>The run's first accepted report moves it on, and what this attempt really inserted is metered.</b> A
+/// <c>queued</c> run is driven <c>queued → running</c> through 05's transition <em>before</em> the admission read takes
+/// the same row's lock, so this writer and the event batch route share one lock order. The events this attempt inserted —
+/// never the replayed ones — become one <c>event_batch</c> receipt and one <c>usage.batch_accepted</c> outbox row in the
+/// evidence's own transaction, so a report cannot be metered for a commit that rolled back.
+/// </para>
+/// <para>
 /// <b>A replay is a no-op only when it is the same evidence.</b> The producer id is synthetic and per report
 /// (<c>junit-&lt;artifact id&gt;</c>) and the sequence is the testcase's document position, so
 /// <c>event_run_producer_sequence_key</c> matches the stored rows of a second parse. Each matched row's stored payload
@@ -95,8 +140,11 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// <c>parse_timeout</c>) becomes a named <c>malformed</c> outcome with zero events, exactly as for an artifact parse;
 /// what the parser decided is stored in one short write of its own, so a report nobody could parse still leaves
 /// evidence of who judged it and why. A producer kind with no loaded parser is stored the same way as
-/// <c>unsupported</c>. Only a child that never started is retried, and it writes nothing. No other exception is read as
-/// a verdict: a resolver or storage fault must surface.
+/// <c>unsupported</c>. A report whose bytes its own <c>artifact_parse</c> already judged — the artifact is
+/// <c>rejected</c> with that verdict, because the completion schedules both tasks in one transaction — stores the same
+/// verdict as its <c>malformed</c> row without reading a byte and without an event; a rejected artifact of any other
+/// reason is a skip, because no report was ever validly uploaded. Only a child that never started is retried, and it
+/// writes nothing. No other exception is read as a verdict: a resolver or storage fault must surface.
 /// </para>
 /// <para>
 /// <b>A report whose artifact belongs to another run, or another tenant, yields no event.</b> The payload's run id is
@@ -114,6 +162,7 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// <param name="mappers">The loaded JUnit mappers; the one whose pair the registry names does the mapping.</param>
 /// <param name="scopeFactory">Reaches the scoped case-attempt writer: handlers are singletons, and the writer joins the ambient tenant transaction and never commits.</param>
 /// <param name="outbox">The reconcile trigger's transactional outbox writer.</param>
+/// <param name="audit">The attempt's audit buffer, which the run transition inside the write transaction records into.</param>
 /// <param name="logger">The one structured line each attempt writes.</param>
 internal sealed partial class ParseRawReportHandler(
     ITenantScopeFactory scopes,
@@ -126,6 +175,7 @@ internal sealed partial class ParseRawReportHandler(
     IEnumerable<IJUnitMapper> mappers,
     IServiceScopeFactory scopeFactory,
     IOutboxWriter outbox,
+    IAuditTrail audit,
     ILogger<ParseRawReportHandler> logger) : ITransactionlessTaskHandler<ParseRawReportPayload>
 {
     /// <summary>The cap name a report over its byte budget carries in telemetry.</summary>
@@ -177,6 +227,26 @@ internal sealed partial class ParseRawReportHandler(
         Guid orgId,
         CancellationToken cancellationToken)
     {
+        if (payload.ProducerKind is not { Length: > 0 } || payload.ProducerIssue is not null)
+        {
+            // No single producer kind to resolve, so no parser can judge the bytes: the report is refused before they
+            // are read and leaves its one row. A null kind without an issue is the same refusal, so a hand-written
+            // payload can never reach the registry with a null.
+            var issue = string.IsNullOrEmpty(payload.ProducerIssue)
+                ? ParseRawReportPayload.ProducerUnknown
+                : payload.ProducerIssue;
+            LogUnsupported(logger, payload.ArtifactId, issue);
+            return await RefuseAsync(
+                    orgId,
+                    payload,
+                    RawReportOutcomes.Unsupported,
+                    issue,
+                    parserId: null,
+                    parserVersion: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         var preparation = await PrepareAsync(orgId, payload, cancellationToken).ConfigureAwait(false);
         if (preparation.Prepared is not { } prepared)
         {

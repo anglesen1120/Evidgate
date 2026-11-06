@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.ObjectStorage;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Application;
@@ -245,6 +246,7 @@ public sealed partial class EvidenceRawReportParseTests
             services.GetServices<IJUnitMapper>(),
             services.GetRequiredService<IServiceScopeFactory>(),
             services.GetRequiredService<IOutboxWriter>(),
+            services.GetRequiredService<IAuditTrail>(),
             NullLogger<ParseRawReportHandler>.Instance);
     }
 }

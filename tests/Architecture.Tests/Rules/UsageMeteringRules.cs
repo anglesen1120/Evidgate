@@ -5,8 +5,13 @@ namespace Architecture.Tests.Rules;
 /// <summary>
 /// 00 §9.1: usage metering is an internal module call, never a public endpoint. Only the Usage module that owns the
 /// ledger and the Ingestion module that meters an accepted batch may name <c>IUsageLedger</c>, and the metering handler
-/// itself is DB-to-DB (00 §5.7 P5), so no HTTP client may appear in it. The usage task type has exactly one producer,
-/// the ingest commit, plus the handler that consumes it — a reprocess path adding itself to that set is a double bill.
+/// itself is DB-to-DB, so no HTTP client may appear in it. The usage task type has one owner,
+/// <c>UsageBatchAcceptedContract</c>, which the raw report's evidence transaction reads; the ingest route keeps its own
+/// literal (<c>IngestEventBatchHandler.UsageTaskType</c>, which the metering handler also takes its task type from) and
+/// a parity test pins the two spellings equal, so the rule below allow-lists the files of both. It has exactly two
+/// producers — the ingest commit and the raw report's evidence transaction — plus the handler that consumes it; a
+/// reprocess path adding itself to that set is a double bill. Moving the ingest literal onto the contract is the
+/// events-route owner's follow-up.
 /// </summary>
 public static class UsageMeteringRules
 {
@@ -17,9 +22,19 @@ public static class UsageMeteringRules
     public const string MeteringHandlerPath =
         "src/Modules/Evidgate.Modules.Ingestion/Application/MeterEventBatchTaskHandler.cs";
 
+    /// <summary>The shared contract that owns the usage row's task type, payload, aggregate and key.</summary>
+    public const string UsageContractPath =
+        "src/Modules/Evidgate.Modules.Ingestion.Contracts/UsageBatchAcceptedContract.cs";
+
+    /// <summary>The second producer of the row: the evidence transaction that meters a parsed report's events.</summary>
+    public const string ReportMeteringPath =
+        "src/Modules/Evidgate.Modules.Evidence/Application/ParseRawReportTask.Metering.cs";
+
     private const string UsageTaskType = "usage.batch_accepted";
 
     private const string TaskTypeConstant = "UsageTaskType";
+
+    private const string SharedContract = "UsageBatchAcceptedContract";
 
     /// <summary>The assembly (by its source directory) whose code owns the ledger.</summary>
     private static readonly string[] LedgerOwners =
@@ -34,11 +49,16 @@ public static class UsageMeteringRules
         "src/Modules/Evidgate.Modules.Ingestion/",
     ];
 
-    /// <summary>Every file allowed to name the usage task type: its producer and its handler.</summary>
+    /// <summary>
+    /// Every file allowed to name the usage task type: the contract that owns it, its two producers (the ingest commit
+    /// and the raw report's evidence transaction) and the one handler that consumes it.
+    /// </summary>
     private static readonly string[] Emitters =
     [
         "src/Modules/Evidgate.Modules.Ingestion/Application/Commands/IngestEventBatch.cs",
         MeteringHandlerPath,
+        UsageContractPath,
+        ReportMeteringPath,
     ];
 
     /// <summary>The HTTP references the metering step may never carry (00 §5.7 P5).</summary>
@@ -139,7 +159,7 @@ public static class UsageMeteringRules
 
         foreach (var path in naming.Except(Emitters, StringComparer.Ordinal))
         {
-            violations.Add($"{path} names the usage task type '{UsageTaskType}'; only the ingest commit may produce it");
+            violations.Add($"{path} names the usage task type '{UsageTaskType}'; only its contract and its two producers — the ingest commit and the raw report parse — may");
         }
 
         foreach (var path in Emitters.Except(naming, StringComparer.Ordinal))
@@ -154,7 +174,10 @@ public static class UsageMeteringRules
 
     private static bool MentionsUsageTask(string text) =>
         Code(text).Contains(UsageTaskType, StringComparison.Ordinal)
-        || Code(text).Contains(TaskTypeConstant, StringComparison.Ordinal);
+        || Code(text).Contains(TaskTypeConstant, StringComparison.Ordinal)
+        // A producer that reaches the row through the shared contract must be caught as well: the literal now lives
+        // there once, so the type name is what a second writer would carry.
+        || Code(text).Contains(SharedContract, StringComparison.Ordinal);
 
     /// <summary>
     /// The file's code with its <c>//</c> and <c>/* */</c> comments removed: a doc comment naming the ledger or a plan id

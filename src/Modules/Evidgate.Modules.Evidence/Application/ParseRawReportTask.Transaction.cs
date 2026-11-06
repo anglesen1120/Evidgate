@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
@@ -15,9 +16,10 @@ namespace Evidgate.Modules.Evidence.Application;
 internal sealed partial class ParseRawReportHandler
 {
     /// <summary>
-    /// The one write transaction: the run's lock, the closed synthetic producer slot, every event in one statement, the
-    /// attempts of the newly inserted finishes, the slot's high-water mark, the reconcile trigger and the report's row —
-    /// committed together or not at all. A report an earlier attempt committed as refused is refused whole here.
+    /// The one write transaction: the queued run's transition to running, the run's lock, the closed synthetic producer
+    /// slot, every event in one statement, the attempts of the newly inserted finishes, the slot's high-water mark, the
+    /// reconcile trigger, the batch receipt with its usage row and the report's row — committed together or not at all.
+    /// A report an earlier attempt committed as refused is refused whole here.
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
@@ -39,7 +41,19 @@ internal sealed partial class ParseRawReportHandler
             .ConfigureAwait(false);
         await using var context = contexts.Create();
 
-        var (admission, stopped) = await AdmitAsync(context, orgId, payload, cancellationToken).ConfigureAwait(false);
+        // The transition below records the run.state_changed edge, and a task attempt has no pipeline unit to inherit,
+        // so this attempt opens its own buffer and flushes it into this transaction just before the commit.
+        using var auditUnit = audit.BeginUnit();
+
+        // The lock order: the transition takes the run row FOR NO KEY UPDATE, and the admission read takes the same row
+        // the same way, so the transition runs first. A run that is not queued is not re-transitioned, and a transition
+        // that fails ends the attempt before any row is read under the lock.
+        if (await StartRunAsync(orgId, payload, cancellationToken).ConfigureAwait(false) is { } unrunnable)
+        {
+            return unrunnable;
+        }
+
+        var (admission, reportBytes, stopped) = await AdmitAsync(context, orgId, payload, cancellationToken).ConfigureAwait(false);
         if (admission is not { } allowed)
         {
             return stopped!;
@@ -47,35 +61,16 @@ internal sealed partial class ParseRawReportHandler
 
         if (events.Events.Length == 0)
         {
-            // Nothing mapped (every testcase unmapped, or a document with no testcase): no slot, no event, no trigger.
-            // The report still leaves its own row, so a document that mapped nothing is distinguishable from one that
-            // was never parsed.
-            if (await StoreParsedRowAsync(orgId, payload, report, cancellationToken).ConfigureAwait(false)
-                is { } conflicted)
-            {
-                return conflicted;
-            }
-
-            LogMapped(logger, payload.ArtifactId, 0, 0);
-            await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return new ParseRawReportOutcome(ParseRawReportOutcome.Parsed, Events: 0);
+            return await WriteNothingMappedAsync(scope, orgId, payload, report, cancellationToken).ConfigureAwait(false);
         }
 
-        var (insertedIds, refused) = await InsertEventSetAsync(
-                allowed, orgId, payload, producerId, events, cancellationToken)
+        var (insertedSet, refused) = await WriteEventSetAsync(
+                allowed, orgId, payload, producerId, events, reportBytes, cancellationToken)
             .ConfigureAwait(false);
-        if (insertedIds is not { } inserted)
+        if (insertedSet is not { } inserted)
         {
             return refused!;
         }
-
-        if (!await WriteAttemptsAsync(payload, events, inserted, cancellationToken).ConfigureAwait(false))
-        {
-            return new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "case_attempt_conflict");
-        }
-
-        await AdvanceSlotAsync(allowed, orgId, payload, producerId, events, inserted, cancellationToken)
-            .ConfigureAwait(false);
 
         // The row is the transaction's last insert and its last verdict: nothing before it commits without it, so a row
         // that already holds a refusal for this report and parser release rolls every write above back.
@@ -85,10 +80,89 @@ internal sealed partial class ParseRawReportHandler
             return rejected;
         }
 
-        await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
+        await CommitAttemptAsync(scope, orgId, cancellationToken).ConfigureAwait(false);
         LogMapped(logger, payload.ArtifactId, events.Events.Length, inserted.Count);
 
         return new ParseRawReportOutcome(ParseRawReportOutcome.Parsed, Events: inserted.Count);
+    }
+
+    /// <summary>
+    /// The report that mapped nothing (every testcase unmapped, or a document with no testcase): no slot, no event, no
+    /// trigger and nothing to meter. The report still leaves its own row, so a document that mapped nothing is
+    /// distinguishable from one that was never parsed, and the commit carries the audit buffer like any other.
+    /// </summary>
+    /// <param name="scope">The write scope this attempt opened.</param>
+    /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="payload">The run, artifact and producer kind.</param>
+    /// <param name="report">The report's own row.</param>
+    /// <param name="cancellationToken">Cancels the write and the commit.</param>
+    /// <returns>The parsed outcome, with no events.</returns>
+    private async Task<ParseRawReportOutcome> WriteNothingMappedAsync(
+        ITenantScope scope,
+        Guid orgId,
+        ParseRawReportPayload payload,
+        RawReportDraft report,
+        CancellationToken cancellationToken)
+    {
+        if (await StoreParsedRowAsync(orgId, payload, report, cancellationToken).ConfigureAwait(false)
+            is { } conflicted)
+        {
+            return conflicted;
+        }
+
+        LogMapped(logger, payload.ArtifactId, 0, 0);
+        await CommitAttemptAsync(scope, orgId, cancellationToken).ConfigureAwait(false);
+        return new ParseRawReportOutcome(ParseRawReportOutcome.Parsed, Events: 0);
+    }
+
+    /// <summary>
+    /// The evidential writes of a report that mapped something, in the order the admits and the row locks require: the
+    /// event set, the new cases' attempts, one batch identity naming both the slot's advance and the receipt, and the
+    /// metering of what this attempt inserted.
+    /// </summary>
+    /// <param name="admission">The run's admission this attempt was allowed under.</param>
+    /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="payload">The run, artifact and producer kind.</param>
+    /// <param name="producerId">The synthetic producer id of this report.</param>
+    /// <param name="events">The serialized, hashed event set built before this scope opened.</param>
+    /// <param name="reportBytes">The bytes of the report that produced the events.</param>
+    /// <param name="cancellationToken">Cancels the writes.</param>
+    /// <returns>The ids this attempt inserted, or the outcome that ends it.</returns>
+    private async Task<(HashSet<Guid>? Inserted, ParseRawReportOutcome? Stopped)> WriteEventSetAsync(
+        RunAdmission admission,
+        Guid orgId,
+        ParseRawReportPayload payload,
+        string producerId,
+        SerializedEventSet events,
+        long reportBytes,
+        CancellationToken cancellationToken)
+    {
+        var (insertedIds, refused) = await InsertEventSetAsync(
+                admission, orgId, payload, producerId, events, cancellationToken)
+            .ConfigureAwait(false);
+        if (insertedIds is not { } inserted)
+        {
+            return (null, refused);
+        }
+
+        if (!await WriteAttemptsAsync(payload, events, inserted, cancellationToken).ConfigureAwait(false))
+        {
+            return (null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "case_attempt_conflict"));
+        }
+
+        // One identity for this accepted batch: the reconcile trigger and the receipt that meters it are both named by
+        // it, so neither can collide with a later batch of the same producer.
+        var batchId = Guid.CreateVersion7();
+
+        await AdvanceSlotAsync(admission, orgId, payload, producerId, events, inserted, batchId, cancellationToken)
+            .ConfigureAwait(false);
+
+        // The batch receipt and its usage row count what this attempt inserted, so a replay adds neither and the
+        // receipt can never disagree with the events in its own transaction.
+        await MeterBatchAsync(orgId, payload, producerId, reportBytes, events, inserted, batchId, cancellationToken)
+            .ConfigureAwait(false);
+
+        return (inserted, null);
     }
 
     /// <summary>
@@ -134,8 +208,11 @@ internal sealed partial class ParseRawReportHandler
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
     /// <param name="cancellationToken">Cancels the reads.</param>
-    /// <returns>The admission, or the skipped outcome that ended the attempt.</returns>
-    private async Task<(RunAdmission? Admission, ParseRawReportOutcome? Stopped)> AdmitAsync(
+    /// <returns>
+    /// The admission and the stored report's size (the batch receipt's byte count), or the skipped outcome that ended
+    /// the attempt.
+    /// </returns>
+    private async Task<(RunAdmission? Admission, long ReportBytes, ParseRawReportOutcome? Stopped)> AdmitAsync(
         EvidenceDbContext context,
         Guid orgId,
         ParseRawReportPayload payload,
@@ -154,7 +231,7 @@ internal sealed partial class ParseRawReportHandler
             || artifact.RunId != payload.RunId)
         {
             LogSkipped(logger, payload.ArtifactId, "left_ready");
-            return (null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "left_ready"));
+            return (null, 0, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "left_ready"));
         }
 
         // The run lock serialises two reports of one run, so the slot's next shard index cannot be taken twice, and it
@@ -166,7 +243,7 @@ internal sealed partial class ParseRawReportHandler
         if (run is null)
         {
             LogSkipped(logger, payload.ArtifactId, "run_absent");
-            return (null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "run_absent"));
+            return (null, 0, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "run_absent"));
         }
 
         var admission = RunAdmissionPolicy.Decide(run.ProjectState, run.RunState, run.LateWindowOpen);
@@ -174,10 +251,10 @@ internal sealed partial class ParseRawReportHandler
         {
             // Terminal: a closed run or a project that is going away will not admit this evidence on a retry either.
             LogSkipped(logger, payload.ArtifactId, admission.Refusal!);
-            return (null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, admission.Refusal));
+            return (null, 0, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, admission.Refusal));
         }
 
-        return (admission, null);
+        return (admission, artifact.Bytes ?? 0, null);
     }
 
     /// <summary>
@@ -288,6 +365,7 @@ internal sealed partial class ParseRawReportHandler
     /// <param name="producerId">The synthetic producer id of this report.</param>
     /// <param name="events">The serialized set, whose declared pair the trigger names.</param>
     /// <param name="insertedIds">The ids this attempt inserted; nothing is advanced for an empty set.</param>
+    /// <param name="batchId">The accepted batch's receipt id, the trigger's own identity.</param>
     /// <param name="cancellationToken">Cancels the writes.</param>
     private async Task AdvanceSlotAsync(
         RunAdmission admission,
@@ -296,6 +374,7 @@ internal sealed partial class ParseRawReportHandler
         string producerId,
         SerializedEventSet events,
         HashSet<Guid> insertedIds,
+        Guid batchId,
         CancellationToken cancellationToken)
     {
         if (insertedIds.Count == 0)
@@ -309,7 +388,7 @@ internal sealed partial class ParseRawReportHandler
                 cancellationToken)
             .ConfigureAwait(false);
 
-        await EnqueueReconcileAsync(payload, producerId, events, admission.Late, cancellationToken)
+        await EnqueueReconcileAsync(payload, producerId, events, admission.Late, batchId, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -407,48 +486,5 @@ internal sealed partial class ParseRawReportHandler
         }
 
         return true;
-    }
-
-    /// <summary>
-    /// Enqueues the one reconcile trigger this attempt's new events need: the late-evidence shape for a run that already
-    /// finished as incomplete, the ordinary slot-closed shape for every other run, so the freeze path sees the events
-    /// without waiting for a finalize that a synthetic producer can never trigger.
-    /// </summary>
-    /// <param name="payload">The run, artifact and producer kind.</param>
-    /// <param name="producerId">The synthetic producer id of this report.</param>
-    /// <param name="events">The serialized set, whose declared pair the trigger names.</param>
-    /// <param name="late">True when this evidence arrived after the run finished incomplete.</param>
-    /// <param name="cancellationToken">Cancels the write.</param>
-    private async Task EnqueueReconcileAsync(
-        ParseRawReportPayload payload,
-        string producerId,
-        SerializedEventSet events,
-        bool late,
-        CancellationToken cancellationToken)
-    {
-        var taskType = RunReconcileContract.OutboxTaskType;
-        var aggregateType = RunReconcileContract.AggregateType;
-
-        if (late)
-        {
-            await outbox.EnqueueAsync(
-                    taskType,
-                    RunReconcileContract.LatePayloadJson(payload.RunId, producerId),
-                    aggregateType,
-                    payload.RunId,
-                    RunReconcileContract.LateIdempotencyKey(payload.RunId, producerId, events.MaxSequence),
-                    cancellationToken)
-                .ConfigureAwait(false);
-            return;
-        }
-
-        await outbox.EnqueueAsync(
-                taskType,
-                RunReconcileContract.PayloadJson(payload.RunId, producerId, events.MaxSequence, events.DeclaredCount),
-                aggregateType,
-                payload.RunId,
-                RunReconcileContract.IdempotencyKey(payload.RunId, producerId),
-                cancellationToken)
-            .ConfigureAwait(false);
     }
 }

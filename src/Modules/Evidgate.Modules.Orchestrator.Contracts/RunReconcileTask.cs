@@ -42,6 +42,38 @@ public static class RunReconcileContract
         string.Create(CultureInfo.InvariantCulture, $"orchestrator:run:{runId:D}:reconcile:{producerId}");
 
     /// <summary>
+    /// The outbox idempotency key of one accepted evidence batch that closed a synthetic producer slot:
+    /// <c>orchestrator:run:{run}:reconcile:{producer}:{batch}</c>.
+    /// <para>
+    /// The accepted batch's own identity, not a high-water mark: a second parse of one report can insert a case that sits
+    /// <em>before</em> the stored ones, so the mark does not move while the evidence does, and only the batch names the
+    /// commit that enqueued the trigger. A redelivery that stored nothing enqueues no trigger at all, so every retry of
+    /// one batch carries the same identity. <c>producer_id</c> never contains the <c>:</c> separator (0034's charset
+    /// bound), so the key stays unambiguous.
+    /// </para>
+    /// </summary>
+    /// <param name="runId">The run the accepted evidence belongs to.</param>
+    /// <param name="producerId">The closed synthetic slot's producer id.</param>
+    /// <param name="batchId">The accepted batch's receipt id, which the same commit writes.</param>
+    public static string BatchIdempotencyKey(Guid runId, string producerId, Guid batchId) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"orchestrator:run:{runId:D}:reconcile:{producerId}:{batchId:D}");
+
+    /// <summary>
+    /// The late-evidence shape of <see cref="BatchIdempotencyKey"/>:
+    /// <c>orchestrator:run:{run}:reconcile:late:{producer}:{batch}</c>. One trigger per accepted batch, for the same
+    /// reason: late batches of one producer differ by their batch, not by a mark they may not move.
+    /// </summary>
+    /// <param name="runId">The run the late evidence belongs to.</param>
+    /// <param name="producerId">The shard that delivered it late.</param>
+    /// <param name="batchId">The accepted batch's receipt id, which the same commit writes.</param>
+    public static string LateBatchIdempotencyKey(Guid runId, string producerId, Guid batchId) =>
+        string.Create(
+            CultureInfo.InvariantCulture,
+            $"orchestrator:run:{runId:D}:reconcile:late:{producerId}:{batchId:D}");
+
+    /// <summary>
     /// The producer id the collection-deadline trigger writes in its payload: a sweep names no shard,
     /// so the reconciler reads no declaration (the deadline path never compares a shard's high-water
     /// mark).
