@@ -22,6 +22,19 @@ public enum QuotaDecision
 }
 
 /// <summary>
+/// Which counter a verdict came from: a project's counter, or the organization-wide one
+/// (<c>quota_counter.project_id</c> null) that caps every project of the tenant together.
+/// </summary>
+public enum QuotaScope
+{
+    /// <summary>The counter of one project.</summary>
+    Project,
+
+    /// <summary>The counter of the whole organization; a project_id-less call's only scope.</summary>
+    Tenant,
+}
+
+/// <summary>
 /// One quota question a hot path asks before it commits metered work (ruling T53): the metric, the period, the
 /// project (null for a tenant-level limit) and the quantity the call is about to commit.
 /// </summary>
@@ -33,19 +46,29 @@ public enum QuotaDecision
 /// about to commit, and a correction is an adjustment of the ledger, not a negative reservation here. The gate refuses
 /// a non-positive quantity loudly, before it writes.
 /// </param>
+/// <param name="IncludeTenantScope">
+/// True charges the organization-wide counter as well as the project's, so an org-level cap applies to work a single
+/// project commits: the call is admitted only when both scopes have room, and both are charged or neither is. False,
+/// the default, asks about the project scope alone (and about the tenant scope alone when
+/// <paramref name="ProjectId"/> is null), which is what every caller that names one scope wants.
+/// </param>
 public sealed record QuotaCheckRequest(
     UsageMetric Metric,
     string Period,
     Guid? ProjectId,
-    decimal Quantity);
+    decimal Quantity,
+    bool IncludeTenantScope = false);
 
 /// <summary>
 /// The answer of one <see cref="IQuotaGate.CheckAsync"/> call: the verdict and the numbers behind it,
 /// so a caller can render <c>quota_exceeded</c> details without a second read of the counter.
 /// </summary>
 /// <param name="Decision">The verdict.</param>
-/// <param name="Used">The counter after the call, or null when there is no counter row or the gate is switched off.</param>
-/// <param name="Limit">The scope's limit, or null when there is no counter row.</param>
+/// <param name="Used">
+/// The counter after the call, or null when there is no counter row or the gate is switched off. With more than one
+/// scope charged, it is the scope with the least room left: the one whose numbers decided the verdict.
+/// </param>
+/// <param name="Limit">That scope's limit, or null when there is no counter row.</param>
 /// <param name="RetryAfter">
 /// On <see cref="QuotaDecision.Block"/> only: the time until the next period starts, at least one second. An
 /// early retry cannot succeed — only a period rollover or an operator raise can.
@@ -53,9 +76,14 @@ public sealed record QuotaCheckRequest(
 /// <param name="RaisePath">
 /// On <see cref="QuotaDecision.Block"/> only: the operator route that raises this scope's limit.
 /// </param>
+/// <param name="RefusedScope">
+/// On <see cref="QuotaDecision.Block"/> only: the scope that refused, in lock order (the tenant counter, then the
+/// project's) when both refuse. Null on every other verdict.
+/// </param>
 public sealed record QuotaCheckResult(
     QuotaDecision Decision,
     decimal? Used = null,
     decimal? Limit = null,
     TimeSpan? RetryAfter = null,
-    string? RaisePath = null);
+    string? RaisePath = null,
+    QuotaScope? RefusedScope = null);

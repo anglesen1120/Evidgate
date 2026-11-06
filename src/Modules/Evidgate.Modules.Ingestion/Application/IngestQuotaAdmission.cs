@@ -1,5 +1,6 @@
 using System.Globalization;
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Usage.Contracts;
@@ -16,8 +17,12 @@ namespace Evidgate.Modules.Ingestion.Application;
 /// answered with duplicate acks instead), and a resend of a committed batch reserves nothing at all.
 /// </para>
 /// <para>
+/// The call charges the organization's counter as well as the project's, so an org-wide limit applies to a batch a
+/// single project commits; the gate admits the batch only when both have room and charges both or neither.
+/// </para>
+/// <para>
 /// A block refuses the batch: the handler returns a failure, so the tenant transaction rolls the inserted
-/// events back with everything else the batch wrote and answers 429. The counter's row lock is therefore held
+/// events back with everything else the batch wrote and answers 429. The counter's row locks are therefore held
 /// only from this call to the end of the transaction, after every read and insert of the batch. An exception is
 /// a failure of the admission itself and propagates: the batch is refused by the host's 500
 /// <c>internal_error</c> envelope, never admitted unmetered.
@@ -26,11 +31,12 @@ namespace Evidgate.Modules.Ingestion.Application;
 internal sealed class IngestQuotaAdmission(
     IQuotaGate gate,
     IngestQuotaVeto veto,
+    ITenantScopeAccessor scopes,
     TimeProvider time)
 {
     /// <summary>
-    /// Reserves <paramref name="quantity"/> units on the project's counter, or answers the refusal that keeps
-    /// the batch from committing.
+    /// Reserves <paramref name="quantity"/> units on the project's counter and the organization's, or answers the
+    /// refusal that keeps the batch from committing.
     /// </summary>
     /// <param name="projectId">The project the token scopes the batch to, whose counter it is charged to.</param>
     /// <param name="quantity">The rows this batch's insert added; zero reserves nothing and asks nobody.</param>
@@ -59,9 +65,9 @@ internal sealed class IngestQuotaAdmission(
         // batch commits milliseconds later, so a reservation made across a month boundary can land one month
         // before its ledger row; that window is one instant and the two months carry the same limit.
         var period = time.GetUtcNow().ToString("yyyy-MM", CultureInfo.InvariantCulture);
-        var answer = await gate
-            .CheckAsync(new QuotaCheckRequest(UsageMetric.Results, period, scopedProject, quantity), cancellationToken)
-            .ConfigureAwait(false);
+        var request = new QuotaCheckRequest(
+            UsageMetric.Results, period, scopedProject, quantity, IncludeTenantScope: true);
+        var answer = await gate.CheckAsync(request, cancellationToken).ConfigureAwait(false);
 
         if (answer.Decision != QuotaDecision.Block)
         {
@@ -70,16 +76,15 @@ internal sealed class IngestQuotaAdmission(
 
         EvidgateTelemetry.RecordIngestQuotaDenied(IngestBatchRejection.QuotaExceeded);
 
+        // The failure rolls the batch back, and the gate's refusal stamp with it, so the question travels out to the
+        // endpoint, which writes the stamp in a scope of its own once the transaction is gone.
+        veto.Refuse(scopes.Require().OrgId, request, answer.RetryAfter);
+
         // The operator raise route the gate names is not published to a tenant: only the wire code and the
         // retry wait leave here, and the envelope stays the one the burst refusal already uses.
-        if (answer.RetryAfter is { } retryAfter)
-        {
-            veto.Refuse(retryAfter);
-        }
-
         return new Error(
             ApiErrorCode.QuotaExceeded,
-            "the project's ingest quota for the billing period is reached",
+            "the ingest quota for the billing period is reached",
             StatusCodes.Status429TooManyRequests,
             Retryable: true);
     }

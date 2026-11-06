@@ -28,21 +28,26 @@ internal sealed class QuotaGateOptions
 }
 
 /// <summary>
-/// <see cref="IQuotaGate"/>: one conditional statement that both checks and reserves, inside the caller's
-/// tenant transaction, and one more only when the scope has a counter the call did not fit into.
+/// <see cref="IQuotaGate"/>: one conditional statement that both checks and reserves every scope the call charges,
+/// inside the caller's tenant transaction, and one more only when a scope the call charges has a counter it did not
+/// fit into.
 /// <para>
-/// A call within the limit increments <c>used</c> and answers Ok or Warn; a call that would pass it
-/// writes only the first refusal stamp and answers Block, which the caller turns into 429 without
-/// rolling its committed work back. A scope with no counter row has no configured limit and answers Ok
-/// — the gate still ran, and it says so after one statement. A call the increment found no room for is
-/// settled by the second statement, which reserves it when an operator raise committed in between, so a
-/// raised counter never refuses work it now has room for and never drops the usage it admitted.
+/// A call within the limit charges each of its counters and answers Ok or Warn; a call that would pass any of them
+/// writes only the first refusal stamp and answers Block, which the caller answers as 429. That stamp commits only if
+/// the caller commits, so a caller that must roll its own work back — the ingest route's refused batch — writes it
+/// again afterwards through <c>IQuotaBlockStamp</c>, in a transaction of its own. The scopes are locked in one order
+/// (the organization-wide counter, then the project's) and the statement charges all of them or none, so a refusal in
+/// one scope leaves no usage behind in the other. A scope with no counter row has no configured limit and answers Ok on
+/// its own; the gate still ran, and it says so after one statement. A call the increment found no room for is settled by
+/// the second statement, which charges the scopes when an operator raise committed in between, so a raised counter never
+/// refuses work it now has room for and never drops the usage it admitted.
 /// </para>
 /// <para>
-/// A month starts with no counter, so the gate carries the previous month's limit and warning line into
-/// it before answering: a configured limit covers every later month instead of lapsing at the rollover.
-/// The call that moves a counter's warning stamp from null to a value also enqueues one warning task in
-/// the same transaction, so the announcement and the counter it announces commit or roll back together.
+/// A month starts with no counter, so the gate carries each scope's previous month's limit and warning line into it
+/// before answering, and only the scopes that need it: a configured limit covers every later month instead of lapsing
+/// at the rollover. The call that moves a counter's warning stamp from null to a value also enqueues one warning task
+/// per such counter in the same transaction, so the announcement and the counter it announces commit or roll back
+/// together.
 /// </para>
 /// </summary>
 internal sealed class QuotaGate(
@@ -71,48 +76,52 @@ internal sealed class QuotaGate(
 
         var orgId = scopes.Require().OrgId;
         var metric = UsageMetricWire.ToWireValue(request.Metric);
+        var scopeKeys = QuotaScopeKeys.Of(request);
 
-        var answer = await ReserveWithCarryAsync(orgId, request, metric, cancellationToken)
+        var answer = await ReserveWithCarryAsync(orgId, request, metric, scopeKeys, cancellationToken)
             .ConfigureAwait(false);
 
-        if (answer is null)
+        if (answer.Count == 0)
         {
             return new QuotaCheckResult(QuotaDecision.Ok);
         }
 
-        return answer.Reserved
-            ? await ReservedAsync(request, metric, answer, cancellationToken).ConfigureAwait(false)
-            : await RefusedAsync(orgId, request, metric, cancellationToken).ConfigureAwait(false);
+        return answer.Any(row => !row.Reserved)
+            ? await SettledAsync(orgId, request, metric, scopeKeys, cancellationToken).ConfigureAwait(false)
+            : await ReservedAsync(request, metric, scopeKeys, answer, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// The first statement, plus the one carry-forward a month without a counter needs: the scope's latest
-    /// earlier month lends it its limit, and the same statement runs again against the row that left.
+    /// The first statement, plus the one carry-forward a month without a counter needs per scope: each scope's latest
+    /// earlier month lends it its limit, and the same statement runs again against the rows that left.
     /// </summary>
-    private async Task<QuotaCounterRow?> ReserveWithCarryAsync(
+    private async Task<IReadOnlyList<QuotaCounterRow>> ReserveWithCarryAsync(
         Guid orgId,
         QuotaCheckRequest request,
         string metric,
+        Guid[] scopeKeys,
         CancellationToken cancellationToken)
     {
-        var answer = await store
-            .ReserveAsync(orgId, request.Period, metric, request.ProjectId, request.Quantity, cancellationToken)
-            .ConfigureAwait(false);
+        var answer = await ReserveAsync(orgId, request, metric, scopeKeys, cancellationToken).ConfigureAwait(false);
 
-        if (answer is not { NeedsCarry: true })
+        var carrying = answer.Where(row => row.NeedsCarry).ToList();
+        if (carrying.Count == 0)
         {
             return answer;
         }
 
-        await store
-            .CarryForwardAsync(orgId, request.Period, metric, request.ProjectId, cancellationToken)
-            .ConfigureAwait(false);
+        // One carry per scope that has a limit to inherit: the statement copies exactly one row, so two scopes need
+        // two runs and neither can borrow the other's limit.
+        foreach (var scope in carrying)
+        {
+            await store
+                .CarryForwardAsync(orgId, request.Period, metric, scope.ScopeKey, cancellationToken)
+                .ConfigureAwait(false);
+        }
 
-        answer = await store
-            .ReserveAsync(orgId, request.Period, metric, request.ProjectId, request.Quantity, cancellationToken)
-            .ConfigureAwait(false);
+        answer = await ReserveAsync(orgId, request, metric, scopeKeys, cancellationToken).ConfigureAwait(false);
 
-        if (answer is { NeedsCarry: true })
+        if (answer.Any(row => row.NeedsCarry))
         {
             throw new InvalidOperationException(
                 $"the quota counter for {request.Period} still has no row after the carry-forward");
@@ -121,64 +130,120 @@ internal sealed class QuotaGate(
         return answer;
     }
 
-    /// <summary>The reserved answer, and the warning task when this call owns the warning transition.</summary>
-    private async Task<QuotaCheckResult> ReservedAsync(
-        QuotaCheckRequest request,
-        string metric,
-        QuotaCounterRow answer,
-        CancellationToken cancellationToken)
-    {
-        if (answer.WarnedNow)
-        {
-            await EnqueueWarningAsync(
-                    request, metric, answer.Id, answer.Used, answer.QuotaLimit, answer.WarnRatio, cancellationToken)
-                .ConfigureAwait(false);
-        }
-
-        return new QuotaCheckResult(
-            answer.IsAtOrAboveWarnLine ? QuotaDecision.Warn : QuotaDecision.Ok,
-            answer.Used,
-            answer.QuotaLimit);
-    }
-
-    /// <summary>
-    /// The refusal statement, which is the second chance a call gets after an operator raise committed
-    /// between the two statements — and the second place a warning transition can happen.
-    /// </summary>
-    private async Task<QuotaCheckResult> RefusedAsync(
+    private Task<IReadOnlyList<QuotaCounterRow>> ReserveAsync(
         Guid orgId,
         QuotaCheckRequest request,
         string metric,
+        Guid[] scopeKeys,
+        CancellationToken cancellationToken) =>
+        store.ReserveAsync(orgId, request.Period, metric, scopeKeys, request.Quantity, cancellationToken);
+
+    /// <summary>The charged answer, and one warning task per counter whose warning transition this call owns.</summary>
+    private async Task<QuotaCheckResult> ReservedAsync(
+        QuotaCheckRequest request,
+        string metric,
+        Guid[] scopeKeys,
+        IReadOnlyList<QuotaCounterRow> answer,
+        CancellationToken cancellationToken)
+    {
+        foreach (var warned in answer.Where(row => row.WarnedNow))
+        {
+            await EnqueueWarningAsync(
+                    request, metric, warned.ScopeKey, warned.Id, warned.Used, warned.QuotaLimit, warned.WarnRatio,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var tightest = Tightest(answer, scopeKeys);
+
+        return new QuotaCheckResult(
+            answer.Any(row => row.IsAtOrAboveWarnLine) ? QuotaDecision.Warn : QuotaDecision.Ok,
+            tightest.Used,
+            tightest.QuotaLimit);
+    }
+
+    /// <summary>
+    /// The settle statement, which is the second chance a call gets after an operator raise committed
+    /// between the two statements — and the second place a warning transition can happen.
+    /// </summary>
+    private async Task<QuotaCheckResult> SettledAsync(
+        Guid orgId,
+        QuotaCheckRequest request,
+        string metric,
+        Guid[] scopeKeys,
         CancellationToken cancellationToken)
     {
         var settled = await store
-            .StampRefusalAsync(orgId, request.Period, metric, request.ProjectId, request.Quantity, cancellationToken)
+            .SettleAsync(orgId, request.Period, metric, scopeKeys, request.Quantity, cancellationToken)
             .ConfigureAwait(false);
 
-        if (settled is null)
+        if (settled.Count == 0)
         {
             return new QuotaCheckResult(QuotaDecision.Ok);
         }
 
-        if (settled.WarnedNow)
+        foreach (var warned in settled.Where(row => row.WarnedNow))
         {
-            await EnqueueWarningAsync(
-                    request, metric, settled.Id, settled.Used, settled.QuotaLimit, settled.WarnRatio, cancellationToken)
+            await EnqueueWarningAsync(request, metric, warned.ScopeKey, warned.Id, warned.Used, warned.QuotaLimit,
+                    warned.WarnRatio, cancellationToken)
                 .ConfigureAwait(false);
         }
 
-        return settled.Blocked
-            ? new QuotaCheckResult(
+        var refused = settled.Where(row => row.Blocked).ToList();
+        if (refused.Count > 0)
+        {
+            // Both scopes can refuse one call. The answer names the first in lock order, which is the
+            // organization-wide counter: the limit an operator raises to unblock every project at once.
+            var refusing = refused.OrderBy(row => LockRank(row, scopeKeys)).First();
+
+            return new QuotaCheckResult(
                 QuotaDecision.Block,
-                settled.Used,
-                settled.QuotaLimit,
+                refusing.Used,
+                refusing.QuotaLimit,
                 RetryUntilNextPeriod(request.Period),
-                RaisePath(orgId))
-            : new QuotaCheckResult(
-                settled.IsAtOrAboveWarnLine ? QuotaDecision.Warn : QuotaDecision.Ok,
-                settled.Used,
-                settled.QuotaLimit);
+                RaisePath(orgId),
+                QuotaScopeKeys.KindOf(refusing.ScopeKey));
+        }
+
+        var tightest = Tightest(settled, scopeKeys);
+
+        return new QuotaCheckResult(
+            settled.Any(row => row.IsAtOrAboveWarnLine) ? QuotaDecision.Warn : QuotaDecision.Ok,
+            tightest.Used,
+            tightest.QuotaLimit);
     }
+
+    /// <summary>
+    /// The scope whose numbers answer the call: the one with the least room left, so a verdict and the figures beside
+    /// it always describe the same counter. A tie is answered in lock order (<paramref name="scopeKeys"/>), so the same
+    /// call always reports the same scope.
+    /// </summary>
+    /// <param name="rows">The counters the statement answered for the scopes.</param>
+    /// <param name="scopeKeys">The scopes the call charged, the tenant's first.</param>
+    /// <returns>The row the call's numbers come from.</returns>
+    private static T Tightest<T>(IReadOnlyList<T> rows, Guid[] scopeKeys)
+        where T : IQuotaScopeNumbers
+    {
+        var tightest = rows[0];
+
+        foreach (var row in rows)
+        {
+            if (row.Headroom < tightest.Headroom
+                || (row.Headroom == tightest.Headroom && LockRank(row, scopeKeys) < LockRank(tightest, scopeKeys)))
+            {
+                tightest = row;
+            }
+        }
+
+        return tightest;
+    }
+
+    /// <summary>Where one scope sits in the single order every statement locks the counters in.</summary>
+    /// <param name="row">The counter the statement answered.</param>
+    /// <param name="scopeKeys">The scopes the call charged, the tenant's first.</param>
+    /// <returns>The scope's index, or <see cref="int.MaxValue"/> for a row outside the call's scopes.</returns>
+    private static int LockRank(IQuotaScopeNumbers row, Guid[] scopeKeys) =>
+        Array.IndexOf(scopeKeys, row.ScopeKey) is var rank && rank >= 0 ? rank : int.MaxValue;
 
     /// <summary>
     /// Writes the warning task through the outbox on the caller's connection, so a rolled-back batch
@@ -187,6 +252,7 @@ internal sealed class QuotaGate(
     private Task<Guid> EnqueueWarningAsync(
         QuotaCheckRequest request,
         string metric,
+        Guid scopeKey,
         Guid counterId,
         decimal used,
         decimal quotaLimit,
@@ -194,8 +260,10 @@ internal sealed class QuotaGate(
         CancellationToken cancellationToken) =>
         outbox.EnqueueAsync(
             QuotaWarningTask.TaskType,
+            // The payload names the counter's own project, which is null for the organization-wide counter: a
+            // consumer repairs the row it announces and must not be told the caller's project instead.
             QuotaWarningTask.PayloadJson(new QuotaWarningPayload(
-                counterId, request.ProjectId, request.Period, metric, used, quotaLimit, warnRatio)),
+                counterId, QuotaScopeKeys.ProjectOf(scopeKey), request.Period, metric, used, quotaLimit, warnRatio)),
             QuotaWarningTask.AggregateType,
             counterId,
             QuotaWarningTask.IdempotencyKey(counterId),

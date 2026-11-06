@@ -199,9 +199,9 @@ public sealed class UsageQuotaWarningTests
             $"update public.quota_counter set quota_limit = 14 where id = '{counterId:D}'",
             cancellationToken: TestContext.Current.CancellationToken)).ShouldBe(1);
 
-        var settled = (await provider.GetRequiredService<QuotaCounterStore>().StampRefusalAsync(
-            world.Org, Period, "results", world.Project, 5m, TestContext.Current.CancellationToken))
-            .ShouldNotBeNull();
+        var settled = (await provider.GetRequiredService<QuotaCounterStore>().SettleAsync(
+            world.Org, Period, "results", [world.Project], 5m, TestContext.Current.CancellationToken))
+            .ShouldHaveSingleItem();
 
         settled.Blocked.ShouldBeFalse("the raised counter has room for the call");
         settled.Used.ShouldBe(12m);

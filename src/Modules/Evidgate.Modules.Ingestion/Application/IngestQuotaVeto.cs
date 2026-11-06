@@ -1,14 +1,15 @@
+using Evidgate.Modules.Usage.Contracts;
+
 namespace Evidgate.Modules.Ingestion.Application;
 
 /// <summary>
-/// Carries the quota block's <c>Retry-After</c> from the command that decided it to the endpoint that answers
-/// with it: the gate's wait is known only inside the tenant transaction, while the header belongs to the response
-/// the endpoint writes.
+/// Carries what a quota block decided inside the tenant transaction out to the endpoint that answers it: the
+/// <c>Retry-After</c> the client is told, and the refused question the durable stamp needs.
 /// </summary>
 /// <remarks>
 /// <para>
 /// <b>One slot per request.</b> The carrier is a singleton, so a plain field would let two concurrent requests
-/// read each other's wait: the slot is an <see cref="AsyncLocal{T}"/> the endpoint installs per request, and the
+/// read each other's block: the slot is an <see cref="AsyncLocal{T}"/> the endpoint installs per request, and the
 /// handler's write lands in the box that slot captured. The wait cannot ride the handler's <c>Result</c>
 /// instead, because a failure's payload is the wire envelope and its details are the tenant-safe ones only.
 /// </para>
@@ -27,6 +28,12 @@ internal sealed class IngestQuotaVeto
     internal int? RetryAfterSeconds => _ambient.Value?.RetryAfterSeconds;
 
     /// <summary>
+    /// The question the refused batch asked and the tenant it ran as, or null when the batch was not refused for
+    /// quota. The refusal's own stamp rolled back with the batch, so this is what the endpoint writes again.
+    /// </summary>
+    internal QuotaBlock? Block => _ambient.Value?.Block;
+
+    /// <summary>
     /// Installs a fresh, empty slot for the request the endpoint is serving and restores the previous one on
     /// disposal, so two requests that share a thread — or a test that reuses a scope — never read each other's wait.
     /// </summary>
@@ -40,20 +47,30 @@ internal sealed class IngestQuotaVeto
     }
 
     /// <summary>
-    /// Records the wait a blocked batch is told: rounded up to whole seconds and never below one, so a client
-    /// never reads <c>Retry-After: 0</c> as "retry now" (00 §9.2).
+    /// Records the block a batch was refused by: the wait it is told, rounded up to whole seconds and never below one,
+    /// so a client never reads <c>Retry-After: 0</c> as "retry now" (00 §9.2), and the refused question itself.
     /// </summary>
-    /// <param name="retryAfter">The gate's wait until the next billing period starts.</param>
-    internal void Refuse(TimeSpan retryAfter)
+    /// <param name="orgId">The tenant the refused batch ran as.</param>
+    /// <param name="request">The gate question the batch was refused by.</param>
+    /// <param name="retryAfter">The gate's wait until the next billing period starts, when it named one.</param>
+    internal void Refuse(Guid orgId, QuotaCheckRequest request, TimeSpan? retryAfter)
     {
         var slot = _ambient.Value ??= new Slot();
-        slot.RetryAfterSeconds = (int)Math.Max(1, Math.Ceiling(retryAfter.TotalSeconds));
+
+        if (retryAfter is { } wait)
+        {
+            slot.RetryAfterSeconds = (int)Math.Max(1, Math.Ceiling(wait.TotalSeconds));
+        }
+
+        slot.Block = new QuotaBlock(orgId, request);
     }
 
     /// <summary>The mutable box shared down the request's async flow (see the type's remarks).</summary>
     private sealed class Slot
     {
         internal int? RetryAfterSeconds { get; set; }
+
+        internal QuotaBlock? Block { get; set; }
     }
 
     private sealed class RequestScope(IngestQuotaVeto owner, Slot? previous) : IDisposable
@@ -62,3 +79,8 @@ internal sealed class IngestQuotaVeto
         public void Dispose() => owner._ambient.Value = previous;
     }
 }
+
+/// <summary>One refused batch's gate question, and the tenant it ran as.</summary>
+/// <param name="OrgId">The tenant the batch ran as: the scope the durable stamp opens.</param>
+/// <param name="Request">The question the gate blocked, whose scopes the stamp names.</param>
+internal sealed record QuotaBlock(Guid OrgId, QuotaCheckRequest Request);

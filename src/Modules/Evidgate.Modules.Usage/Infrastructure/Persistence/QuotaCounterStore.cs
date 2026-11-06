@@ -3,14 +3,36 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 namespace Evidgate.Modules.Usage.Infrastructure.Persistence;
 
 /// <summary>
-/// The answer of the gate's reservation statement: what the counter holds after the call, whether the call
-/// was the one that reserved it, and whether this call is the one that stamped the warning line.
+/// What one charged counter says about itself after the call: the scope it belongs to, what it holds and what it is
+/// allowed to hold. Both statements answer counters, and the gate picks among them by the room they have left.
+/// </summary>
+internal interface IQuotaScopeNumbers
+{
+    /// <summary>The counter's scope: its project id, or <see cref="Guid.Empty"/> for the organization-wide counter.</summary>
+    Guid ScopeKey { get; }
+
+    /// <summary>The quantity the counter holds.</summary>
+    decimal Used { get; }
+
+    /// <summary>The scope's limit.</summary>
+    decimal QuotaLimit { get; }
+
+    /// <summary>What the scope has left below its limit; a refusal charges nothing, so it is never negative.</summary>
+    decimal Headroom { get; }
+}
+
+/// <summary>
+/// The answer of the gate's reservation statement for one scope: what the counter holds after the call, whether the
+/// call was the one that charged it, and whether this call is the one that stamped the warning line.
 /// </summary>
 /// <param name="Id">The counter's id, the aggregate a warning task names.</param>
+/// <param name="ScopeKey">
+/// The counter's scope: its project id, or <see cref="Guid.Empty"/> for the organization-wide counter.
+/// </param>
 /// <param name="Used">The quantity the counter holds.</param>
 /// <param name="QuotaLimit">The scope's limit.</param>
 /// <param name="WarnRatio">The fraction of the limit at which the scope warns.</param>
-/// <param name="Reserved">True when this call incremented the counter; false when the scope has no room.</param>
+/// <param name="Reserved">True when this call charged the counter; false when the scope has no room.</param>
 /// <param name="NeedsCarry">
 /// True when the month has no counter of its own but an earlier month did: the limit must be carried into
 /// this period before the call can be answered, and no usage has been counted yet.
@@ -18,40 +40,51 @@ namespace Evidgate.Modules.Usage.Infrastructure.Persistence;
 /// <param name="WarnedNow">True only for the statement that moved <c>warned_at</c> from null to a stamp.</param>
 internal sealed record QuotaCounterRow(
     Guid Id,
+    Guid ScopeKey,
     decimal Used,
     decimal QuotaLimit,
     decimal WarnRatio,
     bool Reserved,
     bool NeedsCarry,
-    bool WarnedNow)
+    bool WarnedNow) : IQuotaScopeNumbers
 {
-    /// <summary>True once the reservation reached the scope's warning line.</summary>
+    /// <summary>True when the scope's warning line is at or below what it now holds.</summary>
     internal bool IsAtOrAboveWarnLine => Used >= QuotaLimit * WarnRatio;
+
+    /// <inheritdoc />
+    public decimal Headroom => QuotaLimit - Used;
 }
 
 /// <summary>
-/// The answer of the gate's second statement: the counter the call left behind, whether that call was
+/// The answer of the gate's second statement for one scope: the counter the call left behind, whether that call was
 /// refused, and whether it is the one that stamped the warning line.
 /// </summary>
 /// <param name="Id">The counter's id, the aggregate a warning task names.</param>
+/// <param name="ScopeKey">
+/// The counter's scope: its project id, or <see cref="Guid.Empty"/> for the organization-wide counter.
+/// </param>
 /// <param name="Used">The quantity the counter holds.</param>
 /// <param name="QuotaLimit">The scope's limit.</param>
 /// <param name="WarnRatio">The fraction of the limit at which the scope warns.</param>
 /// <param name="Blocked">
-/// True when the call was refused and the counter still holds what it held; false when the second attempt
-/// found room (a raise committed first) and reserved the call after all.
+/// True when this scope refused the call and still holds what it held; false when the second attempt found room (a
+/// raise committed first) and charged it after all, or when it had room all along.
 /// </param>
 /// <param name="WarnedNow">True only for the statement that moved <c>warned_at</c> from null to a stamp.</param>
 internal sealed record QuotaRefusalRow(
     Guid Id,
+    Guid ScopeKey,
     decimal Used,
     decimal QuotaLimit,
     decimal WarnRatio,
     bool Blocked,
-    bool WarnedNow)
+    bool WarnedNow) : IQuotaScopeNumbers
 {
-    /// <summary>True once the counter reached the scope's warning line.</summary>
+    /// <summary>True when the scope's warning line is at or below what it now holds.</summary>
     internal bool IsAtOrAboveWarnLine => Used >= QuotaLimit * WarnRatio;
+
+    /// <inheritdoc />
+    public decimal Headroom => QuotaLimit - Used;
 }
 
 /// <summary>The counter a raise created or moved: its id and the numbers it now holds.</summary>
@@ -62,77 +95,103 @@ internal sealed record QuotaRaiseRow(Guid Id, decimal Used, decimal QuotaLimit);
 
 /// <summary>
 /// The <c>quota_counter</c> write path over the caller's tenant scope: the reservation, the carry-forward,
-/// the refusal stamp and the raise, so the counter and the work it guards commit or roll back together.
+/// the refusal settle and stamp, and the raise, so the counter and the work it guards commit or roll back together.
 /// </summary>
 internal sealed class QuotaCounterStore(ITenantDb db)
 {
     /// <summary>
-    /// Reserves <paramref name="quantity"/> on the scope's counter in one statement. Null means the org
-    /// holds no counter for the scope and no earlier counter to carry a limit from (no configured limit);
-    /// <see cref="QuotaCounterRow.Reserved"/> false means a counter exists but the call did not fit, and
-    /// <see cref="QuotaCounterRow.NeedsCarry"/> means the period has no counter yet but an earlier one did.
+    /// Reserves <paramref name="quantity"/> on every scope in <paramref name="scopeKeys"/> in one statement, all of
+    /// them or none. A scope with no counter row and no earlier counter to carry a limit from reports no row (no
+    /// configured limit); <see cref="QuotaCounterRow.Reserved"/> false means a counter exists but the call did not fit
+    /// in it, and <see cref="QuotaCounterRow.NeedsCarry"/> means the period has no counter yet but an earlier one did.
     /// </summary>
     /// <param name="orgId">The tenant of the open scope.</param>
     /// <param name="period">The billing month, <c>YYYY-MM</c>.</param>
     /// <param name="metric">The wire metric name.</param>
-    /// <param name="projectId">The project, or null for a tenant-level counter.</param>
+    /// <param name="scopeKeys">The scopes to lock and charge, the tenant's first.</param>
     /// <param name="quantity">The amount to add; the caller has already refused a non-positive one.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    internal Task<QuotaCounterRow?> ReserveAsync(
+    internal async Task<IReadOnlyList<QuotaCounterRow>> ReserveAsync(
         Guid orgId,
         string period,
         string metric,
-        Guid? projectId,
+        Guid[] scopeKeys,
         decimal quantity,
         CancellationToken cancellationToken) =>
-        db.QuerySingleOrDefaultAsync<QuotaCounterRow>(
-            UsageQuotaGateSql.Reserve,
-            new { org_id = orgId, project_id = projectId, period, metric, quantity },
-            cancellationToken);
+        await db.QueryAsync<QuotaCounterRow>(
+                UsageQuotaGateSql.Reserve,
+                new { org_id = orgId, scope_keys = scopeKeys, period, metric, quantity },
+                cancellationToken)
+            .ConfigureAwait(false);
 
     /// <summary>
-    /// Settles a call the reservation did not grant, in one statement: it reserves the call when the counter
-    /// has room by then, stamps the first refusal when it has none, and answers the counter either way. Null
-    /// means the org holds no counter row for the scope any more, so the call is not refused.
+    /// Settles a call the reservation did not grant, in one statement: it charges every scope the call asks for when
+    /// they all have room by then, stamps the first refusal on the scopes that have none, and answers each scope either
+    /// way. An empty answer means the tenant holds no counter row for any of the scopes any more, so the call is not
+    /// refused.
     /// </summary>
     /// <param name="orgId">The tenant of the open scope.</param>
     /// <param name="period">The billing month, <c>YYYY-MM</c>.</param>
     /// <param name="metric">The wire metric name.</param>
-    /// <param name="projectId">The project, or null for a tenant-level counter.</param>
+    /// <param name="scopeKeys">The scopes to lock and settle, the tenant's first.</param>
     /// <param name="quantity">The quantity the refused call asked for.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    internal Task<QuotaRefusalRow?> StampRefusalAsync(
+    internal async Task<IReadOnlyList<QuotaRefusalRow>> SettleAsync(
         Guid orgId,
         string period,
         string metric,
-        Guid? projectId,
+        Guid[] scopeKeys,
         decimal quantity,
         CancellationToken cancellationToken) =>
-        db.QuerySingleOrDefaultAsync<QuotaRefusalRow>(
-            UsageQuotaGateSql.StampRefusal,
-            new { org_id = orgId, project_id = projectId, period, metric, quantity },
-            cancellationToken);
+        await db.QueryAsync<QuotaRefusalRow>(
+                UsageQuotaGateSql.Settle,
+                new { org_id = orgId, scope_keys = scopeKeys, period, metric, quantity },
+                cancellationToken)
+            .ConfigureAwait(false);
 
     /// <summary>
-    /// Carries the scope's latest earlier month's limit and warning line into <paramref name="period"/>,
-    /// with no usage and no threshold stamp. Nothing is written when the period already has a counter or
-    /// the scope has no earlier one; the caller re-runs the reservation either way, so one carried row is
-    /// what every concurrent first caller of the month reads.
+    /// Stamps <c>blocked_at</c> on the scopes of a refusal whose caller rolled its transaction back, in the caller's
+    /// own transaction (the stamp service opens one). Counters with room again, counters already stamped and scopes
+    /// without a counter row are not written, so a repeated refusal costs the statement and no version bump.
     /// </summary>
     /// <param name="orgId">The tenant of the open scope.</param>
     /// <param name="period">The billing month, <c>YYYY-MM</c>.</param>
     /// <param name="metric">The wire metric name.</param>
-    /// <param name="projectId">The project, or null for a tenant-level counter.</param>
+    /// <param name="scopeKeys">The scopes the refused call charged, the tenant's first.</param>
+    /// <param name="quantity">The quantity the refused call asked for.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal Task<int> StampBlockedAsync(
+        Guid orgId,
+        string period,
+        string metric,
+        Guid[] scopeKeys,
+        decimal quantity,
+        CancellationToken cancellationToken) =>
+        db.ExecuteAsync(
+            UsageQuotaGateSql.StampBlocked,
+            new { org_id = orgId, scope_keys = scopeKeys, period, metric, quantity },
+            cancellationToken);
+
+    /// <summary>
+    /// Carries one scope's latest earlier month's limit and warning line into <paramref name="period"/>, with no usage
+    /// and no threshold stamp. Nothing is written when the period already has a counter or the scope has no earlier
+    /// one; the caller re-runs the reservation either way, so one carried row is what every concurrent first caller of
+    /// the month reads.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope.</param>
+    /// <param name="period">The billing month, <c>YYYY-MM</c>.</param>
+    /// <param name="metric">The wire metric name.</param>
+    /// <param name="scopeKey">The one scope to carry, a key from the reservation's answer.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     internal Task<int> CarryForwardAsync(
         Guid orgId,
         string period,
         string metric,
-        Guid? projectId,
+        Guid scopeKey,
         CancellationToken cancellationToken) =>
         db.ExecuteAsync(
             UsageQuotaGateSql.CarryForward,
-            new { org_id = orgId, project_id = projectId, period, metric },
+            new { org_id = orgId, scope_key = scopeKey, period, metric },
             cancellationToken);
 
     /// <summary>

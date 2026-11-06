@@ -16,7 +16,7 @@ namespace Tenancy.IntegrationTests;
 /// leaves no reservation behind.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class UsageQuotaGateTests
+public sealed partial class UsageQuotaGateTests
 {
     private const string Period = "2026-10";
     private const string NextPeriod = "2026-11";

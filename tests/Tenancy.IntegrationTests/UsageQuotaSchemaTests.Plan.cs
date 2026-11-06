@@ -32,20 +32,25 @@ public sealed partial class UsageQuotaSchemaTests
             await set.ExecuteScalarAsync(TestContext.Current.CancellationToken);
         }
 
-        // Both shapes of the tenant-level limit (null project) and the project-scoped one, for the two
-        // statements the gate serves: the reservation and the refusal.
+        // Both shapes of the tenant-level limit (null project, the all-zero scope key) and the project-scoped one,
+        // for the statements the gate serves: the reservation, the settle and the durable stamp.
         var tenantLevel = await ExplainAsync(
-            connection, transaction, UsageQuotaGateSql.Reserve, org, projectId: null, "2026-10", "results", quantity: 1m);
+            connection, transaction, UsageQuotaGateSql.Reserve, org, [Guid.Empty], "2026-10", "results", quantity: 1m);
         var projectScoped = await ExplainAsync(
-            connection, transaction, UsageQuotaGateSql.Reserve, org, project, "2026-10", "results", quantity: 1m);
-        var refusal = await ExplainAsync(
-            connection, transaction, UsageQuotaGateSql.StampRefusal, org, projectId: null, "2026-10", "results", quantity: 1m);
+            connection, transaction, UsageQuotaGateSql.Reserve, org, [Guid.Empty, project], "2026-10", "results",
+            quantity: 1m);
+        var settled = await ExplainAsync(
+            connection, transaction, UsageQuotaGateSql.Settle, org, [Guid.Empty], "2026-10", "results", quantity: 1m);
+        var stamped = await ExplainAsync(
+            connection, transaction, UsageQuotaGateSql.StampBlocked, org, [Guid.Empty, project], "2026-10", "results",
+            quantity: 1m);
 
         var plans = new List<(string Label, (List<string> NodeTypes, List<string> IndexNames, List<string> SequentialScanRelations) Nodes)>
         {
             ("the tenant-level reservation", tenantLevel),
             ("the project-scoped reservation", projectScoped),
-            ("the refusal stamp", refusal),
+            ("the settle statement", settled),
+            ("the durable refusal stamp", stamped),
         };
 
         foreach (var (label, plan) in plans)
@@ -90,7 +95,7 @@ public sealed partial class UsageQuotaSchemaTests
         NpgsqlTransaction transaction,
         string sql,
         Guid org,
-        Guid? projectId,
+        Guid[] scopeKeys,
         string period,
         string metric,
         decimal? quantity)
@@ -99,10 +104,10 @@ public sealed partial class UsageQuotaSchemaTests
 
         command.Parameters.AddWithValue("org_id", org);
 
-        // An explicit type, so a null project never leaves PostgreSQL guessing at the cast.
-        command.Parameters.Add(new NpgsqlParameter("project_id", NpgsqlDbType.Uuid)
+        // The scopes are one array: the tenant's all-zero key, then a project's, in the order the statement locks them.
+        command.Parameters.Add(new NpgsqlParameter("scope_keys", NpgsqlDbType.Array | NpgsqlDbType.Uuid)
         {
-            Value = projectId is { } project ? project : DBNull.Value,
+            Value = scopeKeys,
         });
         command.Parameters.AddWithValue("period", period);
         command.Parameters.AddWithValue("metric", metric);

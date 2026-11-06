@@ -2,7 +2,8 @@
 // per event), a block answered as 429 quota_exceeded carrying the gate's own Retry-After and committing nothing
 // (the gate runs after the insert, which the refusal rolls back), a committed batch that survives a later block,
 // 50 racing batches that never pass the limit, a resend that reserves nothing, and a foreign tenant's counter
-// left untouched. The resend/concurrency and warning/rollover halves live in the two partial files beside this one.
+// left untouched. The resend/concurrency, warning/rollover and two-scope/durable-stamp halves live in the partial
+// files beside this one.
 #pragma warning disable CA1861
 using System.Collections.Concurrent;
 using System.Globalization;
@@ -88,15 +89,18 @@ public sealed partial class IngestQuotaTests
         answer.Body.ToString().ShouldNotContain("/internal/operator");
 
         // The gate runs after the insert, so the refusal rolls the whole batch back: no event, no batch row, the
-        // queued -> running transition undone, and the counter exactly as it was, refusal stamp included (the
-        // version does not move either).
+        // queued -> running transition undone, and the counter's charge exactly as it was. The stamp is the one thing
+        // written, by the route afterwards in a scope of its own, which is why the version moves once.
         (await EventRowsAsync(world)).ShouldBe(0);
         (await BatchRowsAsync(world)).ShouldBe(0);
         (await RunStateAsync(world)).ShouldBe("queued");
         // Nothing the batch enqueues survives either: no accepted-batch metering row, no reader trigger.
         (await world.CountAsync("outbox", $"org_id = '{world.Org:D}'")).ShouldBe(0);
-        (await ReadAsync(counters, world)).ShouldBe(before);
-        before.Used.ShouldBe(9m);
+        var after = (await ReadAsync(counters, world)).ShouldNotBeNull();
+        after.Used.ShouldBe(before.Used);
+        after.Used.ShouldBe(9m);
+        before.BlockedAt.ShouldBeNull();
+        after.BlockedAt.ShouldNotBeNull("the refusal outlives the batch that earned it");
     }
 
     [Fact]
@@ -106,7 +110,7 @@ public sealed partial class IngestQuotaTests
         await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
 
         // Two units of room for a batch of three, which would also cross the 80 % warning line: the batch is one
-        // refusal, so neither half of it commits and the counter keeps every column it had.
+        // refusal, so neither half of it commits and the counter is charged nothing.
         await SeedAsync(counters, world, used: 8m, limit: 10m);
         var before = (await ReadAsync(counters, world)).ShouldNotBeNull();
 
@@ -115,7 +119,9 @@ public sealed partial class IngestQuotaTests
         refused.Status.ShouldBe(HttpStatusCode.TooManyRequests, refused.ErrorMessage);
         refused.ErrorCode.ShouldBe("quota_exceeded");
         RetryAfter(refused).ShouldBeGreaterThan(0);
-        (await ReadAsync(counters, world)).ShouldBe(before);
+        var after = (await ReadAsync(counters, world)).ShouldNotBeNull();
+        after.Used.ShouldBe(before.Used, "a refused batch is never charged, not even in part");
+        after.BlockedAt.ShouldNotBeNull("and the refusal keeps the stamp its rollback would have discarded");
         (await EventRowsAsync(world)).ShouldBe(0);
         (await BatchRowsAsync(world)).ShouldBe(0);
         (await WarningRowsAsync(world)).ShouldBe(0);

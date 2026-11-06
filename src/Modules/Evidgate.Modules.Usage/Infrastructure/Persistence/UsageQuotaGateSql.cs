@@ -4,29 +4,66 @@ namespace Evidgate.Modules.Usage.Infrastructure.Persistence;
 /// The <c>quota_counter</c> statements, in one place so the gate and the raise path share the served text
 /// instead of a copy.
 /// <para>
-/// Every statement names the scope through the sentinel <c>coalesce(project_id, …)</c> triple the unique
-/// index uses, so one index probe answers it and an org-level counter (null project) is a plain equality
-/// rather than an <c>is not distinct from</c> the planner cannot index.
+/// Every statement names a scope through the sentinel <c>coalesce(project_id, …)</c> triple the unique index uses, so
+/// one index probe answers it and an org-level counter (null project) is a plain equality rather than an
+/// <c>is not distinct from</c> the planner cannot index. A call that charges two scopes passes both keys in
+/// <c>@scope_keys</c>, and every locking statement reads them in <c>array_position</c> order — the caller's tenant row
+/// first — so the locks are taken in one order by every caller and two of them cannot deadlock.
 /// </para>
 /// </summary>
 internal static class UsageQuotaGateSql
 {
     /// <summary>
-    /// The gate's first statement: one conditional increment that is the check, so concurrent batches
-    /// serialise on the row lock and the last unit is granted once. Its second half answers any scope that
-    /// exists when the increment matched nothing, so a call with no counter row (no configured limit) is
-    /// answered — one round trip — by the same statement, and only a scope that exists with a counter row
-    /// moves on to the refusal statement. <c>reserved</c> says which of the two the caller read;
-    /// <c>needs_carry</c> says the month has no counter of its own but an earlier month did, so the limit
-    /// must be carried into the new period before the call can be answered.
+    /// The gate's first statement: one conditional increment of every scope the call charges, which is the check, so
+    /// concurrent batches serialise on the row locks and the last unit is granted once. The scopes are locked before
+    /// any of them is written (<c>targets</c>), and the increment runs only when <em>every</em> locked scope still has
+    /// room, so a refusal in one scope leaves the other exactly as it was.
     /// <para>
-    /// <c>warned_now</c> is the pre-update tuple against the post-update one, so it is true only for the
-    /// statement that actually stamped <c>warned_at</c>: the call that owns the transition, and only it,
-    /// emits the warning.
+    /// A scope with no counter row is unlimited and reports no row of its own; a scope whose month has no counter but
+    /// an earlier month did reports <c>needs_carry</c>, so the limit is carried into the period before the call is
+    /// answered. A call that needs any carry charges nothing at all — the increment waits until every scope it charges
+    /// has a counter of the period — so the one rerun after the carries is the only statement that can charge and no
+    /// scope is ever paid twice for one call. <c>warned_now</c> is the pre-update tuple against the post-update one, so
+    /// it is true only for the statement that actually stamped <c>warned_at</c>: the call that owns the transition, and
+    /// only it, emits the warning.
     /// </para>
     /// </summary>
     internal const string Reserve = """
-        with reserved as (
+        with targets as materialized (
+            select c.id, c.used, c.quota_limit, c.warn_ratio,
+                coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) as scope_key
+            from public.quota_counter as c
+            where c.org_id = @org_id
+              and c.period = @period
+              and c.metric = @metric
+              and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = any(@scope_keys)
+            order by array_position(@scope_keys, coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid))
+            for update
+        ),
+        carry as materialized (
+            select k.scope_key, p.id, p.quota_limit, p.warn_ratio
+            from unnest(@scope_keys) as k(scope_key)
+            cross join lateral (
+                select c.id, c.quota_limit, c.warn_ratio
+                from public.quota_counter as c
+                where c.org_id = @org_id
+                  and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = k.scope_key
+                  and c.metric = @metric
+                  and c.period < @period
+                order by c.period desc
+                limit 1
+            ) as p
+            where not exists (select 1 from targets as t where t.scope_key = k.scope_key)
+        ),
+        decided as (
+            select coalesce(bool_and(t.used + @quantity <= t.quota_limit), true) as room
+            from targets as t
+        ),
+        gate as (
+            select d.room and not exists (select 1 from carry) as fits
+            from decided as d
+        ),
+        incremented as (
             update public.quota_counter as c
             set used = c.used + @quantity,
                 warned_at = case
@@ -34,60 +71,42 @@ internal static class UsageQuotaGateSql
                         then now()
                     else c.warned_at
                 end
-            where c.org_id = @org_id
-              and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid)
-                  = coalesce(@project_id::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
-              and c.period = @period
-              and c.metric = @metric
-              and c.used + @quantity <= c.quota_limit
+            from gate as d
+            where d.fits
+              and c.id in (select t.id from targets as t)
             returning c.id, c.used, c.quota_limit, c.warn_ratio,
+                coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) as scope_key,
+                true as reserved,
                 old.warned_at is null and c.warned_at is not null as warned_now
-        ),
-        answered as (
-            select id, used, quota_limit, warn_ratio, true as reserved, warned_now
-            from reserved
-            union all
-            select c.id, c.used, c.quota_limit, c.warn_ratio, false as reserved, false as warned_now
-            from public.quota_counter as c
-            where c.org_id = @org_id
-              and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid)
-                  = coalesce(@project_id::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
-              and c.period = @period
-              and c.metric = @metric
-              and not exists (select 1 from reserved)
         )
-        select a.id, a.used, a.quota_limit, a.warn_ratio, a.reserved, false as needs_carry, a.warned_now
-        from answered as a
+        select i.id, i.scope_key, i.used, i.quota_limit, i.warn_ratio, i.reserved,
+            false as needs_carry, i.warned_now
+        from incremented as i
         union all
-        select p.id, 0::numeric, p.quota_limit, p.warn_ratio, false as reserved, true as needs_carry,
-            false as warned_now
-        from (
-            select c.id, c.quota_limit, c.warn_ratio
-            from public.quota_counter as c
-            where c.org_id = @org_id
-              and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid)
-                  = coalesce(@project_id::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
-              and c.metric = @metric
-              and c.period < @period
-              and not exists (select 1 from answered)
-            order by c.period desc
-            limit 1
-        ) as p
+        select t.id, t.scope_key, t.used, t.quota_limit, t.warn_ratio, false as reserved,
+            false as needs_carry, false as warned_now
+        from targets as t
+        where not exists (select 1 from incremented as i where i.id = t.id)
+        union all
+        select c.id, c.scope_key, 0::numeric, c.quota_limit, c.warn_ratio, false as reserved,
+            true as needs_carry, false as warned_now
+        from carry as c
         """;
 
     /// <summary>
-    /// The carry-forward: the month has no counter yet, so the scope's latest earlier counter lends it its
+    /// The carry-forward of one scope: the month has no counter yet, so the scope's latest earlier counter lends it its
     /// limit and warning line, with no usage and no threshold stamp. One statement, and the scope key's
-    /// <c>on conflict</c> is what makes concurrent first callers of the month converge on one row: the
-    /// loser writes nothing and re-reads the winner's row.
+    /// <c>on conflict</c> is what makes concurrent first callers of the month converge on one row: the loser writes
+    /// nothing and re-reads the winner's row.
     /// </summary>
     internal const string CarryForward = """
         insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit, warn_ratio)
-        select uuidv7(), @org_id, @project_id, @period, @metric, 0, p.quota_limit, p.warn_ratio
+        select uuidv7(), @org_id,
+            nullif(@scope_key::uuid, '00000000-0000-0000-0000-000000000000'::uuid),
+            @period, @metric, 0, p.quota_limit, p.warn_ratio
         from public.quota_counter as p
         where p.org_id = @org_id
-          and coalesce(p.project_id, '00000000-0000-0000-0000-000000000000'::uuid)
-              = coalesce(@project_id::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+          and coalesce(p.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = @scope_key
           and p.metric = @metric
           and p.period < @period
         order by p.period desc
@@ -97,31 +116,41 @@ internal static class UsageQuotaGateSql
         """;
 
     /// <summary>
-    /// The gate's second statement, for a call the increment did not grant. One conditional write settles
-    /// the scope: it reserves when the row has room by then (an operator raise committed first, so the call
-    /// is served and its usage is counted rather than lost) and stamps the first refusal when it has none.
-    /// The stamp carries the capacity predicate, so a counter with room is never left blocked, and the
-    /// verdict comes from the pre-update tuple (<c>old.*</c> in <c>returning</c>, the pinned PostgreSQL 18
-    /// server), so a reservation the same statement made is reported as a reservation, never as a refusal.
+    /// The gate's second statement, for a call the increment did not grant. One conditional write settles every scope
+    /// the call charges: when a raise committed in between and they all have room by now, all of them are charged and
+    /// the call is served; otherwise none is charged and the scopes without room get the first refusal stamp, while
+    /// the scope that does have room is left untouched. The stamp carries the capacity predicate, so a counter with
+    /// room is never left blocked, and the verdict comes from the pre-update tuple (<c>old.*</c> in
+    /// <c>returning</c>, the pinned PostgreSQL 18 server), so a reservation the same statement made is reported as a
+    /// reservation, never as a refusal.
     /// <para>
-    /// A scope that already carries the stamp writes nothing: the second half of the statement answers its
-    /// snapshot, so a repeated refusal cannot bump <c>version</c>. The stamp itself is committed only when the
-    /// caller's transaction commits, so a caller that answers the refusal by rolling back (the ingest route's
-    /// blocked batch) discards it and the next refusal stamps the row again. No row at all means the counter
-    /// holds room after all, or is gone.
+    /// A scope that already carries the stamp is not written: it is answered from the locked snapshot, so a repeated
+    /// refusal cannot bump <c>version</c>. The stamp itself commits with the caller's transaction, so a caller that
+    /// answers the refusal by rolling back (the ingest route's refused batch) discards it and
+    /// <see cref="StampBlocked"/> writes it again in a scope of its own.
     /// </para>
     /// </summary>
-    internal const string StampRefusal = """
-        with settled as (
+    internal const string Settle = """
+        with targets as materialized (
+            select c.id, c.used, c.quota_limit, c.warn_ratio,
+                coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) as scope_key
+            from public.quota_counter as c
+            where c.org_id = @org_id
+              and c.period = @period
+              and c.metric = @metric
+              and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = any(@scope_keys)
+            order by array_position(@scope_keys, coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid))
+            for update
+        ),
+        decided as (
+            select coalesce(bool_and(t.used + @quantity <= t.quota_limit), true) as fits
+            from targets as t
+        ),
+        settled as (
             update public.quota_counter as c
-            set used = case
-                    when c.used + @quantity <= c.quota_limit then c.used + @quantity
-                    else c.used
-                end,
+            set used = case when d.fits then c.used + @quantity else c.used end,
                 warned_at = case
-                    when c.used + @quantity <= c.quota_limit
-                         and c.warned_at is null
-                         and c.used + @quantity >= c.quota_limit * c.warn_ratio
+                    when d.fits and c.warned_at is null and c.used + @quantity >= c.quota_limit * c.warn_ratio
                         then now()
                     else c.warned_at
                 end,
@@ -129,27 +158,45 @@ internal static class UsageQuotaGateSql
                     when c.used + @quantity > c.quota_limit then coalesce(c.blocked_at, now())
                     else c.blocked_at
                 end
-            where c.org_id = @org_id
-              and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid)
-                  = coalesce(@project_id::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
-              and c.period = @period
-              and c.metric = @metric
-              and (c.used + @quantity <= c.quota_limit or c.blocked_at is null)
+            from decided as d
+            where c.id in (select t.id from targets as t)
+              and (d.fits or (c.used + @quantity > c.quota_limit and c.blocked_at is null))
             returning c.id, c.used, c.quota_limit, c.warn_ratio,
+                coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) as scope_key,
                 old.used + @quantity > old.quota_limit as blocked,
                 old.warned_at is null and c.warned_at is not null as warned_now
         )
-        select answer.id, answer.used, answer.quota_limit, answer.warn_ratio, answer.blocked, answer.warned_now
-        from settled as answer
+        select s.id, s.scope_key, s.used, s.quota_limit, s.warn_ratio, s.blocked, s.warned_now
+        from settled as s
         union all
-        select c.id, c.used, c.quota_limit, c.warn_ratio, true as blocked, false as warned_now
-        from public.quota_counter as c
-        where c.org_id = @org_id
-          and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid)
-              = coalesce(@project_id::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
-          and c.period = @period
-          and c.metric = @metric
-          and not exists (select 1 from settled)
+        select t.id, t.scope_key, t.used, t.quota_limit, t.warn_ratio,
+            t.used + @quantity > t.quota_limit as blocked, false as warned_now
+        from targets as t
+        where not exists (select 1 from settled as s where s.id = t.id)
+        """;
+
+    /// <summary>
+    /// The durable stamp of a refusal whose caller rolled its transaction back: the scopes are locked in the same order
+    /// as above and only a counter still without room and still unstamped is written, so a repeated refusal, a counter
+    /// a raise has since freed and a scope with no counter row all cost the one statement and no version bump.
+    /// </summary>
+    internal const string StampBlocked = """
+        with blocked as materialized (
+            select c.id
+            from public.quota_counter as c
+            where c.org_id = @org_id
+              and c.period = @period
+              and c.metric = @metric
+              and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = any(@scope_keys)
+              and c.used + @quantity > c.quota_limit
+            order by array_position(@scope_keys, coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid))
+            for update
+        )
+        update public.quota_counter as c
+        set blocked_at = now()
+        from blocked as b
+        where c.id = b.id
+          and c.blocked_at is null
         """;
 
     /// <summary>

@@ -8,6 +8,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Ingestion.Application;
 using Evidgate.Modules.Ingestion.Application.Commands;
 using Evidgate.Modules.Ingestion.Contracts;
+using Evidgate.Modules.Usage.Contracts;
 using Mediator;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -33,7 +34,7 @@ namespace Evidgate.Modules.Ingestion.Endpoints;
 /// per-event <c>duplicate</c> acks, not a cached response, so the header is neither required nor read.
 /// </para>
 /// </summary>
-public static class IngestionEndpoints
+public static partial class IngestionEndpoints
 {
     /// <summary>
     /// The event-batch transport cap (00 §9.3: 1 MiB before decompression), the same number
@@ -71,6 +72,7 @@ public static class IngestionEndpoints
         IRequestPrincipalAccessor principals,
         IMediator mediator,
         IngestQuotaVeto quotaVeto,
+        IQuotaBlockStamp blockStamp,
         CancellationToken cancellationToken)
     {
         var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(IngestionEndpoints));
@@ -163,15 +165,18 @@ public static class IngestionEndpoints
 
             if (!gzip)
             {
-                return Counted(
-                    await mediator
-                        .Send(new IngestEventBatch(r, bytes, context.TraceIdentifier, bytesIn, bytesIn), cancellationToken)
-                        .ConfigureAwait(false),
-                    logger,
-                    context,
-                    r,
-                    bytesIn,
-                    quotaVeto);
+                return await CountedAsync(
+                        await mediator
+                            .Send(new IngestEventBatch(r, bytes, context.TraceIdentifier, bytesIn, bytesIn), cancellationToken)
+                            .ConfigureAwait(false),
+                        logger,
+                        context,
+                        r,
+                        bytesIn,
+                        quotaVeto,
+                        blockStamp,
+                        cancellationToken)
+                    .ConfigureAwait(false);
             }
 
             using var decoded = EventBodyDecoder.DecodeGzip(bytes, limits);
@@ -185,17 +190,20 @@ public static class IngestionEndpoints
                     : Result.Failure<BatchAckResult>(TooLarge());
             }
 
-            return Counted(
-                await mediator
-                    .Send(
-                        new IngestEventBatch(r, decoded.Bytes, context.TraceIdentifier, bytesIn, decoded.ExpandedBytes),
-                        cancellationToken)
-                    .ConfigureAwait(false),
-                logger,
-                context,
-                r,
-                bytesIn,
-                quotaVeto);
+            return await CountedAsync(
+                    await mediator
+                        .Send(
+                            new IngestEventBatch(r, decoded.Bytes, context.TraceIdentifier, bytesIn, decoded.ExpandedBytes),
+                            cancellationToken)
+                        .ConfigureAwait(false),
+                    logger,
+                    context,
+                    r,
+                    bytesIn,
+                    quotaVeto,
+                    blockStamp,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -208,22 +216,29 @@ public static class IngestionEndpoints
     /// Counts one rejection for a failure the pipeline or handler returned, under
     /// <see cref="IngestBatchRejection.ReasonFor"/>'s closed vocabulary. A
     /// <c>batch_too_large</c> is skipped because the cap that refused it already counted it. A quota refusal
-    /// carries the gate's own <c>Retry-After</c>, which the carrier holds for this request.
+    /// carries the gate's own <c>Retry-After</c> and its stamp, both of which the carrier holds for this request.
     /// </summary>
-    private static Result<BatchAckResult> Counted(
+    private static async Task<Result<BatchAckResult>> CountedAsync(
         Result<BatchAckResult> result,
         ILogger logger,
         HttpContext context,
         Guid runId,
         int bytesIn,
-        IngestQuotaVeto quotaVeto)
+        IngestQuotaVeto quotaVeto,
+        IQuotaBlockStamp blockStamp,
+        CancellationToken cancellationToken)
     {
         if (result.Error is { } error)
         {
-            if (string.Equals(error.Code, ApiErrorCode.QuotaExceeded, StringComparison.Ordinal)
-                && quotaVeto.RetryAfterSeconds is { } retryAfter)
+            if (string.Equals(error.Code, ApiErrorCode.QuotaExceeded, StringComparison.Ordinal))
             {
-                context.Response.Headers.RetryAfter = RetryAfterHeader.Format(retryAfter);
+                if (quotaVeto.RetryAfterSeconds is { } retryAfter)
+                {
+                    context.Response.Headers.RetryAfter = RetryAfterHeader.Format(retryAfter);
+                }
+
+                await StampBlockedAsync(blockStamp, quotaVeto, logger, context, cancellationToken)
+                    .ConfigureAwait(false);
             }
 
             if (!string.Equals(error.Code, ApiErrorCode.BatchTooLarge, StringComparison.Ordinal))
@@ -235,6 +250,41 @@ public static class IngestionEndpoints
 
         return result;
     }
+
+    /// <summary>
+    /// Writes the refusal stamp the rolled-back batch carried away, in a scope of its own. Best effort on purpose:
+    /// the block already decided the 429 and nothing here admits work, so a stamp the database refused is logged
+    /// and the caller still reads the 429 it earned.
+    /// </summary>
+    private static async Task StampBlockedAsync(
+        IQuotaBlockStamp blockStamp,
+        IngestQuotaVeto quotaVeto,
+        ILogger logger,
+        HttpContext context,
+        CancellationToken cancellationToken)
+    {
+        if (quotaVeto.Block is not { } block)
+        {
+            return;
+        }
+
+        try
+        {
+            await blockStamp.StampAsync(block.OrgId, block.Request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+            when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // The refusal itself is already answered; only the diagnostics of the retry are lost here.
+            LogBlockStampFailed(logger, context.TraceIdentifier, exception);
+        }
+    }
+
+    [LoggerMessage(
+        EventId = 4111,
+        Level = LogLevel.Warning,
+        Message = "quota block stamp not written request_id={RequestId}")]
+    private static partial void LogBlockStampFailed(ILogger logger, string requestId, Exception exception);
 
     /// <summary>
     /// Puts the route's run id and the effective request id on the request span before any refusal,
