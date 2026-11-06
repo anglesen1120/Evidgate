@@ -186,14 +186,16 @@ public static partial class AuditMetadata
                 throw new ArgumentException($"audit metadata key '{key}' is not on the allowlist", nameof(metadata));
             }
 
-            if (value is null || value.Length > MaxValueLength)
+            switch (ValueOutcome(value))
             {
-                throw new ArgumentException($"audit metadata value of '{key}' is missing or too long", nameof(metadata));
-            }
-
-            if (SecretShaped().IsMatch(value))
-            {
-                throw new ArgumentException($"audit metadata value of '{key}' looks like a credential", nameof(metadata));
+                case MetadataValueOutcome.Missing or MetadataValueOutcome.TooLong:
+                    throw new ArgumentException(
+                        $"audit metadata value of '{key}' is missing or too long",
+                        nameof(metadata));
+                case MetadataValueOutcome.SecretShaped:
+                    throw new ArgumentException(
+                        $"audit metadata value of '{key}' looks like a credential",
+                        nameof(metadata));
             }
         }
 

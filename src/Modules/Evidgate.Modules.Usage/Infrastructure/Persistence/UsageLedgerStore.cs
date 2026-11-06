@@ -155,20 +155,13 @@ internal sealed class UsageLedgerStore(
         }
 
         await using var context = contexts.Create();
-        await using var command = (NpgsqlCommand)context.Database.GetDbConnection().CreateCommand();
-        command.Transaction = (NpgsqlTransaction)scopes.Require().Transaction;
-        command.CommandText = """
-            select id from public.project
-            where org_id = @org_id and id = any(@project_ids)
-            """;
-        command.Parameters.Add(new NpgsqlParameter("org_id", NpgsqlDbType.Uuid) { Value = orgId });
-        command.Parameters.Add(new NpgsqlParameter("project_ids", NpgsqlDbType.Array | NpgsqlDbType.Uuid) { Value = projectIds });
-        var visible = new HashSet<Guid>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
-        {
-            visible.Add(reader.GetGuid(0));
-        }
+        var visible = await UsageProjectVisibility.VisibleAsync(
+                context.Database.GetDbConnection(),
+                scopes.Require().Transaction,
+                orgId,
+                projectIds,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         List<UsageViolation>? violations = null;
         for (var index = 0; index < entries.Count; index++)

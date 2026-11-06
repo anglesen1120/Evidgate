@@ -693,6 +693,23 @@ public sealed class TenantGucTests
             """,
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId));
+        // 0077's quota counter: one limit for the org and one for its project, because the counter is an
+        // org-scoped table the discovery walks like any other.
+        await scope.ExecuteAsync(
+            """
+            insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit)
+            values (@id, @org_id, @project_id, '2026-10', 'results', 1, 100)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit)
+            values (@id, @org_id, null, '2026-10', 'results', 0, 100)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId));
         // The 05.3.2-T5 table (migration 0049): revision 1 of the run seeded above — the insert
         // trigger refuses any number but the run's max + 1. `missing` keeps its '{}' default, which
         // is what the "complete has no missing codes" CHECK requires.

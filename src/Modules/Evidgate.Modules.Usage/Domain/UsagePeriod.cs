@@ -1,7 +1,7 @@
 namespace Evidgate.Modules.Usage.Domain;
 
 /// <summary>
-/// The <c>period</c> rule of the ledger (12.3.1 §4): the column is a calendar month written <c>YYYY-MM</c>, and the
+/// The <c>period</c> rule of the ledger: the column is a calendar month written <c>YYYY-MM</c>, and the
 /// roll-up and every summary filter group by it, so nothing else (a free-text month, a full date, a time zone) is
 /// accepted. The check is ordinal and allocation-free: four ASCII digits, a hyphen, a month in <c>01</c>..<c>12</c>.
 /// </summary>
@@ -27,4 +27,14 @@ internal static class UsagePeriod
             && char.IsAsciiDigit(period[6])
             && month is >= 1 and <= 12;
     }
+
+    /// <summary>
+    /// True when <paramref name="period"/> is a well-formed month from 2000-01 to 2999-12, the range a
+    /// <c>quota_counter</c> row accepts. The counter's retry hint is built from a <see cref="DateTimeOffset"/>,
+    /// so a year outside that range would turn a refusal into an exception; four digits starting with
+    /// <c>2</c> are exactly 2000..2999.
+    /// </summary>
+    /// <param name="period">The candidate period.</param>
+    internal static bool IsQuotaPeriod(string? period) =>
+        period is { } text && IsWellFormed(text) && text[0] == '2';
 }

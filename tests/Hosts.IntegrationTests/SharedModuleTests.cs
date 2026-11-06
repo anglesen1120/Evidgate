@@ -79,23 +79,22 @@ public sealed class SharedModuleTests
     }
 
     /// <summary>
-    /// 12.3.1-T1.3/T4 (review F-F): an unregistered <see cref="IQuotaGate"/> is a wiring error that fails at
-    /// resolution, never "no limit row". The gate's implementation is 12.3.1-T4's, so today both hosts must throw for
-    /// the missing service — the fail-closed behaviour <see cref="IQuotaGate"/> documents, and the reason
-    /// <c>Ok</c> may only ever come from a gate that ran.
+    /// Both entry points compose the one <c>AddUsageModule</c> seam, so the gate a hot path resolves in the
+    /// Api is the gate the Worker resolves — and it is the real implementation, because an always-Ok
+    /// substitute is exactly what the interface forbids.
     /// </summary>
     [Fact]
-    public async Task Usage_Quota_Gate_Unregistered_FailsClosed()
+    public async Task Same_Quota_Gate_In_Api_And_Worker()
     {
         await using var factory = new EvidgateApiFactory(DeadConnectionString);
         using var client = factory.CreateClient();
 
-        Assert.Null(factory.Services.GetService<IQuotaGate>());
-        _ = Assert.Throws<InvalidOperationException>(() => factory.Services.GetRequiredService<IQuotaGate>());
+        var apiGate = factory.Services.GetRequiredService<IQuotaGate>();
 
         await using var worker = await RunningWorker.StartAsync(DeadConnectionString, HostLocator.FreePort(), cancellationToken: TestContext.Current.CancellationToken);
+        var workerGate = worker.Services.GetRequiredService<IQuotaGate>();
 
-        Assert.Null(worker.Services.GetService<IQuotaGate>());
-        _ = Assert.Throws<InvalidOperationException>(() => worker.Services.GetRequiredService<IQuotaGate>());
+        Assert.NotNull(apiGate);
+        Assert.Equal(apiGate.GetType().AssemblyQualifiedName, workerGate.GetType().AssemblyQualifiedName);
     }
 }
