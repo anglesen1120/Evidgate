@@ -11,7 +11,8 @@ public static partial class EvidgateTelemetry
 {
     /// <summary>
     /// Counter of event batches refused because the project's billing-period quota is used up, tagged by
-    /// <c>kind</c> from a closed set (<c>quota_exceeded</c>, <c>report_quota_exceeded</c>). Low cardinality only: never an org id, a project
+    /// <c>kind</c> from a closed set (<c>quota_exceeded</c>, <c>report_quota_exceeded</c>,
+    /// <c>quota_blocked_then_closed</c>). Low cardinality only: never an org id, a project
     /// id, a counter value or any request value.
     /// </summary>
     public const string IngestQuotaDeniedMetricName = "evidgate_ingest_quota_denied_total";

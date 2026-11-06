@@ -7,6 +7,7 @@ using Evidgate.Modules.Evidence.Application;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 using Xunit;
@@ -100,6 +101,7 @@ public sealed partial class EvidenceRawReportQuotaTests
     [InlineData(0, 0, true)]
     [InlineData(-5, 0, true)]
     [InlineData(0, 500, false)]
+    [InlineData(0, 5000, false)]
     [InlineData(5, 0, false)]
     [InlineData(40, 0, false)]
     public void The_Deferral_Delay_Is_Clamped_Between_One_Second_And_The_Next_Period(
@@ -119,15 +121,25 @@ public sealed partial class EvidenceRawReportQuotaTests
             return;
         }
 
-        // Mid-March is 17 days from the April rollover, so a five-day wait stands, a forty-day one is cut to the
-        // rollover, and a sub-second one is lifted to the gate's one-second floor.
+        // The three bounds of a mid-March attempt: the gate's one-second floor lifts anything under it, the
+        // fifteen-minute cap brings an attempt back in time for a raise or the run's late window, and a wait between
+        // the two stands as asked.
         var expected = retryAfter < TimeSpan.FromSeconds(1)
             ? TimeSpan.FromSeconds(1)
-            : retryAfter > TimeSpan.FromDays(17)
-                ? TimeSpan.FromDays(17)
+            : retryAfter > TimeSpan.FromMinutes(15)
+                ? TimeSpan.FromMinutes(15)
                 : retryAfter!.Value;
 
         ParseRawReportHandler.QuotaRetryDelay(retryAfter, MidMarch).ShouldBe(expected);
+    }
+
+    [Fact]
+    public void The_Next_Period_Beats_The_Cap_When_It_Ends_Sooner()
+    {
+        var nearlyApril = new DateTimeOffset(2026, 3, 31, 23, 55, 0, TimeSpan.Zero);
+
+        ParseRawReportHandler.QuotaRetryDelay(TimeSpan.FromMinutes(10), nearlyApril)
+            .ShouldBe(TimeSpan.FromMinutes(5), "the month's own end is the shortest of the three bounds");
     }
 
     [Fact]
@@ -233,8 +245,94 @@ public sealed partial class EvidenceRawReportQuotaTests
         services.AddSingleton(clock);
     }
 
+    /// <summary>The same attempt, against a handler whose lines a test can read.</summary>
+    private static async Task<ParseRawReportOutcome> ParseAsync(
+        World world,
+        Guid artifactId,
+        ILogger<ParseRawReportHandler> logger) =>
+        await CreateHandler(world, logger).ExecuteAsync(
+            new ParseRawReportPayload(world.RunId, artifactId, ProducerKind),
+            world.Org,
+            Token);
+
     private Task<long> OrgCountAsync(World world, string table) =>
         _fixture.ScalarAsync<long>(
             world.Database,
             $"select count(*) from public.{table} where org_id = '{world.Org:D}'");
+
+    [Fact]
+    public async Task A_Deferred_Report_The_Run_Closes_On_Is_Reported_As_Blocked_Then_Closed()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, OneEventBody);
+        await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
+
+        // The queue's own trace of the earlier attempt: this row deferred, so it carries the fixed deferral message.
+        await _fixture.ExecuteAsync(
+            world.Database,
+            "insert into public.task (id, org_id, queue, task_type, payload, idempotency_key, state, last_error) values "
+            + $"('{Guid.CreateVersion7():D}', '{world.Org:D}', 'tasks', '{EvidenceTaskTypes.ReportParse}', "
+            + $"'{{\"run_id\":\"{world.RunId:D}\",\"artifact_id\":\"{artifactId:D}\"}}'::jsonb, "
+            + $"'quota-deferral-{artifactId:D}', 'retry', '{TaskDeferredException.DeferredMessage.Replace("'", "''", StringComparison.Ordinal)}')");
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
+
+        var log = new CapturedLog();
+        var outcome = await ParseAsync(world, artifactId, log);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
+        outcome.Reason.ShouldNotBeNullOrEmpty("the outcome record keeps the admission's own code word");
+        log.Lines.ShouldContain(
+            line => line.Contains("quota_blocked_then_closed", StringComparison.Ordinal),
+            "a batch the period refused and the run then closed is a loss, not an ordinary late report");
+        (await CountAsync(world, "event", artifactId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_Run_Closed_Skip_Without_A_Deferral_Keeps_Its_Own_Code_Word()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, OneEventBody);
+        await SeedCounterAsync(counters, world, used: 0m, limit: 100m);
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
+
+        var log = new CapturedLog();
+        var outcome = await ParseAsync(world, artifactId, log);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
+        log.Lines.ShouldNotContain(line => line.Contains("quota_blocked_then_closed", StringComparison.Ordinal));
+        log.Lines.ShouldContain(line => line.Contains("skipped", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>The handler's structured lines, so a test can read the code word the skip path chose.</summary>
+    internal sealed class CapturedLog : ILogger<ParseRawReportHandler>
+    {
+        private readonly List<string> _lines = [];
+
+        /// <summary>Every formatted line, in arrival order.</summary>
+        internal IReadOnlyList<string> Lines => _lines;
+
+        /// <inheritdoc />
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        /// <inheritdoc />
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        /// <inheritdoc />
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) =>
+            _lines.Add(formatter(state, exception));
+    }
 }

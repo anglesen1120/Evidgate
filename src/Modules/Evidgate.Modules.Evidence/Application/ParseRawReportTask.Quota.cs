@@ -30,6 +30,13 @@ internal sealed partial class ParseRawReportHandler
     private const string QuotaExceededReason = "quota_exceeded";
 
     /// <summary>
+    /// The longest a blocked report may wait. A month-long wait outlives every chance to recover the batch: an
+    /// operator raise and the run's late window both need the attempt back before the run closes it as
+    /// <c>run_closed</c>, and a blocked report waits for neither side's schedule.
+    /// </summary>
+    private static readonly TimeSpan MaximumDeferral = TimeSpan.FromMinutes(15);
+
+    /// <summary>
     /// Asks the gate once for the events this attempt inserted, in the ingest route's request shape. The quantity is
     /// exactly what the batch receipt meters, and the tenant counter is charged too, so an org-wide limit applies.
     /// </summary>
@@ -103,8 +110,9 @@ internal sealed partial class ParseRawReportHandler
         catch (Exception exception)
             when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            // The refusal needs no stamp to stand, and losing it must never turn a deferral into a failure.
-            LogBlockStampFailed(logger, exception);
+            // The refusal needs no stamp to stand, and losing it must never turn a deferral into a failure. Only the
+            // type is logged: the statement's own text can quote counter values and ids.
+            LogBlockStampFailed(logger, exception.GetType().Name);
         }
 
         return outcome;
@@ -131,10 +139,63 @@ internal sealed partial class ParseRawReportHandler
         var nextPeriod = new DateTimeOffset(utcNow.Year, utcNow.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(1) - utcNow;
         // The queue's own floor is the lower bound: a shorter wait would only spin the claim loop.
         var floor = TaskDeferredException.MinimumDelay;
-        var ceiling = nextPeriod > floor ? nextPeriod : floor;
+        // The shortest of the three bounds: the floor, the month's end, and the cap that brings the attempt back in
+        // time for a raise or the run's late window. The floor wins a month that ends within it.
+        var ceiling = nextPeriod < MaximumDeferral ? nextPeriod : MaximumDeferral;
+        ceiling = ceiling < floor ? floor : ceiling;
         var delay = wait < floor ? floor : wait;
 
         return delay > ceiling ? ceiling : delay;
+    }
+
+    /// <summary>The telemetry kind of a deferred report a closed run then skipped: a loss the plain refusal word hides.</summary>
+    private const string BlockedThenClosed = "quota_blocked_then_closed";
+
+    /// <summary>
+    /// Logs a terminal admission refusal on the refusal path only, naming a loss the plain code word hides: a report
+    /// the queue had deferred and the run closed before its retry. The task row is the deferral's only durable trace,
+    /// and it is one indexed probe by the row's own artifact id.
+    /// </summary>
+    /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="artifactId">The report artifact, the only id the line names.</param>
+    /// <param name="reason">The admission's own code word, which the outcome record keeps.</param>
+    /// <param name="cancellationToken">Cancels the probe.</param>
+    private async Task LogAdmissionSkipAsync(
+        Guid orgId,
+        Guid artifactId,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var deferred = await db
+            .QuerySingleOrDefaultAsync<bool>(
+                """
+                select exists (
+                    select 1
+                    from public.task
+                    where org_id = @org_id
+                      and task_type = @task_type
+                      and last_error = @last_error
+                      and payload ->> 'artifact_id' = @artifact_id)
+                """,
+                new
+                {
+                    org_id = orgId,
+                    task_type = EvidenceTaskTypes.ReportParse,
+                    last_error = TaskDeferredException.DeferredMessage,
+                    artifact_id = artifactId.ToString("D"),
+                },
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!deferred)
+        {
+            LogSkipped(logger, artifactId, reason);
+
+            return;
+        }
+
+        EvidgateTelemetry.RecordIngestQuotaDenied(BlockedThenClosed);
+        LogBlockedThenClosed(logger, artifactId, BlockedThenClosed, reason);
     }
 
     /// <summary>The gate's wait as whole seconds for the refusal line; zero when it named none.</summary>
@@ -150,6 +211,16 @@ internal sealed partial class ParseRawReportHandler
     [LoggerMessage(
         EventId = 2468,
         Level = LogLevel.Warning,
-        Message = "quota block stamp not written for a refused raw report")]
-    private static partial void LogBlockStampFailed(ILogger logger, Exception exception);
+        Message = "quota block stamp not written for a refused raw report ({ExceptionType})")]
+    private static partial void LogBlockStampFailed(ILogger logger, string exceptionType);
+
+    [LoggerMessage(
+        EventId = 2469,
+        Level = LogLevel.Warning,
+        Message = "raw report parse of artifact {ArtifactId} was skipped after a quota deferral: {Deferral}, the admission answered {Reason}")]
+    private static partial void LogBlockedThenClosed(
+        ILogger logger,
+        Guid artifactId,
+        string deferral,
+        string reason);
 }

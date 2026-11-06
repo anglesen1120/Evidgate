@@ -176,11 +176,10 @@ public sealed class TaskDeferralTests
         (await TaskSql.ScalarAsync<bool>(
             owner,
             """
-            select available_at > now() + interval '900 milliseconds'
-               and available_at < now() + interval '2 seconds'
+            select available_at - updated_at = interval '1 second'
               from public.task where idempotency_key = 'clamped'
             """))
-            .ShouldBeTrue("the queue never parks a row for less than a second");
+            .ShouldBeTrue("the queue never parks a row for less than a second, and the row's own stamp is the clock");
         (await TaskSql.ScalarAsync<int>(owner, "select attempts from public.task where idempotency_key = 'clamped'"))
             .ShouldBe(0);
     }

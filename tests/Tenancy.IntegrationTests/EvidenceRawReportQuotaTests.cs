@@ -26,6 +26,7 @@ using Evidgate.Modules.Usage.Application.Quota;
 using Evidgate.Modules.Usage.Contracts;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Shouldly;
@@ -397,7 +398,11 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
         $"org/{world.Org:D}/project/{world.Project:D}/run/{world.RunId:D}/attempt/{ExecutionKey}/1/{artifactId:D}";
 
     /// <summary>The handler the task consumer builds, over the host's own registrations, minus the queue.</summary>
-    private static ParseRawReportHandler CreateHandler(World world)
+    /// <param name="world">The attempt's world.</param>
+    /// <param name="log">Where the handler's lines go, or null for a silent one.</param>
+    private static ParseRawReportHandler CreateHandler(
+        World world,
+        ILogger<ParseRawReportHandler>? log = null)
     {
         var services = world.Host.Services;
 
@@ -414,7 +419,7 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
             services.GetRequiredService<IOutboxWriter>(),
             services.GetRequiredService<IAuditTrail>(),
             services.GetRequiredService<TimeProvider>(),
-            NullLogger<ParseRawReportHandler>.Instance);
+            log ?? NullLogger<ParseRawReportHandler>.Instance);
     }
 
     private static async Task<ParseRawReportOutcome> ParseAsync(World world, Guid artifactId) =>

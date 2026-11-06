@@ -259,7 +259,7 @@ internal sealed partial class ParseRawReportHandler
         if (!admission.Allowed)
         {
             // Terminal: a closed run or a project that is going away will not admit this evidence on a retry either.
-            LogSkipped(logger, payload.ArtifactId, admission.Refusal!);
+            await LogAdmissionSkipAsync(orgId, payload.ArtifactId, admission.Refusal!, cancellationToken).ConfigureAwait(false);
             return (null, Guid.Empty, 0, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, admission.Refusal));
         }
 
