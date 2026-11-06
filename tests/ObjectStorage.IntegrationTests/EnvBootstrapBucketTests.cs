@@ -62,7 +62,7 @@ public sealed class EnvBootstrapBucketTests(SeaweedFsFixture fixture) : IDisposa
         var presigned = adapter.PresignPut(new PresignPutRequest(key, body.LongLength, Sha256Hex(body)));
         using var response = await PutAsync(presigned, body);
         response.IsSuccessStatusCode.ShouldBeTrue(
-            $"the presigned PUT must be accepted; status={(int)response.StatusCode}");
+            $"the presigned PUT must be accepted; status={(int)response.StatusCode} body={await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
 
         var cancellationToken = TestContext.Current.CancellationToken;
         (await adapter.GetAsync(key, body.LongLength, cancellationToken)).ShouldBe(body);
