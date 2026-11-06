@@ -150,9 +150,13 @@ input, so it is bounded before any string is expanded:
 | --------------------------- | ---------------- | --------------------------------------------- |
 | `classname` length          | `512` characters | unresolved, never an exception                |
 | `name` length               | `512` characters | unresolved; an empty `name` is unresolved too |
-| dotted `classname` segments | `32`             | unresolved                                    |
+| dotted `classname` segments | `32`             | unresolved (dotted fallback expansion only)   |
 
-Lengths are in UTF-16 `char`s; matching is ordinal.
+Lengths are in UTF-16 `char`s; matching is ordinal. The segment bound governs the
+dotted fallback expansion only: `ResolveExplicit` looks the whole `classname` up as
+a planned file path plus `::name` first, so an exact verbatim planned-file-path
+match resolves before any split, however many segments the string carries. The
+length bounds above still apply to it.
 
 ## Normalisation
 
@@ -182,15 +186,31 @@ The mapper's walk enforces no cap of its own; the parser profile does, in-proces
 or in the resource-limited parse child, and a breach is a refusal (`JUnitParseRefusedException`),
 never a partial event set.
 
-| Guard                              | Value                                                                                               | Refusal reason                                                  |
-| ---------------------------------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| Element nesting depth              | `64` (`ParsingLimits.MaxDepth`)                                                                     | `depth_exceeded`                                                |
-| Wall clock for one parse           | `30` s (`ParsingLimits.ParseTimeout`)                                                               | `timeout` in-process; `parse_timeout` from the child            |
-| Report bytes, profile ceiling      | `67108864` (`ParsingLimits.MaxReportBytes`, 64 MiB)                                                 | `size_exceeded`, carried as `payload_too_large` (413)           |
-| Report bytes, per artifact kind    | `artifact_kind_policy.max_bytes`; the stricter of it and the ceiling is the mapper's byte cap       | same as above                                                   |
-| `testcase` entries                 | configured `IngestionLimits.MaxReportCases`, published default `150000` (allowed range 1 … 1000000) | `cap_exceeded` with path `report_cases`, limit and actual count |
-| Document type declaration          | prohibited; no resolver, entity expansion capped                                                    | `dtd_prohibited`                                                |
-| Distinct discrepancy codes per row | `16`                                                                                                | the row cannot be written (shape `CHECK`)                       |
+| Guard                              | Value                                                                                               | Refusal reason                                                       |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Element nesting depth              | `64` (`ParsingLimits.MaxDepth`)                                                                     | `depth_exceeded`                                                     |
+| Wall clock for one parse           | `30` s (`ParsingLimits.ParseTimeout`)                                                               | `timeout` from the profile; `parse_timeout` from the runner's limits |
+| Report bytes, profile ceiling      | `67108864` (`ParsingLimits.MaxReportBytes`, 64 MiB)                                                 | `size_exceeded`, carried as `payload_too_large` (413)                |
+| Report bytes, per artifact kind    | `artifact_kind_policy.max_bytes`; the stricter of it and the ceiling is the mapper's byte cap       | `size_exceeded` as above; an over-cap stored object is `too_large`   |
+| `testcase` entries                 | configured `IngestionLimits.MaxReportCases`, published default `150000` (allowed range 1 … 1000000) | `cap_exceeded` with path `report_cases`, limit and actual count      |
+| Document type declaration          | prohibited; no resolver, entity expansion capped                                                    | `dtd_prohibited`                                                     |
+| Distinct discrepancy codes per row | `16`                                                                                                | the row cannot be written (shape `CHECK`)                            |
+
+Two timeout paths are distinct, and only one of them is a fact about the report.
+A parse that exceeds `ParsingLimits.ParseTimeout` inside the profile — in-process,
+or in the child's own profile run — is the profile's refusal and keeps the reason
+`timeout`. The runner's limits are separate: when its wall clock
+(`ParseRunnerOptions.WallClockSeconds`, bound from `EVIDGATE:PARSE`, 30 s by
+default) expires it kills the child tree, and the CPU limit the child applies to
+itself from `--cpu-seconds` arrives as `SIGXCPU` (exit 152) from the kernel. Either
+way the verdict is the host's `parse_timeout`, and a non-zero exit decides before
+any record the child wrote.
+
+An oversized stored object is refused before any child starts. The capped read
+never truncates a report — `Get` throws for an object over the cap — so the attempt
+ends as outcome `malformed` with reason `too_large`: this task's verdict, not the
+profile's. The profile's own size refusal stays `size_exceeded`, carried as
+`payload_too_large` (413), and is reached only for bytes that were read.
 
 A child run that ends without a verdict about the document — a heap-limit death, an
 unattributable signal, or a record stream that breaks the protocol — is reported as
@@ -308,8 +328,18 @@ a hostile or unknown string cannot fail the row and hide the refusal.
   `parser_version` writes its own row beside the old one, leaving the old row
   untouched. The event set stays the first accepted parse's: a changed payload
   under a new release refuses the second attempt rather than replacing evidence.
-- An unmapped testcase leaves a gap in the sequence, and the reconciler reads a
-  gap as `count_mismatch` (fail closed).
+- A testcase the mapper left unmapped still occupies its document position, but the
+  declared pair is the written set's own: `declared_last_sequence` is the highest
+  sequence written and `declared_count` the events written. An unmapped testcase
+  **between two mapped ones** therefore leaves an internal hole, which the
+  reconciler reads as its `count_mismatch` (fail closed). A trailing unmapped
+  testcase leaves none — one mapped testcase at position 1 stores sequence 1 and
+  declares `(1, 1)` — so only the report records it, as `unmapped_case`.
+  The two vocabularies stay distinct: the report's discrepancy codes
+  (`count_mismatch`, `unmapped_case`, `duplicate_case`, `status_mismatch`) are the
+  mapper's own, while the reconciler's reasons (`count_mismatch`, `unknown_status`,
+  `artifact_missing`, `setup_error`, `missing_shard`, `missing_result`) are the
+  run-level verdict, and only those decide completeness.
 
 ## Symbol index
 
