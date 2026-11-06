@@ -171,6 +171,40 @@ public sealed partial class EvidenceRawReportEnqueueTests
     }
 
     /// <summary>
+    /// The parse refuses a report whose stored object no longer fits its kind's cap, so the artifact leaves evidence
+    /// with <c>too_large</c>. The report task reads that verdict as the report's refusal rather than skipping a state
+    /// that is no longer <c>ready</c>: one <c>malformed</c> row naming the code, no bytes read, no events. The code is
+    /// also one the completion writes, and the row keeps nothing that tells the two writes apart, so this pins what
+    /// the parse's own verdict must keep producing.
+    /// </summary>
+    [Fact]
+    public async Task RawReport_ArtifactRejectedTooLargeByItsParse_StoresOneMalformedReport()
+    {
+        await using var world = await StartAsync(outOfProcess: true);
+        var runId = await SeedRunAsync(world, ProducerKind);
+        var artifactId = await MintAndUploadAsync(world, runId, "raw_report", XmlType, MappableUploadBody);
+        await CompleteSucceedsAsync(world, artifactId);
+
+        (await LowerKindCapAsync(world, "raw_report", MappableUploadBody.LongLength - 1)).ShouldBe(1);
+        await RunArtifactParseAsync(world, artifactId);
+
+        (await _fixture.ScalarAsync<string>(world.Database,
+            $"select state || '/' || failure_code from public.artifact where id = '{artifactId:D}'"))
+            .ShouldBe("rejected/too_large");
+
+        var outcome = await ConsumeEnqueuedReportAsync(world, artifactId);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Malformed);
+        outcome.Events.ShouldBe(0);
+        (await TenantRowsAsync(world, "raw_report")).ShouldBe(1);
+        (await _fixture.ScalarAsync<string>(world.Database,
+            $"select outcome || '/' || reason from public.raw_report where artifact_id = '{artifactId:D}'"))
+            .ShouldBe("malformed/too_large");
+        (await TenantRowsAsync(world, "event")).ShouldBe(0);
+        (await UsageRowsAsync(world)).ShouldBe(0);
+    }
+
+    /// <summary>
     /// A rejection the completion wrote is not a parse verdict: no report was ever validly uploaded, so the report task
     /// skips it and writes nothing, exactly as it did before the parse-rejected path existed.
     /// </summary>

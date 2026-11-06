@@ -19,8 +19,9 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// The enqueue half of 06.3.6-T1.4: <c>POST /v1/artifacts/{a}/complete</c> writes the <c>artifact_parse</c> row for a
 /// <c>raw_report</c> artifact when out-of-process parsing is composed, and nothing extra otherwise — the two existing
-/// rows of 06.1.2-T2 are untouched, so the flag-off composition is the in-process rollback 06.3.6 §11 names. The same
-/// switch also schedules the report's mapping row, which has its own suite.
+/// rows the completion already wrote for a verified artifact are untouched, so the flag-off composition is the
+/// in-process rollback 06.3.6 §11 names. The same switch also schedules the report's mapping row, which has its
+/// own suite.
 /// </summary>
 /// <remarks>
 /// The whole path is production: the mint, the presigned <c>PUT</c>, the check/copy verification, the conditional state

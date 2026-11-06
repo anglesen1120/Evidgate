@@ -119,10 +119,10 @@ internal sealed class CompleteArtifactUploadValidator : AbstractValidator<Comple
 /// the row once, guards its state (the endpoint's verdict is derived from facts read before this transaction
 /// opened, so it is never trusted for the state), re-reads the project's status so a project that flipped to
 /// <c>deleted</c> since the verifier cannot commit, writes the outcome and — for a verified object — the outbox
-/// rows (the scan and the staging delete, plus the parse rows of a raw report when out-of-process parsing is on,
-/// 06.3.6-T1.4), in one commit (C7). A row that already holds <c>ready</c>/<c>rejected</c> is
-/// returned unchanged: a fresh key on a completed artifact is a no-op, never a second scan, a second staging delete or
-/// a second parse (T19/T86). The staging object is deleted only by the <see cref="ArtifactStagingDeleteTaskHandler"/>,
+/// rows (the scan and the staging delete, plus the parse rows of a raw report when out-of-process parsing is on),
+/// in one commit (C7). A row that already holds <c>ready</c>/<c>rejected</c> is returned unchanged: a fresh key on
+/// a completed artifact is a no-op, never a second scan, a second staging delete or a second parse. The
+/// staging object is deleted only by the <see cref="ArtifactStagingDeleteTaskHandler"/>,
 /// after this transaction commits, and the parse runs only in the Worker (<c>ParseArtifactTaskHandler</c> and
 /// <see cref="ParseRawReportHandler"/>).
 /// </summary>

@@ -46,7 +46,7 @@ public static class UsageBatchAcceptedContract
 
     /// <summary>
     /// The source key of one metered batch: a retried task shows the same key, so the ledger bills the batch once
-    /// (T43/AC1 of 12.3.1).
+    /// (the acceptance check on a duplicate receipt).
     /// </summary>
     /// <param name="batchId">The accepted batch receipt.</param>
     /// <returns>The <c>usage:batch:&lt;id&gt;:&lt;metric&gt;</c> key.</returns>

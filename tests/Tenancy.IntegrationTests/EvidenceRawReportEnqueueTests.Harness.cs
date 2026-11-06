@@ -265,6 +265,21 @@ public sealed partial class EvidenceRawReportEnqueueTests
         world.Client.SendAsync(HttpMethod.Post, $"/v1/artifacts/{artifactId:D}/complete", _ => { }, null, idempotencyKey ?? NewKey());
 
     /// <summary>
+    /// Lowers a kind policy's byte cap after an artifact of that kind was admitted, so a later reader meets an object
+    /// its kind no longer admits: the completion verifies against one cap and the parse reads under another, and only
+    /// this write moves the bound between them.
+    /// </summary>
+    /// <param name="world">The tenant whose policy row is lowered.</param>
+    /// <param name="kind">The kind the row belongs to.</param>
+    /// <param name="maxBytes">The cap to leave behind, below the object that was already stored.</param>
+    private async Task<int> LowerKindCapAsync(World world, string kind, long maxBytes) =>
+        await _fixture.ScalarAsync<int>(
+            world.Database,
+            $"with lowered as (update public.artifact_kind_policy set max_bytes = {maxBytes} "
+            + $"where org_id = '{world.Org:D}' and project_id = '{world.Project:D}' and kind = '{kind}' returning 1) "
+            + "select count(*)::int from lowered").ConfigureAwait(false);
+
+    /// <summary>
     /// Listens for the enqueue counter and collects its <c>issue</c> tag: the closed outcome vocabulary is what the
     /// suites assert on, and the hint itself must never appear.
     /// </summary>

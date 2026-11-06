@@ -158,20 +158,7 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
             world.Database,
             $"select raw_status from public.case_attempt where org_id = '{world.Org:D}'")).ShouldBe("passed");
 
-        // The synthetic slot is closed and declared in the same commit, so no finalize has to close a report's shard.
-        (await _fixture.ScalarAsync<bool>(
-            world.Database,
-            $"select closed_at is not null from public.producer_slot where org_id = '{world.Org:D}'")).ShouldBeTrue();
-        (await _fixture.ScalarAsync<int>(
-            world.Database,
-            $"select declared_count from public.producer_slot where org_id = '{world.Org:D}'")).ShouldBe(1);
-        (await _fixture.ScalarAsync<long>(
-            world.Database,
-            $"select declared_last_sequence from public.producer_slot where org_id = '{world.Org:D}'")).ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(
-            world.Database,
-            $"select producer_id from public.producer_slot where org_id = '{world.Org:D}'"))
-            .ShouldBe("junit-" + artifactId.ToString("D", CultureInfo.InvariantCulture));
+        await AssertClosedSyntheticSlotAsync(world, artifactId);
 
         // An ordinary run gets the ordinary trigger: the reconciler already sees a closed shard, and the trigger
         // carries the slot's declaration rather than a late-evidence marker.
@@ -189,6 +176,24 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
             $"select (payload ->> 'declared_count')::int from public.outbox where org_id = '{world.Org:D}' "
             + $"and task_type = '{RunReconcileContract.OutboxTaskType}'"))
             .ShouldBe(1);
+    }
+
+    /// <summary>The synthetic slot this report closed and declared in its own commit, read back by producer id.</summary>
+    private async Task AssertClosedSyntheticSlotAsync(World world, Guid artifactId)
+    {
+        (await _fixture.ScalarAsync<bool>(
+            world.Database,
+            $"select closed_at is not null from public.producer_slot where org_id = '{world.Org:D}'")).ShouldBeTrue();
+        (await _fixture.ScalarAsync<int>(
+            world.Database,
+            $"select declared_count from public.producer_slot where org_id = '{world.Org:D}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select declared_last_sequence from public.producer_slot where org_id = '{world.Org:D}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<string>(
+            world.Database,
+            $"select producer_id from public.producer_slot where org_id = '{world.Org:D}'"))
+            .ShouldBe("junit-" + artifactId.ToString("D", CultureInfo.InvariantCulture));
     }
 
     [Fact]

@@ -2045,7 +2045,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "registers the out-of-process parse runner (06.3.6-T1.3, IParseRunner over the Evidgate.Parser child) in place of nothing at all: with it off no IParseRunner exists and the in-process IParsing path is the only one, which is the 06.3.6 §11 rollback. With it on, `complete` also writes the artifact_parse row of a raw_report and its raw_report_parse row, and the Worker registers both handlers. Option default false, because no call site resolves the runner before 06.3.6-T1.4; §11 roll-out turns it on in staging and, at M2 exit, in prod."
+      "note": "registers the out-of-process parse runner (IParseRunner over the Evidgate.Parser child) in place of nothing at all: with it off no IParseRunner exists and the in-process IParsing path is the only one, which is the 06.3.6 §11 rollback. With it on, `complete` also writes the artifact_parse row of a raw_report and its raw_report_parse row, and the Worker registers both handlers. Option default false, because no call site resolves the runner before the stage that wires it in; §11 roll-out turns it on in staging and, at M2 exit, in prod."
     },
     {
       "key": "EVIDGATE__PARSE__CHILDPATH",
