@@ -293,12 +293,14 @@ public sealed partial class UsageQuotaGateTests
         // Deterministic: the rollover is inside its carry-forward, waiting for that caller's transaction, before the
         // caller asks for the project's row.
         await world.WaitForBlockedByAsync(otherBackend);
-        (await other.ExecuteAsync(
-            "select 1 from public.quota_counter "
+        // A scalar query, because the row count of a SELECT is -1: the probe proves the lock, not the count.
+        (await other.ScalarAsync<Guid>(
+            "select id from public.quota_counter "
             + "where org_id = @org_id and project_id = @project_id and period = @period for update",
             ("org_id", world.Org),
             ("project_id", world.Project),
-            ("period", Period))).ShouldBe(1);
+            ("period", Period))).ShouldNotBe(
+            Guid.Empty, "the project's row is there for the second caller to lock, so nothing was holding it");
         await other.CommitAsync();
 
         var answer = await rollover;

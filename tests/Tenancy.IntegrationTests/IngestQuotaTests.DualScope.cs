@@ -311,7 +311,9 @@ public sealed partial class IngestQuotaTests
     {
         await using var services = world.Host.Services.CreateAsyncScope();
         var provider = services.ServiceProvider;
-        using var tenant = provider.GetRequiredService<IRequestTenantContextSetter>().Publish(world.Org, null);
+        // The addressed project must be the principal's own scope: the evaluator denies a service principal whose
+        // project scope differs from the open tenant context's project.
+        using var tenant = provider.GetRequiredService<IRequestTenantContextSetter>().Publish(world.Org, world.Project);
         using var principal = provider.GetRequiredService<IRequestPrincipalSetter>()
             .Publish(RequestPrincipal.Service(world.Project, [Permissions.Billing.Write]));
 
