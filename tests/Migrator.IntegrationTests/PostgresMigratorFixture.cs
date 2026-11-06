@@ -176,6 +176,9 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
             Database = database,
             Username = username,
             Password = password,
+            // Every test uses its own database, so idle pooled connections would pile up
+            // until the server refuses new ones (53300).
+            Pooling = false,
         };
 
         return builder.ConnectionString;
