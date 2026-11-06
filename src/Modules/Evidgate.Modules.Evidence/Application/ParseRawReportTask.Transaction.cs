@@ -182,7 +182,8 @@ internal sealed partial class ParseRawReportHandler
         RawReportDraft report,
         CancellationToken cancellationToken)
     {
-        if (await InsertRawReportAsync(orgId, payload, report, cancellationToken).ConfigureAwait(false))
+        if (await InsertRawReportAsync(orgId, payload, report, Guid.CreateVersion7(), cancellationToken)
+            .ConfigureAwait(false))
         {
             return null;
         }

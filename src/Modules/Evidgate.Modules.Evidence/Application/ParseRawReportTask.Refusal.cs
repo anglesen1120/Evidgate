@@ -56,16 +56,22 @@ internal sealed partial class ParseRawReportHandler
             return;
         }
 
+        // The row's id is minted here, before the insert, so the trigger of this refusal can name the very row it
+        // accompanies: one artifact may hold several refusals (an unsupported verdict, then a malformed one under a
+        // parser), and each needs a trigger of its own.
+        var rawReportId = Guid.CreateVersion7();
+
         // A row that already holds this key is an earlier verdict: the conflict is a silent no-op, because a refusal may
         // never overwrite one, a parsed report's row must never be joined by a refusal, and a replay writes no trigger.
         if (await InsertRawReportAsync(
                 orgId,
                 payload,
                 RefusedReport(outcome, reason, parserId, parserVersion),
+                rawReportId,
                 cancellationToken)
             .ConfigureAwait(false))
         {
-            await EnqueueRefusalTriggerAsync(payload, cancellationToken).ConfigureAwait(false);
+            await EnqueueRefusalTriggerAsync(payload, rawReportId, cancellationToken).ConfigureAwait(false);
         }
 
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -105,14 +111,16 @@ internal sealed partial class ParseRawReportHandler
 
     /// <summary>
     /// The one reconcile trigger of a refusal: the same run and the same synthetic producer the mapped path's slot
-    /// names, so the reconciler compares what the run really stored. Its key is the per-report shape
-    /// (<see cref="RunReconcileContract.IdempotencyKey"/>): one refusal leaves one trigger, a replay leaves none, and it
-    /// can never dedupe against the mapped path's batch-keyed row for the same producer.
+    /// names, so the reconciler compares what the run really stored. Its key names the row this trigger accompanies
+    /// (<see cref="RunReconcileContract.BatchIdempotencyKey"/>): one artifact may hold several refusals, each committed
+    /// with its own trigger, while a replay writes no row and so no trigger.
     /// </summary>
     /// <param name="payload">The run and artifact the refusal names.</param>
+    /// <param name="rawReportId">The refusal row this trigger accompanies, and the row id its key names.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     private async Task EnqueueRefusalTriggerAsync(
         ParseRawReportPayload payload,
+        Guid rawReportId,
         CancellationToken cancellationToken)
     {
         // The same synthetic producer the mapped path's slot names (see WriteMappedAsync), so the reconciler compares
@@ -124,7 +132,7 @@ internal sealed partial class ParseRawReportHandler
                 RunReconcileContract.PayloadJson(payload.RunId, producerId, declaredLastSequence: 0, declaredCount: 0),
                 RunReconcileContract.AggregateType,
                 payload.RunId,
-                RunReconcileContract.IdempotencyKey(payload.RunId, producerId),
+                RunReconcileContract.BatchIdempotencyKey(payload.RunId, producerId, rawReportId),
                 cancellationToken)
             .ConfigureAwait(false);
     }

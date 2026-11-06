@@ -134,13 +134,15 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// transactionally instead of overwriting immutable evidence.
 /// </para>
 /// <para>
-/// <b>A refused document writes no event, and exactly one <c>raw_report</c> row.</b>
+/// <b>A refused document writes no event, and one <c>raw_report</c> row per verdict.</b>
 /// <see cref="JUnitParseRefusedException"/> is the mapper's only way to report a refusal of the record stream, and the
 /// child's own rejection record (DTD, truncation, cap) or a failed run (<c>parse_crashed</c>, <c>parse_oom</c>,
 /// <c>parse_timeout</c>) becomes a named <c>malformed</c> outcome with zero events, exactly as for an artifact parse;
-/// what the parser decided is stored in one short write of its own, together with the reconcile trigger that lets the
-/// freeze path read the report as missing evidence, so a report nobody could parse still leaves evidence of who judged
-/// it and why. A producer kind with no loaded parser is stored the same way as
+/// what the parser decided is stored in one short write of its own, together with the reconcile trigger that names that
+/// row and lets the freeze path read the report as missing evidence, so a report nobody could parse still leaves
+/// evidence of who judged it and why. One artifact may carry more than one verdict — an unsupported row, then a
+/// malformed one under a parser — and each leaves its own row and trigger. A producer kind with no loaded parser is
+/// stored the same way as
 /// <c>unsupported</c>. A report whose bytes its own <c>artifact_parse</c> already judged — the artifact is
 /// <c>rejected</c> with that verdict, because the completion schedules both tasks in one transaction — stores the same
 /// verdict as its <c>malformed</c> row without reading a byte and without an event; a rejected artifact of any other

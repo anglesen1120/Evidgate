@@ -90,7 +90,7 @@ public sealed partial class EvidenceRawReportParseTests
         Number(stored, "observed_tests").ShouldBe(0);
         (await CountAsync(world, "event", artifact)).ShouldBe(0,
             "an immutable malformed row must not coexist with events committed by its overlapping delivery");
-        await AssertNothingWrittenAsync(world, artifact);
+        await AssertNothingWrittenAsync(world, artifact, 1);
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public sealed partial class EvidenceRawReportParseTests
         Text(row, "parser_id").ShouldBeNull();
         Text(row, "parser_version").ShouldBeNull();
         Discrepancies(row).ShouldBeEmpty();
-        await AssertNothingWrittenAsync(world, artifact);
+        await AssertNothingWrittenAsync(world, artifact, 1);
 
         var supported = await SeedArtifactAsync(world, MappedBody);
         (await ParseAsync(world, supported, ProducerKind)).Events.ShouldBe(1);
@@ -162,7 +162,7 @@ public sealed partial class EvidenceRawReportParseTests
         db.ReportRowsBeforeFailure.ShouldBe(1);
         db.EventRowsBeforeFailure.ShouldBe(1);
         (await RawReportCountAsync(world, artifact)).ShouldBe(0);
-        await AssertNothingWrittenAsync(world, artifact);
+        await AssertNothingWrittenAsync(world, artifact, 0);
 
         (await ParseAsync(world, artifact, ProducerKind)).Events.ShouldBe(1);
         (await RawReportCountAsync(world, artifact)).ShouldBe(1);

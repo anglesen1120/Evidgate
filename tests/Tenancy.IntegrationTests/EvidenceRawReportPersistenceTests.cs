@@ -305,7 +305,7 @@ public sealed partial class EvidenceRawReportParseTests
 
         // The row is the transaction's last insert, so a fault anywhere before it — or at it — commits nothing.
         (await RawReportCountAsync(world, artifactId)).ShouldBe(0);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 0);
     }
 
     [Fact]
@@ -341,7 +341,7 @@ public sealed partial class EvidenceRawReportParseTests
         outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
         outcome.Reason.ShouldBe("foreign_run");
         (await RawReportCountAsync(world, artifactId)).ShouldBe(0);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 0);
     }
 
     [Fact]
@@ -358,7 +358,7 @@ public sealed partial class EvidenceRawReportParseTests
         outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
         outcome.Reason.ShouldBe(RunAdmissionPolicy.RunClosed);
         (await RawReportCountAsync(world, artifactId)).ShouldBe(0);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 0);
     }
 
     [Fact]
@@ -411,7 +411,7 @@ public sealed partial class EvidenceRawReportParseTests
         Number(row, "observed_skipped").ShouldBe(0);
         Discrepancies(row).ShouldBeEmpty();
 
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 1);
     }
 
     /// <summary>A registry row whose parser release has no loaded mapper, under a kind of its own.</summary>

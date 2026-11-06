@@ -34,7 +34,7 @@ public sealed partial class EvidenceRawReportParseTests
         redelivery.Events.ShouldBe(0);
         (await RawReportCountAsync(world, artifactId)).ShouldBe(1);
         Text(await RawReportAsync(world, artifactId), "outcome").ShouldBe("malformed");
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 1);
 
         // Positive control: only the stored verdict differs from the artifact below, which parses and writes its event.
         var fresh = await SeedArtifactAsync(world, MappedBody);
@@ -63,7 +63,7 @@ public sealed partial class EvidenceRawReportParseTests
         redelivery.Events.ShouldBe(0);
         (await RawReportCountAsync(world, artifactId)).ShouldBe(1);
         Text(await RawReportAsync(world, artifactId), "outcome").ShouldBe("malformed");
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 1);
 
         // Positive control: a report that maps nothing commits its own row when no verdict is stored yet.
         var fresh = await SeedArtifactAsync(world, UnmappedBody);
@@ -91,7 +91,7 @@ public sealed partial class EvidenceRawReportParseTests
             1,
             "the event set is written before the row decides, so the rollback must be of real rows");
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 1);
     }
 
     /// <summary>

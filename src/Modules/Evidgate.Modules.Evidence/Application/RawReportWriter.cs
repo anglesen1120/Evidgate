@@ -114,16 +114,23 @@ internal sealed partial class ParseRawReportHandler
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
     /// <param name="report">The row this attempt built.</param>
+    /// <param name="rawReportId">
+    /// The row's own id, minted by the caller so a trigger written beside it can name that row and not the artifact.
+    /// </param>
     /// <param name="cancellationToken">Cancels the insert.</param>
     /// <returns>True when the row was inserted, false when the key already held one.</returns>
     private async Task<bool> InsertRawReportAsync(
         Guid orgId,
         ParseRawReportPayload payload,
         RawReportDraft report,
+        Guid rawReportId,
         CancellationToken cancellationToken)
     {
         var inserted = await db
-            .ExecuteAsync(InsertRawReportSql, RawReportParameters(orgId, payload, report), cancellationToken)
+            .ExecuteAsync(
+                InsertRawReportSql,
+                RawReportParameters(orgId, payload, report, rawReportId),
+                cancellationToken)
             .ConfigureAwait(false);
 
         return inserted > 0;
@@ -167,28 +174,33 @@ internal sealed partial class ParseRawReportHandler
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
     /// <param name="report">The row this attempt built.</param>
+    /// <param name="rawReportId">The row's own id, which an accompanying trigger may name.</param>
     /// <returns>The anonymous parameter bag.</returns>
-    private static object RawReportParameters(Guid orgId, ParseRawReportPayload payload, RawReportDraft report) => new
-    {
-        id = Guid.CreateVersion7(),
-        org_id = orgId,
-        run_id = payload.RunId,
-        artifact_id = payload.ArtifactId,
-        producer_kind = payload.StoredProducerKind,
-        parser_id = report.ParserId,
-        parser_version = report.ParserVersion,
-        outcome = report.Outcome,
-        reason = report.Reason,
-        declared_tests = report.DeclaredTests,
-        declared_failures = report.DeclaredFailures,
-        declared_errors = report.DeclaredErrors,
-        declared_skipped = report.DeclaredSkipped,
-        observed_tests = report.ObservedTests,
-        observed_failures = report.ObservedFailures,
-        observed_errors = report.ObservedErrors,
-        observed_skipped = report.ObservedSkipped,
-        discrepancies = report.Discrepancies,
-    };
+    private static object RawReportParameters(
+        Guid orgId,
+        ParseRawReportPayload payload,
+        RawReportDraft report,
+        Guid rawReportId) => new
+        {
+            id = rawReportId,
+            org_id = orgId,
+            run_id = payload.RunId,
+            artifact_id = payload.ArtifactId,
+            producer_kind = payload.StoredProducerKind,
+            parser_id = report.ParserId,
+            parser_version = report.ParserVersion,
+            outcome = report.Outcome,
+            reason = report.Reason,
+            declared_tests = report.DeclaredTests,
+            declared_failures = report.DeclaredFailures,
+            declared_errors = report.DeclaredErrors,
+            declared_skipped = report.DeclaredSkipped,
+            observed_tests = report.ObservedTests,
+            observed_failures = report.ObservedFailures,
+            observed_errors = report.ObservedErrors,
+            observed_skipped = report.ObservedSkipped,
+            discrepancies = report.Discrepancies,
+        };
 
     /// <summary>
     /// The row of a report the mapper resolved: the counters it declared, the cases it produced (the event set the

@@ -23,9 +23,10 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// What a refusal leaves behind besides its row: one <c>orchestrator.run.reconcile</c> trigger keyed per report, no
-/// second row or trigger on a replay, and no second read of the stored object. The mapped path's trigger is keyed by
-/// its accepted batch, so the two shapes coexist for one run instead of deduping each other away.
+/// What a refusal leaves behind besides its row: one <c>orchestrator.run.reconcile</c> trigger per refusal row, no
+/// second row or trigger on a replay, and no second read of the stored object. One artifact may hold several refusal
+/// rows — an unsupported verdict and a malformed one under a parser — so each row's trigger names that row and the
+/// two coexist instead of deduping each other away.
 /// </summary>
 public sealed partial class EvidenceRawReportParseTests
 {
@@ -110,13 +111,50 @@ public sealed partial class EvidenceRawReportParseTests
             world.Database,
             $"select idempotency_key from public.outbox where org_id = '{world.Org:D}' "
             + $"and task_type = '{RunReconcileContract.OutboxTaskType}' order by idempotency_key");
-        keys.Count.ShouldBe(2, "the outbox dedupes on (org, key) and the two shapes are keys of their own");
+        keys.Count.ShouldBe(2, "the outbox dedupes on (org, key) and the two rows name their own evidence");
         var batchId = await _fixture.ScalarAsync<Guid>(
             world.Database,
             $"select id from public.event_batch where org_id = '{world.Org:D}'");
-        keys.ShouldContain(RunReconcileContract.IdempotencyKey(world.RunId, SyntheticProducerPrefix + refused.ToString("D", CultureInfo.InvariantCulture)));
+        var refusedRow = await _fixture.ScalarAsync<Guid>(
+            world.Database,
+            $"select id from public.raw_report where artifact_id = '{refused:D}'");
+        keys.ShouldContain(RunReconcileContract.BatchIdempotencyKey(world.RunId, SyntheticProducerPrefix + refused.ToString("D", CultureInfo.InvariantCulture), refusedRow));
         keys.ShouldContain(RunReconcileContract.BatchIdempotencyKey(world.RunId, SyntheticProducerPrefix + mapped.ToString("D", CultureInfo.InvariantCulture), batchId));
         keys[0].ShouldNotBe(keys[1]);
+    }
+
+    [Fact]
+    public async Task Two_Refusals_Of_One_Artifact_Commit_One_Row_And_One_Trigger_Each()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, MalformedBody);
+
+        // A kind no parser names leaves the unsupported row, keyed by the kind the report declared; the same bytes
+        // under a registered kind leave the malformed row, keyed by the parser release. One artifact therefore holds
+        // two refusal rows, and each one's trigger must survive the other's.
+        var unsupported = await ParseAsync(world, artifactId, UnknownKind);
+        var malformed = await ParseAsync(world, artifactId, ProducerKind);
+
+        unsupported.Status.ShouldBe(ParseRawReportOutcome.Unsupported);
+        malformed.Status.ShouldBe(ParseRawReportOutcome.Malformed);
+        (await RawReportCountAsync(world, artifactId)).ShouldBe(2);
+        var rawReportIds = await _fixture.ColumnAsync<Guid>(
+            world.Database,
+            $"select id from public.raw_report where org_id = '{world.Org:D}' and artifact_id = '{artifactId:D}'");
+        rawReportIds.Count.ShouldBe(2);
+
+        var producerId = SyntheticProducerPrefix + artifactId.ToString("D", CultureInfo.InvariantCulture);
+        var keys = await _fixture.ColumnAsync<string>(
+            world.Database,
+            $"select idempotency_key from public.outbox where org_id = '{world.Org:D}' "
+            + $"and task_type = '{RunReconcileContract.OutboxTaskType}'");
+        keys.ShouldBe(
+            rawReportIds
+                .Select(rowId => RunReconcileContract.BatchIdempotencyKey(world.RunId, producerId, rowId))
+                .ToList(),
+            ignoreOrder: true);
     }
 
     [Fact]
@@ -193,12 +231,16 @@ public sealed partial class EvidenceRawReportParseTests
 
     /// <summary>
     /// The one trigger a committed refusal row leaves: the run aggregate, the report's synthetic producer, a zero
-    /// declaration, no late marker and the per-report key. The table's <c>(org, key)</c> dedupe makes it one row.
+    /// declaration, no late marker and a key naming that refusal row. The table's <c>(org, key)</c> dedupe makes it one
+    /// row.
     /// </summary>
     private async Task AssertOneRefusalTriggerAsync(World world, Guid artifactId)
     {
         var producerId = SyntheticProducerPrefix + artifactId.ToString("D", CultureInfo.InvariantCulture);
         (await OutboxRowsAsync(world, RunReconcileContract.OutboxTaskType)).ShouldBe(1);
+        var rawReportId = await _fixture.ScalarAsync<Guid>(
+            world.Database,
+            $"select id from public.raw_report where artifact_id = '{artifactId:D}'");
 
         var row = await _fixture.ScalarAsync<string>(
             world.Database,
@@ -211,7 +253,7 @@ public sealed partial class EvidenceRawReportParseTests
             '|',
             RunReconcileContract.AggregateType,
             world.RunId.ToString("D", CultureInfo.InvariantCulture),
-            RunReconcileContract.IdempotencyKey(world.RunId, producerId),
+            RunReconcileContract.BatchIdempotencyKey(world.RunId, producerId, rawReportId),
             world.RunId.ToString("D", CultureInfo.InvariantCulture),
             producerId,
             "0",

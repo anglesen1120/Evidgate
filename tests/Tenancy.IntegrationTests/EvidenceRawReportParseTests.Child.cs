@@ -90,7 +90,7 @@ public sealed partial class EvidenceRawReportParseTests
 
         outcome.Status.ShouldBe(ParseRawReportOutcome.Malformed);
         outcome.Reason.ShouldBe(reason);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 1);
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public sealed partial class EvidenceRawReportParseTests
 
         await Should.ThrowAsync<InvalidOperationException>(
             () => ParseAsync(world, artifactId, ProducerKind, runner: runner));
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 0);
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public sealed partial class EvidenceRawReportParseTests
 
         outcome.Status.ShouldBe(ParseRawReportOutcome.Malformed);
         outcome.Reason.ShouldBe(ParsingFailureReason.DtdProhibited);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 1);
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public sealed partial class EvidenceRawReportParseTests
         outcome.Reason.ShouldBe(ArtifactFailureCode.CapExceeded);
         runner.MaxCases.ShouldHaveSingleItem()
             .ShouldBe(world.Host.Services.GetRequiredService<IOptions<IngestionLimits>>().Value.MaxReportCases);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 1);
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public sealed partial class EvidenceRawReportParseTests
         outcome.Status.ShouldBe(ParseRawReportOutcome.Malformed);
         outcome.Reason.ShouldBe("too_large");
         runner.Calls.ShouldBe(0);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 1);
     }
 
     [Fact]
@@ -190,7 +190,7 @@ public sealed partial class EvidenceRawReportParseTests
 
         outcome.Status.ShouldBe(ParseRawReportOutcome.Malformed);
         outcome.Reason.ShouldBe(ParseRunRejection.Crashed);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 1);
     }
 
     [Theory]
