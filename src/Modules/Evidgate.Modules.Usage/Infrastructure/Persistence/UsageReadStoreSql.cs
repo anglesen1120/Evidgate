@@ -1,9 +1,10 @@
 namespace Evidgate.Modules.Usage.Infrastructure.Persistence;
 
 /// <summary>
-/// The read SQL of the billing operator's two statements: one keyset page of
-/// <c>usage_ledger_entry</c>, and the period reconciliation of the ledger against
-/// <c>usage_rollup</c> plus the duplicate attempts recorded by the write path.
+/// The read SQL of the billing operator's reads: one keyset page of <c>usage_ledger_entry</c>, the period
+/// reconciliation of the ledger against <c>usage_rollup</c> plus the duplicate attempts recorded by the write path,
+/// and the two per-period documents a read assembles from the ledger — the invoice worksheet and the tenant's cost
+/// inputs.
 /// </summary>
 /// <remarks>
 /// Every statement carries the tenant twice — <c>org_id = @org_id</c> and the open scope's row
@@ -143,6 +144,24 @@ internal static class UsageReadStoreSql
            and period = @period
          order by metric, project_id nulls first, occurred_at, id
          limit @limit
+        """;
+
+    /// <summary>
+    /// The ledger's cost inputs of one closed period: its sum and row count per metric.
+    /// </summary>
+    /// <remarks>
+    /// A row count is returned beside each sum so the caller can tell "no producer wrote this" from a producer
+    /// whose rows net to zero. The statement names <c>org_id</c> as well as the open scope's row security, so no
+    /// argument widens the tenant. The AI-token side that lives outside this ledger is Healing's, and is asked for
+    /// through its Contracts seam rather than read from here.
+    /// </remarks>
+    internal const string TenantCost =
+        """
+        select metric as line, sum(quantity) as quantity, count(*) as row_count
+          from public.usage_ledger_entry
+         where org_id = @org_id
+           and period = @period
+         group by metric
         """;
 
     /// <summary>

@@ -47,6 +47,7 @@ internal static class UsageModule
         // The invoice worksheet is the same read path over the ledger's rows, and the statement is the one write that
         // freezes a worksheet: both ride on the scope and the audit unit the reads above open.
         services.TryAddScoped<InvoiceWorksheetReader>();
+        services.TryAddScoped<CostPerTenantReader>();
         services.TryAddScoped<StatementIssuer>();
         services.TryAddScoped<BillingStatementStore>();
 

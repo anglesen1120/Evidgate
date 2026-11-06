@@ -121,7 +121,30 @@ internal sealed class UsageReadStore(ITenantDb db)
             UsageReadStoreSql.WorksheetLines,
             new { org_id = orgId, period, limit },
             cancellationToken);
+
+    /// <summary>
+    /// Reads the ledger's cost inputs of one closed period: its sum and row count per metric.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope.</param>
+    /// <param name="period">The closed period, <c>YYYY-MM</c>.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal Task<IReadOnlyList<TenantCostRow>> ReadTenantCostAsync(
+        Guid orgId,
+        string period,
+        CancellationToken cancellationToken) =>
+        db.QueryAsync<TenantCostRow>(
+            UsageReadStoreSql.TenantCost,
+            new { org_id = orgId, period },
+            cancellationToken);
 }
+
+/// <summary>Dapper shape of one ledger metric's cost input: its sum and the number of rows behind it.</summary>
+/// <param name="Line">The metric's wire name.</param>
+/// <param name="Quantity">The sum, or null when no row was written.</param>
+/// <param name="RowCount">
+/// The rows the sum covers: zero says nothing was written, which is not the same as a measured zero.
+/// </param>
+internal sealed record TenantCostRow(string Line, decimal? Quantity, long RowCount);
 
 /// <summary>Dapper shape of one <c>usage_ledger_entry</c> worksheet row, adjustment fields included.</summary>
 internal sealed record WorksheetLineRow(

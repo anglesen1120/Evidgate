@@ -82,6 +82,9 @@
       "evidgate.buildingblocks.sharedkernel": {
         "type": "Project"
       },
+      "evidgate.modules.healing.contracts": {
+        "type": "Project"
+      },
       "evidgate.modules.tenancy.contracts": {
         "type": "Project"
       },

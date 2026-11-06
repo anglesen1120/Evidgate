@@ -1,5 +1,6 @@
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Healing.Contracts;
+using Evidgate.Modules.Healing.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -35,6 +36,10 @@ internal static class HealingModule
 
         // 00 §5.5: the Contracts seam other modules resolve to ask "may healing act for this project?".
         services.TryAddScoped<IHealingAvailabilityResolver, HealingAvailabilityResolver>();
+
+        // The cost read's token seam: what one org's attempts spent in a month, answered from this module's own
+        // ledger instead of letting another module read `healing_llm_call`.
+        services.TryAddScoped<IHealingTokenUsage, HealingTokenUsageReader>();
 
         // 08.6.3: the operator's only writer of the platform row, resolved by the operator ingress route.
         services.TryAddSingleton<HealingSystemSwitchWriter>();
