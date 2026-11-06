@@ -110,13 +110,13 @@ if [ "$env_name" = "dev" ]; then
   endpoint="${EVIDGATE__OBJECT__ENDPOINT:-${EVIDGATE_S3_ENDPOINT:-http://127.0.0.1:8333}}"
   region="${EVIDGATE__OBJECT__REGION:-${EVIDGATE_S3_REGION:-us-east-1}}"
   access="${EVIDGATE__OBJECT__ACCESSKEY:-${EVIDGATE_S3_ACCESS_KEY:-}}"
-  secret="${EVIDGATE__OBJECT__SECRETKEY:-${EVIDGATE_S3_SECRET_KEY:-}}"
+  sign_key="${EVIDGATE__OBJECT__SECRETKEY:-${EVIDGATE_S3_SECRET_KEY:-}}"
 else
   bucket="${EVIDGATE__OBJECT__BUCKET:-}"
   endpoint="${EVIDGATE__OBJECT__ENDPOINT:-}"
   region="${EVIDGATE__OBJECT__REGION:-}"
   access="${EVIDGATE__OBJECT__ACCESSKEY:-}"
-  secret="${EVIDGATE__OBJECT__SECRETKEY:-}"
+  sign_key="${EVIDGATE__OBJECT__SECRETKEY:-}"
 fi
 
 missing=""
@@ -124,7 +124,7 @@ missing=""
 [ -n "$endpoint" ] || missing="$missing EVIDGATE__OBJECT__ENDPOINT"
 [ -n "$region" ] || missing="$missing EVIDGATE__OBJECT__REGION"
 [ -n "$access" ] || missing="$missing EVIDGATE__OBJECT__ACCESSKEY"
-[ -n "$secret" ] || missing="$missing EVIDGATE__OBJECT__SECRETKEY"
+[ -n "$sign_key" ] || missing="$missing EVIDGATE__OBJECT__SECRETKEY"
 if [ -n "$missing" ]; then
   die "missing required environment:$missing (no value is used for a missing key)"
 fi
@@ -157,7 +157,7 @@ if [ "$env_name" != "dev" ]; then
   fi
 fi
 
-evg_s3_configure "$access" "$secret" "$region"
+evg_s3_configure "$access" "$sign_key" "$region"
 
 if [ "$action" = "provision" ]; then
   info "provisioning bucket '$bucket' at $endpoint ($env_name)"

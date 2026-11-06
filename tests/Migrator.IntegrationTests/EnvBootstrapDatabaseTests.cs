@@ -184,7 +184,7 @@ public sealed class EnvBootstrapDatabaseTests
         return database;
     }
 
-    private MigratorHarness.RunOutcome ApplyMigrations(string database) =>
+    private RunOutcome ApplyMigrations(string database) =>
         MigratorHarness.Run(PostgresMigratorFixture.RepoMigrationsPath, _fixture.OwnerConnectionString(database));
 
     private Dictionary<string, string?> DevEnvironment(string database) => new(StringComparer.Ordinal)
