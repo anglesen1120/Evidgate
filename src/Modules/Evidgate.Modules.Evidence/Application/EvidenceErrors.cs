@@ -55,6 +55,14 @@ internal static class EvidenceErrors
     internal static Error RunNotFound => Error.NotFound("the run does not exist in this project");
 
     /// <summary>
+    /// 404: no stored report with that id is visible for the route's run and the caller's scope. RLS hides another
+    /// tenant's row, the run predicate hides a report of another run, and the project check hides a sibling project's
+    /// row, so every one of them is this single body — an unknown run included, because its reports are not visible
+    /// either. No existence oracle, and no separate message per cause.
+    /// </summary>
+    internal static Error ReportNotFound => Error.NotFound("the report does not exist in this run");
+
+    /// <summary>
     /// 403: the caller has no token identity (<c>jti</c>) to bind a producer slot to (06.1.2 §5, T9/T85). A slot is
     /// bound to the credential that first wrote it, so a caller without one can never bind — it is refused before
     /// the registry is called rather than binding an empty identity.
