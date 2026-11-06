@@ -12,7 +12,6 @@ using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.EntityFrameworkCore;
 using Evidgate.Modules.Ingestion.Contracts;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -64,7 +63,8 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// One short read-only scope resolves what the fetch needs (the artifact, the kind's byte cap, the parser pair, the
 /// run's plan), then closes; the object is fetched and the document mapped with no scope open (00 §5.7 P5). The
 /// serialized rows — including every payload hash and every case-attempt input — are computed with no scope open too,
-/// so the transaction that follows holds a connection only for its writes.
+/// so the transaction that follows holds a connection only for its writes. A refusal opens one more, equally short,
+/// write scope for its single row and nothing else.
 /// </para>
 /// <para>
 /// <b>Admission is the event batch route's, decided once under the run's lock.</b> A complete run, an incomplete run
@@ -73,11 +73,12 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// <c>late</c>. The rule itself is <see cref="RunAdmissionPolicy"/>, shared with the ingest path.
 /// </para>
 /// <para>
-/// <b>One transaction writes the slot, the events, the attempts and the trigger.</b> The synthetic producer's slot is
-/// created already closed and declared, because no producer will ever finalize a report, and only then can the
-/// reconciler compare this shard instead of waiting on an open one. Every newly inserted finish also becomes a
-/// <c>case_attempt</c> row through the existing writer, and one reconcile trigger is enqueued — the late-evidence one
-/// for a run that already finished as incomplete, the ordinary one for every other run.
+/// <b>One transaction writes the slot, the events, the attempts, the trigger and the report's own row.</b> The
+/// synthetic producer's slot is created already closed and declared, because no producer will ever finalize a report,
+/// and only then can the reconciler compare this shard instead of waiting on an open one. Every newly inserted finish
+/// also becomes a <c>case_attempt</c> row through the existing writer, and one reconcile trigger is enqueued — the
+/// late-evidence one for a run that already finished as incomplete, the ordinary one for every other run. The
+/// <c>raw_report</c> row is the last write before the commit, so a refusal anywhere in the transaction leaves none.
 /// </para>
 /// <para>
 /// <b>A replay is a no-op only when it is the same evidence.</b> The producer id is synthetic and per report
@@ -88,11 +89,14 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// transactionally instead of overwriting immutable evidence.
 /// </para>
 /// <para>
-/// <b>A refused document writes nothing.</b> <see cref="JUnitParseRefusedException"/> is the mapper's only way to
-/// report a refusal of the record stream, and the child's own rejection record (DTD, truncation, cap) or a failed run
-/// (<c>parse_crashed</c>, <c>parse_oom</c>, <c>parse_timeout</c>) becomes a named <c>malformed</c> outcome with zero
-/// events, exactly as for an artifact parse. Only a child that never started is retried. No other exception is read
-/// as a verdict: a resolver or storage fault must surface.
+/// <b>A refused document writes no event, and exactly one <c>raw_report</c> row.</b>
+/// <see cref="JUnitParseRefusedException"/> is the mapper's only way to report a refusal of the record stream, and the
+/// child's own rejection record (DTD, truncation, cap) or a failed run (<c>parse_crashed</c>, <c>parse_oom</c>,
+/// <c>parse_timeout</c>) becomes a named <c>malformed</c> outcome with zero events, exactly as for an artifact parse;
+/// what the parser decided is stored in one short write of its own, so a report nobody could parse still leaves
+/// evidence of who judged it and why. A producer kind with no loaded parser is stored the same way as
+/// <c>unsupported</c>. Only a child that never started is retried, and it writes nothing. No other exception is read as
+/// a verdict: a resolver or storage fault must surface.
 /// </para>
 /// <para>
 /// <b>A report whose artifact belongs to another run, or another tenant, yields no event.</b> The payload's run id is
@@ -100,9 +104,9 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// neither attribute events to a foreign run nor read its plan.
 /// </para>
 /// </summary>
-/// <param name="scopes">Opens the two short scopes this attempt runs in.</param>
+/// <param name="scopes">Opens the short scopes this attempt runs in: the read, the write of a parsed report and, for a refusal, the one-row write.</param>
 /// <param name="contexts">The tenant write model the artifact and its kind policy are read through.</param>
-/// <param name="db">The Dapper path for the registry, the plan, the slot and the event insert.</param>
+/// <param name="db">The Dapper path for the registry, the plan, the slot, the event insert and the report row.</param>
 /// <param name="storage">The object store the report's bytes are read from, capped by the kind policy.</param>
 /// <param name="parsers">The parser registry read (producer kind → parser pair).</param>
 /// <param name="runner">The resource-limited child the untrusted report is parsed in; this process never parses it.</param>
@@ -173,12 +177,51 @@ internal sealed partial class ParseRawReportHandler(
         Guid orgId,
         CancellationToken cancellationToken)
     {
-        var (prepared, stopped) = await PrepareAsync(orgId, payload, cancellationToken).ConfigureAwait(false);
-        if (prepared is null)
+        var preparation = await PrepareAsync(orgId, payload, cancellationToken).ConfigureAwait(false);
+        if (preparation.Prepared is not { } prepared)
         {
-            return stopped!;
+            // A refusal is the one stop that still leaves evidence: an unsupported producer kind writes its row, a skip
+            // writes nothing.
+            return await RefuseUnsupportedAsync(preparation, preparation.Stopped!, orgId, payload, cancellationToken)
+                .ConfigureAwait(false);
         }
 
+        var (bytes, readStopped) = await ReadBytesAsync(prepared, orgId, payload, cancellationToken).ConfigureAwait(false);
+        if (bytes is not { } content)
+        {
+            return readStopped!;
+        }
+
+        var (succeeded, childStopped) = await RunChildAsync(prepared, content, orgId, payload, cancellationToken).ConfigureAwait(false);
+        if (succeeded is not { } run)
+        {
+            return childStopped!;
+        }
+
+        var (mapped, mapStopped) = await MapAsync(run, prepared, orgId, payload, cancellationToken).ConfigureAwait(false);
+        if (mapped is not { } resolution)
+        {
+            return mapStopped!;
+        }
+
+        return await WriteMappedAsync(prepared, resolution, orgId, payload, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The fetch: the object is read with no scope open, capped by the kind policy and the profile's ceiling. A store
+    /// that refuses to truncate is a refusal; an absent object is a retryable fault.
+    /// </summary>
+    /// <param name="prepared">The fetch inputs the read scope resolved.</param>
+    /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="payload">The run, artifact and producer kind.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The object's bytes, or the refused outcome that ended the attempt.</returns>
+    private async Task<(byte[]? Bytes, ParseRawReportOutcome? Stopped)> ReadBytesAsync(
+        Prepared prepared,
+        Guid orgId,
+        ParseRawReportPayload payload,
+        CancellationToken cancellationToken)
+    {
         byte[]? bytes;
         try
         {
@@ -191,19 +234,35 @@ internal sealed partial class ParseRawReportHandler(
             // the cap no longer admits is refused, never parsed as a truncated document.
             LogOversize(logger, payload.ArtifactId, prepared.MaxBytes);
             EvidgateTelemetry.RecordIngestCapExceeded(ReportBytesCap);
-            return new ParseRawReportOutcome(ParseRawReportOutcome.Malformed, "too_large");
+            return (null, await RefuseMalformedAsync(prepared, orgId, payload, "too_large", cancellationToken).ConfigureAwait(false));
         }
 
         if (bytes is null)
         {
-            // An absent object is an infrastructure fault (or a store that has not made the promotion visible yet):
-            // retry instead of recording evidence nobody judged.
             throw new InvalidOperationException(
                 "the raw report's stored object is not readable, so the report was not parsed; the task is retried");
         }
 
-        // The untrusted bytes go to the resource-limited child and nowhere else: a crash, an out-of-memory kill or a
-        // wall-clock expiry ends the child, never this process. No scope is open while it runs.
+        return (bytes, null);
+    }
+
+    /// <summary>
+    /// The child: the untrusted bytes go to the resource-limited child and nowhere else. A child that never started
+    /// throws, because nothing judged the report; every other failure and the child's own rejection record are refusals.
+    /// </summary>
+    /// <param name="prepared">The cap and the parser pair the child and the refusal rows are stamped with.</param>
+    /// <param name="bytes">The report's bytes, owned by this attempt.</param>
+    /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="payload">The run, artifact and producer kind.</param>
+    /// <param name="cancellationToken">Cancels the child.</param>
+    /// <returns>The child's record stream, or the refused outcome that ended the attempt.</returns>
+    private async Task<(ParseRunSucceeded? Succeeded, ParseRawReportOutcome? Stopped)> RunChildAsync(
+        Prepared prepared,
+        byte[] bytes,
+        Guid orgId,
+        ParseRawReportPayload payload,
+        CancellationToken cancellationToken)
+    {
         await using var input = new MemoryStream(bytes, writable: false);
         var run = await runner
             .RunAsync(
@@ -226,7 +285,7 @@ internal sealed partial class ParseRawReportHandler(
             }
 
             LogRefused(logger, payload.ArtifactId, failure);
-            return new ParseRawReportOutcome(ParseRawReportOutcome.Malformed, failure);
+            return (null, await RefuseMalformedAsync(prepared, orgId, payload, failure, cancellationToken).ConfigureAwait(false));
         }
 
         var succeeded = (ParseRunSucceeded)run;
@@ -239,124 +298,75 @@ internal sealed partial class ParseRawReportHandler(
             }
 
             LogRefused(logger, payload.ArtifactId, reported);
-            return new ParseRawReportOutcome(ParseRawReportOutcome.Malformed, reported);
+            return (null, await RefuseMalformedAsync(prepared, orgId, payload, reported, cancellationToken).ConfigureAwait(false));
         }
 
-        JUnitMapResult mapped;
+        return (succeeded, null);
+    }
+
+    /// <summary>The mapping: the child's records become cases through the parser release the registry named.</summary>
+    /// <param name="succeeded">The child's records, its marker excluded and no rejection among them.</param>
+    /// <param name="prepared">The mapper and the plan the cases resolve against.</param>
+    /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="payload">The run, artifact and producer kind.</param>
+    /// <param name="cancellationToken">Cancels the refusal write.</param>
+    /// <returns>The mapping, or the refused outcome that ended the attempt.</returns>
+    private async Task<(JUnitMapResult? Mapped, ParseRawReportOutcome? Stopped)> MapAsync(
+        ParseRunSucceeded succeeded,
+        Prepared prepared,
+        Guid orgId,
+        ParseRawReportPayload payload,
+        CancellationToken cancellationToken)
+    {
         try
         {
-            mapped = prepared.Mapper.Map(
-                succeeded.Records,
-                new JUnitMapContext(payload.ArtifactId, prepared.Plan.Resolve));
+            return (
+                prepared.Mapper.Map(
+                    succeeded.Records,
+                    new JUnitMapContext(payload.ArtifactId, prepared.Plan.Resolve)),
+                null);
         }
         catch (JUnitParseRefusedException refused)
         {
             LogRefused(logger, payload.ArtifactId, refused.Reason);
-            return new ParseRawReportOutcome(ParseRawReportOutcome.Malformed, refused.Reason);
+            return (null, await RefuseMalformedAsync(prepared, orgId, payload, refused.Reason, cancellationToken).ConfigureAwait(false));
         }
+    }
 
-        // Belt and braces over the mapper's contract: an event without a resolved key would attribute a result to no
-        // planned execution, so it is never written.
+    /// <summary>
+    /// The last stage: the resolved cases become events, and the event set and the report's own row are written in one
+    /// transaction. The serialization runs with no scope open, so the transaction only carries the rows.
+    /// </summary>
+    /// <param name="prepared">The parser release the events and the row are stamped with.</param>
+    /// <param name="mapped">What the mapper resolved.</param>
+    /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="payload">The run, artifact and producer kind.</param>
+    /// <param name="cancellationToken">Cancels the writes.</param>
+    /// <returns>The named outcome of the attempt.</returns>
+    private async Task<ParseRawReportOutcome> WriteMappedAsync(
+        Prepared prepared,
+        JUnitMapResult mapped,
+        Guid orgId,
+        ParseRawReportPayload payload,
+        CancellationToken cancellationToken)
+    {
+        // Belt and braces over the mapper's contract: an event without a resolved key attributes a result to no planned
+        // execution, so it is never written.
         var cases = mapped.Cases
             .Where(item => !string.IsNullOrEmpty(item.ExecutionKey))
             .ToArray();
 
         var producerId = ProducerPrefix + payload.ArtifactId.ToString("D", CultureInfo.InvariantCulture);
-
-        // The section that costs the most work (canonical hashing and serialization of every row) runs here, with no
-        // scope open, and the write transaction only carries the rows.
         var events = SerializeEvents(payload.ArtifactId, producerId, prepared, cases);
 
-        return await WriteAsync(orgId, payload, producerId, events, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// The one read-only scope: the artifact, its kind's cap, the parser pair and the run's plan. It closes before the
-    /// caller fetches bytes, so nothing holds a connection while the object store answers.
-    /// </summary>
-    /// <param name="orgId">The tenant the claimed task row names.</param>
-    /// <param name="payload">The run, artifact and producer kind.</param>
-    /// <param name="cancellationToken">Cancels the reads.</param>
-    /// <returns>The prepared attempt, or the outcome that ended it before any fetch.</returns>
-    private async Task<(Prepared? Prepared, ParseRawReportOutcome? Stopped)> PrepareAsync(
-        Guid orgId,
-        ParseRawReportPayload payload,
-        CancellationToken cancellationToken)
-    {
-        await using var scope = await scopes
-            .BeginAsync(orgId, projectId: null, readOnlyTransaction: true, cancellationToken)
-            .ConfigureAwait(false);
-        await using var context = contexts.Create();
-
-        var artifact = await context.Artifacts
-            .AsNoTracking()
-            .SingleOrDefaultAsync(row => row.Id == payload.ArtifactId, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (artifact is null)
-        {
-            LogSkipped(logger, payload.ArtifactId, "absent");
-            return (null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "absent"));
-        }
-
-        if (!string.Equals(artifact.State, ArtifactState.Ready, StringComparison.Ordinal)
-            || !string.Equals(artifact.Kind, ArtifactKind.RawReport, StringComparison.Ordinal))
-        {
-            LogSkipped(logger, payload.ArtifactId, "not_a_ready_raw_report");
-            return (null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "not_a_ready_raw_report"));
-        }
-
-        if (artifact.RunId != payload.RunId)
-        {
-            // The payload names a run the artifact does not belong to: no event may be attributed to that run.
-            LogSkipped(logger, payload.ArtifactId, "foreign_run");
-            return (null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "foreign_run"));
-        }
-
-        if (!ArtifactObjectKey.IsMintedFor(artifact))
-        {
-            // Defence in depth over the 0028 shape CHECK: the key a row holds must be the key this row mints, so a
-            // parse can never read bytes another coordinate names. A row that fails this is corrupt or hand-written;
-            // the attempt throws (redelivered, then dead-lettered) rather than reading an object it cannot vouch for.
-            throw new InvalidOperationException(ArtifactObjectKey.MismatchMessage);
-        }
-
-        var resolution = await parsers.ResolveAsync(payload.ProducerKind, cancellationToken).ConfigureAwait(false);
-        if (!resolution.IsResolved)
-        {
-            LogUnsupported(logger, payload.ArtifactId, resolution.UnsupportedReason!);
-            return (null, new ParseRawReportOutcome(ParseRawReportOutcome.Unsupported, resolution.UnsupportedReason));
-        }
-
-        var mapper = mappers.FirstOrDefault(candidate =>
-            string.Equals(candidate.ParserId, resolution.ParserId, StringComparison.Ordinal)
-            && string.Equals(candidate.Version, resolution.Version, StringComparison.Ordinal));
-
-        if (mapper is null)
-        {
-            // A registry row without a loaded mapper is a deployment mismatch, reported like an unknown kind so a
-            // report of an unloaded parser is never parsed by a different one.
-            LogUnsupported(logger, payload.ArtifactId, "parser_unavailable");
-            return (null, new ParseRawReportOutcome(ParseRawReportOutcome.Unsupported, "parser_unavailable"));
-        }
-
-        // The kind policy caps one kind; the profile's hard ceiling caps every report whatever its kind says, so the
-        // read is bounded by the tighter of the two and a widened kind policy cannot raise the platform limit.
-        var kindMaxBytes = (await ArtifactCapturePolicy
-                .ResolveAsync(context, artifact.ProjectId, artifact.Kind, cancellationToken)
-                .ConfigureAwait(false))
-            .MaxBytes;
-        var maxBytes = Math.Min(kindMaxBytes, ParsingLimits.MaxReportBytes);
-
-        var hints = await db
-            .QueryAsync<PlannedExecutionHint>(
-                PlannedExecutionIndex.SelectSql,
-                new { org_id = orgId, run_id = payload.RunId },
+        return await WriteAsync(
+                orgId,
+                payload,
+                producerId,
+                events,
+                ParsedReport(prepared, mapped, cases),
                 cancellationToken)
             .ConfigureAwait(false);
-
-        return (
-            new Prepared(artifact.ObjectKey, maxBytes, resolution.ParserId!, resolution.Version!, mapper, PlannedExecutionIndex.Build(hints)),
-            null);
     }
+
 }

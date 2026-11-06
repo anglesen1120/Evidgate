@@ -24,7 +24,7 @@ namespace Tenancy.IntegrationTests;
 /// report writes its mapped <c>test.finished</c> events, their case attempts, a closed synthetic producer slot and the
 /// reconcile trigger in one commit; a replay writes nothing new unless the bytes changed; the run's admission rules
 /// refuse a closed run and a deleted or suspended project; and an unknown producer kind or a malformed document writes
-/// nothing at all.
+/// the report's own row and no event.
 /// </summary>
 /// <remarks>
 /// The mapper and the parser registry are production: the built-in <c>junit-pytest/1.0.0</c> row comes from the
@@ -314,7 +314,7 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
     }
 
     [Fact]
-    public async Task Unknown_Producer_Kind_Is_Unsupported_And_Writes_Nothing()
+    public async Task Unknown_Producer_Kind_Is_Unsupported_And_Writes_No_Event()
     {
         var world = await StartAsync();
         await using var _ = world;
@@ -331,7 +331,7 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
     }
 
     [Fact]
-    public async Task Malformed_Report_Writes_Nothing()
+    public async Task Malformed_Report_Writes_No_Event()
     {
         var world = await StartAsync();
         await using var _ = world;

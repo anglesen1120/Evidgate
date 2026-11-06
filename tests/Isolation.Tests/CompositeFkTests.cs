@@ -60,6 +60,16 @@ public sealed class CompositeFkTests : HarnessTest
     /// <summary>The tenant setting the parameterised <c>set_config</c> of the tenant scope writes (00 §5.4.2).</summary>
     private const string TenantSetting = "evidgate.org_id";
 
+    /// <summary>
+    /// Cross-org guarded catalogue keys whose corrupt row this suite cannot generate. <c>report_parser</c> is the
+    /// owner-written catalogue (0075 revokes INSERT from <c>evidgate_app</c>), so the other org's project-owned
+    /// release the corrupt <c>raw_report</c> row must name cannot be created through the application role this
+    /// matrix runs as. <c>RawReportSchemaTests</c> exercises that guard: an owner-seeded org-A release and an org-B
+    /// insert naming it, refused with 23514 <c>raw_report_parser_invisible</c>.
+    /// </summary>
+    private static readonly HashSet<(string Table, string Constraint)> GuardedCatalogueNotGeneratable =
+        [("public.raw_report", "raw_report_parser_fk")];
+
     private readonly ITestOutputHelper _output;
 
     /// <summary>Binds the test to the shared harness fixture (container, migrations, Respawn).</summary>
@@ -110,18 +120,28 @@ public sealed class CompositeFkTests : HarnessTest
         scan.Findings.ShouldBeEmpty(
             $"the tenant set [{coverage}] breaks the composite-FK rules:{Environment.NewLine}{TenantFkScan.Describe(scan.Findings)}");
 
+        // The excluded allowance is only documented, not exercised, while its guard exists: dropping the guard
+        // while keeping the catalogue key would fail here instead of silently leaving the reference unguarded.
+        TenantFkScan.HasCrossOrgGuard("public.raw_report", "raw_report_parser_fk").ShouldBeTrue(
+            "raw_report_parser_fk is excluded from the corruption matrix on the strength of raw_report_parser_visible");
+
         var attempts = 0;
         var structural = new List<string>();
         var rejected = new List<string>();
 
         foreach (var table in scan.TenantTables)
         {
-            // The same criterion rule 2 uses: a parent that carries org_id is
-            // org-scoped, so the child's key to it must be the composite tenant key —
-            // and that is the parent the corruption moves to the other org.
+            // A tenant parent is a key to another table of the tenant set. A catalogue principal
+            // (`report_parser`, `usage_price`) carries a nullable `org_id` for its platform rows, so a
+            // composite key could never match one; a tenant table's key to it is TenantFkScan's documented
+            // catalogue allowance. Only the allowance that names a guard on the referencing table can be
+            // exercised here: the corrupt row is built and the guard is what must refuse it — except where the
+            // catalogued parent is owner-written, which the exclusion above records.
             var tenantParents = scan.Schema
                 .ForeignKeysOf(table)
-                .Where(foreignKey => scan.Schema.HasOrgId(foreignKey.PrincipalTable))
+                .Where(foreignKey => scan.TenantTables.Contains(foreignKey.PrincipalTable)
+                    || (TenantFkScan.HasCrossOrgGuard(table, foreignKey.Name)
+                        && !GuardedCatalogueNotGeneratable.Contains((table, foreignKey.Name))))
                 .ToArray();
 
             if (tenantParents.Length == 0)
@@ -171,8 +191,8 @@ public sealed class CompositeFkTests : HarnessTest
                     + $"({error.MessageText}) — row level security passed on the seeding path (the tenant setting was org {OrgB} "
                     + "for the app role, the owner backfill policy on the owner path of an owner-provisioned table), "
                     + "so this rejection can only be the foreign key");
-                error.ConstraintName.ShouldBe(
-                    tenantParent.Name,
+                error.ConstraintName.ShouldBeOneOf(
+                    ExpectedConstraints(table, tenantParent.Name),
                     $"{table}: the rejection must come from the composite foreign key '{tenantParent.Name}' "
                     + $"({string.Join(", ", tenantParent.Columns)} → {tenantParent.PrincipalTable} "
                     + $"({string.Join(", ", tenantParent.PrincipalColumns)})), not from '{error.ConstraintName}'");
@@ -193,6 +213,18 @@ public sealed class CompositeFkTests : HarnessTest
             RlsExceptionList.PathInRepo,
             string.Join(", ", scan.Excluded.Select(entry => $"{entry.Table} ({entry.Kind})")));
     }
+
+    /// <summary>
+    /// The constraint names a corrupt row's rejection may carry. <c>raw_report</c> names its run twice — the run
+    /// foreign key and the <c>(org_id, artifact_id, run_id)</c> pairing — so a row whose run is moved to the other
+    /// org breaks both references, and PostgreSQL answers with whichever check it reaches first. A table with one
+    /// foreign key to the moved parent has exactly one expected name.
+    /// </summary>
+    private static string[] ExpectedConstraints(string table, string corrupted) =>
+        string.Equals(table, "public.raw_report", StringComparison.Ordinal)
+            && string.Equals(corrupted, "raw_report_run_fk", StringComparison.Ordinal)
+            ? ["raw_report_run_fk", "raw_report_artifact_fk"]
+            : [corrupted];
 
     /// <summary>
     /// The connection one table's generated rows run on: <c>evidgate_app</c> for every tenant table whose

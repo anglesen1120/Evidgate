@@ -537,6 +537,19 @@ public sealed class TenantGucTests
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("artifact_id", artifactId));
+        // 0078's raw_report: one parse record naming that artifact and its run, under the parser release the
+        // migration seeds, so the newly discovered tenant table is not empty for the fail-closed-zero read.
+        await scope.ExecuteAsync(
+            """
+            insert into public.raw_report
+                (id, org_id, run_id, artifact_id, producer_kind, parser_id, parser_version, outcome,
+                 declared_tests, observed_tests)
+            values (@id, @org_id, @run_id, @artifact_id, 'pytest-junitxml', 'junit-pytest', '1.0.0', 'mapped', 1, 1)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("run_id", runId),
+            ("artifact_id", artifactId));
         await scope.ExecuteAsync(
             """
             insert into public.producer_slot (id, org_id, run_id, shard_index, producer_id)
