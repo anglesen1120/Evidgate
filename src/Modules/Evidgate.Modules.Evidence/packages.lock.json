@@ -137,6 +137,9 @@
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
         }
       },
+      "evidgate.modules.usage.contracts": {
+        "type": "Project"
+      },
       "AWSSDK.S3": {
         "type": "CentralTransitive",
         "requested": "[4.0.104.8, )",
