@@ -66,9 +66,9 @@ public sealed class CompositeFkTests : HarnessTest
     /// release the corrupt <c>raw_report</c> or <c>raw_report_reprocess</c> row must name cannot be created through
     /// the application role this matrix runs as. <c>RawReportSchemaTests</c> exercises <c>raw_report</c>'s guard:
     /// an owner-seeded org-A release and an org-B insert naming it, refused with 23514
-    /// <c>raw_report_parser_invisible</c>. The reprocess guard (0081) is the same trigger shape and is declared
-    /// here, but no test yet asserts its refusal of a foreign release — the exclusion below of
-    /// <c>raw_report_reprocess_parser_fk</c> from the corruption matrix rests on that guard.
+    /// <c>raw_report_parser_invisible</c>; its reprocess part does the same for the 0081 guard
+    /// (<c>raw_report_reprocess_parser_invisible</c>), on which the exclusion below of
+    /// <c>raw_report_reprocess_parser_fk</c> from the corruption matrix rests.
     /// </summary>
     private static readonly HashSet<(string Table, string Constraint)> GuardedCatalogueNotGeneratable =
         [("public.raw_report", "raw_report_parser_fk"), ("public.raw_report_reprocess", "raw_report_reprocess_parser_fk")];
