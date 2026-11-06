@@ -64,8 +64,11 @@ public sealed class CompositeFkTests : HarnessTest
     /// Cross-org guarded catalogue keys whose corrupt row this suite cannot generate. <c>report_parser</c> is the
     /// owner-written catalogue (0075 revokes INSERT from <c>evidgate_app</c>), so the other org's project-owned
     /// release the corrupt <c>raw_report</c> or <c>raw_report_reprocess</c> row must name cannot be created through
-    /// the application role this matrix runs as. <c>RawReportSchemaTests</c> exercises that guard: an owner-seeded
-    /// org-A release and an org-B insert naming it, refused with 23514 <c>raw_report_parser_invisible</c>.
+    /// the application role this matrix runs as. <c>RawReportSchemaTests</c> exercises <c>raw_report</c>'s guard:
+    /// an owner-seeded org-A release and an org-B insert naming it, refused with 23514
+    /// <c>raw_report_parser_invisible</c>. The reprocess guard (0081) is the same trigger shape and is declared
+    /// here, but no test yet asserts its refusal of a foreign release — the exclusion below of
+    /// <c>raw_report_reprocess_parser_fk</c> from the corruption matrix rests on that guard.
     /// </summary>
     private static readonly HashSet<(string Table, string Constraint)> GuardedCatalogueNotGeneratable =
         [("public.raw_report", "raw_report_parser_fk"), ("public.raw_report_reprocess", "raw_report_reprocess_parser_fk")];
@@ -127,6 +130,10 @@ public sealed class CompositeFkTests : HarnessTest
         TenantFkScan.HasCrossOrgGuard("public.raw_report_reprocess", "raw_report_reprocess_parser_fk").ShouldBeTrue(
             "raw_report_reprocess_parser_fk is excluded from the corruption matrix on the strength of "
             + "raw_report_reprocess_parser_visible");
+
+        // The harness reset truncated the migration-seeded report_parser catalogue, and the rows this matrix
+        // generates for raw_report_reprocess name that built-in release (TenantRowFactory): restore it first.
+        await BuiltInCatalogue.SeedReportParserAsync(Fixture, Token);
 
         var attempts = 0;
         var structural = new List<string>();

@@ -116,9 +116,16 @@ public sealed partial class ReprocessReportTaskTests
             await scope.CommitAsync();
         }
 
-        await host.Services.GetRequiredService<OutboxDispatcher>().DispatchBatchAsync(Token);
-        var task = await _fixture.ScalarAsync<Guid>(world.Database,
-            $"select id from public.task where idempotency_key = 'outbox:{outbox:D}'");
+        // The dispatcher claims a bounded batch across tenants; under the full suite our row can
+        // sit behind other worlds' rows, so keep dispatching until it has become a task.
+        var task = Guid.Empty;
+        for (var round = 0; round < 20 && task == Guid.Empty; round++)
+        {
+            await host.Services.GetRequiredService<OutboxDispatcher>().DispatchBatchAsync(Token);
+            task = await _fixture.ScalarAsync<Guid>(world.Database,
+                $"select coalesce((select id from public.task where idempotency_key = 'outbox:{outbox:D}'), '{Guid.Empty:D}'::uuid)");
+        }
+
         task.ShouldNotBe(Guid.Empty);
         var queue = $"reprocess-missing-{parsing:N}";
         await _fixture.ExecuteAsync(world.Database,
