@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Usage.Application.Queries;
@@ -15,8 +16,9 @@ namespace Tenancy.IntegrationTests;
 /// <remarks>
 /// These are the invariants a review or a later refactor can break without any route changing, so they are pinned
 /// here on hand-built worksheets: an unpriced period is refused for its pricing rather than for a sum it never had,
-/// a reconciliation that disagrees with the ledger fires <c>not_reconciled</c>, and the hash ignores the scale a
-/// decimal happens to be stored at.
+/// a reconciliation that disagrees with the ledger — or a roll-up gap, or no compared side at all — fires
+/// <c>not_reconciled</c> rather than a currency it cannot name, a document past what a statement row stores never
+/// reaches the insert, and the hash ignores the scale a decimal happens to be stored at.
 /// </remarks>
 public sealed class UsageStatementRulesTests
 {
@@ -26,6 +28,7 @@ public sealed class UsageStatementRulesTests
     private static readonly DateTimeOffset Now = new(2026, 11, 6, 9, 0, 0, TimeSpan.Zero);
     private static readonly Guid LineId = new("11111111-1111-1111-1111-111111111111");
     private static readonly Guid ProjectId = new("22222222-2222-2222-2222-222222222222");
+    private static readonly string LongestReason = new('x', 2_000);
 
     [Theory]
     [InlineData(null, "required")]
@@ -78,11 +81,47 @@ public sealed class UsageStatementRulesTests
     }
 
     [Fact]
-    public void Evaluate_MixedCurrency_IsJudgedBeforeReconciliation()
+    public void Evaluate_MixedCurrencyPeriod_NamesTheCurrencyRatherThanTheTotal()
     {
-        var sheet = Sheet([Line(1m, 2m), Line(2m, 3m)], lineTotal: 5m, total: null, currency: null, reconciled: false);
+        // A reconciled period whose rows carry two currencies states no single currency and no total; the caller
+        // is told the currency it cannot sum, not the total it never had.
+        var sheet = Sheet([Line(1m, 2m), Line(2m, 3m, "EUR")], lineTotal: 5m, total: null, currency: null);
 
         Reason(Evaluate(sheet, total: 5m, currency: "USD")).ShouldBe(StatementIssueRules.ReasonMixedCurrency);
+    }
+
+    [Fact]
+    public void Evaluate_RowsWithoutAComparedLedgerSide_IsNotReconciledRatherThanMixed()
+    {
+        // What an empty units read produces beside one priced row: no currency and a total of zero, because the
+        // ledger side states neither. The rows are the period's own, so the refusal is the reconciliation.
+        var sheet = Sheet([Line(1m, 2m)], lineTotal: 2m, total: 0m, currency: null, reconciled: false);
+
+        var result = Evaluate(sheet, total: 0m, currency: "USD");
+
+        Reason(result).ShouldBe(StatementIssueRules.ReasonNotReconciled);
+        result.Error!.Details![0].Path.ShouldBe("period");
+    }
+
+    [Fact]
+    public void Evaluate_SourceGap_IsRefusedEvenWhenEverySumAgrees()
+    {
+        // The roll-up flagged usage the ledger holds no row for: the rows agree with the aggregate and still
+        // omit billable usage, so the period is not reconciled.
+        var sheet = Sheet([Line(1m, 5m)], lineTotal: 5m, total: 5m, sourceGaps: 1);
+
+        var result = Evaluate(sheet, total: 5m, currency: "USD");
+
+        Reason(result).ShouldBe(StatementIssueRules.ReasonNotReconciled);
+        result.Error!.Details![0].Path.ShouldBe("period");
+    }
+
+    [Fact]
+    public void Evaluate_CurrencyWithoutATotal_IsRefusedRatherThanBilled()
+    {
+        var sheet = Sheet([Line(1m, 5m)], lineTotal: 5m, total: null);
+
+        Reason(Evaluate(sheet, total: 5m, currency: "USD")).ShouldBe(StatementIssueRules.ReasonNotReconciled);
     }
 
     [Fact]
@@ -235,6 +274,40 @@ public sealed class UsageStatementRulesTests
         WorksheetTotals.IsReconciled(ledger, rows, false).ShouldBeTrue();
     }
 
+    [Fact]
+    public void Evaluate_WorksheetAtTheDocumentCap_IssuesAndOneMoreCorrectionIsRefused()
+    {
+        var (fits, over) = CorrectionsAroundTheCap();
+
+        var issued = Evaluate(CorrectionSheet(fits), total: -fits, currency: "USD");
+
+        issued.IsSuccess.ShouldBeTrue("the largest document a statement row can store is issuable");
+        Encoding.UTF8.GetByteCount(issued.Value.WorksheetJson)
+            .ShouldBeLessThanOrEqualTo(StatementIssueRules.MaxWorksheetBytes);
+
+        var refused = Evaluate(CorrectionSheet(over), total: -over, currency: "USD");
+
+        Reason(refused).ShouldBe(StatementIssueRules.ReasonWorksheetTooLarge);
+        refused.Error!.Details![0].Path.ShouldBe("period");
+    }
+
+    [Fact]
+    public void WorksheetTotals_CoversSameRows_ComparesCountTotalAndCurrency()
+    {
+        var sheet = Sheet([Line(1m, 2m), Line(2m, 3m)], lineTotal: 5m, total: 5m);
+
+        WorksheetTotals.CoversSameRows(LedgerSide(5m, "USD", 2), sheet).ShouldBeTrue();
+
+        WorksheetTotals.CoversSameRows(LedgerSide(5m, "USD", 3), sheet)
+            .ShouldBeFalse("a row arrived after the worksheet was assembled");
+        WorksheetTotals.CoversSameRows(LedgerSide(6m, "USD", 2), sheet)
+            .ShouldBeFalse("the period's amount moved");
+        WorksheetTotals.CoversSameRows(LedgerSide(5m, "EUR", 2), sheet)
+            .ShouldBeFalse("the period's currency moved");
+        WorksheetTotals.CoversSameRows(LedgerSide(5m, "USD", 2, truncated: true), sheet)
+            .ShouldBeFalse("a cut aggregate can drop the scope a late row created, so it proves nothing");
+    }
+
     private static WorksheetLine Line(decimal quantity, decimal? amount, string currency = "USD") => new(
         LineId,
         ProjectId,
@@ -249,6 +322,54 @@ public sealed class UsageStatementRulesTests
         AdjustmentOf: null,
         Reason: null);
 
+    /// <summary>
+    /// A correction carrying the longest reason the ledger accepts. Its length is fixed by <paramref name="index"/>
+    /// so a row's canonical text is the same size whatever the index is.
+    /// </summary>
+    private static WorksheetLine Correction(int index) => Line(-1m, -1m) with
+    {
+        BillingKey = $"key:{index:D5}",
+        AdjustmentOf = LineId,
+        Reason = LongestReason,
+    };
+
+    /// <summary>A corrections-only worksheet of <paramref name="count"/> longest-reason rows, all at one amount.</summary>
+    private static InvoiceWorksheet CorrectionSheet(int count) =>
+        Sheet(
+            [],
+            Enumerable.Range(0, count).Select(Correction).ToArray(),
+            lineTotal: 0m,
+            adjustmentTotal: -count,
+            total: -count);
+
+    /// <summary>
+    /// The most longest-reason corrections whose canonical document fits the cap, and the fewest that do not. The
+    /// estimate is per-row arithmetic; the two loops measure the documents around it, because the totals' decimal
+    /// text grows with the count.
+    /// </summary>
+    private static (int Fits, int Over) CorrectionsAroundTheCap()
+    {
+        var one = Bytes(CorrectionSheet(1));
+        var perRow = Bytes(CorrectionSheet(2)) - one;
+        var fits = (StatementIssueRules.MaxWorksheetBytes - one) / perRow;
+
+        while (Bytes(CorrectionSheet(fits)) > StatementIssueRules.MaxWorksheetBytes)
+        {
+            fits--;
+        }
+
+        var over = fits + 1;
+        while (Bytes(CorrectionSheet(over)) <= StatementIssueRules.MaxWorksheetBytes)
+        {
+            over++;
+        }
+
+        return (fits, over);
+    }
+
+    private static int Bytes(InvoiceWorksheet worksheet) =>
+        Encoding.UTF8.GetByteCount(InvoiceWorksheetCanonical.ToJson(worksheet));
+
     private static InvoiceWorksheet Sheet(
         IReadOnlyList<WorksheetLine> lines,
         IReadOnlyList<WorksheetLine>? adjustments = null,
@@ -257,6 +378,7 @@ public sealed class UsageStatementRulesTests
         decimal? total = null,
         string? currency = "USD",
         int unpriced = 0,
+        int sourceGaps = 0,
         bool truncated = false,
         bool reconciled = true)
     {
@@ -271,6 +393,7 @@ public sealed class UsageStatementRulesTests
             total,
             lines.Count,
             unpriced,
+            sourceGaps,
             truncated,
             reconciled,
             ContentHash: string.Empty);
@@ -278,8 +401,12 @@ public sealed class UsageStatementRulesTests
         return sheet with { ContentHash = InvoiceWorksheetCanonical.Hash(sheet) };
     }
 
-    private static WorksheetLedgerSide LedgerSide(decimal? total, string? currency, long rowCount) =>
-        new(total, currency, rowCount, Truncated: false);
+    private static WorksheetLedgerSide LedgerSide(
+        decimal? total,
+        string? currency,
+        long rowCount,
+        bool truncated = false) =>
+        new(total, currency, rowCount, truncated);
 
     private static ReconciliationUnits Units(
         decimal? total,

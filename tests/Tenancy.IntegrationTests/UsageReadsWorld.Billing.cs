@@ -125,6 +125,113 @@ internal sealed partial class UsageReadsWorld
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Inserts many corrections of one period, each naming <paramref name="adjustmentOf"/> and carrying the same
+    /// reason: the shape a period takes when its corrections alone fill a worksheet.
+    /// </summary>
+    /// <param name="count">Corrections to insert.</param>
+    /// <param name="period">Their period.</param>
+    /// <param name="metric">Their metric.</param>
+    /// <param name="adjustmentOf">The row every correction names.</param>
+    /// <param name="reason">The reason each correction carries.</param>
+    /// <param name="currency">The currency each amount is stated in.</param>
+    internal async Task SeedManyCorrectionsAsync(
+        int count,
+        string period,
+        string metric,
+        Guid adjustmentOf,
+        string reason,
+        string currency)
+    {
+        await using var connection = await OpenOwnerAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            insert into public.usage_ledger_entry
+                (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at,
+                 adjustment_of, reason, amount, currency)
+            select gen_random_uuid(), @org_id, @project_id, @metric, -1, 'bulk', @period,
+                   'bulk-correction:' || @period || ':' || @metric || ':' || n, now(),
+                   @adjustment_of, @reason, -1, @currency
+              from generate_series(1, @count) as n
+            """;
+        command.Parameters.Add(new NpgsqlParameter("org_id", Org));
+        command.Parameters.Add(new NpgsqlParameter("project_id", Project));
+        command.Parameters.Add(new NpgsqlParameter("metric", metric));
+        command.Parameters.Add(new NpgsqlParameter("period", period));
+        command.Parameters.Add(new NpgsqlParameter("adjustment_of", adjustmentOf));
+        command.Parameters.Add(new NpgsqlParameter("reason", reason));
+        command.Parameters.Add(new NpgsqlParameter("currency", currency));
+        command.Parameters.Add(new NpgsqlParameter("count", count));
+
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>How many ledger rows this world's org holds for one period.</summary>
+    /// <param name="period">The period.</param>
+    internal async Task<long> LedgerRowCountAsync(string period)
+    {
+        await using var connection = await OpenOwnerAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "select count(*) from public.usage_ledger_entry where org_id = @org_id and period = @period";
+        command.Parameters.Add(new NpgsqlParameter("org_id", Org));
+        command.Parameters.Add(new NpgsqlParameter("period", period));
+
+        return (long)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
+    }
+
+    /// <summary>
+    /// Installs a trigger that writes one more priced ledger row of the statement's period inside the transaction
+    /// that inserts the statement: the row a producer commits after the worksheet was read but before it is frozen.
+    /// The row copies an existing usage row of the period, so the aggregate it changes is deterministic.
+    /// </summary>
+    internal async Task InstallLateLedgerRowTriggerAsync()
+    {
+        await using var connection = await OpenOwnerAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            create or replace function public.test_late_ledger_row() returns trigger
+            language plpgsql
+            as $function$
+            begin
+                insert into public.usage_ledger_entry
+                    (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at,
+                     amount, currency)
+                select gen_random_uuid(), NEW.org_id, l.project_id, l.metric, l.quantity, l.unit, NEW.period,
+                       'late-ledger-row:' || NEW.id, now(), l.amount, l.currency
+                  from public.usage_ledger_entry l
+                 where l.org_id = NEW.org_id
+                   and l.period = NEW.period
+                   and l.adjustment_of is null
+                 limit 1;
+                return NEW;
+            end
+            $function$;
+
+            drop trigger if exists test_late_ledger_row on public.billing_statement;
+            create trigger test_late_ledger_row after insert on public.billing_statement
+              for each row execute function public.test_late_ledger_row();
+            """;
+
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Removes the late-row trigger and its function, leaving the period as it was.</summary>
+    internal async Task RemoveLateLedgerRowTriggerAsync()
+    {
+        await using var connection = await OpenOwnerAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            drop trigger if exists test_late_ledger_row on public.billing_statement;
+            drop function if exists public.test_late_ledger_row();
+            """;
+
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>How many statements this world's org holds for one period.</summary>
     /// <param name="period">The period.</param>
     internal async Task<long> StatementCountAsync(string period)

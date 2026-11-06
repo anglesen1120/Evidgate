@@ -143,6 +143,24 @@ internal static class WorksheetTotals
             || (rows.Currencies.Count == 1 && string.Equals(rows.Currencies[0], currency, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// True when the ledger side still describes exactly the worksheet's rows: the same row count, and — where
+    /// both state one — the same total and currency. A row that arrived after the worksheet was assembled moves
+    /// one of the three, and a cut aggregate can hide it, so a truncated re-read never counts as unchanged.
+    /// </summary>
+    /// <param name="ledger">The ledger side, re-read.</param>
+    /// <param name="worksheet">The worksheet whose rows are being frozen.</param>
+    internal static bool CoversSameRows(WorksheetLedgerSide ledger, InvoiceWorksheet worksheet)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+        ArgumentNullException.ThrowIfNull(worksheet);
+
+        return !ledger.Truncated
+            && ledger.RowCount == worksheet.LineCount + worksheet.Adjustments.Count
+            && ledger.Total == worksheet.Total
+            && string.Equals(ledger.Currency, worksheet.Currency, StringComparison.Ordinal);
+    }
+
     /// <summary>The priced sum of one list, or null when any row of it carries no price or no currency.</summary>
     private static decimal? Sum(IReadOnlyList<WorksheetLine> rows, out int unpriced)
     {

@@ -5,6 +5,7 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Tenancy.Contracts;
+using Evidgate.Modules.Usage.Application.Queries;
 using Evidgate.Modules.Usage.Infrastructure.Persistence;
 
 namespace Evidgate.Modules.Usage.Application.Billing;
@@ -47,6 +48,11 @@ internal sealed record IssuedStatement(
 /// then the worksheet's own rules. An unknown org is the same 404 every operator route answers, and no refusal
 /// writes a row or an audit entry.
 /// <para>
+/// The row is committed only after one more aggregate read of the period's ledger still describes the worksheet
+/// just written: a row that arrived between the worksheet's own reads and the insert is 409
+/// <see cref="LedgerChangedCode"/> and the scope is never committed, so the row and its audit entry roll back.
+/// </para>
+/// <para>
 /// Re-issuing the same period is idempotent only while the recompute still hashes to what was issued: the caller
 /// gets the stored statement with <see cref="IssuedStatement.Replayed"/> set and no second row. A late correction
 /// changes the recompute, so the re-issue is a conflict — the stored document stays exactly as issued rather than
@@ -59,6 +65,7 @@ internal sealed class StatementIssuer(
     IAuditTrail audit,
     ITenantLimits limits,
     InvoiceWorksheetReader worksheets,
+    PeriodReconciliationReader reconciliation,
     BillingStatementStore statements,
     TimeProvider time)
 {
@@ -70,6 +77,9 @@ internal sealed class StatementIssuer(
 
     /// <summary>The conflict code of a re-issue whose recompute differs from the issued document.</summary>
     internal const string ExistsCode = "statement_exists";
+
+    /// <summary>The conflict code of a ledger that moved while the statement was being written.</summary>
+    internal const string LedgerChangedCode = "ledger_changed";
 
     /// <summary>
     /// Validates the request, recomputes the period inside the org's scope, applies the issue rules and writes
@@ -120,21 +130,59 @@ internal sealed class StatementIssuer(
             return Result.Failure<IssuedStatement>(refused);
         }
 
-        var write = await PersistAsync(orgId, operatorId, draft.Value, now, cancellationToken).ConfigureAwait(false);
+        return await FreezeAsync(orgId, operatorId, worksheet, draft.Value, now, scope, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes the draft, re-reads the period's ledger, and commits only a document the ledger still describes.
+    /// A period that moved between the worksheet's read and the insert is refused without a commit, so the row
+    /// and its audit entry roll back together and the caller can retry the issue.
+    /// </summary>
+    private async Task<Result<IssuedStatement>> FreezeAsync(
+        Guid orgId,
+        Guid operatorId,
+        InvoiceWorksheet worksheet,
+        StatementDraft draft,
+        DateTimeOffset now,
+        ITenantScope scope,
+        CancellationToken cancellationToken)
+    {
+        var write = await PersistAsync(orgId, operatorId, draft, now, cancellationToken).ConfigureAwait(false);
         if (write.Error is { } conflict)
         {
             return Result.Failure<IssuedStatement>(conflict);
         }
 
+        if (write.Value.Inserted && await LedgerMovedAsync(orgId, worksheet, cancellationToken).ConfigureAwait(false))
+        {
+            return Result.Failure<IssuedStatement>(Error.Conflict(LedgerChangedCode,
+                "the period's ledger changed while the statement was being written, so nothing was issued"));
+        }
+
         if (write.Value.Inserted)
         {
-            DescribeAudit(operatorId, draft.Value, write.Value.Statement.Id);
+            DescribeAudit(operatorId, draft, write.Value.Statement.Id);
             await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
         }
 
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         return Result.Success(write.Value.Statement);
+    }
+
+    /// <summary>
+    /// True when one more aggregate read of the period's ledger no longer describes the worksheet being frozen:
+    /// a row that arrived after the worksheet's own reads agrees with nothing, so the document would bill a period
+    /// that has already moved.
+    /// </summary>
+    private async Task<bool> LedgerMovedAsync(Guid orgId, InvoiceWorksheet worksheet, CancellationToken cancellationToken)
+    {
+        var units = await reconciliation
+            .ReadUnitsAsync(orgId, worksheet.Period, cancellationToken)
+            .ConfigureAwait(false);
+
+        return !WorksheetTotals.CoversSameRows(WorksheetTotals.FromUnits(units), worksheet);
     }
 
     /// <summary>

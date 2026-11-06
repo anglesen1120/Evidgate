@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Usage.Domain;
@@ -34,9 +35,10 @@ internal sealed record StatementDraft(
 /// <summary>
 /// The rules of issuing a statement, kept apart from the transaction that writes one so each refusal is a value
 /// a test can name. The issuer applies them in one fixed order — the period's shape, whether it is closed, whether
-/// it holds rows, whether every row is priced, whether they share a currency, whether they reconcile, and only
-/// then whether the submitted total agrees — because a caller should be told the first thing that is wrong with
-/// the period, not the last.
+/// it holds rows, whether every row is priced, whether they reconcile with the ledger's own totals, whether the
+/// roll-up flagged a source gap, whether they share a currency, whether the ledger states a total, whether the
+/// document fits what a statement stores, and only then whether the submitted total agrees — because a caller
+/// should be told the first thing that is wrong with the period, not the last.
 /// </summary>
 internal static class StatementIssueRules
 {
@@ -52,11 +54,20 @@ internal static class StatementIssueRules
     /// <summary>The period's rows carry more than one currency.</summary>
     internal const string ReasonMixedCurrency = "mixed_currency";
 
-    /// <summary>The rows are cut by the worksheet bound or do not agree with the ledger's aggregate.</summary>
+    /// <summary>The rows are cut by the worksheet bound, do not agree with the ledger's aggregate, or omit usage.</summary>
     internal const string ReasonNotReconciled = "not_reconciled";
+
+    /// <summary>The frozen document is larger than a statement row may store.</summary>
+    internal const string ReasonWorksheetTooLarge = "worksheet_too_large";
 
     /// <summary>The submitted total or currency differs from the server's recompute.</summary>
     internal const string ReasonTotalMismatch = "total_mismatch";
+
+    /// <summary>
+    /// The most bytes of canonical worksheet text a statement may store. The column accepts 8 MiB of re-rendered
+    /// jsonb text, which is longer than the document itself, so the app keeps a margin under it.
+    /// </summary>
+    internal const int MaxWorksheetBytes = 6 * 1024 * 1024;
 
     /// <summary>Validates the period's shape: required, then <c>YYYY-MM</c>.</summary>
     /// <param name="period">The submitted period, or null when the body omitted it.</param>
@@ -101,38 +112,39 @@ internal static class StatementIssueRules
         ArgumentNullException.ThrowIfNull(worksheet);
         ArgumentNullException.ThrowIfNull(request);
 
-        if (worksheet.Lines.Count == 0 && worksheet.Adjustments.Count == 0)
+        if (RefuseWorksheet(worksheet) is { } refused)
         {
-            return Result.Failure<StatementDraft>(Refuse("period", ReasonNoRows,
-                "the period holds no ledger rows, so there is nothing to invoice"));
+            return Result.Failure<StatementDraft>(refused);
         }
 
-        if (worksheet.UnpricedLineCount > 0)
-        {
-            return Result.Failure<StatementDraft>(Refuse("period", ReasonUnpricedRows,
-                "the period holds usage that no price marked, so its total is not final"));
-        }
-
-        if (worksheet.Currency is null)
+        if (worksheet.Currency is not { } currency)
         {
             return Result.Failure<StatementDraft>(Refuse("period", ReasonMixedCurrency,
                 "the period's rows do not carry one currency, so they cannot be summed"));
         }
 
-        if (worksheet.Truncated || !worksheet.Reconciled || worksheet.Total is null)
+        if (worksheet.Total is not { } total)
         {
             return Result.Failure<StatementDraft>(Refuse("period", ReasonNotReconciled,
-                "the period's rows do not agree with the ledger's own totals for it"));
+                "the ledger states no total for the period, so it cannot be billed"));
+        }
+
+        // The document is rendered once here: it is both what the size rule measures and what the statement stores.
+        var json = InvoiceWorksheetCanonical.ToJson(worksheet);
+        if (Encoding.UTF8.GetByteCount(json) > MaxWorksheetBytes)
+        {
+            return Result.Failure<StatementDraft>(Refuse("period", ReasonWorksheetTooLarge,
+                "the period's worksheet is larger than a statement can store, so it cannot be frozen as issued"));
         }
 
         // decimal equality compares the values, not their scales, so 10.50 and 10.5 are the same total.
-        if (request.TotalAmount != worksheet.Total)
+        if (request.TotalAmount != total)
         {
             return Result.Failure<StatementDraft>(Refuse("total_amount", ReasonTotalMismatch,
                 "the submitted total is not the number this period recomputes to"));
         }
 
-        if (!string.Equals(request.Currency, worksheet.Currency, StringComparison.Ordinal))
+        if (!string.Equals(request.Currency, currency, StringComparison.Ordinal))
         {
             return Result.Failure<StatementDraft>(Refuse("currency", ReasonTotalMismatch,
                 "the submitted currency is not the currency this period bills in"));
@@ -140,11 +152,47 @@ internal static class StatementIssueRules
 
         return Result.Success(new StatementDraft(
             worksheet.Period,
-            worksheet.Total.Value,
-            worksheet.Currency,
+            total,
+            currency,
             worksheet.LineCount,
             worksheet.ContentHash,
-            InvoiceWorksheetCanonical.ToJson(worksheet)));
+            json));
+    }
+
+    /// <summary>
+    /// The refusals a worksheet earns before its currency and its total are looked at, in the order a caller should
+    /// hear them: nothing to invoice, a row no price marked, a period that is cut or does not reconcile, and a
+    /// roll-up that flagged usage the ledger never received.
+    /// </summary>
+    /// <param name="worksheet">The period's worksheet.</param>
+    private static Error? RefuseWorksheet(InvoiceWorksheet worksheet)
+    {
+        if (worksheet.Lines.Count == 0 && worksheet.Adjustments.Count == 0)
+        {
+            return Refuse("period", ReasonNoRows, "the period holds no ledger rows, so there is nothing to invoice");
+        }
+
+        if (worksheet.UnpricedLineCount > 0)
+        {
+            return Refuse("period", ReasonUnpricedRows,
+                "the period holds usage that no price marked, so its total is not final");
+        }
+
+        if (worksheet.Truncated || !worksheet.Reconciled)
+        {
+            return Refuse("period", ReasonNotReconciled,
+                "the period's rows do not agree with the ledger's own totals for it");
+        }
+
+        // A gap means the roll-up saw source usage the ledger holds no row for: the rows agree with the aggregate
+        // and are still not the whole period, so this refusal must not be mistaken for a mixed-currency one.
+        if (worksheet.SourceGapCount > 0)
+        {
+            return Refuse("period", ReasonNotReconciled,
+                "the period's roll-up flagged source usage the ledger holds no row for, so its rows are incomplete");
+        }
+
+        return null;
     }
 
     /// <summary>

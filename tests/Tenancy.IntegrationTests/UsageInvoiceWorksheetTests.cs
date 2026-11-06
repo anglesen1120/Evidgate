@@ -270,6 +270,28 @@ public sealed class UsageInvoiceWorksheetTests
             "a cut list cannot be compared against the whole period's ledger sum");
     }
 
+    [Fact]
+    public async Task Worksheet_RollupFlaggedGap_ReportsTheSourceGapCount()
+    {
+        await using var world = await StartAsync();
+        await world.SeedLedgerAsync(Ledger(world, "gap:1", "results", 1m, 5m, 20));
+        await world.SeedRollupAsync(new RollupSeed(
+            Guid.CreateVersion7(), world.Project, Period, "results", 1m, 1, Now,
+            GapFlag: true, TotalAmount: 5m, Currency: "USD"));
+
+        var answer = await world.GetAsync(world.WorksheetUrl($"period={Period}"));
+
+        answer.Status.ShouldBe(HttpStatusCode.OK);
+        answer.Body.GetProperty("source_gap_count").GetInt32().ShouldBe(1,
+            "a period whose roll-up flagged missing source usage is known to understate what it bills");
+        answer.Body.GetProperty("reconciled").GetBoolean().ShouldBeTrue(
+            "the rows still agree with the aggregate; the gap is the roll-up's own flag");
+
+        var rows = await world.AuditRowsAsync(Action);
+        using var metadata = JsonDocument.Parse(rows.ShouldHaveSingleItem().Split('|', 5)[4]);
+        metadata.RootElement.GetProperty("outcome").GetString().ShouldBe("source_gaps");
+    }
+
     private Task<UsageReadsWorld> StartAsync(OperatorGateMode gate = OperatorGateMode.Permitted) =>
         UsageReadsWorld.StartAsync(_fixture, gate, new FakeTimeProvider(Now));
 

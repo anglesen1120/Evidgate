@@ -50,8 +50,13 @@ internal sealed record WorksheetLine(
 /// A total is null where it cannot be stated: <see cref="LineTotal"/> and <see cref="AdjustmentTotal"/> stay null
 /// while any row of their list is unpriced, and <see cref="Total"/> stays null while any reconciled scope is
 /// unpriced or the period's rows carry more than one currency. <see cref="Reconciled"/> says whether the rows
-/// agree with the ledger side the reconciliation reports; <see cref="Truncated"/> says the row bound cut the
-/// lists, so a truncated worksheet is never issuable.
+/// agree with the ledger side the reconciliation reports; <see cref="SourceGapCount"/> says how many roll-up rows
+/// flagged usage the ledger holds no row for, so the period is known to understate what it bills;
+/// <see cref="Truncated"/> says the row bound cut the lists, so a truncated worksheet is never issuable.
+/// <para>
+/// A source gap is not part of <see cref="InvoiceWorksheetCanonical"/>'s document: no statement is issued while
+/// one exists, so no frozen invoice can ever carry one.
+/// </para>
 /// </remarks>
 /// <param name="Period">The period, <c>YYYY-MM</c>.</param>
 /// <param name="Currency">The period's single currency, or null when it holds no rows or more than one.</param>
@@ -62,6 +67,7 @@ internal sealed record WorksheetLine(
 /// <param name="Total">The authoritative total from the ledger's per-scope sums, or null while one is unknown.</param>
 /// <param name="LineCount">How many usage rows <see cref="Lines"/> holds.</param>
 /// <param name="UnpricedLineCount">How many rows of both lists carry no price or no currency.</param>
+/// <param name="SourceGapCount">How many roll-up rows flagged source usage the ledger holds no row for.</param>
 /// <param name="Truncated">True when the period holds more rows than the worksheet can carry.</param>
 /// <param name="Reconciled">True when the rows agree on count and, where known, on amount and currency.</param>
 /// <param name="ContentHash">SHA-256 (lowercase hex) of <see cref="InvoiceWorksheetCanonical"/>'s text.</param>
@@ -75,6 +81,7 @@ internal sealed record InvoiceWorksheet(
     decimal? Total,
     int LineCount,
     int UnpricedLineCount,
+    int SourceGapCount,
     bool Truncated,
     bool Reconciled,
     string ContentHash);
@@ -188,6 +195,7 @@ internal sealed class InvoiceWorksheetReader(
             ledgerSide.Total,
             lines.Length,
             rowSide.UnpricedCount,
+            compared.Gaps.Count,
             truncated,
             WorksheetTotals.IsReconciled(ledgerSide, rowSide, compared.Truncated),
             ContentHash: string.Empty);
@@ -243,9 +251,11 @@ internal sealed class InvoiceWorksheetReader(
     private static string Outcome(InvoiceWorksheet worksheet) =>
         worksheet.Truncated
             ? "truncated"
-            : !worksheet.Reconciled
-                ? "unreconciled"
-                : worksheet.UnpricedLineCount > 0
-                    ? "unpriced"
-                    : "complete";
+            : worksheet.SourceGapCount > 0
+                ? "source_gaps"
+                : !worksheet.Reconciled
+                    ? "unreconciled"
+                    : worksheet.UnpricedLineCount > 0
+                        ? "unpriced"
+                        : "complete";
 }
