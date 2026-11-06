@@ -138,7 +138,8 @@ internal sealed partial class ParseRawReportHandler
         select r.state as "RunState",
                p.status as "ProjectState",
                (r.state = 'incomplete'
-                and now() <= r.collection_deadline_at + make_interval(mins => r.late_window_minutes)) as "LateWindowOpen"
+                and now() <= r.collection_deadline_at + make_interval(mins => r.late_window_minutes)) as "LateWindowOpen",
+               r.project_id as "ProjectId"
           from public.run r
           join public.project p on p.org_id = r.org_id and p.id = r.project_id
          where r.org_id = @org_id
@@ -225,7 +226,8 @@ internal sealed partial class ParseRawReportHandler
     /// <param name="RunState">The run's state (0031's closed vocabulary).</param>
     /// <param name="ProjectState">The project's state (<c>active</c>, <c>suspended</c>, <c>deleted</c>).</param>
     /// <param name="LateWindowOpen">True when <c>now()</c> is at or before the run's late-window end.</param>
-    private sealed record RunGate(string RunState, string ProjectState, bool LateWindowOpen);
+    /// <param name="ProjectId">The project whose counter the inserted events reserve.</param>
+    private sealed record RunGate(string RunState, string ProjectState, bool LateWindowOpen, Guid ProjectId);
 
     /// <summary>One event as <c>jsonb_to_recordset</c> reads it (the wire names are the column names).</summary>
     /// <param name="Id">The row id.</param>

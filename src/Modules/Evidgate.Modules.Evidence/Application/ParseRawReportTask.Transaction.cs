@@ -18,8 +18,8 @@ internal sealed partial class ParseRawReportHandler
     /// <summary>
     /// The one write transaction: the queued run's transition to running, the run's lock, the closed synthetic producer
     /// slot, every event in one statement, the attempts of the newly inserted finishes, the slot's high-water mark, the
-    /// reconcile trigger, the batch receipt with its usage row and the report's row — committed together or not at all.
-    /// A report an earlier attempt committed as refused is refused whole here.
+    /// quota reservation of what was inserted, the reconcile trigger, the batch receipt with its usage row and the
+    /// report's row — committed together or not at all.
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
@@ -28,7 +28,7 @@ internal sealed partial class ParseRawReportHandler
     /// <param name="report">The report's own row, built before this scope opened.</param>
     /// <param name="cancellationToken">Cancels the writes.</param>
     /// <returns>The named outcome of the write.</returns>
-    private async Task<ParseRawReportOutcome> WriteAsync(
+    private async Task<ParseRawReportOutcome> WriteTransactionAsync(
         Guid orgId,
         ParseRawReportPayload payload,
         string producerId,
@@ -53,7 +53,8 @@ internal sealed partial class ParseRawReportHandler
             return unrunnable;
         }
 
-        var (admission, reportBytes, stopped) = await AdmitAsync(context, orgId, payload, cancellationToken).ConfigureAwait(false);
+        var (admission, projectId, reportBytes, stopped) = await AdmitAsync(context, orgId, payload, cancellationToken)
+            .ConfigureAwait(false);
         if (admission is not { } allowed)
         {
             return stopped!;
@@ -65,7 +66,7 @@ internal sealed partial class ParseRawReportHandler
         }
 
         var (insertedSet, refused) = await WriteEventSetAsync(
-                allowed, orgId, payload, producerId, events, reportBytes, cancellationToken)
+                allowed, orgId, projectId, payload, producerId, events, reportBytes, cancellationToken)
             .ConfigureAwait(false);
         if (insertedSet is not { } inserted)
         {
@@ -122,6 +123,7 @@ internal sealed partial class ParseRawReportHandler
     /// </summary>
     /// <param name="admission">The run's admission this attempt was allowed under.</param>
     /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="projectId">The run's project, whose counter the inserted events reserve.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
     /// <param name="producerId">The synthetic producer id of this report.</param>
     /// <param name="events">The serialized, hashed event set built before this scope opened.</param>
@@ -131,6 +133,7 @@ internal sealed partial class ParseRawReportHandler
     private async Task<(HashSet<Guid>? Inserted, ParseRawReportOutcome? Stopped)> WriteEventSetAsync(
         RunAdmission admission,
         Guid orgId,
+        Guid projectId,
         ParseRawReportPayload payload,
         string producerId,
         SerializedEventSet events,
@@ -156,6 +159,12 @@ internal sealed partial class ParseRawReportHandler
 
         await AdvanceSlotAsync(admission, orgId, payload, producerId, events, inserted, batchId, cancellationToken)
             .ConfigureAwait(false);
+        if (inserted.Count > 0
+            && await CheckQuotaAsync(projectId, payload.ArtifactId, inserted.Count, cancellationToken).ConfigureAwait(false)
+                is { } blocked)
+        {
+            return (null, blocked);
+        }
 
         // The batch receipt and its usage row count what this attempt inserted, so a replay adds neither and the
         // receipt can never disagree with the events in its own transaction.
@@ -210,10 +219,9 @@ internal sealed partial class ParseRawReportHandler
     /// <param name="payload">The run, artifact and producer kind.</param>
     /// <param name="cancellationToken">Cancels the reads.</param>
     /// <returns>
-    /// The admission and the stored report's size (the batch receipt's byte count), or the skipped outcome that ended
-    /// the attempt.
+    /// The admission, the run's project id and the stored report's size, or the skipped outcome that ended it.
     /// </returns>
-    private async Task<(RunAdmission? Admission, long ReportBytes, ParseRawReportOutcome? Stopped)> AdmitAsync(
+    private async Task<(RunAdmission? Admission, Guid ProjectId, long ReportBytes, ParseRawReportOutcome? Stopped)> AdmitAsync(
         EvidenceDbContext context,
         Guid orgId,
         ParseRawReportPayload payload,
@@ -232,7 +240,7 @@ internal sealed partial class ParseRawReportHandler
             || artifact.RunId != payload.RunId)
         {
             LogSkipped(logger, payload.ArtifactId, "left_ready");
-            return (null, 0, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "left_ready"));
+            return (null, Guid.Empty, 0, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "left_ready"));
         }
 
         // The run lock serialises two reports of one run, so the slot's next shard index cannot be taken twice, and it
@@ -244,18 +252,18 @@ internal sealed partial class ParseRawReportHandler
         if (run is null)
         {
             LogSkipped(logger, payload.ArtifactId, "run_absent");
-            return (null, 0, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "run_absent"));
+            return (null, Guid.Empty, 0, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "run_absent"));
         }
 
         var admission = RunAdmissionPolicy.Decide(run.ProjectState, run.RunState, run.LateWindowOpen);
         if (!admission.Allowed)
         {
             // Terminal: a closed run or a project that is going away will not admit this evidence on a retry either.
-            LogSkipped(logger, payload.ArtifactId, admission.Refusal!);
-            return (null, 0, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, admission.Refusal));
+            await LogAdmissionSkipAsync(orgId, payload.ArtifactId, admission.Refusal!, cancellationToken).ConfigureAwait(false);
+            return (null, Guid.Empty, 0, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, admission.Refusal));
         }
 
-        return (admission, artifact.Bytes ?? 0, null);
+        return (admission, run.ProjectId, artifact.Bytes ?? 0, null);
     }
 
     /// <summary>

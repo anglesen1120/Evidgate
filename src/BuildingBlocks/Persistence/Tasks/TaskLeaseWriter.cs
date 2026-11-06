@@ -4,7 +4,7 @@ using Npgsql;
 namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 
 /// <summary>
-/// The completion side of the queue (01.5.1 §6): the three transitions a consumer
+/// The completion side of the queue (01.5.1 §6): the transitions a consumer
 /// makes on a row it holds a lease on. Every one of them is conditional on the
 /// <see cref="TaskClaim"/> it was given —
 /// `where id = @id and state = 'active' and locked_until = @lease and version = @version`
@@ -41,6 +41,18 @@ public interface ITaskLeaseWriter
     /// cannot release the newer attempt's row.
     /// </summary>
     Task<bool> ReleaseAsync(TaskClaim claim, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// `active → retry` for a handler that asked to wait rather than failed: the row
+    /// becomes claimable at `now() + delay`, the attempt the claim counted is given
+    /// back, and the row can never dead-letter for it. False when the claim is no
+    /// longer current — the newer attempt's row is not this caller's to move.
+    /// </summary>
+    Task<bool> DeferAsync(
+        TaskClaim claim,
+        TimeSpan delay,
+        string lastError,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// `active → dead_letter` (retry cap reached). The row stays visible to operators
@@ -102,6 +114,16 @@ public sealed class TaskLeaseWriter : ITaskLeaseWriter
         {Guard}
         """;
 
+    private const string DeferSql = $"""
+        update public.task
+           set state = 'retry',
+               locked_until = null,
+               available_at = now() + make_interval(secs => @delay_seconds),
+               attempts = attempts - 1,
+               last_error = @last_error
+        {Guard}
+        """;
+
     private const string DeadLetterSql = $"""
         update public.task
            set state = 'dead_letter',
@@ -149,6 +171,22 @@ public sealed class TaskLeaseWriter : ITaskLeaseWriter
         ArgumentNullException.ThrowIfNull(claim);
 
         return ExecuteAsync(ReleaseSql, Parameters(claim), cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> DeferAsync(
+        TaskClaim claim,
+        TimeSpan delay,
+        string lastError,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+
+        var parameters = Parameters(claim);
+        parameters.Add("delay_seconds", TaskDeferredException.Clamp(delay).TotalSeconds);
+        parameters.Add("last_error", lastError);
+
+        return ExecuteAsync(DeferSql, parameters, cancellationToken);
     }
 
     /// <inheritdoc />

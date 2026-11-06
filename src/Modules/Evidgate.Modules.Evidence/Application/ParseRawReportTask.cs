@@ -11,6 +11,7 @@ using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Orchestrator.Contracts;
+using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Evidgate.Modules.Ingestion.Contracts;
 using Microsoft.Extensions.Logging;
@@ -67,11 +68,29 @@ internal sealed record ParseRawReportPayload(
 /// <summary>
 /// What one parse attempt produced, named so a caller (and a test) can tell a stored event set from a refusal.
 /// </summary>
-/// <param name="Status">One of <c>parsed</c>, <c>malformed</c>, <c>unsupported</c> or <c>skipped</c>.</param>
+/// <param name="Status">
+/// One of <c>parsed</c>, <c>malformed</c>, <c>unsupported</c>, <c>skipped</c> or <c>quota_blocked</c>.
+/// </param>
 /// <param name="Reason">The code word behind a non-parsed status, or <see langword="null"/>.</param>
 /// <param name="Events">How many event rows this attempt inserted; 0 on a replay and on every refusal.</param>
 internal sealed record ParseRawReportOutcome(string Status, string? Reason = null, int Events = 0)
 {
+    /// <summary>
+    /// The project's billing period had no room for the events this attempt inserted: nothing was committed and the
+    /// task is rescheduled for <see cref="RetryAfter"/> instead of spending an attempt on a refusal only a rollover or
+    /// an operator raise can lift.
+    /// </summary>
+    public const string QuotaBlocked = "quota_blocked";
+
+    /// <summary>The gate's wait on <see cref="QuotaBlocked"/>, null otherwise: how long until that batch may be retried.</summary>
+    public TimeSpan? RetryAfter { get; init; }
+
+    /// <summary>
+    /// The question the gate blocked, carried out of the transaction so the caller can stamp the counter in a scope
+    /// of its own; null unless the outcome is <see cref="QuotaBlocked"/>.
+    /// </summary>
+    internal QuotaCheckRequest? QuotaRequest { get; init; }
+
     /// <summary>The mapped event set was stored (or already was: a replay reports 0 events).</summary>
     public const string Parsed = "parsed";
 
@@ -118,11 +137,9 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// <c>raw_report</c> row is the last write before the commit, so a refusal anywhere in the transaction leaves none.
 /// </para>
 /// <para>
-/// <b>The run's first accepted report moves it on, and what this attempt really inserted is metered.</b> A
-/// <c>queued</c> run is driven <c>queued → running</c> through 05's transition <em>before</em> the admission read takes
-/// the same row's lock, so this writer and the event batch route share one lock order. The events this attempt inserted —
-/// never the replayed ones — become one <c>event_batch</c> receipt and one <c>usage.batch_accepted</c> outbox row in the
-/// evidence's own transaction, so a report cannot be metered for a commit that rolled back.
+/// <b>The first accepted report moves its run on, and only new events reserve quota and are metered.</b>
+/// The gate runs after insertion so replays reserve nothing, but before metering and commit so a block rolls back
+/// the evidence and the queued-to-running transition together with its audit buffer.
 /// </para>
 /// <para>
 /// <b>A replay is a no-op only when it is the same evidence.</b> The producer id is synthetic and per report
@@ -165,6 +182,7 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// <param name="scopeFactory">Reaches the scoped case-attempt writer: handlers are singletons, and the writer joins the ambient tenant transaction and never commits.</param>
 /// <param name="outbox">The reconcile trigger's transactional outbox writer.</param>
 /// <param name="audit">The attempt's audit buffer, which the run transition inside the write transaction records into.</param>
+/// <param name="time">The UTC billing-month clock shared with quota admission.</param>
 /// <param name="logger">The one structured line each attempt writes.</param>
 internal sealed partial class ParseRawReportHandler(
     ITenantScopeFactory scopes,
@@ -178,6 +196,7 @@ internal sealed partial class ParseRawReportHandler(
     IServiceScopeFactory scopeFactory,
     IOutboxWriter outbox,
     IAuditTrail audit,
+    TimeProvider time,
     ILogger<ParseRawReportHandler> logger) : ITransactionlessTaskHandler<ParseRawReportPayload>
 {
     /// <summary>The cap name a report over its byte budget carries in telemetry.</summary>
@@ -201,7 +220,7 @@ internal sealed partial class ParseRawReportHandler(
     /// <inheritdoc />
     public string TaskType => EvidenceTaskTypes.ReportParse;
 
-    /// <summary>Runs one parse attempt and discards the named outcome (the task queue has no caller to return it to).</summary>
+    /// <summary>Runs one parse attempt; quota refusals defer the same task without spending an attempt.</summary>
     /// <param name="payload">The run, artifact and producer kind.</param>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="cancellationToken">Cancelled on shutdown and on lease loss.</param>
@@ -211,7 +230,11 @@ internal sealed partial class ParseRawReportHandler(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        await ExecuteAsync(payload, orgId, cancellationToken).ConfigureAwait(false);
+        var outcome = await ExecuteAsync(payload, orgId, cancellationToken).ConfigureAwait(false);
+        if (outcome.Status == ParseRawReportOutcome.QuotaBlocked)
+        {
+            throw new TaskDeferredException(QuotaRetryDelay(outcome.RetryAfter, time.GetUtcNow()));
+        }
     }
 
     /// <summary>
@@ -428,7 +451,7 @@ internal sealed partial class ParseRawReportHandler(
         var producerId = RawReportProducer.IdFor(payload.ArtifactId);
         var events = SerializeEvents(payload.ArtifactId, producerId, prepared, cases);
 
-        return await WriteAsync(
+        var outcome = await WriteTransactionAsync(
                 orgId,
                 payload,
                 producerId,
@@ -436,6 +459,9 @@ internal sealed partial class ParseRawReportHandler(
                 ParsedReport(prepared, mapped, cases),
                 cancellationToken)
             .ConfigureAwait(false);
-    }
 
+        // The transaction is closed (committed or rolled back) by now, so the refusal stamp is the only write that can
+        // still survive a block: the gate's own stamp rolled back with the evidence it refused.
+        return await StampQuotaBlockAsync(orgId, outcome, cancellationToken).ConfigureAwait(false);
+    }
 }

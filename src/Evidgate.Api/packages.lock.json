@@ -462,6 +462,7 @@
           "Evidgate.Modules.Evidence.Contracts": "[1.0.0, )",
           "Evidgate.Modules.Ingestion.Contracts": "[1.0.0, )",
           "Evidgate.Modules.Orchestrator.Contracts": "[1.0.0, )",
+          "Evidgate.Modules.Usage.Contracts": "[1.0.0, )",
           "FluentValidation": "[12.2.0, )",
           "Mediator.Abstractions": "[3.0.2, )",
           "Microsoft.EntityFrameworkCore": "[10.0.14, )",

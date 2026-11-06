@@ -20,6 +20,8 @@
     <ProjectReference Include="..\Evidgate.Modules.Ingestion.Contracts\Evidgate.Modules.Ingestion.Contracts.csproj" />
     <!-- 06.1.2-T1: IRunPlanReader (run scope + planned execution, T10/T17); another module's .Contracts only. -->
     <ProjectReference Include="..\Evidgate.Modules.Orchestrator.Contracts\Evidgate.Modules.Orchestrator.Contracts.csproj" />
+    <!-- Quota admission reserves the report's new events through the owning module's contract. -->
+    <ProjectReference Include="..\Evidgate.Modules.Usage.Contracts\Evidgate.Modules.Usage.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <!-- 06.1.1-T1: EvidgateDbContext and AddEvidgateDbContext (01.4.2-T1.3). -->
     <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
