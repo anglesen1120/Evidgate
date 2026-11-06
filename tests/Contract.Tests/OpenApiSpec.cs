@@ -47,6 +47,25 @@ internal sealed class OpenApiSpec
     /// <summary>The <c>components.schemas</c> names, in document order.</summary>
     public IReadOnlyList<string> SchemaNames { get; }
 
+    /// <summary>The status keys one operation declares under <c>responses</c>, in document order.</summary>
+    /// <exception cref="KeyNotFoundException">The path or the method is absent from the spec.</exception>
+    public IReadOnlyList<string> ResponseKeys(string pathKey, string method)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(pathKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+
+        var paths = FindMember(_lines, 0, _lines.Length, 0, "paths")
+            ?? throw new InvalidOperationException("the spec has no top-level 'paths' block");
+        var path = FindMember(_lines, paths + 1, SectionEnd(_lines, paths + 1, 0), 2, pathKey)
+            ?? throw new KeyNotFoundException($"the spec declares no path '{pathKey}'");
+        var operation = FindMember(_lines, path + 1, SectionEnd(_lines, path + 1, 2), 4, method)
+            ?? throw new KeyNotFoundException($"'{pathKey}' declares no '{method}' operation");
+        var responses = FindMember(_lines, operation + 1, SectionEnd(_lines, operation + 1, 4), 6, "responses")
+            ?? throw new InvalidOperationException($"'{method} {pathKey}' declares no responses");
+
+        return MemberNames(_lines, responses + 1, SectionEnd(_lines, responses + 1, 6), 8);
+    }
+
     /// <summary>Loads the repository's <c>contracts/openapi.yaml</c>.</summary>
     public static OpenApiSpec Load() => Load(Path.Combine(ContractPaths.ContractsDirectory, "openapi.yaml"));
 
@@ -175,6 +194,11 @@ internal sealed class OpenApiSpec
         for (var i = start; i < end; i++)
         {
             var line = lines[i];
+            if (IsBlank(line))
+            {
+                continue;
+            }
+
             var lineIndent = IndentOf(line);
             if (lineIndent < indent)
             {

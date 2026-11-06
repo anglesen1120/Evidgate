@@ -1,4 +1,3 @@
-using System.Globalization;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Usage.Contracts;
@@ -199,7 +198,7 @@ internal sealed class QuotaGate(
                 QuotaDecision.Block,
                 refusing.Used,
                 refusing.QuotaLimit,
-                RetryUntilNextPeriod(request.Period),
+                UsagePeriod.RetryUntilNextPeriod(request.Period, time.GetUtcNow()),
                 RaisePath(orgId),
                 QuotaScopeKeys.KindOf(refusing.ScopeKey));
         }
@@ -270,20 +269,4 @@ internal sealed class QuotaGate(
 
     /// <summary>The audited operator path a blocked caller is told about.</summary>
     private static string RaisePath(Guid orgId) => $"/internal/operator/billing/orgs/{orgId:D}/quota-raise";
-
-    /// <summary>
-    /// The wait a blocked caller is told: the next month starts the fresh counter that makes the same
-    /// call fit again. At least one second, so a caller never reads <c>Retry-After: 0</c> as "retry now".
-    /// The caller has already restricted the period to 2000-01..2999-12, so both the parse and the
-    /// following month stay inside <see cref="DateTimeOffset"/> and this method never throws.
-    /// </summary>
-    private TimeSpan RetryUntilNextPeriod(string period)
-    {
-        var year = int.Parse(period.AsSpan(0, 4), NumberStyles.None, CultureInfo.InvariantCulture);
-        var month = int.Parse(period.AsSpan(5, 2), NumberStyles.None, CultureInfo.InvariantCulture);
-        var next = new DateTimeOffset(year, month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(1);
-        var until = next - time.GetUtcNow();
-
-        return until < TimeSpan.FromSeconds(1) ? TimeSpan.FromSeconds(1) : until;
-    }
 }

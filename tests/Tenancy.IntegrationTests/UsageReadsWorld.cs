@@ -21,7 +21,7 @@ namespace Tenancy.IntegrationTests;
 /// (row security hides them from the read under test) and can pin <c>created_at</c> — the keyset's first
 /// member — instead of hoping two inserts share an instant.
 /// </remarks>
-internal sealed class UsageReadsWorld : IAsyncDisposable
+internal sealed partial class UsageReadsWorld : IAsyncDisposable
 {
     /// <summary>The platform operator every audit row of these reads must name.</summary>
     internal static readonly Guid OperatorId = Guid.CreateVersion7();
@@ -62,13 +62,19 @@ internal sealed class UsageReadsWorld : IAsyncDisposable
 
     internal Guid Project { get; }
 
-    /// <summary>Starts one world with the operator gate the suite needs.</summary>
+    /// <summary>Starts one world with the operator gate the suite needs, over the clock the host reports time from.</summary>
     /// <param name="fixture">The assembly fixture (one container, one template).</param>
     /// <param name="gate">Which gate the host composes.</param>
-    internal static Task<UsageReadsWorld> StartAsync(PostgresTenancyFixture fixture, OperatorGateMode gate) =>
+    /// <param name="clock">The host's clock, so a read that derives a period answers the period the test pinned.</param>
+    internal static Task<UsageReadsWorld> StartAsync(
+        PostgresTenancyFixture fixture,
+        OperatorGateMode gate,
+        TimeProvider? clock = null) =>
         fixture.StartDedicatedAsync(async database =>
         {
-            var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
+            var api = TenancyApiFactory.RealResolver(
+                fixture.AppConnectionString(database),
+                services: clock is null ? null : services => services.AddSingleton<TimeProvider>(clock));
 
             WebApplicationFactory<Program> host = gate switch
             {
