@@ -558,22 +558,15 @@ internal sealed class IngestEventBatchHandler(
             }
         }
 
-        // (g2) Quota, one gate call per batch and never per event (ruling T53), made last: the insert above has
-        // already answered how many units this batch adds, so the reservation charges exactly the rows that
-        // commit and two identical racing batches charge the batch once between them. Every step that can still
-        // refuse the batch runs before this, and a block returns a failure, so the tenant transaction rolls the
-        // inserted events back and the 429 commits no event.
-        if (await quota
-                .AdmitAsync(principal.ProjectScope, insertedIds.Count, cancellationToken)
-                .ConfigureAwait(false) is { } quotaRefusal)
-        {
-            return Result.Failure<BatchAckResult>(quotaRefusal);
-        }
-
-        // (h) The producer's high-water mark, one statement for every producer of the batch. Only newly
+        // (g1) The producer's high-water mark, one statement for every producer of the batch. Only newly
         // accepted events count, and a batch that accepted nothing (every event a duplicate of an earlier
         // batch) writes no slot row at all: the update would be a no-op that still bumps
         // producer_slot.version through the shared trigger (P2).
+        //
+        // It runs before the quota reservation on purpose: every transaction that reaches the counter holds
+        // this slot row first, so the counter stays the last lock a batch takes and no admitted batch can take
+        // the slot while another admitted batch waits for the counter with the slot already held (a 40P01
+        // deadlock between racing batches of one producer). A blocked batch's update rolls back with the batch.
         var slotMaxima = accepted > 0
             ? toInsert
                 .Where(e => insertedIds.Contains(e.EventId))
@@ -593,6 +586,18 @@ internal sealed class IngestEventBatchHandler(
                     slots = JsonSerializer.Serialize(slotMaxima),
                 },
                 cancellationToken).ConfigureAwait(false);
+        }
+
+        // (g2) Quota, one gate call per batch and never per event (ruling T53), made last: the insert above has
+        // already answered how many units this batch adds, so the reservation charges exactly the rows that
+        // commit and two identical racing batches charge the batch once between them. Every step that can still
+        // refuse the batch runs before this, and a block returns a failure, so the tenant transaction rolls the
+        // inserted events back and the 429 commits no event.
+        if (await quota
+                .AdmitAsync(principal.ProjectScope, insertedIds.Count, cancellationToken)
+                .ConfigureAwait(false) is { } quotaRefusal)
+        {
+            return Result.Failure<BatchAckResult>(quotaRefusal);
         }
 
         // (h2) Late evidence needs a reader: the run already finished as incomplete, so no finalize will close another
