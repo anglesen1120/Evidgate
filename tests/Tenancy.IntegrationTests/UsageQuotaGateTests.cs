@@ -273,14 +273,15 @@ public sealed class UsageQuotaGateTests
 
         var nextMonth = await world.CheckAsync(Request(world, 4m, period: NextPeriod));
 
-        nextMonth.Decision.ShouldBe(QuotaDecision.Ok);
-        nextMonth.Used.ShouldBeNull();
+        nextMonth.Decision.ShouldBe(QuotaDecision.Ok, "the closed period's block does not carry");
+        nextMonth.Used.ShouldBe(4m, "the new period counts only what it was asked for");
+        nextMonth.Limit.ShouldBe(Limit, "the limit carries into the new period");
 
         var october = (await world.CounterAsync(project: world.Project)).ShouldNotBeNull();
         october.Used.ShouldBe(Limit, "a new period never spends the closed period's usage");
         october.BlockedAt.ShouldBe(OccurredAt, "and never lifts the closed period's block");
 
-        (await world.CounterCountAsync()).ShouldBe(1L, "a new period never spends the closed period's usage");
+        (await world.CounterCountAsync()).ShouldBe(2L, "the new period gets its own counter, next to the closed one");
     }
 
     [Fact]

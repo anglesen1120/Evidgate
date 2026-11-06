@@ -16,7 +16,14 @@ internal static class UsageQuotaGateSql
     /// serialise on the row lock and the last unit is granted once. Its second half answers any scope that
     /// exists when the increment matched nothing, so a call with no counter row (no configured limit) is
     /// answered — one round trip — by the same statement, and only a scope that exists with a counter row
-    /// moves on to the refusal statement. <c>reserved</c> says which of the two the caller read.
+    /// moves on to the refusal statement. <c>reserved</c> says which of the two the caller read;
+    /// <c>needs_carry</c> says the month has no counter of its own but an earlier month did, so the limit
+    /// must be carried into the new period before the call can be answered.
+    /// <para>
+    /// <c>warned_now</c> is the pre-update tuple against the post-update one, so it is true only for the
+    /// statement that actually stamped <c>warned_at</c>: the call that owns the transition, and only it,
+    /// emits the warning.
+    /// </para>
     /// </summary>
     internal const string Reserve = """
         with reserved as (
@@ -33,13 +40,14 @@ internal static class UsageQuotaGateSql
               and c.period = @period
               and c.metric = @metric
               and c.used + @quantity <= c.quota_limit
-            returning c.used, c.quota_limit, c.warn_ratio
-        )
-        select answer.used, answer.quota_limit, answer.warn_ratio, answer.reserved
-        from (
-            select used, quota_limit, warn_ratio, true as reserved from reserved
+            returning c.id, c.used, c.quota_limit, c.warn_ratio,
+                old.warned_at is null and c.warned_at is not null as warned_now
+        ),
+        answered as (
+            select id, used, quota_limit, warn_ratio, true as reserved, warned_now
+            from reserved
             union all
-            select c.used, c.quota_limit, c.warn_ratio, false as reserved
+            select c.id, c.used, c.quota_limit, c.warn_ratio, false as reserved, false as warned_now
             from public.quota_counter as c
             where c.org_id = @org_id
               and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid)
@@ -47,7 +55,45 @@ internal static class UsageQuotaGateSql
               and c.period = @period
               and c.metric = @metric
               and not exists (select 1 from reserved)
-        ) as answer
+        )
+        select a.id, a.used, a.quota_limit, a.warn_ratio, a.reserved, false as needs_carry, a.warned_now
+        from answered as a
+        union all
+        select p.id, 0::numeric, p.quota_limit, p.warn_ratio, false as reserved, true as needs_carry,
+            false as warned_now
+        from (
+            select c.id, c.quota_limit, c.warn_ratio
+            from public.quota_counter as c
+            where c.org_id = @org_id
+              and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                  = coalesce(@project_id::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+              and c.metric = @metric
+              and c.period < @period
+              and not exists (select 1 from answered)
+            order by c.period desc
+            limit 1
+        ) as p
+        """;
+
+    /// <summary>
+    /// The carry-forward: the month has no counter yet, so the scope's latest earlier counter lends it its
+    /// limit and warning line, with no usage and no threshold stamp. One statement, and the scope key's
+    /// <c>on conflict</c> is what makes concurrent first callers of the month converge on one row: the
+    /// loser writes nothing and re-reads the winner's row.
+    /// </summary>
+    internal const string CarryForward = """
+        insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit, warn_ratio)
+        select uuidv7(), @org_id, @project_id, @period, @metric, 0, p.quota_limit, p.warn_ratio
+        from public.quota_counter as p
+        where p.org_id = @org_id
+          and coalesce(p.project_id, '00000000-0000-0000-0000-000000000000'::uuid)
+              = coalesce(@project_id::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+          and p.metric = @metric
+          and p.period < @period
+        order by p.period desc
+        limit 1
+        on conflict (org_id, coalesce(project_id, '00000000-0000-0000-0000-000000000000'::uuid), period, metric)
+        do nothing
         """;
 
     /// <summary>
@@ -87,13 +133,14 @@ internal static class UsageQuotaGateSql
               and c.period = @period
               and c.metric = @metric
               and (c.used + @quantity <= c.quota_limit or c.blocked_at is null)
-            returning c.used, c.quota_limit, c.warn_ratio,
-                old.used + @quantity > old.quota_limit as blocked
+            returning c.id, c.used, c.quota_limit, c.warn_ratio,
+                old.used + @quantity > old.quota_limit as blocked,
+                old.warned_at is null and c.warned_at is not null as warned_now
         )
-        select answer.used, answer.quota_limit, answer.warn_ratio, answer.blocked
+        select answer.id, answer.used, answer.quota_limit, answer.warn_ratio, answer.blocked, answer.warned_now
         from settled as answer
         union all
-        select c.used, c.quota_limit, c.warn_ratio, true as blocked
+        select c.id, c.used, c.quota_limit, c.warn_ratio, true as blocked, false as warned_now
         from public.quota_counter as c
         where c.org_id = @org_id
           and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid)

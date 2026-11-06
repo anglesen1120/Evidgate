@@ -254,6 +254,57 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
             Database,
             $"select count(*) from public.quota_counter where org_id = '{(org ?? Org):D}'");
 
+    /// <summary>The id of one scope's counter, or null when the scope holds none.</summary>
+    /// <param name="org">The tenant, or null for this world's org.</param>
+    /// <param name="project">The project, null for the tenant-level counter.</param>
+    /// <param name="period">The billing month.</param>
+    /// <param name="metric">The wire metric name.</param>
+    internal async Task<Guid?> CounterIdAsync(
+        Guid? org = null,
+        Guid? project = null,
+        string period = "2026-10",
+        string metric = "results")
+    {
+        var scope = $"{(project ?? Guid.Empty):D}";
+        var rows = await _fixture.ColumnAsync<string>(
+                Database,
+                $"""
+                select id::text from public.quota_counter
+                where org_id = '{(org ?? Org):D}'
+                  and coalesce(project_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                      = '{scope}'::uuid
+                  and period = '{period}'
+                  and metric = '{metric}'
+                """)
+            .ConfigureAwait(false);
+
+        return rows.Count == 0 ? null : Guid.Parse(rows[0]);
+    }
+
+    /// <summary>How many outbox rows of one task type the org holds.</summary>
+    /// <param name="taskType">The outbox task type.</param>
+    /// <param name="org">The tenant, or null for this world's org.</param>
+    internal Task<long> OutboxCountAsync(string taskType, Guid? org = null) =>
+        _fixture.ScalarAsync<long>(
+            Database,
+            $"select count(*) from public.outbox where org_id = '{(org ?? Org):D}' and task_type = '{taskType}'");
+
+    /// <summary>
+    /// The org's outbox rows of one task type, as <c>task_type|aggregate_type|aggregate_id|payload</c>,
+    /// oldest first: what a consumer would read.
+    /// </summary>
+    /// <param name="taskType">The outbox task type.</param>
+    /// <param name="org">The tenant, or null for this world's org.</param>
+    internal Task<IReadOnlyList<string>> OutboxRowsAsync(string taskType, Guid? org = null) =>
+        _fixture.ColumnAsync<string>(
+            Database,
+            $"""
+            select task_type || '|' || aggregate_type || '|' || aggregate_id::text || '|' || payload::text
+            from public.outbox
+            where org_id = '{(org ?? Org):D}' and task_type = '{taskType}'
+            order by created_at, id
+            """);
+
     /// <summary>How many audit rows one action of the org wrote.</summary>
     /// <param name="org">The tenant, or null for this world's org.</param>
     /// <param name="action">The audited action.</param>
