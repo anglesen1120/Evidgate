@@ -144,6 +144,7 @@ public sealed partial class ReprocessReportTaskTests
             services.GetRequiredService<IServiceScopeFactory>(),
             services.GetRequiredService<IOutboxWriter>(),
             services.GetRequiredService<IAuditTrail>(),
+            services.GetRequiredService<TimeProvider>(),
             NullLogger<ParseRawReportHandler>.Instance);
     }
 
