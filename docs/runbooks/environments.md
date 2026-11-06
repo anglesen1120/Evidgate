@@ -125,6 +125,14 @@ token budget past the default must raise the project budget with it. Both budget
 so the platform-wide burst a project may send is the project limit times the replica count; a deployment
 that needs one shared budget must move the counter to a shared store first.
 
+The quota gate switch (`EVIDGATE__USAGE__QUOTAGATE__ENABLED`, default `true`) is read by every host on its own,
+and the two metered paths run in different hosts: the event route gates in the Api, a raw report parse gates in
+the Worker. A host cannot see the other's value, so a mismatch silently gates one path and lets the other
+commit unmetered against the counter. Set the value **once, from the same shared configuration source, for the
+Api and the Worker** and change both in one deploy. Every host logs the effective value at start (Information),
+and a host that starts with the gate off logs a Warning naming the setting: grep both hosts' start logs for it after
+any change. There is no cross-host check; an operator who switches the gate off on purpose does it on both.
+
 One more shape is a feature that stays **absent until it is configured**: the federated-login rows
 (`EVIDGATE__LOGIN__*`, `EVIDGATE__OIDC__GOOGLE__*`, 02.3.1-T1.1/T1.2, and `EVIDGATE__OAUTH__GITHUB__*`,
 02.3.1-T1.3) are `requiredAtBoot: false` and

@@ -1,18 +1,36 @@
 namespace Evidgate.Modules.Usage.Infrastructure.Persistence;
 
 /// <summary>
-/// The <c>quota_counter</c> statements, in one place so the gate and the raise path share the served text
-/// instead of a copy.
+/// The <c>quota_counter</c> statements and the transaction's billing month, in one place so the gate and the raise path
+/// share the served text instead of a copy.
 /// <para>
-/// Every statement names a scope through the sentinel <c>coalesce(project_id, …)</c> triple the unique index uses, so
-/// one index probe answers it and an org-level counter (null project) is a plain equality rather than an
+/// Every counter statement names a scope through the sentinel <c>coalesce(project_id, …)</c> triple the unique index
+/// uses, so one index probe answers it and an org-level counter (null project) is a plain equality rather than an
 /// <c>is not distinct from</c> the planner cannot index. A call that charges two scopes passes both keys in
-/// <c>@scope_keys</c>, and every locking statement reads them in <c>array_position</c> order — the caller's tenant row
-/// first — so the locks are taken in one order by every caller and two of them cannot deadlock.
+/// <c>@scope_keys</c>, and every statement that reads more than one scope reads them in <c>array_position</c> order — the
+/// caller's tenant row first — so the locks are taken in one order by every caller and two of them cannot deadlock.
 /// </para>
 /// </summary>
 internal static class UsageQuotaGateSql
 {
+    /// <summary>The UTC month stamped on rows created in the caller's transaction.</summary>
+    internal const string CurrentPeriod =
+        "select to_char(transaction_timestamp() at time zone 'UTC','YYYY-MM')";
+
+    /// <summary>Reads only existing refusing counters; the first scope is the tenant's.</summary>
+    internal const string Peek = """
+        select coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) as scope_key,
+               c.used, c.quota_limit, clock_timestamp() as database_now
+        from public.quota_counter as c
+        where c.org_id = @org_id
+          and c.period = @period
+          and c.metric = @metric
+          and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = any(@scope_keys)
+          and c.used + @quantity > c.quota_limit
+        order by array_position(@scope_keys, coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid))
+        limit 1
+        """;
+
     /// <summary>
     /// The gate's first statement: one conditional increment of every scope the call charges, which is the check, so
     /// concurrent batches serialise on the row locks and the last unit is granted once. The scopes are locked before
