@@ -342,7 +342,7 @@ internal sealed partial class ParseRawReportHandler
 
     /// <summary>
     /// The row of a report the mapper resolved: the counters it declared, the cases it produced (the event set the
-    /// attempt could write), and the discrepancies between them. One discrepancy is enough to make it
+    /// attempt could write), and every difference the check names between them. One code is enough to make it
     /// <c>partial</c>, because the two sides no longer agree.
     /// </summary>
     /// <param name="prepared">The parser release that judged the report.</param>
@@ -351,10 +351,16 @@ internal sealed partial class ParseRawReportHandler
     /// <returns>The row the write transaction inserts.</returns>
     private static RawReportDraft ParsedReport(Prepared prepared, JUnitMapResult mapped, MappedCase[] cases)
     {
-        var discrepancies = AggregateDiscrepancies(mapped.Discrepancies);
+        var observed = new ObservedCounters(
+            cases.Length,
+            Observed(cases, PytestStatus.Failed),
+            Observed(cases, PytestStatus.Error),
+            Observed(cases, PytestStatus.Skipped));
+        var codes = JUnitDeclaredObservedCheck.Compare(mapped.Declared, observed, mapped.Discrepancies);
+        var discrepancies = AggregateDiscrepancies(codes);
 
         return new RawReportDraft(
-            mapped.Discrepancies.Count == 0 ? RawReportOutcomes.Mapped : RawReportOutcomes.Partial,
+            codes.Count == 0 ? RawReportOutcomes.Mapped : RawReportOutcomes.Partial,
             null,
             prepared.ParserId,
             prepared.Version,
@@ -362,10 +368,10 @@ internal sealed partial class ParseRawReportHandler
             mapped.Declared.Failures,
             mapped.Declared.Errors,
             mapped.Declared.Skipped,
-            cases.Length,
-            Observed(cases, PytestStatus.Failed),
-            Observed(cases, PytestStatus.Error),
-            Observed(cases, PytestStatus.Skipped),
+            observed.Tests,
+            observed.Failures,
+            observed.Errors,
+            observed.Skipped,
             discrepancies);
     }
 
@@ -415,7 +421,7 @@ internal sealed partial class ParseRawReportHandler
     /// capped to the number of distinct codes the column admits. Codes only: a case name or a message body never
     /// reaches this row.
     /// </summary>
-    /// <param name="codes">The codes the mapping reported, in document order.</param>
+    /// <param name="codes">The codes the check returned, already in canonical order.</param>
     /// <returns>The array as one <c>jsonb</c> parameter.</returns>
     private static string AggregateDiscrepancies(IReadOnlyList<string> codes)
     {
