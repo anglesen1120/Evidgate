@@ -648,7 +648,7 @@ internal sealed class TenantRowFactory
             ("public.project", "case_prefix") =>
                 "P" + Interlocked.Increment(ref _casePrefix).ToString("D4", CultureInfo.InvariantCulture),
             ("public.producer_slot", "producer_id") => "shard-1",
-            // The usage ledger, roll-up and quota counter (0046/0047/0078) close their vocabulary in
+            // The usage ledger, roll-up and quota counter (0046/0047/0077) close their vocabulary in
             // CHECKs the generic text rule cannot satisfy: `metric` is the plan §4 list and `period` is
             // its `YYYY-MM` shape. `billing_key` stays generic on purpose — the generic candidate is 13
             // characters and unique per generated row, which is what `unique (org_id, billing_key)` needs

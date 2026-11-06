@@ -20,7 +20,7 @@ namespace Tenancy.IntegrationTests;
 public sealed partial class UsageQuotaSchemaTests
 {
     private const string Table = "quota_counter";
-    private const string MigrationFile = "0078_usage_quota_counter.sql";
+    private const string MigrationFile = "0077_usage_quota_counter.sql";
 
     /// <summary>The sentinel the scope index substitutes for a null <c>project_id</c>.</summary>
     private const string NullProjectSentinel = "00000000-0000-0000-0000-000000000000";

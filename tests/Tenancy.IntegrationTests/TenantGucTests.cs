@@ -680,7 +680,7 @@ public sealed class TenantGucTests
             """,
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId));
-        // 0078's quota counter: one limit for the org and one for its project, because the counter is an
+        // 0077's quota counter: one limit for the org and one for its project, because the counter is an
         // org-scoped table the discovery walks like any other.
         await scope.ExecuteAsync(
             """

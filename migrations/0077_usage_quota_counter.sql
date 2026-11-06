@@ -1,4 +1,4 @@
--- 0078_usage_quota_counter.sql
+-- 0077_usage_quota_counter.sql
 --
 -- The quota counter: one row per (org, project-or-tenant, period, metric) holding the units already
 -- consumed, the agreed limit and the two threshold stamps. A metered hot path asks one question before
