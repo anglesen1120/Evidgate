@@ -28,9 +28,10 @@ internal interface IJUnitMapper
     /// <param name="context">The synthetic producer identity and the caller's execution-key resolution.</param>
     /// <returns>One mapped case per resolvable <c>testcase</c>, the declared counters and the discrepancies.</returns>
     /// <exception cref="JUnitParseRefusedException">
-    /// The parser profile refused the document (malformed, DTD, over a cap). Only a profile refusal becomes this
-    /// exception: a caller bug or a resolver failure propagates as itself, so a fault can never read as a
-    /// declared malformed report.
+    /// The document is not one this dialect reads: the parser profile refused the bytes (malformed, DTD, over a cap)
+    /// or the root element is neither a <c>testsuite</c> nor a <c>testsuites</c> (the mapper's own shape verdict).
+    /// Only a refusal about the report becomes this exception: a caller bug or a resolver failure propagates as
+    /// itself, so a fault can never read as a declared malformed report.
     /// </exception>
     JUnitMapResult Map(Stream xml, JUnitMapContext context);
 
@@ -42,7 +43,10 @@ internal interface IJUnitMapper
     /// <param name="records">The child's records in stream order, its marker excluded and no rejection among them.</param>
     /// <param name="context">The synthetic producer identity and the caller's execution-key resolution.</param>
     /// <returns>One mapped case per resolvable <c>testcase</c>, the declared counters and the discrepancies.</returns>
-    /// <exception cref="JUnitParseRefusedException">The records are not a well-formed element tree (<c>parse_crashed</c>).</exception>
+    /// <exception cref="JUnitParseRefusedException">
+    /// The records are not a well-formed element tree (<c>parse_crashed</c>), or they describe a document whose root
+    /// is neither a <c>testsuite</c> nor a <c>testsuites</c>.
+    /// </exception>
     JUnitMapResult Map(IReadOnlyList<ParseRecord> records, JUnitMapContext context);
 }
 
@@ -131,9 +135,11 @@ internal static class JUnitDiscrepancies
 }
 
 /// <summary>
-/// A document the parser profile refused (<c>artifact_invalid</c>, or <c>payload_too_large</c> for the byte
-/// cap). <see cref="Reason"/> is one profile code word, so the caller can store the report as
-/// <c>malformed</c> without parsing a message; the message itself is the profile's secret-free text.
+/// A report the mapping refused: either the parser profile rejected the document (<c>artifact_invalid</c>, or
+/// <c>payload_too_large</c> for the byte cap) or the mapper found a shape this dialect does not read, such as a
+/// root that is neither <c>testsuite</c> nor <c>testsuites</c>. <see cref="Reason"/> is one profile code word, so
+/// the caller can store the report as <c>malformed</c> without parsing a message; the message itself carries no
+/// report text.
 /// </summary>
 internal sealed class JUnitParseRefusedException : Exception
 {

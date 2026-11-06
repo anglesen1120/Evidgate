@@ -36,6 +36,13 @@ internal sealed class PytestJUnitMapper : IJUnitMapper
     /// <summary>What replaces the tail of an echoed identity string longer than <see cref="MaxEchoedIdentityLength"/>.</summary>
     public const string TruncationMarker = "[truncated]";
 
+    /// <summary>
+    /// The reason a document whose root is neither a <c>testsuite</c> nor a <c>testsuites</c> is refused with. It
+    /// reuses the profile's own word for content it cannot read as a document, so the refusal coins no new code
+    /// word and the stored reason keeps the column's shape.
+    /// </summary>
+    public const string RootRefusalReason = ParsingFailureReason.Malformed;
+
     private const string TestCaseElement = "testcase";
     private const string TestSuiteElement = "testsuite";
     private const string TestSuitesElement = "testsuites";
@@ -137,6 +144,7 @@ internal sealed class PytestJUnitMapper : IJUnitMapper
 
             if (reader.Depth == 0)
             {
+                EnsureKnownRoot(reader);
                 counters.ReadRoot(reader);
             }
             else
@@ -160,6 +168,28 @@ internal sealed class PytestJUnitMapper : IJUnitMapper
         }
 
         return new JUnitMapResult(cases, declared, discrepancies);
+    }
+
+    /// <summary>
+    /// Refuses a document whose root element is neither a <c>testsuite</c> nor a <c>testsuites</c>: this dialect was
+    /// only agreed to read that shape, and mapping the testcases of any other root would claim evidence the producer
+    /// never declared. Only depth 0 decides, so a suite nested under a foreign root cannot rescue the document.
+    /// </summary>
+    /// <param name="reader">The reader, positioned on the document element.</param>
+    /// <exception cref="JUnitParseRefusedException">The root's local name is neither of the two accepted ones.</exception>
+    private static void EnsureKnownRoot(XmlReader reader)
+    {
+        var localName = reader.LocalName;
+        if (string.Equals(localName, TestSuiteElement, StringComparison.Ordinal)
+            || string.Equals(localName, TestSuitesElement, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // The message stays generic: the root's name is producer text, and a refusal never echoes the report back.
+        throw new JUnitParseRefusedException(
+            RootRefusalReason,
+            "the report root is not a testsuite or testsuites element");
     }
 
     /// <summary>
@@ -292,15 +322,7 @@ internal sealed class PytestJUnitMapper : IJUnitMapper
 
         public void ReadRoot(XmlReader reader)
         {
-            if (string.Equals(reader.LocalName, TestSuitesElement, StringComparison.Ordinal))
-            {
-                rootIsSuites = true;
-            }
-            else if (!string.Equals(reader.LocalName, TestSuiteElement, StringComparison.Ordinal))
-            {
-                return;
-            }
-
+            rootIsSuites = string.Equals(reader.LocalName, TestSuitesElement, StringComparison.Ordinal);
             root = SuiteCounters.Read(reader);
         }
 

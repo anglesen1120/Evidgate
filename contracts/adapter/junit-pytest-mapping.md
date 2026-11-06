@@ -39,9 +39,16 @@ compared exactly; namespaces are ignored. Only the elements and attributes below
 are read; nothing else in the document changes an event.
 
 `testsuites` and `testsuite` are only ever read for their counters (next section).
-Neither is required: a root element that is neither declares no counters, and the
-`testcase` elements the document carries still map. The mapping does not refuse a
-document for its root element's name.
+A **root** element whose local name is neither is refused before any `testcase` is
+read: the attempt ends as outcome `malformed` with reason `malformed`
+(`PytestJUnitMapper.RootRefusalReason`), which reuses the profile's own word for
+content it cannot read as a document — `ParsingFailureReason.Malformed` in
+`src/Modules/Evidgate.Modules.Evidence.Contracts/IParsing.cs:301` — instead of
+coining a new code word, so it writes a refusal row with zero cases and zero
+events, never a partial set. Matching is by local name, so
+`<testsuite xmlns="urn:x">` and `<ns:testsuites xmlns:ns="urn:x">` are accepted
+roots. Only depth 0 decides: a `<testsuites>` nested under a foreign root does not
+rescue the document.
 
 ### Element and attribute table (AC1)
 
@@ -353,6 +360,7 @@ every constant of the listed types has a row.
 | `PytestJUnitMapper.PytestVersion`            | `1.0.0`           | the dialect release; a behaviour change is a new version             |
 | `PytestJUnitMapper.MaxEchoedIdentityLength`  | `256`             | the most characters of `classname`/`name` echoed into a case         |
 | `PytestJUnitMapper.TruncationMarker`         | `[truncated]`     | what replaces the tail of an echoed value over the cap               |
+| `PytestJUnitMapper.RootRefusalReason`        | `malformed`       | the reason a document with a foreign root is refused with            |
 | `PytestJUnitMapper.TestCaseElement`          | `testcase`        | the element one case is read from                                    |
 | `PytestJUnitMapper.TestSuiteElement`         | `testsuite`       | a declaring element (root, or a child of a `testsuites` root)        |
 | `PytestJUnitMapper.TestSuitesElement`        | `testsuites`      | the root whose undeclared counters are summed from its direct suites |
