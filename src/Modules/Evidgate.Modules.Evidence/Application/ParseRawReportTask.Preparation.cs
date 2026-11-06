@@ -50,7 +50,9 @@ internal sealed partial class ParseRawReportHandler
             return stopped!;
         }
 
-        var resolution = await parsers.ResolveAsync(payload.ProducerKind, cancellationToken).ConfigureAwait(false);
+        // The attempt's guard has already refused a report without one kind, so the registry is only ever asked about a
+        // kind the manifest really declared.
+        var resolution = await parsers.ResolveAsync(payload.ProducerKind!, cancellationToken).ConfigureAwait(false);
         if (!resolution.IsResolved)
         {
             // A kind no registry row names has no pair, so the refusal row's key is the kind the report declared.

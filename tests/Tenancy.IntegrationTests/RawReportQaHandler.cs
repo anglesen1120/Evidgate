@@ -45,7 +45,9 @@ public sealed partial class EvidenceRawReportParseTests
         (await CountAsync(world, "event", artifact)).ShouldBe(1);
         (await CountAsync(world, "case_attempt")).ShouldBe(1);
         (await CountAsync(world, "producer_slot")).ShouldBe(1);
-        (await CountAsync(world, "outbox")).ShouldBe(1);
+        // The one committed set leaves its three rows: the run's queued -> running edge, the reconcile trigger and the
+        // batch's usage row.
+        (await CountAsync(world, "outbox")).ShouldBe(3);
     }
 
     [Fact]

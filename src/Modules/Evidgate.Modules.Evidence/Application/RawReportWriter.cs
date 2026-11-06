@@ -210,7 +210,7 @@ internal sealed partial class ParseRawReportHandler
             return;
         }
 
-        if (!IsStorableProducerKind(payload.ProducerKind))
+        if (!IsStorableProducerKind(payload.StoredProducerKind))
         {
             // The column admits only the registry's own kind vocabulary: a payload whose kind cannot be stored gets no
             // row rather than failing the refusal write.
@@ -323,7 +323,7 @@ internal sealed partial class ParseRawReportHandler
         org_id = orgId,
         run_id = payload.RunId,
         artifact_id = payload.ArtifactId,
-        producer_kind = payload.ProducerKind,
+        producer_kind = payload.StoredProducerKind,
         parser_id = report.ParserId,
         parser_version = report.ParserVersion,
         outcome = report.Outcome,

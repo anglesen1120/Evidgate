@@ -132,7 +132,12 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
         outcome.Events.ShouldBe(1);
         (await CountAsync(world, "event", artifactId)).ShouldBe(1);
-        (await CountAsync(world, "outbox")).ShouldBe(1);
+
+        // Three outbox rows leave this commit: the run's queued -> running edge, the one reconcile trigger and the
+        // batch's usage row. The receipt and the usage row are asserted in EvidenceRawReportParseTests.Metering.
+        (await CountAsync(world, "outbox")).ShouldBe(3);
+        (await OutboxRowsAsync(world, RunStateTransitionContract.OutboxTaskType)).ShouldBe(1);
+        (await OutboxRowsAsync(world, RunReconcileContract.OutboxTaskType)).ShouldBe(1);
 
         var parser = await _fixture.ScalarAsync<string?>(
             world.Database,
@@ -172,14 +177,17 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         // carries the slot's declaration rather than a late-evidence marker.
         (await _fixture.ScalarAsync<string>(
             world.Database,
-            $"select task_type from public.outbox where org_id = '{world.Org:D}'"))
+            $"select task_type from public.outbox where org_id = '{world.Org:D}' "
+            + $"and task_type = '{RunReconcileContract.OutboxTaskType}'"))
             .ShouldBe(RunReconcileContract.OutboxTaskType);
         (await _fixture.ScalarAsync<bool>(
             world.Database,
-            $"select payload ? 'late_evidence' from public.outbox where org_id = '{world.Org:D}'")).ShouldBeFalse();
+            $"select payload ? 'late_evidence' from public.outbox where org_id = '{world.Org:D}' "
+            + $"and task_type = '{RunReconcileContract.OutboxTaskType}'")).ShouldBeFalse();
         (await _fixture.ScalarAsync<int>(
             world.Database,
-            $"select (payload ->> 'declared_count')::int from public.outbox where org_id = '{world.Org:D}'"))
+            $"select (payload ->> 'declared_count')::int from public.outbox where org_id = '{world.Org:D}' "
+            + $"and task_type = '{RunReconcileContract.OutboxTaskType}'"))
             .ShouldBe(1);
     }
 
@@ -199,7 +207,11 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         second.Events.ShouldBe(0);
         (await CountAsync(world, "event", artifactId)).ShouldBe(1);
         (await CountAsync(world, "case_attempt")).ShouldBe(1);
-        (await CountAsync(world, "outbox")).ShouldBe(1);
+        // The replay adds no transition (the run is running by then) and no second reconcile trigger, so the first
+        // parse's three rows stand alone.
+        (await CountAsync(world, "outbox")).ShouldBe(3);
+        (await OutboxRowsAsync(world, RunStateTransitionContract.OutboxTaskType)).ShouldBe(1);
+        (await CountAsync(world, "event_batch")).ShouldBe(1);
     }
 
     [Fact]
@@ -221,7 +233,9 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         outcome.Events.ShouldBe(0);
         (await CountAsync(world, "event", artifactId)).ShouldBe(1);
         (await CountAsync(world, "case_attempt")).ShouldBe(1);
-        (await CountAsync(world, "outbox")).ShouldBe(1);
+        // The refused replay rolls its own transition back, so only the first parse's three rows remain.
+        (await CountAsync(world, "outbox")).ShouldBe(3);
+        (await CountAsync(world, "event_batch")).ShouldBe(1);
         (await _fixture.ScalarAsync<long?>(
             world.Database,
             $"select duration_ms from public.event where artifact_ids = array['{artifactId:D}'::uuid]"))
@@ -278,7 +292,8 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         (await _fixture.ScalarAsync<bool>(
             world.Database,
             $"select after_cancel from public.event where artifact_ids = array['{artifactId:D}'::uuid]")).ShouldBeTrue();
-        (await CountAsync(world, "outbox")).ShouldBe(1);
+        // A canceled run is never transitioned, so the commit leaves the reconcile trigger and the usage row.
+        (await CountAsync(world, "outbox")).ShouldBe(2);
     }
 
     [Fact]
@@ -376,7 +391,11 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
         outcome.Events.ShouldBe(0);
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
-        (await CountAsync(world, "outbox")).ShouldBe(0);
+        // The report that mapped nothing moved the run on, so its transition row is the commit's only outbox row: no
+        // reconcile trigger and nothing metered.
+        (await OutboxRowsAsync(world, RunStateTransitionContract.OutboxTaskType)).ShouldBe(1);
+        (await OutboxRowsAsync(world, RunReconcileContract.OutboxTaskType)).ShouldBe(0);
+        (await CountAsync(world, "event_batch")).ShouldBe(0);
     }
 
     // ---------------------------------------------------------------------------------------------------------------
@@ -407,65 +426,28 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
 
         var runId = await RunRowSeeder.SeedRunAsync(_fixture, database, org);
 
+        // `created` is never persisted: the create transaction inserts the run `queued` and that edge has no caller, so
+        // the world starts in the state a report can move on.
+        await _fixture.ExecuteAsync(
+            database,
+            $"update public.run set state = 'queued' where id = '{runId:D}'");
+
         return new World(host, database, org, project, runId);
     }
-
-    /// <summary>
-    /// One planned execution for the run, pointing at the case and revision <see cref="RunRowSeeder"/> seeds (name
-    /// <c>probe</c>, path <c>a</c>): the report's bare-name testcase is the one hint that must resolve.
-    /// </summary>
-    private async Task SeedPlanAsync(World world)
-    {
-        var revision = await _fixture.ScalarAsync<Guid>(
-            world.Database,
-            $"select id from public.test_revision where org_id = '{world.Org:D}' and file_path = 'a'");
-
-        await _fixture.ExecuteAsync(
-            world.Database,
-            "insert into public.planned_execution "
-            + "(id, org_id, run_id, execution_key, case_revision_id, variant_hash, target_env, shard_id) values "
-            + $"('{Guid.CreateVersion7():D}', '{world.Org:D}', '{world.RunId:D}', '{ExecutionKey}', "
-            + $"'{revision:D}', 'sha256:{new string('b', 64)}', 'staging', 'shard-1')");
-    }
-
-    /// <summary>One <c>ready</c> <c>raw_report</c> artifact whose final object the store really holds.</summary>
-    private async Task<Guid> SeedArtifactAsync(World world, byte[] body)
-    {
-        var artifactId = Guid.CreateVersion7();
-        var key = ObjectKeyFor(world, artifactId);
-        var checksum = "sha256:" + Convert.ToHexStringLower(
-            System.Security.Cryptography.SHA256.HashData(body));
-
-        await _store.PutAsync(key, body);
-
-        await _fixture.ExecuteAsync(
-            world.Database,
-            "insert into public.artifact (id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, "
-            + "media_type, checksum, sensitivity, scan_state, state, bytes, failure_code) values "
-            + $"('{artifactId:D}', '{world.Org:D}', '{world.Project:D}', '{world.RunId:D}', '{ExecutionKey}', 1, "
-            + $"'{ArtifactKind.RawReport}', '{key}', '{XmlType}', '{checksum}', 'normal', 'pending', "
-            + $"'{ArtifactState.Ready}', {body.LongLength.ToString(CultureInfo.InvariantCulture)}, null)");
-
-        return artifactId;
-    }
-
-    /// <summary>Replaces the stored bytes of an artifact, the way a re-upload of the same coordinate would.</summary>
-    private async Task StoreAsync(World world, Guid artifactId, byte[] body) =>
-        await _store.PutAsync(ObjectKeyFor(world, artifactId), body);
-
-    /// <summary>The final key the artifact row mints, so a test writes and the handler reads the same object.</summary>
-    private static string ObjectKeyFor(World world, Guid artifactId) =>
-        $"org/{world.Org:D}/project/{world.Project:D}/run/{world.RunId:D}/attempt/{ExecutionKey}/1/{artifactId:D}";
 
     /// <summary>Moves the seeded run into one state, as the owner seam the reconciler's tests also use.</summary>
     private async Task SetRunStateAsync(World world, string sql) =>
         await _fixture.ExecuteAsync(world.Database, sql + $" where id = '{world.RunId:D}'");
 
-    /// <summary>Asserts a refusal left no event, attempt, slot or trigger behind in this tenant.</summary>
+    /// <summary>
+    /// Asserts a refusal left no event, attempt, slot, receipt or trigger behind in this tenant: the refusal's rollback
+    /// covers the batch receipt and its usage row too.
+    /// </summary>
     private async Task AssertNothingWrittenAsync(World world, Guid artifactId)
     {
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
         (await CountAsync(world, "case_attempt")).ShouldBe(0);
+        (await CountAsync(world, "event_batch")).ShouldBe(0);
         (await CountAsync(world, "outbox")).ShouldBe(0);
         (await CountAsync(world, "producer_slot")).ShouldBe(0);
     }
@@ -491,4 +473,10 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
             artifactId is null
                 ? $"select count(*) from public.{table} where org_id = '{world.Org:D}'"
                 : $"select count(*) from public.{table} where artifact_ids = array['{artifactId:D}'::uuid]");
+
+    /// <summary>Counts one task type's outbox rows; one parse commit writes more than one kind.</summary>
+    private Task<long> OutboxRowsAsync(World world, string taskType) =>
+        _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.outbox where org_id = '{world.Org:D}' and task_type = '{taskType}'");
 }
