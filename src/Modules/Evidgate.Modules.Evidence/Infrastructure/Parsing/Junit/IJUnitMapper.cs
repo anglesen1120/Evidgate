@@ -105,6 +105,12 @@ internal sealed record JUnitMapResult(
 /// <summary>The discrepancy vocabulary the mapping result and the comparison read share.</summary>
 internal static class JUnitDiscrepancies
 {
+    /// <summary>
+    /// The document was refused before it could be mapped. A refused row's own array is forced empty, so this code is
+    /// derived from the row's outcome rather than stored.
+    /// </summary>
+    public const string Malformed = "malformed";
+
     /// <summary>The report named a testcase the run planned no execution for; no event was emitted.</summary>
     public const string UnmappedCase = "unmapped_case";
 
@@ -116,6 +122,12 @@ internal static class JUnitDiscrepancies
 
     /// <summary>The declared <c>tests</c> counter differs from the testcases the document actually carries.</summary>
     public const string CountMismatch = "count_mismatch";
+
+    /// <summary>
+    /// A declared <c>failures</c>/<c>errors</c>/<c>skipped</c> counter differs from the observed cases. It is compared
+    /// only when none of the mapper's own codes shows that the cases miss part of the document.
+    /// </summary>
+    public const string StatusMismatch = "status_mismatch";
 }
 
 /// <summary>
