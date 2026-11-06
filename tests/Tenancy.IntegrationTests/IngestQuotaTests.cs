@@ -1,12 +1,12 @@
 // The events route's quota admission over the real host and a real PostgreSQL: one gate call per batch (never
-// per event), a block answered as 429 quota_exceeded carrying the gate's own Retry-After and writing nothing,
-// a committed batch that survives a later block, 50 racing batches that never pass the limit, a resend that
-// reserves nothing, the operator switch, and a foreign tenant's counter left untouched.
+// per event), a block answered as 429 quota_exceeded carrying the gate's own Retry-After and committing nothing
+// (the gate runs after the insert, which the refusal rolls back), a committed batch that survives a later block,
+// 50 racing batches that never pass the limit, a resend that reserves nothing, and a foreign tenant's counter
+// left untouched. The resend/concurrency and warning/rollover halves live in the two partial files beside this one.
 #pragma warning disable CA1861
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
-using System.Text;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -16,14 +16,18 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// The transport half of the quota rule: the ingest route asks <see cref="IQuotaGate"/> once for a whole batch,
-/// refuses the batch the period has no room for, and never charges a resend. The gate's own arithmetic is
-/// covered by <see cref="UsageQuotaGateTests"/>; this suite covers what the route does with its answer.
+/// with the rows its insert actually added as the quantity, refuses the batch the period has no room for, and
+/// never charges a resend. The gate's own arithmetic is covered by <see cref="UsageQuotaGateTests"/>; this suite
+/// covers what the route does with its answer.
 /// </summary>
 [Trait("Category", "Docker")]
 [Collection(ExclusiveTenancySuite.Name)]
-public sealed class IngestQuotaTests
+public sealed partial class IngestQuotaTests
 {
     private const decimal WarnRatio = 0.8m;
+
+    /// <summary>The outbox task type the gate enqueues when a counter crosses its warning line.</summary>
+    private const string WarningTask = "usage.quota.warn";
 
     private readonly PostgresTenancyFixture _fixture;
 
@@ -61,11 +65,12 @@ public sealed class IngestQuotaTests
     [Fact]
     public async Task IngestEvents_QuotaBlock_Returns429QuotaExceededWithRetryAfter()
     {
-        await using var world = await StartIngestAsync(running: false);
+        await using var world = await StartIngestAsync(runState: "queued");
         await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
 
         // One unit of room for a batch of two: the batch is refused as a whole, never partly admitted.
         await SeedAsync(counters, world, used: 9m, limit: 10m);
+        var before = (await ReadAsync(counters, world)).ShouldNotBeNull();
 
         var answer = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L));
 
@@ -82,11 +87,47 @@ public sealed class IngestQuotaTests
         // and the wait, nothing else.
         answer.Body.ToString().ShouldNotContain("/internal/operator");
 
-        // A refusal is complete before the batch writes anything, and it never touches the run.
+        // The gate runs after the insert, so the refusal rolls the whole batch back: no event, no batch row, the
+        // queued -> running transition undone, and the counter exactly as it was, refusal stamp included (the
+        // version does not move either).
         (await EventRowsAsync(world)).ShouldBe(0);
         (await BatchRowsAsync(world)).ShouldBe(0);
         (await RunStateAsync(world)).ShouldBe("queued");
-        (await ReadAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(9m);
+        // Nothing the batch enqueues survives either: no accepted-batch metering row, no reader trigger.
+        (await world.CountAsync("outbox", $"org_id = '{world.Org:D}'")).ShouldBe(0);
+        (await ReadAsync(counters, world)).ShouldBe(before);
+        before.Used.ShouldBe(9m);
+    }
+
+    [Fact]
+    public async Task IngestEvents_QuotaBlock_RefusesAStraddlingBatchWhole()
+    {
+        await using var world = await StartIngestAsync();
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+
+        // Two units of room for a batch of three, which would also cross the 80 % warning line: the batch is one
+        // refusal, so neither half of it commits and the counter keeps every column it had.
+        await SeedAsync(counters, world, used: 8m, limit: 10m);
+        var before = (await ReadAsync(counters, world)).ShouldNotBeNull();
+
+        var refused = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L), (Guid.CreateVersion7(), 3L));
+
+        refused.Status.ShouldBe(HttpStatusCode.TooManyRequests, refused.ErrorMessage);
+        refused.ErrorCode.ShouldBe("quota_exceeded");
+        RetryAfter(refused).ShouldBeGreaterThan(0);
+        (await ReadAsync(counters, world)).ShouldBe(before);
+        (await EventRowsAsync(world)).ShouldBe(0);
+        (await BatchRowsAsync(world)).ShouldBe(0);
+        (await WarningRowsAsync(world)).ShouldBe(0);
+        (await world.CountAsync("outbox", $"org_id = '{world.Org:D}'")).ShouldBe(0);
+
+        // The positive control: the two events that do fit are admitted, and they reach the limit exactly.
+        var fits = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L));
+
+        fits.Status.ShouldBe(HttpStatusCode.OK, fits.ErrorMessage);
+        fits.Body.GetProperty("accepted").GetInt32().ShouldBe(2);
+        (await ReadAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(10m);
+        (await EventRowsAsync(world)).ShouldBe(2);
     }
 
     [Fact]
@@ -130,37 +171,6 @@ public sealed class IngestQuotaTests
         (await ReadAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(2m);
     }
 
-    // ---------------------------------------------------------------- a resend reserves nothing
-
-    [Fact]
-    public async Task IngestEvents_ReplayedBatch_DoesNotChargeQuota()
-    {
-        var spy = new QuotaGateSpy();
-        await using var world = await StartIngestAsync(spy);
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
-        await SeedAsync(counters, world, used: 0m, limit: 10m);
-
-        var json = IngestQaRequests.Json(StepBatch(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L)));
-
-        var first = await IngestQaRequests.PostAsync(world.Client, world.RunId, new StringContent(json, Encoding.UTF8, "application/json"));
-        first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
-        first.Body.GetProperty("accepted").GetInt32().ShouldBe(2);
-        spy.Calls.ShouldBe(1);
-
-        var replay = await IngestQaRequests.PostAsync(world.Client, world.RunId, new StringContent(json, Encoding.UTF8, "application/json"));
-
-        // The resend is answered with duplicate acks and metered nothing, so it must not spend quota either:
-        // the batch is committed, the counter does not move and the gate is not asked a second time.
-        replay.Status.ShouldBe(HttpStatusCode.OK, replay.ErrorMessage);
-        replay.Body.GetProperty("accepted").GetInt32().ShouldBe(0);
-        replay.Body.GetProperty("duplicates").GetInt32().ShouldBe(2);
-        spy.Calls.ShouldBe(1);
-
-        (await ReadAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(2m);
-        (await EventRowsAsync(world)).ShouldBe(2);
-        (await world.CountAsync("outbox", $"org_id = '{world.Org:D}' and task_type = 'usage.batch_accepted'")).ShouldBe(1);
-    }
-
     // ---------------------------------------------------------------- racing the last unit (AC5)
 
     [Fact]
@@ -190,32 +200,6 @@ public sealed class IngestQuotaTests
         counter.Used.ShouldBeLessThanOrEqualTo(counter.Limit);
         (await EventRowsAsync(world)).ShouldBe((int)limit);
         (await BatchRowsAsync(world)).ShouldBe((int)limit);
-    }
-
-    // ---------------------------------------------------------------- operator switch
-
-    [Fact]
-    public async Task IngestEvents_QuotaDisabled_PassesThrough()
-    {
-        await using var world = await StartIngestAsync(configuration: new Dictionary<string, string?>(StringComparer.Ordinal)
-        {
-            ["EVIDGATE:Usage:QuotaGate:Enabled"] = "false",
-        });
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
-
-        // A scope with no room at all: only the switch can let the batch through.
-        await SeedAsync(counters, world, used: 1m, limit: 1m);
-        var before = (await ReadAsync(counters, world)).ShouldNotBeNull();
-
-        var answer = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L));
-
-        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
-        answer.Body.GetProperty("accepted").GetInt32().ShouldBe(2);
-
-        // The switched-off gate answers Ok without reading or writing a counter.
-        var after = (await ReadAsync(counters, world)).ShouldNotBeNull();
-        after.Used.ShouldBe(before.Used);
-        after.Version.ShouldBe(before.Version);
     }
 
     [Fact]
@@ -285,32 +269,43 @@ public sealed class IngestQuotaTests
         QuotaGateSpy? spy = null,
         IReadOnlyDictionary<string, string?>? configuration = null,
         Action<IServiceCollection>? services = null,
-        bool running = true)
+        string runState = "running")
     {
         Action<IServiceCollection>? extra = services;
         if (spy is not null)
         {
+            var testServices = extra;
             extra = collection =>
             {
-                var registration = collection.Last(descriptor => descriptor.ServiceType == typeof(IQuotaGate));
-                collection.Remove(registration);
-                collection.AddScoped<IQuotaGate>(provider => new SpyQuotaGate(
-                    (IQuotaGate)ActivatorUtilities.CreateInstance(provider, registration.ImplementationType!),
-                    spy));
+                testServices?.Invoke(collection);
+                ReplaceWith<IQuotaGate>(collection, inner => new SpyQuotaGate(inner, spy));
             };
         }
 
         var world = await IngestTestWorld.StartAsync(
             _fixture, IngestTestWorld.Writer(), planned: 1, configuration: configuration, services: extra);
 
-        // The racing batches of this suite contend on the counter (the unit under test) and not on the
-        // queued -> running transition, so a world that is not studying the transition starts running.
-        if (running)
-        {
-            await world.SetRunStateAsync("running");
-        }
+        // The batches of this suite contend on the counter (the unit under test) and not on the queued -> running
+        // transition, so the run starts in the state the case is about; a block rolls an applied transition back.
+        await world.SetRunStateAsync(runState);
 
         return world;
+    }
+
+    /// <summary>
+    /// Swaps the host's registration of <typeparamref name="TService"/> for a wrapper around the real one, resolved
+    /// from the same scope. The suite's seams (a counting gate, a synchronised run-scope read) all take this shape.
+    /// </summary>
+    private static void ReplaceWith<TService>(IServiceCollection services, Func<TService, TService> wrap)
+        where TService : class
+    {
+        var registration = services.Last(descriptor => descriptor.ServiceType == typeof(TService));
+        var implementation = registration.ImplementationType
+            ?? throw new InvalidOperationException($"the host's {typeof(TService).Name} registration must name its implementation");
+
+        services.Remove(registration);
+        services.AddScoped<TService>(provider =>
+            wrap((TService)ActivatorUtilities.CreateInstance(provider, implementation)));
     }
 
     private static Task<Guid> SeedAsync(UsageQuotaWorld counters, IngestTestWorld world, decimal used, decimal limit) =>
@@ -346,6 +341,19 @@ public sealed class IngestQuotaTests
 
     private static Task<long> BatchRowsAsync(IngestTestWorld world) =>
         world.CountAsync("event_batch", $"run_id = '{world.RunId:D}'");
+
+    /// <summary>The outbox rows of the period's warning task, the one thing a crossing enqueues.</summary>
+    private static Task<long> WarningRowsAsync(IngestTestWorld world) =>
+        world.CountAsync("outbox", $"org_id = '{world.Org:D}' and task_type = '{WarningTask}'");
+
+    /// <summary>A batch of fresh events, sequenced from <paramref name="firstSequence"/>.</summary>
+    private static object EventBatch(IngestTestWorld world, int firstSequence, int count) =>
+        IngestQaRequests.Batch([.. Enumerable.Range(firstSequence, count).Select(sequence =>
+            IngestQaRequests.Event(
+                Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence, type: "test.step", status: null))]);
+
+    private static Task<ApiAnswer> PostAsync(IngestTestWorld world, object body) =>
+        IngestQaRequests.PostEventsAsync(world.Client, world.RunId, body);
 
     private static Task<string?> RunStateAsync(IngestTestWorld world) =>
         world.ScalarAsync<string?>($"select state from public.run where id = '{world.RunId:D}'");

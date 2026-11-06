@@ -231,17 +231,6 @@ internal sealed class IngestEventBatchHandler(
         activity?.SetTag(EvidgateTelemetry.EventCountTag, events.Count);
         var orgId = scopes.Require().OrgId;
 
-        // (a2) Quota, one gate call per batch and never per event (ruling T53): the body is parsed and
-        // canonicalised, and the run row is not read yet, so the reservation is ordered before every lock the
-        // batch takes and a blocked batch never drives the queued -> running transition. The reservation lives
-        // in this request's tenant transaction, so a batch refused further down leaves no counter row behind.
-        if (await quota
-                .AdmitAsync(orgId, principal.ProjectScope, command.RunId, events, cancellationToken)
-                .ConfigureAwait(false) is { } quotaRefusal)
-        {
-            return Result.Failure<BatchAckResult>(quotaRefusal);
-        }
-
         // (b1) Lock order (04.1.1-T4, ruling T13 + the 05.3.1 lock-order rule; see the class doc): the first
         // accepted batch of a queued run moves it queued -> running through 05's IRunStateTransition, which
         // loads the run row FOR NO KEY UPDATE. The scope read at (c) takes the same row FOR SHARE, and two
@@ -567,6 +556,18 @@ internal sealed class IngestEventBatchHandler(
                         [new ErrorDetail($"/events/{index}/status", outcome.Reason ?? "invalid", index)])),
                 };
             }
+        }
+
+        // (g2) Quota, one gate call per batch and never per event (ruling T53), made last: the insert above has
+        // already answered how many units this batch adds, so the reservation charges exactly the rows that
+        // commit and two identical racing batches charge the batch once between them. Every step that can still
+        // refuse the batch runs before this, and a block returns a failure, so the tenant transaction rolls the
+        // inserted events back and the 429 commits no event.
+        if (await quota
+                .AdmitAsync(principal.ProjectScope, insertedIds.Count, cancellationToken)
+                .ConfigureAwait(false) is { } quotaRefusal)
+        {
+            return Result.Failure<BatchAckResult>(quotaRefusal);
         }
 
         // (h) The producer's high-water mark, one statement for every producer of the batch. Only newly

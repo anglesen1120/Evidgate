@@ -166,7 +166,7 @@ public sealed class UsageQuotaWarningTests
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);
         var (otherOrg, otherProject) = await world.AddOtherOrgAsync();
         await SeedAsync(world, used: Limit * WarnRatio);
-        await SeedAsync(world, used: 0m, project: otherProject, org: otherOrg);
+        await SeedAsync(world, used: Limit * WarnRatio - 1m, project: otherProject, org: otherOrg);
 
         var own = await world.CheckAsync(Request(world, 1m));
         var foreign = await world.CheckAsync(Request(world, 1m, project: otherProject), org: otherOrg);

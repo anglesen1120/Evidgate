@@ -7,10 +7,10 @@ namespace Evidgate.Modules.Ingestion.Application;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Ambient, not scoped.</b> Mediator resolves handlers from the root provider, so a scoped service would be
-/// a root singleton in production (one request's wait leaking into another) and a scope-validation failure in
-/// the hosts' tests. The seam therefore has the shape of the pipeline's ambient caller and tenant: a singleton
-/// whose slot is an <see cref="AsyncLocal{T}"/>, installed by the endpoint per request.
+/// <b>One slot per request.</b> The carrier is a singleton, so a plain field would let two concurrent requests
+/// read each other's wait: the slot is an <see cref="AsyncLocal{T}"/> the endpoint installs per request, and the
+/// handler's write lands in the box that slot captured. The wait cannot ride the handler's <c>Result</c>
+/// instead, because a failure's payload is the wire envelope and its details are the tenant-safe ones only.
 /// </para>
 /// <para>
 /// An <see cref="AsyncLocal{T}"/> write inside an awaited callee does not surface in the caller's execution

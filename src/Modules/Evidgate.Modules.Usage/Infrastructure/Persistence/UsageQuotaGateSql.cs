@@ -105,8 +105,10 @@ internal static class UsageQuotaGateSql
     /// server), so a reservation the same statement made is reported as a reservation, never as a refusal.
     /// <para>
     /// A scope that already carries the stamp writes nothing: the second half of the statement answers its
-    /// snapshot, so a repeated refusal never moves the row and cannot bump <c>version</c>. No row at all
-    /// means the counter holds room after all, or is gone.
+    /// snapshot, so a repeated refusal cannot bump <c>version</c>. The stamp itself is committed only when the
+    /// caller's transaction commits, so a caller that answers the refusal by rolling back (the ingest route's
+    /// blocked batch) discards it and the next refusal stamps the row again. No row at all means the counter
+    /// holds room after all, or is gone.
     /// </para>
     /// </summary>
     internal const string StampRefusal = """

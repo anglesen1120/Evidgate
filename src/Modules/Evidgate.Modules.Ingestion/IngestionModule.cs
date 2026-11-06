@@ -57,8 +57,7 @@ internal static class IngestionModule
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IngestionRateLimiter>();
 
-        // The events route's quota admission: the per-batch gate call, the ambient carrier of the block's
-        // Retry-After, and the shared read of the batch's events already on file.
+        // The events route's quota admission and the per-request carrier of the block's Retry-After.
         services.TryAddScoped<IngestQuotaAdmission>();
         services.TryAddSingleton<IngestQuotaVeto>();
 

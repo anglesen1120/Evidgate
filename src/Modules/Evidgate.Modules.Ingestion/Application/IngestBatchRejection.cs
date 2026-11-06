@@ -42,7 +42,7 @@ internal static partial class IngestBatchRejection
     /// <summary>The project and token exceeded their fixed-window burst budget, so the body was never read.</summary>
     public const string RateLimited = "rate_limited";
 
-    /// <summary>The project's billing-period quota is used up: the batch was refused before any write (429).</summary>
+    /// <summary>The project's billing-period quota is used up: the batch is refused and commits no event (429).</summary>
     public const string QuotaExceeded = "quota_exceeded";
 
     /// <summary>The batch's events were refused by the contract or the run's plan (422).</summary>

@@ -4,11 +4,9 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 namespace Evidgate.Modules.Ingestion.Application;
 
 /// <summary>
-/// The batch's own read of the events of one run that are already on file, in one statement. The quota
-/// admission asks it before it reserves, so a resend of a committed batch reserves nothing, and the insert's
-/// read-back asks it after, so a row this batch did not insert is called a duplicate only when the stored
-/// canonical payload matches. Both callers ask the same <c>(org_id, run_id, event_id)</c> question, so they
-/// share one statement instead of two copies that could drift.
+/// The batch's read of the events of one run that are already on file, in one statement. The insert's read-back
+/// asks it for the rows the insert skipped, so a skipped row is called a duplicate only when the stored
+/// canonical payload matches and is refused as a reused sequence otherwise.
 /// </summary>
 internal static class IngestEventReads
 {
