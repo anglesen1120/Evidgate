@@ -45,6 +45,9 @@ internal static class StatementIssueRules
     /// <summary>The period has not ended, so its usage can still arrive.</summary>
     internal const string ReasonPeriodOpen = "period_open";
 
+    /// <summary>The same refusal as a cost read names it: the month is still running, so its cost is not final.</summary>
+    internal const string ReasonOpenPeriod = "open_period";
+
     /// <summary>The period holds no ledger row at all.</summary>
     internal const string ReasonNoRows = "no_rows";
 
@@ -100,6 +103,10 @@ internal static class StatementIssueRules
     /// <summary>The refusal of a period that has not ended.</summary>
     internal static Error PeriodOpen() => Refuse("period", ReasonPeriodOpen,
         "the period has not ended, so usage that still arrives would fall outside its statement");
+
+    /// <summary>The refusal of a period that has not ended, as a read answers it: the month is still running.</summary>
+    internal static Error OpenPeriod() => Refuse("period", ReasonOpenPeriod,
+        "the period has not ended, so the cost of usage that still arrives would be reported as final");
 
     /// <summary>
     /// Applies the worksheet's rules to one request and returns the draft a statement would store. A period of

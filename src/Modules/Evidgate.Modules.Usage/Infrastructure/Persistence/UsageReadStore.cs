@@ -14,6 +14,12 @@ namespace Evidgate.Modules.Usage.Infrastructure.Persistence;
 /// </remarks>
 internal sealed class UsageReadStore(ITenantDb db)
 {
+    /// <summary>The <c>kind</c> of the cost rows the ledger answers.</summary>
+    internal const string LedgerKind = "ledger";
+
+    /// <summary>The <c>kind</c> of the cost row the healing gateway's attempts answer.</summary>
+    internal const string HealingKind = "healing";
+
     /// <summary>
     /// Reads one page of the org's ledger rows, oldest first. <paramref name="limit"/> is the page
     /// size and the caller asks for one row more than it returns, so "is there more?" needs no count.
@@ -121,7 +127,37 @@ internal sealed class UsageReadStore(ITenantDb db)
             UsageReadStoreSql.WorksheetLines,
             new { org_id = orgId, period, limit },
             cancellationToken);
+
+    /// <summary>
+    /// Reads the cost inputs of one closed period: the ledger's sum and row count per metric, and the healing
+    /// gateway's token sum and attempt count over the month's half-open UTC range.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope.</param>
+    /// <param name="period">The closed period, <c>YYYY-MM</c>.</param>
+    /// <param name="monthStart">The month's first instant, UTC.</param>
+    /// <param name="monthEnd">The next month's first instant, UTC.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal Task<IReadOnlyList<TenantCostRow>> ReadTenantCostAsync(
+        Guid orgId,
+        string period,
+        DateTimeOffset monthStart,
+        DateTimeOffset monthEnd,
+        CancellationToken cancellationToken) =>
+        db.QueryAsync<TenantCostRow>(
+            UsageReadStoreSql.TenantCost,
+            new { org_id = orgId, period, month_start = monthStart, month_end = monthEnd },
+            cancellationToken);
 }
+
+/// <summary>
+/// Dapper shape of one cost input: the ledger's sum for one metric, or the healing gateway's month.
+/// </summary>
+/// <param name="Kind">The side the row came from, <see cref="UsageReadStore.LedgerKind"/> or
+/// <see cref="UsageReadStore.HealingKind"/>.</param>
+/// <param name="Line">The metric's wire name, or <c>healing</c> for the gateway's row.</param>
+/// <param name="Quantity">The sum, or null when the side holds no row in the period.</param>
+/// <param name="RowCount">How many source rows the sum covers; zero says nothing was written.</param>
+internal sealed record TenantCostRow(string Kind, string Line, decimal? Quantity, long RowCount);
 
 /// <summary>Dapper shape of one <c>usage_ledger_entry</c> worksheet row, adjustment fields included.</summary>
 internal sealed record WorksheetLineRow(

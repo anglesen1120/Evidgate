@@ -1,9 +1,10 @@
 namespace Evidgate.Modules.Usage.Infrastructure.Persistence;
 
 /// <summary>
-/// The read SQL of the billing operator's two statements: one keyset page of
-/// <c>usage_ledger_entry</c>, and the period reconciliation of the ledger against
-/// <c>usage_rollup</c> plus the duplicate attempts recorded by the write path.
+/// The read SQL of the billing operator's reads: one keyset page of <c>usage_ledger_entry</c>, the period
+/// reconciliation of the ledger against <c>usage_rollup</c> plus the duplicate attempts recorded by the write path,
+/// and the two per-period documents a read assembles from the ledger — the invoice worksheet and the tenant's cost
+/// inputs.
 /// </summary>
 /// <remarks>
 /// Every statement carries the tenant twice — <c>org_id = @org_id</c> and the open scope's row
@@ -143,6 +144,32 @@ internal static class UsageReadStoreSql
            and period = @period
          order by metric, project_id nulls first, occurred_at, id
          limit @limit
+        """;
+
+    /// <summary>
+    /// The cost inputs of one closed period in one statement: the ledger's sum and row count per metric, and the
+    /// healing gateway's token sum and attempt count over the same month.
+    /// </summary>
+    /// <remarks>
+    /// A row count is returned beside each sum so the caller can tell "no producer wrote this" from a producer
+    /// whose rows net to zero. The two sides filter by different columns on purpose: a ledger row carries its
+    /// billing <c>period</c>, while a healing attempt carries only when it happened, so its window is the
+    /// half-open range of the month in UTC and the <c>(org_id, project_id, created_at)</c> index serves it. Both
+    /// sides name <c>org_id</c> as well as the open scope's row security, so no argument widens the tenant.
+    /// </remarks>
+    internal const string TenantCost =
+        """
+        select 'ledger'::text as kind, metric as line, sum(quantity) as quantity, count(*) as row_count
+          from public.usage_ledger_entry
+         where org_id = @org_id
+           and period = @period
+         group by metric
+        union all
+        select 'healing'::text, 'healing'::text, sum(tokens)::numeric, count(*)
+          from public.healing_llm_call
+         where org_id = @org_id
+           and created_at >= @month_start
+           and created_at < @month_end
         """;
 
     /// <summary>

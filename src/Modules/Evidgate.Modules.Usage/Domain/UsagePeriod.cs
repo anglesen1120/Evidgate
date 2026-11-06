@@ -41,6 +41,40 @@ internal static class UsagePeriod
         period is { } text && IsWellFormed(text) && text[0] == '2';
 
     /// <summary>
+    /// The half-open UTC range of one period's month: its first instant and the next month's, so a table that
+    /// records when something happened is narrowed by an indexed range instead of a parsed month.
+    /// </summary>
+    /// <param name="period">A period <see cref="IsWellFormed"/> accepted.</param>
+    /// <param name="start">The month's first instant, UTC.</param>
+    /// <param name="end">The next month's first instant, UTC; the range excludes it.</param>
+    /// <returns>
+    /// False for the two months no <see cref="DateTimeOffset"/> range covers — year <c>0000</c> and <c>9999-12</c>,
+    /// whose next month does not exist — so a caller refuses them instead of throwing.
+    /// </returns>
+    internal static bool TryMonthRange(string period, out DateTimeOffset start, out DateTimeOffset end)
+    {
+        start = default;
+        end = default;
+
+        if (!IsWellFormed(period))
+        {
+            return false;
+        }
+
+        var year = int.Parse(period.AsSpan(0, 4), NumberStyles.None, CultureInfo.InvariantCulture);
+        var month = int.Parse(period.AsSpan(5, 2), NumberStyles.None, CultureInfo.InvariantCulture);
+        if (year < DateTimeOffset.MinValue.Year || (year == DateTimeOffset.MaxValue.Year && month == 12))
+        {
+            return false;
+        }
+
+        start = new DateTimeOffset(year, month, 1, 0, 0, 0, TimeSpan.Zero);
+        end = start.AddMonths(1);
+
+        return true;
+    }
+
+    /// <summary>
     /// The wait a blocked caller is told: the next month starts the fresh counter that makes the same call fit again.
     /// At least one second, so a caller never reads <c>Retry-After: 0</c> as "retry now".
     /// </summary>
