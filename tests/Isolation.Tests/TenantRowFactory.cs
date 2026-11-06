@@ -260,6 +260,34 @@ internal sealed class TenantRowFactory
     }
 
     /// <summary>
+    /// Creates one more row of a parent table for <paramref name="org"/> without taking it from, or leaving it
+    /// in, the factory's cache: a corrupt row needs a parent the valid row does not name, and the cache must
+    /// keep meaning "the valid row".
+    /// </summary>
+    private async Task<GeneratedRow> CreateBesideCacheAsync(string table, Guid org, CancellationToken cancellationToken)
+    {
+        var key = (Table: table, Org: org);
+        var hadCached = _created.TryGetValue(key, out var cached);
+        _created.Remove(key);
+
+        try
+        {
+            return await CreateAsync(table, org, forcedId: null, cancellationToken);
+        }
+        finally
+        {
+            if (hadCached)
+            {
+                _created[key] = cached!;
+            }
+            else
+            {
+                _created.Remove(key);
+            }
+        }
+    }
+
+    /// <summary>
     /// Resolves every value of one row: foreign-key columns from
     /// <paramref name="tenantParentOrg"/>'s parent rows, the row's own
     /// <c>org_id</c> from <paramref name="org"/>, and the remaining NOT NULL,
@@ -415,6 +443,30 @@ internal sealed class TenantRowFactory
             values["case_id"] = ownCase.Values[TenantFkScan.TenantKeyColumn];
         }
 
+        // raw_report (0078) names a parser release in the append-only report_parser catalogue, which the app
+        // role may read but never write (0075), so a generated pair would have to be a release the migration
+        // seeded. `unsupported` is the outcome whose row needs no parser at all: the pair stays null and the
+        // refusal carries the empty counters and discrepancy list the factory already produces.
+        if (string.Equals(table, "public.raw_report", StringComparison.Ordinal))
+        {
+            values["outcome"] = "unsupported";
+            values["reason"] = "no_parser";
+            values["producer_kind"] = "pytest-junitxml";
+        }
+
+        // raw_report's (org_id, artifact_id, parser_id, parser_version) key is a partial unique index, so the
+        // duplicate repair below (non-partial keys only) cannot see it: a corrupt row reusing the valid row's
+        // artifact would be answered with 23505 before the composite key under test. A second artifact of the
+        // row's own org keeps that key distinct; when the artifact foreign key IS the corruption, its parent is
+        // the value the suite asserts on and stays.
+        if (corruptedForeignKey is not null
+            && string.Equals(table, "public.raw_report", StringComparison.Ordinal)
+            && !string.Equals(corruptedForeignKey, "raw_report_artifact_fk", StringComparison.Ordinal))
+        {
+            var ownArtifact = await CreateBesideCacheAsync("public.artifact", org, cancellationToken);
+            values["artifact_id"] = ownArtifact.Values[TenantFkScan.TenantKeyColumn];
+        }
+
         foreach (var column in _schema.ColumnsOf(table))
         {
             if (values.ContainsKey(column.Name) || !column.NotNull || column.HasDefault)
@@ -489,29 +541,9 @@ internal sealed class TenantRowFactory
                 var moved = false;
                 foreach (var replacement in candidates)
                 {
-                    // The valid row's own parent cannot be reused: its key is exactly what duplicates. Drop
-                    // the cached row for the length of one create so the generator inserts a second parent
-                    // of the same org, then put the cache back — the factory's memory must keep meaning
-                    // "the valid row".
-                    var hadCachedParent = _created.TryGetValue((replacement.PrincipalTable, org), out var validParent);
-                    _created.Remove((replacement.PrincipalTable, org));
-
-                    GeneratedRow parent;
-                    try
-                    {
-                        parent = await CreateAsync(replacement.PrincipalTable, org, forcedId: null, cancellationToken);
-                    }
-                    finally
-                    {
-                        if (hadCachedParent)
-                        {
-                            _created[(replacement.PrincipalTable, org)] = validParent!;
-                        }
-                        else
-                        {
-                            _created.Remove((replacement.PrincipalTable, org));
-                        }
-                    }
+                    // The valid row's own parent cannot be reused: its key is exactly what duplicates, so a
+                    // second parent of the same org is created beside the cached one.
+                    var parent = await CreateBesideCacheAsync(replacement.PrincipalTable, org, cancellationToken);
 
                     for (var index = 0; index < replacement.Columns.Length; index++)
                     {
