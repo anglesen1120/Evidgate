@@ -6,8 +6,8 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Persistence;
 /// </summary>
 /// <remarks>
 /// <c>org_id</c> is left to row level security (forced on both tables), so the run and report predicates are the only
-/// extra filters. The case page names the report's synthetic producer id instead of the run's events, so a second
-/// report of the same run contributes no row. The page groups by <c>execution_key</c> and pages on its smallest
+/// extra filters. The case page names the artifact-scoped synthetic producer id instead of the run's events, so
+/// another artifact of the same run contributes no row. The page groups by <c>execution_key</c> and pages on its smallest
 /// sequence, because the contract counts the events of a case rather than assuming exactly one.
 /// </remarks>
 internal static class ReportComparisonSql

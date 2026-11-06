@@ -138,7 +138,7 @@ public sealed partial class ReportComparisonTests
             ("declared_tests", OrNull(declaredTests)),
             ("declared_failures", OrNull(declaredFailures)),
             ("observed_tests", OrNull(observedTests ?? seeded.Length)),
-            ("observed_failures", OrNull(observedFailures)),
+            ("observed_failures", OrNull(observedFailures ?? 0)),
             ("discrepancies", discrepancies))).ShouldBe(1);
         foreach (var item in seeded)
         {

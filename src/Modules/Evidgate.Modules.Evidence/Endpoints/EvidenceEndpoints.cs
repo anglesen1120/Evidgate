@@ -308,7 +308,7 @@ public static class EvidenceEndpoints
 
         // A sign is allowed so that `-1` reads as the integer it is and takes the range answer below, not the
         // malformed one; the canonical spelling check then refuses `+5` and `01`, whose value alone would pass.
-        if (!int.TryParse(raw, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
+        if (!long.TryParse(raw, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
             || !string.Equals(parsed.ToString(CultureInfo.InvariantCulture), raw, StringComparison.Ordinal))
         {
             return Error.BadRequest(
@@ -316,6 +316,7 @@ public static class EvidenceEndpoints
                 [new ErrorDetail("limit", "malformed")]);
         }
 
+        // Read as a long so a canonical integer too big for an int is a range error, not a malformed one.
         if (parsed < 1 || parsed > MaxLimit)
         {
             return Error.Invalid(
@@ -323,7 +324,7 @@ public static class EvidenceEndpoints
                 [new ErrorDetail("limit", "out_of_range")]);
         }
 
-        limit = parsed;
+        limit = (int)parsed;
 
         return null;
     }

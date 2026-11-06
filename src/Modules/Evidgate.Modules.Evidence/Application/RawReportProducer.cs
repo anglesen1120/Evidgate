@@ -4,8 +4,8 @@ namespace Evidgate.Modules.Evidence.Application;
 
 /// <summary>
 /// The synthetic producer identity a raw report's events are written under. The artifact id makes it unique per
-/// report, so one report's events never collide with another's sequence, and the comparison read can select exactly
-/// the events its own parse wrote.
+/// report artifact, so one artifact's events never collide with another's sequence, and the comparison read can select
+/// the events parsed from that artifact (two parser releases of one artifact share them).
 /// </summary>
 internal static class RawReportProducer
 {

@@ -33,6 +33,11 @@ public sealed partial class ReportComparisonTests
         foreignAnswer.ErrorCode.ShouldBe("not_found");
         foreignAnswer.ErrorCode.ShouldBe(unknownAnswer.ErrorCode);
         foreignAnswer.ErrorMessage.ShouldBe(unknownAnswer.ErrorMessage);
+
+        // Naming the foreign report under its own run leaves only row level security to hide it.
+        var underOwnRun = await GetAsync(world, otherRunId, foreign.Id);
+        underOwnRun.Status.ShouldBe(HttpStatusCode.NotFound, underOwnRun.ErrorMessage);
+        underOwnRun.ErrorMessage.ShouldBe(unknownAnswer.ErrorMessage);
     }
 
     /// <summary>AC: a report that exists but belongs to another run of the same org is <c>not_found</c> for this route.</summary>
