@@ -282,6 +282,7 @@ public sealed partial class EvidenceRawReportParseTests
                 services.GetRequiredService<IServiceScopeFactory>(),
                 services.GetRequiredService<IOutboxWriter>(),
                 services.GetRequiredService<IAuditTrail>(),
+                services.GetRequiredService<TimeProvider>(),
                 NullLogger<ParseRawReportHandler>.Instance)
             .ExecuteAsync(new ParseRawReportPayload(world.RunId, artifactId, ProducerKind), world.Org, Token);
     }
