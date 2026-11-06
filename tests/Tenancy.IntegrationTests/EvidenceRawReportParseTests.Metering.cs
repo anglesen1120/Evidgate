@@ -263,7 +263,7 @@ public sealed partial class EvidenceRawReportParseTests
         (await RunStateAsync(world)).ShouldBe("complete");
         (await RunVersionAsync(world)).ShouldBe(version);
         (await OutboxRowsAsync(world, UsageTask)).ShouldBe(0);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 0);
     }
 
     [Fact]
@@ -283,7 +283,7 @@ public sealed partial class EvidenceRawReportParseTests
 
         outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
         (await RunStateAsync(world)).ShouldBe("queued");
-        await AssertNothingWrittenAsync(world, foreignArtifact);
+        await AssertNothingWrittenAsync(world, foreignArtifact, 0);
         (await CountAsync(other, "event", foreignArtifact)).ShouldBe(0);
         (await CountAsync(other, "event_batch")).ShouldBe(0);
         (await CountAsync(other, "outbox")).ShouldBe(0);
@@ -314,7 +314,7 @@ public sealed partial class EvidenceRawReportParseTests
         (await CountAsync(world, "event_batch")).ShouldBe(0);
         (await OutboxRowsAsync(world, UsageTask)).ShouldBe(0);
         (await RunStateAsync(world)).ShouldBe("queued");
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 1);
     }
 
     [Fact]

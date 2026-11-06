@@ -13,7 +13,7 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// The <c>raw_report</c> half of the <c>raw_report_parse</c> handler, against the shared migrated database: what each
 /// outcome stores about the report itself, and when it stores nothing. A parsed report's row commits with its events,
-/// a refused report's row commits alone, and a skipped attempt leaves no row at all.
+/// a refused report's row commits with the one reconcile trigger it leaves, and a skipped attempt leaves no row at all.
 /// </summary>
 /// <remarks>
 /// Rows are read back over the harness's owner connection, the way the events are read: the row is what a reviewer sees,
@@ -305,7 +305,7 @@ public sealed partial class EvidenceRawReportParseTests
 
         // The row is the transaction's last insert, so a fault anywhere before it — or at it — commits nothing.
         (await RawReportCountAsync(world, artifactId)).ShouldBe(0);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 0);
     }
 
     [Fact]
@@ -341,7 +341,7 @@ public sealed partial class EvidenceRawReportParseTests
         outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
         outcome.Reason.ShouldBe("foreign_run");
         (await RawReportCountAsync(world, artifactId)).ShouldBe(0);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 0);
     }
 
     [Fact]
@@ -358,7 +358,7 @@ public sealed partial class EvidenceRawReportParseTests
         outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
         outcome.Reason.ShouldBe(RunAdmissionPolicy.RunClosed);
         (await RawReportCountAsync(world, artifactId)).ShouldBe(0);
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 0);
     }
 
     [Fact]
@@ -411,7 +411,7 @@ public sealed partial class EvidenceRawReportParseTests
         Number(row, "observed_skipped").ShouldBe(0);
         Discrepancies(row).ShouldBeEmpty();
 
-        await AssertNothingWrittenAsync(world, artifactId);
+        await AssertNothingWrittenAsync(world, artifactId, 1);
     }
 
     /// <summary>A registry row whose parser release has no loaded mapper, under a kind of its own.</summary>
