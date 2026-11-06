@@ -31,6 +31,9 @@
          with the type the host serves rather than with a test-local copy of its shape. -->
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Policy.Contracts\Evidgate.Modules.Policy.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Ingestion.Contracts\Evidgate.Modules.Ingestion.Contracts.csproj" />
+    <!-- The usage summary's wire DTOs are the Usage module's own records, so its spec schema is compared with the
+         type the host serves rather than with a test-local copy of its shape. -->
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Usage.Contracts\Evidgate.Modules.Usage.Contracts.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- The anonymous JSON probe the response-vs-spec suite POSTs to: a bad body must still answer the 00 §9.2 envelope. -->

@@ -1320,6 +1320,7 @@
         "dependencies": {
           "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
           "Evidgate.Modules.Tenancy.Contracts": "[1.0.0, )",
           "Evidgate.Modules.Usage.Contracts": "[1.0.0, )",
