@@ -765,6 +765,10 @@ internal static class RouteRequests
         // The run's decision: the seeded run has no evaluation row, so the recipe is the pending body — clean 200, and
         // the route needs no verdict to be exercisable.
         Add("GET", "/v1/runs/{r}/decision", ctx => new(HttpMethod.Get, $"/v1/runs/{ctx.RunId}/decision"));
+        // The report comparison: the seeded run has no raw_report row and no served route creates one, so the report
+        // id is a fresh one and the route answers 404 not_found — the matrix only reads the authorization outcome.
+        Add("GET", "/v1/runs/{r}/reports/{report_id}/comparison", ctx => new(HttpMethod.Get,
+            $"/v1/runs/{ctx.RunId}/reports/{Guid.CreateVersion7()}/comparison"));
 
         // The release create/read pair. The create recipe is the closed body of `release-create`
         // (`name`, optional `state`, and one `components` entry naming the seeded environment revision) with the
