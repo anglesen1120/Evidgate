@@ -191,8 +191,8 @@ public sealed class CompositeFkTests : HarnessTest
                     + $"({error.MessageText}) — row level security passed on the seeding path (the tenant setting was org {OrgB} "
                     + "for the app role, the owner backfill policy on the owner path of an owner-provisioned table), "
                     + "so this rejection can only be the foreign key");
-                error.ConstraintName.ShouldBe(
-                    tenantParent.Name,
+                error.ConstraintName.ShouldBeOneOf(
+                    ExpectedConstraints(table, tenantParent.Name),
                     $"{table}: the rejection must come from the composite foreign key '{tenantParent.Name}' "
                     + $"({string.Join(", ", tenantParent.Columns)} → {tenantParent.PrincipalTable} "
                     + $"({string.Join(", ", tenantParent.PrincipalColumns)})), not from '{error.ConstraintName}'");
@@ -213,6 +213,18 @@ public sealed class CompositeFkTests : HarnessTest
             RlsExceptionList.PathInRepo,
             string.Join(", ", scan.Excluded.Select(entry => $"{entry.Table} ({entry.Kind})")));
     }
+
+    /// <summary>
+    /// The constraint names a corrupt row's rejection may carry. <c>raw_report</c> names its run twice — the run
+    /// foreign key and the <c>(org_id, artifact_id, run_id)</c> pairing — so a row whose run is moved to the other
+    /// org breaks both references, and PostgreSQL answers with whichever check it reaches first. A table with one
+    /// foreign key to the moved parent has exactly one expected name.
+    /// </summary>
+    private static string[] ExpectedConstraints(string table, string corrupted) =>
+        string.Equals(table, "public.raw_report", StringComparison.Ordinal)
+            && string.Equals(corrupted, "raw_report_run_fk", StringComparison.Ordinal)
+            ? ["raw_report_run_fk", "raw_report_artifact_fk"]
+            : [corrupted];
 
     /// <summary>
     /// The connection one table's generated rows run on: <c>evidgate_app</c> for every tenant table whose

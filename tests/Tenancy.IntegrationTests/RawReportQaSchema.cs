@@ -33,7 +33,7 @@ public sealed partial class EvidenceRawReportParseTests
     }
 
     [Fact]
-    public async Task RawReport_AppInsertWithForeignOrgRun_IsRefusedByTheRunForeignKey()
+    public async Task RawReport_AppInsertWithForeignOrgRun_IsRefusedByACompositeKey()
     {
         var world = await StartAsync();
         await using var _ = world;
@@ -47,7 +47,9 @@ public sealed partial class EvidenceRawReportParseTests
                 QaReportInsertSql,
                 QaReportParameters(world, artifact, run: foreignRun));
             error.SqlState.ShouldBe(PostgresErrorCodes.ForeignKeyViolation);
-            error.ConstraintName.ShouldBe("raw_report_run_fk");
+            // The artifact belongs to this org's run, so the foreign run breaks the run key and the artifact
+            // pairing both; PostgreSQL answers with whichever check it reaches first.
+            error.ConstraintName.ShouldBeOneOf("raw_report_run_fk", "raw_report_artifact_fk");
         }
 
         await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))

@@ -29,6 +29,12 @@
 -- `raw_report_parser_visible` trigger answers that case, reading the catalogue as the caller so row level security
 -- (which hides the foreign row from the tenant, not from the owner) and the explicit org predicate agree.
 --
+-- RUN PAIRING: a report names both its run and its artifact, and the artifact itself belongs to a run. Referencing
+-- the artifact through `(org_id, id)` alone would accept a row naming run A and an artifact of run B of the same
+-- org, and the comparison read would attribute the report to a run that never produced it. The reference therefore
+-- names the pair `(org_id, id, run_id)`, which needs a key of its own on the large, existing artifact relation:
+-- `artifact_org_id_run_key (org_id, id, run_id)`.
+--
 -- IMMUTABILITY: for every role. UPDATE and DELETE raise 23514 `raw_report_immutable` from a BEFORE trigger, and the
 -- app role's grants leave it no UPDATE/DELETE/TRUNCATE to attempt (0066/0074 precedent). The trigger is the only
 -- guard the owner role meets; it is also why a row's outcome can never be rewritten after the fact.
@@ -37,13 +43,32 @@
 -- applies to the migration role too. `evidgate_operator` keeps its default SELECT with no operator policy (inert
 -- until 02.8.1's grant-gated form); the scheduler role holds nothing.
 --
--- LOCKS: a catalogue write on a new relation; `lock_timeout` bounds the DDL's wait. Additive, applies before the
--- handler that writes it. No down migration: dropping the table would lose which parser release judged stored
--- evidence.
+-- LOCKS: a catalogue write on the new relation, plus the artifact pairing key, whose ALTER builds its index over
+-- the whole existing table under the ACCESS EXCLUSIVE lock it acquires, so concurrent readers and writers of
+-- `artifact` wait for the build; `lock_timeout` bounds only the wait to acquire the lock, never the hold. Additive,
+-- applies before the handler that writes it. No down migration: dropping the table would lose which parser release
+-- judged stored evidence.
 --
 -- Idempotent in the shape the README's file contract allows.
 
 set local lock_timeout = '5s';
+
+-- The target of the artifact pairing reference below. PostgreSQL matches a foreign key onto a unique key of the
+-- principal, and `artifact_org_id_key` stops at (org_id, id), so the run half needs its own key.
+do $artifact_key$
+begin
+  if not exists (
+    select 1
+      from pg_catalog.pg_constraint c
+     where c.conname = 'artifact_org_id_run_key'
+       and c.conrelid = 'public.artifact'::regclass
+       and c.contype = 'u')
+  then
+    alter table public.artifact
+      add constraint artifact_org_id_run_key unique (org_id, id, run_id);
+  end if;
+end
+$artifact_key$;
 
 create table if not exists public.raw_report (
   id uuid not null,
@@ -70,7 +95,8 @@ create table if not exists public.raw_report (
   constraint raw_report_pkey primary key (id),
   constraint raw_report_org_id_key unique (org_id, id),
   constraint raw_report_run_fk foreign key (org_id, run_id) references public.run (org_id, id),
-  constraint raw_report_artifact_fk foreign key (org_id, artifact_id) references public.artifact (org_id, id),
+  constraint raw_report_artifact_fk foreign key (org_id, artifact_id, run_id)
+    references public.artifact (org_id, id, run_id),
   constraint raw_report_parser_fk foreign key (parser_id, parser_version)
     references public.report_parser (parser_id, version),
   constraint raw_report_outcome_check check (outcome in ('mapped', 'partial', 'malformed', 'unsupported')),
@@ -125,7 +151,8 @@ create unique index if not exists raw_report_artifact_kind_key
 -- The comparison read lists one run's reports (P4), and the referencing side of the composite run FK.
 create index if not exists raw_report_run_idx on public.raw_report (org_id, run_id, id);
 
--- The referencing side of the composite artifact FK (the unique indexes above are partial, so they cannot serve it).
+-- The referencing side of the composite artifact FK: the partial keys above stop at (org_id, artifact_id) and omit
+-- run_id, while this non-partial index leads with the same pair, which the three-column check uses as its prefix.
 create index if not exists raw_report_artifact_idx on public.raw_report (org_id, artifact_id);
 
 create or replace function evidgate.raw_report_immutable() returns trigger

@@ -144,25 +144,74 @@ public sealed partial class RawReportSchemaTests
         var other = await SeedTenantAsync(database);
         var owner = _fixture.OwnerConnectionString(database);
 
-        (string Constraint, ReportRow Row)[] refused =
+        (string[] Constraints, ReportRow Row)[] refused =
         [
-            ("raw_report_run_fk", Baseline(own) with { Org = other.Org, Run = own.Run, Artifact = other.Artifact }),
-            ("raw_report_run_fk", Baseline(own) with { Run = other.Run }),
-            ("raw_report_run_fk", Baseline(own) with { Run = Guid.CreateVersion7() }),
-            ("raw_report_artifact_fk", Baseline(own) with { Org = other.Org, Run = other.Run, Artifact = own.Artifact }),
-            ("raw_report_artifact_fk", Baseline(own) with { Artifact = Guid.CreateVersion7() }),
+            // Another org's run also breaks the artifact pairing, because the pairing names the run; either
+            // composite key can answer first.
+            (["raw_report_run_fk", "raw_report_artifact_fk"],
+                Baseline(own) with { Org = other.Org, Run = own.Run, Artifact = other.Artifact }),
+            (["raw_report_run_fk", "raw_report_artifact_fk"], Baseline(own) with { Run = other.Run }),
+            (["raw_report_run_fk", "raw_report_artifact_fk"], Baseline(own) with { Run = Guid.CreateVersion7() }),
+            // An artifact of another org, or none at all, is the pairing key's own refusal whatever the run.
+            (["raw_report_artifact_fk"],
+                Baseline(own) with { Org = other.Org, Run = other.Run, Artifact = own.Artifact }),
+            (["raw_report_artifact_fk"], Baseline(own) with { Artifact = Guid.CreateVersion7() }),
         ];
 
-        foreach (var (constraint, refusedRow) in refused)
+        foreach (var (constraints, refusedRow) in refused)
         {
             var error = await RefusedAsync(owner, null, refusedRow);
-            error.SqlState.ShouldBe(PostgresErrorCodes.ForeignKeyViolation, constraint);
-            error.ConstraintName.ShouldBe(constraint);
+            error.SqlState.ShouldBe(PostgresErrorCodes.ForeignKeyViolation, string.Join(", ", constraints));
+            error.ConstraintName.ShouldBeOneOf(
+                constraints,
+                $"a row naming another org's run or artifact must be refused by a composite tenant key "
+                + $"({string.Join(" or ", constraints)}), not by '{error.ConstraintName}'");
         }
+
+        // The run column keeps its own foreign key even though the artifact pairing names the run as well.
+        (await _fixture.ScalarAsync<bool>(
+            database,
+            "select exists (select 1 from pg_catalog.pg_constraint "
+            + "where conname = 'raw_report_run_fk' and conrelid = 'public.raw_report'::regclass and contype = 'f')"))
+            .ShouldBeTrue("raw_report_run_fk is the foreign key on the run column itself");
 
         // Positive control: the same row shape, corrected to this org's own run and artifact.
         (await InsertAsync(owner, null, Baseline(own))).ShouldBe(1);
         (await RowsAsync(database)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task RawReport_RunAndArtifactOfDifferentRuns_AreRefusedByThePairingKey()
+    {
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var tenant = await SeedTenantAsync(database);
+        var otherRun = await RunRowSeeder.SeedRunAsync(_fixture, database, tenant.Org);
+        var artifactOfOtherRun = await SeedArtifactAsync(database, tenant.Org, tenant.Project, otherRun);
+        var artifactOfOwnRun = await NewArtifactAsync(database, tenant);
+        var owner = _fixture.OwnerConnectionString(database);
+        var app = _fixture.AppConnectionString(database);
+
+        (await _fixture.ScalarAsync<bool>(
+            database,
+            "select exists (select 1 from pg_catalog.pg_constraint "
+            + "where conname = 'artifact_org_id_run_key' and conrelid = 'public.artifact'::regclass and contype = 'u')"))
+            .ShouldBeTrue("artifact_org_id_run_key is the (org_id, id, run_id) target the artifact reference needs");
+
+        // Positive controls: a report pairs its own run with an artifact of that run, on the owner and on the
+        // application role (whose row level security check passes on an own-org row, so only a reference can refuse).
+        (await InsertAsync(owner, null, Baseline(tenant) with { Artifact = artifactOfOwnRun })).ShouldBe(1);
+        (await InsertAsync(app, tenant.Org, Baseline(tenant))).ShouldBe(1);
+
+        // One org, one run, and an artifact of the other run: both halves exist and belong to this org, so only
+        // the pairing can refuse the row. Both roles answer the same way.
+        foreach (var (connection, org, role) in new[] { (owner, (Guid?)null, "owner"), (app, tenant.Org, "app role") })
+        {
+            var error = await RefusedAsync(connection, org, Baseline(tenant) with { Artifact = artifactOfOtherRun });
+            error.SqlState.ShouldBe(PostgresErrorCodes.ForeignKeyViolation, role);
+            error.ConstraintName.ShouldBe("raw_report_artifact_fk", role);
+        }
+
+        (await RowsAsync(database)).ShouldBe(2);
     }
 
     /// <summary>An organisation with one project, one committed run and one <c>ready</c> raw-report artifact.</summary>
