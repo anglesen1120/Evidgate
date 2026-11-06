@@ -47,6 +47,11 @@ internal sealed class QuotaGateOptions
 /// carrying anything: a caller that must decide before it parses asks that one, and never treats Ok as an admission.
 /// </para>
 /// <para>
+/// A refusal names the wait until the next period, measured from the database's transaction clock — the clock that
+/// named the period — so a host whose clock runs ahead of the database cannot shorten it to a second of a month the
+/// database still has open.
+/// </para>
+/// <para>
 /// A month starts with no counter, so the gate carries each scope's previous month's limit and warning line into it
 /// before answering, and only the scopes that need it: a configured limit covers every later month instead of lapsing
 /// at the rollover. The carry runs before any counter is locked, and it creates every missing counter of the call in
@@ -59,8 +64,7 @@ internal sealed class QuotaGate(
     ITenantScopeAccessor scopes,
     QuotaCounterStore store,
     IOutboxWriter outbox,
-    IOptions<QuotaGateOptions> options,
-    TimeProvider time) : IQuotaGate
+    IOptions<QuotaGateOptions> options) : IQuotaGate
 {
     /// <inheritdoc />
     public Task<string> CurrentPeriodAsync(CancellationToken cancellationToken) =>
@@ -237,7 +241,7 @@ internal sealed class QuotaGate(
                 QuotaDecision.Block,
                 refusing.Used,
                 refusing.QuotaLimit,
-                UsagePeriod.RetryUntilNextPeriod(request.Period, time.GetUtcNow()),
+                UsagePeriod.RetryUntilNextPeriod(request.Period, refusing.DatabaseNow),
                 RaisePath(orgId),
                 QuotaScopeKeys.KindOf(refusing.ScopeKey));
         }

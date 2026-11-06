@@ -21,7 +21,12 @@ public sealed partial class EvidenceRawReportQuotaTests
     public async Task A_Deferred_Report_With_No_Room_Is_Refused_Before_Its_Bytes_Are_Fetched()
     {
         var storage = new ReportStorageSpy();
-        var world = await StartAsync(services => ReplaceObjectStorage(services, inner => storage.Wrap(inner)));
+        var gate = new ReportPreCheckGate();
+        var world = await StartAsync(services =>
+        {
+            ReplaceObjectStorage(services, inner => storage.Wrap(inner));
+            ReplaceQuotaGate(services, inner => gate.Wrap(inner));
+        });
         await using var _ = world;
         await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
         await SeedPlanAsync(world);
@@ -47,6 +52,8 @@ public sealed partial class EvidenceRawReportQuotaTests
         request.IncludeTenantScope.ShouldBeTrue();
 
         storage.Gets.ShouldBe(0, "the counter's answer is known before the fetch, so no object is read");
+        gate.Peeks.ShouldBe(1, "the deferred report is the one the read scope asks about");
+        gate.Checks.ShouldBe(0, "a report stopped before the fetch never reaches the transactional gate");
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
         (await CountAsync(world, "event_batch")).ShouldBe(0);
         (await CountRawReportsAsync(world, artifactId)).ShouldBe(0);
@@ -199,8 +206,9 @@ public sealed partial class EvidenceRawReportQuotaTests
     /// </summary>
     /// <param name="world">The world the report belongs to.</param>
     /// <param name="artifactId">The report artifact the deferred task parses.</param>
+    /// <param name="queue">The queue the task row names, so a case that polls a worker claims only its own rows.</param>
     /// <returns>The seeded task row's id.</returns>
-    private async Task<Guid> SeedDeferredTaskAsync(World world, Guid artifactId)
+    private async Task<Guid> SeedDeferredTaskAsync(World world, Guid artifactId, string queue = "tasks")
     {
         var outboxId = Guid.CreateVersion7();
         var taskId = Guid.CreateVersion7();
@@ -216,7 +224,7 @@ public sealed partial class EvidenceRawReportQuotaTests
                 '{{payload}}'::jsonb, 'evidence:artifact:{{artifactId:D}}:{{EvidenceTaskTypes.ReportParse}}');
 
             insert into public.task (id, org_id, queue, task_type, payload, idempotency_key, state, last_error)
-            values ('{{taskId:D}}', '{{world.Org:D}}', 'tasks', '{{EvidenceTaskTypes.ReportParse}}',
+            values ('{{taskId:D}}', '{{world.Org:D}}', '{{queue}}', '{{EvidenceTaskTypes.ReportParse}}',
                 '{{payload}}'::jsonb, 'outbox:{{outboxId:D}}', 'retry', '{{persistedError}}')
             """);
 

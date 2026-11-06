@@ -129,9 +129,11 @@ The quota gate switch (`EVIDGATE__USAGE__QUOTAGATE__ENABLED`, default `true`) is
 and the two metered paths run in different hosts: the event route gates in the Api, a raw report parse gates in
 the Worker. A host cannot see the other's value, so a mismatch silently gates one path and lets the other
 commit unmetered against the counter. Set the value **once, from the same shared configuration source, for the
-Api and the Worker** and change both in one deploy. Every host logs the effective value at start (Information),
-and a host that starts with the gate off logs a Warning naming the setting: grep both hosts' start logs for it after
-any change. There is no cross-host check; an operator who switches the gate off on purpose does it on both.
+Api and the Worker** and change both in one deploy. Every host logs the effective value at start: Information
+(event 2472, `Quota gate is enabled on this host`) when the gate is on, and a Warning (event 2473, `Quota gate is
+disabled on this host`) when it is off. A host that starts with the gate off writes only that Warning and never the
+Information line, so grep both hosts' start logs for `Quota gate` after any change and expect one line per host.
+There is no cross-host check; an operator who switches the gate off on purpose does it on both.
 
 One more shape is a feature that stays **absent until it is configured**: the federated-login rows
 (`EVIDGATE__LOGIN__*`, `EVIDGATE__OIDC__GOOGLE__*`, 02.3.1-T1.1/T1.2, and `EVIDGATE__OAUTH__GITHUB__*`,

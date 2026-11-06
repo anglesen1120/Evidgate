@@ -4,6 +4,7 @@
 using System.Net;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Evidence.Application;
+using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -268,9 +269,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
-        // Room, because the loss this case names is the run's: an operator raise lifted the block after the deferral,
-        // so the retry gets past the advisory pre-check and meets the admission instead.
-        await SeedCounterAsync(counters, world, used: 0m, limit: 100m);
+        await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
 
         // The production relation, reproduced: one outbox row keyed by the artifact, and the task the dispatcher makes
         // from it, whose key is 'outbox:' || outbox.id. The text carries an apostrophe, so it is escaped for the literal.
@@ -335,9 +334,8 @@ public sealed partial class EvidenceRawReportQuotaTests
                 world.Database, $"select last_error from public.task where id = '{taskId:D}'"))
             .ShouldBe(TaskDeferredException.PersistedError, "the probe compares the text the consumer really writes");
 
-        // The raise that lifted the block, then the run closing: the retry passes the pre-check and is refused by the
-        // admission, which is the loss this case names. The deferral stays on the task row either way.
-        (await RaiseAsync(counters, world, world.Project, 10m)).IsSuccess.ShouldBeTrue();
+        // The run closes while the row still carries its deferral: the retry is refused by the admission, which is the
+        // loss this case names. The deferral stays on the task row either way.
         await _fixture.ExecuteAsync(
             world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
         var log = new CapturedLog();
@@ -345,6 +343,50 @@ public sealed partial class EvidenceRawReportQuotaTests
 
         outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
         log.Lines.ShouldContain(line => line.Contains("quota_blocked_then_closed", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_Deferred_Report_Of_A_Closed_Run_Ends_Terminal_Instead_Of_Waiting_For_Room()
+    {
+        var queue = "report-closed-terminal";
+        var storage = new ReportStorageSpy();
+        var gate = new ReportPreCheckGate();
+        var world = await StartAsync(services =>
+        {
+            ReplaceObjectStorage(services, inner => storage.Wrap(inner));
+            ReplaceQuotaGate(services, inner => gate.Wrap(inner));
+        });
+        await using var _ = world;
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, OneEventBody);
+        // No room for a single event and a run that has already closed: room would not admit the report, so waiting for
+        // it only postpones a refusal the operator must see now.
+        await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
+        var taskId = await SeedDeferredTaskAsync(world, artifactId, queue);
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
+
+        var log = new CapturedLog();
+        var outcome = await ParseAsync(world, artifactId, log);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
+        outcome.Reason.ShouldBe(RunAdmissionPolicy.RunClosed, "the run's own refusal answers, not a quota wait");
+        gate.Peeks.ShouldBe(0, "a closed run is not asked about room it would never use");
+        gate.Checks.ShouldBe(0, "and the batch is refused before any reservation");
+        log.Lines.ShouldContain(line => line.Contains("quota_blocked_then_closed", StringComparison.Ordinal));
+        log.Lines.ShouldNotContain(line => line.Contains("deferred before the fetch", StringComparison.Ordinal));
+        (await CountAsync(world, "event", artifactId)).ShouldBe(0);
+        (await CountRawReportsAsync(world, artifactId)).ShouldBe(0);
+
+        // The same attempt through the real consumer: the row ends instead of being handed back with the deferral.
+        await using var worker = StartReportWorker(world);
+        var consumer = worker.GetRequiredService<TaskConsumer>();
+        (await consumer.PollOnceAsync(queue, Token)).ShouldBe(1);
+        (await TaskStateAsync(world, taskId)).ShouldBe("done");
+        (await TaskAttemptsAsync(world, taskId)).ShouldBe(
+            1,
+            "a deferral gives the attempt back, so a row deferred again would still hold zero");
     }
 
     [Fact]

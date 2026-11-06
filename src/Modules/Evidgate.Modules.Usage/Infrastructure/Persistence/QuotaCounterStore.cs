@@ -71,6 +71,7 @@ internal sealed record QuotaCounterRow(
 /// raise committed first) and charged it after all, or when it had room all along.
 /// </param>
 /// <param name="WarnedNow">True only for the statement that moved <c>warned_at</c> from null to a stamp.</param>
+/// <param name="DatabaseNow">The transaction's clock, for the retry calculation: the clock that named the period.</param>
 internal sealed record QuotaRefusalRow(
     Guid Id,
     Guid ScopeKey,
@@ -78,7 +79,8 @@ internal sealed record QuotaRefusalRow(
     decimal QuotaLimit,
     decimal WarnRatio,
     bool Blocked,
-    bool WarnedNow) : IQuotaScopeNumbers
+    bool WarnedNow,
+    DateTimeOffset DatabaseNow) : IQuotaScopeNumbers
 {
     /// <summary>True when the scope's warning line is at or below what it now holds.</summary>
     internal bool IsAtOrAboveWarnLine => Used >= QuotaLimit * WarnRatio;
@@ -97,7 +99,7 @@ internal sealed record QuotaRaiseRow(Guid Id, decimal Used, decimal QuotaLimit);
 /// <param name="ScopeKey">The project id, or the tenant sentinel.</param>
 /// <param name="Used">The stored usage.</param>
 /// <param name="QuotaLimit">The stored limit.</param>
-/// <param name="DatabaseNow">The database clock for the retry calculation.</param>
+/// <param name="DatabaseNow">The transaction's clock for the retry calculation.</param>
 internal sealed record QuotaPeekRow(Guid ScopeKey, decimal Used, decimal QuotaLimit, DateTimeOffset DatabaseNow);
 
 /// <summary>

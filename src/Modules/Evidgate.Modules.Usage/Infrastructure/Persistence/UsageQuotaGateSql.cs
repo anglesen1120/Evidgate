@@ -17,10 +17,13 @@ internal static class UsageQuotaGateSql
     internal const string CurrentPeriod =
         "select to_char(transaction_timestamp() at time zone 'UTC','YYYY-MM')";
 
-    /// <summary>Reads only existing refusing counters; the first scope is the tenant's.</summary>
+    /// <summary>
+    /// Reads only existing refusing counters; the first scope is the tenant's. The instant is the transaction's own
+    /// clock, the one that named the period, so a refusal's wait never contradicts the month it refuses in.
+    /// </summary>
     internal const string Peek = """
         select coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) as scope_key,
-               c.used, c.quota_limit, clock_timestamp() as database_now
+               c.used, c.quota_limit, transaction_timestamp() as database_now
         from public.quota_counter as c
         where c.org_id = @org_id
           and c.period = @period
@@ -169,6 +172,10 @@ internal static class UsageQuotaGateSql
     /// answers the refusal by rolling back (the ingest route's refused batch) discards it and
     /// <see cref="StampBlocked"/> writes it again in a scope of its own.
     /// </para>
+    /// <para>
+    /// Every row carries the transaction's own clock, the one that named the period, so the caller measures the wait
+    /// until the next period from the same clock as the month it refuses in rather than from a host's clock.
+    /// </para>
     /// </summary>
     internal const string Settle = """
         with targets as materialized (
@@ -206,11 +213,13 @@ internal static class UsageQuotaGateSql
                 old.used + @quantity > old.quota_limit as blocked,
                 old.warned_at is null and c.warned_at is not null as warned_now
         )
-        select s.id, s.scope_key, s.used, s.quota_limit, s.warn_ratio, s.blocked, s.warned_now
+        select s.id, s.scope_key, s.used, s.quota_limit, s.warn_ratio, s.blocked, s.warned_now,
+            transaction_timestamp() as database_now
         from settled as s
         union all
         select t.id, t.scope_key, t.used, t.quota_limit, t.warn_ratio,
-            t.used + @quantity > t.quota_limit as blocked, false as warned_now
+            t.used + @quantity > t.quota_limit as blocked, false as warned_now,
+            transaction_timestamp() as database_now
         from targets as t
         where not exists (select 1 from settled as s where s.id = t.id)
         """;

@@ -272,20 +272,19 @@ internal sealed partial class ParseRawReportHandler(
         }
 
         var preparation = await PrepareAsync(orgId, payload, cancellationToken).ConfigureAwait(false);
+        if (preparation.Blocked is { } blocked)
+        {
+            // A report the queue already deferred and the counter still has no room for: nothing is fetched, parsed or
+            // written, and the deferral repeats. The stamp the first block left stands; this read writes nothing.
+            return blocked;
+        }
+
         if (preparation.Prepared is not { } prepared)
         {
             // A refusal is the one stop that still leaves evidence: an unsupported producer kind writes its row, a skip
             // writes nothing.
             return await RefuseUnsupportedAsync(preparation, preparation.Stopped!, orgId, payload, cancellationToken)
                 .ConfigureAwait(false);
-        }
-
-        if (await PreCheckQuotaAsync(orgId, preparation.ProjectId, payload.ArtifactId, cancellationToken)
-                .ConfigureAwait(false) is { } preChecked)
-        {
-            // A report the queue already deferred and the counter still has no room for: nothing is fetched, parsed or
-            // written, and the deferral repeats. The stamp the first block left stands; this read writes nothing.
-            return preChecked;
         }
 
         var (bytes, readStopped) = await ReadBytesAsync(prepared, orgId, payload, cancellationToken).ConfigureAwait(false);

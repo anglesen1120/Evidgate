@@ -1,5 +1,6 @@
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
+using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -22,7 +23,8 @@ namespace Evidgate.Modules.Evidence.Application;
 /// <para>
 /// A report the queue already deferred is asked once more, before its bytes are fetched: a counter with no room for a
 /// single event cannot admit the batch whatever the document holds, so the attempt waits again instead of spending the
-/// lease on a read and a parse that would roll back. That answer is advisory only — it never admits, writes or stamps.
+/// lease on a read and a parse that would roll back. That answer is advisory only — it never admits, writes or stamps —
+/// and a run the admission already refuses is not asked at all, because its own refusal is the loss to report.
 /// </para>
 /// </summary>
 internal sealed partial class ParseRawReportHandler
@@ -109,26 +111,31 @@ internal sealed partial class ParseRawReportHandler
     /// stamp is left to the block that already earned it, and an Ok answer only means the transactional gate still
     /// decides after the insert. A first attempt is never probed, so evidence that fits is never refused at the door.
     /// </para>
+    /// <para>
+    /// It runs in the caller's read-only scope, so the probe, the admission facts and the gate share one connection and
+    /// the attempt pays a first-attempt cost of one statement.
+    /// </para>
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="projectId">The project whose counter the report's events would charge.</param>
-    /// <param name="artifactId">The report artifact, the task row's probe key.</param>
-    /// <param name="cancellationToken">Cancels the probe and the advisory question.</param>
+    /// <param name="payload">The run, artifact and producer kind; the artifact is the task row's probe key.</param>
+    /// <param name="cancellationToken">Cancels the probe, the admission read and the advisory question.</param>
     /// <returns>The blocked outcome to defer, or null when the report continues to the fetch.</returns>
     private async Task<ParseRawReportOutcome?> PreCheckQuotaAsync(
         Guid orgId,
         Guid projectId,
-        Guid artifactId,
+        ParseRawReportPayload payload,
         CancellationToken cancellationToken)
     {
-        // One short read-only scope of its own: the probe and the gate both read tenant data, and the gate joins this
-        // scope's transaction, which never writes.
-        await using var scope = await scopes
-            .BeginAsync(orgId, projectId: null, readOnlyTransaction: true, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (!await IsDeferredAsync(orgId, artifactId, cancellationToken).ConfigureAwait(false))
+        if (!await IsDeferredAsync(orgId, payload.ArtifactId, cancellationToken).ConfigureAwait(false))
         {
+            return null;
+        }
+
+        if (await AdmissionRefusesAsync(orgId, payload.RunId, cancellationToken).ConfigureAwait(false))
+        {
+            // A closed run refuses this report whatever the counter says, so waiting for room would bury the terminal
+            // refusal and the loss it names: the attempt goes on and the write transaction answers it as before.
             return null;
         }
 
@@ -151,13 +158,33 @@ internal sealed partial class ParseRawReportHandler
         }
 
         EvidgateTelemetry.RecordIngestQuotaDenied(ReportQuotaPreCheck);
-        LogQuotaPreChecked(logger, artifactId, RetrySeconds(answer.RetryAfter));
+        LogQuotaPreChecked(logger, payload.ArtifactId, RetrySeconds(answer.RetryAfter));
 
         return new ParseRawReportOutcome(ParseRawReportOutcome.QuotaBlocked, QuotaExceededReason)
         {
             RetryAfter = answer.RetryAfter,
             QuotaRequest = request,
         };
+    }
+
+    /// <summary>
+    /// Whether the run already refuses evidence, decided by the same rule the write transaction applies
+    /// (<see cref="RunAdmissionPolicy"/>) so the pre-check cannot defer a report the admission has already closed off.
+    /// The facts are read unlocked: this answer only chooses between waiting and the terminal refusal the write decides,
+    /// and a run that cannot be read answers false so the attempt names its absence the way it always did.
+    /// </summary>
+    /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="runId">The run the report belongs to.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>True when the admission would refuse the evidence.</returns>
+    private async Task<bool> AdmissionRefusesAsync(Guid orgId, Guid runId, CancellationToken cancellationToken)
+    {
+        var run = await db
+            .QuerySingleOrDefaultAsync<RunGate>(RunFactsSql, new { org_id = orgId, run_id = runId }, cancellationToken)
+            .ConfigureAwait(false);
+
+        return run is not null
+            && !RunAdmissionPolicy.Decide(run.ProjectState, run.RunState, run.LateWindowOpen).Allowed;
     }
 
     /// <summary>
@@ -318,7 +345,7 @@ internal sealed partial class ParseRawReportHandler
     private static partial void LogQuotaBlocked(ILogger logger, Guid artifactId, int retrySeconds);
 
     [LoggerMessage(
-        EventId = 2470,
+        EventId = 2447,
         Level = LogLevel.Warning,
         Message = "raw report parse of artifact {ArtifactId} was deferred before the fetch: the project's quota has no room for one event, the task defers for {RetrySeconds}s")]
     private static partial void LogQuotaPreChecked(ILogger logger, Guid artifactId, int retrySeconds);

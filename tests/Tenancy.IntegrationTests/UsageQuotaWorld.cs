@@ -20,7 +20,7 @@ namespace Tenancy.IntegrationTests;
 /// <c>used</c>, the two threshold stamps and a second org's counter — a period's usage is an input of a
 /// gate test, never an outcome the test has to earn by metering.
 /// </remarks>
-internal sealed class UsageQuotaWorld : IAsyncDisposable
+internal sealed partial class UsageQuotaWorld : IAsyncDisposable
 {
     /// <summary>The platform operator every audit row of the operator route must name.</summary>
     internal static readonly Guid OperatorId = Guid.CreateVersion7();
@@ -152,80 +152,6 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
     }
 
     /// <summary>
-    /// Asks the advisory gate one question in its own tenant scope, committed like the caller that follows it with the
-    /// authoritative call.
-    /// </summary>
-    /// <param name="request">The question.</param>
-    /// <param name="org">The tenant to ask as, or null for this world's org.</param>
-    internal async Task<QuotaCheckResult> PeekAsync(QuotaCheckRequest request, Guid? org = null)
-    {
-        var token = TestContext.Current.CancellationToken;
-
-        await GateCalls.WaitAsync(token).ConfigureAwait(false);
-
-        try
-        {
-            await using var services = Api.Services.CreateAsyncScope();
-            var provider = services.ServiceProvider;
-            var scopes = provider.GetRequiredService<ITenantScopeFactory>();
-            await using var scope = await scopes.BeginAsync(org ?? Org, null, false, token);
-
-            var result = await provider.GetRequiredService<IQuotaGate>()
-                .PeekAsync(request, token)
-                .ConfigureAwait(false);
-            await scope.CommitAsync(token).ConfigureAwait(false);
-
-            return result;
-        }
-        finally
-        {
-            GateCalls.Release();
-        }
-    }
-
-    /// <summary>
-    /// The gate's transaction month beside the database's own two statements, read in one tenant transaction: the month
-    /// of the transaction and the month a row stamped by <c>now()</c> in it carries.
-    /// </summary>
-    internal async Task<(string Gate, string Transaction, string Event)> PeriodAsync()
-    {
-        var token = TestContext.Current.CancellationToken;
-
-        await GateCalls.WaitAsync(token).ConfigureAwait(false);
-
-        try
-        {
-            await using var services = Api.Services.CreateAsyncScope();
-            var provider = services.ServiceProvider;
-            var scopes = provider.GetRequiredService<ITenantScopeFactory>();
-            await using var scope = await scopes.BeginAsync(Org, null, false, token);
-
-            var gate = await provider.GetRequiredService<IQuotaGate>()
-                .CurrentPeriodAsync(token)
-                .ConfigureAwait(false);
-            var db = provider.GetRequiredService<ITenantDb>();
-            var transaction = await db
-                .ScalarAsync<string>(
-                    "select to_char(transaction_timestamp() at time zone 'UTC','YYYY-MM')",
-                    cancellationToken: token)
-                .ConfigureAwait(false)
-                ?? throw new InvalidOperationException("transaction_timestamp() answered no month");
-            var stamped = await db
-                .ScalarAsync<string>("select to_char(now() at time zone 'UTC','YYYY-MM')", cancellationToken: token)
-                .ConfigureAwait(false)
-                ?? throw new InvalidOperationException("now() answered no month");
-
-            await scope.CommitAsync(token).ConfigureAwait(false);
-
-            return (gate, transaction, stamped);
-        }
-        finally
-        {
-            GateCalls.Release();
-        }
-    }
-
-    /// <summary>
     /// Asks the gate and records the metered work in the same tenant transaction, exactly as the ingest
     /// hot path does: the reservation and the ledger row commit or roll back together.
     /// </summary>
@@ -345,6 +271,10 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
         _fixture.ScalarAsync<long>(
             Database,
             $"select count(*) from public.quota_counter where org_id = '{(org ?? Org):D}'");
+
+    /// <summary>One read on the world's database, for the values only it can answer, such as its own clock.</summary>
+    /// <param name="sql">The read; it must return one row and one column.</param>
+    internal Task<T> ScalarAsync<T>(string sql) => _fixture.ScalarAsync<T>(Database, sql);
 
     /// <summary>The id of one scope's counter, or null when the scope holds none.</summary>
     /// <param name="org">The tenant, or null for this world's org.</param>

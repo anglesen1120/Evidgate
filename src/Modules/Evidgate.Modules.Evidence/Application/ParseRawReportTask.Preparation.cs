@@ -29,10 +29,10 @@ internal sealed partial class ParseRawReportHandler
         string? ParserVersion = null)
     {
         /// <summary>
-        /// The project whose counter the report's events would charge, read from the artifact row: the pre-check asks
-        /// about that counter before the bytes are fetched, and a stopped preparation never asks.
+        /// The advisory quota stop: the read scope asked about a deferred report's counter and it has no room for one
+        /// event, so the attempt carries the blocked outcome instead of the inputs the fetch needs.
         /// </summary>
-        public Guid ProjectId { get; init; }
+        public ParseRawReportOutcome? Blocked { get; init; }
     }
 
     /// <summary>
@@ -83,12 +83,18 @@ internal sealed partial class ParseRawReportHandler
             return ParserUnavailable(payload);
         }
 
+        // The advisory quota question runs here, inside the scope the read already holds and before the fetch inputs are
+        // resolved: a deferred report whose counter has no room for one event stops without an object read, and a first
+        // attempt pays only the probe statement this asks first.
+        if (await PreCheckQuotaAsync(orgId, artifact.ProjectId, payload, cancellationToken).ConfigureAwait(false)
+            is { } blocked)
+        {
+            return new Preparation(null, null) { Blocked = blocked };
+        }
+
         return new Preparation(
             await ResolveFetchAsync(context, orgId, artifact, payload, resolution, mapper, cancellationToken).ConfigureAwait(false),
-            null)
-        {
-            ProjectId = artifact.ProjectId,
-        };
+            null);
     }
 
     /// <summary>

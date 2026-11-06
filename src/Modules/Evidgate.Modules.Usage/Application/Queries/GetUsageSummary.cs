@@ -15,8 +15,9 @@ namespace Evidgate.Modules.Usage.Application.Queries;
 
 /// <summary>
 /// <c>GET /v1/orgs/{o}/usage/summary</c>: the current period's counters against quota for the org and, when the request
-/// names one, a project. The period comes from the server clock, the same one the quota gate reads, so the answer
-/// describes the counter the gate would refuse against.
+/// names one, a project. The period comes from the server clock while the gate reads the database transaction month, so
+/// the two name the same month except for a request that crosses a month end; the wait beside a blocked counter is a
+/// hint to a reader, never an input to scheduling.
 /// </summary>
 /// <param name="OrgId">The org the route names; it must be the request's tenant.</param>
 /// <param name="ProjectId">The project the request named, or null for the org-wide answer.</param>

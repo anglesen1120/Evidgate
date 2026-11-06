@@ -13,6 +13,10 @@ namespace Evidgate.Modules.Usage.Contracts;
 /// in the scope that had room. The counters are locked in one order for every caller, tenant first, so two calls
 /// cannot deadlock on each other's scope.
 /// </para>
+/// <para>
+/// The wait a refusal names until the next period is measured from the database's transaction clock — the clock that
+/// named the period — so it never contradicts a month the database still has open because a host's clock runs ahead.
+/// </para>
 /// </summary>
 public interface IQuotaGate
 {

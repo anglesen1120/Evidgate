@@ -95,6 +95,36 @@ public sealed class UsageQuotaPeekTests
         projectOnly.Decision.ShouldBe(QuotaDecision.Ok);
     }
 
+    [Fact]
+    public async Task QuotaGatePeek_ForeignOrgFullCounters_DoNotBlock()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        var (otherOrg, otherProject) = await world.AddOtherOrgAsync();
+        await SeedAsync(world, used: Limit, projectId: otherProject, org: otherOrg);
+        await SeedAsync(world, used: Limit, projectId: null, org: otherOrg);
+        await SeedAsync(world, used: 0m, projectId: world.Project);
+        var foreignProject = await world.CounterAsync(org: otherOrg, project: otherProject);
+        var foreignTenant = await world.CounterAsync(org: otherOrg);
+
+        var projectOnly = await world.PeekAsync(Request(world, 1m));
+
+        projectOnly.Decision.ShouldBe(QuotaDecision.Ok, "another organization's full counter refuses nothing here");
+        var bothScopes = await world.PeekAsync(Request(world, 1m, includeTenantScope: true));
+
+        bothScopes.Decision.ShouldBe(
+            QuotaDecision.Ok,
+            "the same period, metric and tenant scope under another organization is a different counter");
+
+        // The positive control: the same two counters under this organization refuse the same question.
+        await SeedAsync(world, used: Limit, projectId: null);
+        var refused = await world.PeekAsync(Request(world, 1m, includeTenantScope: true));
+
+        refused.Decision.ShouldBe(QuotaDecision.Block);
+        refused.RefusedScope.ShouldBe(QuotaScope.Tenant, "this organization's own full tenant counter refuses");
+        (await world.CounterAsync(org: otherOrg, project: otherProject)).ShouldBe(foreignProject);
+        (await world.CounterAsync(org: otherOrg)).ShouldBe(foreignTenant);
+    }
+
     // ------------------------------------------------------------------ the admission
 
     [Fact]
