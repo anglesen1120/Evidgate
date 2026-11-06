@@ -112,6 +112,8 @@ public sealed class UsageQuotaGateTests
         (await world.CounterAsync(project: world.Project)).ShouldNotBeNull().Used.ShouldBe(Limit);
 
         // A whole batch that exactly fills an empty counter is one reservation, not a refusal.
+        await world.SeedCounterAsync(new CounterSeed(
+            Guid.CreateVersion7(), world.Project, Period, "ai_tokens", 0m, Limit, WarnRatio, null, null));
         var exact = await world.CheckAsync(Request(world, Limit, metric: UsageMetric.AiTokens));
         exact.Decision.ShouldBe(QuotaDecision.Warn);
         exact.Used.ShouldBe(Limit);

@@ -341,7 +341,7 @@ public sealed partial class UsageQuotaSchemaTests
         await using (var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), org))
         {
             (await app.ExecuteAsync($"update public.quota_counter set used = 3 where id = '{id}'")).ShouldBe(1);
-            (await app.ScalarAsync<long>($"select version from public.quota_counter where id = '{id}'")).ShouldBe(2);
+            (await app.ScalarAsync<int>($"select version from public.quota_counter where id = '{id}'")).ShouldBe(2);
             (await app.ScalarAsync<bool>(
                 $"select updated_at >= created_at from public.quota_counter where id = '{id}'")).ShouldBeTrue();
             await app.CommitAsync();
