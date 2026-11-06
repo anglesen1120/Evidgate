@@ -48,6 +48,10 @@ public sealed class SchemaConventionTests
         scan.BusinessTables.ShouldContain("public.project");
         scan.BusinessTables.ShouldContain("public.rls_probe");
 
+        // A tenant table the scan has no list for joins the set by carrying `org_id`: the proof that its
+        // conventions are enforced is its presence here, not a rule added for it.
+        scan.BusinessTables.ShouldContain("public.billing_statement");
+
         // The org root is not a tenant table (`org_id` would reference the row
         // itself), so the org_id rule keeps it out of the scan. The mechanism tables
         // are exempt only from the rules their design breaks — RLS, the audit columns

@@ -710,6 +710,19 @@ public sealed class TenantGucTests
             """,
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId));
+        // The issued billing statement: a tenant table the discovery walks like any other, so the
+        // fail-closed zero below has a document to hide.
+        await scope.ExecuteAsync(
+            """
+            insert into public.billing_statement
+                (id, org_id, period, kind, total_amount, currency, line_count, content_hash, worksheet_json,
+                 issued_by, issued_at)
+            values (@id, @org_id, '2026-10', 'invoice', 1, 'USD', 1, @content_hash, '{}'::jsonb, @issued_by, now())
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("content_hash", new string('a', 64)),
+            ("issued_by", Guid.CreateVersion7()));
         // The 05.3.2-T5 table (migration 0049): revision 1 of the run seeded above — the insert
         // trigger refuses any number but the run's max + 1. `missing` keeps its '{}' default, which
         // is what the "complete has no missing codes" CHECK requires.

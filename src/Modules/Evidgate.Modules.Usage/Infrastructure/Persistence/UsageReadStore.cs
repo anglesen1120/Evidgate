@@ -101,7 +101,42 @@ internal sealed class UsageReadStore(ITenantDb db)
             UsageReadStoreSql.Summary,
             new { org_id = orgId, period, project_id = projectId },
             cancellationToken);
+
+    /// <summary>
+    /// Reads the ledger rows of one period in the order an issued worksheet prints them, at most
+    /// <paramref name="limit"/> rows; the caller asks for one more than it reports to detect truncation.
+    /// Adjustment rows are included: the worksheet totals the lines and the adjustments separately, so
+    /// the read hands over both halves of the period.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope.</param>
+    /// <param name="period">The closed period the worksheet invoices.</param>
+    /// <param name="limit">Rows to fetch, already bounded by the caller.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal Task<IReadOnlyList<WorksheetLineRow>> ReadWorksheetLinesAsync(
+        Guid orgId,
+        string period,
+        int limit,
+        CancellationToken cancellationToken) =>
+        db.QueryAsync<WorksheetLineRow>(
+            UsageReadStoreSql.WorksheetLines,
+            new { org_id = orgId, period, limit },
+            cancellationToken);
 }
+
+/// <summary>Dapper shape of one <c>usage_ledger_entry</c> worksheet row, adjustment fields included.</summary>
+internal sealed record WorksheetLineRow(
+    Guid Id,
+    Guid? ProjectId,
+    string Metric,
+    decimal Quantity,
+    string Unit,
+    string BillingKey,
+    DateTimeOffset OccurredAt,
+    Guid? PriceRef,
+    decimal? Amount,
+    string? Currency,
+    Guid? AdjustmentOf,
+    string? Reason);
 
 /// <summary>Dapper shape of one <c>usage_ledger_entry</c> row of a page.</summary>
 internal sealed class UsageLedgerPageRow
