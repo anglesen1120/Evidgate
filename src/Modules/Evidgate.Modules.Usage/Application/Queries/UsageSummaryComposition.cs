@@ -50,54 +50,74 @@ internal static class UsageSummaryComposition
         var projects = new Dictionary<(string Metric, Guid ProjectId), UsageSummaryRow>();
         foreach (var row in rows)
         {
-            if (row.Metric is not { } metric)
-            {
-                continue;
-            }
-
-            if (row.Scope == UsageSummaryScopes.Tenant)
-            {
-                tenant[metric] = row;
-            }
-            else if (row.ProjectId is { } projectId)
-            {
-                projects[(metric, projectId)] = row;
-            }
+            Index(row, tenant, projects);
         }
 
         var metrics = new List<UsageSummaryMetricDto>(UsageLedgerMetricNames.All.Count);
         foreach (var metric in Enum.GetValues<UsageMetric>())
         {
-            var wire = UsageMetricWire.ToWireValue(metric);
-            if (UsageMetricAvailability.UnavailableReason(metric) is { } reason)
-            {
-                metrics.Add(new UsageSummaryMetricDto(
-                    wire,
-                    UsageSummaryScopes.Tenant,
-                    Used: null,
-                    Limit: null,
-                    WarnedAt: null,
-                    BlockedAt: null,
-                    RetryAfterSeconds: null,
-                    reason,
-                    Projects: []));
-                continue;
-            }
-
-            tenant.TryGetValue(wire, out var counter);
-            metrics.Add(new UsageSummaryMetricDto(
-                wire,
-                UsageSummaryScopes.Tenant,
-                counter?.Used ?? 0m,
-                counter?.QuotaLimit,
-                counter?.WarnedAt,
-                counter?.BlockedAt,
-                RetrySeconds(counter?.BlockedAt, period, now),
-                UnavailableReason: null,
-                ProjectRows(wire, requestedProject, projects, period, now)));
+            metrics.Add(Metric(metric, requestedProject, tenant, projects, period, now));
         }
 
         return new UsageSummaryDto(period, requestedProject, metrics);
+    }
+
+    /// <summary>Files one statement row under the scope it answers; the marker row carries no metric and is skipped.</summary>
+    private static void Index(
+        UsageSummaryRow row,
+        Dictionary<string, UsageSummaryRow> tenant,
+        Dictionary<(string Metric, Guid ProjectId), UsageSummaryRow> projects)
+    {
+        if (row.Metric is not { } metric)
+        {
+            return;
+        }
+
+        if (row.Scope == UsageSummaryScopes.Tenant)
+        {
+            tenant[metric] = row;
+        }
+        else if (row.ProjectId is { } projectId)
+        {
+            projects[(metric, projectId)] = row;
+        }
+    }
+
+    /// <summary>One metric's answer: the unavailable null pair with its reason, or the tenant counter and its projects.</summary>
+    private static UsageSummaryMetricDto Metric(
+        UsageMetric metric,
+        Guid? requestedProject,
+        Dictionary<string, UsageSummaryRow> tenant,
+        Dictionary<(string Metric, Guid ProjectId), UsageSummaryRow> projects,
+        string period,
+        DateTimeOffset now)
+    {
+        var wire = UsageMetricWire.ToWireValue(metric);
+        if (UsageMetricAvailability.UnavailableReason(metric) is { } reason)
+        {
+            return new UsageSummaryMetricDto(
+                wire,
+                UsageSummaryScopes.Tenant,
+                Used: null,
+                Limit: null,
+                WarnedAt: null,
+                BlockedAt: null,
+                RetryAfterSeconds: null,
+                reason,
+                Projects: []);
+        }
+
+        tenant.TryGetValue(wire, out var counter);
+        return new UsageSummaryMetricDto(
+            wire,
+            UsageSummaryScopes.Tenant,
+            counter?.Used ?? 0m,
+            counter?.QuotaLimit,
+            counter?.WarnedAt,
+            counter?.BlockedAt,
+            RetrySeconds(counter?.BlockedAt, period, now),
+            UnavailableReason: null,
+            ProjectRows(wire, requestedProject, projects, period, now));
     }
 
     /// <summary>The project counters of one metric, ordered by project id, plus the requested project's zero when it

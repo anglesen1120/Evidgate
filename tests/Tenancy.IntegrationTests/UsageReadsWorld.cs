@@ -21,7 +21,7 @@ namespace Tenancy.IntegrationTests;
 /// (row security hides them from the read under test) and can pin <c>created_at</c> — the keyset's first
 /// member — instead of hoping two inserts share an instant.
 /// </remarks>
-internal sealed class UsageReadsWorld : IAsyncDisposable
+internal sealed partial class UsageReadsWorld : IAsyncDisposable
 {
     /// <summary>The platform operator every audit row of these reads must name.</summary>
     internal static readonly Guid OperatorId = Guid.CreateVersion7();
@@ -62,13 +62,19 @@ internal sealed class UsageReadsWorld : IAsyncDisposable
 
     internal Guid Project { get; }
 
-    /// <summary>Starts one world with the operator gate the suite needs.</summary>
+    /// <summary>Starts one world with the operator gate the suite needs, over the clock the host reports time from.</summary>
     /// <param name="fixture">The assembly fixture (one container, one template).</param>
     /// <param name="gate">Which gate the host composes.</param>
-    internal static Task<UsageReadsWorld> StartAsync(PostgresTenancyFixture fixture, OperatorGateMode gate) =>
+    /// <param name="clock">The host's clock, so a read that derives a period answers the period the test pinned.</param>
+    internal static Task<UsageReadsWorld> StartAsync(
+        PostgresTenancyFixture fixture,
+        OperatorGateMode gate,
+        TimeProvider? clock = null) =>
         fixture.StartDedicatedAsync(async database =>
         {
-            var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
+            var api = TenancyApiFactory.RealResolver(
+                fixture.AppConnectionString(database),
+                services: clock is null ? null : services => services.AddSingleton<TimeProvider>(clock));
 
             WebApplicationFactory<Program> host = gate switch
             {
@@ -301,55 +307,6 @@ internal sealed class UsageReadsWorld : IAsyncDisposable
             command.Parameters.Add(new NpgsqlParameter("attempts", row.Attempts));
             command.Parameters.Add(new NpgsqlParameter("first_seen_at", row.FirstSeenAt));
             command.Parameters.Add(new NpgsqlParameter("last_seen_at", row.LastSeenAt));
-
-            await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
-        }
-    }
-
-    /// <summary>The url of the tenant usage summary of this world's org.</summary>
-    /// <param name="project">The project filter, or null for the org-wide answer.</param>
-    internal string SummaryUrl(Guid? project = null) =>
-        $"/v1/orgs/{Org:D}/usage/summary" + (project is { } id ? $"?project_id={id:D}" : string.Empty);
-
-    /// <summary>Sends a GET as the founder of this world's org, who holds <c>tenant_admin</c>.</summary>
-    /// <param name="url">The route.</param>
-    internal Task<ApiAnswer> GetAsMemberAsync(string url) =>
-        Client.SendAsync(HttpMethod.Get, url, TenancyApiFactory.Resolved(user: User, orgHeader: Org));
-
-    /// <summary>Sends a GET as a service credential naming this org and project with the given permissions.</summary>
-    /// <param name="url">The route.</param>
-    /// <param name="permissions">The permissions the credential asks for.</param>
-    internal Task<ApiAnswer> GetAsServiceAsync(string url, params string[] permissions) =>
-        Client.SendAsync(
-            HttpMethod.Get,
-            url,
-            TenancyApiFactory.Resolved(serviceOrg: Org, serviceProject: Project, servicePermissions: permissions));
-
-    /// <summary>Inserts the given quota counters, one parameterised statement each.</summary>
-    /// <param name="rows">The counters to insert.</param>
-    internal async Task SeedCounterAsync(params CounterSeed[] rows)
-    {
-        await using var connection = await OpenOwnerAsync();
-
-        foreach (var row in rows)
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                """
-                insert into public.quota_counter
-                    (id, org_id, project_id, period, metric, used, quota_limit, warned_at, blocked_at)
-                values
-                    (@id, @org_id, @project_id, @period, @metric, @used, @quota_limit, @warned_at, @blocked_at)
-                """;
-            command.Parameters.Add(new NpgsqlParameter("id", row.Id));
-            command.Parameters.Add(new NpgsqlParameter("org_id", row.Org ?? Org));
-            command.Parameters.Add(new NpgsqlParameter("project_id", (object?)row.ProjectId ?? DBNull.Value));
-            command.Parameters.Add(new NpgsqlParameter("period", row.Period));
-            command.Parameters.Add(new NpgsqlParameter("metric", row.Metric));
-            command.Parameters.Add(new NpgsqlParameter("used", row.Used));
-            command.Parameters.Add(new NpgsqlParameter("quota_limit", row.Limit));
-            command.Parameters.Add(new NpgsqlParameter("warned_at", (object?)row.WarnedAt ?? DBNull.Value));
-            command.Parameters.Add(new NpgsqlParameter("blocked_at", (object?)row.BlockedAt ?? DBNull.Value));
 
             await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         }

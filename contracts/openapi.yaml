@@ -5466,6 +5466,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UsageSummaryDto'
+        # project_id binds as a Guid, so a malformed, empty or repeated value answers request_invalid before the handler.
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -13406,7 +13409,9 @@ components:
             - device_minutes
         scope:
           type: string
-          enum: [tenant, project]
+          description: Always `tenant`; the numbers describe the organization-wide counter.
+          enum:
+            - tenant
         used:
           type: [number, 'null']
           description: >-
@@ -13447,7 +13452,9 @@ components:
           format: uuid
         scope:
           type: string
-          enum: [project]
+          description: Always `project`; the row describes one project counter.
+          enum:
+            - project
         used:
           type: number
           description: The used of the project-level counter, or the project roll-up total when no counter exists.

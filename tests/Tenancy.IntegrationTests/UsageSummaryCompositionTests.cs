@@ -1,3 +1,4 @@
+using System.Globalization;
 using Evidgate.Modules.Usage.Application.Queries;
 using Evidgate.Modules.Usage.Contracts;
 using Evidgate.Modules.Usage.Infrastructure.Persistence;
@@ -115,6 +116,38 @@ public sealed class UsageSummaryCompositionTests
 
         projects.Select(project => project.ProjectId).ShouldBe(
             new[] { first, second }.OrderBy(id => id));
+    }
+
+    /// <summary>
+    /// A counter blocked 30 seconds before January is answered with a 30 second hint on the clock's month, and the same
+    /// metric read at January's first instant answers the new month with nothing measured and no hint.
+    /// </summary>
+    [Fact]
+    public void UsageSummary_BlockedJustBeforeJanuary_HintsWholeSecondsAndJanuaryStartsEmpty()
+    {
+        var december = new DateTimeOffset(2026, 12, 31, 23, 59, 30, TimeSpan.Zero);
+        var january = december.AddSeconds(31);
+        var decemberPeriod = december.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+        var januaryPeriod = january.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+        var decemberRows = new[] { Rows.Tenant(UsageLedgerMetricNames.Results, 10m, 10m, blockedAt: december.AddMinutes(-1)) };
+
+        var before = UsageSummaryComposition.Compose(decemberPeriod, null, december, decemberRows);
+        var after = UsageSummaryComposition.Compose(januaryPeriod, null, january, []);
+        before.ShouldNotBeNull();
+        after.ShouldNotBeNull();
+
+        // The two instants really straddle the year, so the hint is measured against a month that is about to end.
+        decemberPeriod.ShouldBe("2026-12");
+        januaryPeriod.ShouldBe("2027-01");
+        Metric(before!, UsageLedgerMetricNames.Results).RetryAfterSeconds.ShouldBe(30L);
+
+        var fresh = Metric(after!, UsageLedgerMetricNames.Results);
+        before!.Period.ShouldBe(decemberPeriod);
+        after!.Period.ShouldBe(januaryPeriod);
+        fresh.Used.ShouldBe(0m);
+        fresh.Limit.ShouldBeNull();
+        fresh.BlockedAt.ShouldBeNull();
+        fresh.RetryAfterSeconds.ShouldBeNull();
     }
 
     private static UsageSummaryDto Compose(params UsageSummaryRow[] rows) => ComposeFor(null, rows);

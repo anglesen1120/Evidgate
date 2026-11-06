@@ -2634,7 +2634,10 @@ export type UsageSummaryDto = {
  */
 export type UsageSummaryMetricDto = {
     metric: 'results' | 'artifact_gb_month' | 'egress_gb' | 'ai_tokens' | 'support_hours' | 'runner_minutes' | 'device_minutes';
-    scope: 'tenant' | 'project';
+    /**
+     * Always `tenant`; the numbers describe the organization-wide counter.
+     */
+    scope: 'tenant';
     /**
      * The tenant counter's used, or the period's roll-up total across the org when the month has no tenant counter. Null only when the metric is unavailable.
      */
@@ -2670,6 +2673,9 @@ export type UsageSummaryMetricDto = {
  */
 export type UsageSummaryProjectDto = {
     project_id: string;
+    /**
+     * Always `project`; the row describes one project counter.
+     */
     scope: 'project';
     /**
      * The used of the project-level counter, or the project roll-up total when no counter exists.
@@ -9355,6 +9361,10 @@ export type GetUsageSummaryData = {
 };
 
 export type GetUsageSummaryErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
     /**
      * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */

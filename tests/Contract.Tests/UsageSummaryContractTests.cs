@@ -13,8 +13,9 @@ namespace Contract.Tests;
 /// </summary>
 /// <remarks>
 /// The instance is built from the module's own records, never a hand-written literal, so a member renamed, dropped or
-/// retyped on either side fails here rather than in a generated client. The negative control changes the scope label of
-/// a project row, which the schema's closed enum must reject, so the valid case is proven against a live schema.
+/// retyped on either side fails here rather than in a generated client. The negative controls change the scope label of
+/// a metric entry and of a project row, which the schemas' closed enums must reject, so the valid case is proven
+/// against a live schema.
 /// </remarks>
 public sealed class UsageSummaryContractTests
 {
@@ -84,6 +85,42 @@ public sealed class UsageSummaryContractTests
 
         var failures = ContractSchema.Failures(SummaryDocument(OpenApiSpec.Load()), SchemaUri, json);
         failures.ShouldBeEmpty($"a usage summary body must validate against components.schemas.{SchemaName}: {string.Join(" | ", failures)}");
+    }
+
+    /// <summary>The operation declares the 400 of a project_id that cannot bind, so a client is not left guessing.</summary>
+    [Fact]
+    public void Spec_SummaryOperation_DeclaresTheUnbindableProjectAnswer()
+    {
+        var responses = OpenApiSpec.Load().ResponseKeys("/orgs/{o}/usage/summary", "get");
+
+        responses.ShouldContain("200");
+        responses.ShouldContain("400");
+    }
+
+    /// <summary>The negative control: a metric entry claiming another scope label must be rejected.</summary>
+    [Fact]
+    public void Metric_WithProjectScope_IsRejected()
+    {
+        var summary = new UsageSummaryDto(
+            "2026-11",
+            null,
+        [
+            new UsageSummaryMetricDto(
+                UsageLedgerMetricNames.Results,
+                UsageSummaryScopes.Tenant,
+                Used: 0m,
+                Limit: null,
+                WarnedAt: null,
+                BlockedAt: null,
+                RetryAfterSeconds: null,
+                UnavailableReason: null,
+                Projects: []),
+        ]);
+        var instance = JsonNode.Parse(JsonSerializer.Serialize(summary, SnakeCase))!.AsObject();
+        instance["metrics"]![0]!["scope"] = UsageSummaryScopes.Project;
+
+        ContractSchema.Failures(SummaryDocument(OpenApiSpec.Load()), SchemaUri, instance.ToJsonString())
+            .ShouldNotBeEmpty("a metric entry is always the organization-wide counter, so the project label must be rejected");
     }
 
     /// <summary>The negative control: a project row claiming another scope label must be rejected.</summary>
