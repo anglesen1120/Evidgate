@@ -157,6 +157,109 @@ public sealed partial class ReconcileRunTests
             "no redelivery takes a state edge");
     }
 
+    /// <summary>
+    /// A complete run is terminal, so the only place a re-reading of its own stored report can count is its next revision:
+    /// the marker appends revision N+1 beside a run that stays complete, and takes no state edge.
+    /// </summary>
+    [Fact]
+    public async Task Reprocess_On_Complete_Run_Appends_Its_Revision_And_Leaves_The_Run_Complete()
+    {
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
+
+        var (runId, revisionOne) = await StartIncompleteRunAsync(world);
+        await SetRunStateAsync(world, runId, "complete");
+
+        // The evidence the first revision missed, under a synthetic producer of its own: the same shape the reprocess
+        // task writes.
+        var producerId = "reprocess-" + Guid.CreateVersion7().ToString("D");
+        await InsertSyntheticSlotAsync(world, runId, producerId, shardIndex: 2, declaredLastSequence: 1, declaredCount: 1);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(
+                producerId,
+                1,
+                "test.finished",
+                "passed",
+                ExecutionKey: world.Plan.Executions[^1].ExecutionKey));
+        var audits = await StateChangeAuditCountAsync(world, runId);
+
+        var (outcome, finalization) = await ReconcileAndFinishOnHostAsync(world, runId, reprocessTrigger: true);
+
+        outcome.Disposition.ShouldBe(ReconcileDisposition.ComparedReprocess, Describe(outcome));
+        finalization.ShouldNotBeNull().RevisionNo.ShouldBe(2, "the re-read evidence reaches a revision of its own");
+        (await RevisionRowAsync(world, runId, 1)).ShouldBe(
+            revisionOne,
+            "the earlier revision is immutable: the attempt appends, it never rewrites");
+        (await StateAsync(world, runId)).ShouldBe(
+            "complete",
+            "a complete run is terminal: the revision carries the evidence, the state does not move");
+        (await StateChangeAuditCountAsync(world, runId)).ShouldBe(audits, "an appended revision takes no edge");
+    }
+
+    /// <summary>
+    /// A live run that already holds a revision answers the marker with an append beside it: the collection settlement
+    /// decided that run once, so the re-read evidence must never re-decide it, and the comparison alone names whatever
+    /// shard is still open.
+    /// </summary>
+    [Fact]
+    public async Task Reprocess_Marker_On_Live_Run_With_A_Revision_Appends_Beside_It()
+    {
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
+
+        var (runId, revisionOne) = await StartIncompleteRunAsync(world);
+        await SetRunStateAsync(world, runId, "collecting");
+
+        var producerId = "reprocess-" + Guid.CreateVersion7().ToString("D");
+        await InsertSyntheticSlotAsync(world, runId, producerId, shardIndex: 2, declaredLastSequence: 1, declaredCount: 1);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(
+                producerId,
+                1,
+                "test.finished",
+                "passed",
+                ExecutionKey: world.Plan.Executions[^1].ExecutionKey));
+
+        var (outcome, finalization) = await ReconcileAndFinishOnHostAsync(world, runId, reprocessTrigger: true);
+
+        outcome.Disposition.ShouldBe(ReconcileDisposition.ComparedReprocess, Describe(outcome));
+        finalization.ShouldNotBeNull().RevisionNo.ShouldBe(2);
+        (await RevisionRowAsync(world, runId, 1)).ShouldBe(revisionOne, "the append never rewrites the earlier revision");
+        (await StateAsync(world, runId)).ShouldBe(
+            "collecting",
+            "a reprocess marker never settles a live run the collection decision has not settled");
+    }
+
+    /// <summary>
+    /// A live run that holds no revision yet is the one case the marker writes nothing for: its collection settlement IS
+    /// the revision this evidence belongs to, so comparing here would either decide a collecting run or append ahead of
+    /// its baseline. The attempt reports the wait and leaves the run, its revisions and its queue rows untouched.
+    /// </summary>
+    [Fact]
+    public async Task Reprocess_Marker_On_Live_Run_Without_A_Revision_Waits_For_The_Collection_Settlement()
+    {
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
+
+        await SetRunStateAsync(world, world.RunId, "collecting");
+        var versions = await VersionAsync(world, world.RunId);
+
+        var outcome = await ReconcileAsync(world, world.RunId, reprocessTrigger: true);
+
+        outcome.Disposition.ShouldBe(ReconcileDisposition.ReprocessAwaitsCollection, Describe(outcome));
+        outcome.Comparison.ShouldBeNull("nothing was compared, so nothing may be frozen");
+        (await RevisionCountAsync(world)).ShouldBe(0, "no revision exists, and the marker appends none");
+        (await StateAsync(world, world.RunId)).ShouldBe("collecting", "the marker settles no live run");
+        (await VersionAsync(world, world.RunId)).ShouldBe(versions, "not even the run's version moved");
+    }
+
     // ------------------------------------------------------------------ world and driving
 
     /// <summary>

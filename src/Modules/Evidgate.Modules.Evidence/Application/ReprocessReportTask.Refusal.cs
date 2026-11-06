@@ -39,15 +39,7 @@ internal sealed partial class ReprocessReportHandler
         if (await InsertRawReportAsync(orgId, prepared, RefusedReport(prepared, reason), cancellationToken)
             .ConfigureAwait(false))
         {
-            await EnqueueReconcileAsync(
-                    prepared,
-                    declaredLastSequence: 0,
-                    declaredCount: 0,
-                    late: false,
-                    afterCancel: false,
-                    Guid.CreateVersion7(),
-                    cancellationToken)
-                .ConfigureAwait(false);
+            await EnqueueReconcileAsync(prepared, Guid.CreateVersion7(), cancellationToken).ConfigureAwait(false);
         }
 
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -85,81 +77,28 @@ internal sealed partial class ReprocessReportHandler
         return false;
     }
 
-    /// <summary>The trigger of a mapped attempt, named by the set's own declaration.</summary>
-    /// <param name="prepared">The request and its synthetic producer.</param>
-    /// <param name="events">The set whose declaration the trigger names.</param>
-    /// <param name="late">True when this evidence arrived after the run finished incomplete.</param>
-    /// <param name="afterCancel">True when the run was already canceled, so this is its post-cancel evidence.</param>
-    /// <param name="batchId">The accepted set's own idempotency id.</param>
-    /// <param name="cancellationToken">Cancels the write.</param>
-    /// <returns>The enqueue.</returns>
-    private Task EnqueueReconcileAsync(
-        Prepared prepared,
-        SerializedEventSet events,
-        bool late,
-        bool afterCancel,
-        Guid batchId,
-        CancellationToken cancellationToken) =>
-        EnqueueReconcileAsync(
-            prepared, events.MaxSequence, events.DeclaredCount, late, afterCancel, batchId, cancellationToken);
-
     /// <summary>
-    /// Enqueues the one reconcile trigger this attempt's rows need: the reprocess shape for a run that was canceled before
-    /// the re-read rows were admitted, the late-evidence shape for a run that already finished as incomplete, and the
-    /// ordinary slot-closed shape for every other run — and for a refusal, which stores no event, so no freeze path can
-    /// see it. Every shape carries the new evidence to the freeze path without waiting for a finalize a synthetic
-    /// producer can never trigger; only the canceled one needs a marker, because a canceled run is otherwise never
-    /// compared and its evidence would never reach a revision.
+    /// Enqueues the one reconcile trigger this attempt's rows need. Every trigger this task writes carries the reprocess
+    /// marker whatever state the run was in when the rows were admitted: the trigger is the only thing that compares a
+    /// finished run or a live one that already holds a revision, and without the marker the queue's ordinary shapes would
+    /// settle the run instead of appending to it. The declaration fields stay at zero because the reconciler re-reads the
+    /// slot's stored declaration under its own lock.
     /// </summary>
     /// <param name="prepared">The request and its synthetic producer.</param>
-    /// <param name="declaredLastSequence">The set's declared high-water mark (0 for a refusal).</param>
-    /// <param name="declaredCount">The set's declared count (0 for a refusal).</param>
-    /// <param name="late">True when this evidence arrived after the run finished incomplete.</param>
-    /// <param name="afterCancel">True when the run was already canceled, so this is its post-cancel evidence.</param>
-    /// <param name="batchId">The accepted set's own idempotency id.</param>
+    /// <param name="batchId">This attempt's own identity, so two attempts never share a trigger key.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <returns>The enqueue.</returns>
     private async Task EnqueueReconcileAsync(
         Prepared prepared,
-        long declaredLastSequence,
-        int declaredCount,
-        bool late,
-        bool afterCancel,
         Guid batchId,
         CancellationToken cancellationToken)
     {
-        if (afterCancel)
-        {
-            await outbox.EnqueueAsync(
-                    RunReconcileContract.OutboxTaskType,
-                    RunReconcileContract.ReprocessPayloadJson(prepared.RunId, prepared.ProducerId),
-                    RunReconcileContract.AggregateType,
-                    prepared.RunId,
-                    RunReconcileContract.ReprocessBatchIdempotencyKey(prepared.RunId, prepared.ProducerId, batchId),
-                    cancellationToken)
-                .ConfigureAwait(false);
-            return;
-        }
-
-        if (late)
-        {
-            await outbox.EnqueueAsync(
-                    RunReconcileContract.OutboxTaskType,
-                    RunReconcileContract.LatePayloadJson(prepared.RunId, prepared.ProducerId),
-                    RunReconcileContract.AggregateType,
-                    prepared.RunId,
-                    RunReconcileContract.LateBatchIdempotencyKey(prepared.RunId, prepared.ProducerId, batchId),
-                    cancellationToken)
-                .ConfigureAwait(false);
-            return;
-        }
-
         await outbox.EnqueueAsync(
                 RunReconcileContract.OutboxTaskType,
-                RunReconcileContract.PayloadJson(prepared.RunId, prepared.ProducerId, declaredLastSequence, declaredCount),
+                RunReconcileContract.ReprocessPayloadJson(prepared.RunId, prepared.ProducerId),
                 RunReconcileContract.AggregateType,
                 prepared.RunId,
-                RunReconcileContract.BatchIdempotencyKey(prepared.RunId, prepared.ProducerId, batchId),
+                RunReconcileContract.ReprocessBatchIdempotencyKey(prepared.RunId, prepared.ProducerId, batchId),
                 cancellationToken)
             .ConfigureAwait(false);
     }

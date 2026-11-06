@@ -41,8 +41,8 @@ internal sealed record RevisionSource(Guid ProjectId, string? ManifestHash);
 /// It never opens, commits or rolls back a transaction (00 §5.5 C3): the caller's rollback undoes the revision, the
 /// pointer move, the outbox row and the state change together, so a failed attempt leaves no half-written revision and a
 /// retry starts from the state it began in. Three settlements reach this type: the collection decision of a
-/// <c>collecting</c> run, the late revision of one already <c>incomplete</c> and the reprocessed revision of a
-/// <c>canceled</c> one. Either way one run appends at most one
+/// <c>collecting</c> run, the late revision of one already <c>incomplete</c> and the reprocessed revision of a run that
+/// already holds its verdict (<c>incomplete</c>, <c>complete</c> or <c>canceled</c>). Either way one run appends at most one
 /// revision per attempt and never rewrites one (00 §8.5 C6/AC9).
 /// </para>
 /// </summary>
@@ -329,8 +329,9 @@ internal sealed class ReconcileFinisher(
         // transaction already holds FOR NO KEY UPDATE, which is a no-op for the holder). An applied edge is credited to
         // the system actor, which is what a task consumer is, and its outbox row and audit row join this unit of work;
         // a run that left queued/running meanwhile answers NoOp, not an applied edge. An append — late evidence into an
-        // incomplete run, reprocessed evidence into a canceled one — never moves the state: both terminal states are the
-        // run's last word, so the revision, not the state, is what a later reader follows. `incomplete -> complete` and
+        // incomplete run, reprocessed evidence into an incomplete, complete or canceled one — never moves the state: those
+        // states hold the run's last word, so the revision, not the state, is what a later reader follows.
+        // `incomplete -> complete`, `complete -> *` and
         // `canceled -> *` are not edges the machine allows, and inventing one would let new evidence rewrite a finished
         // verdict.
         if (!AppendsEvidence(settlement))

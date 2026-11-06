@@ -57,18 +57,32 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         // revision. An ordinary trigger carries no evidence and appends a revision with nothing behind it, so it stays
         // uncollectable.
         // A reprocess of an incomplete run is that same evidence — its admission marks those rows late — so its marker
-        // answers the late path too. Only a canceled run, which no later trigger can revive, needs a disposition of its
-        // own: the re-read rows of its own stored report are admitted after cancel, and they count through a revision
-        // while the run stays canceled.
-        var late = (lateTrigger || reprocessTrigger)
-            && string.Equals(locked.State, RunStates.Incomplete, StringComparison.Ordinal);
-        var reprocess = reprocessTrigger
-            && string.Equals(locked.State, RunStates.Canceled, StringComparison.Ordinal);
+        // answers the late path too.
+        var incomplete = string.Equals(locked.State, RunStates.Incomplete, StringComparison.Ordinal);
+        var late = (lateTrigger || reprocessTrigger) && incomplete;
+
+        // A reprocess marker on a run that already holds a verdict appends a revision and never settles it: <c>complete</c>
+        // and <c>canceled</c> are terminal, so the revision the re-read rows reach is the only place they count.
+        var append = reprocessTrigger && !incomplete && VerdictHolds(locked.State);
+
+        // On a live run the marker must never reach a settlement: a comparison there would decide the run
+        // (collecting → complete|incomplete, or the deadline's forced close) from evidence the run has not finished
+        // collecting. A run that already holds a revision appends beside it; one that holds none waits, because the
+        // collection settlement is the revision this evidence belongs to.
+        var live = reprocessTrigger && !incomplete && !append;
+        if (live && locked.RevisionId is null)
+        {
+            return new ReconcileOutcome(ReconcileDisposition.ReprocessAwaitsCollection, Comparison: null);
+        }
+
+        var reprocess = append || live;
 
         // A queued or running run past its collection deadline is decided too: no finalize will enqueue the attempt
         // that could close it, and the deadline is the run's promise to the caller. Before it the run stays
-        // NotCollectable — it is not collecting, so there is nothing to wait for.
+        // NotCollectable — it is not collecting, so there is nothing to wait for. A reprocess marker never takes this
+        // path: it would move a run its own evidence never settled.
         var overdue = !late
+            && !reprocess
             && locked.DeadlinePassed
             && (string.Equals(locked.State, RunStates.Queued, StringComparison.Ordinal)
                 || string.Equals(locked.State, RunStates.Running, StringComparison.Ordinal));
@@ -122,7 +136,9 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         // into a verdict, so the bounded read of the plan is spent only on the attempt that compares for real.
         // A finished run never waits: its verdict is already written, its open shard would never close now that no
         // finalize is accepted, and waiting would leave the late evidence unread for good. A canceled run has the same
-        // reason: no finalize will ever close what it left open.
+        // reason: no finalize will ever close what it left open. A reprocess on a live run compares too, and appends
+        // beside the run: the marker is the evidence of a deliberate re-reading, and the comparison itself names whatever
+        // shard is still open, so the revision it appends can never read complete.
         if (!late && !reprocess && HasOpenShard(planned) && !locked.DeadlinePassed)
         {
             return new ReconcileOutcome(
@@ -169,6 +185,12 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         return new ExecutionCoverage(executions, rows[0].UncoveredTotal);
     }
 
+    /// <summary>True when the run's verdict is final, so a reprocess beside it appends a revision and moves no state.</summary>
+    /// <param name="state">The run's state as the lock statement read it.</param>
+    private static bool VerdictHolds(string state) =>
+        string.Equals(state, RunStates.Complete, StringComparison.Ordinal)
+        || string.Equals(state, RunStates.Canceled, StringComparison.Ordinal);
+
     /// <summary>True when the shard plan still holds a slot that never closed.</summary>
     /// <param name="planned">The run's producer slots as the shard plan, one row per shard.</param>
     private static bool HasOpenShard(PlannedShard[] planned)
@@ -186,7 +208,8 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
 
     /// <summary>
     /// One row as <see cref="ReconcileSql.LockRun"/> returns it (snake_case → PascalCase, Dapper's underscore map): the
-    /// state the attempt decides on and the collection deadline, evaluated by the <b>database</b>.
+    /// state the attempt decides on, the collection deadline and the run's current revision, evaluated by the
+    /// <b>database</b>.
     /// </summary>
     private sealed class RunLockRow
     {
@@ -194,6 +217,9 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
 
         /// <summary>True when <c>collection_deadline_at &lt;= now()</c>; a NULL deadline reads false (never "passed").</summary>
         public bool DeadlinePassed { get; set; }
+
+        /// <summary>The run's <c>current_evidence_revision_id</c>: null while it holds no revision.</summary>
+        public Guid? RevisionId { get; set; }
     }
 
     /// <summary>One row as <see cref="ReconcileSql.ListSlots"/> returns it (snake_case → PascalCase, Dapper's underscore map).</summary>

@@ -78,8 +78,8 @@ internal sealed partial class ReconcileRunTaskHandler(
         // and Pending reach no finisher at all — nothing to freeze, nothing to append, nothing to transition: a pending
         // attempt waits for the open shard or for the collection deadline, so the run stays collecting. An overdue
         // attempt (queued or running past its deadline) is settled as a forced close; a late attempt (the run already
-        // finished as incomplete and new evidence arrived) and a reprocess attempt (a canceled run whose own report was
-        // re-read) append a revision and settle no state.
+        // finished as incomplete and new evidence arrived) and a reprocess attempt (a run that already holds a verdict —
+        // incomplete, complete or canceled — whose own report was re-read) append a revision and settle no state.
         // An exception here is not caught: it must abort the attempt so the consumer rolls the transaction back and
         // retries it.
         if (comparison is null
@@ -120,6 +120,7 @@ internal sealed partial class ReconcileRunTaskHandler(
         ReconcileDisposition.Compared => "compared",
         ReconcileDisposition.ComparedLate => "compared_late",
         ReconcileDisposition.ComparedReprocess => "compared_reprocess",
+        ReconcileDisposition.ReprocessAwaitsCollection => "reprocess_awaits_collection",
         ReconcileDisposition.ComparedOverdue => "compared_overdue",
         _ => "unknown",
     };

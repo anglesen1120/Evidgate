@@ -208,9 +208,17 @@ internal enum ReconcileDisposition
     /// re-reading of the run's own stored report wrote new rows after cancel, so the attempt appends revision N+1 and
     /// moves the run's pointer to it, and the run stays <c>canceled</c> — a canceled run is terminal and never becomes
     /// complete, whatever its evidence now says (00 §8.1). Like the late path, the revision is the only place
-    /// this evidence ever counts.
+    /// this evidence ever counts. A <c>complete</c> run answers the same way, and stays <c>complete</c>.
     /// </summary>
     ComparedReprocess,
+
+    /// <summary>
+    /// A reprocess marker named a run that is still live (<c>created</c>, <c>queued</c>, <c>running</c> or
+    /// <c>collecting</c>) and holds no <c>evidence_revision</c> yet: nothing is compared, nothing is frozen and no state
+    /// moves, because the run's collection settlement freezes this evidence into its first revision. Comparing here would
+    /// either decide a run that is still collecting or append a revision ahead of its baseline.
+    /// </summary>
+    ReprocessAwaitsCollection,
 
     /// <summary>
     /// The comparison ran on a <c>queued</c> or <c>running</c> run whose <c>collection_deadline_at</c> has passed: its
@@ -269,10 +277,13 @@ internal interface IRunReconciler
     /// a precondition, not a verdict: the run must also still be <c>incomplete</c>.
     /// </param>
     /// <param name="reprocessTrigger">
-    /// Whether this trigger was enqueued for a reprocess the run's admission accepted after cancellation (only the
-    /// reprocess task sets it). A precondition too: it moves an <c>incomplete</c> run onto the same path as
-    /// <paramref name="lateTrigger"/>, and only a <c>canceled</c> run answers
-    /// <see cref="ReconcileDisposition.ComparedReprocess"/>.
+    /// Whether this trigger was enqueued for a reprocess the run's admission accepted (only the reprocess task sets it,
+    /// on every trigger it writes). A precondition, not a verdict: it moves an <c>incomplete</c> run onto the same path as
+    /// <paramref name="lateTrigger"/>, and a <c>complete</c> or <c>canceled</c> run answers
+    /// <see cref="ReconcileDisposition.ComparedReprocess"/> — a revision beside a state that never moves. On a live run it
+    /// answers <see cref="ReconcileDisposition.ComparedReprocess"/> when the run already holds a revision and
+    /// <see cref="ReconcileDisposition.ReprocessAwaitsCollection"/> when it holds none, and it never takes the deadline's
+    /// forced close.
     /// </param>
     /// <param name="cancellationToken">Cancelled on shutdown or lease loss.</param>
     ValueTask<ReconcileOutcome> ReconcileAsync(

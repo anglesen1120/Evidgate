@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -10,9 +11,9 @@ using Evidgate.BuildingBlocks.SharedKernel.Messaging;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Endpoints;
+using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using FluentValidation;
 using Mediator;
-using Microsoft.AspNetCore.Http;
 
 namespace Evidgate.Modules.Evidence.Application;
 
@@ -82,6 +83,7 @@ internal sealed class ReprocessRawReportValidator : AbstractValidator<ReprocessR
 /// </summary>
 /// <param name="db">The Dapper path every statement of this command runs on, inside the ambient tenant scope.</param>
 /// <param name="outbox">The outbox the parse task is handed to, on this same connection and transaction.</param>
+/// <param name="audit">The audit trail the accepted request is recorded on, in the same transaction.</param>
 /// <param name="principals">The caller, for the project its credential is bound to.</param>
 /// <param name="tenant">The request's tenant context, for the project the request is narrowed to.</param>
 /// <remarks>
@@ -89,77 +91,21 @@ internal sealed class ReprocessRawReportValidator : AbstractValidator<ReprocessR
 /// run predicate hides another run's, and the project scope hides a sibling project's report of the same org — all
 /// three are the one 404, so a caller who may not see the report cannot learn it exists by asking to reprocess it.
 /// </remarks>
+[AuditedAction("raw_report.reprocess")]
 [Permission(Permissions.Run.Create)]
 internal sealed class ReprocessRawReportHandler(
     ITenantDb db,
     IOutboxWriter outbox,
+    IAuditTrail audit,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant)
     : ICommandHandler<ReprocessRawReport, Result<ReprocessResponse>>
 {
-    /// <summary>The outbox aggregate the task row belongs to (00 §5.3).</summary>
+    /// <summary>The outbox aggregate the task row belongs to.</summary>
     private const string AggregateType = "raw_report";
 
-    /// <summary>
-    /// The report the caller named, restricted to the routed run: <c>org_id</c> comes back with it because the request
-    /// row is written with the same value, and every later statement re-states it so no read depends on RLS alone.
-    /// </summary>
-    private const string SourceSql = """
-        select r.org_id, r.run_id, r.artifact_id, r.parser_id, r.parser_version, r.outcome, a.project_id
-          from public.raw_report r
-          join public.artifact a
-            on a.org_id = r.org_id
-           and a.id = r.artifact_id
-           and a.run_id = r.run_id
-         where r.id = @raw_report_id
-           and r.run_id = @run_id
-        """;
-
-    /// <summary>
-    /// Whether the requested release is one this org may parse with: a built-in release carries a null org, a
-    /// project-owned one only exists for its own org.
-    /// </summary>
-    private const string ParserVisibleSql = """
-        select exists (
-            select 1
-              from public.report_parser
-             where parser_id = @parser_id
-               and version = @parser_version
-               and (org_id is null or org_id = @org_id))
-        """;
-
-    /// <summary>The report already parsed with this release: the id it was written under is the answer.</summary>
-    private const string StoredReportSql = """
-        select id
-          from public.raw_report
-         where org_id = @org_id
-           and artifact_id = @artifact_id
-           and parser_id = @parser_id
-           and parser_version = @parser_version
-        """;
-
-    /// <summary>The request already recorded for this pair: its id is the answer, and its task is already queued.</summary>
-    private const string ExistingRequestSql = """
-        select id
-          from public.raw_report_reprocess
-         where org_id = @org_id
-           and artifact_id = @artifact_id
-           and parser_id = @parser_id
-           and parser_version = @parser_version
-        """;
-
-    /// <summary>
-    /// Records the request. The conflict target is the natural key, so a concurrent identical request inserts nothing
-    /// and reads nothing back: it answers the winner's id below and enqueues no second task.
-    /// </summary>
-    private const string InsertSql = """
-        insert into public.raw_report_reprocess
-            (id, org_id, run_id, artifact_id, source_raw_report_id, parser_id, parser_version)
-        values
-            (@id, @org_id, @run_id, @artifact_id, @source_raw_report_id, @parser_id, @parser_version)
-        on conflict (org_id, artifact_id, parser_id, parser_version) do nothing
-        returning id
-        """;
+    /// <summary>The audit object type of the request row this command writes.</summary>
+    private const string AuditObjectType = "raw_report_reprocess";
 
     /// <inheritdoc />
     public async ValueTask<Result<ReprocessResponse>> Handle(
@@ -171,13 +117,7 @@ internal sealed class ReprocessRawReportHandler(
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Evidence, nameof(ReprocessRawReport));
 
         var context = tenant.Require();
-
-        var source = await db
-            .QuerySingleOrDefaultAsync<SourceReport>(
-                SourceSql,
-                new { raw_report_id = command.RawReportId, run_id = command.RunId },
-                cancellationToken)
-            .ConfigureAwait(false);
+        var source = await LoadSourceAsync(command, cancellationToken).ConfigureAwait(false);
 
         if (source is null
             || EvidenceProjectScope.Project(source.ProjectId, principals.Current?.ProjectScope, context.ProjectId) is not null)
@@ -192,92 +132,150 @@ internal sealed class ReprocessRawReportHandler(
             return Result.Failure<ReprocessResponse>(EvidenceErrors.ReportUnprocessable);
         }
 
-        if (!ParserVersionOrder.IsNewer(command.ParserVersion, sourceVersion))
+        var requested = new ReprocessTarget(source.OrgId, source.ArtifactId, parserId, command.ParserVersion);
+
+        if (!ParserVersionOrder.IsNewer(command.ParserVersion, sourceVersion)
+            || !await IsParserVisibleAsync(requested, cancellationToken).ConfigureAwait(false))
         {
             return Result.Failure<ReprocessResponse>(EvidenceErrors.ParserVersionUnknown);
         }
 
-        var requested = new
-        {
-            org_id = source.OrgId,
-            artifact_id = source.ArtifactId,
-            parser_id = parserId,
-            parser_version = command.ParserVersion,
-        };
+        return await RecordOrAnswerAsync(command, source, requested, cancellationToken).ConfigureAwait(false);
+    }
 
-        var parserVisible = await db
-            .ScalarAsync<bool>(ParserVisibleSql, requested, cancellationToken)
-            .ConfigureAwait(false);
+    /// <summary>The report the route names, with the project its artifact belongs to; null when no row matches.</summary>
+    private Task<SourceReport?> LoadSourceAsync(ReprocessRawReport command, CancellationToken cancellationToken) =>
+        db.QuerySingleOrDefaultAsync<SourceReport>(
+            ReprocessRawReportSql.Source,
+            new { raw_report_id = command.RawReportId, run_id = command.RunId },
+            cancellationToken);
 
-        if (!parserVisible)
+    /// <summary>Whether the org may parse with the requested release; a foreign or unknown release is not visible.</summary>
+    private Task<bool> IsParserVisibleAsync(ReprocessTarget target, CancellationToken cancellationToken) =>
+        db.ScalarAsync<bool>(ReprocessRawReportSql.ParserVisible, Parameters(target), cancellationToken);
+
+    /// <summary>
+    /// The two natural keys first, then the insert: an existing report row or request row is the answer itself, and
+    /// only a genuinely new pair inserts and enqueues. A lost insert race answers the winner's row.
+    /// </summary>
+    private async Task<Result<ReprocessResponse>> RecordOrAnswerAsync(
+        ReprocessRawReport command,
+        SourceReport source,
+        ReprocessTarget target,
+        CancellationToken cancellationToken)
+    {
+        var parameters = Parameters(target);
+
+        if (await db.ScalarAsync<Guid?>(ReprocessRawReportSql.StoredReport, parameters, cancellationToken)
+                .ConfigureAwait(false) is { } storedId)
         {
-            return Result.Failure<ReprocessResponse>(EvidenceErrors.ParserVersionUnknown);
+            return Answered(storedId, changed: false);
         }
 
-        var stored = await db
-            .ScalarAsync<Guid?>(StoredReportSql, requested, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (stored is { } storedId)
+        if (await db.ScalarAsync<Guid?>(ReprocessRawReportSql.ExistingRequest, parameters, cancellationToken)
+                .ConfigureAwait(false) is { } existingId)
         {
-            return Accepted(storedId);
-        }
-
-        var existing = await db
-            .ScalarAsync<Guid?>(ExistingRequestSql, requested, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (existing is { } existingId)
-        {
-            return Accepted(existingId);
+            return Answered(existingId, changed: false);
         }
 
         // The id is minted here, not by the task: the caller is answered with it, and the task writes the report
         // row under it, so the id a client holds names the evidence the reprocess will produce.
         var parsingId = Guid.CreateVersion7();
 
-        var inserted = await db
-            .ScalarAsync<Guid?>(
-                InsertSql,
-                new
-                {
-                    id = parsingId,
-                    org_id = source.OrgId,
-                    run_id = source.RunId,
-                    artifact_id = source.ArtifactId,
-                    source_raw_report_id = command.RawReportId,
-                    parser_id = parserId,
-                    parser_version = command.ParserVersion,
-                },
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        if (inserted is null)
+        if (await InsertRequestAsync(command, source, target, parsingId, cancellationToken).ConfigureAwait(false)
+            is null)
         {
             // A concurrent identical request won the insert and enqueued the task; this one answers it.
-            var winner = await db
-                .ScalarAsync<Guid?>(ExistingRequestSql, requested, cancellationToken)
-                .ConfigureAwait(false);
-
-            return winner is { } winnerId
-                ? Accepted(winnerId)
-                : Result.Failure<ReprocessResponse>(EvidenceErrors.ParserVersionUnknown);
+            return await AnswerWinnerAsync(parameters, cancellationToken).ConfigureAwait(false);
         }
 
-        await outbox.EnqueueAsync(
+        await EnqueueAsync(command, parsingId, cancellationToken).ConfigureAwait(false);
+
+        return Answered(parsingId, changed: true);
+    }
+
+    /// <summary>Inserts the request row under the natural key; null when a concurrent request won the key.</summary>
+    private Task<Guid?> InsertRequestAsync(
+        ReprocessRawReport command,
+        SourceReport source,
+        ReprocessTarget target,
+        Guid parsingId,
+        CancellationToken cancellationToken) =>
+        db.ScalarAsync<Guid?>(
+            ReprocessRawReportSql.Insert,
+            new
+            {
+                id = parsingId,
+                org_id = source.OrgId,
+                run_id = source.RunId,
+                artifact_id = source.ArtifactId,
+                source_raw_report_id = command.RawReportId,
+                parser_id = target.ParserId,
+                parser_version = target.ParserVersion,
+            },
+            cancellationToken);
+
+    /// <summary>Reads the row the concurrent winner inserted, or refuses when even that read finds nothing.</summary>
+    private async Task<Result<ReprocessResponse>> AnswerWinnerAsync(
+        object parameters,
+        CancellationToken cancellationToken)
+    {
+        var winner = await db
+            .ScalarAsync<Guid?>(ReprocessRawReportSql.ExistingRequest, parameters, cancellationToken)
+            .ConfigureAwait(false);
+
+        return winner is { } winnerId
+            ? Answered(winnerId, changed: false)
+            : Result.Failure<ReprocessResponse>(EvidenceErrors.ParserVersionUnknown);
+    }
+
+    /// <summary>The one task of an accepted pair, written in this transaction under the natural key.</summary>
+    private Task<Guid> EnqueueAsync(ReprocessRawReport command, Guid parsingId, CancellationToken cancellationToken) =>
+        outbox.EnqueueAsync(
             ReprocessReportPayload.TaskType,
             JsonSerializer.Serialize(new { parsing_id = parsingId }),
             AggregateType,
             parsingId,
             $"reprocess:{command.RawReportId:D}:{command.ParserVersion}",
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken);
 
-        return Accepted(parsingId);
+    /// <summary>
+    /// The 202 answer: the id the report row will be written under, whether it exists yet or not. An answer that
+    /// wrote nothing describes no change to the trail, so the audit entry of the command is dropped instead.
+    /// </summary>
+    private Result<ReprocessResponse> Answered(Guid parsingId, bool changed)
+    {
+        if (changed)
+        {
+            audit.Describe(new AuditObject(AuditObjectType, parsingId.ToString("D")));
+        }
+        else
+        {
+            audit.Suppress();
+        }
+
+        return Result.Success(new ReprocessResponse(parsingId), 202);
     }
 
-    /// <summary>The 202 answer: the id the report row will be written under, whether it exists yet or not.</summary>
-    private static Result<ReprocessResponse> Accepted(Guid parsingId) =>
-        Result.Success(new ReprocessResponse(parsingId), StatusCodes.Status202Accepted);
+    /// <summary>The statement parameters of one (report artifact, release) pair.</summary>
+    private static object Parameters(ReprocessTarget target) => new
+    {
+        org_id = target.OrgId,
+        artifact_id = target.ArtifactId,
+        parser_id = target.ParserId,
+        parser_version = target.ParserVersion,
+    };
+
+    /// <summary>The pair this request names: the stored report's artifact and the release asked to re-read it.</summary>
+    /// <param name="OrgId">The row's tenant, written onto the request row.</param>
+    /// <param name="ArtifactId">The report artifact the release is asked to parse again.</param>
+    /// <param name="ParserId">The release family that judged the report.</param>
+    /// <param name="ParserVersion">The release the caller asked for.</param>
+    private sealed record ReprocessTarget(
+        Guid OrgId,
+        Guid ArtifactId,
+        string ParserId,
+        string ParserVersion);
 
     /// <summary>One stored report as the decision reads it: where it lives and which release judged it.</summary>
     /// <param name="OrgId">The row's tenant, written onto the request row.</param>

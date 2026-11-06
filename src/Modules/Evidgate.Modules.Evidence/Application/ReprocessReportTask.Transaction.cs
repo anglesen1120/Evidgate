@@ -27,6 +27,9 @@ internal sealed partial class ReprocessReportHandler
     /// </summary>
     private const int MaxShardIndex = 256;
 
+    /// <summary>The reason the case-attempt writer refused this set, so nothing of the attempt is committed.</summary>
+    private const string CaseAttemptConflict = "case_attempt_conflict";
+
     /// <summary>
     /// The run's state, its project's state and its late window, read under the run's own lock (the same admission facts
     /// the parse path reads, plus the lock the synthetic slot's shard index needs).
@@ -91,24 +94,33 @@ internal sealed partial class ReprocessReportHandler
             return refused!;
         }
 
+        var compared = false;
         if (inserted.Count > 0)
         {
             if (!await WriteAttemptsAsync(orgId, prepared, events, inserted, cancellationToken).ConfigureAwait(false))
             {
-                return new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "case_attempt_conflict");
+                return new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, CaseAttemptConflict);
             }
 
             // One identity for this attempt's accepted set: the reconcile trigger is named by it, so it cannot collide
             // with a later attempt's trigger for this same request.
-            await EnqueueReconcileAsync(
-                    prepared, events, allowed.Late, allowed.AfterCancel, Guid.CreateVersion7(), cancellationToken)
-                .ConfigureAwait(false);
+            await EnqueueReconcileAsync(prepared, Guid.CreateVersion7(), cancellationToken).ConfigureAwait(false);
+            compared = true;
         }
 
-        if (await StoreParsedRowAsync(orgId, prepared, report, cancellationToken).ConfigureAwait(false)
-            is { } rejected)
+        var (rejectedReport, reportInserted) = await StoreParsedRowAsync(orgId, prepared, report, cancellationToken)
+            .ConfigureAwait(false);
+        if (rejectedReport is not null)
         {
-            return rejected;
+            return rejectedReport;
+        }
+
+        // A fresh row whose events were every one already stored (an attempt that committed them and then lost its
+        // trigger) still asks for one comparison: without it the run would never read the row this attempt wrote, and the
+        // trigger is idempotent by its own identity, so a second one at worst repeats the comparison.
+        if (!compared && reportInserted)
+        {
+            await EnqueueReconcileAsync(prepared, Guid.CreateVersion7(), cancellationToken).ConfigureAwait(false);
         }
 
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -119,8 +131,9 @@ internal sealed partial class ReprocessReportHandler
 
     /// <summary>
     /// The report that mapped nothing (every testcase unmapped, or a document with no testcase): no slot, no event and
-    /// nothing for the reconciler. The row still leaves, so a document that mapped nothing is distinguishable from one
-    /// that was never parsed.
+    /// no attempt. The row still leaves, so a document that mapped nothing is distinguishable from one that was never
+    /// parsed, and a fresh row enqueues the same reprocess-marked trigger a mapped one does: the comparison then answers
+    /// that this evidence is already what the run holds.
     /// </summary>
     /// <param name="scope">The write scope this attempt opened.</param>
     /// <param name="orgId">The tenant the claimed task row names.</param>
@@ -135,10 +148,17 @@ internal sealed partial class ReprocessReportHandler
         RawReportDraft report,
         CancellationToken cancellationToken)
     {
-        if (await StoreParsedRowAsync(orgId, prepared, report, cancellationToken).ConfigureAwait(false)
-            is { } conflicted)
+        var (stopped, inserted) = await StoreParsedRowAsync(orgId, prepared, report, cancellationToken)
+            .ConfigureAwait(false);
+        if (stopped is not null)
         {
-            return conflicted;
+            return stopped;
+        }
+
+        // Only the attempt that wrote the row asks for a comparison: a replay wrote nothing, so no evidence moved.
+        if (inserted)
+        {
+            await EnqueueReconcileAsync(prepared, Guid.CreateVersion7(), cancellationToken).ConfigureAwait(false);
         }
 
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -341,17 +361,17 @@ internal sealed partial class ReprocessReportHandler
     }
 
     /// <summary>
-    /// Writes one attempt per newly inserted finish through the shared writer, in batches the writer accepts, and only
-    /// for executions no earlier report already attempted: this report speaks for a plan that may already carry a
-    /// verdict, and a second verdict on one execution would overwrite a standing one. A refusal is reported to the
-    /// caller, which then commits nothing.
+    /// Writes one attempt per newly inserted event, through the shared writer, in batches the writer accepts. An execution
+    /// that already carries an attempt keeps it untouched: an attempt row is never rewritten, and a second row for the
+    /// same execution would change what the frozen evidence of an earlier revision recomputes. A refusal is reported to
+    /// the caller, which then commits nothing.
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="prepared">The run the attempts are written under.</param>
     /// <param name="events">The serialized set, whose attempt inputs were built with the rows.</param>
     /// <param name="insertedIds">The event ids this attempt inserted.</param>
     /// <param name="cancellationToken">Cancels the writes.</param>
-    /// <returns>True when the writer accepted every attempt.</returns>
+    /// <returns>True when the writer accepted every attempt, false when it refused one.</returns>
     private async Task<bool> WriteAttemptsAsync(
         Guid orgId,
         Prepared prepared,
@@ -368,18 +388,21 @@ internal sealed partial class ReprocessReportHandler
             return true;
         }
 
-        var covered = (await db.QueryAsync<string>(
-                CoveredExecutionsSql,
-                new { org_id = orgId, run_id = prepared.RunId },
-                cancellationToken).ConfigureAwait(false))
-            .ToHashSet(StringComparer.Ordinal);
+        var attempted = new HashSet<string>(
+            (await db.QueryAsync<AttemptedExecutionRow>(
+                    AttemptedExecutionsSql,
+                    new
+                    {
+                        org_id = orgId,
+                        run_id = prepared.RunId,
+                        execution_keys = SerializeExecutionKeys(inputs),
+                    },
+                    cancellationToken)
+                .ConfigureAwait(false))
+            .Select(row => row.ExecutionKey),
+            StringComparer.Ordinal);
 
-        // One attempt per execution, and only for the executions no earlier report attempted: the writer holds one
-        // verdict per (run, execution, attempt), and re-stating a standing verdict is not this attempt's business.
-        var pending = inputs
-            .Where(input => !covered.Contains(input.ExecutionKey))
-            .DistinctBy(input => input.ExecutionKey, StringComparer.Ordinal)
-            .ToArray();
+        var pending = FirstAttempts(inputs, attempted);
         if (pending.Length == 0)
         {
             return true;
@@ -412,37 +435,29 @@ internal sealed partial class ReprocessReportHandler
 
         return true;
     }
-}
 
-/// <summary>
-/// Whether a run still accepts a <em>reprocess</em>, as distinct from whether it still accepts new ingest evidence.
-/// <para>
-/// It shares the intake policy's verdict everywhere except one case: a run that finished <c>incomplete</c> stays open to a
-/// reprocess after its late window closed. That window bounds what an ingest route or a parse task may still add to a run
-/// the clock already judged; a reprocess is a deliberate re-reading of bytes the run itself holds, and it is the one path
-/// that can turn an incomplete verdict into an evidence-backed one. A <c>complete</c> run stays closed, and a deleted or
-/// suspended project refuses as it does for every writer.
-/// </para>
-/// </summary>
-internal static class ReprocessAdmission
-{
-    /// <summary>Decides one reprocess against the run's and its project's state.</summary>
-    /// <param name="projectState">The project's state: <c>active</c>, <c>suspended</c> or <c>deleted</c>.</param>
-    /// <param name="runState">The run's state (0031's closed vocabulary).</param>
-    /// <param name="lateWindowOpen">True when <c>now()</c> is at or before the run's late-window end.</param>
-    /// <returns>The decision, with the rows' <c>after_cancel</c>/<c>late</c> markers already resolved.</returns>
-    public static RunAdmission Decide(string projectState, string runState, bool lateWindowOpen)
+    /// <summary>
+    /// One attempt per execution key of the set, for the executions that carry none yet. A key is reported once: the first
+    /// occurrence is the report's own answer for it.
+    /// </summary>
+    /// <param name="inputs">The attempt inputs of the newly inserted events, in the report's order.</param>
+    /// <param name="attempted">The execution keys the run already holds an attempt for.</param>
+    /// <returns>The attempts to write.</returns>
+    private static CaseAttemptInput[] FirstAttempts(CaseAttemptInput[] inputs, HashSet<string> attempted)
     {
-        var intake = RunAdmissionPolicy.Decide(projectState, runState, lateWindowOpen);
-        if (intake.Allowed || !string.Equals(intake.Refusal, RunAdmissionPolicy.RunClosed, StringComparison.Ordinal))
+        var pending = new List<CaseAttemptInput>(inputs.Length);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var input in inputs)
         {
-            return intake;
+            if (!seen.Add(input.ExecutionKey) || attempted.Contains(input.ExecutionKey))
+            {
+                continue;
+            }
+
+            pending.Add(input);
         }
 
-        // Closed because the clock ran out, not because the evidence is final: the run stays where it is and the attempt's
-        // rows are marked late, so the freeze path records a new revision instead of moving the run.
-        return string.Equals(runState, "incomplete", StringComparison.Ordinal)
-            ? new RunAdmission(Allowed: true, Refusal: null, AfterCancel: false, Late: true)
-            : intake;
+        return [.. pending];
     }
 }

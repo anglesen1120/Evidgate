@@ -2,6 +2,9 @@
 #pragma warning disable CA1861
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using Evidgate.Modules.Evidence.Endpoints;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -14,12 +17,14 @@ namespace Tenancy.IntegrationTests;
 /// the release asked to read it again. The route records one request row and one task in the same transaction, answers
 /// 202 with the id the report row will carry, and never reads or changes run state. A report of another tenant or
 /// another run is the one 404 <c>not_found</c> (00 §5.4: no existence oracle), and the handler applies the same
-/// project-scope rule the comparison read does — no caller of this suite carries a project scope, so the project case
-/// is covered by that read's suite rather than here. A report no release ever judged is 422
+/// project-scope rule the comparison read does — <c>run:create</c> is inside the service-role ceiling, so a
+/// project-bound service credential is accepted for a report of its own project and gets that 404 for another. A
+/// report no release ever judged is 422
 /// <c>raw_report_unprocessable</c>; a version that is unregistered, equal, older or unorderable is 422
 /// <c>parser_version_unknown</c>. A replay of the key answers the stored id, the same key
 /// with another body is 409 <c>idempotency_conflict</c>, and the same pair under a fresh key neither writes a second
-/// request nor queues a second task.
+/// request nor queues a second task. A body over the route's 4 KiB cap is 413 <c>payload_too_large</c> before it is
+/// parsed.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class ReprocessEndpointTests
@@ -151,14 +156,56 @@ public sealed class ReprocessEndpointTests
     {
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
-        var reportId = await SeedReportAsync(world, runId, version: NewerVersion);
+        var reportId = await SeedReportAsync(world, runId);
+        var artifactId = await ArtifactOfAsync(world, reportId);
 
-        // The row exists, so this release is not newer: whatever the route answers, it never records a request.
+        // The pair already exists: the release re-read these bytes before and wrote the row this id names.
+        var parsedId = await SeedParsedAsync(world, runId, artifactId, NewerVersion);
+
         var answer = await PostAsync(world, runId, reportId);
 
-        answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
-        answer.ErrorCode.ShouldBe("parser_version_unknown");
-        (await ReprocessTasksAsync(world)).ShouldBe(0);
+        answer.Status.ShouldBe(HttpStatusCode.Accepted);
+        answer.Id("parsing_id").ShouldBe(parsedId);
+        (await ReprocessTasksAsync(world)).ShouldBe(0, "the work exists, so nothing is queued");
+    }
+
+    [Fact]
+    public async Task A_body_over_the_route_cap_is_payload_too_large_and_records_nothing()
+    {
+        await using var world = await StartAsync();
+        var runId = await SeedRunAsync(world);
+        var reportId = await SeedReportAsync(world, runId);
+
+        // Exactly at the cap is read and accepted; one byte more is refused before it is parsed.
+        var atCap = await PostRawAsync(world, runId, PaddedBody(reportId, ReprocessLimits.MaxBodyBytes));
+        var overCap = await PostRawAsync(world, runId, PaddedBody(reportId, ReprocessLimits.MaxBodyBytes + 1));
+
+        overCap.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
+        overCap.ErrorCode.ShouldBe("payload_too_large");
+        overCap.Body.GetRawText().ShouldNotContain(NewerVersion, Case.Sensitive, "the refusal echoes nothing of the body");
+        (await ReprocessTasksAsync(world)).ShouldBe(1, "only the body at the cap was read and accepted");
+
+        atCap.Status.ShouldBe(HttpStatusCode.Accepted, atCap.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task An_accepted_request_audits_the_new_report_id_and_a_replay_audits_nothing()
+    {
+        await using var world = await StartAsync();
+        var runId = await SeedRunAsync(world);
+        var reportId = await SeedReportAsync(world, runId);
+        var key = NewKey();
+
+        var first = await PostAsync(world, runId, reportId, key: key);
+        var replay = await PostAsync(world, runId, reportId, key: key);
+
+        first.Status.ShouldBe(HttpStatusCode.Accepted);
+        replay.Id("parsing_id").ShouldBe(first.Id("parsing_id"));
+
+        // [AuditedAction] records the accepted write against the report id it will create; the replay wrote nothing,
+        // so its entry is suppressed and the action keeps one row.
+        (await AuditedObjectsAsync(world, "raw_report.reprocess"))
+            .ShouldBe(new[] { $"raw_report_reprocess:{first.Id("parsing_id"):D}" });
     }
 
     // ------------------------------------------------------------------ refusals
@@ -176,6 +223,11 @@ public sealed class ReprocessEndpointTests
         answer.Status.ShouldBe(HttpStatusCode.NotFound);
         answer.ErrorCode.ShouldBe("not_found");
         (await ReprocessTasksAsync(world)).ShouldBe(0);
+
+        // Positive control: the same request shape against the caller's own report is accepted.
+        var ownRun = await SeedRunAsync(world);
+        var ownReport = await SeedReportAsync(world, ownRun);
+        (await PostAsync(world, ownRun, ownReport)).Status.ShouldBe(HttpStatusCode.Accepted);
     }
 
     [Fact]
@@ -191,6 +243,9 @@ public sealed class ReprocessEndpointTests
         answer.Status.ShouldBe(HttpStatusCode.NotFound);
         answer.ErrorCode.ShouldBe("not_found");
         (await ReprocessTasksAsync(world)).ShouldBe(0);
+
+        // Positive control: the report of the run the route names is accepted.
+        (await PostAsync(world, otherRun, reportId)).Status.ShouldBe(HttpStatusCode.Accepted);
     }
 
     [Fact]
@@ -198,11 +253,15 @@ public sealed class ReprocessEndpointTests
     {
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
+        var reportId = await SeedReportAsync(world, runId);
 
         var answer = await PostAsync(world, runId, Guid.CreateVersion7());
 
         answer.Status.ShouldBe(HttpStatusCode.NotFound);
         answer.ErrorCode.ShouldBe("not_found");
+
+        // Positive control: the report that does exist under the same run is accepted.
+        (await PostAsync(world, runId, reportId)).Status.ShouldBe(HttpStatusCode.Accepted);
     }
 
     [Fact]
@@ -211,12 +270,16 @@ public sealed class ReprocessEndpointTests
         await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
         var reportId = await SeedReportAsync(world, runId, outcome: "unsupported");
+        var supported = await SeedReportAsync(world, runId);
 
         var answer = await PostAsync(world, runId, reportId);
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         answer.ErrorCode.ShouldBe("raw_report_unprocessable");
         (await ReprocessTasksAsync(world)).ShouldBe(0);
+
+        // Positive control: a report a release did judge is accepted under the same route.
+        (await PostAsync(world, runId, supported)).Status.ShouldBe(HttpStatusCode.Accepted);
     }
 
     [Theory]
@@ -235,6 +298,9 @@ public sealed class ReprocessEndpointTests
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         answer.ErrorCode.ShouldBe("parser_version_unknown");
         (await ReprocessTasksAsync(world)).ShouldBe(0);
+
+        // Positive control: the registered newer release of the same parser is accepted.
+        (await PostAsync(world, runId, reportId)).Status.ShouldBe(HttpStatusCode.Accepted);
     }
 
     [Fact]
@@ -253,6 +319,9 @@ public sealed class ReprocessEndpointTests
         answer.Status.ShouldBe(HttpStatusCode.BadRequest);
         answer.ErrorCode.ShouldBe("request_invalid");
         (await ReprocessTasksAsync(world)).ShouldBe(0);
+
+        // Positive control: the identical body with a key is accepted.
+        (await PostAsync(world, runId, reportId)).Status.ShouldBe(HttpStatusCode.Accepted);
     }
 
     [Fact]
@@ -272,6 +341,34 @@ public sealed class ReprocessEndpointTests
 
         answer.Status.ShouldBe(HttpStatusCode.Forbidden);
         (await ReprocessTasksAsync(world)).ShouldBe(0);
+
+        // Positive control: the org's founder holds run:create and is accepted with the same body.
+        (await PostAsync(world, runId, reportId)).Status.ShouldBe(HttpStatusCode.Accepted);
+    }
+
+    [Fact]
+    public async Task A_project_bound_service_credential_is_accepted_for_its_own_project_and_not_found_for_another()
+    {
+        await using var world = await StartAsync();
+        var runId = await SeedRunAsync(world);
+        var reportId = await SeedReportAsync(world, runId);
+        var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("sibling"));
+
+        // run:create is inside the service-role ceiling, so the permission stage admits a project-bound credential.
+        var own = TenancyApiFactory.Resolved(
+            serviceOrg: world.Org, serviceProject: world.Project, servicePermissions: ["run:create"]);
+        var elsewhere = TenancyApiFactory.Resolved(
+            serviceOrg: world.Org, serviceProject: sibling, servicePermissions: ["run:create"]);
+
+        var denied = await PostAsync(world, runId, reportId, caller: elsewhere);
+
+        denied.Status.ShouldBe(HttpStatusCode.NotFound);
+        denied.ErrorCode.ShouldBe("not_found");
+        (await ReprocessTasksAsync(world)).ShouldBe(0);
+
+        // Positive control: the same credential bound to the report's own project is accepted.
+        (await PostAsync(world, runId, reportId, caller: own)).Status.ShouldBe(HttpStatusCode.Accepted);
+        (await ReprocessTasksAsync(world)).ShouldBe(1);
     }
 
     // ------------------------------------------------------------------ run state and accounting
@@ -420,12 +517,84 @@ public sealed class ReprocessEndpointTests
         return reportId;
     }
 
+    /// <summary>
+    /// One report row for an artifact the caller already holds, at <paramref name="version"/>: the row an earlier
+    /// reprocess with that release wrote. The table's natural key is (artifact, parser pair), so this pair answers as
+    /// already parsed and the route must return its id instead of queueing a second task.
+    /// </summary>
+    private async Task<Guid> SeedParsedAsync(World world, Guid runId, Guid artifactId, string version)
+    {
+        var reportId = Guid.CreateVersion7();
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        (await scope.ExecuteAsync(
+            """
+            insert into public.raw_report
+            (id, org_id, run_id, artifact_id, producer_kind, parser_id, parser_version, outcome,
+            observed_tests, observed_failures)
+            values (@id, @org, @run, @artifact, @producer_kind, @parser_id, @parser_version, 'mapped', 0, 0)
+            """,
+            ("id", reportId),
+            ("org", world.Org),
+            ("run", runId),
+            ("artifact", artifactId),
+            ("producer_kind", ProducerKind),
+            ("parser_id", world.ParserId),
+            ("parser_version", version))).ShouldBe(1);
+        await scope.CommitAsync();
+        return reportId;
+    }
+
     private async Task<Guid> ArtifactOfAsync(World world, Guid reportId)
     {
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
         return await scope.ScalarAsync<Guid>(
             "select artifact_id from public.raw_report where id = @id",
             ("id", reportId));
+    }
+
+    /// <summary>The audit rows of one action, as <c>object_type:object_id</c>, in the order they were written.</summary>
+    private async Task<string[]> AuditedObjectsAsync(World world, string action)
+    {
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        return await scope.ScalarAsync<string[]>(
+            """
+            select array_agg(object_type || ':' || object_id order by seq)
+            from public.audit_log
+            where org_id = @org and action = @action
+            """,
+            ("org", world.Org),
+            ("action", action)) ?? [];
+    }
+
+    /// <summary>
+    /// Posts one body verbatim, with the mandatory key: a body padded to a byte count has no serialised form, and the
+    /// cap is refused only after the key is present.
+    /// </summary>
+    private static async Task<ApiAnswer> PostRawAsync(World world, Guid runId, string raw)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/v1/runs/{runId}/reprocess")
+        {
+            Content = new StringContent(raw, Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add("Idempotency-Key", NewKey());
+        world.Admin(request.Headers);
+
+        using var response = await world.Client.SendAsync(request, TestContext.Current.CancellationToken);
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        using var document = JsonDocument.Parse(string.IsNullOrEmpty(text) ? "{}" : text);
+
+        return new ApiAnswer(response.StatusCode, document.RootElement.Clone(), response.Headers);
+    }
+
+    /// <summary>A legal reprocess body of exactly <paramref name="totalBytes"/> bytes: trailing whitespace is legal JSON.</summary>
+    private static string PaddedBody(Guid reportId, int totalBytes)
+    {
+        var json = $$"""{"raw_report_id":"{{reportId:D}}","parser_version":"{{NewerVersion}}"}""";
+        var length = Encoding.UTF8.GetByteCount(json);
+
+        length.ShouldBeLessThan(totalBytes, "the pad must leave room for the whole body");
+
+        return json + new string(' ', totalBytes - length);
     }
 
     private async Task<long> ReprocessTasksAsync(World world)

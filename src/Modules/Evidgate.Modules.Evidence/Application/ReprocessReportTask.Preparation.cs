@@ -115,54 +115,18 @@ internal sealed partial class ReprocessReportHandler
         {
             // The command committed the request before it enqueued, so an absent row is a claim on something that was
             // never written: there is nothing to retry toward.
-            return new Preparation(null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, RequestAbsent));
+            return Stopped(RequestAbsent);
         }
 
         await using var context = contexts.Create();
-        var artifact = await context.Artifacts
-            .AsNoTracking()
-            .SingleOrDefaultAsync(row => row.Id == request.ArtifactId, cancellationToken)
+        var (artifact, artifactStopped) = await ResolveArtifactAsync(context, request, cancellationToken)
             .ConfigureAwait(false);
         if (artifact is not { } ready)
         {
-            return new Preparation(null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, ArtifactAbsent));
+            return Stopped(artifactStopped!);
         }
 
-        if (ready.State is not ArtifactState.Ready
-            || ready.Kind is not ArtifactKind.RawReport
-            || ready.RunId != request.RunId)
-        {
-            // The bytes were retracted or replaced between the command and this attempt: nothing may be derived from an
-            // artifact that no longer is the run's ready raw report.
-            return new Preparation(null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, ArtifactLeftReady));
-        }
-
-        if (!ArtifactObjectKey.IsMintedFor(ready))
-        {
-            throw new InvalidOperationException($"artifact {ready.Id} has an object key that was not minted for it");
-        }
-
-        var registered = await db.ScalarAsync<int?>(
-            RegistrySql,
-            new { parser_id = request.ParserId, parser_version = request.ParserVersion },
-            cancellationToken).ConfigureAwait(false);
-        if (registered is null)
-        {
-            throw new InvalidOperationException(
-                "the pinned parser release is not visible in this tenant's registry, so the report was not parsed; the task is retried");
-        }
-
-        var mapper = mappers.FirstOrDefault(candidate =>
-            string.Equals(candidate.ParserId, request.ParserId, StringComparison.Ordinal)
-            && string.Equals(candidate.Version, request.ParserVersion, StringComparison.Ordinal));
-        if (mapper is null)
-        {
-            // The verdict named a release this deployment does not ship. Retrying cannot load it, so the attempt
-            // dead-letters rather than reporting a mapped report that was never mapped.
-            throw new InvalidOperationException(
-                "no JUnit mapper is loaded for the pinned parser release, so the report was not parsed; the task is retried");
-        }
-
+        var mapper = await ResolveMapperAsync(request, cancellationToken).ConfigureAwait(false);
         var planned = await db.QueryAsync<PlannedExecutionHint>(
             PlannedExecutionIndex.SelectSql,
             new { org_id = orgId, run_id = request.RunId },
@@ -186,4 +150,80 @@ internal sealed partial class ReprocessReportHandler
                 ReprocessReportProducer.IdFor(payload.ParsingId)),
             null);
     }
+
+    /// <summary>
+    /// The artifact the request names, re-read inside the read scope: only this run's still-<c>ready</c> raw report may be
+    /// re-read, because the bytes may have been retracted or replaced between the command and this attempt.
+    /// </summary>
+    /// <param name="context">The tenant read model.</param>
+    /// <param name="request">The request whose artifact is resolved.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The artifact, or the reason the attempt stops before the fetch.</returns>
+    private static async Task<(Artifact? Ready, string? Stopped)> ResolveArtifactAsync(
+        EvidenceDbContext context,
+        RequestRow request,
+        CancellationToken cancellationToken)
+    {
+        var artifact = await context.Artifacts
+            .AsNoTracking()
+            .SingleOrDefaultAsync(row => row.Id == request.ArtifactId, cancellationToken)
+            .ConfigureAwait(false);
+        if (artifact is not { } ready)
+        {
+            return (null, ArtifactAbsent);
+        }
+
+        if (ready.State is not ArtifactState.Ready
+            || ready.Kind is not ArtifactKind.RawReport
+            || ready.RunId != request.RunId)
+        {
+            return (null, ArtifactLeftReady);
+        }
+
+        if (!ArtifactObjectKey.IsMintedFor(ready))
+        {
+            throw new InvalidOperationException($"artifact {ready.Id} has an object key that was not minted for it");
+        }
+
+        return (ready, null);
+    }
+
+    /// <summary>
+    /// The loaded mapper for the exact release the request pinned. A release the registry does not show, or one this
+    /// deployment does not ship, is a fault retrying cannot fix, so it throws instead of reporting a mapped report that
+    /// was never mapped.
+    /// </summary>
+    /// <param name="request">The request whose pinned pair the registry and the mapper collection are asked for.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The mapper of that pair.</returns>
+    private async Task<IJUnitMapper> ResolveMapperAsync(RequestRow request, CancellationToken cancellationToken)
+    {
+        var registered = await db.ScalarAsync<int?>(
+            RegistrySql,
+            new { parser_id = request.ParserId, parser_version = request.ParserVersion },
+            cancellationToken).ConfigureAwait(false);
+        if (registered is null)
+        {
+            throw new InvalidOperationException(
+                "the pinned parser release is not visible in this tenant's registry, so the report was not parsed; the task is retried");
+        }
+
+        foreach (var candidate in mappers)
+        {
+            if (string.Equals(candidate.ParserId, request.ParserId, StringComparison.Ordinal)
+                && string.Equals(candidate.Version, request.ParserVersion, StringComparison.Ordinal))
+            {
+                return candidate;
+            }
+        }
+
+        throw new InvalidOperationException(
+            "no JUnit mapper is loaded for the pinned parser release, so the report was not parsed; the task is retried");
+    }
+
+    /// <summary>The terminal outcome of an attempt that had nothing to parse.</summary>
+    /// <param name="reason">The named reason the held-back bytes are not this attempt's evidence.</param>
+    /// <returns>A preparation that stops before the fetch.</returns>
+    private static Preparation Stopped(string reason) =>
+        new(null, new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, reason));
 }

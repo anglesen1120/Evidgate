@@ -42,10 +42,16 @@ internal static class ReconcileSql
     /// (<see cref="RunEventScopeReader"/>), and the late trigger it writes carries that decision. Re-evaluating the
     /// window here would let a lagging queue withdraw evidence the route already accepted and acknowledged.
     /// </para>
+    /// <para>
+    /// <c>revision_id</c> is the run's current <c>evidence_revision</c>, or NULL while the run holds none: a reprocess
+    /// marker naming a live run needs that answer before anything is read, because the collection settlement of such a
+    /// run is the revision its evidence belongs to.
+    /// </para>
     /// </summary>
     internal const string LockRun = """
         select r.state as state,
-               coalesce(r.collection_deadline_at <= now(), false) as deadline_passed
+               coalesce(r.collection_deadline_at <= now(), false) as deadline_passed,
+               r.current_evidence_revision_id as revision_id
           from public.run r
          where r.org_id = @org_id and r.id = @run_id
            for no key update of r

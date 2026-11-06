@@ -138,8 +138,11 @@ internal sealed partial class ReprocessReportHandler
     /// <param name="prepared">The request, its run and its pinned release.</param>
     /// <param name="report">The report's own row, built before this scope opened.</param>
     /// <param name="cancellationToken">Cancels the insert and the read.</param>
-    /// <returns>The skipped outcome that ends the attempt, or null when the row is stored or an earlier attempt holds it.</returns>
-    private async Task<ParseRawReportOutcome?> StoreParsedRowAsync(
+    /// <returns>
+    /// The skipped outcome that ends the attempt (or null), and whether this attempt wrote the row: a replay wrote
+    /// nothing, so it has no evidence to send to the reconciler.
+    /// </returns>
+    private async Task<(ParseRawReportOutcome? Stopped, bool Inserted)> StoreParsedRowAsync(
         Guid orgId,
         Prepared prepared,
         RawReportDraft report,
@@ -147,19 +150,19 @@ internal sealed partial class ReprocessReportHandler
     {
         if (await InsertRawReportAsync(orgId, prepared, report, cancellationToken).ConfigureAwait(false))
         {
-            return null;
+            return (null, true);
         }
 
         var stored = await StoredOutcomeByIdAsync(orgId, prepared.ParsingId, cancellationToken).ConfigureAwait(false);
         if (stored is RawReportOutcomes.Mapped or RawReportOutcomes.Partial)
         {
-            return null;
+            return (null, false);
         }
 
         // The stored row says the document was refused and this attempt mapped it: the refusal is immutable, and an event
         // set beside it would contradict what a reviewer reads. No content of the document is logged either.
         LogSkipped(logger, prepared.ParsingId, "report_outcome_conflict");
-        return new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "report_outcome_conflict");
+        return (new ParseRawReportOutcome(ParseRawReportOutcome.Skipped, "report_outcome_conflict"), false);
     }
 
     /// <summary>The insert's parameters, named after the columns they fill.</summary>

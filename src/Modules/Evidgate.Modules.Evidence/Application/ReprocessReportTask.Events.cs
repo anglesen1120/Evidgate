@@ -38,16 +38,22 @@ internal sealed partial class ReprocessReportHandler
     /// <param name="PayloadHash">The hash of the stored payload.</param>
     private sealed record StoredEventRow(Guid EventId, string PayloadHash);
 
+    /// <summary>One execution key whose attempt this run already holds.</summary>
+    /// <param name="ExecutionKey">The planned execution the existing attempt belongs to.</param>
+    private sealed record AttemptedExecutionRow(string ExecutionKey);
+
     /// <summary>
-    /// The number of a run's planned executions that already carry an attempt. This reprocess answers a plan on behalf
-    /// of a report that may have been parsed already, so it attempts only what no earlier report attempted: re-writing
-    /// a standing attempt would be a second verdict on the same execution.
+    /// The executions this set names that already carry an attempt, at most one row per key. The keys are the report's
+    /// own, so the read walks the unique <c>(org_id, run_id, execution_key, attempt_no)</c> index instead of every
+    /// attempt of the run.
     /// </summary>
-    private const string CoveredExecutionsSql = """
-        select distinct ca.execution_key
+    private const string AttemptedExecutionsSql = """
+        select distinct ca.execution_key as "ExecutionKey"
           from public.case_attempt ca
          where ca.org_id = @org_id
            and ca.run_id = @run_id
+           and ca.execution_key in (
+               select key from jsonb_array_elements_text(@execution_keys::jsonb) as key)
         """;
 
     /// <summary>The next free shard index of the run (1 when the run has no slot yet).</summary>
@@ -172,6 +178,12 @@ internal sealed partial class ReprocessReportHandler
     /// <returns>A JSON array of <c>{"event_id": …}</c> objects.</returns>
     private static string SerializeEventIds(IEnumerable<Guid> eventIds) =>
         JsonSerializer.Serialize(eventIds.Select(eventId => new { event_id = eventId }));
+
+    /// <summary>The execution keys as one <c>jsonb</c> array, which the tenant Dapper path accepts where it refuses a client array.</summary>
+    /// <param name="inputs">The attempt inputs whose execution keys the read names.</param>
+    /// <returns>A JSON array of strings, each key once.</returns>
+    private static string SerializeExecutionKeys(IEnumerable<CaseAttemptInput> inputs) =>
+        JsonSerializer.Serialize(inputs.Select(item => item.ExecutionKey).Distinct(StringComparer.Ordinal));
 
     /// <summary>The deterministic event id of one (producer, sequence) pair, so a replay hashes to the same identity.</summary>
     /// <param name="producerId">The synthetic producer id.</param>

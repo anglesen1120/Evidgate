@@ -61,6 +61,7 @@ public static class EvidenceEndpoints
 
         group.MapPost("/runs/{r:guid}/reprocess", ReprocessEndpoints.ReprocessAsync)
             .Produces<ReprocessResponse>(StatusCodes.Status202Accepted)
+            .Produces(StatusCodes.Status413PayloadTooLarge)
             .WithSummary("Reprocess one stored raw report with a newer parser release");
 
         return group;

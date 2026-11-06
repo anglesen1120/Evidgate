@@ -45,16 +45,33 @@ internal static class ReprocessEndpoints
             return Result.Failure<ReprocessResponse>(keyError);
         }
 
+        if (context.Request.ContentLength is { } declared && declared > ReprocessLimits.MaxBodyBytes)
+        {
+            return Result.Failure<ReprocessResponse>(CappedRequestBody.TooLarge);
+        }
+
+        // The body is read explicitly so the size-limiting stream sits under the reader: a declared Content-Length is
+        // refused above without touching the body, and a chunked or length-less body is counted while it is read.
         ReprocessRequest? request;
+        var body = context.Request.Body;
         try
         {
+            context.Request.Body = new CappedBodyStream(body, ReprocessLimits.MaxBodyBytes);
             request = await context.Request
                 .ReadFromJsonAsync<ReprocessRequest>(cancellationToken)
                 .ConfigureAwait(false);
         }
+        catch (BadHttpRequestException exception)
+        {
+            return Result.Failure<ReprocessResponse>(CappedRequestBody.Unreadable(exception));
+        }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or InvalidOperationException)
         {
             return Result.Failure<ReprocessResponse>(Error.BadRequest("the request body is not valid JSON"));
+        }
+        finally
+        {
+            context.Request.Body = body;
         }
 
         if (request is null)
@@ -71,6 +88,16 @@ internal static class ReprocessEndpoints
                 EvidenceEndpoints.IdempotencyKey(context)),
             cancellationToken).ConfigureAwait(false);
     }
+}
+
+/// <summary>
+/// The transport cap of <c>POST /v1/runs/{r}/reprocess</c>: the legal body is a report id and a version, well under
+/// 150 bytes, so the cap sits far above every real request and still refuses an oversized one before it is parsed.
+/// </summary>
+internal static class ReprocessLimits
+{
+    /// <summary>The largest body the route accepts, in bytes.</summary>
+    internal const int MaxBodyBytes = 4 * 1024;
 }
 
 /// <summary>

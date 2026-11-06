@@ -33,8 +33,8 @@ internal sealed record ReprocessReportPayload(Guid ParsingId)
 /// <para>
 /// <b>Nothing about the run moves.</b> This handler is not the ingest route: it does not drive <c>queued → running</c>,
 /// writes no <c>event_batch</c> receipt, emits no usage row, calls no quota gate, and never rewrites the source report,
-/// the earlier revision or the events behind it. What it adds is a second reading of the same bytes, and 05.3.2's
-/// reconciler turns that into the next <c>evidence_revision</c>.
+/// the earlier revision or the events behind it. What it adds is a second reading of the same bytes, and the reconciler
+/// turns that into the next <c>evidence_revision</c>.
 /// </para>
 /// <para>
 /// <b>Synthetic producer, never a CI producer.</b> The events carry <c>reprocess-&lt;parsing id&gt;</c> and sequences
