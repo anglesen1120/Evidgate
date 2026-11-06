@@ -32,4 +32,18 @@ public static class TaskQueueMetrics
 
     /// <summary>Unit of <see cref="DeadLetterCounterName"/>.</summary>
     public const string DeadLetterUnit = "{row}";
+
+    /// <summary>
+    /// Counter of committed deferrals: a handler asked to wait, so the row kept its
+    /// attempt and nothing failed. Alert-side: a long run of them means the window the
+    /// handler waits for never opens — a dependency or quota problem, not a poison task.
+    /// </summary>
+    public const string DeferredCounterName = "task_deferred_total";
+
+    /// <summary>Description of <see cref="DeferredCounterName"/>.</summary>
+    public const string DeferredDescription =
+        "Task attempts deferred to a later window at the handler's request (attempt kept, no dead letter, no alert).";
+
+    /// <summary>Unit of <see cref="DeferredCounterName"/>.</summary>
+    public const string DeferredUnit = "{attempt}";
 }

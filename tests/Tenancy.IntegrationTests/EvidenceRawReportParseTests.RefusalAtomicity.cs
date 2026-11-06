@@ -71,6 +71,7 @@ public sealed partial class EvidenceRawReportParseTests
             services.GetRequiredService<IServiceScopeFactory>(),
             outbox,
             services.GetRequiredService<IAuditTrail>(),
+            services.GetRequiredService<TimeProvider>(),
             NullLogger<ParseRawReportHandler>.Instance);
     }
 }
