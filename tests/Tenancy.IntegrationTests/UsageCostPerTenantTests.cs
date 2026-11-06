@@ -130,11 +130,15 @@ public sealed class UsageCostPerTenantTests
         await using var world = await StartAsync();
         await world.SeedLedgerAsync(Ledger(world, "tokens:1", "ai_tokens", 7m, 20));
         await world.SeedHealingCallsAsync(Healing(999, "ok", 7, 30));
+        var askedBefore = world.StatementsTouching("public.healing_llm_call").Count;
 
         var answer = await world.GetAsync(world.CostUrl($"period={Period}"));
 
         answer.Status.ShouldBe(HttpStatusCode.OK);
         AssertAvailable(answer, "ai_tokens", 7m, "tokens", "usage_ledger_entry:ai_tokens");
+        (world.StatementsTouching("public.healing_llm_call").Count - askedBefore).ShouldBe(
+            0,
+            "the ledger already holds ai_tokens for the period, so the gateway's month is never asked for");
     }
 
     [Fact]
@@ -247,6 +251,7 @@ public sealed class UsageCostPerTenantTests
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         Detail(answer).GetProperty("path").GetString().ShouldBe("period");
         Detail(answer).GetProperty("reason").GetString().ShouldBe("required");
+        (await world.AuditCountAsync(Action)).ShouldBe(0L);
     }
 
     [Fact]

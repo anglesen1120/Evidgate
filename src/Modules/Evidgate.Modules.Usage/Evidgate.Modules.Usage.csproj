@@ -14,6 +14,9 @@
     <!-- The billing operator's reads answer 404 for an org that does not exist, through the registry's Contracts
          surface; a module never reads another module's tables. -->
     <ProjectReference Include="..\Evidgate.Modules.Tenancy.Contracts\Evidgate.Modules.Tenancy.Contracts.csproj" />
+    <!-- The AI-token half of a tenant's cost is Healing's ledger: the query asks its Contracts seam for the month
+         rather than reading `healing_llm_call` across the module boundary. -->
+    <ProjectReference Include="..\Evidgate.Modules.Healing.Contracts\Evidgate.Modules.Healing.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
     <!-- The issued statement's content hash is taken over the shared RFC 8785 canonical form, not a local one. -->
     <ProjectReference Include="..\..\BuildingBlocks\Canonicalization\Evidgate.BuildingBlocks.Canonicalization.csproj" />

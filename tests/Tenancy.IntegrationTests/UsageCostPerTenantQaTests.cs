@@ -203,12 +203,17 @@ public sealed class UsageCostPerTenantTests(PostgresTenancyFixture fixture)
         await using var world = await StartAsync();
         await world.SeedManyLedgerRowsAsync(10_001, Period, "artifact_gb_month", 0.5m);
         await world.SeedHealingCallsAsync(Healing(12));
-        var before = world.StatementsTouching("public.usage_ledger_entry", "public.healing_llm_call").Count;
+        var ledgerBefore = world.StatementsTouching("public.usage_ledger_entry").Count;
+        var healingBefore = world.StatementsTouching("public.healing_llm_call").Count;
 
         var first = await world.GetTextAsync(world.CostUrl($"period={Period}"));
         first.Status.ShouldBe(HttpStatusCode.OK);
-        var after = world.StatementsTouching("public.usage_ledger_entry", "public.healing_llm_call").Count;
-        (after - before).ShouldBe(1);
+        (world.StatementsTouching("public.usage_ledger_entry").Count - ledgerBefore).ShouldBe(
+            1,
+            "the month of ledger rows is one aggregate, never a row-by-row read");
+        (world.StatementsTouching("public.healing_llm_call").Count - healingBefore).ShouldBe(
+            1,
+            "the token fallback is Healing's own single-statement read, asked for through its Contracts seam");
         using var document = JsonDocument.Parse(first.Text);
         document.RootElement.GetProperty("lines").EnumerateArray()
             .Single(line => line.GetProperty("line").GetString() == "object_gb_month")

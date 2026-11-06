@@ -5,6 +5,7 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Healing.Contracts;
 using Evidgate.Modules.Tenancy.Contracts;
 using Evidgate.Modules.Usage.Contracts;
 using Evidgate.Modules.Usage.Domain;
@@ -50,8 +51,9 @@ internal sealed record TenantCost(string Period, IReadOnlyList<TenantCostLine> L
 /// </para>
 /// </summary>
 /// <remarks>
-/// The ledger's rows are the cost basis; the AI line falls back to the healing gateway's own attempt ledger only
-/// while the ledger holds no <c>ai_tokens</c> row for the period, and never sums the two. The read is audited like
+/// The ledger's rows are the cost basis; the AI line falls back to what Healing's own attempt ledger recorded, asked
+/// for through <see cref="IHealingTokenUsage"/> only while the ledger holds no <c>ai_tokens</c> row for the period,
+/// and the two are never summed. The read is audited like
 /// the other billing reads — one row per read, in the read's own transaction, naming the period and how many lines
 /// it could state, never a quantity.
 /// </remarks>
@@ -61,6 +63,7 @@ internal sealed class CostPerTenantReader(
     IAuditTrail audit,
     ITenantLimits limits,
     UsageReadStore store,
+    IHealingTokenUsage healing,
     TimeProvider time)
 {
     /// <summary>The audited action of one cost read.</summary>
@@ -138,10 +141,20 @@ internal sealed class CostPerTenantReader(
         }
 
         var rows = await store
-            .ReadTenantCostAsync(orgId, validated.Value, monthStart, monthEnd, cancellationToken)
+            .ReadTenantCostAsync(orgId, validated.Value, cancellationToken)
             .ConfigureAwait(false);
 
-        var cost = Assemble(validated.Value, rows);
+        // The AI line's second source lives in Healing's ledger, so it is asked for through the Contracts seam and
+        // only when the ledger holds no `ai_tokens` row for the period: the answer is otherwise ignored, and the
+        // monthly aggregate over an org's attempt history is not free.
+        var tokens = rows.Any(row => string.Equals(
+            row.Line,
+            UsageMetricWire.ToWireValue(UsageMetric.AiTokens),
+            StringComparison.Ordinal))
+            ? null
+            : await healing.ReadAsync(orgId, monthStart, monthEnd, cancellationToken).ConfigureAwait(false);
+
+        var cost = Assemble(validated.Value, rows, tokens);
 
         DescribeAudit(orgId, operatorId, cost);
         await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
@@ -155,14 +168,16 @@ internal sealed class CostPerTenantReader(
     /// no row in the period, which is the difference between an unavailable line and a measured zero.
     /// </summary>
     /// <param name="period">The period read.</param>
-    /// <param name="rows">The ledger's per-metric sums and the gateway's month.</param>
-    private static TenantCost Assemble(string period, IReadOnlyList<TenantCostRow> rows)
+    /// <param name="rows">The ledger's per-metric sums.</param>
+    /// <param name="healing">
+    /// The gateway's month, read only when the ledger holds no <c>ai_tokens</c> row; null otherwise.
+    /// </param>
+    private static TenantCost Assemble(
+        string period,
+        IReadOnlyList<TenantCostRow> rows,
+        HealingTokenUsage? healing)
     {
-        var ledger = rows
-            .Where(row => string.Equals(row.Kind, UsageReadStore.LedgerKind, StringComparison.Ordinal))
-            .ToDictionary(row => row.Line, StringComparer.Ordinal);
-        var healing = rows.Single(row =>
-            string.Equals(row.Kind, UsageReadStore.HealingKind, StringComparison.Ordinal));
+        var ledger = rows.ToDictionary(row => row.Line, StringComparer.Ordinal);
 
         TenantCostLine[] lines =
         [
@@ -207,14 +222,14 @@ internal sealed class CostPerTenantReader(
     /// The token line: the ledger's <c>ai_tokens</c> rows while it holds one, otherwise the attempts the healing
     /// gateway recorded in the month whose token use is known — a failed attempt that reported tokens burned them,
     /// while one that reported none says nothing and is not a measured zero. The two sources are never added
-    /// together, which would bill the same tokens twice once the ledger's emitter lands; the read skips the healing
-    /// aggregate altogether while the ledger holds the metric, so its sum arrives null then and is never read.
+    /// together, which would bill the same tokens twice once the ledger's emitter lands; the caller asks the gateway
+    /// only while the ledger holds no <c>ai_tokens</c> row, so the month arrives null when the ledger wins.
     /// </summary>
     /// <param name="ledger">The ledger's sums by wire metric name.</param>
-    /// <param name="healing">The gateway's token sum and known-usage attempt count for the month.</param>
+    /// <param name="healing">The gateway's token sum and known-usage attempt count, or null when it was not asked.</param>
     private static TenantCostLine Tokens(
         Dictionary<string, TenantCostRow> ledger,
-        TenantCostRow healing)
+        HealingTokenUsage? healing)
     {
         var wire = UsageMetricWire.ToWireValue(UsageMetric.AiTokens);
 
@@ -223,7 +238,7 @@ internal sealed class CostPerTenantReader(
             return new TenantCostLine(AiTokensLine, row.Quantity, "tokens", $"{LedgerSource}:{wire}", null);
         }
 
-        return healing is { RowCount: > 0, Quantity: { } tokens }
+        return healing is { KnownAttempts: > 0, Tokens: { } tokens }
             ? new TenantCostLine(AiTokensLine, tokens, "tokens", HealingSource, null)
             : new TenantCostLine(
                 AiTokensLine,
