@@ -82,6 +82,25 @@ internal sealed class UsageReadStore(ITenantDb db)
             UsageReadStoreSql.DuplicateAttempts,
             new { org_id = orgId, period, limit },
             cancellationToken);
+
+    /// <summary>
+    /// Reads the current period's counters and roll-up totals in one statement: the organization-wide rows, the
+    /// project rows (all of them, or the one <paramref name="projectId"/> names), and the roll-up fallback where no
+    /// counter exists. A project outside the tenant answers one marker row instead of data.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope.</param>
+    /// <param name="period">The current billing period, <c>YYYY-MM</c>.</param>
+    /// <param name="projectId">The project filter the request named, or null for every project of the org.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal Task<IReadOnlyList<UsageSummaryRow>> ReadSummaryAsync(
+        Guid orgId,
+        string period,
+        Guid? projectId,
+        CancellationToken cancellationToken) =>
+        db.QueryAsync<UsageSummaryRow>(
+            UsageReadStoreSql.Summary,
+            new { org_id = orgId, period, project_id = projectId },
+            cancellationToken);
 }
 
 /// <summary>Dapper shape of one <c>usage_ledger_entry</c> row of a page.</summary>
@@ -157,4 +176,28 @@ internal sealed class DuplicateAttemptRow
     public DateTimeOffset FirstSeenAt { get; set; }
 
     public DateTimeOffset LastSeenAt { get; set; }
+}
+
+/// <summary>
+/// Dapper shape of one counter or roll-up total the summary statement returns. <see cref="Metric"/> is null only on
+/// the marker row, which says the requested project is not in the caller's tenant; a roll-up fallback row carries a
+/// total and a null limit.
+/// </summary>
+internal sealed class UsageSummaryRow
+{
+    public string Scope { get; set; } = string.Empty;
+
+    public Guid? ProjectId { get; set; }
+
+    public string? Metric { get; set; }
+
+    public decimal? Used { get; set; }
+
+    public decimal? QuotaLimit { get; set; }
+
+    public DateTimeOffset? WarnedAt { get; set; }
+
+    public DateTimeOffset? BlockedAt { get; set; }
+
+    public bool ProjectMissing { get; set; }
 }

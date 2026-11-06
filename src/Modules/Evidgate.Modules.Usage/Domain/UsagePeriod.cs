@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Evidgate.Modules.Usage.Domain;
 
 /// <summary>
@@ -37,4 +39,21 @@ internal static class UsagePeriod
     /// <param name="period">The candidate period.</param>
     internal static bool IsQuotaPeriod(string? period) =>
         period is { } text && IsWellFormed(text) && text[0] == '2';
+
+    /// <summary>
+    /// The wait a blocked caller is told: the next month starts the fresh counter that makes the same call fit again.
+    /// At least one second, so a caller never reads <c>Retry-After: 0</c> as "retry now".
+    /// </summary>
+    /// <param name="period">A period <see cref="IsQuotaPeriod"/> accepts; both the parse and the next month stay
+    /// inside <see cref="DateTimeOffset"/> for it, so this never throws.</param>
+    /// <param name="now">The caller's clock instant, so the answer is the same everywhere the same instant is read.</param>
+    internal static TimeSpan RetryUntilNextPeriod(string period, DateTimeOffset now)
+    {
+        var year = int.Parse(period.AsSpan(0, 4), NumberStyles.None, CultureInfo.InvariantCulture);
+        var month = int.Parse(period.AsSpan(5, 2), NumberStyles.None, CultureInfo.InvariantCulture);
+        var next = new DateTimeOffset(year, month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(1);
+        var until = next - now;
+
+        return until < TimeSpan.FromSeconds(1) ? TimeSpan.FromSeconds(1) : until;
+    }
 }

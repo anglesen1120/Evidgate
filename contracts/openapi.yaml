@@ -5453,12 +5453,19 @@ paths:
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/UsageSummaryProject'
       responses:
         '200':
-          description: Usage counters vs quota
+          description: >-
+            The current period's per-metric counters: the organization-wide counter and, when `project_id` names
+            one, that project's counter, plus the roll-up total for a scope the month has no counter for.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageSummaryDto'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -8377,6 +8384,17 @@ components:
       schema:
         type: string
         format: date-time
+    UsageSummaryProject:
+      name: project_id
+      in: query
+      required: false
+      description: >-
+        The project whose counter the summary adds. Absent answers the organization-wide counters and
+        every project's; present, the project must be inside the credential's and the request's scope (403
+        `project_scope_mismatch`) and be in the caller's org (404 otherwise, also for another tenant's project).
+      schema:
+        type: string
+        format: uuid
     SecurityEventProjectFilter:
       name: project_id
       in: query
@@ -13335,6 +13353,120 @@ components:
             $ref: '#/components/schemas/AiSettingsTemplateView'
         next_cursor:
           type: 'null'
+    UsageSummaryDto:
+      type: object
+      description: >-
+        The `200` answer of `GET /v1/orgs/{o}/usage/summary`: one entry per wire metric for the current billing
+        period, the organization-wide counter and, when the request names a project, that project's counter.
+      additionalProperties: false
+      required: [period, project, metrics]
+      properties:
+        period:
+          type: string
+          description: The billing period the counters belong to, from the server's clock.
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        project:
+          type: [string, 'null']
+          format: uuid
+          description: The project filter the request named, or null for the org-wide answer.
+        metrics:
+          type: array
+          description: One entry per metric, in the ledger's metric order.
+          items:
+            $ref: '#/components/schemas/UsageSummaryMetricDto'
+    UsageSummaryMetricDto:
+      type: object
+      description: >-
+        One metric's counters for the period. `used`, `limit` and the threshold stamps describe the organization-wide
+        counter (`scope` is `tenant`); `projects` holds the per-project counters the request asked for. A metric with
+        no producer in this build answers `used` and `limit` as null and names the missing producer in
+        `unavailable_reason`, never as 0: a zero would read as a measurement. A metered metric with no row yet
+        answers `used` 0 and a null limit.
+      additionalProperties: false
+      required:
+        [
+          metric,
+          scope,
+          used,
+          limit,
+          warned_at,
+          blocked_at,
+          retry_after_seconds,
+          unavailable_reason,
+          projects,
+        ]
+      properties:
+        metric:
+          type: string
+          enum:
+            [
+              results,
+              artifact_gb_month,
+              egress_gb,
+              ai_tokens,
+              support_hours,
+              runner_minutes,
+              device_minutes,
+            ]
+        scope:
+          type: string
+          enum: [tenant, project]
+        used:
+          type: [number, 'null']
+          description: >-
+            The tenant counter's used, or the period's roll-up total across the org when the month has no tenant
+            counter. Null only when the metric is unavailable.
+        limit:
+          type: [number, 'null']
+          description: The tenant counter's configured limit; null when the month has no tenant counter.
+        warned_at:
+          type: [string, 'null']
+          format: date-time
+          description: When the tenant counter crossed its warning line, or null.
+        blocked_at:
+          type: [string, 'null']
+          format: date-time
+          description: When the tenant counter refused, or null.
+        retry_after_seconds:
+          type: [integer, 'null']
+          description: On a blocked counter only, whole seconds until the next period starts.
+        unavailable_reason:
+          type: [string, 'null']
+          description: Why the metric cannot be reported, or null when it can.
+        projects:
+          type: array
+          description: The per-project counters, ordered by project id.
+          items:
+            $ref: '#/components/schemas/UsageSummaryProjectDto'
+    UsageSummaryProjectDto:
+      type: object
+      description: >-
+        One project's counter for one metric. A project the request named that has no counter or roll-up row yet
+        answers used 0 and a null limit, so a client renders "nothing measured" without inventing a number.
+      additionalProperties: false
+      required: [project_id, scope, used, limit, warned_at, blocked_at, retry_after_seconds]
+      properties:
+        project_id:
+          type: string
+          format: uuid
+        scope:
+          type: string
+          enum: [project]
+        used:
+          type: number
+          description: The project counter's used, or the project's roll-up total when no counter exists.
+        limit:
+          type: [number, 'null']
+          description: The project counter's configured limit; null when the month has no project counter.
+        warned_at:
+          type: [string, 'null']
+          format: date-time
+        blocked_at:
+          type: [string, 'null']
+          format: date-time
+        retry_after_seconds:
+          type: [integer, 'null']
+          description: On a blocked counter only, whole seconds until the next period starts.
 
 security:
   - sessionCookie: []

@@ -2612,6 +2612,82 @@ export type AiSettingsTemplateListResponse = {
 };
 
 /**
+ * The `200` answer of `GET /v1/orgs/{o}/usage/summary`: one entry per wire metric for the current billing period, the organization-wide counter and, when the request names a project, that project's counter.
+ */
+export type UsageSummaryDto = {
+    /**
+     * The billing period the counters belong to, from the server's clock.
+     */
+    period: string;
+    /**
+     * The project filter the request named, or null for the org-wide answer.
+     */
+    project: string | null;
+    /**
+     * One entry per metric, in the ledger's metric order.
+     */
+    metrics: Array<UsageSummaryMetricDto>;
+};
+
+/**
+ * One metric's counters for the period. `used`, `limit` and the threshold stamps describe the organization-wide counter (`scope` is `tenant`); `projects` holds the per-project counters the request asked for. A metric with no producer in this build answers `used` and `limit` as null and names the missing producer in `unavailable_reason`, never as 0: a zero would read as a measurement. A metered metric with no row yet answers `used` 0 and a null limit.
+ */
+export type UsageSummaryMetricDto = {
+    metric: 'results' | 'artifact_gb_month' | 'egress_gb' | 'ai_tokens' | 'support_hours' | 'runner_minutes' | 'device_minutes';
+    scope: 'tenant' | 'project';
+    /**
+     * The tenant counter's used, or the period's roll-up total across the org when the month has no tenant counter. Null only when the metric is unavailable.
+     */
+    used: number | null;
+    /**
+     * The tenant counter's configured limit; null when the month has no tenant counter.
+     */
+    limit: number | null;
+    /**
+     * When the tenant counter crossed its warning line, or null.
+     */
+    warned_at: string | null;
+    /**
+     * When the tenant counter refused, or null.
+     */
+    blocked_at: string | null;
+    /**
+     * On a blocked counter only, whole seconds until the next period starts.
+     */
+    retry_after_seconds: number | null;
+    /**
+     * Why the metric cannot be reported, or null when it can.
+     */
+    unavailable_reason: string | null;
+    /**
+     * The per-project counters, ordered by project id.
+     */
+    projects: Array<UsageSummaryProjectDto>;
+};
+
+/**
+ * One project's counter for one metric. A project the request named that has no counter or roll-up row yet answers used 0 and a null limit, so a client renders "nothing measured" without inventing a number.
+ */
+export type UsageSummaryProjectDto = {
+    project_id: string;
+    scope: 'project';
+    /**
+     * The project counter's used, or the project's roll-up total when no counter exists.
+     */
+    used: number;
+    /**
+     * The project counter's configured limit; null when the month has no project counter.
+     */
+    limit: number | null;
+    warned_at: string | null;
+    blocked_at: string | null;
+    /**
+     * On a blocked counter only, whole seconds until the next period starts.
+     */
+    retry_after_seconds: number | null;
+};
+
+/**
  * Adapter capability document v1
  *
  * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
@@ -3209,6 +3285,11 @@ export type AuditFrom = string;
  * Exclusive upper bound on `created_at` (ISO 8601).
  */
 export type AuditTo = string;
+
+/**
+ * The project whose counter the summary adds. Absent answers the organization-wide counters and every project's; present, the project must be inside the credential's and the request's scope (403 `project_scope_mismatch`) and be in the caller's org (404 otherwise, also for another tenant's project).
+ */
+export type UsageSummaryProject = string;
 
 /**
  * Exact `project_id` (11.5.1 AC3). An id that is unknown or belongs to another org answers an empty page, not 404; a present but non-uuid value is 422 `request_invalid` with `details[].path` = `project_id`.
@@ -9264,7 +9345,12 @@ export type GetUsageSummaryData = {
     path: {
         o: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * The project whose counter the summary adds. Absent answers the organization-wide counters and every project's; present, the project must be inside the credential's and the request's scope (403 `project_scope_mismatch`) and be in the caller's org (404 otherwise, also for another tenant's project).
+         */
+        project_id?: string;
+    };
     url: '/orgs/{o}/usage/summary';
 };
 
@@ -9295,10 +9381,12 @@ export type GetUsageSummaryError = GetUsageSummaryErrors[keyof GetUsageSummaryEr
 
 export type GetUsageSummaryResponses = {
     /**
-     * Usage counters vs quota
+     * The current period's per-metric counters: the organization-wide counter and, when `project_id` names one, that project's counter, plus the roll-up total for a scope the month has no counter for.
      */
-    200: unknown;
+    200: UsageSummaryDto;
 };
+
+export type GetUsageSummaryResponse = GetUsageSummaryResponses[keyof GetUsageSummaryResponses];
 
 export type GetUsageLedgerData = {
     body?: never;

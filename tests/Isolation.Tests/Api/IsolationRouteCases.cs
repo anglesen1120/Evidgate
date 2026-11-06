@@ -600,6 +600,10 @@ public static class IsolationRouteCases
         // a resolved tenant that differs from {o}; the rows are invisible to RLS besides.
         OrgCase("GET", "/v1/orgs/{o}/security-events", o => new(HttpMethod.Get, $"/v1/orgs/{o}/security-events")),
 
+        // ---- Usage (UsageEndpoints.cs): {o}'s counters, refused at tenant resolution as above -------------------
+        // The summary's own org check and RLS add the same 404 backstop the security-events read carries.
+        OrgCase("GET", "/v1/orgs/{o}/usage/summary", o => new(HttpMethod.Get, $"/v1/orgs/{o}/usage/summary")),
+
         // ---- CI admin (CiAdminEndpoints.cs:30-55) --------------------------------------------------------------
         ProjectCase("POST", "/v1/projects/{p}/ci-bindings", p => new(HttpMethod.Post, $"/v1/projects/{p}/ci-bindings", Binding())),
         ProjectCase("GET", "/v1/projects/{p}/ci-bindings", p => new(HttpMethod.Get, $"/v1/projects/{p}/ci-bindings"), list: true),
