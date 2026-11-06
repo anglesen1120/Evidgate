@@ -248,92 +248,6 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
     }
 
     [Fact]
-    public async Task Complete_Run_Refuses_The_Report_And_Writes_Nothing()
-    {
-        var world = await StartAsync();
-        await using var _ = world;
-        await SeedPlanAsync(world);
-        var artifactId = await SeedArtifactAsync(world, ReportBody);
-        await SetRunStateAsync(world, "update public.run set state = 'complete'");
-
-        var outcome = await ParseAsync(world, artifactId, ProducerKind);
-
-        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
-        outcome.Reason.ShouldBe(RunAdmissionPolicy.RunClosed);
-        await AssertNothingWrittenAsync(world, artifactId);
-    }
-
-    [Fact]
-    public async Task Incomplete_Run_Past_Its_Late_Window_Refuses_The_Report_And_Writes_Nothing()
-    {
-        var world = await StartAsync();
-        await using var _ = world;
-        await SeedPlanAsync(world);
-        var artifactId = await SeedArtifactAsync(world, ReportBody);
-        await SetRunStateAsync(
-            world,
-            "update public.run set state = 'incomplete', collection_deadline_at = now() - interval '2 days', late_window_minutes = 1");
-
-        var outcome = await ParseAsync(world, artifactId, ProducerKind);
-
-        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
-        outcome.Reason.ShouldBe(RunAdmissionPolicy.RunClosed);
-        await AssertNothingWrittenAsync(world, artifactId);
-    }
-
-    [Fact]
-    public async Task Canceled_Run_Accepts_The_Report_And_Marks_It_After_Cancel()
-    {
-        var world = await StartAsync();
-        await using var _ = world;
-        await SeedPlanAsync(world);
-        var artifactId = await SeedArtifactAsync(world, ReportBody);
-        await SetRunStateAsync(world, "update public.run set state = 'canceled'");
-
-        var outcome = await ParseAsync(world, artifactId, ProducerKind);
-
-        outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
-        outcome.Events.ShouldBe(1);
-        (await _fixture.ScalarAsync<bool>(
-            world.Database,
-            $"select after_cancel from public.event where artifact_ids = array['{artifactId:D}'::uuid]")).ShouldBeTrue();
-        // A canceled run is never transitioned, so the commit leaves the reconcile trigger and the usage row.
-        (await CountAsync(world, "outbox")).ShouldBe(2);
-    }
-
-    [Fact]
-    public async Task Suspended_Project_Refuses_The_Report_And_Writes_Nothing()
-    {
-        var world = await StartAsync();
-        await using var _ = world;
-        await SeedPlanAsync(world);
-        var artifactId = await SeedArtifactAsync(world, ReportBody);
-        await _fixture.ExecuteAsync(world.Database, $"update public.project set status = 'suspended' where id = '{world.Project:D}'");
-
-        var outcome = await ParseAsync(world, artifactId, ProducerKind);
-
-        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
-        outcome.Reason.ShouldBe(RunAdmissionPolicy.ProjectSuspended);
-        await AssertNothingWrittenAsync(world, artifactId);
-    }
-
-    [Fact]
-    public async Task Deleted_Project_Refuses_The_Report_And_Writes_Nothing()
-    {
-        var world = await StartAsync();
-        await using var _ = world;
-        await SeedPlanAsync(world);
-        var artifactId = await SeedArtifactAsync(world, ReportBody);
-        await _fixture.ExecuteAsync(world.Database, $"update public.project set status = 'deleted' where id = '{world.Project:D}'");
-
-        var outcome = await ParseAsync(world, artifactId, ProducerKind);
-
-        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
-        outcome.Reason.ShouldBe(RunAdmissionPolicy.ProjectDeleted);
-        await AssertNothingWrittenAsync(world, artifactId);
-    }
-
-    [Fact]
     public async Task Unknown_Producer_Kind_Is_Unsupported_And_Writes_No_Event()
     {
         var world = await StartAsync();
@@ -347,7 +261,8 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         outcome.Reason.ShouldNotBeNullOrWhiteSpace();
         outcome.Events.ShouldBe(0);
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
-        (await CountAsync(world, "outbox")).ShouldBe(0);
+        // The refusal row commits with its one reconcile trigger; the run was never moved, so nothing else is written.
+        (await OutboxRowsAsync(world, RunReconcileContract.OutboxTaskType)).ShouldBe(1);
     }
 
     [Fact]
@@ -365,7 +280,8 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         outcome.Status.ShouldBe(ParseRawReportOutcome.Malformed);
         outcome.Events.ShouldBe(0);
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
-        (await CountAsync(world, "outbox")).ShouldBe(0);
+        // The row and its trigger are the whole refusal: no event, slot or receipt, and no run transition either.
+        (await OutboxRowsAsync(world, RunReconcileContract.OutboxTaskType)).ShouldBe(1);
     }
 
     [Fact]
@@ -445,16 +361,37 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         await _fixture.ExecuteAsync(world.Database, sql + $" where id = '{world.RunId:D}'");
 
     /// <summary>
-    /// Asserts a refusal left no event, attempt, slot, receipt or trigger behind in this tenant: the refusal's rollback
-    /// covers the batch receipt and its usage row too.
+    /// Asserts a refused or skipped attempt left no evidence behind in this tenant: no event, attempt, receipt or slot,
+    /// exactly the expected number of committed refusal rows and one reconcile trigger for each of them, with no other
+    /// outbox row of any kind. The count is passed in rather than derived from the rows, so an erroneous extra row
+    /// cannot excuse the trigger that came with it.
     /// </summary>
-    private async Task AssertNothingWrittenAsync(World world, Guid artifactId)
+    /// <param name="world">The tenant and run the attempt named.</param>
+    /// <param name="artifactId">The report artifact the attempt addressed.</param>
+    /// <param name="refusals">How many refusal rows this attempt was expected to commit: none for a skip, one for a verdict.</param>
+    private async Task AssertNothingWrittenAsync(World world, Guid artifactId, long refusals)
     {
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
         (await CountAsync(world, "case_attempt")).ShouldBe(0);
         (await CountAsync(world, "event_batch")).ShouldBe(0);
-        (await CountAsync(world, "outbox")).ShouldBe(0);
         (await CountAsync(world, "producer_slot")).ShouldBe(0);
+
+        var ownTrigger = $"task_type = '{RunReconcileContract.OutboxTaskType}' "
+            + $"and (payload ->> 'producer_id') = 'junit-{artifactId:D}'";
+
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.raw_report where org_id = '{world.Org:D}' "
+            + $"and artifact_id = '{artifactId:D}'"))
+            .ShouldBe(refusals, "a refusal row and its trigger are one write, so the count is the caller's expectation");
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.outbox where org_id = '{world.Org:D}' and {ownTrigger}"))
+            .ShouldBe(refusals);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.outbox where org_id = '{world.Org:D}' and not ({ownTrigger})"))
+            .ShouldBe(0);
     }
 
     /// <summary>

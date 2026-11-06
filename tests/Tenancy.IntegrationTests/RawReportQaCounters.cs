@@ -62,7 +62,7 @@ public sealed partial class EvidenceRawReportParseTests
         Text(row, "reason").ShouldNotBeNullOrWhiteSpace();
         Number(row, "observed_tests").ShouldBe(0);
         Discrepancies(row).ShouldBeEmpty();
-        await AssertNothingWrittenAsync(world, artifact);
+        await AssertNothingWrittenAsync(world, artifact, 1);
         (await _fixture.ScalarAsync<long>(world.Database,
             $"select bytes from public.artifact where id = '{artifact:D}'")).ShouldBe(body.LongLength);
     }
