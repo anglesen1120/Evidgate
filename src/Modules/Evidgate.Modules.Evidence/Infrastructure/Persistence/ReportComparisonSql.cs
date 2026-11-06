@@ -33,7 +33,10 @@ internal static class ReportComparisonSql
                rr.observed_failures,
                rr.observed_errors,
                rr.observed_skipped,
-               rr.discrepancies::text as discrepancies,
+               array(select d.e ->> 'code'
+                       from jsonb_array_elements(rr.discrepancies) with ordinality as d(e, n)
+                      group by d.e ->> 'code'
+                      order by min(d.n)) as discrepancy_codes,
                a.project_id
           from public.raw_report rr
           join public.artifact a

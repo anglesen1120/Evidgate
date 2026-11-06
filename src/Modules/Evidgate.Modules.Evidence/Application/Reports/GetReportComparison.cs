@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -144,34 +142,12 @@ internal sealed class GetReportComparisonHandler(
     }
 
     /// <summary>
-    /// The report's effective discrepancy codes, in the canonical order: the stored codes handed to the shared check
-    /// once each, because the per-code counts are not served and the check orders code words independently of how
-    /// often they occur, so expanding them would only allocate.
+    /// The report's effective discrepancy codes, in the canonical order: the stored code words, each once as the query
+    /// selects them, handed to the shared check, which orders them independently of how often a code occurred.
     /// </summary>
     /// <param name="report">The stored report row.</param>
     private static IReadOnlyList<string> EffectiveCodes(ReportComparisonRow report) =>
-        JUnitDeclaredObservedCheck.EffectiveCodes(report.Outcome, report.Reason, DistinctCodes(report.Discrepancies));
-
-    /// <summary>The stored code words, each once, in the order the row lists them.</summary>
-    /// <param name="json">The column as JSON text.</param>
-    private static List<string> DistinctCodes(string json)
-    {
-        var codes = new List<string>();
-        foreach (var discrepancy in StoredDiscrepancies(json))
-        {
-            if (!codes.Contains(discrepancy.Code))
-            {
-                codes.Add(discrepancy.Code);
-            }
-        }
-
-        return codes;
-    }
-
-    /// <summary>The row's stored <c>{code, count}</c> array. The column's CHECK guarantees its shape.</summary>
-    /// <param name="json">The column as JSON text.</param>
-    private static StoredDiscrepancy[] StoredDiscrepancies(string json) =>
-        JsonSerializer.Deserialize<StoredDiscrepancy[]>(json) ?? [];
+        JUnitDeclaredObservedCheck.EffectiveCodes(report.Outcome, report.Reason, report.DiscrepancyCodes);
 
     /// <summary>422: the cursor is not a value this endpoint issued, so no page position is guessed from it.</summary>
     private static Error CursorMalformed => Error.Invalid(
@@ -215,7 +191,7 @@ internal sealed class GetReportComparisonHandler(
 
         public int ObservedSkipped { get; set; }
 
-        public string Discrepancies { get; set; } = "[]";
+        public string[] DiscrepancyCodes { get; set; } = [];
     }
 
     /// <summary>One case row of the page: its execution key, the producer's status word and its event count.</summary>
@@ -229,14 +205,6 @@ internal sealed class GetReportComparisonHandler(
 
         public int ObservedEvents { get; set; }
     }
-
-    /// <summary>
-    /// One stored element of the report's discrepancy column. The column's element also carries a <c>count</c>, which
-    /// this read leaves unread: the wire serves code words, and the shared check orders them independently of how often
-    /// the mapping reported one.
-    /// </summary>
-    /// <param name="Code">One code of the shared vocabulary.</param>
-    private sealed record StoredDiscrepancy([property: JsonPropertyName("code")] string Code);
 }
 
 /// <summary>
