@@ -57,6 +57,7 @@ public sealed class MetricCardinalityTests
         "trigger",
         "written",
         "cap",
+        "issue",
     };
 
     /// <summary>Id-shaped key names that must never become a label (they would be one series per row).</summary>
