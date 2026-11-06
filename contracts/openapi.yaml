@@ -2494,45 +2494,66 @@ paths:
     get:
       operationId: getReportComparison
       tags: [reports]
-      summary: Parsed events per case vs declared counts/ids, with discrepancy reasons
+      summary: Raw-report comparison — effective discrepancy codes and a page of per-case events
       description: >-
-        Raw report bytes are never returned; only the `raw_report` artifact id
-        for `download-url` (`artifact:read` + sensitivity gate) (04.4.1-T6).
+        One `raw_report` row (0078) of a run against what its parser observed:
+        the counts the report declared beside the counts observed, the effective
+        `discrepancies`, and one cursor page of the `event` rows the mapped
+        report produced. The report is addressed by id, so the run in the path
+        must be its own: an unknown report id, another tenant's report, a report
+        whose `run_id` is a different run and, for a project-scoped credential,
+        a sibling project's report all take the one 404 `not_found` envelope,
+        with the same message, so none of them is an existence oracle
+        (00 §5.4); `403` comes only from the permission stage. The report's raw
+        bytes, object key and checksum are never returned: only
+        `raw_report_artifact_id`, which `download-url` resolves under
+        `artifact:read` and its sensitivity gate.
+        `discrepancies` is the effective list, derived rather than stored where
+        the row cannot hold one: `malformed` alone for a malformed report,
+        otherwise the stored codes in canonical order, deduplicated as code
+        words (`count_mismatch`, `unmapped_case`, `duplicate_case`,
+        `status_mismatch`). `cases` is one keyset page ordered by event
+        `sequence` ascending; `case_ref` is the event's `execution_key` and
+        `declared_status` the producer's own `raw_status`. The opaque `cursor`
+        is not signed and carries only the last returned `sequence`; the query
+        scopes it to this report, so a number issued for another report or run
+        only positions the page inside this report and never returns rows of
+        another report. A cursor that is not a canonical non-negative decimal is
+        422 `request_invalid` (`details[].path` = `cursor`), as is an integer
+        `limit` outside 1–200 (`limit`) — `-1` and `0` take that answer, not the
+        malformed one. A `limit` that is not the canonical spelling of an
+        integer (`abc`, `1.5`, ` 5`, `+5`, `01`), an undecodable or truncated
+        query string are 400 `request_invalid` before the handler runs, so a
+        client can tell "not this number" from "this number is refused". A
+        refused report (`malformed`, `unsupported`) answers 200 with
+        `cases: []`.
       x-permission: run:read
       x-version: v1
       parameters:
         - $ref: '#/components/parameters/RunId'
         - $ref: '#/components/parameters/ReportId'
+        - $ref: '#/components/parameters/ReportComparisonCursor'
+        - $ref: '#/components/parameters/Limit'
       responses:
         '200':
-          description: Per-case comparison with discrepancy reasons
+          description: The report comparison and one page of its per-case events
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
           content:
             application/json:
               schema:
-                type: object
-                required: [raw_report_id, cases]
-                properties:
-                  raw_report_id:
-                    type: string
-                    format: uuid
-                  cases:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        discrepancy_reasons:
-                          type: array
-                          items:
-                            type: string
+                $ref: '#/components/schemas/ReportComparison'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -8636,6 +8657,20 @@ components:
         `request_invalid`.
       schema:
         type: string
+    ReportComparisonCursor:
+      name: cursor
+      in: query
+      required: false
+      description: >-
+        Opaque cursor from `next_cursor` of
+        `GET /v1/runs/{r}/reports/{report_id}/comparison`; the canonical decimal
+        of the last returned event `sequence`, ascending (00 §9.1). It carries no
+        report identity, so the query scopes it to the report named in the path:
+        a number issued for another report or run only positions the page inside
+        this report. A value that is not a canonical non-negative decimal is 422
+        `request_invalid` (`details[].path` = `cursor`).
+      schema:
+        type: string
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -9759,6 +9794,194 @@ components:
           type: array
           items: { $ref: '#/components/schemas/EvidenceRevision' }
         next_cursor: { type: [string, 'null'] }
+    ReportComparison:
+      type: object
+      additionalProperties: false
+      description: >-
+        Body of `GET /v1/runs/{r}/reports/{report_id}/comparison`: one
+        `raw_report` row (0078) compared with the `event` rows its parser
+        produced. The counts stay declared beside observed instead of being
+        folded into a verdict, so a client can show which side disagreed, and
+        the raw bytes, object key and checksum are never part of the body.
+      required:
+        - report_id
+        - run_id
+        - raw_report_artifact_id
+        - producer_kind
+        - parser_id
+        - parser_version
+        - reason
+        - discrepancies
+        - summary
+        - cases
+        - next_cursor
+      properties:
+        report_id:
+          type: string
+          format: uuid
+          description: '`raw_report.id` of the compared report.'
+        run_id:
+          type: string
+          format: uuid
+          description: >-
+            `raw_report.run_id` — the run in the path, because the composite
+            foreign key binds a report to an artifact of that same run.
+        raw_report_artifact_id:
+          type: string
+          format: uuid
+          description: >-
+            The `artifact.id` that holds the uploaded report bytes; the only
+            pointer served, and `download-url` resolves it under `artifact:read`
+            and its sensitivity gate.
+        producer_kind:
+          type: string
+          description: >-
+            `raw_report.producer_kind`, the producer kind stored with the
+            report; the events this read counts are the ones the report parse
+            wrote for the report artifact.
+        parser_id:
+          type: [string, 'null']
+          description: >-
+            `raw_report.parser_id`, the parser that handled the report, or
+            `null` on a refused row that was never mapped.
+        parser_version:
+          type: [string, 'null']
+          description: '`raw_report.parser_version`, or `null` while no parser version is stored.'
+        reason:
+          type: [string, 'null']
+          description: >-
+            `raw_report.reason`, the closed parsing-failure reason of a refused
+            row; `null` for a mapped row.
+        discrepancies:
+          type: array
+          description: >-
+            The effective discrepancy codes, as distinct words in canonical
+            order: `malformed` alone for a malformed report, otherwise the stored
+            codes (`count_mismatch`, `unmapped_case`, `duplicate_case`,
+            `status_mismatch`). The per-code counts are stored on the row and are
+            not served here.
+          items:
+            type: string
+            enum:
+              - malformed
+              - count_mismatch
+              - unmapped_case
+              - duplicate_case
+              - status_mismatch
+        summary:
+          $ref: '#/components/schemas/ReportComparisonSummary'
+        cases:
+          type: array
+          description: >-
+            One keyset page of the report's events, ordered by `sequence`
+            ascending; empty for a refused report and for a page past the last
+            event.
+          items:
+            $ref: '#/components/schemas/ReportComparisonCase'
+        next_cursor:
+          type: [string, 'null']
+          description: >-
+            The opaque cursor of the next page, or `null` on the last page. It
+            is the canonical decimal of the last returned event `sequence`,
+            bound to this report by the query rather than carried in the value.
+    ReportComparisonSummary:
+      type: object
+      additionalProperties: false
+      description: >-
+        `raw_report` counts, declared beside observed. A declared count is
+        nullable because a producer may omit it; an observed count is always
+        present, since the parser counts what it read.
+      required:
+        - declared_tests
+        - declared_failures
+        - declared_errors
+        - declared_skipped
+        - observed_tests
+        - observed_failures
+        - observed_errors
+        - observed_skipped
+        - status
+      properties:
+        declared_tests:
+          type: [integer, 'null']
+          minimum: 0
+          description: '`raw_report.declared_tests`, or `null` when the report did not state it.'
+        declared_failures:
+          type: [integer, 'null']
+          minimum: 0
+          description: '`raw_report.declared_failures`, or `null` when the report did not state it.'
+        declared_errors:
+          type: [integer, 'null']
+          minimum: 0
+          description: '`raw_report.declared_errors`, or `null` when the report did not state it.'
+        declared_skipped:
+          type: [integer, 'null']
+          minimum: 0
+          description: '`raw_report.declared_skipped`, or `null` when the report did not state it.'
+        observed_tests:
+          type: integer
+          minimum: 0
+          description: '`raw_report.observed_tests`, counted from the parsed report.'
+        observed_failures:
+          type: integer
+          minimum: 0
+          description: '`raw_report.observed_failures`, counted from the parsed report.'
+        observed_errors:
+          type: integer
+          minimum: 0
+          description: '`raw_report.observed_errors`, counted from the parsed report.'
+        observed_skipped:
+          type: integer
+          minimum: 0
+          description: '`raw_report.observed_skipped`, counted from the parsed report.'
+        status:
+          type: string
+          enum:
+            - mapped
+            - partial
+            - malformed
+            - unsupported
+          description: >-
+            `raw_report.outcome`: `mapped` for a fully mapped report, `partial`
+            when some cases could not be mapped, and `malformed` or `unsupported`
+            for a refused one.
+    ReportComparisonCase:
+      type: object
+      additionalProperties: false
+      description: >-
+        One event of the compared report, keyed by the execution key the parser
+        derived. The cases are the observed side of the comparison; the report
+        level `summary` and `discrepancies` are the declared side.
+      required:
+        - case_ref
+        - declared_status
+        - observed_events
+        - discrepancies
+      properties:
+        case_ref:
+          type: string
+          description: >-
+            The event `execution_key`: the parser's identity for one test case
+            in this report, stable across reprocessing of the same bytes.
+        declared_status:
+          type: [string, 'null']
+          description: >-
+            The event `raw_status`, the status word the producer itself wrote
+            for this case; `null` when the event carries none.
+        observed_events:
+          type: integer
+          minimum: 1
+          description: >-
+            The number of `event` rows this report produced for this execution
+            key: one per case when the producer reports each case once, and more
+            when it repeats a key.
+        discrepancies:
+          type: array
+          description: >-
+            Per-case attribution is not stored in V1; always empty; see the
+            report-level `discrepancies`.
+          items:
+            type: string
     CancelRunRequest:
       type: object
       additionalProperties: false

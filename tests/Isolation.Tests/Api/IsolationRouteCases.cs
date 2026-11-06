@@ -838,6 +838,13 @@ public static class IsolationRouteCases
         // control answers 200 with the pending body because the world stores no evaluation.
         ObjectCase("GET", "/v1/runs/{r}/decision", p => [("run", p.RunId)], id =>
             new(HttpMethod.Get, $"/v1/runs/{id}/decision"), ownControl: true),
+        // The report comparison names the run and the report. The world stores no raw_report row and no served route
+        // creates one, so the report id is a fresh one: another tenant's report, an unknown id and a report whose run
+        // is not the one in the path all take the one 404 not_found envelope (never a 403 that would name existence),
+        // and run:read is outside the service-role ceiling, so a project-scoped or service credential is refused by
+        // the permission stage before the handler.
+        ObjectCase("GET", "/v1/runs/{r}/reports/{report_id}/comparison", p => [("run", p.RunId)], id =>
+            new(HttpMethod.Get, $"/v1/runs/{id}/reports/{Guid.CreateVersion7()}/comparison")),
         // The release pair. The create names its project in {p}, so its body must carry that project's own
         // environment revision (a foreign project is refused before the body is validated); the read names the
         // release alone, so its tenant scope is the RLS read and another tenant's release is the 404

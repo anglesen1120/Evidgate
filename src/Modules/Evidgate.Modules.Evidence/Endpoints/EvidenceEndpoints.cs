@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -24,6 +26,12 @@ public static class EvidenceEndpoints
     /// <summary>The header every per-caller, credential-bearing answer carries: no cache may store it.</summary>
     private const string NoStore = "no-store";
 
+    /// <summary>Default page size of the report comparison (00 §9.1, as every other cursor list).</summary>
+    private const int DefaultLimit = 50;
+
+    /// <summary>Largest accepted page size of the report comparison (00 §9.1).</summary>
+    private const int MaxLimit = 200;
+
     /// <summary>Maps the routes and returns the <c>/v1</c> group so the host can apply its filters (00 §5.5 C8).</summary>
     public static RouteGroupBuilder MapEvidenceEndpoints(this IEndpointRouteBuilder routes)
     {
@@ -46,6 +54,10 @@ public static class EvidenceEndpoints
         group.MapGet("/artifacts/{a:guid}/download-url", IssueDownloadUrlAsync)
             .Produces<DownloadUrlResponse>(StatusCodes.Status200OK)
             .WithSummary("Issue a short-lived presigned download URL for one artifact");
+
+        group.MapGet("/runs/{r:guid}/reports/{report_id:guid}/comparison", GetReportComparisonAsync)
+            .Produces<ReportComparison>(StatusCodes.Status200OK)
+            .WithSummary("Compare one stored report's declared counters with the cases its parse observed");
 
         return group;
     }
@@ -223,6 +235,35 @@ public static class EvidenceEndpoints
             cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// <c>GET /v1/runs/{r}/reports/{report_id}/comparison</c>: one stored report against the events its parse wrote.
+    /// The pipeline authorizes <c>run:read</c>; the <c>limit</c>/<c>cursor</c> binding is the cursor-list convention
+    /// of 00 §9.1, and the answer is per-caller, so no cache may store it.
+    /// </summary>
+    /// <param name="r">The run the report must belong to.</param>
+    /// <param name="report_id">The stored report the path names.</param>
+    /// <param name="context">The request, for the query string and the response headers.</param>
+    /// <param name="mediator">Dispatches the read.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    private static async Task<Result<ReportComparison>> GetReportComparisonAsync(
+        Guid r,
+        Guid report_id,
+        HttpContext context,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        context.Response.Headers.CacheControl = NoStore;
+
+        if (ComparisonLimitError(context.Request.Query["limit"], out var limit) is { } error)
+        {
+            return Result.Failure<ReportComparison>(error);
+        }
+
+        return await mediator.Send(
+            new Application.Reports.GetReportComparison(r, report_id, Blank(context.Request.Query["cursor"]), limit),
+            cancellationToken).ConfigureAwait(false);
+    }
+
     private static Error Unauthenticated => new(ApiErrorCode.Unauthenticated, "authentication is required", StatusCodes.Status401Unauthorized);
 
     /// <summary>00 §7 / the <c>idempotency_record</c> key column: the C2 idempotency stage's own bound (T92).</summary>
@@ -248,6 +289,48 @@ public static class EvidenceEndpoints
     }
 
     private static string IdempotencyKey(HttpContext context) => context.Request.Headers["Idempotency-Key"].ToString();
+
+    /// <summary>
+    /// The comparison page size: absent or blank keeps the default. A value that is not the canonical decimal
+    /// spelling of an integer is the route's 400 (malformed), while a canonical integer outside 1–200 — a negative
+    /// one included — is the list 422 with <c>details[].path</c> = <c>limit</c>, exactly as the evidence-revision
+    /// list binds the same member.
+    /// </summary>
+    /// <param name="raw">The raw query value.</param>
+    /// <param name="limit">The page size the query uses.</param>
+    private static Error? ComparisonLimitError(string? raw, out int limit)
+    {
+        limit = DefaultLimit;
+
+        if (string.IsNullOrEmpty(raw))
+        {
+            return null;
+        }
+
+        // A sign is allowed so that `-1` reads as the integer it is and takes the range answer below, not the
+        // malformed one; the canonical spelling check then refuses `+5` and `01`, whose value alone would pass.
+        if (!BigInteger.TryParse(raw, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
+            || !string.Equals(parsed.ToString(CultureInfo.InvariantCulture), raw, StringComparison.Ordinal))
+        {
+            return Error.BadRequest(
+                "limit must be a canonical integer (00 §9.1); the request is malformed",
+                [new ErrorDetail("limit", "malformed")]);
+        }
+
+        // Read unbounded so a canonical integer of any size is a range error, not a malformed one.
+        if (parsed < 1 || parsed > MaxLimit)
+        {
+            return Error.Invalid(
+                string.Create(CultureInfo.InvariantCulture, $"limit must be an integer between 1 and {MaxLimit} (00 §9.1)"),
+                [new ErrorDetail("limit", "out_of_range")]);
+        }
+
+        limit = (int)parsed;
+
+        return null;
+    }
+
+    private static string? Blank(string? value) => string.IsNullOrEmpty(value) ? null : value;
 }
 
 /// <summary>

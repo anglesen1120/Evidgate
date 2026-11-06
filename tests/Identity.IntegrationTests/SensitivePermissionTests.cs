@@ -109,6 +109,13 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // service-token request answers 401 `unauthenticated` with no body. Its refusals and its own body are
         // asserted in Profile/MyProfileTests.
         "/v1/me",
+
+        // The report comparison answers only for a stored `raw_report` row, and no served route creates one in this
+        // host (the report arrives through the parse pipeline, not through a route), so a documented call would be the
+        // 404 `not_found` the scan reports as a violation. `raw_report` carries counts, ids and code words — no secret
+        // among them — and its body and effective discrepancy codes are asserted in Tenancy.IntegrationTests'
+        // ReportComparisonTests.
+        "/v1/runs/{r}/reports/{report_id}/comparison",
     ];
 
     /// <summary>The wire shape of the create bodies (snake_case, like the API).</summary>

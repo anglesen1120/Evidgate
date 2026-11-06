@@ -1,4 +1,3 @@
-using System.Globalization;
 using Evidgate.Modules.Evidence.Application.Freeze;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
@@ -125,7 +124,7 @@ internal sealed partial class ParseRawReportHandler
     {
         // The same synthetic producer the mapped path's slot names (see WriteMappedAsync), so the reconciler compares
         // one report by one identity whether it mapped or refused.
-        var producerId = ProducerPrefix + payload.ArtifactId.ToString("D", CultureInfo.InvariantCulture);
+        var producerId = RawReportProducer.IdFor(payload.ArtifactId);
 
         await outbox.EnqueueAsync(
                 RunReconcileContract.OutboxTaskType,

@@ -1,4 +1,3 @@
-using System.Globalization;
 using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
@@ -189,9 +188,6 @@ internal sealed partial class ParseRawReportHandler(
 
     /// <summary>The media type the child is told the report carries.</summary>
     private const string XmlMediaType = "application/xml";
-
-    /// <summary>The prefix of the synthetic producer id; the artifact id makes it unique per report.</summary>
-    private const string ProducerPrefix = "junit-";
 
     /// <summary>
     /// The binding the synthetic slot carries: no credential writes this producer, so the slot is bound to a value no
@@ -429,7 +425,7 @@ internal sealed partial class ParseRawReportHandler(
             .Where(item => !string.IsNullOrEmpty(item.ExecutionKey))
             .ToArray();
 
-        var producerId = ProducerPrefix + payload.ArtifactId.ToString("D", CultureInfo.InvariantCulture);
+        var producerId = RawReportProducer.IdFor(payload.ArtifactId);
         var events = SerializeEvents(payload.ArtifactId, producerId, prepared, cases);
 
         return await WriteAsync(

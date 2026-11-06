@@ -258,6 +258,117 @@ export type EvidenceRevisionPage = {
 };
 
 /**
+ * Body of `GET /v1/runs/{r}/reports/{report_id}/comparison`: one `raw_report` row (0078) compared with the `event` rows its parser produced. The counts stay declared beside observed instead of being folded into a verdict, so a client can show which side disagreed, and the raw bytes, object key and checksum are never part of the body.
+ */
+export type ReportComparison = {
+    /**
+     * `raw_report.id` of the compared report.
+     */
+    report_id: string;
+    /**
+     * `raw_report.run_id` — the run in the path, because the composite foreign key binds a report to an artifact of that same run.
+     */
+    run_id: string;
+    /**
+     * The `artifact.id` that holds the uploaded report bytes; the only pointer served, and `download-url` resolves it under `artifact:read` and its sensitivity gate.
+     */
+    raw_report_artifact_id: string;
+    /**
+     * `raw_report.producer_kind`, the producer kind stored with the report; the events this read counts are the ones the report parse wrote for the report artifact.
+     */
+    producer_kind: string;
+    /**
+     * `raw_report.parser_id`, the parser that handled the report, or `null` on a refused row that was never mapped.
+     */
+    parser_id: string | null;
+    /**
+     * `raw_report.parser_version`, or `null` while no parser version is stored.
+     */
+    parser_version: string | null;
+    /**
+     * `raw_report.reason`, the closed parsing-failure reason of a refused row; `null` for a mapped row.
+     */
+    reason: string | null;
+    /**
+     * The effective discrepancy codes, as distinct words in canonical order: `malformed` alone for a malformed report, otherwise the stored codes (`count_mismatch`, `unmapped_case`, `duplicate_case`, `status_mismatch`). The per-code counts are stored on the row and are not served here.
+     */
+    discrepancies: Array<'malformed' | 'count_mismatch' | 'unmapped_case' | 'duplicate_case' | 'status_mismatch'>;
+    summary: ReportComparisonSummary;
+    /**
+     * One keyset page of the report's events, ordered by `sequence` ascending; empty for a refused report and for a page past the last event.
+     */
+    cases: Array<ReportComparisonCase>;
+    /**
+     * The opaque cursor of the next page, or `null` on the last page. It is the canonical decimal of the last returned event `sequence`, bound to this report by the query rather than carried in the value.
+     */
+    next_cursor: string | null;
+};
+
+/**
+ * `raw_report` counts, declared beside observed. A declared count is nullable because a producer may omit it; an observed count is always present, since the parser counts what it read.
+ */
+export type ReportComparisonSummary = {
+    /**
+     * `raw_report.declared_tests`, or `null` when the report did not state it.
+     */
+    declared_tests: number | null;
+    /**
+     * `raw_report.declared_failures`, or `null` when the report did not state it.
+     */
+    declared_failures: number | null;
+    /**
+     * `raw_report.declared_errors`, or `null` when the report did not state it.
+     */
+    declared_errors: number | null;
+    /**
+     * `raw_report.declared_skipped`, or `null` when the report did not state it.
+     */
+    declared_skipped: number | null;
+    /**
+     * `raw_report.observed_tests`, counted from the parsed report.
+     */
+    observed_tests: number;
+    /**
+     * `raw_report.observed_failures`, counted from the parsed report.
+     */
+    observed_failures: number;
+    /**
+     * `raw_report.observed_errors`, counted from the parsed report.
+     */
+    observed_errors: number;
+    /**
+     * `raw_report.observed_skipped`, counted from the parsed report.
+     */
+    observed_skipped: number;
+    /**
+     * `raw_report.outcome`: `mapped` for a fully mapped report, `partial` when some cases could not be mapped, and `malformed` or `unsupported` for a refused one.
+     */
+    status: 'mapped' | 'partial' | 'malformed' | 'unsupported';
+};
+
+/**
+ * One event of the compared report, keyed by the execution key the parser derived. The cases are the observed side of the comparison; the report level `summary` and `discrepancies` are the declared side.
+ */
+export type ReportComparisonCase = {
+    /**
+     * The event `execution_key`: the parser's identity for one test case in this report, stable across reprocessing of the same bytes.
+     */
+    case_ref: string;
+    /**
+     * The event `raw_status`, the status word the producer itself wrote for this case; `null` when the event carries none.
+     */
+    declared_status: string | null;
+    /**
+     * The number of `event` rows this report produced for this execution key: one per case when the producer reports each case once, and more when it repeats a key.
+     */
+    observed_events: number;
+    /**
+     * Per-case attribution is not stored in V1; always empty; see the report-level `discrepancies`.
+     */
+    discrepancies: Array<string>;
+};
+
+/**
  * Optional body of `POST /v1/runs/{r}/cancel`. Absent, `{}` and `{"reason": null}` all mean "no reason given".
  */
 export type CancelRunRequest = {
@@ -3410,6 +3521,11 @@ export type RunAttemptCursor = string;
 export type RunEvidenceRevisionCursor = string;
 
 /**
+ * Opaque cursor from `next_cursor` of `GET /v1/runs/{r}/reports/{report_id}/comparison`; the canonical decimal of the last returned event `sequence`, ascending (00 §9.1). It carries no report identity, so the query scopes it to the report named in the path: a number issued for another report or run only positions the page inside this report. A value that is not a canonical non-negative decimal is 422 `request_invalid` (`details[].path` = `cursor`).
+ */
+export type ReportComparisonCursor = string;
+
+/**
  * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
  */
 export type IdempotencyKey = string;
@@ -5588,11 +5704,21 @@ export type GetReportComparisonData = {
         r: string;
         report_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor` of `GET /v1/runs/{r}/reports/{report_id}/comparison`; the canonical decimal of the last returned event `sequence`, ascending (00 §9.1). It carries no report identity, so the query scopes it to the report named in the path: a number issued for another report or run only positions the page inside this report. A value that is not a canonical non-negative decimal is 422 `request_invalid` (`details[].path` = `cursor`).
+         */
+        cursor?: string;
+        limit?: number;
+    };
     url: '/runs/{r}/reports/{report_id}/comparison';
 };
 
 export type GetReportComparisonErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
     /**
      * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
      */
@@ -5605,6 +5731,10 @@ export type GetReportComparisonErrors = {
      * 404 not found — also for other-tenant ids (00 §9.2)
      */
     404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
     /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
@@ -5619,14 +5749,9 @@ export type GetReportComparisonError = GetReportComparisonErrors[keyof GetReport
 
 export type GetReportComparisonResponses = {
     /**
-     * Per-case comparison with discrepancy reasons
+     * The report comparison and one page of its per-case events
      */
-    200: {
-        raw_report_id: string;
-        cases: Array<{
-            discrepancy_reasons?: Array<string>;
-        }>;
-    };
+    200: ReportComparison;
 };
 
 export type GetReportComparisonResponse = GetReportComparisonResponses[keyof GetReportComparisonResponses];
