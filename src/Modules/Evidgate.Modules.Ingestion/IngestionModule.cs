@@ -57,6 +57,10 @@ internal static class IngestionModule
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IngestionRateLimiter>();
 
+        // The events route's quota admission and the per-request carrier of the block's Retry-After.
+        services.TryAddScoped<IngestQuotaAdmission>();
+        services.TryAddSingleton<IngestQuotaVeto>();
+
         // 04.1.2-T4.1: the EF write model of producer slots (00 §5.5 C4).
         services.AddEvidgateDbContext<IngestionDbContext>(typeof(IngestionDbContext).Assembly);
 

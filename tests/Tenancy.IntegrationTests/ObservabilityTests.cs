@@ -9,6 +9,7 @@ using System.Net;
 using System.Text;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Observability.Correlation;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 
@@ -126,6 +127,53 @@ public sealed class ObservabilityTests
         Tag(requestSpan!, CorrelationNames.RunId).ShouldBe(
             world.RunId.ToString("D", CultureInfo.InvariantCulture), "the refused request names its run");
     }
+
+    [Fact]
+    public async Task quota_refusal_counts_once_and_its_batch_span_is_correlated()
+    {
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), planned: 1);
+        await world.SetRunStateAsync("running");
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedFullQuotaAsync(world, counters);
+        using var denied = IngestTelemetryCapture.QuotaDeniedBatches(out var kinds);
+        using var rejected = IngestTelemetryCapture.RejectedBatches(out var reasons);
+        using var spans = IngestTelemetryCapture.ModuleSpans(out var captured);
+        const string refusedRequest = "req-ingest-quota-1";
+
+        var refused = await PostAsync(world, sequence: 1, refusedRequest);
+
+        refused.Status.ShouldBe(HttpStatusCode.TooManyRequests, refused.ErrorMessage);
+        refused.ErrorCode.ShouldBe("quota_exceeded");
+        kinds.ShouldHaveSingleItem().ShouldBe("quota_exceeded");
+        reasons.ShouldHaveSingleItem().ShouldBe("quota_exceeded");
+
+        // The request's own span and the handler's module span both name this batch, so the correlation is read
+        // from the module span (the one that also carries the producer and the event count); the token is on neither.
+        var batch = await WaitForSpanAsync(captured, span => span.OperationName == "IngestEventBatch"
+            && span.GetTagItem(EvidgateTelemetry.ModuleTag) is not null
+            && Equals(Tag(span, CorrelationNames.RequestId), refusedRequest));
+        batch.ShouldNotBeNull("a batch the quota blocked still exports its module span");
+        Tag(batch!, CorrelationNames.RunId).ShouldBe(world.RunId.ToString("D", CultureInfo.InvariantCulture));
+        Tag(batch!, EvidgateTelemetry.ProducerIdTag).ShouldBe(IngestTestWorld.ProducerId);
+        Tag(batch!, EvidgateTelemetry.EventCountTag).ShouldBe("1");
+        batch!.TagObjects.ShouldAllBe(tag => !Equals(tag.Value, IngestTestWorld.Jti));
+
+        // The block is reported once and commits nothing, quota and events alike.
+        (await world.CountAsync("event", $"run_id = '{world.RunId:D}'")).ShouldBe(0L);
+    }
+
+    /// <summary>A counter with no room at all, so the route's very first batch is the one the gate blocks.</summary>
+    private static Task<Guid> SeedFullQuotaAsync(IngestTestWorld world, UsageQuotaWorld counters) =>
+        counters.SeedCounterAsync(new CounterSeed(
+            Guid.CreateVersion7(),
+            world.Project,
+            world.Host.Services.GetRequiredService<TimeProvider>().GetUtcNow()
+                .ToString("yyyy-MM", CultureInfo.InvariantCulture),
+            "results",
+            10m,
+            10m,
+            0.8m,
+            Org: world.Org));
 
     private static Task<ApiAnswer> PostAsync(IngestTestWorld world, long sequence, string requestId) =>
         IngestQaRequests.PostAsync(

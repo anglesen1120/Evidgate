@@ -45,6 +45,40 @@ internal static class IngestTelemetryCapture
     }
 
     /// <summary>
+    /// Listens for <c>evidgate_ingest_quota_denied_total</c> and collects the <c>kind</c> tag of every
+    /// measurement taken while the listener runs.
+    /// </summary>
+    internal static MeterListener QuotaDeniedBatches(out ConcurrentBag<string> kinds)
+    {
+        var bag = new ConcurrentBag<string>();
+        kinds = bag;
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == EvidgateTelemetry.MeterName
+                    && instrument.Name == EvidgateTelemetry.IngestQuotaDeniedMetricName)
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            foreach (var tag in tags)
+            {
+                if (tag.Key == "kind" && tag.Value is string kind)
+                {
+                    bag.Add(kind);
+                }
+            }
+        });
+        listener.Start();
+
+        return listener;
+    }
+
+    /// <summary>
     /// Listens for <c>evidgate_ingest_cap_exceeded_total</c> and collects the <c>cap</c> tag of every measurement taken
     /// while the listener runs.
     /// </summary>

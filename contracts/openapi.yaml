@@ -1656,10 +1656,15 @@ paths:
         A burst above the token's or the project's budget
         (`EVIDGATE__INGESTION__RATELIMIT__*`: default 120 requests per 60 s per
         token and 480 per project) is 429 `rate_limited` with an integer
-        `Retry-After`, refused before the body is read and with no write; it is
-        the one retryable answer here. A request is charged to both budgets in
-        one step, so a refused request spends neither. All the rejections above
-        are `retryable: false`.
+        `Retry-After`, refused before the body is read and with no write. A
+        batch that would take the project's billing period past its `results`
+        quota is 429 `quota_exceeded` with an integer `Retry-After` (the wait
+        until the period rolls over), refused before the run is touched and
+        with no write; a resend whose events are all already stored spends no
+        quota, and a batch committed earlier is untouched by a later refusal.
+        Those two are the retryable answers here. A request is charged to both
+        budget partitions in one step, so a refused request spends neither. All
+        the other rejections above are `retryable: false`.
       x-permission: event:write
       x-version: v1
       parameters:
