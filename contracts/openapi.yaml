@@ -13363,7 +13363,7 @@ components:
       properties:
         period:
           type: string
-          description: The billing period the counters belong to, from the server's clock.
+          description: The billing period the counters belong to, from the server clock.
           pattern: '^\d{4}-(0[1-9]|1[0-2])$'
         project:
           type: [string, 'null']
@@ -13371,7 +13371,7 @@ components:
           description: The project filter the request named, or null for the org-wide answer.
         metrics:
           type: array
-          description: One entry per metric, in the ledger's metric order.
+          description: One entry per metric, in the ledger metric order.
           items:
             $ref: '#/components/schemas/UsageSummaryMetricDto'
     UsageSummaryMetricDto:
@@ -13384,30 +13384,26 @@ components:
         answers `used` 0 and a null limit.
       additionalProperties: false
       required:
-        [
-          metric,
-          scope,
-          used,
-          limit,
-          warned_at,
-          blocked_at,
-          retry_after_seconds,
-          unavailable_reason,
-          projects,
-        ]
+        - metric
+        - scope
+        - used
+        - limit
+        - warned_at
+        - blocked_at
+        - retry_after_seconds
+        - unavailable_reason
+        - projects
       properties:
         metric:
           type: string
           enum:
-            [
-              results,
-              artifact_gb_month,
-              egress_gb,
-              ai_tokens,
-              support_hours,
-              runner_minutes,
-              device_minutes,
-            ]
+            - results
+            - artifact_gb_month
+            - egress_gb
+            - ai_tokens
+            - support_hours
+            - runner_minutes
+            - device_minutes
         scope:
           type: string
           enum: [tenant, project]
@@ -13418,7 +13414,7 @@ components:
             counter. Null only when the metric is unavailable.
         limit:
           type: [number, 'null']
-          description: The tenant counter's configured limit; null when the month has no tenant counter.
+          description: The organization-wide counter configured limit; null when the month has no tenant counter.
         warned_at:
           type: [string, 'null']
           format: date-time
@@ -13454,10 +13450,10 @@ components:
           enum: [project]
         used:
           type: number
-          description: The project counter's used, or the project's roll-up total when no counter exists.
+          description: The used of the project-level counter, or the project roll-up total when no counter exists.
         limit:
           type: [number, 'null']
-          description: The project counter's configured limit; null when the month has no project counter.
+          description: The project-level counter configured limit; null when the month has no project counter.
         warned_at:
           type: [string, 'null']
           format: date-time

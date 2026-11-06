@@ -19,6 +19,7 @@ namespace Contract.Tests;
 public sealed class UsageSummaryContractTests
 {
     private const string SchemaName = "UsageSummaryDto";
+    private const string SchemaUri = "urn:evidgate:contract-spec:UsageSummaryDocument";
 
     /// <summary>The operation and the three response schemas are documented where the SDK reads them.</summary>
     [Fact]
@@ -81,7 +82,8 @@ public sealed class UsageSummaryContractTests
         json.ShouldContain("\"unavailable_reason\":\"the object store does not report egress bytes yet\"", Case.Sensitive);
         json.ShouldContain("\"projects\":[]", Case.Sensitive);
 
-        ContractSchema.AssertValid(OpenApiSpec.Load(), SchemaName, json, "a usage summary body");
+        var failures = ContractSchema.Failures(SummaryDocument(OpenApiSpec.Load()), SchemaUri, json);
+        failures.ShouldBeEmpty($"a usage summary body must validate against components.schemas.{SchemaName}: {string.Join(" | ", failures)}");
     }
 
     /// <summary>The negative control: a project row claiming another scope label must be rejected.</summary>
@@ -117,11 +119,32 @@ public sealed class UsageSummaryContractTests
         var instance = JsonNode.Parse(JsonSerializer.Serialize(summary, SnakeCase))!.AsObject();
         instance["metrics"]![0]!["projects"]![0]!["scope"] = "tenant";
 
-        ContractSchema.AssertInvalid(
-            OpenApiSpec.Load(),
-            SchemaName,
-            instance.ToJsonString(),
-            "a project counter whose scope claims a tenant counter");
+        ContractSchema.Failures(SummaryDocument(OpenApiSpec.Load()), SchemaUri, instance.ToJsonString())
+            .ShouldNotBeEmpty("a project counter whose scope claims a tenant counter must be rejected, or the valid case proves nothing");
+    }
+
+    /// <summary>
+    /// The summary schema and the two it references as one document rooted at the summary: the validator resolves
+    /// <c>#/components/schemas/...</c> inside the document, so all three entries are read from the spec under that path.
+    /// </summary>
+    private static string SummaryDocument(OpenApiSpec spec)
+    {
+        var schemas = new JsonObject();
+        foreach (var name in new[] { SchemaName, "UsageSummaryMetricDto", "UsageSummaryProjectDto" })
+        {
+            var entry = spec.Schema(name).DeepClone().AsObject();
+            entry.Remove("$schema");
+            entry.Remove("$id");
+            schemas[name] = entry;
+        }
+
+        return new JsonObject
+        {
+            ["$schema"] = OpenApiSpec.SchemaDialect,
+            ["$id"] = SchemaUri,
+            ["components"] = new JsonObject { ["schemas"] = schemas },
+            ["$ref"] = $"#/components/schemas/{SchemaName}",
+        }.ToJsonString();
     }
 
     /// <summary>The host's wire policy (<c>ApiHost</c>): snake_case, nulls written.</summary>

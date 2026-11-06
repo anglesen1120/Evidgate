@@ -2616,7 +2616,7 @@ export type AiSettingsTemplateListResponse = {
  */
 export type UsageSummaryDto = {
     /**
-     * The billing period the counters belong to, from the server's clock.
+     * The billing period the counters belong to, from the server clock.
      */
     period: string;
     /**
@@ -2624,7 +2624,7 @@ export type UsageSummaryDto = {
      */
     project: string | null;
     /**
-     * One entry per metric, in the ledger's metric order.
+     * One entry per metric, in the ledger metric order.
      */
     metrics: Array<UsageSummaryMetricDto>;
 };
@@ -2640,7 +2640,7 @@ export type UsageSummaryMetricDto = {
      */
     used: number | null;
     /**
-     * The tenant counter's configured limit; null when the month has no tenant counter.
+     * The organization-wide counter configured limit; null when the month has no tenant counter.
      */
     limit: number | null;
     /**
@@ -2672,11 +2672,11 @@ export type UsageSummaryProjectDto = {
     project_id: string;
     scope: 'project';
     /**
-     * The project counter's used, or the project's roll-up total when no counter exists.
+     * The used of the project-level counter, or the project roll-up total when no counter exists.
      */
     used: number;
     /**
-     * The project counter's configured limit; null when the month has no project counter.
+     * The project-level counter configured limit; null when the month has no project counter.
      */
     limit: number | null;
     warned_at: string | null;
