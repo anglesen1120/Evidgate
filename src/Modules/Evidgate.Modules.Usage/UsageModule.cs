@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Usage.Application;
 using Evidgate.Modules.Usage.Application.Queries;
+using Evidgate.Modules.Usage.Application.Quota;
 using Evidgate.Modules.Usage.Application.Rollup;
 using Evidgate.Modules.Usage.Contracts;
 using Evidgate.Modules.Usage.Infrastructure.Persistence;
@@ -52,9 +53,17 @@ internal static class UsageModule
         services.AddTaskSchedule(UsageRollupSweeps.Compute);
         services.AddTaskSchedule(UsageRollupSweeps.ComputeOnPeriodClose);
 
-        // IQuotaGate stays unregistered until 12.3.1-T4 implements it: a hot path that asks for it must fail at
-        // resolution rather than meter against a stub that always answers Ok. Fail closed is the contract (IQuotaGate's
-        // docs), so nothing here substitutes an always-Ok default, now or later.
+        // The quota gate the metering hot paths resolve, and the raise path behind the operator route. The
+        // gate is registered unconditionally: a host either has the real one or fails at resolution, and the
+        // `EVIDGATE:Usage:QuotaGate:Enabled` switch is the only way it answers Ok without a write.
+        services.TryAddScoped<QuotaCounterStore>();
+        services.TryAddScoped<IQuotaGate, QuotaGate>();
+        services.TryAddScoped<QuotaLimitWriter>();
+        services.TryAddScoped<QuotaLimitRaiser>();
+        services.AddOptions<QuotaGateOptions>()
+            .BindConfiguration(QuotaGateOptions.Section)
+            .ValidateOnStart();
+        services.TryAddSingleton(TimeProvider.System);
 
         return services;
     }
