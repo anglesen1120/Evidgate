@@ -164,6 +164,10 @@ public sealed partial class ReportComparisonTests
     [InlineData("-1", HttpStatusCode.UnprocessableEntity)]
     [InlineData("2147483648", HttpStatusCode.UnprocessableEntity)]
     [InlineData("-2147483649", HttpStatusCode.UnprocessableEntity)]
+    [InlineData("9223372036854775807", HttpStatusCode.UnprocessableEntity)]
+    [InlineData("9223372036854775808", HttpStatusCode.UnprocessableEntity)]
+    [InlineData("-9223372036854775808", HttpStatusCode.UnprocessableEntity)]
+    [InlineData("-9223372036854775809", HttpStatusCode.UnprocessableEntity)]
     public async Task Comparison_LimitText_DistinguishesMalformedFromOutOfRange(string limit, HttpStatusCode expected)
     {
         await using var world = await StartAsync();

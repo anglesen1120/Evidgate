@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -308,7 +309,7 @@ public static class EvidenceEndpoints
 
         // A sign is allowed so that `-1` reads as the integer it is and takes the range answer below, not the
         // malformed one; the canonical spelling check then refuses `+5` and `01`, whose value alone would pass.
-        if (!long.TryParse(raw, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
+        if (!BigInteger.TryParse(raw, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var parsed)
             || !string.Equals(parsed.ToString(CultureInfo.InvariantCulture), raw, StringComparison.Ordinal))
         {
             return Error.BadRequest(
@@ -316,7 +317,7 @@ public static class EvidenceEndpoints
                 [new ErrorDetail("limit", "malformed")]);
         }
 
-        // Read as a long so a canonical integer too big for an int is a range error, not a malformed one.
+        // Read unbounded so a canonical integer of any size is a range error, not a malformed one.
         if (parsed < 1 || parsed > MaxLimit)
         {
             return Error.Invalid(
