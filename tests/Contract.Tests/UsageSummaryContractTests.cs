@@ -32,7 +32,7 @@ public sealed class UsageSummaryContractTests
         spec.SchemaNames.ShouldContain(SchemaName);
         spec.SchemaNames.ShouldContain("UsageSummaryMetricDto");
         spec.SchemaNames.ShouldContain("UsageSummaryProjectDto");
-        spec.SchemaNames.ShouldContain("UsageSummaryProjectsStatus");
+        spec.SchemaNames.ShouldContain("UsageSummaryProjectsStatusDto");
     }
 
     /// <summary>Every member the schema requires is written, an unavailable metric's as explicit nulls.</summary>
@@ -239,9 +239,9 @@ public sealed class UsageSummaryContractTests
         metric["required"]!.AsArray().Select(member => member!.GetValue<string>())
             .ShouldContain("projects_status");
         metric["properties"]!["projects_status"]!["$ref"]!.GetValue<string>()
-            .ShouldBe("#/components/schemas/UsageSummaryProjectsStatus");
+            .ShouldBe("#/components/schemas/UsageSummaryProjectsStatusDto");
 
-        var status = spec.Schema("UsageSummaryProjectsStatus");
+        var status = spec.Schema("UsageSummaryProjectsStatusDto");
         status["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
         status["required"]!.AsArray().Select(member => member!.GetValue<string>())
             .ShouldBe(ProjectStatusCounts, ignoreOrder: true);
@@ -318,7 +318,7 @@ public sealed class UsageSummaryContractTests
     private static string SummaryDocument(OpenApiSpec spec)
     {
         var schemas = new JsonObject();
-        foreach (var name in new[] { SchemaName, "UsageSummaryMetricDto", "UsageSummaryProjectDto", "UsageSummaryProjectsStatus" })
+        foreach (var name in new[] { SchemaName, "UsageSummaryMetricDto", "UsageSummaryProjectDto", "UsageSummaryProjectsStatusDto" })
         {
             var entry = spec.Schema(name).DeepClone().AsObject();
             entry.Remove("$schema");

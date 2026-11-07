@@ -2827,7 +2827,7 @@ export type UsageSummaryMetricDto = {
      * The per-project counters of the page, ordered by project `created_at`, then id; empty when the metric is unavailable.
      */
     projects: Array<UsageSummaryProjectDto>;
-    projects_status: UsageSummaryProjectsStatus;
+    projects_status: UsageSummaryProjectsStatusDto;
 };
 
 /**
@@ -2858,7 +2858,7 @@ export type UsageSummaryProjectDto = {
 /**
  * How many of the organization's projects a metric warns or blocks in the current period, counted over all projects rather than the page: the values are identical on every page and when `project_id` is given, so a quota badge never narrows when the per-project rows are paged. Only project quota counters count, never the roll-up fallback, which carries no threshold stamps. A blocked project is counted in `blocked_count` only, so the two counts never describe the same project twice. A metric with no producer in this build answers 0 and 0.
  */
-export type UsageSummaryProjectsStatus = {
+export type UsageSummaryProjectsStatusDto = {
     /**
      * Projects whose counter for this metric is blocked, that is its `blocked_at` is set.
      */

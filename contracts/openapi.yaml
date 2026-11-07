@@ -13793,7 +13793,7 @@ components:
           items:
             $ref: '#/components/schemas/UsageSummaryProjectDto'
         projects_status:
-          $ref: '#/components/schemas/UsageSummaryProjectsStatus'
+          $ref: '#/components/schemas/UsageSummaryProjectsStatusDto'
     UsageSummaryProjectDto:
       type: object
       description: >-
@@ -13825,7 +13825,7 @@ components:
         retry_after_seconds:
           type: [integer, 'null']
           description: On a blocked counter only, whole seconds until the next period starts.
-    UsageSummaryProjectsStatus:
+    UsageSummaryProjectsStatusDto:
       type: object
       description: >-
         How many of the organization's projects a metric warns or blocks in the current period, counted over all
