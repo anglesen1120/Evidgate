@@ -103,6 +103,31 @@ public sealed class UsageQuotaPeekTests
     }
 
     [Fact]
+    public async Task QuotaGatePeek_OnlyTheSecondRefusingScopeUnstamped_StillReportsUnstamped()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        var tenantId = await SeedAsync(world, used: Limit);
+        var projectId = await SeedAsync(world, used: Limit, projectId: world.Project);
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.quota_counter set blocked_at = now() where id = '{tenantId:D}'");
+        var request = Request(world, 1m, includeTenantScope: true);
+
+        var secondUnstamped = await world.PeekAsync(request);
+
+        secondUnstamped.Blocked.ShouldBeTrue();
+        secondUnstamped.RefusedScope.ShouldBe(QuotaScope.Tenant, "the organization counter is the first that refuses");
+        secondUnstamped.Unstamped.ShouldBeTrue(
+            "the project refuses too and carries no stamp, so a stamp write would still change a row");
+
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.quota_counter set blocked_at = now() where id = '{projectId:D}'");
+
+        (await world.PeekAsync(request)).Unstamped.ShouldBeFalse("every refusing scope already carries its stamp");
+    }
+
+    [Fact]
     public async Task QuotaGatePeek_TenantCounterFull_BlocksTenantScope()
     {
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);

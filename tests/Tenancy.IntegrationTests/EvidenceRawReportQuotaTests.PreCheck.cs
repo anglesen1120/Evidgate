@@ -355,6 +355,46 @@ public sealed partial class EvidenceRawReportQuotaTests
     }
 
     [Fact]
+    public async Task A_Second_Refusing_Scopes_Stamp_Is_Written_Again_After_Only_That_Scope_Is_Raised()
+    {
+        var gate = new ReportPreCheckGate();
+        var world = await StartAsync(services => ReplaceQuotaGate(services, inner => gate.Wrap(inner)));
+        await using var _ = world;
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, OneEventBody);
+        await SeedCounterAsync(counters, world, used: 7m, limit: 7m);
+        await counters.SeedCounterAsync(new CounterSeed(
+            Guid.CreateVersion7(), null, await PeriodAsync(world), "results", 7m, 7m, WarnRatio, Org: world.Org));
+        await SeedDeferredTaskAsync(world, artifactId);
+
+        // Both scopes refuse and both carry the stamp a raise has to clear.
+        (await ParseAsync(world, artifactId)).Status.ShouldBe(ParseRawReportOutcome.QuotaBlocked);
+        (await ReadCounterAsync(counters, world)).ShouldNotBeNull().BlockedAt.ShouldNotBeNull();
+        var tenant = (await ReadTenantCounterAsync(counters, world)).ShouldNotBeNull();
+        tenant.BlockedAt.ShouldNotBeNull();
+
+        // Only the project is raised, and not far enough: 7.999 leaves it refusing too, so the counter that is now
+        // unstamped is the second scope the peek reports on, not the first one it returns.
+        (await RaiseAsync(counters, world, world.Project, limit: 7.999m)).IsSuccess.ShouldBeTrue();
+        var raised = (await ReadCounterAsync(counters, world)).ShouldNotBeNull();
+        raised.BlockedAt.ShouldBeNull();
+
+        var again = await ParseAsync(world, artifactId);
+
+        again.Status.ShouldBe(ParseRawReportOutcome.QuotaBlocked);
+        again.QuotaRequest.ShouldNotBeNull(
+            "a still-refusing second scope without a stamp needs the write, even though the returned scope has one")
+            .ProjectId.ShouldBe(world.Project);
+        var reStamped = (await ReadCounterAsync(counters, world)).ShouldNotBeNull();
+        reStamped.BlockedAt.ShouldNotBeNull("the raise cleared the stamp, so the refusal must be visible again");
+        reStamped.Version.ShouldBeGreaterThan(raised.Version);
+        (await SummaryBlockedAtAsync(counters, world)).ShouldBe(reStamped.BlockedAt);
+        (await ReadTenantCounterAsync(counters, world)).ShouldNotBeNull().ShouldBe(
+            tenant, "the scope that already carries its stamp is not written again");
+    }
+
+    [Fact]
     public async Task A_Probe_Fault_On_A_First_Attempt_Cannot_Defer_It()
     {
         // No deferred task row yet: the pre-check is not reached at all, so the fault this gate would throw is never

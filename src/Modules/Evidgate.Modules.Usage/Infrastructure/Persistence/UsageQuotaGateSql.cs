@@ -41,13 +41,15 @@ internal static class UsageQuotaGateSql
     /// <summary>
     /// Reads only existing refusing counters; the first scope is the tenant's. The instant is the transaction's own
     /// clock, the one that named the period, so a refusal's wait never contradicts the month it refuses in. A null
-    /// <c>@period</c> is the transaction's own month, and every row answers the month it was read in. <c>unstamped</c>
-    /// tells a caller whether a stamp written after its rollback would change the row at all.
+    /// <c>@period</c> is the transaction's own month, and every row answers the month it was read in.
+    /// <c>unstamped</c> answers for every refusing scope of the call, not only the returned one — the window runs before
+    /// <c>limit 1</c> — so a raise that cleared one scope's stamp while the other still refuses is still reported as
+    /// work a stamp write would change.
     /// </summary>
     internal const string Peek = $"""
         select coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) as scope_key,
                c.used, c.quota_limit, transaction_timestamp() as database_now, c.period,
-               c.blocked_at is null as unstamped
+               bool_or(c.blocked_at is null) over () as unstamped
         from public.quota_counter as c
         where c.org_id = @org_id
           and c.period = {ResolvedMonth}
