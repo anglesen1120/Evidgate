@@ -276,4 +276,47 @@ describe('ReleasePanelComponent', () => {
     expect(root.querySelector('[role="status"]')?.textContent).toContain('Copy failed.');
     expect(root.querySelector('[data-release-digest]')?.textContent).toBe(digest('1'));
   });
+
+  it('escapes a format character in the label and the announcement of a copied component', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const componentKey = 'web\u202eapi';
+    const { fixture, root } = await render({
+      release: {
+        ...RELEASE,
+        components: [{ componentKey, digest: digest('3'), environmentRevisionId: 'env-api-3' }],
+        boundRuns: [{ runId: RUN_ID, componentKey }],
+      },
+    });
+    const button = root.querySelector<HTMLButtonElement>('[data-release-component] button');
+    expect(button?.getAttribute('aria-label')).toBe(
+      'Copy full digest for component web⟨U+202E⟩api',
+    );
+    button?.click();
+    await fixture.whenStable();
+    expect(writeText).toHaveBeenCalledWith(digest('3'));
+    expect(root.querySelector('[role="status"]')?.textContent).toBe(
+      'Digest copied for component web⟨U+202E⟩api',
+    );
+    expect(root.querySelector('[role="status"]')?.textContent).not.toContain('\u202e');
+  });
+
+  it('refuses to copy a digest whose visible form differs from the served value', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const served = `sha256:${'4'.repeat(63)}\u202e`;
+    const { fixture, root } = await render({
+      release: {
+        ...RELEASE,
+        components: [{ componentKey: 'api', digest: served, environmentRevisionId: 'env-api-3' }],
+      },
+    });
+    expect(root.querySelector('[data-release-digest]')?.textContent).toBe(
+      `sha256:${'4'.repeat(63)}⟨U+202E⟩`,
+    );
+    root.querySelector<HTMLButtonElement>('[data-release-component] button')?.click();
+    await fixture.whenStable();
+    expect(writeText).not.toHaveBeenCalled();
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('Copy failed.');
+  });
 });

@@ -71,7 +71,7 @@ describe('RunTimelineComponent', () => {
     expect(stepStatus(root, 'complete')).toContain('Not reached yet');
   });
 
-  it('ends an incomplete run at its own terminal step and never reaches complete', async () => {
+  it('ends an incomplete run at its own terminal step, never reaching complete', async () => {
     const { root } = await render('incomplete');
     const rows = [...root.querySelectorAll('ol > li')];
     expect(rows.map((row) => row.getAttribute('data-step'))).toEqual([
@@ -82,6 +82,13 @@ describe('RunTimelineComponent', () => {
       'complete',
       'incomplete',
     ]);
+    expect(stepStatus(root, 'created')).toContain('Reached');
+    // The deadline can close the run straight from queued or running, so no intermediate step is
+    // claimed as served.
+    for (const state of ['queued', 'running', 'collecting'] as const) {
+      expect(stepStatus(root, state)).toContain('Not recorded');
+      expect(stepStatus(root, state)).not.toContain('Reached');
+    }
     expect(stepStatus(root, 'incomplete')).toContain('Current step');
     expect(stepStatus(root, 'complete')).toContain('Not reached');
     expect(stepStatus(root, 'complete')).not.toContain('Reached');

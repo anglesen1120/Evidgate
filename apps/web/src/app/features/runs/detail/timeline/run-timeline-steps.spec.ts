@@ -30,15 +30,23 @@ describe('runTimelineSteps', () => {
     },
   );
 
-  it('runTimelineSteps_incomplete_endsAtIncompleteAndNeverReachesComplete', () => {
+  it('runTimelineSteps_incomplete_keepsUnservedIntermediateStepsUnrecorded', () => {
     expect(states('incomplete')).toEqual([...MAIN_PATH, 'incomplete']);
     expect(statuses('incomplete')).toEqual([
       'reached',
-      'reached',
-      'reached',
-      'reached',
+      'unrecorded',
+      'unrecorded',
+      'unrecorded',
       'not-reached',
       'current',
+    ]);
+  });
+
+  it('runTimelineSteps_incomplete_neverMarksCompleteReachedOrCurrent', () => {
+    const steps = runTimelineSteps('incomplete');
+    expect(steps.find((step) => step.state === 'complete')?.status).toBe('not-reached');
+    expect(steps.filter((step) => step.status === 'reached')).toEqual([
+      { state: 'created', status: 'reached' },
     ]);
   });
 

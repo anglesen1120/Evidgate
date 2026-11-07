@@ -117,19 +117,27 @@ export class ReleasePanelComponent {
       this.copyStatus.set('');
     });
   }
-  protected copyDigestLabel(componentKey: string): string {
+  protected copyDigestLabel(rawKey: string): string {
+    const componentKey = this.display(rawKey);
     return $localize`:@@runs.detail.release.copy-digest-for:Copy full digest for component ${componentKey}:key:`;
   }
   protected async copyDigest(component: ReleaseComponentView): Promise<void> {
     if (this.copying() !== null) return;
     const releaseId = this.release()?.releaseId ?? null;
+    const componentKey = this.display(component.componentKey);
     this.copying.set(component.componentKey);
     this.copyStatus.set('');
     try {
+      // What is pasted has to be what the table shows: a digest whose visible form differs would
+      // paste invisible format characters, so it is refused instead of copied.
+      if (this.display(component.digest) !== component.digest) {
+        if (this.release()?.releaseId === releaseId) this.copyStatus.set(this.copy.copyFailed);
+        return;
+      }
       await navigator.clipboard.writeText(component.digest);
       if (this.release()?.releaseId === releaseId) {
         this.copyStatus.set(
-          $localize`:@@runs.detail.release.copied-for:Digest copied for component ${component.componentKey}:key:`,
+          $localize`:@@runs.detail.release.copied-for:Digest copied for component ${componentKey}:key:`,
         );
       }
     } catch {

@@ -21,8 +21,10 @@ function mainPathStatuses(currentIndex: number): readonly TimelineStep[] {
 
 /**
  * The run response carries the current state and no transition history, so a side exit cannot
- * claim the steps it passed through: an `incomplete` run did enter collecting, a `canceled` run
- * could have been canceled anywhere, and `complete` is unreachable once a run is terminal.
+ * claim the steps it passed through: the collection deadline can close an `incomplete` run
+ * straight from `queued` or `running`, and a `canceled` run could have been canceled anywhere.
+ * Only `created` is certain to have been reached, every intermediate step stays unrecorded
+ * because the run may never have served it, and `complete` is unreachable once a run is terminal.
  */
 export function runTimelineSteps(state: RunState): readonly TimelineStep[] {
   const currentIndex = MAIN_PATH.indexOf(state);
@@ -30,13 +32,6 @@ export function runTimelineSteps(state: RunState): readonly TimelineStep[] {
     return mainPathStatuses(currentIndex);
   }
   const terminal: TimelineStep = { state, status: 'current' };
-  if (state === 'incomplete') {
-    const passed = MAIN_PATH.map((step): TimelineStep => ({
-      state: step,
-      status: step === 'complete' ? 'not-reached' : 'reached',
-    }));
-    return [...passed, terminal];
-  }
   const unknownProgress = MAIN_PATH.map((step): TimelineStep => ({
     state: step,
     status: step === 'created' ? 'reached' : step === 'complete' ? 'not-reached' : 'unrecorded',
