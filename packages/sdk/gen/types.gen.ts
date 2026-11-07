@@ -74,6 +74,23 @@ export type RunStateDto = {
      * The run's producer slot ids in `shard_index` order, the values the manifest's shards declare (`producer_slot.producer_id`, written as `shard-<n>` at run creation, 0029). Empty only for a run whose slots were never registered.
      */
     declared_producers: Array<string>;
+    /**
+     * The releases this run is bound to, one item per stored `release_run` row, ordered by its `created_at` then id. An empty array — never `null` — is a run bound to nothing. A release of another org or project is never listed.
+     */
+    releases: Array<RunReleaseRef>;
+    /**
+     * How many of the run's stored `event` rows are flagged `after_cancel` (0034): late events that arrived after the cancel. A count of events, not of case attempts.
+     */
+    after_cancel_events: number;
+};
+
+/**
+ * One release binding of a run (`release_run`, the only run-release binding).
+ */
+export type RunReleaseRef = {
+    release_id: string;
+    release_name: string;
+    component_key: string;
 };
 
 /**
