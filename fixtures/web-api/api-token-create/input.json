@@ -11,7 +11,7 @@
     "name": "Dashboard (fixture)",
     "prefix": "fx0000000001",
     "token": "evg_fx0000000001_FIXTURE_ONLY_not_a_real_token",
-    "permissions": ["run:read", "decision:read"],
+    "permissions": ["run:read", "suite:read"],
     "expires_at": "2027-02-05T00:00:00Z"
   }
 }
