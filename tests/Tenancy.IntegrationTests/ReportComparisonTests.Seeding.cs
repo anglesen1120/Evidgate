@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Modules.Evidence.Application;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -85,7 +86,7 @@ public sealed partial class ReportComparisonTests
         var seeded = events ?? [];
         var reportId = Guid.CreateVersion7();
         var artifactId = Guid.CreateVersion7();
-        var producerId = "junit-" + artifactId.ToString("D", CultureInfo.InvariantCulture);
+        var producerId = RawReportProducer.IdFor(artifactId);
         var artifactExecutionKey = artifactId.ToString("N") + artifactId.ToString("N");
         await using var scope = await TenantScope.BeginAsync(
             _fixture.AppConnectionString(world.Database),
@@ -140,6 +141,20 @@ public sealed partial class ReportComparisonTests
             ("observed_tests", OrNull(observedTests ?? seeded.Length)),
             ("observed_failures", OrNull(observedFailures ?? 0)),
             ("discrepancies", discrepancies))).ShouldBe(1);
+        await SeedEventsAsync(scope, org ?? world.Org, runId, producerId, seeded);
+
+        await scope.CommitAsync();
+        return new SeededReport(reportId, artifactId);
+    }
+
+    /// <summary>One <c>test.finished</c> event per seeded case, all under the producer whose slot already exists.</summary>
+    private static async Task SeedEventsAsync(
+        TenantScope scope,
+        Guid org,
+        Guid runId,
+        string producerId,
+        EventSeed[] seeded)
+    {
         foreach (var item in seeded)
         {
             (await scope.ExecuteAsync(
@@ -151,7 +166,7 @@ public sealed partial class ReportComparisonTests
                 @raw_status, 'passed', @payload_hash)
                 """,
                 ("id", Guid.CreateVersion7()),
-                ("org", org ?? world.Org),
+                ("org", org),
                 ("run", runId),
                 ("event_id", Guid.CreateVersion7()),
                 ("producer", producerId),
@@ -160,10 +175,108 @@ public sealed partial class ReportComparisonTests
                 ("raw_status", item.RawStatus),
                 ("payload_hash", PayloadHash))).ShouldBe(1);
         }
+    }
+
+    /// <summary>
+    /// One reprocess of <paramref name="source"/>: the release it pins, the request row the task writes the report
+    /// under, the synthetic producer slot its events land on, and one <c>test.finished</c> event per seeded case. The
+    /// release is this org's own so the shared catalogue keeps its built-in rows, and it is dated behind them because
+    /// the registry resolves a producer kind to its most recent release.
+    /// </summary>
+    private async Task<SeededReport> SeedReprocessAsync(
+        World world,
+        Guid runId,
+        SeededReport source,
+        EventSeed[]? events = null)
+    {
+        var seeded = events ?? [];
+        var parsingId = Guid.CreateVersion7();
+        var parserId = ReprocessParserId(world);
+
+        await SeedReleaseAsync(world, parserId);
+        await SeedReprocessRowsAsync(world, runId, source, parsingId, parserId, seeded);
+
+        return new SeededReport(parsingId, source.ArtifactId);
+    }
+
+    /// <summary>
+    /// The rows one reprocess writes: the report row keyed on the request's id, the request row itself, the closed
+    /// synthetic slot its events land on, and then the events — the shape the task writes, minus the parse.
+    /// </summary>
+    private async Task SeedReprocessRowsAsync(
+        World world,
+        Guid runId,
+        SeededReport source,
+        Guid parsingId,
+        string parserId,
+        EventSeed[] seeded)
+    {
+        var producerId = ReprocessReportProducer.IdFor(parsingId);
+
+        await using var scope = await TenantScope.BeginAsync(
+            _fixture.AppConnectionString(world.Database),
+            world.Org);
+        (await scope.ExecuteAsync(
+            """
+            insert into public.raw_report
+            (id, org_id, run_id, artifact_id, producer_kind, parser_id, parser_version, outcome, reason,
+            declared_tests, declared_failures, observed_tests, observed_failures, discrepancies)
+            values (@id, @org, @run, @artifact, @producer_kind, @parser_id::text, @parser_version::text, 'mapped', null,
+            @declared_tests::integer, 0, @observed_tests, 0, '[]'::jsonb)
+            """,
+            ("id", parsingId),
+            ("org", world.Org),
+            ("run", runId),
+            ("artifact", source.ArtifactId),
+            ("producer_kind", ProducerKind),
+            ("parser_id", parserId),
+            ("parser_version", ReprocessVersion),
+            ("declared_tests", OrNull(seeded.Length)),
+            ("observed_tests", seeded.Length))).ShouldBe(1);
+        (await scope.ExecuteAsync(
+            """
+            insert into public.raw_report_reprocess
+            (id, org_id, run_id, artifact_id, source_raw_report_id, parser_id, parser_version)
+            values (@id, @org, @run, @artifact, @source, @parser_id, @parser_version)
+            """,
+            ("id", parsingId),
+            ("org", world.Org),
+            ("run", runId),
+            ("artifact", source.ArtifactId),
+            ("source", source.Id),
+            ("parser_id", parserId),
+            ("parser_version", ReprocessVersion))).ShouldBe(1);
+        (await scope.ExecuteAsync(
+            """
+            insert into public.producer_slot (id, org_id, run_id, shard_index, producer_id)
+            values (@id, @org, @run,
+            (select count(*)::int + 1 from public.producer_slot where org_id = @org and run_id = @run), @producer)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org", world.Org),
+            ("run", runId),
+            ("producer", producerId))).ShouldBe(1);
+        await SeedEventsAsync(scope, world.Org, runId, producerId, seeded);
 
         await scope.CommitAsync();
-        return new SeededReport(reportId, artifactId);
     }
+
+    /// <summary>
+    /// The org-owned release the reprocess pins, written as the owner because the app role may not register parsers. It
+    /// is dated behind the built-in releases on purpose: the registry resolves a producer kind to its most recent row.
+    /// </summary>
+    private async Task SeedReleaseAsync(World world, string parserId) =>
+        await _fixture.ExecuteAsync(
+            world.Database,
+            "insert into public.report_parser "
+            + "(id, org_id, parser_id, version, producer_kind, schema_version, notes, created_at) values "
+            + $"('{Guid.CreateVersion7():D}', '{world.Org:D}', '{parserId}', '{ReprocessVersion}', '{ProducerKind}', 1, "
+            + "'comparison suite: this org only', '2000-01-01T00:00:00Z') "
+            + "on conflict (parser_id, version) do nothing");
+
+    /// <summary>The org-owned release family this world pins its reprocesses to: unique per org, visible to it alone.</summary>
+    private static string ReprocessParserId(World world) =>
+        "junit-pytest-" + world.Org.ToString("N", CultureInfo.InvariantCulture);
 
     /// <summary>The execution key a seeded case carries: one per case label, so two events of a label share it.</summary>
     private static string ExecutionKeyFor(string caseRef) =>

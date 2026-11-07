@@ -6,20 +6,25 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Persistence;
 /// </summary>
 /// <remarks>
 /// <c>org_id</c> is left to row level security (forced on both tables), so the run and report predicates are the only
-/// extra filters. The case page names the artifact-scoped synthetic producer id instead of the run's events, so
-/// another artifact of the same run contributes no row. The page groups by <c>execution_key</c> and pages on its smallest
-/// sequence, because the contract counts the events of a case rather than assuming exactly one.
+/// extra filters. The case page names the synthetic producer id of the report that answers, so another artifact of the
+/// same run contributes no row. The page groups by <c>execution_key</c> and pages on its smallest sequence, because the
+/// contract counts the events of a case rather than assuming exactly one.
 /// </remarks>
 internal static class ReportComparisonSql
 {
     /// <summary>
     /// The report row the route names, with the project its artifact belongs to. The three-column join repeats the
-    /// report's own run, so a row whose artifact names another run cannot answer for this route.
+    /// report's own run, so a row whose artifact names another run cannot answer for this route; the correlated read
+    /// names the reprocess request that wrote the row, when one did.
     /// </summary>
     internal const string Report = """
         select rr.id,
                rr.run_id,
                rr.artifact_id,
+               (select rp.id
+                  from public.raw_report_reprocess rp
+                 where rp.org_id = rr.org_id
+                   and rp.id = rr.id) as reprocess_id,
                rr.producer_kind,
                rr.parser_id,
                rr.parser_version,
