@@ -4,6 +4,7 @@
 
 import { FIXTURE_CATALOG_RUN_ROWS } from './fixture-catalog-run-rows';
 import { FIXTURE_CATALOG_SESSION_ROWS } from './fixture-catalog-session-rows';
+import { FIXTURE_CATALOG_RELEASE_ROWS } from './fixture-catalog-release-rows';
 import type { FixtureCatalogRow } from './fixture-document';
 
 /**
@@ -467,6 +468,7 @@ import type { FixtureCatalogRow } from './fixture-document';
 export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
   ...FIXTURE_CATALOG_SESSION_ROWS,
   ...FIXTURE_CATALOG_RUN_ROWS,
+  ...FIXTURE_CATALOG_RELEASE_ROWS,
 ];
 
 /** One catalog entry: the corpus directory name, the document it holds and the cursor it answers. */

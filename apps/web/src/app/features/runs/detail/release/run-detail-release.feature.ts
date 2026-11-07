@@ -8,12 +8,18 @@ import type { ReleaseStatus } from './release-summary';
 
 /** The release region of the run page; its failure never becomes a run-page failure. */
 interface ReleaseState {
+  selectedReleaseId: string | null;
   release: ReleaseDetail | null;
   releaseStatus: ReleaseStatus;
   releaseError: ApiError | null;
 }
 
-const NO_RELEASE: ReleaseState = { release: null, releaseStatus: 'idle', releaseError: null };
+const NO_RELEASE: ReleaseState = {
+  selectedReleaseId: null,
+  release: null,
+  releaseStatus: 'idle',
+  releaseError: null,
+};
 
 const UNRESOLVED_FAILURE: ApiError = {
   kind: 'unexpected',
@@ -32,14 +38,7 @@ function statusFor(error: ApiError): ReleaseStatus {
   return error.kind === 'forbidden' ? 'forbidden' : 'error';
 }
 
-/**
- * The release read a run page performs when it knows a release id. A run created with
- * `release_id` carries no release id in `GET /v1/runs/{r}`, so no caller reads this today; the
- * region still owns its own state so wiring it later cannot couple it to the run read.
- *
- * One accepted answer at a time: a newer `loadRelease` or `resetRelease` invalidates the one in
- * flight, so a slow response for a previous release or a previous run can never land.
- */
+/** A newer selection or run invalidates any release answer still in flight. */
 export function withRunDetailRelease() {
   return signalStoreFeature(
     withState<ReleaseState>({ ...NO_RELEASE }),
@@ -50,7 +49,12 @@ export function withRunDetailRelease() {
         /** Read one release by id; the previous release is dropped before the request starts. */
         async loadRelease(releaseId: string): Promise<void> {
           const read = ++generation;
-          patchState(store, { release: null, releaseStatus: 'loading', releaseError: null });
+          patchState(store, {
+            selectedReleaseId: releaseId,
+            release: null,
+            releaseStatus: 'loading',
+            releaseError: null,
+          });
           try {
             const release = await data.get(releaseId);
             if (read !== generation) return;
@@ -64,6 +68,10 @@ export function withRunDetailRelease() {
               releaseError: error,
             });
           }
+        },
+        selectRelease(releaseId: string): Promise<void> {
+          if (store.selectedReleaseId() === releaseId) return Promise.resolve();
+          return this.loadRelease(releaseId);
         },
         /** Forget the region and any answer in flight; a run change calls it. */
         resetRelease(): void {

@@ -36,14 +36,24 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       ).toEqual(readDocument(fixture));
     }
 
-    // The derived rows: each one is a corpus document with the members it shows replaced, never a
-    // stand-alone body. Today that is the canceled run, the fifty-slot run whose table has to
-    // scroll, and the run that declares no producer at all.
+    // Derived documents have no corpus directory, so every added row is pinned explicitly.
     const derived = FIXTURE_CATALOG.filter((entry) => entry.derived === true);
     expect(
       derived.map((entry) => entry.name),
       'a new derived row needs its own pin here',
-    ).toEqual(['run-detail-canceled', 'run-detail-many-producers', 'run-detail-no-producers']);
+    ).toEqual([
+      'run-detail-canceled',
+      'run-detail-many-producers',
+      'run-detail-no-producers',
+      'run-detail-release',
+      'run-detail-releases',
+      'run-detail-release-refused',
+      'release-detail',
+      'release-detail-second',
+      'release-detail-regular-run',
+      'release-detail-forbidden',
+      'release-detail-not-found',
+    ]);
     const readyFixture = corpusByName.get('run-detail');
     if (readyFixture === undefined) {
       throw new Error('fixtures/web-api holds no run-detail document to derive from');
@@ -52,7 +62,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     expect(derived[0]?.document).toEqual({
       ...ready,
       variant: 'detail-canceled',
-      body: { ...(ready.body as object), state: 'canceled' },
+      body: { ...(ready.body as object), state: 'canceled', releases: [] },
     });
 
     // Every member the producer rows do not replace, so the pin still compares the whole body.
@@ -84,6 +94,13 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       variant: 'detail-no-producers',
       body: { ...(ready.body as object), declared_producers: [], shard_count: 0 },
     });
+    for (const entry of derived.slice(3)) {
+      const document = entry.document;
+      expect(
+        VALIDATOR.validateResponse(document.operation_id, document.status, document.body).errors,
+        entry.name,
+      ).toEqual([]);
+    }
   });
 
   it('pins the method and path template FIXTURE_ROUTES declares for every fixture operation', () => {

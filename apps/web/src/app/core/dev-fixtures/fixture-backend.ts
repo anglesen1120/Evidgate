@@ -14,10 +14,9 @@
 // supplemental usage-summary read; `FixtureToggles` selects its variant (default `ok`).
 // Missing routes and variants answer `501 fixture_not_found` rather than inventing an empty page.
 //
-// One operation is ID-KEYED (09.7.1-F15 note 3, the row's `idKeyParameter`): `getPolicyRevision`
-// answers the catalog document whose own `body.id` equals the revision id in the path, so a tab
-// that compares two revisions — or a 412 dialog that reads the head the server named — gets two
-// different bodies from one backend. Two are CURSOR-KEYED (note 4, `cursorQueryParameter`):
+// ID-keyed routes answer the document whose declared resource-id field matches the path value.
+// This lets policy comparisons and release selection read distinct bodies. Two are CURSOR-KEYED
+// (`cursorQueryParameter`):
 // `listCiBindings` answers the catalog row whose `cursor` equals the request's cursor, so the
 // Secrets tab's Load more gets a second page from the same backend and the control's terminal state
 // is reachable in a browser; `listRuns` answers the same way for the Runs list (09.3.1-T1). An id no
@@ -270,17 +269,7 @@ export class FixtureHttpBackend implements HttpBackend {
     return route === undefined ? undefined : this.selectEntry(route, relativePath, request);
   }
 
-  /**
-   * The document answering `(route, relativePath, request)`, in the one order this backend has: a
-   * route that declares an `idKeyParameter` first looks for a catalog document of its operation
-   * whose own `body.id` equals the request's path value, a route that declares a
-   * `cursorQueryParameter` first looks for the catalog row whose `cursor` equals the request's query
-   * value (09.7.1-F15 notes 3 and 4), and everything else — an id or cursor no document answers, and
-   * every request-agnostic route — is answered by the variant selection exactly as before. The
-   * variant is never consulted first: the id/cursor is what the app asked for, the variant is a
-   * review's override of the request-agnostic case, and a corpus that grows a document for an id or
-   * a page must win over a toggle left in a bookmarked URL. No route declares both.
-   */
+  /** A matching resource id or cursor wins over the fallback variant selected in the URL. */
   private selectEntry(
     route: FixtureRoute,
     relativePath: string,
@@ -290,7 +279,7 @@ export class FixtureHttpBackend implements HttpBackend {
     const requestedId =
       parameter === undefined ? undefined : pathParameter(route.path, relativePath, parameter);
     if (requestedId !== undefined) {
-      const byId = findFixtureEntryById(route.operationId, requestedId);
+      const byId = findFixtureEntryById(route.operationId, requestedId, route.idKeyField);
       if (byId !== undefined) {
         return byId;
       }

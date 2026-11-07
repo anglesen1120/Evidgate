@@ -9,7 +9,7 @@ import { RunsDataService } from '../../../core/data/runs-data.service';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { RunDataService } from '../data/run-data.service';
 import { routes } from '../runs.routes';
-import { deferred, pendingBody, run } from './run-detail-store.fixtures';
+import { deferred, pendingBody, refused, run } from './run-detail-store.fixtures';
 import { RunDetailPage } from './run-detail.page';
 
 const attemptPage = attemptsOk.body as RunAttemptPage;
@@ -44,7 +44,7 @@ describe('RunDetailPage release and timeline regions', () => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl(`/projects/project-1/runs/${id}`, RunDetailPage);
     await settle(harness);
-    return { root: harness.routeNativeElement! };
+    return { root: harness.routeNativeElement!, harness };
   }
 
   /** One macrotask after the stable fixture drains the pin write-back and the render handoffs. */
@@ -86,17 +86,135 @@ describe('RunDetailPage release and timeline regions', () => {
     );
   });
 
-  it('shows the release region as unavailable instead of bound to no release', async () => {
+  it('shows the unbound release state without making a release request', async () => {
+    get.mockResolvedValue({ ...run, releases: [] });
     const { root } = await open();
-    const release = region(root, 'app-release-panel');
-
-    expect(release.querySelector('[data-release-unavailable]')?.textContent).toContain(
-      'does not name a release',
+    expect(region(root, '[data-release-unbound]').textContent).toContain(
+      'No release bound to this run',
     );
-    expect(release.querySelector('[data-release-unbound]')).toBeNull();
-    expect(root.textContent ?? '').not.toContain('No release bound to this run');
-    // No release id is served, so the page never reads a release it cannot address.
     expect(getRelease).not.toHaveBeenCalled();
+  });
+
+  it('loads the bound release and switches between distinct release ids in served order', async () => {
+    get.mockResolvedValue({
+      ...run,
+      releases: [
+        { release_id: 'rel-1', release_name: 'Web', component_key: 'web' },
+        { release_id: 'rel-1', release_name: 'Web', component_key: 'worker' },
+        { release_id: 'rel-2', release_name: 'rel-2', component_key: 'api' },
+      ],
+    });
+    getRelease.mockImplementation((id) =>
+      Promise.resolve({
+        release_id: id,
+        name: id === 'rel-1' ? 'Web release' : 'API release',
+        state: 'active',
+        version: 2,
+        components: [
+          { component_key: 'web', digest: 'sha256:abc', environment_revision_id: 'env' },
+        ],
+        bound_runs: [{ run_id: run.run_id, component_key: 'web' }],
+      }),
+    );
+    const { root, harness } = await open();
+    expect(region(root, '[data-release-name]').textContent).toContain('Web release');
+    const buttons = root.querySelectorAll<HTMLButtonElement>(
+      'app-release-panel [role="group"] button',
+    );
+    expect(buttons).toHaveLength(2);
+    expect(buttons[1]?.textContent).toContain('rel-2');
+    buttons[1]?.click();
+    await settle(harness);
+    expect(getRelease.mock.calls.map(([id]) => id)).toEqual(['rel-1', 'rel-2']);
+    expect(region(root, '[data-release-name]').textContent).toContain('API release');
+  });
+
+  it.each(['forbidden', 'not_found'] as const)(
+    'renders a %s release failure inside a ready run',
+    async (kind) => {
+      get.mockResolvedValue({
+        ...run,
+        releases: [{ release_id: 'rel-1', release_name: 'Web', component_key: 'web' }],
+      });
+      getRelease.mockRejectedValueOnce(refused(kind));
+      const { root } = await open();
+      expect(root.getAttribute('data-run-detail-status')).toBe('ready');
+      expect(
+        region(root, 'app-release-panel').querySelector(
+          kind === 'forbidden' ? 'app-forbidden-pattern' : 'app-not-found-pattern',
+        ),
+      ).not.toBeNull();
+      expect(root.querySelector('app-manifest-panel')).not.toBeNull();
+    },
+  );
+
+  it('retries the selected release through its own error region', async () => {
+    get.mockResolvedValue({
+      ...run,
+      releases: [{ release_id: 'rel-1', release_name: 'Web', component_key: 'web' }],
+    });
+    getRelease.mockRejectedValueOnce(refused('unavailable')).mockResolvedValueOnce({
+      release_id: 'rel-1',
+      name: 'Recovered release',
+      state: 'active',
+      version: 1,
+      components: [],
+      bound_runs: [{ run_id: run.run_id, component_key: 'web' }],
+    });
+    const { root, harness } = await open();
+    const retry = root.querySelector<HTMLButtonElement>(
+      'app-release-panel app-error-pattern button',
+    );
+    expect(retry).not.toBeNull();
+    expect(retry?.disabled).toBe(false);
+    retry?.click();
+    await settle(harness);
+    expect(getRelease.mock.calls.map(([id]) => id)).toEqual(['rel-1', 'rel-1']);
+    expect(region(root, '[data-release-name]').textContent).toContain('Recovered release');
+    expect(root.getAttribute('data-run-detail-status')).toBe('ready');
+  });
+
+  it('clears the previous components when the next release fails and retries that selection', async () => {
+    get.mockResolvedValue({
+      ...run,
+      releases: [
+        { release_id: 'rel-1', release_name: 'Web', component_key: 'web' },
+        { release_id: 'rel-2', release_name: 'API', component_key: 'api' },
+      ],
+    });
+    getRelease
+      .mockResolvedValueOnce({
+        release_id: 'rel-1',
+        name: 'Web release',
+        state: 'active',
+        version: 1,
+        components: [
+          { component_key: 'web', digest: 'sha256:abc', environment_revision_id: 'env' },
+        ],
+        bound_runs: [{ run_id: run.run_id, component_key: 'web' }],
+      })
+      .mockRejectedValueOnce(refused('unavailable'))
+      .mockResolvedValueOnce({
+        release_id: 'rel-2',
+        name: 'Recovered API release',
+        state: 'active',
+        version: 2,
+        components: [],
+        bound_runs: [{ run_id: run.run_id, component_key: 'api' }],
+      });
+    const { root, harness } = await open();
+    expect(root.querySelectorAll('[data-release-component]')).toHaveLength(1);
+    root.querySelectorAll<HTMLButtonElement>('app-release-panel [role="group"] button')[1]?.click();
+    await settle(harness);
+    expect(root.querySelectorAll('[data-release-component]')).toHaveLength(0);
+    expect(region(root, 'app-release-panel app-error-pattern')).not.toBeNull();
+    expect(root.getAttribute('data-run-detail-status')).toBe('ready');
+    root.querySelector<HTMLButtonElement>('app-release-panel app-error-pattern button')?.click();
+    await settle(harness);
+    expect(getRelease.mock.calls.map(([id]) => id)).toEqual(['rel-1', 'rel-2', 'rel-2']);
+    expect(region(root, '[data-release-name]').textContent).toContain('Recovered API release');
+    expect(root.querySelector('[data-release-unbound]')).toBeNull();
+    expect(root.querySelector('[data-release-no-components]')).not.toBeNull();
   });
 
   it('keeps one current step and no after-cancel note for a complete run', async () => {

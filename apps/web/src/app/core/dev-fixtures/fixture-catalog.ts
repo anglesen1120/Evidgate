@@ -38,29 +38,25 @@ export function findFixtureEntry(operationId: string, variant: string): FixtureE
   );
 }
 
-/**
- * The `id` a document answers for: its own `body.id`, or `undefined` when the body is absent or
- * carries no string `id`. Nothing is inferred — an operation whose body names its resource another
- * way simply never matches by id, and its route must not declare an `idKeyParameter`.
- */
-function documentId(document: FixtureDocument): string | undefined {
+/** Resource id field declared by the route; most wire resources name it `id`. */
+function documentId(document: FixtureDocument, field: string): string | undefined {
   const body = document.body;
   if (typeof body !== 'object' || body === null || Array.isArray(body)) {
     return undefined;
   }
-  const id = (body as Record<string, unknown>)['id'];
+  const id = (body as Record<string, unknown>)[field];
   return typeof id === 'string' ? id : undefined;
 }
 
-/**
- * The entry of `operationId` whose own `body.id` equals `id` — the id-keyed selection
- * `fixture-backend.ts` makes for a route that declares an `idKeyParameter`, ahead of the variant
- * (09.7.1-F15 note 3). `undefined` means no document of that operation answers this id, and the
- * caller then falls back to the variant it would have used anyway.
- */
-export function findFixtureEntryById(operationId: string, id: string): FixtureEntry | undefined {
+/** Match the route's id field before falling back to its explicitly selected variant. */
+export function findFixtureEntryById(
+  operationId: string,
+  id: string,
+  field = 'id',
+): FixtureEntry | undefined {
   return FIXTURE_CATALOG.find(
-    (entry) => entry.document.operation_id === operationId && documentId(entry.document) === id,
+    (entry) =>
+      entry.document.operation_id === operationId && documentId(entry.document, field) === id,
   );
 }
 

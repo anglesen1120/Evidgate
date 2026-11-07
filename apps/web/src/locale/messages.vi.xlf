@@ -2779,7 +2779,7 @@
       <trans-unit id="runs.detail.copy-failed" datatype="html"><source>Copy failed. Select and copy the full hash shown above.</source><target>Không thể sao chép. Hãy chọn và sao chép toàn bộ mã băm ở trên.</target></trans-unit>
       <trans-unit id="runs.detail.release.title" datatype="html"><source>Release</source><target>Bản phát hành</target></trans-unit>
       <trans-unit id="runs.detail.release.loading" datatype="html"><source>Loading release</source><target>Đang tải bản phát hành</target></trans-unit>
-      <trans-unit id="runs.detail.release.unavailable" datatype="html"><source>This run does not name a release, so release data is not shown.</source><target>Lần chạy này không nêu bản phát hành, nên không hiển thị dữ liệu bản phát hành.</target></trans-unit>
+      <trans-unit id="runs.detail.release.select-label" datatype="html"><source>Releases bound to this run</source><target>Các bản phát hành gắn với lần chạy này</target></trans-unit>
       <trans-unit id="runs.detail.release.unbound" datatype="html"><source>No release bound to this run</source><target>Không có bản phát hành nào gắn với lần chạy này</target></trans-unit>
       <trans-unit id="runs.detail.release.name" datatype="html"><source>Release name</source><target>Tên bản phát hành</target></trans-unit>
       <trans-unit id="runs.detail.release.state" datatype="html"><source>State</source><target>Trạng thái</target></trans-unit>

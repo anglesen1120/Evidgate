@@ -45,17 +45,13 @@ import suiteRevisionPublished from '../../../../../../fixtures/web-api/suite-rev
 import suiteRevisionUnavailable from '../../../../../../fixtures/web-api/suite-revision-unavailable/input.json';
 
 import type { FixtureCatalogRow, FixtureDocument } from './fixture-document';
+import { RELEASE_BINDINGS } from './fixture-catalog-release-rows';
 
-/**
- * The canceled run: `GET /v1/runs/{r}` serves the state, and the timeline's after-cancel note is
- * only reachable on a canceled run, but the corpus carries no canceled detail document. One field
- * of the validated `run-detail` body is replaced, so this state cannot drift from the response
- * shape the contract check already proves.
- */
+/** The shared corpus has no canceled run; replace its state and keep the run explicitly unbound. */
 const runDetailCanceled: FixtureDocument = {
   ...runDetail,
   variant: 'detail-canceled',
-  body: { ...runDetail.body, state: 'canceled' },
+  body: { ...runDetail.body, state: 'canceled', releases: [] },
 };
 
 /**
@@ -79,6 +75,34 @@ const runDetailManyProducers: FixtureDocument = {
   ...runDetail,
   variant: 'detail-many-producers',
   body: { ...runDetail.body, declared_producers: MANY_PRODUCER_IDS, shard_count: 50 },
+};
+
+const runDetailRelease: FixtureDocument = {
+  ...runDetail,
+  variant: 'detail-release',
+  body: { ...runDetail.body, purpose: 'regular', releases: [RELEASE_BINDINGS[0]] },
+};
+const runDetailReleases: FixtureDocument = {
+  ...runDetail,
+  variant: 'detail-releases',
+  body: {
+    ...runDetail.body,
+    purpose: 'regular',
+    releases: [
+      RELEASE_BINDINGS[0],
+      { ...RELEASE_BINDINGS[0], component_key: 'worker' },
+      RELEASE_BINDINGS[1],
+    ],
+  },
+};
+const runDetailReleaseRefused: FixtureDocument = {
+  ...runDetail,
+  variant: 'detail-release-refused',
+  body: {
+    ...runDetail.body,
+    purpose: 'regular',
+    releases: [{ ...RELEASE_BINDINGS[0], release_id: '018f0000-0000-7000-8000-000000000094' }],
+  },
 };
 
 export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
@@ -107,6 +131,9 @@ export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
   { name: 'run-detail-not-found', document: runDetailNotFound },
   { name: 'run-detail-null-evidence', document: runDetailNullEvidence },
   { name: 'run-detail-ref-format', document: runDetailRefFormat },
+  { name: 'run-detail-release', document: runDetailRelease, derived: true },
+  { name: 'run-detail-releases', document: runDetailReleases, derived: true },
+  { name: 'run-detail-release-refused', document: runDetailReleaseRefused, derived: true },
   { name: 'run-evidence-revisions', document: runEvidenceRevisions },
   { name: 'run-evidence-revisions-empty', document: runEvidenceRevisionsEmpty },
   { name: 'run-evidence-revisions-unavailable', document: runEvidenceRevisionsUnavailable },

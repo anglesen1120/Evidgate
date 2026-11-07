@@ -141,4 +141,83 @@ describe('RunDetailStore release region', () => {
     expect(subject.releaseStatus()).toBe('error');
     expect(subject.releaseError()?.status).toBe(503);
   });
+
+  it.each([
+    { releases: [{ release_id: 'rel-1', release_name: 'Web', component_key: 'web' }] },
+    {
+      releases: [
+        { release_id: 'rel-1', release_name: 'Web', component_key: 'web' },
+        { release_id: 'rel-1', release_name: 'Web', component_key: 'worker' },
+        { release_id: 'rel-2', release_name: 'API', component_key: 'api' },
+      ],
+    },
+  ])('selects and reads only the first served release for bindings %j', async ({ releases }) => {
+    getRun.mockResolvedValue({ ...run, releases });
+    const subject = store();
+    await subject.load(run.run_id);
+    expect(subject.selectedReleaseId()).toBe('rel-1');
+    expect(getRelease).toHaveBeenCalledExactlyOnceWith('rel-1');
+    await subject.selectRelease('rel-1');
+    expect(getRelease).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes no release request for an unbound run', async () => {
+    getRun.mockResolvedValue({ ...run, releases: [] });
+    const subject = store();
+    await subject.load(run.run_id);
+    expect(subject.selectedReleaseId()).toBeNull();
+    expect(subject.releaseStatus()).toBe('idle');
+    expect(getRelease).not.toHaveBeenCalled();
+  });
+
+  it('switches selection without accepting a slower previous answer', async () => {
+    const first = deferred<ReleaseDetail>();
+    getRelease
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(release({ release_id: 'rel-2' }));
+    const subject = store();
+    const reading = subject.selectRelease('rel-1');
+    await subject.selectRelease('rel-2');
+    first.resolve(release());
+    await reading;
+    expect(subject.selectedReleaseId()).toBe('rel-2');
+    expect(subject.release()?.release_id).toBe('rel-2');
+    expect(getRelease.mock.calls.map(([id]) => id)).toEqual(['rel-1', 'rel-2']);
+    subject.resetRelease();
+    expect(subject.selectedReleaseId()).toBeNull();
+  });
+
+  it.each(['forbidden', 'not_found'] as const)(
+    'keeps %s release failures local to a loaded run',
+    async (kind) => {
+      getRun.mockResolvedValue({
+        ...run,
+        releases: [{ release_id: 'rel-1', release_name: 'Web', component_key: 'web' }],
+      });
+      getRelease.mockRejectedValueOnce(refused(kind));
+      const subject = store();
+      await subject.load(run.run_id);
+      await Promise.resolve();
+      expect(subject.status()).toBe('ready');
+      expect(subject.run()?.run_id).toBe(run.run_id);
+      expect(subject.loadError()).toBeNull();
+      expect(subject.releaseStatus()).toBe(kind === 'forbidden' ? 'forbidden' : 'not-found');
+      expect(subject.release()).toBeNull();
+    },
+  );
+
+  it('ignores a stale refused answer after another release is selected', async () => {
+    const first = deferred<ReleaseDetail>();
+    getRelease
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(release({ release_id: 'rel-2' }));
+    const subject = store();
+    const reading = subject.selectRelease('rel-1');
+    await subject.selectRelease('rel-2');
+    first.reject(refused('forbidden'));
+    await reading;
+    expect(subject.releaseStatus()).toBe('ready');
+    expect(subject.selectedReleaseId()).toBe('rel-2');
+    expect(subject.releaseError()).toBeNull();
+  });
 });
