@@ -10,11 +10,9 @@
 // therefore the same typed `ApiRequestError` a real 403/412 produces, which is exactly what a UI
 // state review needs to exercise.
 //
-// Request -> fixture: method + `/v1`-relative path resolve an operation through
-// `fixture-routes.ts` (the closed list of servable operations), the operation's variant comes from
-// `FixtureToggles` (default `ok`), and the pair selects one document of `fixture-catalog.ts`. No
-// route or no document is `501 fixture_not_found` with a 00 §9.2 envelope: a fixture backend that
-// invented an empty page for an uncovered operation would hide the gap.
+// Request -> fixture: the method and `/v1`-relative path select a corpus operation or the
+// supplemental usage-summary read; `FixtureToggles` selects its variant (default `ok`).
+// Missing routes and variants answer `501 fixture_not_found` rather than inventing an empty page.
 //
 // One operation is ID-KEYED (09.7.1-F15 note 3, the row's `idKeyParameter`): `getPolicyRevision`
 // answers the catalog document whose own `body.id` equals the revision id in the path, so a tab
@@ -32,8 +30,7 @@
 // what Angular's real backends produce; the adapter reads text (09.1.1-T8), so the body is the JSON
 // text for `responseType: 'text'` (a `Blob` for 'blob', the parsed value otherwise). Every answer
 // carries `Content-Type: application/json`, the fixture's own headers and
-// `X-Evidgate-Fixture: <fixture name>`, the last one so a review can tell which corpus directory
-// answered without the browser network panel.
+// `X-Evidgate-Fixture: <fixture name>` so a review can identify the supplied specimen.
 //
 // Dev-only: this module is reachable only from `dev-backend.fixtures.ts`, which the `fixtures`
 // angular.json configuration substitutes for the empty `dev-backend.ts`; the production build
@@ -73,7 +70,9 @@ import {
   queryParameter,
   type FixtureRoute,
 } from './fixture-routes';
+import { findSettingsAdminUsageFixture } from './fixture-settings-permissions';
 import { FixtureToggles } from './fixture-toggles';
+import { findUsageSummaryFixture } from './fixture-usage-summary';
 
 /** Response header naming the corpus directory that answered; also a production-leak marker. */
 export const FIXTURE_RESPONSE_HEADER = 'X-Evidgate-Fixture';
@@ -217,12 +216,7 @@ export class FixtureHttpBackend implements HttpBackend {
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
     recordRequest(request);
     const relativePath = apiRelativePath(request.url);
-    const route =
-      relativePath === null ? undefined : matchFixtureRoute(request.method, relativePath);
-    const entry =
-      route === undefined || relativePath === null
-        ? undefined
-        : this.selectEntry(route, relativePath, request);
+    const entry = relativePath === null ? undefined : this.requestEntry(request, relativePath);
     if (entry === undefined) {
       return this.respond(
         request,
@@ -241,6 +235,26 @@ export class FixtureHttpBackend implements HttpBackend {
       fixtureHeaders(entry),
       Math.max(0, latency),
     );
+  }
+
+  private requestEntry(
+    request: HttpRequest<unknown>,
+    relativePath: string,
+  ): FixtureEntry | undefined {
+    // Keep computed UI specimens outside the corpus registry, whose rows mirror on-disk examples.
+    if (request.method === 'GET' && /^\/orgs\/[^/]+\/usage\/summary$/.test(relativePath)) {
+      return findUsageSummaryFixture(this.toggles.variantFor('getUsageSummary'));
+    }
+    // The Settings strip's admin session needs one grant the corpus row predates; a toggle that
+    // names no specimen falls through, so every corpus variant answers exactly as before.
+    if (request.method === 'GET' && relativePath === '/permissions') {
+      const supplemental = findSettingsAdminUsageFixture(
+        this.toggles.variantFor('listPermissions'),
+      );
+      if (supplemental !== undefined) return supplemental;
+    }
+    const route = matchFixtureRoute(request.method, relativePath);
+    return route === undefined ? undefined : this.selectEntry(route, relativePath, request);
   }
 
   /**

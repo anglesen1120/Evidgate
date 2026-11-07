@@ -48,6 +48,7 @@ import { LoginPage } from './features/auth/login/login.page';
 import { SettingsNoTabsPage } from './features/settings/settings-no-tabs.page';
 import { SettingsShellPage } from './features/settings/settings-shell.page';
 import { SettingsTabPlaceholderPage } from './features/settings/settings-tab-placeholder.page';
+import { QuotaPanelComponent } from './features/settings/quota-retention/quota-panel.component';
 import { ShellComponent } from './shell/layout/shell.component';
 import { ACTIVE_PHASE } from './shell/nav/product-phase';
 import type { NavEntry } from './shell/nav/nav.models';
@@ -168,6 +169,7 @@ const COMPONENT_STUBS = new Map<unknown, Type<unknown>>([
   [SettingsShellPage, SettingsShellStub],
   [SettingsTabPlaceholderPage, SettingsTabStub],
   [SettingsNoTabsPage, SettingsNoTabsStub],
+  [QuotaPanelComponent, SettingsTabStub],
 ]);
 
 /**
@@ -485,13 +487,16 @@ describe('Settings shell entry override (09.7.1-T1.1)', () => {
   }
 
   it('mounts the Settings shell table for the settings entry, landing on the first available tab', async () => {
-    const { harness } = await setUp();
+    const { harness } = await setUp(
+      new FakeIdentityData(),
+      new Set(['organization:read', 'usage:read']),
+    );
     const router = TestBed.inject(Router);
 
     await harness.navigateByUrl(urlOf(entryOf('settings')));
 
-    // `BASE_PERMISSIONS` holds `project:read`, so Quota & Retention is the first tab in strip order
-    // the caller may open: the shell table answered, not the area's stub table.
+    // The caller has the usage summary permission but no project read permission, so the
+    // organization quota tab is the first destination it may open.
     expect(router.url).toBe(`/orgs/${ORG.id}/settings/quota-retention`);
     expect(
       document.querySelector('[data-settings-tab-body]')?.getAttribute('data-settings-tab-body'),

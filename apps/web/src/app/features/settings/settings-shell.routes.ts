@@ -10,8 +10,8 @@
 //                not-found pattern answers — never a 403, never a redirect (AC1, 00 §9.2).
 //
 // Both the strip and this table read `SETTINGS_TABS`, so a tab can never be offered without a route
-// or routed without being offered. Members and Audit have their real org-scoped screens; Secrets
-// has its project-selected G2 screen. Other tab bodies remain placeholders until their stories land.
+// or routed without being offered. Delivered tab bodies share the same permission-aware shell;
+// the remaining destinations retain their placeholders.
 // Other sidebar destinations retain `settings.routes.ts`.
 //
 // W1 holds: only `app.routes.ts` imports this module, through the per-entry `ENTRY_ROUTES` override.
@@ -23,6 +23,7 @@ import { AuditPage } from './audit/audit.page';
 import { MembersPage } from './members/members.page';
 import { SecretsPage } from './secrets/secrets.page';
 import { PolicyPage } from './policy/policy.page';
+import { QuotaPanelComponent } from './quota-retention/quota-panel.component';
 import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SettingsShellPage } from './settings-shell.page';
 import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
@@ -36,6 +37,7 @@ const TAB_BODIES: Readonly<Partial<Record<SettingsTabId, Type<unknown>>>> = {
   audit: AuditPage,
   secrets: SecretsPage,
   policy: PolicyPage,
+  'quota-retention': QuotaPanelComponent,
 };
 
 /** One child route per tab, in strip order (the id reaches the body through `data.settingsTabId`). */

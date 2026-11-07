@@ -280,6 +280,14 @@ export async function waitForDialogAnimations(page: Page, dialog: string): Promi
 /** `?fixture.variant.listPermissions=settings-admin` — every tab code of the strip is granted. */
 export const SETTINGS_ADMIN_GRANTS = '?fixture.variant.listPermissions=settings-admin';
 
+/**
+ * `?fixture.variant.listPermissions=settings-admin-usage` — the same admin page plus `usage:read`,
+ * the Quota & retention tab's own read. A computed specimen (`core/dev-fixtures/
+ * fixture-settings-permissions.ts`), not a corpus row: the corpus document predates that tab and
+ * the .NET fixture loader also walks `fixtures/`, so the extra grant is merged in TypeScript.
+ */
+export const SETTINGS_ADMIN_USAGE_GRANTS = '?fixture.variant.listPermissions=settings-admin-usage';
+
 /** `?fixture.variant.listPermissions=settings-audit-only` — `organization:read` + `audit:read`. */
 export const SETTINGS_AUDIT_ONLY_GRANTS = '?fixture.variant.listPermissions=settings-audit-only';
 
