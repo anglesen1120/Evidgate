@@ -185,6 +185,13 @@ internal static class UsageReadStoreSql
     /// "is there a next page?" needs no count, and a filter names one project, which is a page of one whatever the
     /// cursor says.
     /// </para>
+    /// <para>
+    /// The projects status counts are the org's whole set and never the page, so each page and a filtered answer carry
+    /// the same figures. They aggregate every project counter of the period: no index leads with <c>(org_id,
+    /// period)</c>, so the read walks the org's counters on the unique key's leading column and filters the period,
+    /// which is a small set per tenant. A project, a roll-up and a marker row answer null there; only the alert rows
+    /// carry counts.
+    /// </para>
     /// </remarks>
     internal const string Summary =
         """
@@ -264,12 +271,24 @@ internal static class UsageReadStoreSql
               and (select visible from project_visible)
             group by r.metric
         ),
+        project_alerts as (
+            select c.metric,
+                   count(*) filter (where c.blocked_at is not null) as blocked_projects,
+                   count(*) filter (where c.blocked_at is null and c.warned_at is not null) as warned_projects
+            from public.quota_counter as c
+            where c.org_id = @org_id
+              and c.period = @period
+              and c.project_id is not null
+              and (select visible from project_visible)
+            group by c.metric
+        ),
         rows as (
-            select scope, project_id, project_created_at, metric, used, quota_limit, warned_at, blocked_at
+            select scope, project_id, project_created_at, metric, used, quota_limit, warned_at, blocked_at,
+                   null::bigint as blocked_projects, null::bigint as warned_projects
             from counters
             union all
             select 'tenant'::text, null::uuid, null::timestamptz, t.metric, t.used,
-                   null::numeric, null::timestamptz, null::timestamptz
+                   null::numeric, null::timestamptz, null::timestamptz, null::bigint, null::bigint
             from tenant_rollups as t
             where not exists (
                 select 1
@@ -278,7 +297,7 @@ internal static class UsageReadStoreSql
                   and c.metric = t.metric)
             union all
             select 'project'::text, p.project_id, p.project_created_at, p.metric, p.used,
-                   null::numeric, null::timestamptz, null::timestamptz
+                   null::numeric, null::timestamptz, null::timestamptz, null::bigint, null::bigint
             from project_rollups as p
             where not exists (
                 select 1
@@ -288,11 +307,15 @@ internal static class UsageReadStoreSql
                   and c.metric = p.metric)
         )
         select scope, project_id, project_created_at, metric, used, quota_limit, warned_at, blocked_at,
-               false as project_missing
+               blocked_projects, warned_projects, false as project_missing
         from rows
         union all
+        select 'alerts'::text, null::uuid, null::timestamptz, a.metric, null::numeric, null::numeric,
+               null::timestamptz, null::timestamptz, a.blocked_projects, a.warned_projects, false as project_missing
+        from project_alerts as a
+        union all
         select 'tenant'::text, null::uuid, null::timestamptz, null::text, null::numeric, null::numeric,
-               null::timestamptz, null::timestamptz, true as project_missing
+               null::timestamptz, null::timestamptz, null::bigint, null::bigint, true as project_missing
         where not (select visible from project_visible)
         """;
 }

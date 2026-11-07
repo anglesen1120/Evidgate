@@ -53,6 +53,9 @@ public sealed record UsageSummaryDto(
 /// </param>
 /// <param name="UnavailableReason">Why the metric cannot be reported, or null when it can.</param>
 /// <param name="Projects">The page's per-project counters, ordered by project creation time then id.</param>
+/// <param name="ProjectsStatus">
+/// How many of the organization's projects this metric warns or blocks, over every project and never only the page.
+/// </param>
 public sealed record UsageSummaryMetricDto(
     string Metric,
     string Scope,
@@ -62,7 +65,22 @@ public sealed record UsageSummaryMetricDto(
     DateTimeOffset? BlockedAt,
     long? RetryAfterSeconds,
     string? UnavailableReason,
-    IReadOnlyList<UsageSummaryProjectDto> Projects);
+    IReadOnlyList<UsageSummaryProjectDto> Projects,
+    UsageSummaryProjectsStatusDto ProjectsStatus);
+
+/// <summary>
+/// One metric's project stamps across the whole organization for the period: a count a client can render beside the
+/// page without walking it. Both counts are always present, and a metric the month holds no project counter for
+/// answers <c>0</c>/<c>0</c>.
+/// </summary>
+/// <param name="BlockedCount">Projects whose counter of this metric refused in the period.</param>
+/// <param name="WarnedCount">
+/// Projects whose counter of this metric warned and did not refuse: a blocked project is counted as blocked only, so
+/// the two counts never describe one project.
+/// </param>
+public sealed record UsageSummaryProjectsStatusDto(
+    long BlockedCount,
+    long WarnedCount);
 
 /// <summary>
 /// One project's counter for one metric. A project the request named that has no counter or roll-up row yet answers

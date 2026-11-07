@@ -220,6 +220,46 @@ public sealed class UsageSummaryCompositionTests
     }
 
     /// <summary>
+    /// A statement with no alert row answers zeros for every metric: the counts are always present, and a metric nobody
+    /// stamped is a genuine zero rather than an unknown.
+    /// </summary>
+    [Fact]
+    public void UsageSummary_ProjectsStatus_IsZeroWithoutAnAlertRow()
+    {
+        var summary = Compose(Rows.Tenant(UsageLedgerMetricNames.Results, 4m, 10m));
+
+        foreach (var metric in summary.Metrics)
+        {
+            metric.ProjectsStatus.BlockedCount.ShouldBe(0L);
+            metric.ProjectsStatus.WarnedCount.ShouldBe(0L);
+        }
+    }
+
+    [Fact]
+    public void UsageSummary_ProjectsStatus_ComesFromTheAlertRowOfItsOwnMetric()
+    {
+        var project = Guid.CreateVersion7();
+        var summary = ComposeFor(
+            project,
+            Rows.Tenant(UsageLedgerMetricNames.Results, used: 4m, limit: 10m),
+            Rows.Project(UsageLedgerMetricNames.Results, project, used: 10m, limit: 10m, createdAt: Now.AddHours(-2)),
+            Rows.Alert(UsageLedgerMetricNames.Results, blocked: 2, warned: 3));
+
+        var results = Metric(summary, UsageLedgerMetricNames.Results);
+        results.ProjectsStatus.BlockedCount.ShouldBe(2L);
+        results.ProjectsStatus.WarnedCount.ShouldBe(3L);
+
+        // The alert row describes the org, so it is neither a project row nor a total of the answer it rides in.
+        results.Used.ShouldBe(4m);
+        results.Projects.Select(row => row.ProjectId).ShouldBe([project]);
+
+        // Another metric carries its own count, so a neighbour's stamps never apply.
+        var egress = Metric(summary, UsageLedgerMetricNames.EgressGb);
+        egress.ProjectsStatus.BlockedCount.ShouldBe(0L);
+        egress.ProjectsStatus.WarnedCount.ShouldBe(0L);
+    }
+
+    /// <summary>
     /// A counter blocked 30 seconds before January is answered with a 30 second hint on the clock's month, and the same
     /// metric read at January's first instant answers the new month with nothing measured and no hint.
     /// </summary>
@@ -303,6 +343,16 @@ public sealed class UsageSummaryCompositionTests
                 Metric = metric,
                 Used = used,
                 QuotaLimit = limit,
+            };
+
+        /// <summary>One metric's org-wide project counts, the scope label the statement gives them.</summary>
+        internal static UsageSummaryRow Alert(string metric, long blocked, long warned) =>
+            new()
+            {
+                Scope = "alerts",
+                Metric = metric,
+                BlockedProjects = blocked,
+                WarnedProjects = warned,
             };
     }
 

@@ -252,7 +252,8 @@ internal sealed class DuplicateAttemptRow
 /// <summary>
 /// Dapper shape of one counter or roll-up total the summary statement returns. <see cref="Metric"/> is null only on
 /// the marker row, which says the requested project is not in the caller's tenant; a roll-up fallback row carries a
-/// total and a null limit.
+/// total and a null limit. Only an alert row carries <see cref="BlockedProjects"/> and <see cref="WarnedProjects"/>,
+/// which describe the org's projects whatever page answered.
 /// </summary>
 internal sealed class UsageSummaryRow
 {
@@ -271,6 +272,10 @@ internal sealed class UsageSummaryRow
     public DateTimeOffset? WarnedAt { get; set; }
 
     public DateTimeOffset? BlockedAt { get; set; }
+
+    public long? BlockedProjects { get; set; }
+
+    public long? WarnedProjects { get; set; }
 
     public bool ProjectMissing { get; set; }
 }

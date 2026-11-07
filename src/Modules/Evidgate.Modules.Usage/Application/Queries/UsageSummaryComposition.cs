@@ -22,10 +22,18 @@ namespace Evidgate.Modules.Usage.Application.Queries;
 /// <item>A limit is never carried from an earlier period: only the current period's counter can contribute one.</item>
 /// <item>Paging is over projects, in <c>(created_at, id)</c> order: every metric describes the same page, and the
 /// continuation is the last reported project's keyset. Tenant totals are never paged.</item>
+/// <item>The projects status counts are org-wide too: every project's stamps for the period, not the page's, so a
+/// client reads the same figures on every page and on a filtered answer. A blocked project is never also warned.</item>
 /// </list>
 /// </remarks>
 internal static class UsageSummaryComposition
 {
+    /// <summary>
+    /// The statement's own scope label for the org-wide project counts. The counts travel inside each metric, so a
+    /// client never reads this label: it stays here rather than joining the wire scope constants.
+    /// </summary>
+    private const string AlertsScope = "alerts";
+
     /// <summary>
     /// Builds the answer for <paramref name="period"/>, or null when the statement reported the requested project as
     /// missing from the caller's tenant (the caller maps that to 404).
@@ -56,16 +64,17 @@ internal static class UsageSummaryComposition
 
         var tenant = new Dictionary<string, UsageSummaryRow>(StringComparer.Ordinal);
         var projects = new Dictionary<(string Metric, Guid ProjectId), UsageSummaryRow>();
+        var alerts = new Dictionary<string, UsageSummaryRow>(StringComparer.Ordinal);
         foreach (var row in rows)
         {
-            Index(row, tenant, projects);
+            Index(row, tenant, projects, alerts);
         }
 
         var page = Page(projects.Values, limit, out var more);
         var metrics = new List<UsageSummaryMetricDto>(UsageLedgerMetricNames.All.Count);
         foreach (var metric in Enum.GetValues<UsageMetric>())
         {
-            metrics.Add(Metric(metric, requestedProject, tenant, projects, page, period, now));
+            metrics.Add(Metric(metric, requestedProject, tenant, projects, alerts, page, period, now));
         }
 
         // A filtered answer is one project by definition, so only the org-wide page can continue.
@@ -109,22 +118,30 @@ internal static class UsageSummaryComposition
         return ordered;
     }
 
-    /// <summary>Files one statement row under the scope it answers; the marker row carries no metric and is skipped.</summary>
+    /// <summary>
+    /// Files one statement row under the scope it answers; the marker row carries no metric and is skipped. The alert
+    /// row is the org-wide count of one metric, so it is neither a tenant counter nor a project's and is kept apart.
+    /// </summary>
     private static void Index(
         UsageSummaryRow row,
         Dictionary<string, UsageSummaryRow> tenant,
-        Dictionary<(string Metric, Guid ProjectId), UsageSummaryRow> projects)
+        Dictionary<(string Metric, Guid ProjectId), UsageSummaryRow> projects,
+        Dictionary<string, UsageSummaryRow> alerts)
     {
         if (row.Metric is not { } metric)
         {
             return;
         }
 
-        if (row.Scope == UsageSummaryScopes.Tenant)
+        if (row.Scope == AlertsScope)
+        {
+            alerts[metric] = row;
+        }
+        else if (row.Scope == UsageSummaryScopes.Tenant)
         {
             tenant[metric] = row;
         }
-        else if (row.ProjectId is { } projectId)
+        else if (row.Scope == UsageSummaryScopes.Project && row.ProjectId is { } projectId)
         {
             projects[(metric, projectId)] = row;
         }
@@ -136,6 +153,7 @@ internal static class UsageSummaryComposition
         Guid? requestedProject,
         Dictionary<string, UsageSummaryRow> tenant,
         Dictionary<(string Metric, Guid ProjectId), UsageSummaryRow> projects,
+        Dictionary<string, UsageSummaryRow> alerts,
         List<(Guid ProjectId, DateTimeOffset CreatedAt)> page,
         string period,
         DateTimeOffset now)
@@ -152,7 +170,8 @@ internal static class UsageSummaryComposition
                 BlockedAt: null,
                 RetryAfterSeconds: null,
                 reason,
-                Projects: []);
+                Projects: [],
+                ProjectsStatus: Status(alerts, wire));
         }
 
         tenant.TryGetValue(wire, out var counter);
@@ -165,8 +184,18 @@ internal static class UsageSummaryComposition
             counter?.BlockedAt,
             RetrySeconds(counter?.BlockedAt, period, now),
             UnavailableReason: null,
-            ProjectRows(wire, requestedProject, projects, page, period, now));
+            ProjectRows(wire, requestedProject, projects, page, period, now),
+            Status(alerts, wire));
     }
+
+    /// <summary>
+    /// The metric's org-wide project stamps. A metric the month holds no project counter for answers zeros, because a
+    /// count of projects is a fact either way, unlike a measurement nobody made.
+    /// </summary>
+    private static UsageSummaryProjectsStatusDto Status(Dictionary<string, UsageSummaryRow> alerts, string wire) =>
+        alerts.TryGetValue(wire, out var alert)
+            ? new UsageSummaryProjectsStatusDto(alert.BlockedProjects ?? 0L, alert.WarnedProjects ?? 0L)
+            : new UsageSummaryProjectsStatusDto(0L, 0L);
 
     /// <summary>
     /// One metric over the page's projects, in the page's order: a project the metric has no row for is its zero, so

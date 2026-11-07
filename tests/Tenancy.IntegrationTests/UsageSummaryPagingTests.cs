@@ -256,6 +256,11 @@ public sealed class UsageSummaryPagingTests
         answer.Body.GetProperty("period").GetString().ShouldBe(period);
         ProjectIds(answer).ShouldBeEmpty();
         NextCursor(answer).ShouldBeNull();
+
+        // No project counter exists, so the org-wide counts are zeros for every metric, never absent.
+        var status = Status(answer, UsageLedgerMetricNames.Results);
+        status.BlockedCount.ShouldBe(0L);
+        status.WarnedCount.ShouldBe(0L);
     }
 
     [Fact]
@@ -317,6 +322,102 @@ public sealed class UsageSummaryPagingTests
     }
 
     /// <summary>
+    /// The status counts belong to the organization, not the page: the blocked project that sorts last is still counted
+    /// on the first page, every page reports the same two figures, and a project that both warned and refused is
+    /// counted as blocked alone.
+    /// </summary>
+    [Fact]
+    public async Task Summary_ProjectsStatus_IsTheOrgWideCountOnEveryPage()
+    {
+        await using var world = await StartAsync();
+        var (period, instant) = await world.DatabaseClockAsync();
+        var created = await SeedStatusProjectsAsync(world, period, instant);
+
+        string? cursor = null;
+        var pages = new List<IReadOnlyList<Guid>>();
+        do
+        {
+            var answer = await world.GetAsMemberAsync(world.SummaryPageUrl(limit: "2", cursor: cursor));
+            answer.Status.ShouldBe(HttpStatusCode.OK);
+
+            var status = Status(answer, UsageLedgerMetricNames.Results);
+            status.BlockedCount.ShouldBe(2L);
+            status.WarnedCount.ShouldBe(2L);
+
+            pages.Add(ProjectIds(answer));
+            cursor = NextCursor(answer);
+        }
+        while (cursor is not null && pages.Count < 10);
+
+        pages.Count.ShouldBe(3);
+        pages[0].ShouldBe(created.Take(2));
+        pages[^1].ShouldBe([created[4]]);
+        pages.SelectMany(page => page).ShouldBe(created);
+    }
+
+    /// <summary>The filtered answer is one project, yet its counts still describe every project of the org.</summary>
+    [Fact]
+    public async Task Summary_ProjectsStatus_IsTheSameOnTheFilteredAnswer()
+    {
+        await using var world = await StartAsync();
+        var (period, instant) = await world.DatabaseClockAsync();
+        var created = await SeedStatusProjectsAsync(world, period, instant);
+
+        // The filtered project carries no stamp of its own: the counts cannot come from the rows that answer it.
+        var answer = await world.GetAsMemberAsync(world.SummaryPageUrl(project: created[2]));
+
+        answer.Status.ShouldBe(HttpStatusCode.OK);
+        ProjectIds(answer).ShouldBe([created[2]]);
+        var status = Status(answer, UsageLedgerMetricNames.Results);
+        status.BlockedCount.ShouldBe(2L);
+        status.WarnedCount.ShouldBe(2L);
+
+        // A metric with no producer counts nothing, and says so with zeros rather than an absent value.
+        var unavailable = Status(answer, UsageLedgerMetricNames.ArtifactGbMonth);
+        unavailable.BlockedCount.ShouldBe(0L);
+        unavailable.WarnedCount.ShouldBe(0L);
+    }
+
+    /// <summary>
+    /// Creates five projects of this world's org, pinned a minute apart, with one counters mix: a warned project, one
+    /// that both warned and refused, an unmarked one, a second warned one, and a blocked one that sorts last.
+    /// </summary>
+    private static async Task<IReadOnlyList<Guid>> SeedStatusProjectsAsync(
+        UsageReadsWorld world,
+        string period,
+        DateTimeOffset instant)
+    {
+        (DateTimeOffset? Warned, DateTimeOffset? Blocked)[] stamps =
+        [
+            (instant.AddHours(-3), null),
+            (instant.AddHours(-3), instant.AddHours(-2)),
+            (null, null),
+            (instant.AddHours(-2), null),
+            (null, instant.AddHours(-1)),
+        ];
+
+        var created = new List<Guid>(stamps.Length);
+        var counters = new List<CounterSeed>(stamps.Length);
+        for (var index = 0; index < stamps.Length; index++)
+        {
+            var project = await world.AddProjectAtAsync(instant.AddMinutes(index - 6));
+            created.Add(project);
+            counters.Add(new CounterSeed(
+                Guid.CreateVersion7(),
+                project,
+                period,
+                UsageLedgerMetricNames.Results,
+                index + 1m,
+                1000m,
+                WarnedAt: stamps[index].Warned,
+                BlockedAt: stamps[index].Blocked));
+        }
+
+        await world.SeedCounterAsync([.. counters]);
+        return created;
+    }
+
+    /// <summary>
     /// Creates <paramref name="count"/> projects of this world's org, pinned one minute apart from
     /// <paramref name="instant"/>, each with a <c>results</c> counter, and returns them in creation order.
     /// </summary>
@@ -355,6 +456,15 @@ public sealed class UsageSummaryPagingTests
 
     private static string? NextCursor(ApiAnswer answer) =>
         answer.Body.GetProperty("next_cursor").GetString();
+
+    /// <summary>One metric's org-wide project counts as the wire carries them.</summary>
+    private static UsageSummaryProjectsStatusDto Status(ApiAnswer answer, string wire)
+    {
+        var status = Metric(answer, wire).GetProperty("projects_status");
+        return new UsageSummaryProjectsStatusDto(
+            status.GetProperty("blocked_count").GetInt64(),
+            status.GetProperty("warned_count").GetInt64());
+    }
 
     private static IReadOnlyList<(string Path, string Reason)> Details(ApiAnswer answer) =>
         [.. answer.Body.GetProperty("error").GetProperty("details").EnumerateArray()
