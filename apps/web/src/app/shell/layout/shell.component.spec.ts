@@ -200,6 +200,43 @@ describe('ShellComponent', () => {
     expect(document.activeElement).toBe(toggle);
   });
 
+  it('leaves the drawer open for the Escape that closes a scope popup, then closes it on the next', async () => {
+    vi.stubGlobal('innerWidth', 360);
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    await renderScope();
+    root.querySelector<HTMLButtonElement>('.nav-toggle')!.click();
+    await fixture.whenStable();
+    const aside = root.querySelector<HTMLElement>('aside')!;
+    const org = aside.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+    org.focus();
+    org.click();
+    await fixture.whenStable();
+    expect(org.getAttribute('aria-expanded')).toBe('true');
+    // The popup flushes its closed state for that Escape before the drawer's handler runs, so a
+    // rendered `aria-expanded` probe misses it there: close and re-render at the aside's capture.
+    aside.addEventListener(
+      'keydown',
+      () => {
+        org.click();
+        fixture.detectChanges();
+      },
+      { capture: true, once: true },
+    );
+    const pressEscape = (): void => {
+      org.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+    };
+    pressEscape();
+    await fixture.whenStable();
+    expect(org.getAttribute('aria-expanded')).toBe('false');
+    expect(fixture.componentInstance.drawerOpen()).toBe(true);
+    pressEscape();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.drawerOpen()).toBe(false);
+  });
+
   it('waits for the visible, non-inert drawer before focusing its close button', async () => {
     vi.stubGlobal('innerWidth', 360);
     window.dispatchEvent(new Event('resize'));

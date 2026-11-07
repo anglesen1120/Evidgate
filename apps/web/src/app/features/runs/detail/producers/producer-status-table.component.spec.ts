@@ -18,6 +18,19 @@ const FINALIZED: ProducerSlot = {
   afterCancelEvents: 0,
 };
 
+/**
+ * Every fact cell's markup without `style`: a transition the host applies while the DOM settles
+ * toggles that attribute under load and says nothing about the fact the cell reports.
+ */
+function factSnapshots(root: HTMLElement): string[] {
+  return [...root.querySelectorAll('[data-fact]')].map((cell) => {
+    const copy = cell.cloneNode(true) as HTMLElement;
+    copy.removeAttribute('style');
+    copy.querySelectorAll('[style]').forEach((node) => node.removeAttribute('style'));
+    return copy.outerHTML;
+  });
+}
+
 describe('ProducerStatusTableComponent', () => {
   beforeEach(() => {
     stubLayoutApis();
@@ -157,7 +170,7 @@ describe('ProducerStatusTableComponent', () => {
     ]);
     expect(metadata?.outputs).toEqual([]);
     const { fixture, root } = await render();
-    const originalFacts = [...root.querySelectorAll('[data-fact]')].map((cell) => cell.outerHTML);
+    const originalFacts = factSnapshots(root);
     const originalNote = root.querySelector('#producers-event-note')?.outerHTML;
     const originalAttributes = [
       ...root.querySelectorAll('[data-completeness], [data-run-completeness]'),
@@ -165,9 +178,7 @@ describe('ProducerStatusTableComponent', () => {
     fixture.componentRef.setInput('slots', [{ ...FINALIZED, staleEpochEvents: 4 }]);
     fixture.componentRef.setInput('runAfterCancelEvents', 3);
     await fixture.whenStable();
-    expect([...root.querySelectorAll('[data-fact]')].map((cell) => cell.outerHTML)).toEqual(
-      originalFacts,
-    );
+    expect(factSnapshots(root)).toEqual(originalFacts);
     expect(root.querySelector('#producers-event-note')?.outerHTML).toBe(originalNote);
     expect(root.querySelectorAll('[data-badge]')).toHaveLength(2);
     expect([...root.querySelectorAll('[data-completeness], [data-run-completeness]')]).toEqual(
