@@ -102,6 +102,11 @@ internal sealed record QuotaRaiseRow(Guid Id, decimal Used, decimal QuotaLimit);
 /// <param name="DatabaseNow">The transaction's clock for the retry calculation.</param>
 internal sealed record QuotaPeekRow(Guid ScopeKey, decimal Used, decimal QuotaLimit, DateTimeOffset DatabaseNow);
 
+/// <summary>The transaction's billing month and the instant it is measured from, read together.</summary>
+/// <param name="Period">The transaction's month, <c>YYYY-MM</c> in UTC.</param>
+/// <param name="DatabaseNow">The transaction's own instant, the clock a retry hint is measured from.</param>
+internal sealed record QuotaPeriodClock(string Period, DateTimeOffset DatabaseNow);
+
 /// <summary>
 /// The <c>quota_counter</c> path over the caller's tenant scope: the reservation, the carry-forward,
 /// the refusal settle and stamp, and the raise, plus the read-only peek and the transaction month the caller gates with,
@@ -109,17 +114,22 @@ internal sealed record QuotaPeekRow(Guid ScopeKey, decimal Used, decimal QuotaLi
 /// </summary>
 internal sealed class QuotaCounterStore(ITenantDb db)
 {
-    /// <summary>Reads the billing month of the caller's transaction even when quota enforcement is off.</summary>
+    /// <summary>
+    /// Reads the billing month of the caller's transaction and the instant it is measured from, so a caller that needs
+    /// both (the gate's period, the summary's period and retry hint) cannot cross a month end between them.
+    /// </summary>
     /// <param name="cancellationToken">Cancellation.</param>
-    /// <returns>The transaction's month, <c>YYYY-MM</c> in UTC.</returns>
-    internal async Task<string> CurrentPeriodAsync(CancellationToken cancellationToken)
+    /// <returns>The transaction's month <c>YYYY-MM</c> in UTC, and the transaction's own instant.</returns>
+    internal async Task<QuotaPeriodClock> CurrentPeriodClockAsync(CancellationToken cancellationToken)
     {
-        var period = await db
-            .ScalarAsync<string>(UsageQuotaGateSql.CurrentPeriod, cancellationToken: cancellationToken)
+        var clock = await db
+            .QuerySingleOrDefaultAsync<QuotaPeriodClock>(
+                UsageQuotaGateSql.CurrentPeriod,
+                cancellationToken: cancellationToken)
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException("the transaction did not return a billing month");
 
-        return period;
+        return clock;
     }
 
     /// <summary>

@@ -1,4 +1,3 @@
-using System.Globalization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -15,18 +14,19 @@ namespace Evidgate.Modules.Usage.Application.Queries;
 
 /// <summary>
 /// <c>GET /v1/orgs/{o}/usage/summary</c>: the current period's counters against quota for the org and, when the request
-/// names one, a project. The period comes from the server clock while the gate reads the database transaction month, so
-/// the two name the same month except for a request that crosses a month end; the wait beside a blocked counter is a
-/// hint to a reader, never an input to scheduling.
+/// names one, a project. The period and the wait beside a blocked counter are the reading transaction's own clock, the
+/// month the gate writes its counters in, so a host clock that already names the next month cannot answer a month the
+/// counters do not live in. The wait is a hint to a reader, never an input to scheduling.
 /// </summary>
 /// <param name="OrgId">The org the route names; it must be the request's tenant.</param>
 /// <param name="ProjectId">The project the request named, or null for the org-wide answer.</param>
 internal sealed record GetUsageSummaryQuery(Guid OrgId, Guid? ProjectId) : IQuery<Result<UsageSummaryDto>>;
 
 /// <summary>
-/// Handler of <see cref="GetUsageSummaryQuery"/>: the C2 project-scope rule, then one statement that reads the period's
-/// counters, roll-up totals and the requested project's visibility together. The organization resolves through the
-/// pipeline's tenant context, so an org outside the caller's visibility never reaches this handler.
+/// Handler of <see cref="GetUsageSummaryQuery"/>: the C2 project-scope rule, the reading transaction's own month, then
+/// one statement that reads that month's counters, roll-up totals and the requested project's visibility together. The
+/// organization resolves through the pipeline's tenant context, so an org outside the caller's visibility never reaches
+/// this handler.
 /// </summary>
 /// <remarks>
 /// The statement answers "is the named project in this org?" by itself, so a foreign id is the same 404 an unknown one
@@ -37,10 +37,10 @@ internal sealed record GetUsageSummaryQuery(Guid OrgId, Guid? ProjectId) : IQuer
 [Permission(Permissions.Usage.Read)]
 internal sealed class GetUsageSummaryQueryHandler(
     UsageReadStore store,
+    QuotaCounterStore counters,
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
-    IRequestTenantContextAccessor tenant,
-    TimeProvider time)
+    IRequestTenantContextAccessor tenant)
     : IQueryHandler<GetUsageSummaryQuery, Result<UsageSummaryDto>>
 {
     /// <summary>The 404 of a project this org does not hold; unknown and foreign ids share it.</summary>
@@ -55,7 +55,8 @@ internal sealed class GetUsageSummaryQueryHandler(
             ModuleName.Usage,
             nameof(GetUsageSummaryQuery));
 
-        if (query.OrgId != scopes.Require().OrgId)
+        var scope = scopes.Require();
+        if (query.OrgId != scope.OrgId)
         {
             return Result.Failure<UsageSummaryDto>(Error.NotFound("no such organization"));
         }
@@ -67,12 +68,13 @@ internal sealed class GetUsageSummaryQueryHandler(
             return Result.Failure<UsageSummaryDto>(mismatch);
         }
 
-        var now = time.GetUtcNow();
-        var period = now.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+        // Both reads run in this request's tenant transaction, so the counters and the clock that names them are the
+        // gate's own.
+        var clock = await counters.CurrentPeriodClockAsync(cancellationToken).ConfigureAwait(false);
         var rows = await store
-            .ReadSummaryAsync(scopes.Require().OrgId, period, query.ProjectId, cancellationToken)
+            .ReadSummaryAsync(scope.OrgId, clock.Period, query.ProjectId, cancellationToken)
             .ConfigureAwait(false);
-        var summary = UsageSummaryComposition.Compose(period, query.ProjectId, now, rows);
+        var summary = UsageSummaryComposition.Compose(clock.Period, query.ProjectId, clock.DatabaseNow, rows);
 
         return summary is null
             ? Result.Failure<UsageSummaryDto>(ProjectNotFound)

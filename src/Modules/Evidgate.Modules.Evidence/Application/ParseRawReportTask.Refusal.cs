@@ -164,6 +164,41 @@ internal sealed partial class ParseRawReportHandler
     }
 
     /// <summary>
+    /// The refusal of a payload no parser can judge, or null when it names one producer kind and carries no issue. The
+    /// report is refused before its bytes are read and leaves its one row, so a hand-written payload can never reach
+    /// the registry with a null kind.
+    /// </summary>
+    /// <param name="payload">The run, artifact and producer kind.</param>
+    /// <param name="orgId">The tenant the claimed task row names.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>The named outcome of the refusal, or null when a parser may judge the report.</returns>
+    private async Task<ParseRawReportOutcome?> RefuseUnknownProducerAsync(
+        ParseRawReportPayload payload,
+        Guid orgId,
+        CancellationToken cancellationToken)
+    {
+        if (payload.ProducerKind is { Length: > 0 } && payload.ProducerIssue is null)
+        {
+            return null;
+        }
+
+        var issue = string.IsNullOrEmpty(payload.ProducerIssue)
+            ? ParseRawReportPayload.ProducerUnknown
+            : payload.ProducerIssue;
+        LogUnsupported(logger, payload.ArtifactId, issue);
+
+        return await RefuseAsync(
+                orgId,
+                payload,
+                RawReportOutcomes.Unsupported,
+                issue,
+                parserId: null,
+                parserVersion: null,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// The one malformed refusal of an attempt that already resolved a parser: the row names the release that judged the
     /// document, and the outcome keeps the reason word the parse reported.
     /// </summary>

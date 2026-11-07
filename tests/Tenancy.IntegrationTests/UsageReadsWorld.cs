@@ -65,7 +65,7 @@ internal sealed partial class UsageReadsWorld : IAsyncDisposable
     /// <summary>Starts one world with the operator gate the suite needs, over the clock the host reports time from.</summary>
     /// <param name="fixture">The assembly fixture (one container, one template).</param>
     /// <param name="gate">Which gate the host composes.</param>
-    /// <param name="clock">The host's clock, so a read that derives a period answers the period the test pinned.</param>
+    /// <param name="clock">The host's own clock, for the billing reads that name a month from it.</param>
     internal static Task<UsageReadsWorld> StartAsync(
         PostgresTenancyFixture fixture,
         OperatorGateMode gate,

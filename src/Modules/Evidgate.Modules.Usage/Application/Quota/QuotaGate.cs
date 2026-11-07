@@ -67,8 +67,8 @@ internal sealed class QuotaGate(
     IOptions<QuotaGateOptions> options) : IQuotaGate
 {
     /// <inheritdoc />
-    public Task<string> CurrentPeriodAsync(CancellationToken cancellationToken) =>
-        store.CurrentPeriodAsync(cancellationToken);
+    public async Task<string> CurrentPeriodAsync(CancellationToken cancellationToken) =>
+        (await store.CurrentPeriodClockAsync(cancellationToken).ConfigureAwait(false)).Period;
 
     /// <inheritdoc />
     public async Task<QuotaCheckResult> PeekAsync(

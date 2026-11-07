@@ -13,9 +13,14 @@ namespace Evidgate.Modules.Usage.Infrastructure.Persistence;
 /// </summary>
 internal static class UsageQuotaGateSql
 {
-    /// <summary>The UTC month stamped on rows created in the caller's transaction.</summary>
-    internal const string CurrentPeriod =
-        "select to_char(transaction_timestamp() at time zone 'UTC','YYYY-MM')";
+    /// <summary>
+    /// The UTC month stamped on rows created in the caller's transaction, beside the instant that month is measured
+    /// from, so a reader of both names the month the transaction is in.
+    /// </summary>
+    internal const string CurrentPeriod = """
+        select to_char(transaction_timestamp() at time zone 'UTC','YYYY-MM') as period,
+               transaction_timestamp() as database_now
+        """;
 
     /// <summary>
     /// Reads only existing refusing counters; the first scope is the tenant's. The instant is the transaction's own

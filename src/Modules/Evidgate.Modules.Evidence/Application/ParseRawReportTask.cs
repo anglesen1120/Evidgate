@@ -251,24 +251,10 @@ internal sealed partial class ParseRawReportHandler(
         Guid orgId,
         CancellationToken cancellationToken)
     {
-        if (payload.ProducerKind is not { Length: > 0 } || payload.ProducerIssue is not null)
+        if (await RefuseUnknownProducerAsync(payload, orgId, cancellationToken).ConfigureAwait(false)
+            is { } unknownProducer)
         {
-            // No single producer kind to resolve, so no parser can judge the bytes: the report is refused before they
-            // are read and leaves its one row. A null kind without an issue is the same refusal, so a hand-written
-            // payload can never reach the registry with a null.
-            var issue = string.IsNullOrEmpty(payload.ProducerIssue)
-                ? ParseRawReportPayload.ProducerUnknown
-                : payload.ProducerIssue;
-            LogUnsupported(logger, payload.ArtifactId, issue);
-            return await RefuseAsync(
-                    orgId,
-                    payload,
-                    RawReportOutcomes.Unsupported,
-                    issue,
-                    parserId: null,
-                    parserVersion: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            return unknownProducer;
         }
 
         var preparation = await PrepareAsync(orgId, payload, cancellationToken).ConfigureAwait(false);
