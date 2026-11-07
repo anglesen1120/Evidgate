@@ -52,17 +52,17 @@
               type="number"
               step="1"
               required
-              formControlName="artifact"
+              formControlName="artifact_days"
               class="w-full min-w-0 min-h-(--eg-control-touch)"
               [readOnly]="!store.writable() || store.saving()"
-              [attr.aria-invalid]="fieldError('artifact') ? true : null"
+              [attr.aria-invalid]="fieldError('artifact_days') ? true : null"
               [attr.aria-describedby]="
-                fieldError('artifact')
+                fieldError('artifact_days')
                   ? 'retention-hint retention-artifact-error'
                   : 'retention-hint'
               "
             />
-            @if (fieldError('artifact'); as error) {
+            @if (fieldError('artifact_days'); as error) {
               <p id="retention-artifact-error" class="m-0 text-sm text-destructive">{{ error }}</p>
             }
           </div>
@@ -74,17 +74,17 @@
               type="number"
               step="1"
               required
-              formControlName="metadata"
+              formControlName="metadata_days"
               class="w-full min-w-0 min-h-(--eg-control-touch)"
               [readOnly]="!store.writable() || store.saving()"
-              [attr.aria-invalid]="fieldError('metadata') ? true : null"
+              [attr.aria-invalid]="fieldError('metadata_days') ? true : null"
               [attr.aria-describedby]="
-                fieldError('metadata')
+                fieldError('metadata_days')
                   ? 'retention-hint retention-metadata-error'
                   : 'retention-hint'
               "
             />
-            @if (fieldError('metadata'); as error) {
+            @if (fieldError('metadata_days'); as error) {
               <p id="retention-metadata-error" class="m-0 text-sm text-destructive">{{ error }}</p>
             }
           </div>
