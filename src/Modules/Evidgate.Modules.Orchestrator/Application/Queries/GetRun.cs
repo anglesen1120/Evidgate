@@ -8,6 +8,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Orchestrator.Application.Manifests;
 using Evidgate.Modules.Orchestrator.Contracts;
+using Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 using Mediator;
 
 namespace Evidgate.Modules.Orchestrator.Application.Queries;
@@ -20,7 +21,9 @@ internal sealed record GetRunQuery(Guid RunId) : IQuery<Result<RunStateDto>>;
 /// Handler of <see cref="GetRunQuery"/>: one Dapper read over the ambient tenant scope (00 §5.5 C1/C3/C5), so RLS
 /// scopes the row and another tenant's run is the same <c>404 not_found</c> as an unknown id. The body reports the
 /// run's state machine position and the identity it records (05.2.2-T1: the <c>ref</c> block and
-/// <c>unverified_ref</c>; <c>advisory_only</c> is 05.2.2-T3.2's). The route names the run
+/// <c>unverified_ref</c>; <c>advisory_only</c> is 05.2.2-T3.2's). The state transitions the write trigger recorded are
+/// selected by the same statement as the run row, so the state and the history reported beside it share one snapshot;
+/// the releases the run is bound to follow that row as one more read. The route names the run
 /// by id alone, so a project-scoped credential asking for a sibling project's run of the same org is that same
 /// <c>404 not_found</c>: <see cref="OrchestratorScope.Project"/>'s scope mismatch is mapped to it below, never to
 /// <c>403 project_scope_mismatch</c> — the same shape as the module's other read route
@@ -47,7 +50,9 @@ internal sealed class GetRunQueryHandler(
     /// read is never N+1 and its producer order never depends on the heap order the slots happen to have. The same
     /// statement counts the run's late events. Only a canceled run can hold one (admission flags a write as
     /// <c>after_cancel</c> solely against a canceled run, and that state is terminal), so every other state skips the
-    /// heap scan the flag column would otherwise cost on each read.
+    /// heap scan the flag column would otherwise cost on each read. The state history is selected here too, as two
+    /// correlated subqueries of this one statement: a history read by a statement of its own could see a cancel commit
+    /// after the run row was read, and serve the old state beside a history that ends canceled.
     /// <para>
     /// <c>org_id</c> is left to RLS (the row is readable only inside the caller's tenant scope, and the policy is
     /// <c>FORCE</c>d, 0031), so an unknown id and another tenant's id take the same branch. Every join is on the
@@ -57,7 +62,7 @@ internal sealed class GetRunQueryHandler(
     /// deleted project either.
     /// </para>
     /// </summary>
-    private const string RunStateById = """
+    private const string RunStateById = $$"""
         select r.id as run_id, r.project_id, r.state, r.current_evidence_revision_id, r.version, r.purpose,
                r.ref_kind, r.ref_name, r.pr_number, r.head_sha, r.base_sha, r.trigger_event, r.is_fork, r.unverified_ref,
                m.manifest_hash,
@@ -69,7 +74,8 @@ internal sealed class GetRunQueryHandler(
                     then (select count(*)::integer
                             from public.event ev
                            where ev.org_id = r.org_id and ev.run_id = r.id and ev.after_cancel)
-                    else 0 end as after_cancel_events
+                    else 0 end as after_cancel_events,
+               {{RunStateHistorySql.HistoryColumns}}
           from public.run r
           join public.manifest m on m.org_id = r.org_id and m.id = r.manifest_id
           join public.environment_revision er on er.org_id = r.org_id and er.id = r.environment_revision_id
@@ -98,8 +104,9 @@ internal sealed class GetRunQueryHandler(
             return Result.Failure<RunStateDto>(RunNotFound);
         }
 
-        // Only a run the caller may see reads its bindings, so a 404 run answers before any release statement runs.
+        // Only a run the caller may see reads its bindings, so a 404 run answers before that statement runs.
         var releases = await bindings.BoundReleasesAsync(query.RunId, cancellationToken).ConfigureAwait(false);
+        var stateHistory = RunStateHistoryReader.FromRow(row.StateHistoryKnown, row.StateHistory);
 
         return Result.Success(new RunStateDto(
             row.RunId,
@@ -128,7 +135,8 @@ internal sealed class GetRunQueryHandler(
             row.ShardCount,
             [.. row.DeclaredProducers],
             releases,
-            row.AfterCancelEvents));
+            row.AfterCancelEvents,
+            stateHistory));
     }
 
     /// <summary>
@@ -191,5 +199,11 @@ internal sealed class GetRunQueryHandler(
         public string[] DeclaredProducers { get; set; } = [];
 
         public int AfterCancelEvents { get; set; }
+
+        /// <summary>The marker column of <see cref="RunStateHistorySql.HistoryColumns"/>: the run's history is knowable.</summary>
+        public bool StateHistoryKnown { get; set; }
+
+        /// <summary>The transitions column of <see cref="RunStateHistorySql.HistoryColumns"/>, oldest first.</summary>
+        public string StateHistory { get; set; } = "[]";
     }
 }

@@ -9467,6 +9467,7 @@ components:
           declared_producers,
           releases,
           after_cancel_events,
+          state_history,
         ]
       properties:
         run_id:
@@ -9550,6 +9551,42 @@ components:
           description: >-
             How many of the run's stored `event` rows are flagged `after_cancel` (0034): late events that arrived
             after the cancel. A count of events, not of case attempts.
+        state_history:
+          type: [array, 'null']
+          maxItems: 64
+          description: >-
+            The run's recorded state transitions, oldest first (`run_state_event.seq` ascending). The creation row — the
+            one with no from state — is the marker that the history is known, so it is never served, and its absence is
+            what makes the whole member `null`: a run created before the table existed cannot have its history
+            reconstructed. `[]` is a run whose history is known and which has not transitioned yet; `null` is an
+            unknown history. Bounded to 64 items, which no run can reach: the forward ranks are fixed (`created` 0,
+            `queued` 1, `running` 2, `collecting` 3) and a terminal state has no outgoing edge, so the longest declared
+            path is four transitions (`created → queued → running → collecting → complete`/`incomplete`); a run is
+            inserted already `queued`, so a served history holds at most three.
+          items:
+            $ref: '#/components/schemas/RunStateTransition'
+    RunStateTransition:
+      type: object
+      description: One recorded transition of a run (`run_state_event`), appended by the trigger on `public.run`.
+      additionalProperties: false
+      required: [from_state, to_state, occurred_at]
+      properties:
+        from_state:
+          type: string
+          enum: [created, queued, running, collecting, complete, incomplete, canceled]
+          description: >-
+            The state the run left. Never null in a served item: an item with no from state is the creation marker and
+            is not part of this array.
+        to_state:
+          type: string
+          enum: [created, queued, running, collecting, complete, incomplete, canceled]
+          description: The state the run entered, one of the same vocabulary as `state`.
+        occurred_at:
+          type: string
+          format: date-time
+          description: >-
+            The database clock time the transition was recorded (`clock_timestamp()`). Order comes from the row's
+            sequence, not this value, so a clock that steps backwards cannot reorder a run's history.
     RunReleaseRef:
       type: object
       description: One release binding of a run (`release_run`, the only run-release binding).
