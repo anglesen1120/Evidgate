@@ -18,6 +18,17 @@ import { expect, type Page } from '@playwright/test';
 import axe from 'axe-core';
 import type { AxeResults, RunOptions } from 'axe-core';
 
+import exceptionsDocument from '../a11y-exceptions.json';
+import {
+  AXE_RUN_OPTIONS,
+  formatViolations,
+  unexceptedViolations,
+  type A11yException,
+} from '../a11y/axe-config';
+
+/** The accepted violations every scan here honours; the checker in `scripts/` validates the file. */
+const A11Y_EXCEPTIONS: readonly A11yException[] = exceptionsDocument.exceptions;
+
 /** The org and project ids of `fixtures/web-api/orgs-list` + `projects-list` (org 1). */
 export const ORG_ACME = '018f0000-0000-7000-8000-000000000001';
 /** The second organization of `orgs-list`, used by the scope-switcher cases. */
@@ -176,17 +187,38 @@ export async function seedStoredTheme(page: Page, theme: ShellTheme | null): Pro
   }, theme);
 }
 
-/** `axe-core`'s WCAG 2.2 A/AA tag set: everything the product claims, contrast included. */
-const AXE_OPTIONS: RunOptions = {
-  runOnly: {
-    type: 'tag',
-    values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'],
-  },
-};
-
 /** The subset of the injected `axe` global these specs use. */
 interface AxeGlobal {
   run: (context: Document, options: RunOptions) => Promise<AxeResults>;
+}
+
+/**
+ * Brain's trigger gets `role="combobox"` from a static host attribute, but `aria-expanded` and its
+ * projected label arrive with the bindings and content, and the shell renders the scope switcher
+ * through `@defer (on idle)`. A scan can catch a combobox one frame old — unnamed, unexpanded —
+ * which axe reports as `aria-required-attr` plus `button-name`: a render race, not a page defect.
+ * Wait for the finished DOM; after the bound wait the scan still runs, so a combobox that never
+ * settles fails on axe's own message and selector.
+ */
+async function waitForSettledComboboxes(page: Page): Promise<void> {
+  try {
+    await page.waitForFunction(
+      () => {
+        const settled = (combobox: Element): boolean => {
+          if (combobox.getAttribute('aria-expanded') === null) return false;
+          const labelled =
+            (combobox.getAttribute('aria-label') ?? '').trim() !== '' ||
+            (combobox.getAttribute('aria-labelledby') ?? '').trim() !== '';
+          return labelled || (combobox.textContent ?? '').trim() !== '';
+        };
+        return Array.from(document.querySelectorAll('[role="combobox"]')).every(settled);
+      },
+      undefined,
+      { timeout: 5_000 },
+    );
+  } catch {
+    // Not a wait to fail on: axe names the offending element on its own, and that is the report.
+  }
 }
 
 /**
@@ -197,6 +229,7 @@ interface AxeGlobal {
  * is added and the rule set is the version the repo pins.
  */
 export async function axeScan(page: Page, context?: string): Promise<AxeResults> {
+  await waitForSettledComboboxes(page);
   await page.addScriptTag({ content: axe.source });
   return page.evaluate(
     async ({ context, options }: { context: string | undefined; options: RunOptions }) => {
@@ -206,7 +239,7 @@ export async function axeScan(page: Page, context?: string): Promise<AxeResults>
       // `context` is a CSS selector string here; axe resolves it inside the page.
       return axeGlobal.axe.run((context ?? document) as Document, options);
     },
-    { context, options: AXE_OPTIONS },
+    { context, options: AXE_RUN_OPTIONS },
   );
 }
 
@@ -230,8 +263,9 @@ export function axeViolations(results: AxeResults): AxeFinding[] {
 }
 
 /**
- * Asserts a page is WCAG 2.2 A/AA clean AND that the colour-contrast rule actually produced an
- * outcome (a pass or an "incomplete"): a silent rule would make "no violations" meaningless.
+ * Asserts a page is WCAG 2.2 A/AA clean — meaning no violation that `e2e/a11y-exceptions.json` does
+ * not cover — AND that the colour-contrast rule actually produced an outcome (a pass or an
+ * "incomplete"): a silent rule would make "no violations" meaningless.
  */
 export async function expectNoA11yViolations(page: Page, context: string): Promise<void> {
   const results = await axeScan(page);
@@ -242,7 +276,8 @@ export async function expectNoA11yViolations(page: Page, context: string): Promi
     contrast.length,
     `axe evaluated color-contrast on ${context} (violations: ${results.violations.length})`,
   ).toBeGreaterThan(0);
-  expect(axeViolations(results), `axe violations on ${context}`).toEqual([]);
+  const found = formatViolations(unexceptedViolations(results.violations, A11Y_EXCEPTIONS));
+  expect(found, `axe violations on ${context}`).toEqual([]);
 }
 
 /**
