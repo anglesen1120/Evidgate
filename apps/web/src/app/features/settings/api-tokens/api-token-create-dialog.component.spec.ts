@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { expiryInstant } from './api-token-create-dialog.component';
 import {
   control,
   fillCreate,
@@ -6,7 +7,7 @@ import {
   submitCreate,
   writeFailure,
 } from './api-token-dialog.test-support';
-import { CREATED, mount, deferred } from './api-tokens.test-support';
+import { CREATED, mount, deferred, project } from './api-tokens.test-support';
 
 describe('API token creation dialog', () => {
   afterEach(() => {
@@ -143,5 +144,107 @@ describe('API token creation dialog', () => {
     expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
     submitCreate();
     expect(h.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-reads the token list from its first page before closing on an ambiguous create', async () => {
+    const h = mount();
+    await h.settle();
+    await openCreate(h);
+    await fillCreate(h);
+    h.create.mockRejectedValueOnce(writeFailure({ kind: 'timeout', status: 0, retryable: true }));
+    submitCreate();
+    await h.settle();
+    expect(h.list).toHaveBeenCalledTimes(1);
+    h.list.mockResolvedValue({ items: [], next_cursor: null });
+    const inspect = Array.from(document.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Close and check token list'),
+    );
+    if (!inspect) throw new Error('Missing inspect action');
+    inspect.click();
+    await h.settle();
+    // The read starts from the click handler, so the close cannot outrun a committed token.
+    expect(h.list).toHaveBeenCalledTimes(2);
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.store.createOpen()).toBe(false);
+  });
+
+  it('keeps submit disabled for a missing or past expiry and never submits it', async () => {
+    const h = mount();
+    await h.settle();
+    await openCreate(h);
+    const name = control<HTMLInputElement>('#api-create-name');
+    name.value = 'Reader';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    control<HTMLButtonElement>('button[id="api-permission-run:read"]').click();
+    await h.settle();
+    expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
+    const expiry = control<HTMLInputElement>('#api-create-expiry');
+    expiry.value = '2020-01-01T00:00';
+    expiry.dispatchEvent(new Event('input', { bubbles: true }));
+    await h.settle();
+    expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
+    expect(() => submitCreate()).not.toThrow();
+    await h.settle();
+    expect(h.create).not.toHaveBeenCalled();
+    expect(expiry.getAttribute('min')).toBeTruthy();
+    expect(expiry.hasAttribute('max')).toBe(false);
+  });
+
+  it('reads an impossible expiry as absent instead of throwing', () => {
+    expect(expiryInstant('')).toBeNull();
+    expect(expiryInstant('2027-13-01T00:00')).toBeNull();
+    expect(expiryInstant('2027-01-01T00:00')).toBe(new Date('2027-01-01T00:00Z').getTime());
+  });
+
+  it('keeps the refusal message when the selection moved while the create was pending', async () => {
+    const h = mount();
+    await h.settle();
+    await openCreate(h);
+    await fillCreate(h);
+    const pending = deferred<typeof CREATED>();
+    h.create.mockReturnValueOnce(pending.promise);
+    submitCreate();
+    h.projects.set([project('project-2', 'Other')]);
+    pending.reject(
+      writeFailure({
+        message: 'Expiry must be in the future.',
+        details: [{ path: 'expires_at', reason: 'past' }],
+      }),
+    );
+    await h.settle();
+    expect(control('[data-api-create-dialog]').textContent).toContain(
+      'Expiry must be in the future.',
+    );
+    expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
+  });
+
+  it('does not resubmit the expiry a 422 refused until a field changes', async () => {
+    const h = mount();
+    await h.settle();
+    await openCreate(h);
+    await fillCreate(h);
+    h.create.mockRejectedValueOnce(
+      writeFailure({
+        message: 'Expiry must be in the future.',
+        details: [{ path: 'expires_at', reason: 'past' }],
+      }),
+    );
+    submitCreate();
+    await h.settle();
+    expect(control('[data-api-create-dialog]').textContent).toContain(
+      'Expiry must be in the future.',
+    );
+    expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
+    submitCreate();
+    await h.settle();
+    expect(h.create).toHaveBeenCalledTimes(1);
+    const name = control<HTMLInputElement>('#api-create-name');
+    name.value = 'Renamed reader';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    await h.settle();
+    expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(false);
+    submitCreate();
+    await h.settle();
+    expect(h.create).toHaveBeenCalledTimes(2);
   });
 });

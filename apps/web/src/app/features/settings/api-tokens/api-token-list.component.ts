@@ -94,7 +94,7 @@ import { API_TOKENS_COPY } from './api-tokens.copy';
                 }
               </td>
               @if (canWrite()) {
-                <td hlmTd role="cell" class="hidden md:table-cell">
+                <td hlmTd role="cell" class="max-md:hidden! md:table-cell">
                   @if (row.status !== 'revoked') {
                     <button
                       hlmBtn

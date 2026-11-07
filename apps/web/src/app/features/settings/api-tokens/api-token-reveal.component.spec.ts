@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { control, fillCreate, openCreate, submitCreate } from './api-token-dialog.test-support';
-import { CREATED, mount, deferred } from './api-tokens.test-support';
+import { CREATED, mount, deferred, project } from './api-tokens.test-support';
 
 const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
 
@@ -67,7 +67,7 @@ describe('API token one-time reveal lifetime', () => {
     expect(document.body.innerHTML).not.toContain(CREATED.token);
   });
 
-  it('clears on project change and on component destruction (navigation)', async () => {
+  it('keeps the reveal bound to the minted scope when the selection moves, and clears on destruction', async () => {
     const h = mount();
     await h.settle();
     await openCreate(h);
@@ -75,21 +75,17 @@ describe('API token one-time reveal lifetime', () => {
     submitCreate();
     await h.settle();
     const value = control<HTMLInputElement>('[data-testid="reveal-value"]');
-    h.projects.set([{ id: 'project-2', name: 'Other', org_id: 'org-1' }]);
+    h.projects.set([project('project-2', 'Other')]);
     await h.settle();
-    expect(value.value).toBe('');
-    expect(h.store.createOpen()).toBe(false);
-    await openCreate(h);
-    await fillCreate(h);
-    submitCreate();
-    await h.settle();
-    const second = control<HTMLInputElement>('[data-testid="reveal-value"]');
+    // The dialog stays on the scope it opened for: the only copy of the secret is in this field.
+    expect(value.value).toBe(CREATED.token);
+    expect(h.store.createOpen()).toBe(true);
     h.fixture.destroy();
-    expect(second.value).toBe('');
+    expect(value.value).toBe('');
     expect(document.body.innerHTML).not.toContain(CREATED.token);
   });
 
-  it('does not show a late credential after the creating member loses write access', async () => {
+  it('still reveals a credential minted just before the creating member lost write access', async () => {
     const h = mount();
     await h.settle();
     await openCreate(h);
@@ -101,7 +97,8 @@ describe('API token one-time reveal lifetime', () => {
     h.permissions.set(new Set(['api_token:read']));
     pending.resolve(CREATED);
     await h.settle();
-    expect(document.querySelector('[data-testid="reveal-value"]')).toBeNull();
-    expect(h.store.createOpen()).toBe(false);
+    // Dropping the answer would leave a token nobody can copy and few can even find to revoke.
+    expect(control<HTMLInputElement>('[data-testid="reveal-value"]').value).toBe(CREATED.token);
+    expect(h.store.createOpen()).toBe(true);
   });
 });

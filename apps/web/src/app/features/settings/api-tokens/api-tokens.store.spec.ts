@@ -1,7 +1,7 @@
 import { isSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { getState } from '@ngrx/signals';
-import { mount, refusal, ROW, deferred } from './api-tokens.test-support';
+import { mount, refusal, ROW, deferred, project } from './api-tokens.test-support';
 
 describe('ApiTokensStore', () => {
   afterEach(() => TestBed.resetTestingModule());
@@ -99,7 +99,7 @@ describe('ApiTokensStore', () => {
   it('clears the old scope immediately when switching project', async () => {
     const h = mount();
     await h.settle();
-    h.projects.set([{ id: 'project-2', name: 'Other', org_id: 'org-1' }]);
+    h.projects.set([project('project-2', 'Other')]);
     await h.settle();
     expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal));
     expect(h.store.selectedProject()).toBe('project-2');
@@ -111,10 +111,43 @@ describe('ApiTokensStore', () => {
     h.fixture.detectChanges();
     await vi.waitFor(() => expect(h.list).toHaveBeenCalledTimes(1));
     h.list.mockResolvedValueOnce({ items: [{ ...ROW, id: 'new-scope' }], next_cursor: null });
-    h.projects.set([{ id: 'project-2', name: 'Other', org_id: 'org-1' }]);
+    h.projects.set([project('project-2', 'Other')]);
     h.fixture.detectChanges();
     first.resolve({ items: [{ ...ROW, id: 'old-scope' }], next_cursor: null });
     await h.settle();
     expect(h.store.rows().map((row) => row.id)).toEqual(['new-scope']);
+  });
+
+  it('restores the project and the page named in the URL', async () => {
+    const h = mount(undefined, {
+      projects: [project('project-1'), project('project-2', 'Other')],
+      query: { project: 'project-2', cursor: 'page-2' },
+    });
+    await h.settle();
+    expect(h.store.selectedProject()).toBe('project-2');
+    expect(h.list).toHaveBeenCalledWith('project-2', 'page-2', expect.any(AbortSignal));
+  });
+
+  it('ignores a cursor that arrives without the project it belongs to', async () => {
+    const h = mount(undefined, { query: { cursor: 'page-2' } });
+    await h.settle();
+    expect(h.store.selectedProject()).toBe('project-1');
+    expect(h.store.cursor()).toBeUndefined();
+    expect(h.list).toHaveBeenCalledWith('project-1', undefined, expect.any(AbortSignal));
+  });
+
+  it('drops the page cursor when the selection moves to another project', async () => {
+    const h = mount(undefined, {
+      projects: [project('project-1'), project('project-2', 'Other')],
+      query: { project: 'project-1', cursor: 'page-2' },
+    });
+    await h.settle();
+    expect(h.store.cursor()).toBe('page-2');
+    h.store.selectProject('project-2');
+    await h.settle();
+    expect(h.store.selectedProject()).toBe('project-2');
+    // The URL still names project-1's page; applying it to project-2 would page the wrong list.
+    expect(h.store.cursor()).toBeUndefined();
+    expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal));
   });
 });

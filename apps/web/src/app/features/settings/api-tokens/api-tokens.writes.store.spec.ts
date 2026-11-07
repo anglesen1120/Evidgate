@@ -53,7 +53,7 @@ describe('API token mutations without credential state', () => {
     expect(h.revoke).not.toHaveBeenCalled();
   });
 
-  it('discards a late create answer after project or write access changes', async () => {
+  it('returns a late create answer after project or write access changes so the dialog can reveal it', async () => {
     const h = mount();
     await h.settle();
     const pending = deferred<typeof CREATED>();
@@ -61,8 +61,55 @@ describe('API token mutations without credential state', () => {
     const request = h.store.create(BODY, createIntent());
     h.permissions.set(new Set(['api_token:read']));
     pending.resolve(CREATED);
-    await expect(request).resolves.toBeNull();
+    await expect(request).resolves.toEqual(CREATED);
     expect(h.store.creating()).toBe(false);
+  });
+
+  it('reads the first page again after a create so a new row is visible', async () => {
+    const h = mount();
+    h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'next-page' });
+    await h.settle();
+    h.store.next();
+    h.list.mockResolvedValueOnce({ items: [{ ...ROW, id: 'row-2' }], next_cursor: null });
+    await h.settle();
+    expect(h.list).toHaveBeenLastCalledWith('project-1', 'next-page', expect.any(AbortSignal));
+    h.list.mockResolvedValueOnce({
+      items: [{ ...ROW, id: 'created-row' }, ROW],
+      next_cursor: null,
+    });
+    await expect(h.store.create(BODY, createIntent())).resolves.toEqual(CREATED);
+    await h.settle();
+    expect(h.store.cursor()).toBeUndefined();
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.store.rows().map((row) => row.id)).toEqual(['created-row', 'row-1']);
+  });
+
+  it('leaves the stale cursor behind on revoke so a successful revoke never shows a read error', async () => {
+    const h = mount();
+    const stale = new ApiRequestError({
+      kind: 'validation',
+      status: 422,
+      code: 'invalid_cursor',
+      message: 'The page cursor is not valid.',
+      requestId: 'cursor-race',
+      retryable: false,
+      retryAfterSeconds: null,
+      details: [{ path: 'cursor', reason: 'invalid' }],
+    });
+    h.list.mockImplementation((_project, cursor) =>
+      cursor
+        ? Promise.reject(stale)
+        : Promise.resolve({ items: [{ ...ROW, status: 'revoked' }], next_cursor: null }),
+    );
+    h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'next-page' });
+    await h.settle();
+    h.store.next();
+    await h.settle();
+    expect(h.store.phase()).toBe('error');
+    await expect(h.store.revoke(ROW.id, createIntent())).resolves.toBe(true);
+    await h.settle();
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
+    expect(h.store.phase()).toBe('success');
   });
 
   it('never optimistically revokes a row, then refreshes authoritative metadata on success', async () => {

@@ -92,6 +92,7 @@ import { retryReadyFor } from './api-token-retry';
               [variant]="'outline'"
               type="button"
               class="min-h-[var(--eg-control-touch)]"
+              data-api-first
               (click)="first()"
             >
               {{ copy.first }}
@@ -103,6 +104,7 @@ import { retryReadyFor } from './api-token-retry';
               [variant]="'outline'"
               type="button"
               class="min-h-[var(--eg-control-touch)]"
+              data-api-next
               (click)="next()"
             >
               {{ copy.next }}
@@ -131,7 +133,7 @@ import { retryReadyFor } from './api-token-retry';
       <app-api-token-revoke-dialog
         [row]="row"
         (dismissed)="revokeSelection.set(null)"
-        (completed)="revoked.set(true)"
+        (completed)="onRevoked()"
       />
     }
   `,
@@ -160,7 +162,7 @@ export class ApiTokensPage {
     const target = event.target;
     if (target instanceof HTMLSelectElement) {
       this.store.selectProject(target.value);
-      this.updateCursor();
+      this.syncQuery();
     }
   }
 
@@ -170,18 +172,30 @@ export class ApiTokensPage {
 
   protected next(): void {
     this.store.next();
-    this.updateCursor(this.store.cursor());
+    this.syncQuery();
   }
 
   protected first(): void {
     this.store.setCursor(undefined);
-    this.updateCursor();
+    this.syncQuery();
   }
 
-  private updateCursor(cursor?: string): void {
+  protected onRevoked(): void {
+    this.revoked.set(true);
+    this.syncQuery();
+  }
+
+  /**
+   * The project is written with the cursor: a cursor alone names a page of an unknown list, so a
+   * shared or restored URL would page through another project's tokens.
+   */
+  private syncQuery(): void {
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { cursor: cursor ?? null },
+      queryParams: {
+        project: this.store.selectedProject(),
+        cursor: this.store.cursor() ?? null,
+      },
       queryParamsHandling: 'merge',
     });
   }

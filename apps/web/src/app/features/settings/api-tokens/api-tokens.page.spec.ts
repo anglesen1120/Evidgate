@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { mount, refusal, ROW, deferred } from './api-tokens.test-support';
+import { mount, refusal, ROW, deferred, project } from './api-tokens.test-support';
 import type { ApiTokenListResponse } from '@evidgate/sdk';
 
 describe('ApiTokensPage states', () => {
@@ -56,5 +56,40 @@ describe('ApiTokensPage states', () => {
     await h.settle();
     expect(h.root.querySelector('app-retry-after')?.textContent).toContain('60');
     expect(h.root.querySelector('app-retry-after button')?.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('writes the selected project with the cleared page so the URL never pairs it with a stale cursor', async () => {
+    const h = mount(undefined, {
+      projects: [project('project-1'), project('project-2', 'Other')],
+      query: { project: 'project-1', cursor: 'page-2' },
+    });
+    await h.settle();
+    const select = h.root.querySelector<HTMLSelectElement>('#api-tokens-project');
+    if (!select) throw new Error('Missing project picker');
+    select.value = 'project-2';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await h.settle();
+    expect(h.navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: { project: 'project-2', cursor: null },
+        queryParamsHandling: 'merge',
+      }),
+    );
+    expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal));
+  });
+
+  it('writes the page cursor together with its project', async () => {
+    const h = mount();
+    h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'next-page' });
+    await h.settle();
+    const next = h.root.querySelector<HTMLButtonElement>('[data-api-next]');
+    if (!next) throw new Error('Missing next-page control');
+    next.click();
+    await h.settle();
+    expect(h.navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({ queryParams: { project: 'project-1', cursor: 'next-page' } }),
+    );
   });
 });

@@ -1,13 +1,15 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { InteractivityChecker } from '@angular/cdk/a11y';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
+import { BehaviorSubject } from 'rxjs';
 import { vi } from 'vitest';
 import type {
   ApiTokenCreatedResponse,
   ApiTokenListResponse,
   ApiTokenView,
   CreateApiTokenRequest,
+  ProjectDto,
 } from '@evidgate/sdk';
 import { ApiTokensService } from '../../../core/data/api-tokens-data.service';
 import { ApiRequestError, type ApiErrorKind } from '../../../core/http/api-error';
@@ -15,6 +17,24 @@ import { SessionStore } from '../../../core/session/session.store';
 import type { Intent } from '../../../core/http/intent';
 import { ApiTokensPage } from './api-tokens.page';
 import { ApiTokensStore } from './api-tokens.store';
+
+/** A session project; only the fields the picker renders vary between fixtures. */
+export function project(id: string, name = 'Storefront'): ProjectDto {
+  return {
+    id,
+    org_id: 'org-1',
+    name,
+    slug: id,
+    status: 'active',
+    default_environment_id: null,
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    version: 1,
+    retention_days: null,
+    monthly_run_quota: null,
+    case_prefix: 'STOR',
+  };
+}
 
 export const ROW: ApiTokenView = {
   id: 'row-1',
@@ -51,11 +71,17 @@ export function refusal(kind: ApiErrorKind, seconds: number | null = null): ApiR
 export function mount(
   answer: () => Promise<ApiTokenListResponse> = () =>
     Promise.resolve({ items: [ROW], next_cursor: null }),
+  options: {
+    query?: Record<string, string>;
+    projects?: readonly ProjectDto[];
+  } = {},
 ) {
   const permissions = signal(new Set(['api_token:read', 'api_token:write', 'run:read']));
   const org = signal({ id: 'org-1' });
-  const projects = signal([{ id: 'project-1', name: 'Storefront', org_id: 'org-1' }]);
+  const projects = signal<ProjectDto[]>([...(options.projects ?? [project('project-1')])]);
   const currentProject = signal(projects()[0]);
+  const query = new BehaviorSubject(convertToParamMap(options.query ?? {}));
+  const navigate = vi.fn<Router['navigate']>().mockResolvedValue(true);
   const endHandlers = new Set<() => void>();
   const session = {
     currentOrg: org,
@@ -71,7 +97,14 @@ export function mount(
       };
     },
   };
-  const list = vi.fn(answer);
+  const list =
+    vi.fn<
+      (
+        project: string,
+        cursor: string | undefined,
+        abort: AbortSignal,
+      ) => Promise<ApiTokenListResponse>
+    >(answer);
   const create = vi
     .fn<
       (
@@ -89,11 +122,15 @@ export function mount(
     providers: [
       provideZonelessChangeDetection(),
       provideRouter([]),
+      // The page and its store read the URL through one stub so a spec can seed a deep link.
+      { provide: ActivatedRoute, useValue: { queryParamMap: query } },
       { provide: SessionStore, useValue: session },
       { provide: ApiTokensService, useValue: { list, create, revoke } },
     ],
   });
   vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
+  const router = TestBed.inject(Router);
+  vi.spyOn(router, 'navigate').mockImplementation((commands, extras) => navigate(commands, extras));
   const fixture = TestBed.createComponent(ApiTokensPage);
   const store = fixture.debugElement.injector.get(ApiTokensStore);
   const root = fixture.nativeElement as HTMLElement;
@@ -120,6 +157,8 @@ export function mount(
     permissions,
     projects,
     org,
+    query,
+    navigate,
     list,
     create,
     revoke,

@@ -3051,7 +3051,7 @@
       <trans-unit id="settings.api-tokens.pages" datatype="html"><source>API token pages</source></trans-unit>
       <trans-unit id="settings.api-tokens.create-name" datatype="html"><source>Token name</source></trans-unit>
       <trans-unit id="settings.api-tokens.create-expires" datatype="html"><source>Expiry (UTC)</source></trans-unit>
-      <trans-unit id="settings.api-tokens.expiry-required" datatype="html"><source>Expiry is required. The server enforces the maximum lifetime.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.expiry-required" datatype="html"><source>Enter an expiry in the future. The server enforces the maximum lifetime.</source></trans-unit>
       <trans-unit id="settings.api-tokens.create-permissions" datatype="html"><source>Choose at least one permission</source></trans-unit>
       <trans-unit id="settings.api-tokens.permission-hint" datatype="html"><source>Only your granted, non-administrative permissions are offered. The server decides actual access.</source></trans-unit>
       <trans-unit id="settings.api-tokens.submitting" datatype="html"><source>Submitting…</source></trans-unit>

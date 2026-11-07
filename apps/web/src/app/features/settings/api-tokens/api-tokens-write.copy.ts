@@ -1,7 +1,7 @@
 export const API_TOKENS_WRITE_COPY = {
   name: $localize`:@@settings.api-tokens.create-name:Token name`,
   expires: $localize`:@@settings.api-tokens.create-expires:Expiry (UTC)`,
-  required: $localize`:@@settings.api-tokens.expiry-required:Expiry is required. The server enforces the maximum lifetime.`,
+  required: $localize`:@@settings.api-tokens.expiry-required:Enter an expiry in the future. The server enforces the maximum lifetime.`,
   permissions: $localize`:@@settings.api-tokens.create-permissions:Choose at least one permission`,
   permissionHint: $localize`:@@settings.api-tokens.permission-hint:Only your granted, non-administrative permissions are offered. The server decides actual access.`,
   create: $localize`:@@settings.api-tokens.create:Create token`,

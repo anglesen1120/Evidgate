@@ -86,4 +86,24 @@ describe('ApiTokenListComponent', () => {
     fixture.detectChanges();
     expect(root.querySelector('[data-api-revoke]')).toBeNull();
   });
+
+  it('hides the action cell on mobile where every body cell becomes a block', () => {
+    TestBed.configureTestingModule({
+      imports: [ApiTokenListComponent],
+      providers: [provideZonelessChangeDetection()],
+    });
+    const fixture = TestBed.createComponent(ApiTokenListComponent);
+    fixture.componentRef.setInput('rows', [ROW]);
+    fixture.componentRef.setInput('canWrite', true);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+
+    // The table turns every body cell into a block below `md`, which outranks a plain `hidden`; the
+    // action cell opts out with the important mobile hide, so revoking stays a desktop affordance
+    // and the phone view shows supplied metadata only.
+    const cell = root.querySelector('[data-api-revoke]')?.closest('td');
+    expect(cell?.classList.contains('max-md:hidden!')).toBe(true);
+    expect(cell?.classList.contains('md:table-cell')).toBe(true);
+    expect(cell?.classList.contains('hidden')).toBe(false);
+  });
 });

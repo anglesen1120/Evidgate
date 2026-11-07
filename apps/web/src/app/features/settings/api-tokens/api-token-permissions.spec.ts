@@ -1,7 +1,11 @@
 import catalogue from '../../../../../../../contracts/permissions.json';
-import { tokenPermissionChoices } from './api-token-permissions';
+import { TOKEN_DENIED_PATTERNS, tokenPermissionChoices } from './api-token-permissions';
 
 describe('API token permission choices', () => {
+  it('ships exactly the catalogue deny set, so a contract change cannot drift', () => {
+    expect(TOKEN_DENIED_PATTERNS).toEqual(catalogue.token_denied);
+  });
+
   it('uses the canonical administrative deny patterns and offers a sorted caller-held subset', () => {
     const codes = new Set(catalogue.permissions.map((row) => row.code));
     const choices = tokenPermissionChoices(codes, () => true);

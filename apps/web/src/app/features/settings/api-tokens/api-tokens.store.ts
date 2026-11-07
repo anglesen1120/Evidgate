@@ -57,12 +57,17 @@ export const ApiTokensStore = signalStore(
       org: session.currentOrg()?.id,
       projects: session.projects(),
       current: session.currentProject()?.id,
+      requested: query?.()?.get('project') ?? null,
     }));
     const selectedProject = linkedSignal({
       source: selection,
       computation: (source, previous): string | null => {
         const preferred =
-          previous && previous.source.org === source.org ? previous.value : source.current;
+          source.requested && source.requested !== previous?.source.requested
+            ? source.requested
+            : previous && previous.source.org === source.org
+              ? previous.value
+              : (source.requested ?? source.current);
         return (
           source.projects.find((row) => row.id === preferred)?.id ?? source.projects[0]?.id ?? null
         );
@@ -81,9 +86,13 @@ export const ApiTokensStore = signalStore(
       { equal: (a, b) => a?.org === b?.org && a?.project === b?.project },
     );
     const cursor = linkedSignal({
-      source: () => ({ scope: scope(), query: query?.()?.get('cursor') ?? undefined }),
-      computation: (source, previous): string | undefined =>
-        previous && previous.source.scope !== source.scope ? undefined : source.query,
+      source: () => ({
+        scope: scope(),
+        project: query?.()?.get('project'),
+        cursor: query?.()?.get('cursor') ?? undefined,
+      }),
+      computation: (source): string | undefined =>
+        source.project === source.scope?.project ? source.cursor : undefined,
     });
     const pageResource = resource({
       params: () => {
@@ -111,13 +120,14 @@ export const ApiTokensStore = signalStore(
         ? !!store.pageResource.value().next_cursor
         : false,
     ),
-    createOpen: computed(
-      () => store.canWrite() && !!store.scope() && store.createScope() === store.scope(),
-    ),
+    // The response belongs to the open dialog, even if project selection or grants change.
+    createOpen: computed(() => store.createScope() !== null),
     creating: computed(() => store.createAttempt().phase === 'submitting'),
     revoking: computed(() => store.revokeAttempt().phase === 'submitting'),
+    // The failure belongs to the dialog's scope, so a selection that moves under an open dialog
+    // cannot hide the server message from the person who submitted it.
     createError: computed(() =>
-      store.createAttempt().scope === store.scope() ? store.createAttempt().error : null,
+      store.createAttempt().scope === store.createScope() ? store.createAttempt().error : null,
     ),
     revokeError: computed(() =>
       store.revokeAttempt().scope === store.scope() ? store.revokeAttempt().error : null,
@@ -151,6 +161,12 @@ export const ApiTokensStore = signalStore(
     reload(): void {
       store.pageResource.reload();
     },
+    // A mutation changes the first page, so the next read starts there: an old cursor can name a
+    // page the server no longer accepts once a row moves.
+    reloadFirst(): void {
+      if (store.cursor() === undefined) store.pageResource.reload();
+      else store.cursor.set(undefined);
+    },
     openCreate(): void {
       const scope = store.scope();
       if (scope && store.canWrite()) patchState(store, { createScope: scope });
@@ -167,18 +183,20 @@ export const ApiTokensStore = signalStore(
       body: CreateApiTokenRequest,
       intent: Intent,
     ): Promise<ApiTokenCreatedResponse | null> {
-      const scope = store.scope();
+      // The dialog opened for one scope and owns the only copy of the secret it receives, so the
+      // token is minted where the dialog was opened, not wherever the selection moved since.
+      const scope = store.createScope() ?? store.scope();
       if (!scope || !store.canWrite() || store.creating() || store.revoking()) return null;
       patchState(store, { createAttempt: { scope, phase: 'submitting', error: null } });
       try {
         const answer = await store.data.create(scope.project, body, intent);
-        if (scope !== store.scope() || !store.canWrite()) return null;
-        store.pageResource.reload();
+        if (scope === store.scope()) store.reloadFirst();
         return answer;
       } catch (error) {
         if (!isApiRequestError(error)) throw error;
-        if (scope === store.scope())
-          patchState(store, { createAttempt: { scope, phase: 'failed', error: error.error } });
+        // `createError` reads this attempt only while the dialog that opened for `scope` is up, so
+        // the refusal reaches the person who submitted it even if the selection moved meanwhile.
+        patchState(store, { createAttempt: { scope, phase: 'failed', error: error.error } });
         return null;
       } finally {
         if (store.createAttempt().phase === 'submitting')
@@ -198,14 +216,14 @@ export const ApiTokensStore = signalStore(
         await store.data.revoke(id, intent);
         if (scope !== store.scope() || !store.canWrite()) return false;
         // The DELETE is bodiless. Re-read metadata rather than inventing a response status.
-        store.pageResource.reload();
+        store.reloadFirst();
         return true;
       } catch (error) {
         if (!isApiRequestError(error)) throw error;
         if (scope === store.scope()) {
           patchState(store, { revokeAttempt: { scope, phase: 'failed', error: error.error } });
           if (error.error.kind === 'not_found' || error.error.kind === 'conflict')
-            store.pageResource.reload();
+            store.reloadFirst();
         }
         return false;
       } finally {

@@ -3231,7 +3231,7 @@
       <trans-unit id="settings.api-tokens.pages" datatype="html"><source>API token pages</source><target>Các trang mã truy cập API</target></trans-unit>
       <trans-unit id="settings.api-tokens.create-name" datatype="html"><source>Token name</source><target>Tên mã truy cập</target></trans-unit>
       <trans-unit id="settings.api-tokens.create-expires" datatype="html"><source>Expiry (UTC)</source><target>Thời điểm hết hạn (UTC)</target></trans-unit>
-      <trans-unit id="settings.api-tokens.expiry-required" datatype="html"><source>Expiry is required. The server enforces the maximum lifetime.</source><target>Bắt buộc có thời hạn. Máy chủ áp dụng thời hạn tối đa.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.expiry-required" datatype="html"><source>Enter an expiry in the future. The server enforces the maximum lifetime.</source><target>Nhập thời hạn trong tương lai. Máy chủ áp dụng thời hạn tối đa.</target></trans-unit>
       <trans-unit id="settings.api-tokens.create-permissions" datatype="html"><source>Choose at least one permission</source><target>Chọn ít nhất một quyền</target></trans-unit>
       <trans-unit id="settings.api-tokens.permission-hint" datatype="html"><source>Only your granted, non-administrative permissions are offered. The server decides actual access.</source><target>Chỉ hiển thị các quyền bạn đang có, không bao gồm quyền quản trị. Máy chủ quyết định quyền truy cập thực tế.</target></trans-unit>
       <trans-unit id="settings.api-tokens.submitting" datatype="html"><source>Submitting…</source><target>Đang gửi…</target></trans-unit>
