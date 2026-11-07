@@ -15,7 +15,7 @@ using Mediator;
 namespace Evidgate.Modules.Evidence.Application.Reports;
 
 /// <summary>
-/// One stored report read back against the events its parse wrote (<c>GET /v1/runs/{r}/reports/{report_id}/comparison</c>):
+/// One stored report read back against the events its own producer wrote (<c>GET /v1/runs/{r}/reports/{report_id}/comparison</c>):
 /// the report's declared and observed counters, the discrepancy codes that explain the difference, and one
 /// sequence-ordered page of the report's cases.
 /// </summary>
@@ -126,7 +126,7 @@ internal sealed class GetReportComparisonHandler(
             return [];
         }
 
-        var producerId = RawReportProducer.IdFor(report.ArtifactId);
+        var producerId = ProducerId(report);
 
         return cursorSequence is { } sequence
             ? await db.QueryAsync<ReportComparisonCaseRow>(
@@ -140,6 +140,17 @@ internal sealed class GetReportComparisonHandler(
                     cancellationToken)
                 .ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// The producer whose events this row's cases are. A reprocess writes under the synthetic slot of the request whose
+    /// id its row carries, so the row compares against its own release's events and never against the ones the original
+    /// report's parse holds on the same artifact; every other row keeps the artifact-scoped parse identity.
+    /// </summary>
+    /// <param name="report">The stored report row.</param>
+    private static string ProducerId(ReportComparisonRow report) =>
+        report.ReprocessId is { } reprocessId
+            ? ReprocessReportProducer.IdFor(reprocessId)
+            : RawReportProducer.IdFor(report.ArtifactId);
 
     /// <summary>
     /// The report's effective discrepancy codes, in the canonical order: the stored code words, each once as the query
@@ -162,6 +173,9 @@ internal sealed class GetReportComparisonHandler(
         public Guid RunId { get; set; }
 
         public Guid ArtifactId { get; set; }
+
+        /// <summary>The request row a reprocess wrote this report under, or null for a report an ingest route accepted.</summary>
+        public Guid? ReprocessId { get; set; }
 
         public Guid ProjectId { get; set; }
 

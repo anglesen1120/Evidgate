@@ -3,10 +3,12 @@ using System.Numerics;
 namespace Evidgate.Modules.Evidence.Application;
 
 /// <summary>
-/// The order a reprocess asks a parser release to match: a version is a run of dotted decimal segments compared
-/// segment by segment, and a shorter version is the longer one padded with zeros (<c>1.0</c> equals <c>1.0.0</c>).
-/// Only a strictly greater release is a reprocess — the same release wrote the stored row, and an older one would
-/// replace a newer report with what that release knew at the time.
+/// The one order a parser release is placed by, shared by the registry that resolves a producer kind to a release and
+/// the reprocess route that compares one against a stored report: a version is a run of dotted decimal segments
+/// compared segment by segment, and a shorter version is the longer one padded with zeros (<c>1.0</c> equals
+/// <c>1.0.0</c>), because text order would put <c>1.10</c> behind <c>1.9</c>. Only a strictly greater release is a
+/// reprocess — the same release wrote the stored row, and an older one would replace a newer report with what that
+/// release knew at the time.
 /// <para>
 /// A version with a non-numeric segment (<c>1.0.0-rc.1</c>, <c>1.0.0+build</c>, an empty segment) is unorderable:
 /// pre-release and build metadata have their own precedence rules, and guessing one here would let a release the
@@ -25,28 +27,45 @@ internal static class ParserVersionOrder
     /// </summary>
     /// <param name="requested">The version the caller asked to reprocess with.</param>
     /// <param name="source">The version of the report being reprocessed.</param>
-    internal static bool IsNewer(string? requested, string? source)
+    internal static bool IsNewer(string? requested, string? source) => Compare(requested, source) is > 0;
+
+    /// <summary>
+    /// The dotted numeric order itself: negative when <paramref name="left"/> is the older release, zero when both
+    /// name the same release (<c>1.10</c> equals <c>1.10.0</c>), positive when it is the newer — and
+    /// <see langword="null"/> when either side is unorderable, because a caller must decide what an unplaceable
+    /// release means instead of receiving a guessed order.
+    /// </summary>
+    /// <param name="left">One version.</param>
+    /// <param name="right">The version to order it against.</param>
+    internal static int? Compare(string? left, string? right)
     {
-        if (!TryParse(requested, out var requestedSegments) || !TryParse(source, out var sourceSegments))
+        if (!TryParse(left, out var leftSegments) || !TryParse(right, out var rightSegments))
         {
-            return false;
+            return null;
         }
 
-        var length = Math.Max(requestedSegments.Length, sourceSegments.Length);
+        var length = Math.Max(leftSegments.Length, rightSegments.Length);
 
         for (var index = 0; index < length; index++)
         {
-            var left = index < requestedSegments.Length ? requestedSegments[index] : BigInteger.Zero;
-            var right = index < sourceSegments.Length ? sourceSegments[index] : BigInteger.Zero;
+            var leftSegment = index < leftSegments.Length ? leftSegments[index] : BigInteger.Zero;
+            var rightSegment = index < rightSegments.Length ? rightSegments[index] : BigInteger.Zero;
 
-            if (left != right)
+            if (leftSegment != rightSegment)
             {
-                return left > right;
+                return leftSegment > rightSegment ? 1 : -1;
             }
         }
 
-        return false;
+        return 0;
     }
+
+    /// <summary>
+    /// True when the version splits into numeric segments, so the dotted order can place it at all. A caller that
+    /// ranks releases asks this before comparing: an unorderable label is never given a position among them.
+    /// </summary>
+    /// <param name="version">The version to inspect.</param>
+    internal static bool IsOrderable(string? version) => TryParse(version, out _);
 
     /// <summary>
     /// Splits a version into its numeric segments. A null, empty, blank or segment-less version, an empty segment

@@ -286,7 +286,7 @@ internal sealed partial class ParseRawReportHandler
         CancellationToken cancellationToken)
     {
         var shardIndex = await db
-            .ScalarAsync<int?>(NextShardIndexSql, new { org_id = orgId, run_id = payload.RunId }, cancellationToken)
+            .ScalarAsync<int?>(RawReportWorkerSql.NextShardIndex, new { org_id = orgId, run_id = payload.RunId }, cancellationToken)
             .ConfigureAwait(false);
 
         if (shardIndex is null or > MaxShardIndex)
@@ -301,7 +301,7 @@ internal sealed partial class ParseRawReportHandler
             .ConfigureAwait(false);
 
         var insertedIds = (await db.QueryAsync<Guid>(
-                InsertEventsSql,
+                RawReportWorkerSql.InsertEvents,
                 new
                 {
                     org_id = orgId,
@@ -345,7 +345,7 @@ internal sealed partial class ParseRawReportHandler
         CancellationToken cancellationToken)
     {
         await db.ExecuteAsync(
-                InsertSlotSql,
+                RawReportWorkerSql.InsertSlot,
                 new
                 {
                     id = Guid.CreateVersion7(),
@@ -392,7 +392,7 @@ internal sealed partial class ParseRawReportHandler
         }
 
         await db.ExecuteAsync(
-                UpdateSlotSql,
+                RawReportWorkerSql.UpdateSlot,
                 new { org_id = orgId, run_id = payload.RunId, producer_id = producerId, last_sequence = events.MaxSequence },
                 cancellationToken)
             .ConfigureAwait(false);
@@ -420,7 +420,7 @@ internal sealed partial class ParseRawReportHandler
         CancellationToken cancellationToken)
     {
         var stored = (await db.QueryAsync<StoredEventRow>(
-                StoredEventHashesSql,
+                RawReportWorkerSql.StoredEventHashes,
                 new
                 {
                     org_id = orgId,

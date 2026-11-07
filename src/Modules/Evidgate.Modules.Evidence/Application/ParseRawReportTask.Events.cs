@@ -152,66 +152,6 @@ internal sealed partial class ParseRawReportHandler
     /// </summary>
     private const string RunGateSql = RunFactsSql + "\nfor no key update of r";
 
-    /// <summary>The next free shard index of the run (1 when the run has no slot yet).</summary>
-    private const string NextShardIndexSql = """
-        select coalesce(max(shard_index), 0) + 1
-          from public.producer_slot
-         where org_id = @org_id
-           and run_id = @run_id
-        """;
-
-    /// <summary>
-    /// The synthetic producer's slot, written closed and declared in one statement: no producer finalizes a report, so
-    /// the reconciler must see this shard's declaration at once. A replay's existing row answers the conflict and stays
-    /// as it is.
-    /// </summary>
-    private const string InsertSlotSql = """
-        insert into public.producer_slot (
-            id, org_id, run_id, shard_index, producer_id,
-            bound_token_jti, last_sequence, closed_at, declared_last_sequence, declared_count)
-        values (
-            @id, @org_id, @run_id, @shard_index, @producer_id,
-            @bound_token_jti, @last_sequence, now(), @declared_last_sequence, @declared_count)
-        on conflict do nothing
-        """;
-
-    /// <summary>One statement for the whole event set, answering the ids it actually inserted (the replay filter).</summary>
-    private const string InsertEventsSql = """
-        insert into public.event (
-            id, org_id, run_id, event_id, producer_id, sequence, job_id, epoch, execution_key,
-            attempt_no, type, raw_status, normalized_status, duration_ms, occurred_at, payload_hash,
-            payload, artifact_ids, after_cancel, late)
-        select
-            x.id, @org_id, @run_id, x.event_id, x.producer_id, x.sequence, null, null, x.execution_key,
-            1, 'test.finished', x.raw_status, x.normalized_status, x.duration_ms, null, x.payload_hash,
-            x.payload::jsonb, x.artifact_ids, @after_cancel, @late
-        from jsonb_to_recordset(@events::jsonb) as x (
-            id uuid, event_id uuid, producer_id text, sequence bigint, execution_key text, raw_status text,
-            normalized_status text, duration_ms bigint, payload_hash text, payload text, artifact_ids uuid[])
-        on conflict do nothing
-        returning event_id
-        """;
-
-    /// <summary>The stored hash of every row this attempt could not insert, by its deterministic identity.</summary>
-    private const string StoredEventHashesSql = """
-        select e.event_id as "EventId",
-               e.payload_hash as "PayloadHash"
-          from jsonb_to_recordset(@events::jsonb) as x (event_id uuid)
-          join public.event e
-            on e.org_id = @org_id
-           and e.run_id = @run_id
-           and e.event_id = x.event_id
-        """;
-
-    /// <summary>The synthetic slot's high-water mark (the column grant adds for the ingest path).</summary>
-    private const string UpdateSlotSql = """
-        update public.producer_slot
-           set last_sequence = greatest(last_sequence, @last_sequence)
-         where org_id = @org_id
-           and run_id = @run_id
-           and producer_id = @producer_id
-        """;
-
     /// <summary>What the read scope resolved before the fetch: everything the parse needs and no live connection.</summary>
     /// <param name="ObjectKey">The artifact's stored key.</param>
     /// <param name="MaxBytes">The effective byte cap (the kind policy and the profile's ceiling, whichever is lower).</param>
