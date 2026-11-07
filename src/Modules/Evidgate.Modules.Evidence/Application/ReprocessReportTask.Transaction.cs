@@ -229,7 +229,7 @@ internal sealed partial class ReprocessReportHandler
         CancellationToken cancellationToken)
     {
         var shardIndex = await db
-            .ScalarAsync<int?>(NextShardIndexSql, new { org_id = orgId, run_id = prepared.RunId }, cancellationToken)
+            .ScalarAsync<int?>(RawReportWorkerSql.NextShardIndex, new { org_id = orgId, run_id = prepared.RunId }, cancellationToken)
             .ConfigureAwait(false);
 
         if (shardIndex is null or > MaxShardIndex)
@@ -243,7 +243,7 @@ internal sealed partial class ReprocessReportHandler
         await InsertSlotAsync(orgId, prepared, shardIndex.Value, events, cancellationToken).ConfigureAwait(false);
 
         var insertedIds = (await db.QueryAsync<Guid>(
-                InsertEventsSql,
+                RawReportWorkerSql.InsertEvents,
                 new
                 {
                     org_id = orgId,
@@ -285,7 +285,7 @@ internal sealed partial class ReprocessReportHandler
         CancellationToken cancellationToken)
     {
         await db.ExecuteAsync(
-                InsertSlotSql,
+                RawReportWorkerSql.InsertSlot,
                 new
                 {
                     id = Guid.CreateVersion7(),
@@ -321,7 +321,7 @@ internal sealed partial class ReprocessReportHandler
         CancellationToken cancellationToken)
     {
         var stored = (await db.QueryAsync<StoredEventRow>(
-                StoredEventHashesSql,
+                RawReportWorkerSql.StoredEventHashes,
                 new
                 {
                     org_id = orgId,

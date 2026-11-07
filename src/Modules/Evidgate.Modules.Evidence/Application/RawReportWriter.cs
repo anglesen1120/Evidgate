@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
+using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Evidgate.Modules.Evidence.Application;
@@ -77,36 +78,6 @@ internal sealed partial class ParseRawReportHandler
         [property: JsonPropertyName("count")] int Count);
 
     /// <summary>
-    /// One row per (artifact, parser release), or per (artifact, producer kind) when no parser was resolved. A replay
-    /// and a duplicate delivery conflict on that key and write nothing; the table refuses every update.
-    /// </summary>
-    private const string InsertRawReportSql = """
-        insert into public.raw_report (
-            id, org_id, run_id, artifact_id, producer_kind, parser_id, parser_version,
-            outcome, reason, declared_tests, declared_failures, declared_errors, declared_skipped,
-            observed_tests, observed_failures, observed_errors, observed_skipped, discrepancies)
-        values (
-            @id, @org_id, @run_id, @artifact_id, @producer_kind, @parser_id::text, @parser_version::text,
-            @outcome, @reason::text, @declared_tests::integer, @declared_failures::integer,
-            @declared_errors::integer, @declared_skipped::integer,
-            @observed_tests, @observed_failures, @observed_errors, @observed_skipped, @discrepancies::jsonb)
-        on conflict do nothing
-        """;
-
-    /// <summary>
-    /// The stored outcome of the row that already holds this attempt's (artifact, parser release) key. It decides whether
-    /// a parsed attempt may commit after its own insert wrote nothing.
-    /// </summary>
-    private const string StoredOutcomeSql = """
-        select outcome
-        from public.raw_report
-        where org_id = @org_id
-          and artifact_id = @artifact_id
-          and parser_id = @parser_id::text
-          and parser_version = @parser_version::text
-        """;
-
-    /// <summary>
     /// The one insert of a <c>raw_report</c> row. A parsed report's row runs inside the caller's write transaction, after
     /// the events, the attempts and the slot have succeeded, so a rollback or a skipped attempt leaves no row behind; a
     /// refusal's row runs in its own short transaction.
@@ -128,7 +99,7 @@ internal sealed partial class ParseRawReportHandler
     {
         var inserted = await db
             .ExecuteAsync(
-                InsertRawReportSql,
+                RawReportWorkerSql.InsertRawReport,
                 RawReportParameters(orgId, payload, report, rawReportId),
                 cancellationToken)
             .ConfigureAwait(false);
@@ -158,7 +129,7 @@ internal sealed partial class ParseRawReportHandler
 
         return await db
             .ScalarAsync<string?>(
-                StoredOutcomeSql,
+                RawReportWorkerSql.StoredOutcome,
                 new
                 {
                     org_id = orgId,
