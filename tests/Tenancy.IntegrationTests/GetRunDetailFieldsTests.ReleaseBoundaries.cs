@@ -62,6 +62,7 @@ public sealed partial class GetRunDetailFieldsTests
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var releaseId = await CreateReleaseAsync(world, "reader-release", "web");
         var runId = await CreateBoundRunAsync(world, releaseId);
+        (await CancelRunTestData.CancelAsync(world, runId)).Status.ShouldBe(HttpStatusCode.Accepted);
         await SeedEventsAsync(world, runId, flagged: 1, unflagged: 0);
         var decisionControl = await world.Client.SendAsync(
             HttpMethod.Get, $"/v1/runs/{runId}/decision", world.Admin);
