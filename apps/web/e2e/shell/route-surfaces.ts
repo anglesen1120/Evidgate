@@ -37,11 +37,13 @@ function source(file: string): ts.SourceFile {
   return created;
 }
 
+/** One property's initializer; a quoted key (`'quota-retention': …`) matches its own text. */
 function property(node: ts.Node, name: string): ts.Expression | undefined {
   if (!ts.isObjectLiteralExpression(node)) return undefined;
   return node.properties.find(
     (member): member is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(member) && member.name.getText() === name,
+      ts.isPropertyAssignment(member) &&
+      (ts.isStringLiteralLike(member.name) ? member.name.text : member.name.getText()) === name,
   )?.initializer;
 }
 

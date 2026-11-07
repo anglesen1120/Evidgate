@@ -21,6 +21,7 @@ import type { Client } from '@evidgate/sdk';
 import { ApiRequestError } from './api-error';
 import { API_CLIENT } from './api-client';
 import { mapApiError, mapNetworkError, mapTimeoutError } from './error-mapper';
+import { QuotaExceededRelay } from './quota-exceeded-relay';
 import { UnauthenticatedRelay } from './unauthenticated-relay';
 
 /**
@@ -44,6 +45,15 @@ export type SdkResult = {
  * `unknown`.
  */
 export type SdkSuccess<TResult extends SdkResult> = Exclude<TResult['data'], undefined>;
+
+/**
+ * Per-call switches that do not change the classification. `reportQuota` is `false` for the
+ * usage-summary read itself: its own refusal must not ask for the reload the refusal triggers,
+ * or a failing read would keep asking for the next one.
+ */
+export interface CallOptions {
+  readonly reportQuota?: boolean;
+}
 
 /**
  * True for a cancellation, on either path one can arrive by: the adapter rejects with a
@@ -97,6 +107,13 @@ export class ApiGateway {
   private readonly unauthenticated = inject(UnauthenticatedRelay);
 
   /**
+   * The quota hook: an operation refused as `429 quota_exceeded` is reported here before the
+   * refusal reaches the caller, so `QuotaStore` refreshes the counters once for every write the
+   * server turned away. Registered handlers hold no reference to the gateway.
+   */
+  private readonly quotaExceeded = inject(QuotaExceededRelay);
+
+  /**
    * Runs one SDK operation and resolves its 2xx body.
    *
    * It is exactly {@link ApiGateway.callWithResponse} without the response: the body when the
@@ -107,8 +124,9 @@ export class ApiGateway {
    */
   async call<TResult extends SdkResult>(
     operation: (client: Client) => Promise<TResult>,
+    options: CallOptions = {},
   ): Promise<SdkSuccess<TResult>> {
-    const { data } = await this.callWithResponse(operation);
+    const { data } = await this.callWithResponse(operation, options);
     return data;
   }
 
@@ -143,6 +161,7 @@ export class ApiGateway {
    */
   async callWithResponse<TResult extends SdkResult>(
     operation: (client: Client) => Promise<TResult>,
+    options: CallOptions = {},
   ): Promise<{ data: SdkSuccess<TResult>; status: number; headers: Headers }> {
     let result: TResult;
     try {
@@ -202,6 +221,16 @@ export class ApiGateway {
       // any read can be the first one to notice an expired session.
       if (refusal.error.kind === 'unauthenticated') {
         this.unauthenticated.notify(null);
+      }
+      // A write refused as over quota is the moment the counters the badge shows are stale. The
+      // summary read opts out (its own refusal must not ask for the reload it triggers), and a
+      // `rate_limited` burst keeps its own code, so only a real quota refusal reports.
+      if (
+        options.reportQuota !== false &&
+        refusal.error.status === 429 &&
+        refusal.error.code === 'quota_exceeded'
+      ) {
+        this.quotaExceeded.notify();
       }
       throw refusal;
     }

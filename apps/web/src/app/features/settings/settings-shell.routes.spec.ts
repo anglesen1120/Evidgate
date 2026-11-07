@@ -24,6 +24,7 @@ import { AuditPage } from './audit/audit.page';
 import { MembersPage } from './members/members.page';
 import { PolicyPage } from './policy/policy.page';
 import { SecretsPage } from './secrets/secrets.page';
+import { QuotaPanelComponent } from './quota-retention/quota-panel.component';
 import { SettingsNoTabsPage } from './settings-no-tabs.page';
 import { SettingsShellPage } from './settings-shell.page';
 import { SettingsTabPlaceholderPage } from './settings-tab-placeholder.page';
@@ -89,6 +90,7 @@ const PAGE_STUBS = new Map<unknown, Type<unknown>>([
   [AuditPage, SettingsTabStub],
   [SecretsPage, SettingsTabStub],
   [PolicyPage, SettingsTabStub],
+  [QuotaPanelComponent, SettingsTabStub],
 ]);
 
 /** The real shell table with only its page components swapped. */
@@ -156,19 +158,22 @@ function refusedTabs(codes: ReadonlySet<string>): readonly string[] {
 }
 
 describe('Settings shell route table (09.7.1-T1.2)', () => {
-  it('mounts delivered members, audit, policy and G2 secrets bodies and keeps other tabs as placeholders', async () => {
+  it('mounts delivered settings bodies and keeps other tabs as placeholders', async () => {
     const tabs = shellRoutes[0]?.children?.filter((route) => route.data?.['settingsTabId']);
     expect(tabs?.find((route) => route.path === 'members')?.component).toBe(MembersPage);
     expect(tabs?.find((route) => route.path === 'audit')?.component).toBe(AuditPage);
     expect(tabs?.find((route) => route.path === 'secrets')?.component).toBe(SecretsPage);
     expect(tabs?.find((route) => route.path === 'policy')?.component).toBe(PolicyPage);
+    expect(tabs?.find((route) => route.path === 'quota-retention')?.component).toBe(
+      QuotaPanelComponent,
+    );
     // Delivered bodies are independent of phase visibility: Secrets is G2 and Policy is G4, so
     // both are hidden in the G1 build even though their bodies exist.
     const delivered = tabs?.filter((route) => route.component !== SettingsTabPlaceholderPage);
     expect(delivered?.map((route) => route.path)).toEqual(
-      SETTINGS_TABS.filter((tab) => ['members', 'audit', 'secrets', 'policy'].includes(tab.id)).map(
-        (tab) => tab.segment,
-      ),
+      SETTINGS_TABS.filter((tab) =>
+        ['members', 'audit', 'secrets', 'policy', 'quota-retention'].includes(tab.id),
+      ).map((tab) => tab.segment),
     );
     const harness = await setUp(new Set(['membership:read']));
     await harness.navigateByUrl('/orgs/o1/settings/members');
@@ -176,11 +181,10 @@ describe('Settings shell route table (09.7.1-T1.2)', () => {
       document.querySelector('[data-settings-tab-body]')?.getAttribute('data-settings-tab-body'),
     ).toBe('members');
   });
-  it('renders the placeholder of a tab the caller may use, with its id in the route data', async () => {
-    // Quota & Retention is G1 and has no delivered body yet, so it still mounts the placeholder;
-    // Members, Audit, Secrets and Policy have real pages (asserted above, and their own specs
-    // cover the bodies).
-    const harness = await setUp(new Set(['project:read']));
+  it('renders the body of a tab the caller may use, with its id in the route data', async () => {
+    // Every G1 tab is delivered now; the body stub stands in for QuotaPanelComponent, whose own
+    // spec covers the panel. The guard is what this case is about: `usage:read` opens the tab.
+    const harness = await setUp(new Set(['usage:read']));
 
     await harness.navigateByUrl('/orgs/o1/settings/quota-retention');
 

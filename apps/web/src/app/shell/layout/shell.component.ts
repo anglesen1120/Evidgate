@@ -28,6 +28,7 @@ import { SessionStore } from '../../core/session/session.store';
 import { NavViewService } from '../nav/nav-view';
 import { NavComponent } from './nav.component';
 import { ScopeSwitcherComponent } from './scope-switcher.component';
+import { QuotaBadgeComponent } from './quota-badge.component';
 import { ShellIconComponent } from './shell-icon.component';
 import { ThemeService } from './theme.service';
 import { trackTopbarHeight } from './topbar-height';
@@ -40,6 +41,7 @@ import { trackTopbarHeight } from './topbar-height';
     NavComponent,
     ScopeSwitcherComponent,
     ShellIconComponent,
+    QuotaBadgeComponent,
     HlmButton,
     HlmCard,
     CdkTrapFocus,
