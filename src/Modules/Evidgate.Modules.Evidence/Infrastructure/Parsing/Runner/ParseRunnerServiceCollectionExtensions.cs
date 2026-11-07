@@ -59,6 +59,10 @@ internal static class ParseRunnerServiceCollectionExtensions
             // The raw-report mapping parses the same untrusted XML, so it travels with the runner for the same reason:
             // the Api can neither parse a report nor claim a `raw_report_parse` row.
             services.AddTransactionlessTaskHandler<ParseRawReportPayload, ParseRawReportHandler>();
+
+            // A reprocess re-parses the same bytes with the same child, so it is composed here too: neither the Api nor
+            // a host without a process-spawn capability can claim or run an `ingest.reprocess_report` row.
+            services.AddTransactionlessTaskHandler<ReprocessReportPayload, ReprocessReportHandler>();
         }
 
         return services;

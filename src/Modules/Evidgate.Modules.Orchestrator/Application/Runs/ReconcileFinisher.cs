@@ -40,8 +40,9 @@ internal sealed record RevisionSource(Guid ProjectId, string? ManifestHash);
 /// <para>
 /// It never opens, commits or rolls back a transaction (00 §5.5 C3): the caller's rollback undoes the revision, the
 /// pointer move, the outbox row and the state change together, so a failed attempt leaves no half-written revision and a
-/// retry starts from the state it began in. Two settlements reach this type: the collection decision of a
-/// <c>collecting</c> run and the late revision of one already <c>incomplete</c>. Either way one run appends at most one
+/// retry starts from the state it began in. Three settlements reach this type: the collection decision of a
+/// <c>collecting</c> run, the late revision of one already <c>incomplete</c> and the reprocessed revision of a run that
+/// already holds its verdict (<c>incomplete</c>, <c>complete</c> or <c>canceled</c>). Either way one run appends at most one
 /// revision per attempt and never rewrites one (00 §8.5 C6/AC9).
 /// </para>
 /// </summary>
@@ -55,7 +56,7 @@ internal interface IReconcileFinisher
     /// <param name="settlement">
     /// Which settled run the comparison belongs to: <see cref="ReconcileSettlement.DecideCollection"/> and
     /// <see cref="ReconcileSettlement.CloseOverdue"/> move the run state, <see cref="ReconcileSettlement.AppendLateEvidence"/>
-    /// leaves it alone.
+    /// and <see cref="ReconcileSettlement.AppendReprocessEvidence"/> leave it alone.
     /// </param>
     /// <param name="cancellationToken">Cancelled on shutdown or lease loss.</param>
     /// <returns>The persisted completeness and revision.</returns>
@@ -89,6 +90,13 @@ internal enum ReconcileSettlement
     /// state stays where it is — a finished run has no forward edge, so the revision alone carries the new completeness.
     /// </summary>
     AppendLateEvidence,
+
+    /// <summary>
+    /// The run was <c>canceled</c> and a reprocess its admission accepted re-read its own stored report: this revision
+    /// records that evidence, and the run state stays <c>canceled</c> — a canceled run is terminal and never becomes
+    /// complete. Same append as <see cref="AppendLateEvidence"/>: one revision, no edge.
+    /// </summary>
+    AppendReprocessEvidence,
 
     /// <summary>
     /// The run is <c>queued</c> or <c>running</c> and its collection deadline has passed, so this revision is its
@@ -232,11 +240,12 @@ internal sealed class ReconcileFinisher(
 
         var parameters = new { org_id = orgId, run_id = runId };
 
-        // (e) A late append is idempotent against its own evidence. The consumer commits this transaction and only then
+        // (e) An append is idempotent against its own evidence. The consumer commits this transaction and only then
         // completes the task row, so a crash in between re-claims the same attempt; appending a second, identical
-        // revision would break "one late batch, one revision". Equal evidence answers with the revision already recorded
-        // instead of a copy of it.
-        if (settlement == ReconcileSettlement.AppendLateEvidence)
+        // revision would break "one accepted batch, one revision". Equal evidence answers with the revision already
+        // recorded instead of a copy of it. Both append settlements share this half: the run they leave alone is the
+        // only difference between late evidence and reprocessed evidence, and the append itself is the same write.
+        if (AppendsEvidence(settlement))
         {
             var recorded = await LatestRevisionCoversAsync(orgId, runId, comparison, frozen, cancellationToken)
                 .ConfigureAwait(false);
@@ -319,12 +328,13 @@ internal sealed class ReconcileFinisher(
         // incomplete from a forced close, both through the guarded run-state transition (it re-takes the run row this
         // transaction already holds FOR NO KEY UPDATE, which is a no-op for the holder). An applied edge is credited to
         // the system actor, which is what a task consumer is, and its outbox row and audit row join this unit of work;
-        // a run that left queued/running meanwhile answers NoOp, not an applied edge. Late evidence appends a revision
-        // and never moves the state: the run already finished as incomplete, and both terminal states are the run's last
-        // word, so the revision — not the state — is what a later reader follows. `incomplete -> complete` is not an
-        // edge the machine allows (collecting writes both verdicts), and inventing one would let new evidence rewrite a
-        // finished verdict.
-        if (settlement is ReconcileSettlement.DecideCollection or ReconcileSettlement.CloseOverdue)
+        // a run that left queued/running meanwhile answers NoOp, not an applied edge. An append — late evidence into an
+        // incomplete run, reprocessed evidence into an incomplete, complete or canceled one — never moves the state: those
+        // states hold the run's last word, so the revision, not the state, is what a later reader follows.
+        // `incomplete -> complete`, `complete -> *` and
+        // `canceled -> *` are not edges the machine allows, and inventing one would let new evidence rewrite a finished
+        // verdict.
+        if (!AppendsEvidence(settlement))
         {
             var transition = await runStates
                 .TransitionAsync(
@@ -347,6 +357,15 @@ internal sealed class ReconcileFinisher(
 
         return new ReconcileFinalization(completeness, revisionId, revisionNo);
     }
+
+    /// <summary>
+    /// Whether this settlement only appends a revision: the two append settlements record evidence on a run that already
+    /// holds its verdict, so they share the idempotency guard and leave the state alone. Every other settlement decides
+    /// the run through a declared edge.
+    /// </summary>
+    /// <param name="settlement">How the attempt settles the run.</param>
+    private static bool AppendsEvidence(ReconcileSettlement settlement) =>
+        settlement is ReconcileSettlement.AppendLateEvidence or ReconcileSettlement.AppendReprocessEvidence;
 
     /// <summary>
     /// The latest revision of the run when it already counts exactly this evidence, or null when the attempt must append.

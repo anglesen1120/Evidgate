@@ -2563,7 +2563,31 @@ paths:
       operationId: reprocessRun
       tags: [runs]
       summary: Reprocess a raw report → 202, new evidence revision labelled `reprocessed`
-      description: '`raw_report_id` + `parser_version` → 202; never `rerun` (04).'
+      description: >-
+        Records one reprocess request for a stored `raw_report` of the run in
+        the path and hands the parse to the background. The answer is `202`
+        with `parsing_id`, the id the new `raw_report` row will carry; it
+        exists the moment the request is accepted, so a client can poll the
+        report by it, and a replay of the same `Idempotency-Key` returns the
+        same id. No run state is read or changed: a canceled, complete or
+        incomplete run accepts a reprocess alike, because the request names
+        bytes the platform already stores. A report of another tenant, another
+        run, another project of the caller's org, or an unknown id is the one
+        `404 not_found`. `run:create` is inside the service-role ceiling, so a
+        project-bound service credential holding it is accepted for a report of
+        its own project and gets that same `404` for another project's report;
+        `403` is a caller holding no `run:create` (a member without an active
+        membership, or a service claim outside the ceiling). The body is capped
+        at 4096 bytes and is refused `413 payload_too_large` before it is
+        parsed. `422 raw_report_unprocessable` refuses a report no parser release
+        ever judged; `422 parser_version_unknown` refuses a `parser_version` that is
+        not a registered release of the report's own parser, is not strictly
+        newer than the release that judged it, or cannot be ordered (a
+        pre-release suffix) — one code, so a client cannot probe which releases
+        another org registered. A `(raw_report, parser_version)` pair already
+        parsed or already requested is the id that exists, and no second task is
+        queued. The same `Idempotency-Key` with a different body is `409
+        idempotency_conflict`.
       x-permission: run:create
       x-version: v1
       parameters:
@@ -2585,10 +2609,16 @@ paths:
                   type: string
       responses:
         '202':
-          description: Reprocess accepted; new evidence revision labelled `reprocessed`
+          description: Reprocess accepted; the id the report row will be written under
           headers:
             X-Request-Id:
               $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReprocessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -2597,6 +2627,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/TooLarge'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -9794,6 +9826,19 @@ components:
           type: array
           items: { $ref: '#/components/schemas/EvidenceRevision' }
         next_cursor: { type: [string, 'null'] }
+    ReprocessResponse:
+      type: object
+      additionalProperties: false
+      description: >-
+        Body of `POST /v1/runs/{r}/reprocess`: the id the accepted reprocess
+        writes its `raw_report` row under. It is minted when the request is
+        accepted, so the caller can poll the report before the parse runs, and
+        a replay of the request returns the same id.
+      required: [parsing_id]
+      properties:
+        parsing_id:
+          type: string
+          format: uuid
     ReportComparison:
       type: object
       additionalProperties: false

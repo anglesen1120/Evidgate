@@ -152,4 +152,25 @@ internal static class EvidenceErrors
     internal static Error ArtifactStateConflict => Error.Conflict(
         ApiErrorCode.ArtifactStateConflict,
         "the artifact is not awaiting an upload completion");
+
+    /// <summary>
+    /// 422: the stored report cannot be reprocessed at all — its <c>outcome</c> is <c>unsupported</c>, so no parser
+    /// release ever judged it and there is none to be newer than. The refusal names the report member only: the
+    /// answer must read the same for every version tried.
+    /// </summary>
+    internal static Error ReportUnprocessable => Error.Unprocessable(
+        ApiErrorCode.RawReportUnprocessable,
+        "the report was not parsed by any parser release, so it cannot be reprocessed",
+        [new ErrorDetail("raw_report_id", "unprocessable")]);
+
+    /// <summary>
+    /// 422: the requested release is not one this org may parse with, or is not strictly newer than the release that
+    /// judged the report. Both are one code so a client cannot tell an unregistered version from another org's
+    /// project-owned one, and a version that cannot be ordered (a pre-release suffix) is refused rather than guessed
+    /// at.
+    /// </summary>
+    internal static Error ParserVersionUnknown => Error.Unprocessable(
+        ApiErrorCode.ParserVersionUnknown,
+        "the parser version must be a registered release of the report's parser, newer than the one that parsed it",
+        [new ErrorDetail("parser_version", "unknown")]);
 }

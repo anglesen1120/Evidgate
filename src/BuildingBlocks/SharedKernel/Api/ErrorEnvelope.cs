@@ -321,6 +321,15 @@ public static class ApiErrorCode
     /// <summary>409: the artifact's state does not allow the requested transition (06.1.2-T2 §6).</summary>
     public const string ArtifactStateConflict = "artifact_state_conflict";
 
+    /// <summary>422: the report was never parsed by a parser release, so it cannot be reprocessed.</summary>
+    public const string RawReportUnprocessable = "raw_report_unprocessable";
+
+    /// <summary>
+    /// 422: the requested parser version is not a visible release of the report's parser, or is not strictly newer
+    /// than the release that judged it.
+    /// </summary>
+    public const string ParserVersionUnknown = "parser_version_unknown";
+
     /// <summary>403: the artifact's content is sensitive and the caller holds no <c>artifact:read_sensitive</c>.</summary>
     public const string SensitivityForbidden = "sensitivity_forbidden";
 

@@ -118,6 +118,10 @@ internal static class EvidenceModule
         // completion's own tenant transaction; scoped like every reader bound to the ambient scope.
         services.TryAddScoped<IRawReportProducerKindReader, RawReportProducerKindReader>();
 
+        // The shape rules of the reprocess route. The release it may name is decided by the handler's read inside the
+        // tenant transaction, so this stage validates the wire shape only.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<ReprocessRawReport>, ReprocessRawReportValidator>());
+
         // The one untrusted-parser profile, published on the module's .Contracts. It has no consumer yet: the
         // `complete` verifier uses the static MediaSniffer directly, and the report mapper is the first IParsing
         // consumer, resolving this same singleton instead of building its own readers. The report entry cap is the
