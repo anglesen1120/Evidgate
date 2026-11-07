@@ -12,6 +12,7 @@ public interface IReleaseBindingReader
     /// Every release <paramref name="runId"/> is bound to, one item per stored binding row, ordered by the binding's
     /// <c>created_at</c> then id. An unbound run answers an empty list, never null; a release of another org — or,
     /// only reachable by a writer that bypassed the bind path, of a sibling project — is never listed.
+    /// The org is enforced here; the caller's project scope is not, so the caller must have authorised the run first.
     /// </summary>
     /// <param name="runId">The run to read the bindings of.</param>
     /// <param name="cancellationToken">Cancellation.</param>

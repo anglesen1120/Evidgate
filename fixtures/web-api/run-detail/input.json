@@ -34,13 +34,7 @@
     },
     "shard_count": 2,
     "declared_producers": ["shard-1", "shard-2"],
-    "releases": [
-      {
-        "release_id": "018f0000-0000-7000-8000-00000000f001",
-        "release_name": "release-candidate",
-        "component_key": "web"
-      }
-    ],
+    "releases": [],
     "after_cancel_events": 0
   }
 }

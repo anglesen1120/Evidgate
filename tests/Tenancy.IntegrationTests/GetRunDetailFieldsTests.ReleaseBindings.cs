@@ -154,6 +154,7 @@ public sealed partial class GetRunDetailFieldsTests
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
+        (await CancelRunTestData.CancelAsync(world, runId)).Status.ShouldBe(HttpStatusCode.Accepted);
         await SeedEventsAsync(world, runId, flagged: 2, unflagged: 1);
 
         var answer = await GetAsync(world, runId);
