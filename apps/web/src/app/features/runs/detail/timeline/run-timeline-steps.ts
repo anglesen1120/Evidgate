@@ -34,19 +34,34 @@ function legacySteps(state: RunState, currentIndex: number): readonly TimelineSt
   return [...unknownProgress, terminal];
 }
 
+/**
+ * The date-time shape `<time datetime>` and the `date` pipe render: an RFC 3339 date-time with a
+ * numeric offset or `Z`. `Date.parse` alone is lenient enough to accept `'1'`, `'2026'` and
+ * `'Nov 7 2026'`, which the timeline must not surface as a step time.
+ */
+const INSTANT_SHAPE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** {@link value} in milliseconds, or `null` when it is not an instant this surface can render. */
+function instantMs(value: string): number | null {
+  if (!INSTANT_SHAPE.test(value)) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function orderedHistory(history: RunStateTransition[]): RunStateTransition[] {
-  const timed = history
-    .filter((transition) => Number.isFinite(Date.parse(transition.occurred_at)))
-    .sort(
-      (left: RunStateTransition, right: RunStateTransition) =>
-        Date.parse(left.occurred_at) - Date.parse(right.occurred_at),
-    );
+  const entries = history.map((transition) => ({
+    transition,
+    atMs: instantMs(transition.occurred_at),
+  }));
+  const timed: { transition: RunStateTransition; atMs: number }[] = [];
+  for (const entry of entries) {
+    if (entry.atMs !== null) timed.push({ transition: entry.transition, atMs: entry.atMs });
+  }
+  timed.sort((left, right) => left.atMs - right.atMs);
   let index = 0;
   // Malformed times retain their input slots without preventing valid entries from sorting.
-  return history.map((transition) =>
-    Number.isFinite(Date.parse(transition.occurred_at))
-      ? (timed[index++] ?? transition)
-      : transition,
+  return entries.map((entry) =>
+    entry.atMs === null ? entry.transition : (timed[index++]?.transition ?? entry.transition),
   );
 }
 
@@ -75,7 +90,7 @@ export function runTimelineSteps(
   for (const transition of orderedHistory(history)) {
     reached.add(transition.from_state);
     reached.add(transition.to_state);
-    if (!arrivals.has(transition.to_state) && Number.isFinite(Date.parse(transition.occurred_at))) {
+    if (!arrivals.has(transition.to_state) && instantMs(transition.occurred_at) !== null) {
       arrivals.set(transition.to_state, transition.occurred_at);
     }
   }

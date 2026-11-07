@@ -19,6 +19,22 @@ const MAIN_PATH_CASES: readonly MainPathCase[] = [
   { state: 'complete', expected: ['reached', 'reached', 'reached', 'reached', 'current'] },
 ];
 
+/** A side exit cannot establish which intermediate steps were served. */
+const TERMINAL_STATUSES: readonly TimelineStepStatus[] = [
+  'reached',
+  'unrecorded',
+  'unrecorded',
+  'unrecorded',
+  'not-reached',
+  'current',
+];
+
+const LEGACY_CASES: readonly MainPathCase[] = [
+  ...MAIN_PATH_CASES,
+  { state: 'incomplete', expected: TERMINAL_STATUSES },
+  { state: 'canceled', expected: TERMINAL_STATUSES },
+];
+
 const states = (state: RunState) => runTimelineSteps(state).map((step) => step.state);
 const statuses = (state: RunState) => runTimelineSteps(state).map((step) => step.status);
 
@@ -45,14 +61,7 @@ describe('runTimelineSteps', () => {
 
   it('runTimelineSteps_incomplete_keepsUnservedIntermediateStepsUnrecorded', () => {
     expect(states('incomplete')).toEqual([...MAIN_PATH, 'incomplete']);
-    expect(statuses('incomplete')).toEqual([
-      'reached',
-      'unrecorded',
-      'unrecorded',
-      'unrecorded',
-      'not-reached',
-      'current',
-    ]);
+    expect(statuses('incomplete')).toEqual(TERMINAL_STATUSES);
   });
 
   it('runTimelineSteps_incomplete_neverMarksCompleteReachedOrCurrent', () => {
@@ -65,14 +74,7 @@ describe('runTimelineSteps', () => {
 
   it('runTimelineSteps_canceled_keepsUnservedIntermediateStepsUnrecorded', () => {
     expect(states('canceled')).toEqual([...MAIN_PATH, 'canceled']);
-    expect(statuses('canceled')).toEqual([
-      'reached',
-      'unrecorded',
-      'unrecorded',
-      'unrecorded',
-      'not-reached',
-      'current',
-    ]);
+    expect(statuses('canceled')).toEqual(TERMINAL_STATUSES);
   });
 
   it('runTimelineSteps_canceled_neverMarksCompleteReachedOrCurrent', () => {
@@ -129,9 +131,10 @@ describe('runTimelineSteps', () => {
   it.each([null, undefined])(
     'runTimelineSteps_legacyHistory_%s_preservesStatusesWithoutTimes',
     (history) => {
-      for (const state of ALL_STATES) {
-        expect(runTimelineSteps(state, history)).toEqual(runTimelineSteps(state));
-        expect(runTimelineSteps(state, history).every((step) => step.at === null)).toBe(true);
+      for (const { state, expected } of LEGACY_CASES) {
+        const steps = runTimelineSteps(state, history);
+        expect(steps.map((step) => step.status)).toEqual(expected);
+        expect(steps.every((step) => step.at === null)).toBe(true);
       }
     },
   );
@@ -233,5 +236,32 @@ describe('runTimelineSteps', () => {
     expect(runTimelineSteps('running', history).find((step) => step.state === 'running')?.at).toBe(
       '2026-11-07T10:00:00Z',
     );
+  });
+
+  it.each(['1', '2026', 'Nov 7 2026'])(
+    'runTimelineSteps_lenientTime_%s_isNotAnInstantAndDoesNotDisplaceValidOrdering',
+    (occurred_at) => {
+      const history = [
+        transition('queued', 'running', '2026-11-07T10:02:00Z'),
+        transition('running', 'collecting', occurred_at),
+        transition('collecting', 'complete', '2026-11-07T10:00:00Z'),
+      ];
+      expect(runTimelineSteps('complete', history)).toEqual([
+        { state: 'created', status: 'reached', at: null },
+        { state: 'queued', status: 'reached', at: null },
+        { state: 'running', status: 'reached', at: '2026-11-07T10:02:00Z' },
+        { state: 'collecting', status: 'reached', at: null },
+        { state: 'complete', status: 'current', at: '2026-11-07T10:00:00Z' },
+      ]);
+    },
+  );
+
+  it('runTimelineSteps_offsetInstant_isAcceptedAndKeepsItsWrittenForm', () => {
+    const history = [transition('queued', 'running', '2026-11-07T10:00:00+07:00')];
+    expect(runTimelineSteps('running', history).find((step) => step.state === 'running')).toEqual({
+      state: 'running',
+      status: 'current',
+      at: '2026-11-07T10:00:00+07:00',
+    });
   });
 });
