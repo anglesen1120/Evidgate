@@ -32,6 +32,7 @@ public sealed class UsageSummaryContractTests
         spec.SchemaNames.ShouldContain(SchemaName);
         spec.SchemaNames.ShouldContain("UsageSummaryMetricDto");
         spec.SchemaNames.ShouldContain("UsageSummaryProjectDto");
+        spec.SchemaNames.ShouldContain("UsageSummaryProjectsStatus");
     }
 
     /// <summary>Every member the schema requires is written, an unavailable metric's as explicit nulls.</summary>
@@ -63,7 +64,8 @@ public sealed class UsageSummaryContractTests
                         WarnedAt: blockedAt.AddHours(-1),
                         BlockedAt: blockedAt,
                         RetryAfterSeconds: 2_419_200),
-                ]),
+                ],
+                ProjectsStatus: new UsageSummaryProjectsStatusDto(BlockedCount: 1, WarnedCount: 0)),
             new UsageSummaryMetricDto(
                 UsageLedgerMetricNames.EgressGb,
                 UsageSummaryScopes.Tenant,
@@ -73,7 +75,8 @@ public sealed class UsageSummaryContractTests
                 BlockedAt: null,
                 RetryAfterSeconds: null,
                 UnavailableReason: "the object store does not report egress bytes yet",
-                Projects: []),
+                Projects: [],
+                ProjectsStatus: new UsageSummaryProjectsStatusDto(BlockedCount: 0, WarnedCount: 0)),
         ],
         NextCursor: "page-after-project-2");
 
@@ -83,6 +86,7 @@ public sealed class UsageSummaryContractTests
         json.ShouldContain("\"retry_after_seconds\":2419200", Case.Sensitive);
         json.ShouldContain("\"unavailable_reason\":\"the object store does not report egress bytes yet\"", Case.Sensitive);
         json.ShouldContain("\"projects\":[]", Case.Sensitive);
+        json.ShouldContain("\"projects_status\":{\"blocked_count\":1,\"warned_count\":0}", Case.Sensitive);
         json.ShouldContain("\"next_cursor\":\"page-after-project-2\"", Case.Sensitive);
 
         var failures = ContractSchema.Failures(SummaryDocument(OpenApiSpec.Load()), SchemaUri, json);
@@ -144,7 +148,8 @@ public sealed class UsageSummaryContractTests
                 BlockedAt: null,
                 RetryAfterSeconds: null,
                 UnavailableReason: null,
-                Projects: []),
+                Projects: [],
+                ProjectsStatus: new UsageSummaryProjectsStatusDto(BlockedCount: 0, WarnedCount: 0)),
         ],
         NextCursor: null);
         var instance = JsonNode.Parse(JsonSerializer.Serialize(summary, SnakeCase))!.AsObject();
@@ -171,7 +176,8 @@ public sealed class UsageSummaryContractTests
                 BlockedAt: null,
                 RetryAfterSeconds: null,
                 UnavailableReason: null,
-                Projects: []),
+                Projects: [],
+                ProjectsStatus: new UsageSummaryProjectsStatusDto(BlockedCount: 0, WarnedCount: 0)),
         ],
         NextCursor: null);
         var instance = JsonNode.Parse(JsonSerializer.Serialize(summary, SnakeCase))!.AsObject();
@@ -209,7 +215,8 @@ public sealed class UsageSummaryContractTests
                         WarnedAt: null,
                         BlockedAt: null,
                         RetryAfterSeconds: null),
-                ]),
+                ],
+                ProjectsStatus: new UsageSummaryProjectsStatusDto(BlockedCount: 0, WarnedCount: 0)),
         ],
         NextCursor: null);
         var instance = JsonNode.Parse(JsonSerializer.Serialize(summary, SnakeCase))!.AsObject();
@@ -220,13 +227,98 @@ public sealed class UsageSummaryContractTests
     }
 
     /// <summary>
-    /// The summary schema and the two it references as one document rooted at the summary: the validator resolves
-    /// <c>#/components/schemas/...</c> inside the document, so all three entries are read from the spec under that path.
+    /// The metric requires `projects_status`, and its two counts are non-negative int64s: the quota badge reads them as
+    /// counts over every project of the organization, never as the page's project rows.
+    /// </summary>
+    [Fact]
+    public void Spec_MetricSchema_RequiresAllProjectStatusCounts()
+    {
+        var spec = OpenApiSpec.Load();
+        var metric = spec.Schema("UsageSummaryMetricDto");
+
+        metric["required"]!.AsArray().Select(member => member!.GetValue<string>())
+            .ShouldContain("projects_status");
+        metric["properties"]!["projects_status"]!["$ref"]!.GetValue<string>()
+            .ShouldBe("#/components/schemas/UsageSummaryProjectsStatus");
+
+        var status = spec.Schema("UsageSummaryProjectsStatus");
+        status["additionalProperties"]!.GetValue<bool>().ShouldBeFalse();
+        status["required"]!.AsArray().Select(member => member!.GetValue<string>())
+            .ShouldBe(ProjectStatusCounts, ignoreOrder: true);
+
+        foreach (var count in ProjectStatusCounts)
+        {
+            var property = status["properties"]![count]!.AsObject();
+            property["type"]!.GetValue<string>().ShouldBe("integer");
+            property["format"]!.GetValue<string>().ShouldBe("int64");
+            property["minimum"]!.GetValue<long>().ShouldBe(0L);
+        }
+    }
+
+    /// <summary>The negative control: a metric without `projects_status` must be rejected, so the required member proves nothing until it is written.</summary>
+    [Fact]
+    public void Metric_WithoutProjectsStatus_IsRejected()
+    {
+        var summary = new UsageSummaryDto(
+            "2026-11",
+            null,
+        [
+            new UsageSummaryMetricDto(
+                UsageLedgerMetricNames.Results,
+                UsageSummaryScopes.Tenant,
+                Used: 0m,
+                Limit: null,
+                WarnedAt: null,
+                BlockedAt: null,
+                RetryAfterSeconds: null,
+                UnavailableReason: null,
+                Projects: [],
+                ProjectsStatus: new UsageSummaryProjectsStatusDto(BlockedCount: 0, WarnedCount: 0)),
+        ],
+        NextCursor: null);
+        var instance = JsonNode.Parse(JsonSerializer.Serialize(summary, SnakeCase))!.AsObject();
+        instance["metrics"]![0]!.AsObject().Remove("projects_status");
+
+        ContractSchema.Failures(SummaryDocument(OpenApiSpec.Load()), SchemaUri, instance.ToJsonString())
+            .ShouldNotBeEmpty("every metric writes the organization-wide project counts, so their absence must be rejected");
+    }
+
+    /// <summary>The negative control: a negative project count must be rejected, or the zero minimum proves nothing.</summary>
+    [Fact]
+    public void ProjectsStatus_WithNegativeCount_IsRejected()
+    {
+        var summary = new UsageSummaryDto(
+            "2026-11",
+            null,
+        [
+            new UsageSummaryMetricDto(
+                UsageLedgerMetricNames.Results,
+                UsageSummaryScopes.Tenant,
+                Used: 0m,
+                Limit: null,
+                WarnedAt: null,
+                BlockedAt: null,
+                RetryAfterSeconds: null,
+                UnavailableReason: null,
+                Projects: [],
+                ProjectsStatus: new UsageSummaryProjectsStatusDto(BlockedCount: 0, WarnedCount: 0)),
+        ],
+        NextCursor: null);
+        var instance = JsonNode.Parse(JsonSerializer.Serialize(summary, SnakeCase))!.AsObject();
+        instance["metrics"]![0]!["projects_status"]!["blocked_count"] = -1;
+
+        ContractSchema.Failures(SummaryDocument(OpenApiSpec.Load()), SchemaUri, instance.ToJsonString())
+            .ShouldNotBeEmpty("a project count cannot be negative, so the schema minimum must reject it");
+    }
+
+    /// <summary>
+    /// The summary schema and the three it references as one document rooted at the summary: the validator resolves
+    /// <c>#/components/schemas/...</c> inside the document, so all four entries are read from the spec under that path.
     /// </summary>
     private static string SummaryDocument(OpenApiSpec spec)
     {
         var schemas = new JsonObject();
-        foreach (var name in new[] { SchemaName, "UsageSummaryMetricDto", "UsageSummaryProjectDto" })
+        foreach (var name in new[] { SchemaName, "UsageSummaryMetricDto", "UsageSummaryProjectDto", "UsageSummaryProjectsStatus" })
         {
             var entry = spec.Schema(name).DeepClone().AsObject();
             entry.Remove("$schema");
@@ -249,4 +341,7 @@ public sealed class UsageSummaryContractTests
 
     /// <summary>A nullable JSON Schema type list, as the spec writes <c>[string, 'null']</c>.</summary>
     private static readonly string[] NullableStringTypes = ["string", "null"];
+
+    /// <summary>The two organization-wide project counts one metric reports.</summary>
+    private static readonly string[] ProjectStatusCounts = ["blocked_count", "warned_count"];
 }

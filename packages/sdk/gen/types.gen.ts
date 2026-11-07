@@ -2827,6 +2827,7 @@ export type UsageSummaryMetricDto = {
      * The per-project counters of the page, ordered by project `created_at`, then id; empty when the metric is unavailable.
      */
     projects: Array<UsageSummaryProjectDto>;
+    projects_status: UsageSummaryProjectsStatus;
 };
 
 /**
@@ -2852,6 +2853,20 @@ export type UsageSummaryProjectDto = {
      * On a blocked counter only, whole seconds until the next period starts.
      */
     retry_after_seconds: number | null;
+};
+
+/**
+ * How many of the organization's projects a metric warns or blocks in the current period, counted over all projects rather than the page: the values are identical on every page and when `project_id` is given, so a quota badge never narrows when the per-project rows are paged. Only project quota counters count, never the roll-up fallback, which carries no threshold stamps. A blocked project is counted in `blocked_count` only, so the two counts never describe the same project twice. A metric with no producer in this build answers 0 and 0.
+ */
+export type UsageSummaryProjectsStatus = {
+    /**
+     * Projects whose counter for this metric is blocked, that is its `blocked_at` is set.
+     */
+    blocked_count: number;
+    /**
+     * Projects whose counter for this metric warned without blocking, that is `warned_at` is set and `blocked_at` is null.
+     */
+    warned_count: number;
 };
 
 /**
@@ -9585,7 +9600,7 @@ export type GetUsageSummaryError = GetUsageSummaryErrors[keyof GetUsageSummaryEr
 
 export type GetUsageSummaryResponses = {
     /**
-     * The current period's per-metric counters, with per-project rows paged by project when `project_id` is absent. Every available metric lists the same page of projects, ordered by project `created_at`, then id; a metric without a producer answers `projects: []`. Organization-wide counters and roll-up totals cover all projects and remain identical on every page. With `project_id`, only that project's counters are included and `next_cursor` is null; `limit` and `cursor` are still syntactically validated.
+     * The current period's per-metric counters, with per-project rows paged by project when `project_id` is absent. Every available metric lists the same page of projects, ordered by project `created_at`, then id; a metric without a producer answers `projects: []`. Organization-wide counters, roll-up totals and the per-metric `projects_status` warning and block counts cover all projects and remain identical on every page, and `projects_status` is the same with `project_id`. With `project_id`, only that project's counters are included and `next_cursor` is null; `limit` and `cursor` are still syntactically validated.
      */
     200: UsageSummaryDto;
 };
