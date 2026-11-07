@@ -2838,7 +2838,7 @@
       <trans-unit id="runs.detail.attempts.candidate" datatype="html"><source>Healing candidate</source></trans-unit>
       <trans-unit id="runs.detail.attempts.shadow" datatype="html"><source>Shadow evaluation</source></trans-unit>
       <trans-unit id="runs.detail.attempts.official" datatype="html"><source>Official evaluation</source></trans-unit>
-      <trans-unit id="runs.detail.attempts.page" datatype="html"><source>Page</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.page" datatype="html"><source>Page <x id="page" equiv-text="page"/> / <x id="pages" equiv-text="pages"/></source></trans-unit>
       <trans-unit id="runs.detail.attempts.previous" datatype="html"><source>Previous page</source></trans-unit>
       <trans-unit id="runs.detail.attempts.next" datatype="html"><source>Next page</source></trans-unit>
       <trans-unit id="runs.detail.attempts.healing-candidates" datatype="html"><source>Healing candidates</source></trans-unit>

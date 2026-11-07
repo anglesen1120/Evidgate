@@ -7,11 +7,9 @@
 // the shell composes are checked in the same Chromium the app runs in.
 import { expect, test, type Page } from '@playwright/test';
 
+import { axeScan, axeViolations, expectNoA11yViolations } from '../a11y/axe-scan';
 import {
-  axeScan,
-  axeViolations,
   currentTheme,
-  expectNoA11yViolations,
   LIMITED_GRANTS,
   localePath,
   LOCALES,

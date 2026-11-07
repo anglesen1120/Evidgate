@@ -190,7 +190,7 @@
         >
           {{ copy.previous }}
         </button>
-        <p role="status">{{ copy.page }} {{ page() + 1 }} / {{ pages().length }}</p>
+        <p role="status">{{ pageLabel() }}</p>
         <button
           hlmBtn
           [variant]="'outline'"

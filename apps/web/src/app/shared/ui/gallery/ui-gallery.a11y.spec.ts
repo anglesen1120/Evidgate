@@ -5,6 +5,13 @@ import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import axe from 'axe-core';
 
+import exceptionsDocument from '../../../../../e2e/a11y-exceptions.json';
+import {
+  AXE_JSDOM_RUN_OPTIONS,
+  formatViolations,
+  unexceptedViolations,
+  type A11yException,
+} from '../../../../../e2e/a11y/axe-config';
 import { DataTableComponent } from '../data-table';
 import {
   DATA_TABLE_FIXTURE_COLUMNS,
@@ -15,17 +22,15 @@ import { UiGalleryComponent } from './ui-gallery.component';
 
 registerLocaleData(localeVi);
 
-const axeOptions: axe.RunOptions = {
-  runOnly: {
-    type: 'tag',
-    values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'],
-  },
-  rules: {
-    // jsdom has no layout/computed colours. Contrast is covered by the recorded token pairs in
-    // docs/design/web/tokens.md#contrast-table (70/70 pass via docs/design/web/contrast.py).
-    'color-contrast': { enabled: false },
-  },
-};
+const axeOptions: axe.RunOptions = AXE_JSDOM_RUN_OPTIONS;
+
+/** The accepted violations the whole a11y gate shares; this spec honours them too. */
+const A11Y_EXCEPTIONS: readonly A11yException[] = exceptionsDocument.exceptions;
+
+/** What a scan of the gallery must leave empty: one line per violation no entry covers. */
+function unexceptedLines(result: axe.AxeResults): string[] {
+  return formatViolations(unexceptedViolations(result.violations, A11Y_EXCEPTIONS));
+}
 
 const cases = [
   { locale: 'en', theme: 'light' },
@@ -86,17 +91,11 @@ describe('UiGalleryComponent axe acceptance (AC8 / AC9)', () => {
           expect(root.querySelector(selector), selector).not.toBeNull();
         }
         const result = await axe.run(root, axeOptions);
-        expect(
-          result.violations.map(({ id, nodes }) => ({
-            id,
-            targets: nodes.map((node) => node.target),
-            summaries: nodes.map((node) => node.failureSummary),
-          })),
-        ).toEqual([]);
+        expect(unexceptedLines(result)).toEqual([]);
         root.querySelector<HTMLButtonElement>('[data-demo="reveal-opener"]')?.click();
         await fixture.whenStable();
         const revealResult = await axe.run(root, axeOptions);
-        expect(revealResult.violations).toEqual([]);
+        expect(unexceptedLines(revealResult)).toEqual([]);
         root.querySelector<HTMLButtonElement>('[data-demo="conflict-opener"]')?.click();
         await fixture.whenStable();
         const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
@@ -104,13 +103,7 @@ describe('UiGalleryComponent axe acceptance (AC8 / AC9)', () => {
         expect(dialog.getAttribute('aria-modal')).toBe('true');
         expect(dialog.textContent).toContain('Not compared');
         const dialogResult = await axe.run(dialog, axeOptions);
-        expect(
-          dialogResult.violations.map(({ id, nodes }) => ({
-            id,
-            targets: nodes.map((node) => node.target),
-            summaries: nodes.map((node) => node.failureSummary),
-          })),
-        ).toEqual([]);
+        expect(unexceptedLines(dialogResult)).toEqual([]);
       } finally {
         fixture.destroy();
         root.remove();

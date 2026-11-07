@@ -15,14 +15,8 @@ import {
   openPublish,
   visit,
 } from './settings-policy.support';
-import {
-  axeScan,
-  axeViolations,
-  localePath,
-  LOCALES,
-  THEMES,
-  waitForDialogAnimations,
-} from './support';
+import { axeScan, axeViolations } from '../a11y/axe-scan';
+import { localePath, LOCALES, THEMES, waitForDialogAnimations } from './support';
 
 const OPENER = '[data-demo="conflict-opener"]';
 const DIALOG = '[role="dialog"]:has(hlm-dialog-content)';

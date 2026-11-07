@@ -17,8 +17,8 @@ import runListPage1 from '../../../../fixtures/web-api/run-list-page-1/input.jso
 import runListPage2 from '../../../../fixtures/web-api/run-list-page-2/input.json';
 import runListUnavailable from '../../../../fixtures/web-api/run-list-unavailable/input.json';
 import type { FixtureCallRecord } from '../../src/app/core/dev-fixtures/fixture-request-log';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
-  expectNoA11yViolations,
   localePath,
   LOCALES,
   ORG_ACME,
