@@ -6,6 +6,7 @@ import type { EvidenceRevisionPage, RunAttemptPage, RunStateDto } from '@evidgat
 import attemptsOk from '../../../../../../../fixtures/web-api/run-attempts/input.json';
 import ready from '../../../../../../../fixtures/web-api/run-detail/input.json';
 import formatted from '../../../../../../../fixtures/web-api/run-detail-ref-format/input.json';
+import { ReleasesDataService } from '../../../core/data/releases-data.service';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
@@ -72,6 +73,7 @@ describe('RunDetailPage', () => {
         provideRouter([{ path: 'projects/:projectId/runs', children: routes }]),
         { provide: RunsDataService, useValue: { get, listAttempts, listEvidenceRevisions } },
         { provide: RunDataService, useValue: { getDecision } },
+        { provide: ReleasesDataService, useValue: { get: vi.fn() } },
       ],
     });
   });

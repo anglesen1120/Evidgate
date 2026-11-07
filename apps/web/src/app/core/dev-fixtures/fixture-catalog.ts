@@ -13,7 +13,9 @@
 // `operation_id`, `variant`, `status`, `headers`, `latency_ms` and an optional `body` (omitted for
 // a bodyless response). `variant: "ok"` is the answer the backend serves by default; every other
 // variant is reached through `FixtureToggles` and exists so a review can show an empty list, a 403
-// or a 412 without a server.
+// or a 412 without a server. A row the corpus has no file for is marked `derived`: its document is
+// one corpus body with the members that state changes replaced, and the catalog-integrity check
+// pins it against that source instead of letting it become a second hand-written response.
 //
 // Dev-only, like the rest of `core/dev-fixtures`: see the module comment of `fixture-toggles.ts`.
 

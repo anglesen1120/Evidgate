@@ -44,7 +44,19 @@ import suiteRevisionNotFound from '../../../../../../fixtures/web-api/suite-revi
 import suiteRevisionPublished from '../../../../../../fixtures/web-api/suite-revision-published/input.json';
 import suiteRevisionUnavailable from '../../../../../../fixtures/web-api/suite-revision-unavailable/input.json';
 
-import type { FixtureCatalogRow } from './fixture-document';
+import type { FixtureCatalogRow, FixtureDocument } from './fixture-document';
+
+/**
+ * The canceled run: `GET /v1/runs/{r}` serves the state, and the timeline's after-cancel note is
+ * only reachable on a canceled run, but the corpus carries no canceled detail document. One field
+ * of the validated `run-detail` body is replaced, so this state cannot drift from the response
+ * shape the contract check already proves.
+ */
+const runDetailCanceled: FixtureDocument = {
+  ...runDetail,
+  variant: 'detail-canceled',
+  body: { ...runDetail.body, state: 'canceled' },
+};
 
 export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
   { name: 'run-attempts', document: runAttempts },
@@ -65,6 +77,7 @@ export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
   { name: 'run-decision-shadow-refused', document: runDecisionShadowRefused },
   { name: 'run-decision-unavailable', document: runDecisionUnavailable },
   { name: 'run-detail', document: runDetail },
+  { name: 'run-detail-canceled', document: runDetailCanceled, derived: true },
   { name: 'run-detail-forbidden', document: runDetailForbidden },
   { name: 'run-detail-not-found', document: runDetailNotFound },
   { name: 'run-detail-null-evidence', document: runDetailNullEvidence },
