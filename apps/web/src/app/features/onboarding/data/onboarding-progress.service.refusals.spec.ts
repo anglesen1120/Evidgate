@@ -1,9 +1,9 @@
 import { isApiRequestError } from '../../../core/http/api-error';
+import { apiError } from '../../../shared/testing/http-data.testing';
 import { OnboardingProgressService } from './onboarding-progress.service';
 import {
   FakeOnboardingDataService,
   PROJECT,
-  apiError,
   rejectionOf,
   runPage,
   runSummary,

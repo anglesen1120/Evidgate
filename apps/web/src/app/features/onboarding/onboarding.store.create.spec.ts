@@ -1,9 +1,9 @@
 // The one-shot create marker and `projectCreated`: a route-level singleton may spare the activation
 // a create causes repeated reads, adopt the new project, and nothing else.
 
+import { apiError } from '../../shared/testing/http-data.testing';
 import { OnboardingStore } from './onboarding.store';
 import {
-  apiError,
   FakeOnboardingDataService,
   FakeSessionStore,
   PROJECT,

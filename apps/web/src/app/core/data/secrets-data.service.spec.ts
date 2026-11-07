@@ -16,13 +16,12 @@
 // The base URL is the absolute form of the same-origin API path because Node's `Request` (the one
 // `ng test` runs on) refuses the relative `/v1` the browser resolves for us.
 
-import type { HttpRequest } from '@angular/common/http';
+import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
 import {
   HttpTestingController,
   provideHttpClientTesting,
   type TestRequest,
 } from '@angular/common/http/testing';
-import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { CiBindingView, IngestTokenCreatedResponse, IngestTokenView } from '@evidgate/sdk';
@@ -30,15 +29,13 @@ import type { CiBindingView, IngestTokenCreatedResponse, IngestTokenView } from 
 import { isApiRequestError } from '../http/api-error';
 import { provideApi } from '../http/api-client';
 import { API_BASE_PATH } from '../http/api-origin';
+import { JSON_HEADERS, takeRequest } from '../../shared/testing/http-data.testing';
 import { SecretsDataService } from './secrets-data.service';
 
 const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
 const TOKENS_URL = `${API_BASE_URL}/projects/p-1/ingest-tokens`;
 const ROTATE_URL = `${API_BASE_URL}/ingest-tokens/t-1/rotate`;
 const BINDINGS_URL = `${API_BASE_URL}/projects/p-1/ci-bindings`;
-
-/** The served media type: the adapter reads bodies as text and `flush` does not derive it. */
-const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
 /** One row of the metadata list: everything the tab renders, and no value of any kind. */
 const TOKEN: IngestTokenView = {
@@ -93,27 +90,6 @@ const BINDING: CiBindingView = {
   created_at: '2026-06-01T08:00:00Z',
   version: 1,
 };
-
-/**
- * The SDK -> adapter -> `HttpClient` pipeline is asynchronous, so a request is registered after the
- * call starts — and after a page is flushed the next one waits on the blob parse, which is a
- * macrotask in jsdom, so yielding only microtasks stalls the second read.
- */
-async function takeRequest(
-  httpMock: HttpTestingController,
-  match: string | ((request: HttpRequest<unknown>) => boolean),
-): Promise<TestRequest> {
-  const matches = (candidate: HttpRequest<unknown>): boolean =>
-    typeof match === 'string' ? candidate.url.startsWith(match) : match(candidate);
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const [request] = httpMock.match(matches);
-    if (request !== undefined) {
-      return request;
-    }
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  }
-  throw new Error('no HTTP request reached HttpTestingController');
-}
 
 /** Answers one request with a body, so the SDK's parser sees the served media type. */
 function flushPage(request: TestRequest, body: unknown, status = 200): void {

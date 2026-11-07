@@ -1,9 +1,9 @@
 // Refusals are failures, never steps, and a superseded load never publishes: the wizard must not
 // derive progress from an answer nobody is waiting for any more.
 
+import { apiError } from '../../shared/testing/http-data.testing';
 import { OnboardingStore } from './onboarding.store';
 import {
-  apiError,
   BINDING,
   bindingPage,
   FakeOnboardingDataService,

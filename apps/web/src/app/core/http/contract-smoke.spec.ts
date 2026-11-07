@@ -17,12 +17,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
-import type { HttpRequest } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-  type TestRequest,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import {
@@ -39,11 +34,14 @@ import {
 } from '@evidgate/sdk';
 import { parse as parseYaml } from 'yaml';
 
+import { EXACT_MATCH_PROFILE, takeRequestWith } from '../../shared/testing/http-data.testing';
 import { isApiRequestError } from './api-error';
 import { provideApi } from './api-client';
 import { ApiGateway, type SdkResult } from './api-gateway';
 import { API_BASE_PATH } from './api-origin';
 import { createIntent, intentHeaders } from './intent';
+
+const takeRequest = takeRequestWith(EXACT_MATCH_PROFILE);
 
 const RECORDED_OPERATION_IDS: readonly string[] = [
   'listRuns',
@@ -285,25 +283,6 @@ function readEnvelopeExample(): ErrorEnvelope {
     throw new Error(`the fixture's errorEnvelopeExample is not a 00 §9.2 envelope; ${RE_RECORD}`);
   }
   return example;
-}
-
-/**
- * The SDK -> adapter -> `HttpClient` pipeline is asynchronous, so a request is registered a few
- * microtasks after the call starts. `expectOne` throws when nothing matches yet, so this drains
- * the queue first and then matches — the request is still `verify()`-checked like any other.
- */
-async function takeRequest(
-  httpMock: HttpTestingController,
-  match: string | ((request: HttpRequest<unknown>) => boolean),
-): Promise<TestRequest> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const [request] = httpMock.match(match);
-    if (request !== undefined) {
-      return request;
-    }
-    await Promise.resolve();
-  }
-  throw new Error('no HTTP request reached HttpTestingController');
 }
 
 /** The same-origin URL the wire must carry for one recorded row. */

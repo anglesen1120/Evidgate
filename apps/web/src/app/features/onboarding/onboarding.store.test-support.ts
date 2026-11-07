@@ -18,8 +18,8 @@ import type {
 } from '@evidgate/sdk';
 
 import { OnboardingDataService } from '../../core/data/onboarding-data.service';
-import { ApiRequestError, type ApiErrorKind } from '../../core/http/api-error';
 import { SessionStore } from '../../core/session/session.store';
+import { apiError } from '../../shared/testing/http-data.testing';
 import { OnboardingStore } from './onboarding.store';
 
 type ProjectListQuery = NonNullable<ListProjectsData['query']>;
@@ -71,19 +71,6 @@ export const TOKEN: IngestTokenView = {
   scopes: ['run:create'],
   created_at: '2026-10-20T10:05:00Z',
 };
-
-export function apiError(kind: ApiErrorKind, status: number): ApiRequestError {
-  return new ApiRequestError({
-    kind,
-    status,
-    code: kind,
-    message: `${kind} (test)`,
-    requestId: null,
-    retryable: false,
-    details: [],
-    retryAfterSeconds: null,
-  });
-}
 
 function projectPage(items: readonly ProjectDto[]): ProjectListResponse {
   return { items: [...items], next_cursor: null };
