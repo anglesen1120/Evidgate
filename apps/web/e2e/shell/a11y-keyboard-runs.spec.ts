@@ -159,6 +159,9 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(copy).toBeFocused();
   expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 
+  // The producer table's scroll region is the last stop; it is named, then the page ends.
+  await page.keyboard.press('Tab');
+  await expect(page.locator('[data-producer-scroll]')).toBeFocused();
   await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');
   await expect(page.getByRole('dialog')).toHaveCount(0);

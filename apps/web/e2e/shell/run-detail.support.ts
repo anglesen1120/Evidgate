@@ -26,10 +26,11 @@ export type RunAttemptsVariant = 'ok' | 'empty' | 'unavailable';
 export type RunRevisionsVariant = 'ok' | 'empty' | 'unavailable';
 
 /**
- * The states `GET /v1/runs/{r}` answers. `canceled` is a derived catalog row, because the corpus
- * has no canceled detail document: it is `run-detail` with `state` replaced.
+ * The states `GET /v1/runs/{r}` answers. `canceled`, `many-producers` and `no-producers` are
+ * derived catalog rows: the corpus has no document for them, so each is `run-detail` with the
+ * member that state changes replaced.
  */
-export type RunStateVariant = 'ready' | 'canceled';
+export type RunStateVariant = 'ready' | 'canceled' | 'many-producers' | 'no-producers';
 
 /** The operations whose answer a caller chooses; every other one keeps the corpus default. */
 export interface RunDetailAddress {
