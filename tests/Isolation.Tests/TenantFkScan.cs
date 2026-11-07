@@ -278,12 +278,16 @@ internal static class TenantFkScan
     /// another org's catalogue row can be built and refused: <c>usage_ledger_entry</c>'s price reference is the
     /// trigger <c>usage_ledger_entry_price_visible</c>, which raises 23503 under the foreign key's own name;
     /// <c>raw_report</c>'s parser reference is the trigger <c>raw_report_parser_visible</c>, which raises 23514
-    /// <c>raw_report_parser_invisible</c> when the named release is another org's project-owned row.
+    /// <c>raw_report_parser_invisible</c> when the named release is another org's project-owned row;
+    /// <c>raw_report_reprocess</c> asks for a release through the same catalogue key and the same kind of guard,
+    /// <c>raw_report_reprocess_parser_visible</c>, so a reprocess request cannot name a project-owned release of
+    /// another org before the task that would parse with it is queued.
     /// </summary>
     private static readonly (string Table, string Constraint, string[] PrincipalColumns, bool CrossOrgGuarded)[] CatalogueKeyAllowlist =
     [
         ("public.usage_ledger_entry", "usage_ledger_entry_price_fk", [TenantKeyColumn], true),
         ("public.raw_report", "raw_report_parser_fk", ["parser_id", "version"], true),
+        ("public.raw_report_reprocess", "raw_report_reprocess_parser_fk", ["parser_id", "version"], true),
     ];
 
     /// <summary>True when one of these allowances names a guard that refuses another org's catalogue row.</summary>

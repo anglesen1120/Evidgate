@@ -805,6 +805,17 @@ internal static class RouteRequests
         Add("POST", "/v1/runs/{r}/cancel", _ => new(HttpMethod.Post, $"/v1/runs/{Guid.CreateVersion7()}/cancel",
             new JsonObject { ["reason"] = "probe" }, IdempotencyKey: Key()));
 
+        // The reprocess route is a command on the run named in the path, and its body names a report of that run. The
+        // recipe uses fresh ids, so a granted caller answers the one 404 `not_found` and nothing is created; the key is
+        // mandatory because the route is an idempotent command, and `run:create` decides the gate before any read.
+        Add("POST", "/v1/runs/{r}/reprocess", _ => new(HttpMethod.Post, $"/v1/runs/{Guid.CreateVersion7()}/reprocess",
+            new JsonObject
+            {
+                ["raw_report_id"] = Guid.CreateVersion7().ToString(),
+                ["parser_version"] = "1.1.0",
+            },
+            IdempotencyKey: Key()));
+
         // ---- Policy ------------------------------------------------------------------------------------------
         Add("POST", "/v1/projects/{p}/policies", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/policies",
             new JsonObject { ["flaky_budget"] = 0 }, IdempotencyKey: Key()));

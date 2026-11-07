@@ -51,7 +51,7 @@ internal sealed partial class ReconcileRunTaskHandler(
 
         var reconciler = attemptScope.ServiceProvider.GetRequiredService<IRunReconciler>();
         var outcome = await reconciler
-            .ReconcileAsync(payload.RunId, payload.LateEvidence, cancellationToken)
+            .ReconcileAsync(payload.RunId, payload.LateEvidence, payload.ReprocessEvidence, cancellationToken)
             .ConfigureAwait(false);
 
         // The four values are taken first so the log call's arguments stay locals (CA1873: no work behind a disabled
@@ -77,13 +77,15 @@ internal sealed partial class ReconcileRunTaskHandler(
         // locked the run FOR NO KEY UPDATE and its comparison is this attempt's own read). RunNotFound, NotCollectable
         // and Pending reach no finisher at all — nothing to freeze, nothing to append, nothing to transition: a pending
         // attempt waits for the open shard or for the collection deadline, so the run stays collecting. An overdue
-        // attempt (queued or running past its deadline) is settled as a forced close, and a late attempt (the run
-        // already finished as incomplete and new evidence arrived) appends a revision and settles no state.
+        // attempt (queued or running past its deadline) is settled as a forced close; a late attempt (the run already
+        // finished as incomplete and new evidence arrived) and a reprocess attempt (a run that already holds a verdict —
+        // incomplete, complete or canceled — whose own report was re-read) append a revision and settle no state.
         // An exception here is not caught: it must abort the attempt so the consumer rolls the transaction back and
         // retries it.
         if (comparison is null
             || outcome.Disposition is not (ReconcileDisposition.Compared
                 or ReconcileDisposition.ComparedLate
+                or ReconcileDisposition.ComparedReprocess
                 or ReconcileDisposition.ComparedOverdue))
         {
             return;
@@ -92,6 +94,7 @@ internal sealed partial class ReconcileRunTaskHandler(
         var settlement = outcome.Disposition switch
         {
             ReconcileDisposition.ComparedLate => ReconcileSettlement.AppendLateEvidence,
+            ReconcileDisposition.ComparedReprocess => ReconcileSettlement.AppendReprocessEvidence,
             ReconcileDisposition.ComparedOverdue => ReconcileSettlement.CloseOverdue,
             _ => ReconcileSettlement.DecideCollection,
         };
@@ -116,6 +119,8 @@ internal sealed partial class ReconcileRunTaskHandler(
         ReconcileDisposition.Pending => "pending",
         ReconcileDisposition.Compared => "compared",
         ReconcileDisposition.ComparedLate => "compared_late",
+        ReconcileDisposition.ComparedReprocess => "compared_reprocess",
+        ReconcileDisposition.ReprocessAwaitsCollection => "reprocess_awaits_collection",
         ReconcileDisposition.ComparedOverdue => "compared_overdue",
         _ => "unknown",
     };

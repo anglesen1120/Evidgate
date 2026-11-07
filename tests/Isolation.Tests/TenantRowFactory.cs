@@ -378,6 +378,15 @@ internal sealed class TenantRowFactory
                 continue;
             }
 
+            // The release pair of a reprocess request is pinned to a seeded catalogue row below: the app role
+            // cannot write report_parser, so the factory must not try to mint a parent for it. That seed is the
+            // migration's, which the harness reset removes — the suite restores it before generating the table.
+            if (string.Equals(table, "public.raw_report_reprocess", StringComparison.Ordinal)
+                && string.Equals(foreignKey.PrincipalTable, "public.report_parser", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             // A foreign key to another tenant table is the one the corruption moves
             // to the other org; every other parent (the tenant root, a catalogue
             // row) belongs to the row's own org.
@@ -462,6 +471,26 @@ internal sealed class TenantRowFactory
         if (corruptedForeignKey is not null
             && string.Equals(table, "public.raw_report", StringComparison.Ordinal)
             && !string.Equals(corruptedForeignKey, "raw_report_artifact_fk", StringComparison.Ordinal))
+        {
+            var ownArtifact = await CreateBesideCacheAsync("public.artifact", org, cancellationToken);
+            values["artifact_id"] = ownArtifact.Values[TenantFkScan.TenantKeyColumn];
+        }
+
+        // raw_report_reprocess (0081) pins the release it will parse with, so a generated row must name one the
+        // migration seeded: the catalogue is owner-written, so the factory cannot mint a pair. The harness reset
+        // truncates that seed like any other row, so a suite generating this table restores it first with
+        // BuiltInCatalogue.SeedReportParserAsync, from the same constants pinned here. Its natural key is a
+        // plain unique (no partial index), so a corrupt row reusing the valid row's artifact needs a second artifact
+        // of its own org for the same reason as raw_report's, and a source report of its own too.
+        if (string.Equals(table, "public.raw_report_reprocess", StringComparison.Ordinal))
+        {
+            values["parser_id"] = BuiltInCatalogue.ReportParserId;
+            values["parser_version"] = BuiltInCatalogue.ReportParserVersion;
+        }
+
+        if (corruptedForeignKey is not null
+            && string.Equals(table, "public.raw_report_reprocess", StringComparison.Ordinal)
+            && !string.Equals(corruptedForeignKey, "raw_report_reprocess_artifact_fk", StringComparison.Ordinal))
         {
             var ownArtifact = await CreateBesideCacheAsync("public.artifact", org, cancellationToken);
             values["artifact_id"] = ownArtifact.Values[TenantFkScan.TenantKeyColumn];
