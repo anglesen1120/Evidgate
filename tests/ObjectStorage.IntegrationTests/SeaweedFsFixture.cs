@@ -53,7 +53,10 @@ public sealed class SeaweedFsFixture : IAsyncLifetime
                 "server",
                 "-s3",
                 $"-s3.port={S3Port}",
-                $"-s3.config={ContainerConfigPath}")
+                $"-s3.config={ContainerConfigPath}",
+                // Each bucket that receives an object takes its own volume; the default slot count
+                // runs out after a handful of buckets and answers InternalError on the next write.
+                "-volume.max=64")
             .WithPortBinding(S3Port, assignRandomHostPort: true)
             .WithWaitStrategy(
                 Wait.ForUnixContainer()

@@ -37,6 +37,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/dev/lib.sh
 . "$SCRIPT_DIR/lib.sh"
+# shellcheck source=scripts/env/lib-bucket.sh
+. "$SCRIPT_DIR/../env/lib-bucket.sh"
+
+# The bucket requests run inside the SeaweedFS container with its own curl, so no
+# host S3 client is required and they target the gateway's own port rather than
+# the host port EVIDGATE_S3_PORT publishes (they differ once it is overridden).
+evg_s3_curl() { evg_compose exec -T seaweedfs curl "$@"; }
 
 READY_TIMEOUT_SECONDS="${EVIDGATE_UP_READY_TIMEOUT_SECONDS:-300}"
 START_SECONDS="$SECONDS"
@@ -161,29 +168,17 @@ export_s3_config_for_compose() {
   export EVIDGATE_SEAWEEDFS_S3_CONFIG
 }
 
-# Bucket + the pending/ 24 h lifecycle (T18). The request runs inside the
-# SeaweedFS container with its own curl, so no host S3 client is required; it
-# therefore targets the container's own S3 port, not the host port that
-# EVIDGATE_S3_PORT publishes (they differ whenever the port is overridden).
+# Bucket + the pending/ 24 h lifecycle, through the same helpers
+# scripts/env/bootstrap-bucket.sh uses, so the two cannot drift apart.
 configure_dev_bucket() {
-  local bucket="${EVIDGATE_S3_BUCKET}" endpoint="http://127.0.0.1:8333" code
-  local credentials="${EVIDGATE_S3_ACCESS_KEY}:${EVIDGATE_S3_SECRET_KEY}"
-  local sigv4='aws:amz:us-east-1:s3'
+  local endpoint="http://127.0.0.1:8333"
 
-  code="$(evg_compose exec -T seaweedfs curl -s -o /dev/null -w '%{http_code}' \
-    --aws-sigv4 "$sigv4" --user "$credentials" -X PUT "$endpoint/$bucket" || true)"
-  # 409 is the emulator's "bucket already exists" (up.sh is re-runnable).
-  case "$code" in
-    200 | 409) ;;
-    *) die "creating bucket '$bucket' failed (HTTP ${code:-none})" ;;
-  esac
+  evg_s3_configure "$EVIDGATE_S3_ACCESS_KEY" "$EVIDGATE_S3_SECRET_KEY" \
+    "${EVIDGATE_S3_REGION:-us-east-1}"
+  evg_s3_create_bucket "$EVIDGATE_S3_BUCKET" "$endpoint"
+  evg_s3_put_lifecycle "$EVIDGATE_S3_BUCKET" "$endpoint" "$EVG_S3_LIFECYCLE_FILE"
 
-  code="$(evg_compose exec -T seaweedfs curl -s -o /dev/null -w '%{http_code}' \
-    --aws-sigv4 "$sigv4" --user "$credentials" \
-    -X PUT --data-binary @- "$endpoint/$bucket?lifecycle=" <"$EVG_S3_LIFECYCLE_FILE" || true)"
-  [ "$code" = "200" ] || die "putting the lifecycle rule on '$bucket' failed (HTTP ${code:-none})"
-
-  info "bucket $bucket ready with the pending/ 24 h lifecycle rule ($EVG_S3_LIFECYCLE_FILE)"
+  info "bucket $EVIDGATE_S3_BUCKET ready with the pending/ 24 h lifecycle rule ($EVG_S3_LIFECYCLE_FILE)"
 }
 
 # True when something accepts TCP on 127.0.0.1:$1. A loopback listener answers at
