@@ -1,16 +1,17 @@
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using Evidgate.Modules.Identity.Tokens;
 
 namespace Evidgate.Modules.Identity.Ci;
 
 /// <summary>
 /// The public form of an ingest token (02.4.2 §5): <c>egt_&lt;12-char prefix&gt;_&lt;base64url secret&gt;</c>.
 /// The prefix is the resolver's lookup key; the secret is 256 random bits and is never stored.
+/// The prefix and secret halves come from <see cref="SecretTokenFormat"/>, shared with the API token.
 /// </summary>
 internal static partial class IngestTokenFormat
 {
-    internal const int PrefixLength = 12;
-    private const string Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    internal const int PrefixLength = SecretTokenFormat.PrefixLength;
 
     /// <summary>A freshly generated token.</summary>
     /// <param name="Prefix">The public lookup prefix.</param>
@@ -21,24 +22,8 @@ internal static partial class IngestTokenFormat
     /// <summary>Generates a token from the system CSPRNG.</summary>
     public static Generated Generate()
     {
-        var prefix = string.Create(PrefixLength, 0, static (span, _) =>
-        {
-            Span<byte> random = stackalloc byte[PrefixLength];
-            RandomNumberGenerator.Fill(random);
-            for (var i = 0; i < span.Length; i++)
-            {
-                // 62 symbols from a byte: reject the biased tail (>= 248) by re-drawing.
-                var value = random[i];
-                while (value >= 248)
-                {
-                    value = RandomNumberGenerator.GetBytes(1)[0];
-                }
-
-                span[i] = Alphabet[value % Alphabet.Length];
-            }
-        });
-
-        var secret = Base64Url(RandomNumberGenerator.GetBytes(32));
+        var prefix = SecretTokenFormat.NewPrefix();
+        var secret = SecretTokenFormat.NewSecret();
 
         return new Generated(prefix, secret, $"egt_{prefix}_{secret}");
     }
@@ -70,10 +55,7 @@ internal static partial class IngestTokenFormat
     }
 
     /// <summary>A 128-bit-plus random challenge for a binding (T70): 256 bits, base64url.</summary>
-    public static string NewChallenge() => Base64Url(RandomNumberGenerator.GetBytes(32));
-
-    private static string Base64Url(byte[] bytes) =>
-        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    public static string NewChallenge() => SecretTokenFormat.Base64Url(RandomNumberGenerator.GetBytes(32));
 
     [GeneratedRegex("^egt_([A-Za-z0-9]{12})_([A-Za-z0-9_-]{43})\\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 100)]
     private static partial Regex Shape();
