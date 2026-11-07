@@ -193,6 +193,17 @@ describe('ReleasePanelComponent', () => {
     expect(buttons[1]?.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it.each(['', '   ', '\t\n'])('uses the release id for a blank selector name %j', async (name) => {
+    const { root } = await render({
+      releases: [
+        { releaseId: 'rel-1', name: RELEASE.name },
+        { releaseId: 'rel-2', name },
+      ],
+    });
+    const buttons = root.querySelectorAll('[role="group"] button');
+    expect(buttons[1]?.textContent?.trim()).toBe('rel-2');
+  });
+
   it('renders the loading state before a release lands', async () => {
     const { root } = await render({ release: null, status: 'loading' });
     expect(root.querySelector('app-loading-pattern')).not.toBeNull();

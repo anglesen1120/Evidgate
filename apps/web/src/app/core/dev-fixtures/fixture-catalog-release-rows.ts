@@ -3,6 +3,7 @@ import projectDetail from '../../../../../../fixtures/web-api/project-detail/inp
 import runDetail from '../../../../../../fixtures/web-api/run-detail/input.json';
 import runForbidden from '../../../../../../fixtures/web-api/run-detail-forbidden/input.json';
 import runNotFound from '../../../../../../fixtures/web-api/run-detail-not-found/input.json';
+import runState from '../../../../../../fixtures/web-api/run-state/input.json';
 import type { FixtureCatalogRow, FixtureDocument } from './fixture-document';
 
 export const RELEASE_BINDINGS = [
@@ -18,8 +19,14 @@ export const RELEASE_BINDINGS = [
   },
 ] as const;
 
-function releaseDocument(index: 0 | 1): FixtureDocument {
-  const binding = RELEASE_BINDINGS[index];
+function releaseDocument(
+  index: 0 | 1,
+  runId = runDetail.body.run_id,
+  binding: { release_id: string; release_name: string; component_key: string } = RELEASE_BINDINGS[
+    index
+  ],
+  variant = index === 0 ? 'ok' : 'second',
+): FixtureDocument {
   const body: ReleaseDetail = {
     release_id: binding.release_id,
     project_id: projectDetail.body.id,
@@ -37,18 +44,23 @@ function releaseDocument(index: 0 | 1): FixtureDocument {
     ],
     bound_runs: [
       {
-        run_id: runDetail.body.run_id,
+        run_id: runId,
         component_key: binding.component_key,
         bound_at: '2026-11-01T00:00:01Z',
       },
     ],
   };
-  return { ...runDetail, operation_id: 'getRelease', variant: index === 0 ? 'ok' : 'second', body };
+  return { ...runDetail, operation_id: 'getRelease', variant, body };
 }
 
 export const FIXTURE_CATALOG_RELEASE_ROWS: readonly FixtureCatalogRow[] = [
   { name: 'release-detail', document: releaseDocument(0), derived: true },
   { name: 'release-detail-second', document: releaseDocument(1), derived: true },
+  {
+    name: 'release-detail-regular-run',
+    document: releaseDocument(0, runState.body.run_id, runState.body.releases[0], 'regular-run'),
+    derived: true,
+  },
   {
     name: 'release-detail-forbidden',
     document: { ...runForbidden, operation_id: 'getRelease', variant: 'forbidden' },

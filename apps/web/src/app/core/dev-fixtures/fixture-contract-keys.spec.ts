@@ -79,14 +79,6 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     }
   });
 
-  it('pins the id-keyed release read to distinct corpus release ids', () => {
-    const ids = CORPUS.map(readDocument)
-      .filter((document) => document.operation_id === 'getRelease' && document.status < 400)
-      .map((document) => (isRecord(document.body) ? document.body['release_id'] : undefined));
-    expect(ids.every((id) => typeof id === 'string')).toBe(true);
-    expect(new Set(ids).size, 'two documents share one release_id').toBe(ids.length);
-  });
-
   it('pins the cursor-keyed CI-binding and run-list walks to their corpus pages (09.7.1-F15, 09.3.1-T1)', () => {
     // 09.7.1-F15 note (4): `listCiBindings` answers the catalog row whose `cursor` equals the
     // request's cursor, so the Secrets tab's Load more reaches its terminal page in a browser

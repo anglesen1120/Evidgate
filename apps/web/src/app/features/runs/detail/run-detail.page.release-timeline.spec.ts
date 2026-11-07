@@ -174,6 +174,49 @@ describe('RunDetailPage release and timeline regions', () => {
     expect(root.getAttribute('data-run-detail-status')).toBe('ready');
   });
 
+  it('clears the previous components when the next release fails and retries that selection', async () => {
+    get.mockResolvedValue({
+      ...run,
+      releases: [
+        { release_id: 'rel-1', release_name: 'Web', component_key: 'web' },
+        { release_id: 'rel-2', release_name: 'API', component_key: 'api' },
+      ],
+    });
+    getRelease
+      .mockResolvedValueOnce({
+        release_id: 'rel-1',
+        name: 'Web release',
+        state: 'active',
+        version: 1,
+        components: [
+          { component_key: 'web', digest: 'sha256:abc', environment_revision_id: 'env' },
+        ],
+        bound_runs: [{ run_id: run.run_id, component_key: 'web' }],
+      })
+      .mockRejectedValueOnce(refused('unavailable'))
+      .mockResolvedValueOnce({
+        release_id: 'rel-2',
+        name: 'Recovered API release',
+        state: 'active',
+        version: 2,
+        components: [],
+        bound_runs: [{ run_id: run.run_id, component_key: 'api' }],
+      });
+    const { root, harness } = await open();
+    expect(root.querySelectorAll('[data-release-component]')).toHaveLength(1);
+    root.querySelectorAll<HTMLButtonElement>('app-release-panel [role="group"] button')[1]?.click();
+    await settle(harness);
+    expect(root.querySelectorAll('[data-release-component]')).toHaveLength(0);
+    expect(region(root, 'app-release-panel app-error-pattern')).not.toBeNull();
+    expect(root.getAttribute('data-run-detail-status')).toBe('ready');
+    root.querySelector<HTMLButtonElement>('app-release-panel app-error-pattern button')?.click();
+    await settle(harness);
+    expect(getRelease.mock.calls.map(([id]) => id)).toEqual(['rel-1', 'rel-2', 'rel-2']);
+    expect(region(root, '[data-release-name]').textContent).toContain('Recovered API release');
+    expect(root.querySelector('[data-release-unbound]')).toBeNull();
+    expect(root.querySelector('[data-release-no-components]')).not.toBeNull();
+  });
+
   it('keeps one current step and no after-cancel note for a complete run', async () => {
     const { root } = await open();
     const timeline = region(root, 'app-run-timeline');

@@ -19,7 +19,9 @@
             class="min-h-(--eg-control-touch) h-auto max-w-full min-w-0 whitespace-normal text-start transition-none"
             (click)="selectRelease.emit(binding.releaseId)"
           >
-            <bdi class="wrap-anywhere">{{ display(binding.name ?? binding.releaseId) }}</bdi>
+            <bdi class="wrap-anywhere">{{
+              display(binding.name?.trim() || binding.releaseId)
+            }}</bdi>
           </button>
         }
       </div>

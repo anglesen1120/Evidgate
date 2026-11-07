@@ -50,6 +50,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       'run-detail-release-refused',
       'release-detail',
       'release-detail-second',
+      'release-detail-regular-run',
       'release-detail-forbidden',
       'release-detail-not-found',
     ]);

@@ -165,3 +165,76 @@ for (const locale of LOCALES) {
     ).toBe(true);
   });
 }
+
+for (const locale of LOCALES) {
+  test(`an unbound run makes no release read at 320px (${locale})`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(runDetailPath({ locale, run: 'canceled' }));
+    await ready(page);
+    await expect(page.locator('app-release-panel [data-release-unbound]')).toHaveText(
+      COPY[locale].unbound,
+    );
+    const reads = await page.evaluate(() =>
+      (window.__evidgateFixtureRequests ?? []).filter((request) =>
+        new URL(request.url).pathname.includes('/releases/'),
+      ),
+    );
+    expect(reads).toEqual([]);
+    await expect(page.locator('app-release-panel button')).toHaveCount(0);
+  });
+
+  test(`an unretryable release load error hides components but preserves the run (${locale})`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `${runDetailPath({ locale, run: 'release-refused' })}&fixture.variant.getRelease=missing`,
+    );
+    await ready(page);
+    await expect(page.locator('app-release-panel app-error-pattern')).toBeVisible();
+    await expect(page.locator('app-release-panel [data-release-component]')).toHaveCount(0);
+    await expect(page.locator('app-release-panel [data-release-unbound]')).toHaveCount(0);
+    await expect(page.locator('app-manifest-panel')).toBeVisible();
+    await expect(page.locator('app-release-panel app-error-pattern button')).toHaveCount(0);
+    await expectNoA11yViolations(page, `release load error ${locale}`);
+  });
+
+  test(`two releases switch back by keyboard without duplicate reads at 320px (${locale})`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(runDetailPath({ locale, run: 'releases' }));
+    await ready(page);
+    const release = page.locator('app-release-panel');
+    const buttons = release.getByRole('group').getByRole('button');
+    await expect(release.locator('[data-release-digest]')).toHaveText(`sha256:${'a'.repeat(64)}`);
+    await expect(buttons).toHaveCount(2);
+    await buttons.nth(0).focus();
+    await page.keyboard.press('Tab');
+    await expect(buttons.nth(1)).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(release.locator('[data-release-digest]')).toHaveText(`sha256:${'b'.repeat(64)}`);
+    await page.keyboard.press('Shift+Tab');
+    await expect(buttons.nth(0)).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(release.locator('[data-release-digest]')).toHaveText(`sha256:${'a'.repeat(64)}`);
+    await page.keyboard.press('Enter');
+    await expect(buttons.nth(0)).toHaveAttribute('aria-pressed', 'true');
+    await expect(buttons.nth(1)).toHaveAttribute('aria-pressed', 'false');
+    const reads = await page.evaluate(() =>
+      (window.__evidgateFixtureRequests ?? [])
+        .map((request) => new URL(request.url).pathname)
+        .filter((path) => path.includes('/releases/')),
+    );
+    expect(reads).toEqual([
+      '/v1/releases/018f0000-0000-7000-8000-000000000091',
+      '/v1/releases/018f0000-0000-7000-8000-000000000092',
+      '/v1/releases/018f0000-0000-7000-8000-000000000091',
+    ]);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+    await release.screenshot({
+      path: testInfo.outputPath(`release-components-${locale}-320px.png`),
+    });
+  });
+}
