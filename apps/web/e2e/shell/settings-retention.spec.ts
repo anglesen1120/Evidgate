@@ -4,7 +4,7 @@ import { FIXTURE_REQUEST_LOG } from '../../src/app/core/dev-fixtures/fixture-req
 import {
   LOCALES,
   ORG_ACME,
-  SETTINGS_ADMIN_USAGE_GRANTS,
+  SETTINGS_ADMIN_GRANTS,
   THEMES,
   localePath,
   seedStoredTheme,
@@ -14,14 +14,14 @@ import {
 } from './support';
 
 const FORM = 'app-retention-form';
-const RETENTION_GRANTS = SETTINGS_ADMIN_USAGE_GRANTS.replace(
-  'settings-admin-usage',
+const RETENTION_GRANTS = SETTINGS_ADMIN_GRANTS.replace(
+  'settings-admin',
   'settings-retention-write',
 );
 
 function path(locale: ShellLocale, variant = 'ok', writable = true): string {
   return withVariants(localePath(locale, `/orgs/${ORG_ACME}/settings/quota-retention`), [
-    writable ? RETENTION_GRANTS : SETTINGS_ADMIN_USAGE_GRANTS,
+    writable ? RETENTION_GRANTS : SETTINGS_ADMIN_GRANTS,
     `?fixture.variant.setRetentionPolicy=${variant}`,
   ]);
 }
@@ -101,14 +101,14 @@ for (const locale of LOCALES) {
     });
 
     test('422 renders server limits inline while retaining the draft', async ({ page }) => {
-      await page.goto(path(locale, 'out-of-range'));
+      await page.goto(path(locale, 'out_of_range'));
       await expect(page.locator('#retention-artifact')).toHaveValue('14');
       await enterDays(page, '#retention-artifact', '100');
       await enterDays(page, '#retention-metadata', '120');
       await tabTo(page, '[data-retention-save]');
       await page.keyboard.press('Enter');
       await expect(page.locator('[data-retention-error]')).toHaveText(
-        'artifact_days must be between 1 and 90',
+        'the retention window is outside the configured range',
       );
       await expect(page.locator('#retention-artifact-error')).toContainText(
         'retention_limits.min_artifact_days: 1',

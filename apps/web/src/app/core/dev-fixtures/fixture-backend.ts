@@ -70,7 +70,7 @@ import {
   queryParameter,
   type FixtureRoute,
 } from './fixture-routes';
-import { findSettingsAdminUsageFixture } from './fixture-settings-permissions';
+import { findSettingsRetentionWriteFixture } from './fixture-settings-permissions';
 import { FixtureToggles } from './fixture-toggles';
 import { findUsageSummaryFixture } from './fixture-usage-summary';
 
@@ -245,22 +245,26 @@ export class FixtureHttpBackend implements HttpBackend {
     const retention = /^\/projects\/([^/]+)\/retention$/.exec(relativePath);
     if (retention?.[1] && (request.method === 'GET' || request.method === 'PUT')) {
       const operation = request.method === 'GET' ? 'getRetentionPolicy' : 'setRetentionPolicy';
-      return findRetentionFixture(
+      // A variant the supplement does not model (the corpus's `out_of_range` 422) falls through.
+      const supplement = findRetentionFixture(
         request.method,
         this.toggles.variantFor(operation),
         retention[1],
         request.body,
         this.retentionPolicies,
       );
+      // The supplement stays authoritative for `ok`; a malformed write must not reach the corpus row.
+      const variant = this.toggles.variantFor(operation);
+      if (supplement !== undefined || variant === 'ok') return supplement;
     }
     // Keep computed UI specimens outside the corpus registry, whose rows mirror on-disk examples.
     if (request.method === 'GET' && /^\/orgs\/[^/]+\/usage\/summary$/.test(relativePath)) {
       return findUsageSummaryFixture(this.toggles.variantFor('getUsageSummary'));
     }
-    // The Settings strip's admin session needs one grant the corpus row predates; a toggle that
-    // names no specimen falls through, so every corpus variant answers exactly as before.
+    // The retention writer session needs one grant no corpus row holds; a toggle that names no
+    // specimen falls through, so every corpus variant answers exactly as before.
     if (request.method === 'GET' && relativePath === '/permissions') {
-      const supplemental = findSettingsAdminUsageFixture(
+      const supplemental = findSettingsRetentionWriteFixture(
         this.toggles.variantFor('listPermissions'),
       );
       if (supplemental !== undefined) return supplemental;
