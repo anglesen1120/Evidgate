@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   LOCALES,
   ORG_ACME,
+  SETTINGS_ADMIN_USAGE_GRANTS,
   THEMES,
   expectNoA11yViolations,
   localePath,
@@ -12,12 +13,11 @@ import {
 
 const PANEL = 'app-quota-panel';
 const BADGE = '[data-quota-badge]';
-const USAGE_READ = '?fixture.variant.listPermissions=usage-read';
 
 function path(locale: ShellLocale, variant: string, tab = true): string {
   const route = `/orgs/${ORG_ACME}${tab ? '/settings/quota-retention' : '/usage'}`;
   return withVariants(localePath(locale, route), [
-    USAGE_READ,
+    SETTINGS_ADMIN_USAGE_GRANTS,
     `?fixture.variant.getUsageSummary=${variant}`,
   ]);
 }

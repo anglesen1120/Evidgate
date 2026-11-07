@@ -72,6 +72,12 @@ describe('QuotaBadgeComponent', () => {
     expect(await link?.text()).toContain('Approaching quota limit:');
     expect(await link?.text()).toContain('Results');
     expect(await link?.getAttribute('href')).toBe('/orgs/org-one/settings/quota-retention');
+    const classes = (await link?.getAttribute('class')) ?? '';
+    // The link is a control: its touch minimum must win over the domain badge's chip minimum.
+    expect(classes).toContain('min-h-(--eg-control-touch)');
+    expect(classes).toContain('min-w-(--eg-control-touch)');
+    expect(classes).not.toContain('min-h-[var(--eg-space-6)]');
+    expect(classes).not.toContain('min-w-0');
     await link?.focus();
     expect(await link?.isFocused()).toBe(true);
   });

@@ -70,6 +70,7 @@ import {
   queryParameter,
   type FixtureRoute,
 } from './fixture-routes';
+import { findSettingsAdminUsageFixture } from './fixture-settings-permissions';
 import { FixtureToggles } from './fixture-toggles';
 import { findUsageSummaryFixture } from './fixture-usage-summary';
 
@@ -243,6 +244,14 @@ export class FixtureHttpBackend implements HttpBackend {
     // Keep computed UI specimens outside the corpus registry, whose rows mirror on-disk examples.
     if (request.method === 'GET' && /^\/orgs\/[^/]+\/usage\/summary$/.test(relativePath)) {
       return findUsageSummaryFixture(this.toggles.variantFor('getUsageSummary'));
+    }
+    // The Settings strip's admin session needs one grant the corpus row predates; a toggle that
+    // names no specimen falls through, so every corpus variant answers exactly as before.
+    if (request.method === 'GET' && relativePath === '/permissions') {
+      const supplemental = findSettingsAdminUsageFixture(
+        this.toggles.variantFor('listPermissions'),
+      );
+      if (supplemental !== undefined) return supplemental;
     }
     const route = matchFixtureRoute(request.method, relativePath);
     return route === undefined ? undefined : this.selectEntry(route, relativePath, request);

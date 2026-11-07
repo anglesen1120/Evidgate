@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { HlmBadge } from '@evidgate/ui/badge';
+import { hlm } from '@evidgate/ui/utils';
 
 import { TenantStore } from '../../core/session/tenant.store';
 import { quotaMetricLabel } from '../../features/settings/quota-retention/quota-metric-label';
@@ -43,9 +44,14 @@ export class QuotaBadgeComponent {
   protected readonly quota = inject(QuotaStore);
   protected readonly tenant = inject(TenantStore);
   protected readonly metricLabel = quotaMetricLabel;
-  private readonly linkClasses = `${BADGE_CLASSES} min-h-(--eg-control-touch) min-w-(--eg-control-touch) no-underline hover:underline focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-2 focus-visible:outline-ring`;
-  protected readonly warnClasses = `${this.linkClasses} ${BADGE_TONE_CLASSES.warning}`;
-  protected readonly blockedClasses = `${this.linkClasses} ${BADGE_TONE_CLASSES.danger}`;
+  // `hlm` merges, so the link's touch target replaces the chip minimum height and width the domain
+  // badge classes set instead of competing with them in stylesheet order.
+  private readonly linkClasses = hlm(
+    BADGE_CLASSES,
+    'min-h-(--eg-control-touch) min-w-(--eg-control-touch) no-underline hover:underline focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-2 focus-visible:outline-ring',
+  );
+  protected readonly warnClasses = hlm(this.linkClasses, BADGE_TONE_CLASSES.warning);
+  protected readonly blockedClasses = hlm(this.linkClasses, BADGE_TONE_CLASSES.danger);
 
   constructor() {
     this.quota.load();

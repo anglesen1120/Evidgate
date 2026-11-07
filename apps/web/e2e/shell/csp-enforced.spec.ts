@@ -82,6 +82,7 @@ const READY: Readonly<Record<string, string>> = {
   SecretsPage: 'app-secrets-page app-secret-reference-list [data-secret-reference]:first-child',
   SettingsNoTabsPage: 'app-settings-no-tabs',
   PolicyPage: 'app-policy-page[data-policy-phase="ready"]',
+  QuotaPanelComponent: 'app-quota-panel[data-quota-state="ready"]',
   RunListPage: 'app-run-list-page[data-run-list-status="ready"]',
   RunDetailPage: 'app-run-detail-page[data-run-detail-status="ready"]',
   SuiteCompositionComponent: 'app-suite-composition[data-suite-composition-status="ready"]',
