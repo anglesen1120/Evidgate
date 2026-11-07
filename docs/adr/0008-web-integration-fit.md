@@ -109,7 +109,7 @@ The spec's external `$ref` files require the whole `contracts/` directory, not o
 
 Bundle cost of the SDK: production `ng build` of the spike app (Angular, router, `@ngrx/signals`, SDK, app code) — initial 247.71 kB raw / 70.69 kB Angular-estimated transfer (78,537 B ≈ 76.7 KiB by `gzip -9` per file); the SDK alone, tree-shaken to two operations, 9,816 B raw / 3,997 B gzip.
 
-### (d) `@ngrx/signals` store (`session.store.spec.ts`, 7 tests, zoneless)
+### (d) `@ngrx/signals` store (`session.store.*.spec.ts`, zoneless)
 
 `@ngrx/signals` root exports (read from the installed typings): `signalStore`, `signalState`, `signalMethod`, `patchState`, `getState`, `watchState`, `withState`, `withComputed`, `withMethods`, `withProps`, `withHooks`, `withFeature`, `deepComputed`, `withLinkedState`; `@ngrx/signals/rxjs-interop` exports exactly `rxMethod`. The seven tests (D1–D7) cover the permission lookup, org/project switching, a failing `load()` ⇒ `sessionState: 'expired'`, a zoneless DOM update (`'Zone' in globalThis === false`, no `detectChanges()`), the `CanMatchFn` returning `true` or a `UrlTree` to `/forbidden`, and a runs list store that keeps only the cursor. `sdk-store/EVIDENCE.md` §3 holds the details.
 
