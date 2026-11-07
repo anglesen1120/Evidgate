@@ -163,7 +163,8 @@ public sealed class RlsIsolationTests : HarnessTest
         failures.ShouldBeEmpty(
             $"the unset-GUC rule is broken for {failures.Count} tenant table(s):{Environment.NewLine}"
             + string.Join(Environment.NewLine, failures));
-        checkedTables.Count.ShouldBe(scan.TenantTables.Count);
+        checkedTables.Count.ShouldBe(
+            scan.TenantTables.Count(table => !TenantRowFactory.TriggerWrittenTables.Contains(table)));
     }
 
     /// <summary>
@@ -267,7 +268,19 @@ public sealed class RlsIsolationTests : HarnessTest
         failures.ShouldBeEmpty(
             $"the set-GUC rule is broken for {failures.Count} tenant table(s):{Environment.NewLine}"
             + string.Join(Environment.NewLine, failures));
-        checkedTables.Count.ShouldBe(scan.TenantTables.Count);
+
+        // Every tenant table is covered once: by a generated row here, or — for a trigger-written table with no
+        // generated row to seed — by the trigger/test that owns it. Asserting both sides keeps an exclusion from
+        // silently dropping a table out of the scan.
+        foreach (var triggerWritten in TenantRowFactory.TriggerWrittenTables)
+        {
+            scan.TenantTables.ShouldContain(
+                triggerWritten,
+                $"{triggerWritten} is excluded from this suite as trigger-written but is not a discovered tenant table");
+        }
+
+        checkedTables.Count.ShouldBe(
+            scan.TenantTables.Count(table => !TenantRowFactory.TriggerWrittenTables.Contains(table)));
     }
 
     /// <summary>
@@ -302,7 +315,9 @@ public sealed class RlsIsolationTests : HarnessTest
 
     /// <summary>The discovered tenant tables the app role can insert, in discovery order.</summary>
     private static IEnumerable<string> AppSeedableTables(TenantFkScanResult scan) =>
-        scan.TenantTables.Where(table => !TenantRowFactory.OwnerProvisionedTables.Contains(table));
+        scan.TenantTables.Where(table =>
+            !TenantRowFactory.OwnerProvisionedTables.Contains(table)
+            && !TenantRowFactory.TriggerWrittenTables.Contains(table));
 
     /// <summary>
     /// The discovered tenant tables only the owner can provision

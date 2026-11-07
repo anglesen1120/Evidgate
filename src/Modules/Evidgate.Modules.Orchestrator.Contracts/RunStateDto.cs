@@ -7,9 +7,10 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// locked (the pinned manifest, its suite and policy revisions, its environment revision and the producer slots it
 /// registered). The wire names are <c>run_id</c>, <c>state</c>, <c>current_evidence_revision_id</c>, <c>version</c>,
 /// <c>purpose</c>, <c>ref</c>, <c>unverified_ref</c>, <c>manifest_hash</c>, <c>suite_revision_id</c>,
-/// <c>policy_revision_id</c>, <c>environment</c>, <c>shard_count</c>, <c>declared_producers</c>, <c>releases</c> and
-/// <c>after_cancel_events</c> (the host's <c>SnakeCaseLower</c> policy). Another tenant's — or, for a project-scoped
-/// credential, another project's — run is <c>404 not_found</c>, the same code and body as an unknown id (00 §5.4).
+/// <c>policy_revision_id</c>, <c>environment</c>, <c>shard_count</c>, <c>declared_producers</c>, <c>releases</c>,
+/// <c>after_cancel_events</c> and <c>state_history</c> (the host's <c>SnakeCaseLower</c> policy). Another tenant's — or,
+/// for a project-scoped credential, another project's — run is <c>404 not_found</c>, the same code and body as an
+/// unknown id (00 §5.4).
 /// <para>
 /// Every member is required and comes from a stored column: nothing here is a placeholder. Evidence
 /// <c>completeness</c>/<c>missing[]</c> are a later, separate read (09.3.1-T3 with 07.5.2), not part of this body.
@@ -65,6 +66,12 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// How many of the run's <c>event</c> rows are flagged <c>after_cancel</c>: late events a canceled run kept accepting.
 /// It counts events, not case attempts, and a run with none reports zero.
 /// </param>
+/// <param name="StateHistory">
+/// The run's recorded transitions, oldest first, from the table the write trigger appends to; the creation row — the
+/// one with no from state — is the marker that the history is known, so it is never served. An empty array is a run
+/// whose history is known and which has not transitioned yet; null is a run created before that table existed, whose
+/// history nothing can reconstruct. At most <c>64</c> items are served.
+/// </param>
 public sealed record RunStateDto(
     Guid RunId,
     string State,
@@ -80,7 +87,21 @@ public sealed record RunStateDto(
     int ShardCount,
     IReadOnlyList<string> DeclaredProducers,
     IReadOnlyList<RunReleaseRef> Releases,
-    int AfterCancelEvents);
+    int AfterCancelEvents,
+    IReadOnlyList<RunStateTransition>? StateHistory);
+
+/// <summary>
+/// One recorded transition of a run (<c>GET /v1/runs/{r}</c>): the state it left, the state it entered and when the
+/// database recorded the move. The wire names are <c>from_state</c>, <c>to_state</c> and <c>occurred_at</c>, and all
+/// three are required — the creation row, which has no from state, is the marker and is never served.
+/// </summary>
+/// <param name="FromState">The state the run left, one of the 00 §8.1 vocabulary; never null in a served item.</param>
+/// <param name="ToState">The state the run entered, one of the same vocabulary.</param>
+/// <param name="OccurredAt">
+/// The database clock time the transition was recorded, so two values of one run are ordered by the row's sequence,
+/// which a clock that steps backwards would not preserve.
+/// </param>
+public sealed record RunStateTransition(string FromState, string ToState, DateTimeOffset OccurredAt);
 
 /// <summary>
 /// One release a run is bound to (<c>GET /v1/runs/{r}</c>): the release's id and name, and the component key the stored

@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Orchestrator.Application.Attempts;
 using Evidgate.Modules.Orchestrator.Application.Evaluation;
+using Evidgate.Modules.Orchestrator.Application.Queries;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Application.Releases;
 using Evidgate.Modules.Orchestrator.Contracts;
