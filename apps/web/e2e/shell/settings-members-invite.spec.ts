@@ -21,8 +21,8 @@ import cancelNotPending from '../../../../fixtures/web-api/membership-cancel-not
 import resendNotPending from '../../../../fixtures/web-api/membership-resend-not-pending/input.json';
 import resendOk from '../../../../fixtures/web-api/membership-resend-ok/input.json';
 import membershipsList from '../../../../fixtures/web-api/memberships-list/input.json';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
-  expectNoA11yViolations,
   LOCALES,
   MEMBERS_CANCEL_NOT_PENDING,
   MEMBERS_CANCEL_OK,

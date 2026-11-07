@@ -15,6 +15,13 @@ import {
   withVariants,
   type ShellLocale,
 } from '../shell/support';
+import {
+  findingFor,
+  inPageMeasure,
+  insideHiddenClip,
+  type ClippingFinding,
+  type Probe,
+} from './i18n-longest.geometry';
 
 const VI_CATALOGUE = resolve(__dirname, '../../src/locale/messages.vi.xlf');
 
@@ -58,27 +65,6 @@ export interface PageGeometry {
   readonly viewport: number;
   readonly document: number;
   readonly body: number;
-}
-
-export type ClippingKind = 'clipped' | 'outside-viewport';
-
-/** A longest string the page renders while cutting it off or pushing it past the viewport. */
-export interface ClippingFinding {
-  readonly stringId: string;
-  readonly text: string;
-  readonly selector: string;
-  readonly kind: ClippingKind;
-  readonly scrollWidth: number;
-  readonly clientWidth: number;
-  readonly left: number;
-  readonly right: number;
-  readonly viewport: number;
-}
-
-interface Probe {
-  readonly id: string;
-  readonly text: string;
-  readonly probe: string;
 }
 
 let catalogue: readonly ViString[] | null = null;
@@ -173,138 +159,6 @@ export async function scanLongestStrings(
     findings.push(finding);
   }
   return { matched: [...matched], findings };
-}
-
-/** One element's own box and the clipping-relevant style of every ancestor up to the root. */
-interface AncestorBox {
-  readonly selector: string;
-  readonly overflowX: string;
-  readonly textOverflow: string;
-  readonly scrollWidth: number;
-  readonly clientWidth: number;
-}
-
-interface PageMeasurement {
-  readonly probeId: string;
-  readonly text: string;
-  readonly selector: string;
-  readonly rendered: boolean;
-  readonly width: number;
-  readonly height: number;
-  readonly left: number;
-  readonly right: number;
-  readonly ancestors: readonly AncestorBox[];
-}
-
-interface MeasuredPage {
-  readonly viewport: number;
-  readonly measurements: readonly PageMeasurement[];
-}
-
-/** `sr-only` shaves a wrapper to 1px and clips it, so nothing inside reaches a sighted reader. */
-function insideHiddenClip(ancestors: readonly AncestorBox[]): boolean {
-  return ancestors.some((row) => row.clientWidth <= 1 && row.overflowX !== 'visible');
-}
-
-/**
- * Runs inside the page, so Playwright serialises the source and every helper it uses is declared
- * here. It only measures; the judgement of what counts as clipped runs in the test process.
- */
-function inPageMeasure(probes: Probe[]): MeasuredPage {
-  const viewport = document.documentElement.clientWidth;
-  const measurements: PageMeasurement[] = [];
-  const collapse = (value: string | null) => (value ?? '').replace(/\s+/g, ' ').trim();
-  const describe = (element: Element): string => {
-    const testId = element.getAttribute('data-testid');
-    const hook = testId === null ? '' : `[data-testid="${testId}"]`;
-    const first = collapse(element.getAttribute('class')).split(' ').filter(Boolean)[0];
-    const cls = first === undefined ? '' : `.${first}`;
-    const id = element.id === '' ? '' : `#${element.id}`;
-    return `${element.tagName.toLowerCase()}${id}${hook}${cls}`;
-  };
-  const ancestry = (element: Element): AncestorBox[] => {
-    const rows: AncestorBox[] = [];
-    for (let node: Element | null = element; node !== null; node = node.parentElement) {
-      const style = getComputedStyle(node);
-      rows.push({
-        selector: describe(node),
-        overflowX: style.overflowX,
-        textOverflow: style.textOverflow,
-        scrollWidth: node.scrollWidth,
-        clientWidth: node.clientWidth,
-      });
-    }
-    return rows;
-  };
-
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    const element = node.parentElement;
-    const text = collapse(node.nodeValue);
-    if (element === null || text === '') {
-      continue;
-    }
-    // An inert subtree (a closed off-canvas drawer) and non-content tags are never painted.
-    if (element.closest('script, style, noscript, template, [inert]')) {
-      continue;
-    }
-    const style = getComputedStyle(element);
-    const box = element.getBoundingClientRect();
-    for (const probe of probes) {
-      if (!text.includes(probe.probe)) {
-        continue;
-      }
-      measurements.push({
-        probeId: probe.id,
-        text: probe.text,
-        selector: describe(element),
-        rendered: style.display !== 'none' && style.visibility !== 'hidden',
-        width: box.width,
-        height: box.height,
-        left: box.left,
-        right: box.right,
-        ancestors: ancestry(element),
-      });
-    }
-  }
-  return { viewport, measurements };
-}
-
-/** A measurement that a reader cannot read in full, or `null` when the string is fully legible. */
-function findingFor(measurement: PageMeasurement, viewport: number): ClippingFinding | null {
-  if (!measurement.rendered || measurement.width < 2 || measurement.height < 2) {
-    return null; // sr-only or not painted: nothing a reader could see cut off
-  }
-  // Content inside a scroll region is reachable, so widening it past the box is not a cut.
-  const scroller = measurement.ancestors.some(
-    (row) =>
-      (row.overflowX === 'auto' || row.overflowX === 'scroll') &&
-      row.scrollWidth > row.clientWidth + 1,
-  );
-  const clipped = measurement.ancestors.find(
-    (row) =>
-      row.scrollWidth > row.clientWidth + 1 &&
-      (row.overflowX === 'hidden' ||
-        row.overflowX === 'clip' ||
-        (row.textOverflow === 'ellipsis' && row.overflowX !== 'visible')),
-  );
-  const outside = measurement.left < -1 || measurement.right > viewport + 1;
-  if (clipped === undefined && !(outside && !scroller)) {
-    return null;
-  }
-  const own = measurement.ancestors[0];
-  const box = clipped ?? own;
-  return {
-    stringId: measurement.probeId,
-    text: measurement.text,
-    selector: clipped === undefined ? measurement.selector : clipped.selector,
-    kind: clipped === undefined ? 'outside-viewport' : 'clipped',
-    scrollWidth: box === undefined ? 0 : box.scrollWidth,
-    clientWidth: box === undefined ? 0 : box.clientWidth,
-    left: Math.round(measurement.left),
-    right: Math.round(measurement.right),
-    viewport,
-  };
 }
 
 /** The review address of the run list the core flow opens its detail from. */

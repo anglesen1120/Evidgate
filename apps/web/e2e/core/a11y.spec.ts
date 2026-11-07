@@ -6,10 +6,10 @@ import { expect, test, type Page } from '@playwright/test';
 
 import runDetail from '../../../../fixtures/web-api/run-detail/input.json';
 import { runDetailPath } from '../shell/run-detail.support';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   ANONYMOUS_SESSION,
   currentTheme,
-  expectNoA11yViolations,
   LIMITED_GRANTS,
   localePath,
   LOCALES,

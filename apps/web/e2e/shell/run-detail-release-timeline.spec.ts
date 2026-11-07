@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { activeElement, expectNoA11yViolations, LOCALES, type ShellLocale } from './support';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
+import { activeElement, LOCALES, type ShellLocale } from './support';
 import { runDetailPath } from './run-detail.support';
 
 const COPY: Record<

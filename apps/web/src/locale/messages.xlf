@@ -2976,7 +2976,7 @@
       <trans-unit id="quota.panel.title" datatype="html"><source>Quota &amp; retention</source></trans-unit>
       <trans-unit id="quota.panel.description" datatype="html"><source>Organization-wide counters and limits supplied by the service. Quota state does not change recorded test outcomes.</source></trans-unit>
       <trans-unit id="quota.panel.loading" datatype="html"><source>Loading usage summary…</source></trans-unit>
-      <trans-unit id="quota.panel.period" datatype="html"><source>Billing period:</source></trans-unit>
+      <trans-unit id="quota.panel.period" datatype="html"><source>Billing period</source></trans-unit>
       <trans-unit id="quota.panel.empty" datatype="html"><source>No usage counters were supplied for this period.</source></trans-unit>
       <trans-unit id="quota.panel.used" datatype="html"><source>Used</source></trans-unit>
       <trans-unit id="quota.panel.limit" datatype="html"><source>Limit</source></trans-unit>

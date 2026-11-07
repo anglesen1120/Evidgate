@@ -3,7 +3,8 @@
 // The empty and fifty-slot runs are derived catalog rows, because the corpus holds neither.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import readyFixture from '../../../../fixtures/web-api/run-detail/input.json';
-import { activeElement, expectNoA11yViolations, LOCALES, type ShellLocale } from './support';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
+import { activeElement, LOCALES, type ShellLocale } from './support';
 import { runDetailPath, type RunStateVariant } from './run-detail.support';
 
 /** The two slots the unmodified `run-detail` document declares, in shard-index order. */

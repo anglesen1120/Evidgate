@@ -82,6 +82,20 @@ describe('exception matching', () => {
     expect(targetSelector(['iframe#preview', 'p.notice'])).toBe('p.notice');
     expect(targetSelector('  #a   >\n p.notice ')).toBe('#a > p.notice');
   });
+
+  it('keeps whitespace and escapes inside a quoted attribute value', () => {
+    expect(targetSelector('  p[title="A  B"]\n')).toBe('p[title="A  B"]');
+    expect(targetSelector("p[title='A  B']")).toBe("p[title='A  B']");
+    // The escaped quote does not end the value, so the run after it is still content.
+    expect(targetSelector('p[title="A \\"  B"]')).toBe('p[title="A \\"  B"]');
+    const spaced: A11yException = { ...EXCEPTION, selector: 'p[title="A  B"]' };
+    expect(isExcepted([spaced], 'color-contrast', 'p[title="A  B"]')).toBe(true);
+    // The negative control: one space fewer is a different element, so the entry must not cover it.
+    expect(isExcepted([spaced], 'color-contrast', 'p[title="A B"]')).toBe(false);
+    expect(
+      unexceptedViolations([violationOf('color-contrast', 'p[title="A B"]')], [spaced]),
+    ).toHaveLength(1);
+  });
 });
 
 describe('the violations a scan still fails on', () => {

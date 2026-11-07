@@ -3156,7 +3156,7 @@
       <trans-unit id="quota.panel.title" datatype="html"><source>Quota &amp; retention</source><target>Hạn mức và lưu giữ</target></trans-unit>
       <trans-unit id="quota.panel.description" datatype="html"><source>Organization-wide counters and limits supplied by the service. Quota state does not change recorded test outcomes.</source><target>Số liệu và giới hạn toàn tổ chức do dịch vụ cung cấp. Trạng thái hạn mức không thay đổi kết quả kiểm thử đã ghi nhận.</target></trans-unit>
       <trans-unit id="quota.panel.loading" datatype="html"><source>Loading usage summary…</source><target>Đang tải tổng hợp mức sử dụng…</target></trans-unit>
-      <trans-unit id="quota.panel.period" datatype="html"><source>Billing period:</source><target>Kỳ tính phí:</target></trans-unit>
+      <trans-unit id="quota.panel.period" datatype="html"><source>Billing period</source><target>Kỳ tính phí</target></trans-unit>
       <trans-unit id="quota.panel.empty" datatype="html"><source>No usage counters were supplied for this period.</source><target>Chưa có số liệu sử dụng được cung cấp cho kỳ này.</target></trans-unit>
       <trans-unit id="quota.panel.used" datatype="html"><source>Used</source><target>Đã dùng</target></trans-unit>
       <trans-unit id="quota.panel.limit" datatype="html"><source>Limit</source><target>Giới hạn</target></trans-unit>

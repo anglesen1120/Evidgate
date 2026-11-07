@@ -16,10 +16,10 @@
 // (`core/dev-fixtures/fixture-settings-permissions.ts`) — the Quota & retention tab's own read.
 import { expect, test, type Page } from '@playwright/test';
 
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   activeSettingsTabId,
   expectIndistinguishableNotFound,
-  expectNoA11yViolations,
   LOCALES,
   SETTINGS_ADMIN_GRANTS,
   SETTINGS_ADMIN_USAGE_GRANTS,

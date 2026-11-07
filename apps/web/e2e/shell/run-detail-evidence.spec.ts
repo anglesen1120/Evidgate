@@ -14,13 +14,8 @@ import {
   type RunDecisionVariant,
   type RunRevisionsVariant,
 } from './run-detail.support';
-import {
-  expectNoA11yViolations,
-  LOCALES,
-  seedStoredTheme,
-  THEMES,
-  type ShellLocale,
-} from './support';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
+import { LOCALES, seedStoredTheme, THEMES, type ShellLocale } from './support';
 
 /** Revisions arrive newest first: the newest is the default pin, the incomplete one is 2. */
 const REVISIONS = revisionsDocument.body.items;

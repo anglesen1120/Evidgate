@@ -13,14 +13,8 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
 import runListPage2 from '../../../../fixtures/web-api/run-list-page-2/input.json';
-import {
-  activeElement,
-  expectNoA11yViolations,
-  localePath,
-  ORG_ACME,
-  PROJECT_STOREFRONT,
-  withVariants,
-} from './support';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
+import { activeElement, localePath, ORG_ACME, PROJECT_STOREFRONT, withVariants } from './support';
 
 /** The grant set that holds `run:read`; the default G1 session grants no run code. */
 const RUN_READ_GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';

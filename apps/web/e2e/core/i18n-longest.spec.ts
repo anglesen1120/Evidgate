@@ -23,6 +23,7 @@ import {
   type ShellLocale,
   type ShellTheme,
 } from '../shell/support';
+import { type ClippingFinding } from './i18n-longest.geometry';
 import {
   coreRunListPath,
   loadViStrings,
@@ -30,7 +31,6 @@ import {
   pageGeometry,
   pageText,
   scanLongestStrings,
-  type ClippingFinding,
 } from './i18n-longest.support';
 import { LoginPage } from './pages/login.page';
 import { OnboardingWizard } from './pages/onboarding-wizard.page';
@@ -136,13 +136,18 @@ function describeFindings(
   if (findings.length === 0) {
     return `${context}: no tracked longest vi string is clipped`;
   }
-  const lines = findings.map(
-    (finding) =>
+  const lines = findings.map((finding) => {
+    const measured =
+      finding.kind === 'clipped-vertically'
+        ? `scrollHeight=${finding.scrollHeight} clientHeight=${finding.clientHeight} ` +
+          `top=${finding.top} bottom=${finding.bottom}`
+        : `scrollWidth=${finding.scrollWidth} clientWidth=${finding.clientWidth} ` +
+          `left=${finding.left} right=${finding.right}`;
+    return (
       `${context} ${route} ${finding.kind} ${finding.stringId} "${finding.text}" at ` +
-      `${finding.selector}: scrollWidth=${finding.scrollWidth} ` +
-      `clientWidth=${finding.clientWidth} left=${finding.left} right=${finding.right} ` +
-      `viewport=${finding.viewport}`,
-  );
+      `${finding.selector}: ${measured} viewport=${finding.viewport}`
+    );
+  });
   return `${findings.length} longest vi string(s) do not fit on ${context}:\n${lines.join('\n')}`;
 }
 
@@ -207,6 +212,51 @@ test.describe('longest vi strings at the narrowest viewport, signed out', () => 
       await expectLongestStringsFit(page, SIGN_IN, theme);
     });
   }
+});
+
+test.describe('the clipping detector at the narrowest viewport', () => {
+  test.use({ viewport: VIEWPORT });
+
+  test('a paragraph cut by height and hidden overflow is reported', async ({ page }) => {
+    const longest = loadViStrings()[0];
+    if (longest === undefined) {
+      throw new Error('the vi catalogue yields no core-flow string');
+    }
+    // A probe page of its own, so only the style under test can decide the result.
+    await page.setContent('<p id="clipped-probe"></p>');
+    await page.locator('#clipped-probe').evaluate((node, text) => {
+      node.textContent = text;
+    }, longest.text);
+    const tracked = longestOnPage(loadViStrings(), await pageText(page));
+    expect(tracked.length, 'the paragraph is matched through the catalogue').toBeGreaterThan(0);
+    expect(
+      (await scanLongestStrings(page, tracked)).findings,
+      'the paragraph is legible before it is cut',
+    ).toEqual([]);
+    await page.addStyleTag({ content: '#clipped-probe { height: 8px; overflow: hidden; }' });
+    const cut = await scanLongestStrings(page, tracked);
+    expect(cut.findings.map((finding) => finding.kind)).toContain('clipped-vertically');
+    expect(cut.findings.map((finding) => finding.stringId)).toContain(longest.id);
+  });
+
+  test('a paragraph cut by an ancestor box is reported', async ({ page }) => {
+    const longest = loadViStrings()[0];
+    if (longest === undefined) {
+      throw new Error('the vi catalogue yields no core-flow string');
+    }
+    // The paragraph keeps its own geometry; only the wrapping box is short and hides the rest.
+    await page.setContent('<div id="clipped-wrap"><p id="clipped-probe"></p></div>');
+    await page.locator('#clipped-probe').evaluate((node, text) => {
+      node.textContent = text;
+    }, longest.text);
+    const tracked = longestOnPage(loadViStrings(), await pageText(page));
+    await page.addStyleTag({ content: '#clipped-wrap { height: 8px; overflow: hidden; }' });
+    const cut = await scanLongestStrings(page, tracked);
+    expect(cut.findings.map((finding) => finding.kind)).toContain('clipped-vertically');
+    expect(cut.findings.some((finding) => finding.selector.startsWith('div#clipped-wrap'))).toBe(
+      true,
+    );
+  });
 });
 
 test.describe('the probe list itself', () => {

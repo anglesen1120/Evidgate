@@ -17,10 +17,10 @@ match `@@area.name`. `apps/web/src/app/shared/ui/i18n-catalog.spec.ts` adds that
 target may equal its source.
 
 Status: the fix set below is **applied** in this change. Every `<target>`-only replacement of §1,
-§2 and §3 is in `apps/web/src/locale/messages.vi.xlf`, the two rows that also change the English
-source (`runs.detail.attempts.page`, `quota.panel.period`) are in both `messages.vi.xlf` and
-`messages.xlf` with their matching template edits, and every spec/e2e copy that asserted the old
-copy now asserts the new copy. The changed ids are listed per group in §6; `shared.label-chip.healed`
+§2 and §3 is in `apps/web/src/locale/messages.vi.xlf`, the one row that also changes the English
+source (`runs.detail.attempts.page`) is in both `messages.vi.xlf` and `messages.xlf` with its
+matching template edit, and every spec/e2e copy that asserted the old copy now asserts the new
+copy. The changed ids are listed per group in §6; `shared.label-chip.healed`
 stays as found, per §8. Nothing was re-extracted: the catalog was hand-edited, so `i18n:check` and
 the spec runs named at the end of §6 are the checks to run on this state.
 
@@ -90,7 +90,7 @@ sentence, and plurals formed by appending `s`.
 | Site | Pattern | Verdict |
 |---|---|---|
 | `features/runs/detail/attempts/attempts-table.component.html:193` | `{{ copy.page }} {{ page() + 1 }} / {{ pages().length }}` — translated noun, two numbers and the separator `/` are three fragments; `Page` cannot be moved by a translator | **bug** — make it one message: source `Page {page} / {pages}`, `vi` `Trang {page} / {pages}`, rendered by a computed label (same shape as `runs.detail.producers.page`, which already does this) |
-| `features/settings/quota-retention/quota-panel.component.html:25` | `<span i18n="@@quota.panel.period">Billing period</span>:` — the colon sits outside the message | **bug (low)** — move the colon inside the `i18n` element and update the source text to `Billing period:` in both catalogs (the only occurrence of a literal glued to an `i18n` element in the app) |
+| `features/settings/quota-retention/quota-panel.component.html:25` | `<span i18n="@@quota.panel.period">Billing period</span>:` — the colon sits outside the message | ok — the label is one complete noun and `: ` separates it from the value; folding the colon into the message deletes that separator, because the whitespace-only text node between the two spans is dropped, and renders `Billing period:2026-11` |
 | `features/runs/detail/producers/producer-status-table.component.ts:98-114`, `features/runs/detail/timeline/run-timeline.component.ts:63-66` | manual singular/plural switch between two complete messages (`-one` and a `{count}` message) | ok — whole messages, no fragment; `vi` has no plural inflection, so both branches render correctly. No ICU message exists anywhere in this app, so this is the local convention, not a defect |
 | `features/onboarding/health/cli-quickstart.component.ts:41-63` | `` `# ${$localize`:@@onboarding.quickstart.…`}` `` | ok — the `#` is shell-comment syntax and the `$localize` message is complete |
 | `features/auth/login/login.page.ts:62-64` | `<span i18n>EN</span> / <span i18n>VI</span>` with `aria-hidden` separator | ok — two independent labels; the control's accessible name is the whole sentence `auth.login.switch-language` |
@@ -141,7 +141,7 @@ it is a judgement call, not a defect, per §8). Ids changed, by group:
   `auth.login.destination-heading`.
 - §3 formality rows: `shell.page.unavailable.explanation`, `shell.page.unavailable.failed`.
 
-Two rows also change the English source, and carry the matching template edit and the same
+One row also changes the English source, and carries the matching template edit and the same
 source text in `apps/web/src/locale/messages.xlf`:
 
 - `runs.detail.attempts.page`: source `Page` → `Page <x id="page"/> / <x id="pages"/>`, target
@@ -149,9 +149,6 @@ source text in `apps/web/src/locale/messages.xlf`:
   `attempts-table.component.html:193` renders one computed label (`pageLabel()`, same shape as
   `runs.detail.producers.page`) instead of `{{ copy.page }}`.
   The English output stays `Page 2 / 3`, so `attempts-table.spec.ts` assertions do not change.
-- `quota.panel.period`: source `Billing period` → `Billing period:`, target `Kỳ tính phí` →
-  `Kỳ tính phí:`, and the colon moved inside the `i18n` element in
-  `quota-panel.component.html:25`.
 
 Copies of the changed `vi` text, changed with the catalog (they assert shipped copy):
 
@@ -219,6 +216,10 @@ labels valid / duplicate / false-positive / out-of-scope) rather than by hand:
   `concat-label-value` row (0.41) stays `ok` on the evidence of §5: every one of those ten joins
   places a complete noun before a number or identifier with no punctuation glued on, and the noun
   order is the same in both languages.
+- On reinspection the §5 colon row is `ok`, not a defect to apply: the change would delete the
+  separator space between the label and the value — the colon and the whitespace after it are one
+  text node, so a message-wrapped colon renders `Billing period:2026-11` — and the original markup
+  and English source stand. That is why §6 has one source-changing row, not two.
 
 ## 9. Tools used
 

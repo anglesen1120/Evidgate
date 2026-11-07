@@ -55,9 +55,45 @@ export interface UnexceptedViolation {
   readonly nodes: readonly AxeViolationNodeLike[];
 }
 
-/** Axe composes selectors and summaries with newlines and padding; one line is what a report has. */
+/**
+ * Axe composes selectors and summaries with newlines and padding; one line is what a report has.
+ * Only whitespace outside quotes is layout: a run inside a quoted attribute value is content, so
+ * `p[title="A  B"]` and `p[title="A B"]` stay different elements. An escape is kept verbatim and
+ * never opens or closes a quote, which is what a CSS `\"` or an escaped space means.
+ */
 function oneLine(text: string): string {
-  return text.trim().replace(/\s+/g, ' ');
+  let out = '';
+  let quote = '';
+  let pendingSpace = false;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text.charAt(index);
+    if (quote !== '') {
+      out += char;
+      if (char === '\\' && index + 1 < text.length) {
+        out += text.charAt(index + 1);
+        index += 1;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (char === '\\' && index + 1 < text.length) {
+      if (pendingSpace && out !== '') out += ' ';
+      pendingSpace = false;
+      out += char + text.charAt(index + 1);
+      index += 1;
+      continue;
+    }
+    if (/\s/.test(char)) {
+      pendingSpace = true;
+      continue;
+    }
+    if (pendingSpace && out !== '') out += ' ';
+    pendingSpace = false;
+    if (char === '"' || char === "'") quote = char;
+    out += char;
+  }
+  return out;
 }
 
 /** `Array.isArray` narrows to `any[]`; this keeps the element type unknown for the recursion. */
