@@ -78,8 +78,8 @@ test('the two regions add no keyboard stop and keep their own name', async ({ pa
   const timeline = page.getByRole('region', { name: COPY.en.timeline });
   const release = page.getByRole('region', { name: COPY.en.release });
 
-  // Nothing inside either region is interactive, so the walk passes straight from the manifest
-  // panel's copy button to the end of the page and back.
+  // Nothing inside either region is interactive, so the walk passes from the manifest panel's
+  // copy button to the producer table's scroll region (its only stop) and then off the page.
   await expect(timeline.locator('a, button, input, select, textarea, [tabindex="0"]')).toHaveCount(
     0,
   );
@@ -90,7 +90,10 @@ test('the two regions add no keyboard stop and keep their own name', async ({ pa
   await copyHash.focus();
   await expect(copyHash).toBeFocused();
   await page.keyboard.press('Tab');
+  await expect(page.locator('[data-producer-scroll]')).toBeFocused();
+  await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');
+  await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Shift+Tab');
   await expect(copyHash).toBeFocused();
 

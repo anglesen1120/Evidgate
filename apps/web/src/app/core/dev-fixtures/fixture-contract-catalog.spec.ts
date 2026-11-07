@@ -4,7 +4,7 @@
 
 import { FIXTURE_CATALOG } from './fixture-catalog';
 import { CORPUS, FIXTURE_ROUTE_ROWS, readDocument } from './fixture-contract.corpus';
-import { VALIDATOR } from './fixture-contract.support';
+import { VALIDATOR, isRecord } from './fixture-contract.support';
 
 describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
   it('keeps FIXTURE_CATALOG in step with the corpus directory', () => {
@@ -37,12 +37,13 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     }
 
     // The derived rows: each one is a corpus document with the members it shows replaced, never a
-    // stand-alone body. Today that is the canceled run, which `GET /v1/runs/{r}` keeps in `state`.
+    // stand-alone body. Today that is the canceled run, the fifty-slot run whose table has to
+    // scroll, and the run that declares no producer at all.
     const derived = FIXTURE_CATALOG.filter((entry) => entry.derived === true);
     expect(
       derived.map((entry) => entry.name),
-      'a second derived row needs its own pin here',
-    ).toEqual(['run-detail-canceled']);
+      'a new derived row needs its own pin here',
+    ).toEqual(['run-detail-canceled', 'run-detail-many-producers', 'run-detail-no-producers']);
     const readyFixture = corpusByName.get('run-detail');
     if (readyFixture === undefined) {
       throw new Error('fixtures/web-api holds no run-detail document to derive from');
@@ -52,6 +53,36 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       ...ready,
       variant: 'detail-canceled',
       body: { ...(ready.body as object), state: 'canceled' },
+    });
+
+    // Every member the producer rows do not replace, so the pin still compares the whole body.
+    const untouched = (body: object): Record<string, unknown> => {
+      const members = { ...(body as Record<string, unknown>) };
+      delete members['declared_producers'];
+      delete members['shard_count'];
+      return members;
+    };
+    const many = derived[1]?.document;
+    const manyBody: unknown = many?.body;
+    if (!isRecord(manyBody)) {
+      throw new Error('the fifty-slot row carries no object body to pin');
+    }
+    const declared: unknown = manyBody['declared_producers'];
+    if (!Array.isArray(declared)) {
+      throw new Error('the fifty-slot row declares no producer array');
+    }
+    const manyIds: unknown[] = declared;
+    expect(many?.variant).toBe('detail-many-producers');
+    expect(manyIds).toHaveLength(50);
+    expect(manyIds[0]).toBe('shard-1');
+    expect(manyIds[49]).toBe('shard-50');
+    expect(new Set(manyIds).size, 'the fifty slots are not distinct ids').toBe(50);
+    expect(manyBody['shard_count']).toBe(50);
+    expect(untouched(manyBody)).toEqual(untouched(ready.body as object));
+    expect(derived[2]?.document).toEqual({
+      ...ready,
+      variant: 'detail-no-producers',
+      body: { ...(ready.body as object), declared_producers: [], shard_count: 0 },
     });
   });
 

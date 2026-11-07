@@ -58,6 +58,29 @@ const runDetailCanceled: FixtureDocument = {
   body: { ...runDetail.body, state: 'canceled' },
 };
 
+/**
+ * The declared-producer states the corpus has no detail document for: an empty declaration, which
+ * the producers section explains rather than reports as an error, and a full fifty-slot run, where
+ * the table has to scroll inside its own wrapper. One member of the validated body is replaced.
+ */
+const runDetailNoProducers: FixtureDocument = {
+  ...runDetail,
+  variant: 'detail-no-producers',
+  body: { ...runDetail.body, declared_producers: [], shard_count: 0 },
+};
+
+/** Fifty slot ids in shard-index order: the widest producer table the run screen has to lay out. */
+const MANY_PRODUCER_IDS: readonly string[] = Array.from(
+  { length: 50 },
+  (_declared, index) => `shard-${index + 1}`,
+);
+
+const runDetailManyProducers: FixtureDocument = {
+  ...runDetail,
+  variant: 'detail-many-producers',
+  body: { ...runDetail.body, declared_producers: MANY_PRODUCER_IDS, shard_count: 50 },
+};
+
 export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
   { name: 'run-attempts', document: runAttempts },
   { name: 'run-attempts-empty', document: runAttemptsEmpty },
@@ -79,6 +102,8 @@ export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
   { name: 'run-detail', document: runDetail },
   { name: 'run-detail-canceled', document: runDetailCanceled, derived: true },
   { name: 'run-detail-forbidden', document: runDetailForbidden },
+  { name: 'run-detail-many-producers', document: runDetailManyProducers, derived: true },
+  { name: 'run-detail-no-producers', document: runDetailNoProducers, derived: true },
   { name: 'run-detail-not-found', document: runDetailNotFound },
   { name: 'run-detail-null-evidence', document: runDetailNullEvidence },
   { name: 'run-detail-ref-format', document: runDetailRefFormat },

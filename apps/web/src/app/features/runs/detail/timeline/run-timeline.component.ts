@@ -60,6 +60,9 @@ export class RunTimelineComponent {
     const count = this.afterCancelEvents();
     if (count === null) return null;
     if (count <= 0) return this.copy.afterCancelNone;
+    if (count === 1) {
+      return $localize`:@@runs.detail.timeline.after-cancel-one:1 event arrived after cancel (informational)`;
+    }
     return $localize`:@@runs.detail.timeline.after-cancel-count:${count}:count: events arrived after cancel (informational)`;
   });
 

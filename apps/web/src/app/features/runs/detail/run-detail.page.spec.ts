@@ -19,7 +19,6 @@ import { routes } from '../runs.routes';
 const run = ready.body as RunStateDto;
 const refRun = formatted.body as RunStateDto;
 const attemptPage = attemptsOk.body as RunAttemptPage;
-/** One pending body: `status` set, every evaluation-derived member null. */
 function pendingBody() {
   return {
     status: 'pending',
@@ -37,7 +36,6 @@ function pendingBody() {
     url: null,
   };
 }
-/** One evaluated live body, member for member. */
 function liveBody() {
   return {
     ...pendingBody(),
@@ -122,6 +120,9 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('app-decision-chip')?.textContent).toContain('Not evaluated');
     expect(root.querySelector('app-outcome-pill')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
+    expect(root.querySelectorAll('#producers td[data-fact][data-unavailable]')).toHaveLength(
+      run.declared_producers.length * 4,
+    );
   });
   it('places compact run facts before attempts and evidence, with full provenance last', async () => {
     const { root } = await open();

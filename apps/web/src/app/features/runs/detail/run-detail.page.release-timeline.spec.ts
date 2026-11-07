@@ -63,7 +63,7 @@ describe('RunDetailPage release and timeline regions', () => {
   }
 
   it('shows a canceled run as an informational note that never marks completion reached', async () => {
-    get.mockResolvedValue({ ...run, state: 'canceled' });
+    get.mockResolvedValue({ ...run, state: 'canceled', after_cancel_events: 3 });
     const { root } = await open();
     const timeline = region(root, 'app-run-timeline');
 
@@ -81,8 +81,9 @@ describe('RunDetailPage release and timeline regions', () => {
 
     const note = timeline.querySelector<HTMLElement>('[data-after-cancel-note]');
     expect(note?.textContent).toContain('never complete the run');
-    // The response serves no after-cancel count, so the region says nothing about one.
-    expect(note?.textContent).not.toMatch(/\d+ events arrived after cancel/);
+    expect(timeline.querySelector('[data-after-cancel-count]')?.textContent).toContain(
+      '3 events arrived after cancel (informational)',
+    );
   });
 
   it('shows the release region as unavailable instead of bound to no release', async () => {
