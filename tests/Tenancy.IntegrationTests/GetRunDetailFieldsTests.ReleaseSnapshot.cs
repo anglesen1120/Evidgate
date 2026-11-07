@@ -13,8 +13,8 @@ namespace Tenancy.IntegrationTests;
 public sealed partial class GetRunDetailFieldsTests
 {
     /// <summary>
-    /// The binding count the contract states for <c>GET /v1/runs/{r}</c>. Asserted against the read's own constant, so a
-    /// change on either side that the contract does not carry fails this file rather than a served body nobody compares.
+    /// The binding ceiling the run detail read applies. The contract declares no bound, so this pins the
+    /// implementation constant: changing it must be a deliberate edit of this file too.
     /// </summary>
     private const int ServedBindingBound = 500;
 
@@ -37,7 +37,7 @@ public sealed partial class GetRunDetailFieldsTests
     public async Task GetRun_MoreBindingsThanTheCeiling_ServesTheOldestRowsAndDropsTheNewest()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
-        ReleaseSql.MaxBoundReleases.ShouldBe(ServedBindingBound, "the read's ceiling is the contract's number");
+        ReleaseSql.MaxBoundReleases.ShouldBe(ServedBindingBound, "the read's ceiling is the pinned implementation value");
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
