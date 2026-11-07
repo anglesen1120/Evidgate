@@ -63,7 +63,7 @@ internal sealed class GetRunQueryHandler(
     /// deleted project either.
     /// </para>
     /// </summary>
-    private const string RunStateById = $$"""
+    internal const string RunStateById = $$"""
         select r.id as run_id, r.project_id, r.state, r.current_evidence_revision_id, r.version, r.purpose,
                r.ref_kind, r.ref_name, r.pr_number, r.head_sha, r.base_sha, r.trigger_event, r.is_fork, r.unverified_ref,
                m.manifest_hash,
