@@ -32,6 +32,7 @@
     // explicitly because `**/playwright.config.ts` does not match `playwright.fixtures.config.ts`.
     "playwright.fixtures.config.ts",
     "playwright.dev-login.config.ts",
+    "playwright.core.config.ts",
     "e2e/**/*.ts",
     // 09.1.1-T11.4 (AC9): the `style-tokens` rule spec and its Vitest config. The rule
     // itself is plain CommonJS (`eslint-rules/*.js`) linted by ESLint, not type-checked.
