@@ -35,10 +35,14 @@ describe('ProducerStatusTableComponent', () => {
   async function render(
     slots: readonly ProducerSlot[] | null = [FINALIZED],
     status: ProducerStatus = 'ready',
+    runAfterCancelEvents: number | null = null,
+    targetAnchor: string | null = null,
   ) {
     const fixture = TestBed.createComponent(ProducerStatusTableComponent);
     fixture.componentRef.setInput('slots', slots);
     fixture.componentRef.setInput('status', status);
+    fixture.componentRef.setInput('runAfterCancelEvents', runAfterCancelEvents);
+    fixture.componentRef.setInput('targetAnchor', targetAnchor);
     await fixture.whenStable();
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
@@ -110,9 +114,47 @@ describe('ProducerStatusTableComponent', () => {
     expect(root.querySelector('[data-badge="stale-epoch"]')).toBeNull();
   });
 
+  it('shows a run-level count once without assigning it to any producer', async () => {
+    const slots = producerSlotsFromRun({ declared_producers: ['shard-1', 'shard-2'] });
+    const { root } = await render(slots, 'ready', 3);
+    expect(root.querySelectorAll('[data-badge="after-cancel"]')).toHaveLength(1);
+    expect(root.querySelector('[data-run-after-cancel]')?.textContent).toContain(
+      '3 after-cancel events for this run',
+    );
+    expect(root.querySelector('tbody [data-badge="after-cancel"]')).toBeNull();
+    expect(root.querySelectorAll('td[data-fact][data-unavailable]')).toHaveLength(8);
+  });
+
+  it.each([null, 0])('does not show a run-level badge for %s', async (count) => {
+    const { root } = await render([FINALIZED], 'ready', count);
+    expect(root.querySelector('[data-run-after-cancel]')).toBeNull();
+  });
+
+  it('uses singular event labels when exactly one event is supplied', async () => {
+    const { root } = await render(
+      [{ ...FINALIZED, staleEpochEvents: 1, afterCancelEvents: 1 }],
+      'ready',
+      1,
+    );
+    expect(root.querySelector('[data-badge="stale-epoch"]')?.textContent?.trim()).toBe(
+      '1 stale-epoch event',
+    );
+    expect(root.querySelector('tbody [data-badge="after-cancel"]')?.textContent?.trim()).toBe(
+      '1 after-cancel event',
+    );
+    expect(root.querySelector('[data-run-after-cancel]')?.textContent?.trim()).toBe(
+      '1 after-cancel event for this run',
+    );
+  });
+
   it('cannot take or emit completeness and badges leave all result facts unchanged', async () => {
     const metadata = reflectComponentType(ProducerStatusTableComponent);
-    expect(metadata?.inputs.map((input) => input.templateName)).toEqual(['slots', 'status']);
+    expect(metadata?.inputs.map((input) => input.templateName)).toEqual([
+      'slots',
+      'status',
+      'runAfterCancelEvents',
+      'targetAnchor',
+    ]);
     expect(metadata?.outputs).toEqual([]);
     const { fixture, root } = await render();
     const originalFacts = [...root.querySelectorAll('[data-fact]')].map((cell) => cell.outerHTML);
@@ -120,9 +162,8 @@ describe('ProducerStatusTableComponent', () => {
     const originalAttributes = [
       ...root.querySelectorAll('[data-completeness], [data-run-completeness]'),
     ];
-    fixture.componentRef.setInput('slots', [
-      { ...FINALIZED, staleEpochEvents: 4, afterCancelEvents: 3 },
-    ]);
+    fixture.componentRef.setInput('slots', [{ ...FINALIZED, staleEpochEvents: 4 }]);
+    fixture.componentRef.setInput('runAfterCancelEvents', 3);
     await fixture.whenStable();
     expect([...root.querySelectorAll('[data-fact]')].map((cell) => cell.outerHTML)).toEqual(
       originalFacts,
@@ -173,6 +214,70 @@ describe('ProducerStatusTableComponent', () => {
     ).toBe(true);
     expect(root.querySelectorAll('tbody th')[49]?.textContent?.trim()).toBe(slots[49]?.producerId);
     expect(root.textContent).not.toContain('…');
+  });
+
+  it.each([200, 201])('bounds %i producers to pages of at most 200 rows', async (count) => {
+    const slots = Array.from({ length: count }, (_, index) => ({
+      ...FINALIZED,
+      producerId: `shard-${index}`,
+    }));
+    const { fixture, root } = await render(slots);
+    expect(root.querySelectorAll('tr[data-producer-slot]')).toHaveLength(200);
+    const next = root.querySelector<HTMLButtonElement>('[data-producer-next]');
+    if (count === 200) {
+      expect(next).toBeNull();
+    } else {
+      expect(next?.disabled).toBe(false);
+      next?.click();
+      await fixture.whenStable();
+      expect(root.querySelectorAll('tr[data-producer-slot]')).toHaveLength(1);
+      expect(root.querySelector('tr[data-producer-slot]')?.getAttribute('data-producer-slot')).toBe(
+        'shard-200',
+      );
+      expect(next?.disabled).toBe(true);
+      expect(root.querySelector('tbody th')?.id).toBe('producer-shard-200');
+      expect(root.querySelectorAll('td[data-fact]')).toHaveLength(4);
+      root.querySelector<HTMLButtonElement>('[data-producer-previous]')?.click();
+      await fixture.whenStable();
+      expect(root.querySelectorAll('tr[data-producer-slot]')).toHaveLength(200);
+    }
+  });
+
+  it('selects the page containing a producer fragment and preserves manual pages on polling', async () => {
+    const slots = Array.from({ length: 256 }, (_, index) => ({
+      ...FINALIZED,
+      producerId: `shard-${index}`,
+    }));
+    const { fixture, root } = await render(slots, 'ready', null, 'producer-shard-255');
+    expect(root.querySelector('#producer-shard-255')).not.toBeNull();
+    expect(root.querySelectorAll('tr[data-producer-slot]')).toHaveLength(56);
+    root.querySelector<HTMLButtonElement>('[data-producer-previous]')?.click();
+    await fixture.whenStable();
+    fixture.componentRef.setInput('slots', [...slots]);
+    await fixture.whenStable();
+    expect(root.querySelector('#producer-shard-0')).not.toBeNull();
+    expect(root.querySelector('#producer-shard-255')).toBeNull();
+  });
+
+  it('localizes the run-level singular count and page controls into Vietnamese', async () => {
+    loadTranslations({
+      'runs.detail.producers.run-after-cancel-one': '1 sự kiện sau khi hủy của lần chạy này',
+      'runs.detail.producers.previous': 'Nguồn gửi dữ liệu trước',
+      'runs.detail.producers.next': 'Nguồn gửi dữ liệu tiếp theo',
+      'runs.detail.producers.page': 'Trang {$page} / {$pages}',
+    });
+    const slots = Array.from({ length: 201 }, (_, index) => ({
+      ...FINALIZED,
+      producerId: `shard-${index}`,
+    }));
+    const { root } = await render(slots, 'ready', 1);
+    expect(root.querySelector('[data-run-after-cancel]')?.textContent?.trim()).toBe(
+      '1 sự kiện sau khi hủy của lần chạy này',
+    );
+    expect(root.querySelector('[data-producer-next]')?.textContent).toContain(
+      'Nguồn gửi dữ liệu tiếp theo',
+    );
+    expect(root.querySelector('nav [role="status"]')?.textContent).toBe('Trang 1 / 2');
   });
 
   it('uses the evidence-link anchor helper even for reserved characters', async () => {

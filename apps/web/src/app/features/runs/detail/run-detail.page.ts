@@ -23,7 +23,7 @@ import { RequestStateComponent } from '../../../shared/ui/states/request-state.c
 import { AttemptsTableComponent } from './attempts/attempts-table.component';
 import { DecisionViewComponent } from './decision/decision-view.component';
 import { EvidencePanelComponent } from './evidence/evidence-panel.component';
-import { resolveEvidenceAnchor } from './evidence/run-evidence-anchors';
+import { decodeEvidenceAnchor, resolveEvidenceAnchor } from './evidence/run-evidence-anchors';
 import { ManifestPanelComponent } from './manifest-panel.component';
 import { producerSlotsFromRun } from './producers/producer-slots';
 import { ProducerStatusTableComponent } from './producers/producer-status-table.component';
@@ -73,6 +73,9 @@ export class RunDetailPage {
   private runId: string | null = null;
   /** The fragment this view was opened (or navigated) with; the landing target lives there. */
   private readonly fragment = signal<string | null>(null);
+  protected readonly producerTargetAnchor = computed(() =>
+    decodeEvidenceAnchor(this.fragment() ?? ''),
+  );
   /** The fragment landed once: a polling update never moves focus a second time. */
   private landed = false;
   protected readonly retryEligible = signal(false);
@@ -166,14 +169,15 @@ export class RunDetailPage {
     this.watchRetryWindow(this.store.loadError, this.retryEligible);
     this.watchRetryWindow(this.store.decisionError, this.decisionRetryEligible);
     this.watchRetryWindow(this.store.revisionsError, this.revisionsRetryEligible);
-    // Initial-fragment landing: `#attempt-…`/`#producer-…` names a row the attempts table renders
-    // only after its first page lands, so resolution waits for that state. A target on a page the
-    // visitor has not loaded yet is left alone: the landing retries after a visitor-requested page
-    // arrives and never paginates on its own. One landing per fragment, so a poll never moves focus.
+    // Producer anchors depend on the run declaration, not a successful attempts read.
+    // Unloaded attempt targets retry only when their requested page arrives.
     effect(() => {
       const fragment = this.fragment();
+      const run = this.store.run();
       const attempts = this.store.attempts();
-      if (fragment === null || attempts === null || this.landed) return;
+      const anchor = decodeEvidenceAnchor(fragment ?? '');
+      if (fragment === null || anchor === null || run === null || this.landed) return;
+      if (anchor.startsWith('attempt-') && attempts === null) return;
       afterNextRender(
         () => {
           if (this.landed || this.fragment() !== fragment) return;

@@ -11,6 +11,16 @@
   } @else if (status() === 'error') {
     <app-error-pattern [attr.data-state]="'error'" [headingLevel]="3" [retryDisabled]="true" />
   } @else if (slots(); as rows) {
+    <p id="producers-event-note" class="m-0 text-muted-foreground">{{ copy.eventNote }}</p>
+    @let runLateCount = runAfterCancelEvents();
+    @if (runLateCount !== null && runLateCount > 0) {
+      <app-status-pill
+        data-run-after-cancel
+        [attr.data-badge]="'after-cancel'"
+        [tone]="'info'"
+        [label]="runAfterCancelLabel(runLateCount)"
+      />
+    }
     @if (rows.length === 0) {
       <app-empty-pattern
         [attr.data-state]="'empty'"
@@ -18,7 +28,6 @@
         [description]="copy.emptyDescription"
       />
     } @else {
-      <p id="producers-event-note" class="m-0 text-muted-foreground">{{ copy.eventNote }}</p>
       <div
         hlmTableContainer
         data-producer-scroll
@@ -48,7 +57,7 @@
             </tr>
           </thead>
           <tbody hlmTBody>
-            @for (slot of rows; track slot.producerId) {
+            @for (slot of pageSlots(); track slot.producerId) {
               <tr hlmTr [attr.data-producer-slot]="slot.producerId">
                 <th
                   hlmTh
@@ -140,6 +149,36 @@
           </tbody>
         </table>
       </div>
+      @if (rows.length > pageSize) {
+        <nav
+          [attr.aria-label]="copy.pagination"
+          class="flex flex-wrap items-center gap-(--eg-space-3)"
+        >
+          <button
+            hlmBtn
+            type="button"
+            [variant]="'outline'"
+            data-producer-previous
+            class="min-h-(--eg-control-touch) whitespace-normal"
+            [disabled]="pageIndex() === 0"
+            (click)="movePage(-1)"
+          >
+            {{ copy.previous }}
+          </button>
+          <span role="status" [attr.aria-live]="'polite'">{{ pageLabel() }}</span>
+          <button
+            hlmBtn
+            type="button"
+            [variant]="'outline'"
+            data-producer-next
+            class="min-h-(--eg-control-touch) whitespace-normal"
+            [disabled]="pageIndex() === pageCount() - 1"
+            (click)="movePage(1)"
+          >
+            {{ copy.next }}
+          </button>
+        </nav>
+      }
     }
   } @else {
     <p [attr.data-state]="'unavailable'" class="m-0">

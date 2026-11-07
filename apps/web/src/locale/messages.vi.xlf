@@ -2818,6 +2818,15 @@
       <trans-unit id="runs.detail.producers.event-note" datatype="html"><source>Stale-epoch and after-cancel event counts are informational and do not affect completeness.</source><target>Số sự kiện thuộc epoch cũ và sau khi hủy chỉ mang tính thông tin, không ảnh hưởng đến tính đầy đủ.</target></trans-unit>
       <trans-unit id="runs.detail.producers.stale-epoch" datatype="html"><source><x id="count" equiv-text="count"/> stale-epoch events</source><target><x id="count"/> sự kiện thuộc epoch cũ</target></trans-unit>
       <trans-unit id="runs.detail.producers.after-cancel" datatype="html"><source><x id="count" equiv-text="count"/> after-cancel events</source><target><x id="count"/> sự kiện sau khi hủy</target></trans-unit>
+      <trans-unit id="runs.detail.producers.stale-epoch-one" datatype="html"><source>1 stale-epoch event</source><target>1 sự kiện thuộc epoch cũ</target></trans-unit>
+      <trans-unit id="runs.detail.producers.after-cancel-one" datatype="html"><source>1 after-cancel event</source><target>1 sự kiện sau khi hủy</target></trans-unit>
+      <trans-unit id="runs.detail.producers.run-after-cancel-one" datatype="html"><source>1 after-cancel event for this run</source><target>1 sự kiện sau khi hủy của lần chạy này</target></trans-unit>
+      <trans-unit id="runs.detail.producers.run-after-cancel" datatype="html"><source><x id="count" equiv-text="count"/> after-cancel events for this run</source><target><x id="count"/> sự kiện sau khi hủy của lần chạy này</target></trans-unit>
+      <trans-unit id="runs.detail.producers.previous" datatype="html"><source>Previous producers</source><target>Nguồn gửi dữ liệu trước</target></trans-unit>
+      <trans-unit id="runs.detail.producers.next" datatype="html"><source>Next producers</source><target>Nguồn gửi dữ liệu tiếp theo</target></trans-unit>
+      <trans-unit id="runs.detail.producers.pagination" datatype="html"><source>Producer pages</source><target>Các trang nguồn gửi dữ liệu</target></trans-unit>
+      <trans-unit id="runs.detail.producers.page" datatype="html"><source>Page <x id="page" equiv-text="page"/> of <x id="pages" equiv-text="pages"/></source><target>Trang <x id="page"/> / <x id="pages"/></target></trans-unit>
+      <trans-unit id="runs.detail.timeline.after-cancel-one" datatype="html"><source>1 event arrived after cancel (informational)</source><target>1 sự kiện đến sau khi hủy (chỉ mang tính thông tin)</target></trans-unit>
       <trans-unit id="runs.detail.timeline" datatype="html"><source>Run state timeline</source><target>Dòng thời gian trạng thái lượt chạy</target></trans-unit>
       <trans-unit id="runs.detail.timeline.reached" datatype="html"><source>Reached</source><target>Đã qua</target></trans-unit>
       <trans-unit id="runs.detail.timeline.current" datatype="html"><source>Current step</source><target>Bước hiện tại</target></trans-unit>

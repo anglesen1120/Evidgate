@@ -2803,6 +2803,15 @@
       <trans-unit id="runs.detail.producers.event-note" datatype="html"><source>Stale-epoch and after-cancel event counts are informational and do not affect completeness.</source></trans-unit>
       <trans-unit id="runs.detail.producers.stale-epoch" datatype="html"><source><x id="count" equiv-text="count"/> stale-epoch events</source></trans-unit>
       <trans-unit id="runs.detail.producers.after-cancel" datatype="html"><source><x id="count" equiv-text="count"/> after-cancel events</source></trans-unit>
+      <trans-unit id="runs.detail.producers.stale-epoch-one" datatype="html"><source>1 stale-epoch event</source></trans-unit>
+      <trans-unit id="runs.detail.producers.after-cancel-one" datatype="html"><source>1 after-cancel event</source></trans-unit>
+      <trans-unit id="runs.detail.producers.run-after-cancel-one" datatype="html"><source>1 after-cancel event for this run</source></trans-unit>
+      <trans-unit id="runs.detail.producers.run-after-cancel" datatype="html"><source><x id="count" equiv-text="count"/> after-cancel events for this run</source></trans-unit>
+      <trans-unit id="runs.detail.producers.previous" datatype="html"><source>Previous producers</source></trans-unit>
+      <trans-unit id="runs.detail.producers.next" datatype="html"><source>Next producers</source></trans-unit>
+      <trans-unit id="runs.detail.producers.pagination" datatype="html"><source>Producer pages</source></trans-unit>
+      <trans-unit id="runs.detail.producers.page" datatype="html"><source>Page <x id="page" equiv-text="page"/> of <x id="pages" equiv-text="pages"/></source></trans-unit>
+      <trans-unit id="runs.detail.timeline.after-cancel-one" datatype="html"><source>1 event arrived after cancel (informational)</source></trans-unit>
       <trans-unit id="runs.detail.timeline" datatype="html"><source>Run state timeline</source></trans-unit>
       <trans-unit id="runs.detail.timeline.reached" datatype="html"><source>Reached</source></trans-unit>
       <trans-unit id="runs.detail.timeline.current" datatype="html"><source>Current step</source></trans-unit>

@@ -6,10 +6,11 @@ import type { EvidenceRevisionPage, RunAttemptPage, RunStateDto } from '@evidgat
 import attemptsOk from '../../../../../../../fixtures/web-api/run-attempts/input.json';
 import { ReleasesDataService } from '../../../core/data/releases-data.service';
 import { RunsDataService } from '../../../core/data/runs-data.service';
+import { ApiRequestError } from '../../../core/http/api-error';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { RunDataService } from '../data/run-data.service';
 import { routes } from '../runs.routes';
-import { producerAnchorId } from './evidence/run-evidence-anchors';
+import { attemptAnchorId, producerAnchorId } from './evidence/run-evidence-anchors';
 import { deferred, pendingBody, run } from './run-detail-store.fixtures';
 import { RunDetailPage } from './run-detail.page';
 
@@ -40,9 +41,12 @@ describe('RunDetailPage producer region', () => {
   });
   afterEach(() => TestBed.resetTestingModule());
 
-  async function open() {
+  async function open(fragment = '') {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl(`/projects/project-1/runs/${run.run_id}`, RunDetailPage);
+    await harness.navigateByUrl(
+      `/projects/project-1/runs/${run.run_id}${fragment === '' ? '' : `#${fragment}`}`,
+      RunDetailPage,
+    );
     await harness.fixture.whenStable();
     const tick = deferred<void>();
     setTimeout(tick.resolve, 0);
@@ -76,5 +80,77 @@ describe('RunDetailPage producer region', () => {
     expect(root.querySelectorAll('tr[data-producer-slot]')).toHaveLength(0);
     expect(root.querySelector('#producers [data-state="empty"]')).not.toBeNull();
     expect(root.querySelector('#producers')?.textContent).not.toContain('finalized');
+  });
+
+  it('shows the served run-level late count once while every per-slot fact stays unavailable', async () => {
+    get.mockResolvedValue({
+      ...run,
+      state: 'canceled',
+      declared_producers: ['shard-1', 'shard-2'],
+      after_cancel_events: 3,
+    });
+    const root = await open();
+    const region = root.querySelector('#producers');
+    expect(region?.querySelectorAll('[data-badge="after-cancel"]')).toHaveLength(1);
+    expect(region?.querySelector('[data-run-after-cancel]')?.textContent).toContain(
+      '3 after-cancel events for this run',
+    );
+    expect(region?.querySelector('tbody [data-badge="after-cancel"]')).toBeNull();
+    expect(region?.querySelectorAll('td[data-fact][data-unavailable]')).toHaveLength(8);
+    expect(root.querySelector('[data-step="complete"]')?.getAttribute('data-status')).toBe(
+      'not-reached',
+    );
+  });
+
+  it.each(['failed', 'loading'])(
+    'lands a producer fragment while attempts are %s',
+    async (status) => {
+      if (status === 'failed') {
+        listAttempts.mockRejectedValue(
+          new ApiRequestError({
+            kind: 'unavailable',
+            status: 503,
+            code: 'unavailable',
+            message: '',
+            requestId: null,
+            retryable: true,
+            details: [],
+            retryAfterSeconds: null,
+          }),
+        );
+      } else {
+        listAttempts.mockReturnValue(deferred<RunAttemptPage>().promise);
+      }
+      const root = await open('producer-shard-2');
+      const target = root.querySelector('#producer-shard-2');
+      expect(target).not.toBeNull();
+      expect(document.activeElement).toBe(target);
+    },
+  );
+
+  it('lands a producer beyond the first bounded page even after attempts fail', async () => {
+    get.mockResolvedValue({
+      ...run,
+      declared_producers: Array.from({ length: 256 }, (_, index) => `shard-${index}`),
+      shard_count: 256,
+    });
+    listAttempts.mockRejectedValue(new Error('attempts unavailable'));
+    const root = await open('producer-shard-255');
+    const target = root.querySelector('#producer-shard-255');
+    expect(target).not.toBeNull();
+    expect(document.activeElement).toBe(target);
+    expect(root.querySelectorAll('tr[data-producer-slot]')).toHaveLength(56);
+  });
+
+  it('keeps an attempt fragment waiting for the attempts response', async () => {
+    const pending = deferred<RunAttemptPage>();
+    listAttempts.mockReturnValue(pending.promise);
+    const first = attemptPage.items[0];
+    if (first === undefined) throw new Error('attempt fixture must have a positive control');
+    const anchor = attemptAnchorId(first.execution_key, first.attempt_no);
+    const root = await open(anchor);
+    expect(root.querySelector(`#${anchor}`)).toBeNull();
+    pending.resolve(attemptPage);
+    await vi.waitFor(() => expect(document.activeElement?.id).toBe(anchor));
   });
 });

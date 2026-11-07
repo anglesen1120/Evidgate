@@ -138,6 +138,13 @@ describe('RunTimelineComponent', () => {
     expect(count?.textContent).not.toContain('Status unavailable');
   });
 
+  it('uses singular copy for exactly one after-cancel event', async () => {
+    const { root } = await render('canceled', 1);
+    expect(root.querySelector('[data-after-cancel-count]')?.textContent).toContain(
+      '1 event arrived after cancel (informational)',
+    );
+  });
+
   it.each(ALL_STATES.filter((state) => state !== 'canceled').map((state) => ({ state })))(
     'shows no after-cancel note for a $state run',
     async ({ state }) => {
