@@ -62,8 +62,8 @@ internal static class UsageModule
         services.AddTaskSchedule(UsageRollupSweeps.ComputeOnPeriodClose);
 
         // The quota gate the metering hot paths resolve, and the raise path behind the operator route. The
-        // gate is registered unconditionally: a host either has the real one or fails at resolution, and the
-        // `EVIDGATE:Usage:QuotaGate:Enabled` switch is the only way it answers Ok without a write.
+        // gate is registered unconditionally: a host either has the real one or fails at resolution.
+        // Each host announces its effective switch because Api and Worker bind it independently.
         services.TryAddScoped<QuotaCounterStore>();
         services.TryAddScoped<IQuotaGate, QuotaGate>();
         // The refusal stamp a caller that answers a block by rolling back discards, written in a scope of its own.
@@ -73,6 +73,7 @@ internal static class UsageModule
         services.AddOptions<QuotaGateOptions>()
             .BindConfiguration(QuotaGateOptions.Section)
             .ValidateOnStart();
+        services.AddHostedService<QuotaGateStartupNotice>();
         services.TryAddSingleton(TimeProvider.System);
 
         return services;

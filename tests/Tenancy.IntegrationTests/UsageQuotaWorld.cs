@@ -20,7 +20,7 @@ namespace Tenancy.IntegrationTests;
 /// <c>used</c>, the two threshold stamps and a second org's counter — a period's usage is an input of a
 /// gate test, never an outcome the test has to earn by metering.
 /// </remarks>
-internal sealed class UsageQuotaWorld : IAsyncDisposable
+internal sealed partial class UsageQuotaWorld : IAsyncDisposable
 {
     /// <summary>The platform operator every audit row of the operator route must name.</summary>
     internal static readonly Guid OperatorId = Guid.CreateVersion7();
@@ -271,6 +271,10 @@ internal sealed class UsageQuotaWorld : IAsyncDisposable
         _fixture.ScalarAsync<long>(
             Database,
             $"select count(*) from public.quota_counter where org_id = '{(org ?? Org):D}'");
+
+    /// <summary>One read on the world's database, for the values only it can answer, such as its own clock.</summary>
+    /// <param name="sql">The read; it must return one row and one column.</param>
+    internal Task<T> ScalarAsync<T>(string sql) => _fixture.ScalarAsync<T>(Database, sql);
 
     /// <summary>The id of one scope's counter, or null when the scope holds none.</summary>
     /// <param name="org">The tenant, or null for this world's org.</param>

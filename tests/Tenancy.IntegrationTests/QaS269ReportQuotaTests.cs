@@ -50,8 +50,9 @@ public sealed partial class EvidenceRawReportQuotaTests
     [InlineData(8)]
     public async Task ReportTask_DeferredThenRaisedAndDue_CompletesAtOriginalAttempt(int maxAttempts)
     {
-        // A pinned mid-month clock: the gate's wait is deterministic, so a run on the last day of a month cannot turn
-        // this case's deferral into a sub-minute one. The billing period follows the same clock everywhere here.
+        // A pinned mid-month clock keeps the deferral clamp deterministic, so a run on the last day of a month cannot
+        // turn this case's wait into a sub-minute one. It does not move the billing period: the gate charges the
+        // database's month, and the counter below is seeded there.
         await using var world = await StartAsync(
             services => UseClock(services, new FakeTimeProvider(MidMarch)));
         await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
