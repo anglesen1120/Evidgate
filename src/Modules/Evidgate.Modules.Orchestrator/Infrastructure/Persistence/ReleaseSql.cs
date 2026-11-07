@@ -2,7 +2,7 @@ namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 
 /// <summary>
 /// The release SQL: the create transaction's three statements, the reference probe that turns an unknown or foreign
-/// environment revision into a 422 before any write, and the read path's two statements. All are parameterised and run
+/// environment revision into a 422 before any write, and the read path's statements. All are parameterised and run
 /// on the ambient tenant scope, so RLS — not a `where` clause alone — hides another org's rows.
 /// </summary>
 internal static class ReleaseSql
@@ -159,20 +159,34 @@ internal static class ReleaseSql
         """;
 
     /// <summary>
-    /// The run-side mirror of <see cref="BoundRuns"/>: one row per stored binding, joined to its release for the name
-    /// and to the run so the release's project is compared with the run's. The project predicate is the same one
-    /// <see cref="MismatchSource"/> applies, so a binding row a bypassing writer pointed at a sibling project's release
-    /// is not reported. The order is the binding's own <c>created_at</c> then id, so the list is insertion order.
+    /// The most bindings one run detail serves. A run may be bound to several releases and each bind writes up to
+    /// <see cref="Evidgate.Modules.Orchestrator.Domain.ReleaseRules.MaxComponents"/> rows, so no writer constraint
+    /// bounds the total; this is the read's own ceiling, ordered like the list so the oldest bindings are the ones kept.
     /// </summary>
-    internal const string BoundReleases = """
-        select rl.id as release_id, rl.name as release_name, rr.component_key
-          from public.release_run rr
-          join public.release rl
-            on rl.org_id = rr.org_id and rl.id = rr.release_id
-          join public.run ru
-            on ru.org_id = rr.org_id and ru.id = rr.run_id
-         where rr.org_id = @org_id and rr.run_id = @run_id and rl.project_id = ru.project_id
-         order by rr.created_at, rr.id
+    internal const int MaxBoundReleases = 500;
+
+    /// <summary>
+    /// The run-side mirror of <see cref="BoundRuns"/>, as one column of the statement that selects the run row
+    /// (aliased <c>r</c>): one item per stored binding, joined to its release for the name, in the binding's own
+    /// <c>created_at</c> then id order, capped by <c>@bound_release_limit</c>. It is a subquery of the run statement,
+    /// so the bindings and the run's state come from one snapshot. The release's project is compared with the run's,
+    /// the same predicate <see cref="MismatchSource"/> applies, so a binding row a bypassing writer pointed at a sibling
+    /// project's release is not reported.
+    /// </summary>
+    internal const string BoundReleasesColumn = """
+        (select coalesce(
+                    jsonb_agg(
+                        jsonb_build_object('release_id', b.release_id, 'release_name', b.release_name,
+                                           'component_key', b.component_key)
+                        order by b.created_at, b.id),
+                    '[]'::jsonb)::text
+           from (select rl.id as release_id, rl.name as release_name, rr.component_key, rr.created_at, rr.id
+                   from public.release_run rr
+                   join public.release rl
+                     on rl.org_id = rr.org_id and rl.id = rr.release_id
+                  where rr.org_id = r.org_id and rr.run_id = r.id and rl.project_id = r.project_id
+                  order by rr.created_at, rr.id
+                  limit @bound_release_limit) b) as bound_releases
         """;
 
     /// <summary>
