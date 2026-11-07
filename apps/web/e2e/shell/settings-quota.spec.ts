@@ -3,7 +3,7 @@ import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   LOCALES,
   ORG_ACME,
-  SETTINGS_ADMIN_USAGE_GRANTS,
+  SETTINGS_ADMIN_GRANTS,
   THEMES,
   localePath,
   seedStoredTheme,
@@ -17,7 +17,7 @@ const BADGE = '[data-quota-badge]';
 function path(locale: ShellLocale, variant: string, tab = true): string {
   const route = `/orgs/${ORG_ACME}${tab ? '/settings/quota-retention' : '/usage'}`;
   return withVariants(localePath(locale, route), [
-    SETTINGS_ADMIN_USAGE_GRANTS,
+    SETTINGS_ADMIN_GRANTS,
     `?fixture.variant.getUsageSummary=${variant}`,
   ]);
 }

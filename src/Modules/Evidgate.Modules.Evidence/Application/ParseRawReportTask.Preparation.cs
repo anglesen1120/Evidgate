@@ -30,7 +30,8 @@ internal sealed partial class ParseRawReportHandler
     {
         /// <summary>
         /// The advisory quota stop: the read scope asked about a deferred report's counter and it has no room for one
-        /// event, so the attempt carries the blocked outcome instead of the inputs the fetch needs.
+        /// event, so the attempt carries the blocked outcome instead of the inputs the fetch needs. Its stamp request,
+        /// when it has one, is what the caller writes again after the scope has closed.
         /// </summary>
         public ParseRawReportOutcome? Blocked { get; init; }
     }
@@ -85,9 +86,9 @@ internal sealed partial class ParseRawReportHandler
 
         // The advisory quota question runs here, inside the scope the read already holds and before the fetch inputs are
         // resolved: a deferred report whose counter has no room for one event stops without an object read, and a first
-        // attempt pays only the probe statement this asks first.
-        if (await PreCheckQuotaAsync(orgId, artifact.ProjectId, payload, cancellationToken).ConfigureAwait(false)
-            is { } blocked)
+        // attempt pays only the probe statement this asks first. It asks about the run's project, the counter the write
+        // transaction charges, and not the artifact's, which a crafted row could name differently.
+        if (await PreCheckQuotaAsync(orgId, payload, cancellationToken).ConfigureAwait(false) is { } blocked)
         {
             return new Preparation(null, null) { Blocked = blocked };
         }

@@ -1,13 +1,9 @@
-// The Settings tab strip's admin review session, in TypeScript rather than the
-// `fixtures/web-api` corpus: the strip's G1 tabs include Quota & retention, whose read is
-// `GET /orgs/{o}/usage/summary` and whose declared code is `usage:read`, while
-// `permissions-list-settings-admin` predates that tab and grants every *other* tab code.
+// The Settings retention review's writer session, in TypeScript rather than the
+// `fixtures/web-api` corpus: `settings-admin` plus `project:write`, a grant no corpus variant
+// holds yet. Editing the corpus would change a document the .NET fixture loader also walks, so the
+// extra row is merged here from the corpus page itself; nothing else is restated.
 //
-// Editing that corpus would change a document the .NET fixture loader also walks, so the extra
-// grant is a computed specimen here: the admin rows plus the catalog's own `usage:read` row, in
-// code order. Nothing is restated — both halves are the corpus documents themselves.
-//
-// A review selects it with `?fixture.variant.listPermissions=settings-admin-usage`.
+// A review selects it with `?fixture.variant.listPermissions=settings-retention-write`.
 
 import permissionsCatalogue from '../../../../../../contracts/permissions.json';
 import type { FixtureDocument } from './fixture-document';
@@ -15,12 +11,10 @@ import { findFixtureEntry } from './fixture-catalog';
 import type { FixtureEntry } from './fixture-catalog-entries';
 
 /** The toggle value that selects this session; no corpus directory answers it. */
-export const SETTINGS_ADMIN_USAGE_VARIANT = 'settings-admin-usage';
 export const SETTINGS_RETENTION_WRITE_VARIANT = 'settings-retention-write';
 export const SETTINGS_API_TOKENS_READ_VARIANT = 'settings-api-tokens-read';
 export const SETTINGS_API_TOKENS_WRITE_VARIANT = 'settings-api-tokens-write';
 
-// No corpus variant holds this grant yet; keep the specimen outside the shared .NET corpus.
 const PROJECT_WRITE_ROW: PermissionRow = {
   code: 'project:write',
   resource: 'project',
@@ -38,25 +32,17 @@ interface PermissionRow {
   readonly [member: string]: unknown;
 }
 
-/** The `listPermissions` page a corpus document holds, narrowed to the rows this specimen reads. */
-function pageOf(variant: string): { items: readonly PermissionRow[]; next_cursor: unknown } {
-  const document = findFixtureEntry('listPermissions', variant)?.document;
+/** The `settings-admin` corpus page, narrowed to the rows this specimen extends. */
+function adminPage(): { items: readonly PermissionRow[]; next_cursor: unknown } {
+  const document = findFixtureEntry('listPermissions', 'settings-admin')?.document;
   const body = document?.body as { items?: unknown; next_cursor?: unknown } | undefined;
   if (document?.status !== 200 || !Array.isArray(body?.['items'])) {
-    throw new Error(`the listPermissions corpus lost its ${variant} page`);
+    throw new Error('the listPermissions corpus lost its settings-admin page');
   }
   return { items: body['items'] as readonly PermissionRow[], next_cursor: body['next_cursor'] };
 }
 
-/** The `usage:read` row: the corpus's own copy, so the specimen cannot drift from the contract. */
-function usageReadRow(): PermissionRow {
-  const row = pageOf('usage-read').items.find((item) => item['code'] === 'usage:read');
-  if (row === undefined) {
-    throw new Error('the listPermissions corpus lost its usage:read row');
-  }
-  return row;
-}
-
+/** API token review grants, copied from the permission catalogue so they cannot drift from it. */
 function apiTokenRows(variant: string): readonly PermissionRow[] {
   if (variant !== SETTINGS_API_TOKENS_READ_VARIANT && variant !== SETTINGS_API_TOKENS_WRITE_VARIANT)
     return [];
@@ -73,10 +59,9 @@ function apiTokenRows(variant: string): readonly PermissionRow[] {
  * The fixture entry answering `variant`, or `undefined` so the corpus answers as usual — a typo in
  * the toggle must surface as `fixture_not_found` or the corpus page, never as a merged grant set.
  */
-export function findSettingsAdminUsageFixture(variant: string): FixtureEntry | undefined {
+export function findSettingsRetentionWriteFixture(variant: string): FixtureEntry | undefined {
   if (
     ![
-      SETTINGS_ADMIN_USAGE_VARIANT,
       SETTINGS_RETENTION_WRITE_VARIANT,
       SETTINGS_API_TOKENS_READ_VARIANT,
       SETTINGS_API_TOKENS_WRITE_VARIANT,
@@ -84,10 +69,10 @@ export function findSettingsAdminUsageFixture(variant: string): FixtureEntry | u
   ) {
     return undefined;
   }
-  const admin = pageOf('settings-admin');
+  const admin = adminPage();
   const extra =
     variant === SETTINGS_RETENTION_WRITE_VARIANT ? [PROJECT_WRITE_ROW] : apiTokenRows(variant);
-  const items = [...admin.items, usageReadRow(), ...extra].sort((left, right) =>
+  const items = [...admin.items, ...extra].sort((left, right) =>
     left['code'] < right['code'] ? -1 : left['code'] > right['code'] ? 1 : 0,
   );
   const document: FixtureDocument = {

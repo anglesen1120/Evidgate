@@ -94,7 +94,7 @@ public sealed partial class AuthoringChangePurgeTaskHandler(
     }
 
     [LoggerMessage(
-        EventId = 2411,
+        EventId = 2413,
         Level = LogLevel.Information,
         Message = "Audited sweep evidgate.purge_expired_authoring_changes as evidgate_worker_sched removed {Removed} discarded changes (batch limit {Limit})")]
     private partial void LogPurged(int removed, int limit);

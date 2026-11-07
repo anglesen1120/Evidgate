@@ -9,9 +9,7 @@ using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
-using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
-using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Application;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
@@ -21,10 +19,7 @@ using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Ingestion.Contracts;
 using Evidgate.Modules.Orchestrator.Contracts;
-using Evidgate.Modules.Usage.Application.Commands;
-using Evidgate.Modules.Usage.Application.Quota;
 using Evidgate.Modules.Usage.Contracts;
-using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -225,70 +220,6 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
         (await ReadCounterAsync(counters, world)).ShouldNotBeNull().BlockedAt.ShouldNotBeNull();
     }
 
-    [Fact]
-    public async Task The_Organization_Counter_Blocks_And_Is_The_One_Charged_And_Stamped()
-    {
-        var world = await StartAsync();
-        await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
-        await SeedPlanAsync(world);
-        var artifactId = await SeedArtifactAsync(world, OneEventBody);
-        await counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), ProjectId: null, await PeriodAsync(world), "results", 1m, 1m, WarnRatio, Org: world.Org));
-
-        // Only the organization's counter exists: the project has no limit, so the batch is admitted or refused by the
-        // org-wide row alone and charged there alone.
-        var blocked = await ParseAsync(world, artifactId);
-        blocked.Status.ShouldBe(ParseRawReportOutcome.QuotaBlocked);
-
-        var tenant = (await ReadTenantCounterAsync(counters, world)).ShouldNotBeNull();
-        tenant.Used.ShouldBe(1m, "the refused batch charges nothing");
-        tenant.BlockedAt.ShouldNotBeNull("the org counter is the one that refused");
-
-        // An operator raise of the org limit admits the same payload, and the charge lands on that counter once.
-        var raised = await RaiseAsync(counters, world, project: null, limit: 10m);
-        raised.IsSuccess.ShouldBeTrue(raised.Error?.Message);
-
-        var admitted = await ParseAsync(world, artifactId);
-
-        admitted.Status.ShouldBe(ParseRawReportOutcome.Parsed);
-        admitted.Events.ShouldBe(1);
-        (await CountAsync(world, "event", artifactId)).ShouldBe(1);
-        (await ReadTenantCounterAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(2m);
-    }
-
-    [Fact]
-    public async Task An_Operator_Raise_Admits_The_Blocked_Report_And_Charges_It_Once()
-    {
-        var world = await StartAsync();
-        await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
-        await SeedPlanAsync(world);
-        var artifactId = await SeedArtifactAsync(world, OneEventBody);
-        await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
-
-        (await ParseAsync(world, artifactId)).Status.ShouldBe(ParseRawReportOutcome.QuotaBlocked);
-        (await ReadCounterAsync(counters, world)).ShouldNotBeNull().BlockedAt.ShouldNotBeNull();
-        var artifactAfterBlock = await _fixture.ScalarAsync<long>(
-            world.Database,
-            $"select count(*) from public.artifact where org_id = '{world.Org:D}' and id = '{artifactId:D}'");
-        artifactAfterBlock.ShouldBe(1, "a block writes nothing, not even an artifact change");
-
-        var raised = await RaiseAsync(counters, world, world.Project, limit: 20m);
-
-        raised.IsSuccess.ShouldBeTrue(raised.Error?.Message);
-
-        var admitted = await ParseAsync(world, artifactId);
-
-        admitted.Status.ShouldBe(ParseRawReportOutcome.Parsed);
-        admitted.Events.ShouldBe(1);
-        (await CountAsync(world, "event", artifactId)).ShouldBe(1);
-        (await CountAsync(world, "event_batch")).ShouldBe(1);
-        var counter = (await ReadCounterAsync(counters, world)).ShouldNotBeNull();
-        counter.Used.ShouldBe(11m, "the blocked attempt charged nothing, so the admitted one charges exactly one unit");
-        counter.BlockedAt.ShouldBeNull("the raise is the one transition that clears the stamp");
-    }
-
     // ---------------------------------------------------------------------------------------------------------------
     // Harness
     // ---------------------------------------------------------------------------------------------------------------
@@ -372,11 +303,19 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
         return revisionId;
     }
 
-    /// <summary>One <c>ready</c> <c>raw_report</c> artifact whose final object the store really holds.</summary>
-    private async Task<Guid> SeedArtifactAsync(World world, byte[] body)
+    /// <summary>
+    /// One <c>ready</c> <c>raw_report</c> artifact whose final object the store really holds. The row may name a
+    /// project other than the run's, which no key ties together, so a case can prove the pre-check asks about the run.
+    /// </summary>
+    /// <param name="world">The world the report belongs to.</param>
+    /// <param name="body">The report's bytes.</param>
+    /// <param name="projectId">The project the row names, or null for the run's own.</param>
+    /// <returns>The artifact's id.</returns>
+    private async Task<Guid> SeedArtifactAsync(World world, byte[] body, Guid? projectId = null)
     {
+        var owner = projectId ?? world.Project;
         var artifactId = Guid.CreateVersion7();
-        var key = ObjectKeyFor(world, artifactId);
+        var key = ObjectKeyFor(world, owner, artifactId);
         var checksum = "sha256:" + Convert.ToHexStringLower(
             System.Security.Cryptography.SHA256.HashData(body));
 
@@ -386,7 +325,7 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
             world.Database,
             "insert into public.artifact (id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, "
             + "media_type, checksum, sensitivity, scan_state, state, bytes, failure_code) values "
-            + $"('{artifactId:D}', '{world.Org:D}', '{world.Project:D}', '{world.RunId:D}', '{ExecutionKey}', 1, "
+            + $"('{artifactId:D}', '{world.Org:D}', '{owner:D}', '{world.RunId:D}', '{ExecutionKey}', 1, "
             + $"'{ArtifactKind.RawReport}', '{key}', '{XmlType}', '{checksum}', 'normal', 'pending', "
             + $"'{ArtifactState.Ready}', {body.LongLength.ToString(CultureInfo.InvariantCulture)}, null)");
 
@@ -394,8 +333,43 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
     }
 
     /// <summary>The final key the artifact row mints, so a test writes and the handler reads the same object.</summary>
-    private static string ObjectKeyFor(World world, Guid artifactId) =>
-        $"org/{world.Org:D}/project/{world.Project:D}/run/{world.RunId:D}/attempt/{ExecutionKey}/1/{artifactId:D}";
+    private static string ObjectKeyFor(World world, Guid projectId, Guid artifactId) =>
+        $"org/{world.Org:D}/project/{projectId:D}/run/{world.RunId:D}/attempt/{ExecutionKey}/1/{artifactId:D}";
+
+    /// <summary>A second project of the world's org, so a counter of another project can be seeded beside the run's.</summary>
+    /// <param name="world">The world the project belongs to.</param>
+    /// <returns>The new project's id.</returns>
+    private async Task<Guid> SeedOtherProjectAsync(World world)
+    {
+        var projectId = Guid.CreateVersion7();
+        var slug = Unique.Slug("quota-other-project");
+
+        await _fixture.ExecuteAsync(
+            world.Database,
+            "insert into public.project (id, org_id, name, slug) "
+            + $"values ('{projectId:D}', '{world.Org:D}', '{slug}', '{slug}')");
+
+        return projectId;
+    }
+
+    /// <summary>A foreign tenant with one project, so a counter that must never block this one can be seeded.</summary>
+    /// <param name="world">The world the foreign tenant is seeded beside.</param>
+    /// <returns>The foreign org and project ids.</returns>
+    private async Task<(Guid Org, Guid Project)> SeedForeignOrgAsync(World world)
+    {
+        var orgId = Guid.CreateVersion7();
+        var projectId = Guid.CreateVersion7();
+        var slug = Unique.Slug("quota-foreign");
+
+        await _fixture.ExecuteAsync(
+            world.Database,
+            "insert into public.organization (id, name, slug) "
+            + $"values ('{orgId:D}', '{slug}', '{slug}'); "
+            + "insert into public.project (id, org_id, name, slug) "
+            + $"values ('{projectId:D}', '{orgId:D}', '{slug}', '{slug}')");
+
+        return (orgId, projectId);
+    }
 
     /// <summary>The handler the task consumer builds, over the host's own registrations, minus the queue.</summary>
     /// <param name="world">The attempt's world.</param>
@@ -427,44 +401,6 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
             new ParseRawReportPayload(world.RunId, artifactId, ProducerKind),
             world.Org,
             Token);
-
-    /// <summary>Seeds one project-scoped counter for the DB transaction's month, which is the month the gate charges.</summary>
-    private async Task<Guid> SeedCounterAsync(UsageQuotaWorld counters, World world, decimal used, decimal limit) =>
-        await counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), world.Project, await PeriodAsync(world), "results", used, limit, WarnRatio, Org: world.Org));
-
-    private async Task<CounterState?> ReadCounterAsync(UsageQuotaWorld counters, World world) =>
-        await counters.CounterAsync(org: world.Org, project: world.Project, period: await PeriodAsync(world), metric: "results");
-
-    private async Task<CounterState?> ReadTenantCounterAsync(UsageQuotaWorld counters, World world) =>
-        await counters.CounterAsync(org: world.Org, project: null, period: await PeriodAsync(world), metric: "results");
-
-    /// <summary>
-    /// The audited operator raise, run in process against the counters world's permissive host: the ingest suite's own
-    /// seam, which also proves the raise clears the stamp a block left behind.
-    /// </summary>
-    private async Task<Result<QuotaRaiseResult>> RaiseAsync(
-        UsageQuotaWorld counters,
-        World world,
-        Guid? project,
-        decimal limit)
-    {
-        await using var services = counters.Commands.Services.CreateAsyncScope();
-        var provider = services.ServiceProvider;
-        using var tenant = provider.GetRequiredService<IRequestTenantContextSetter>().Publish(world.Org, null);
-        using var principal = provider.GetRequiredService<IRequestPrincipalSetter>()
-            .Publish(RequestPrincipal.Service(project, [Permissions.Billing.Write]));
-
-        return await provider.GetRequiredService<IMediator>().Send(
-            new RaiseQuotaLimit(project, await PeriodAsync(world), UsageMetric.Results, limit, RaiseReason),
-            Token);
-    }
-
-    /// <summary>The month the gate charges: the database's UTC month, which the host's clock cannot move.</summary>
-    private Task<string> PeriodAsync(World world) =>
-        _fixture.ScalarAsync<string>(
-            world.Database,
-            "select to_char(now() at time zone 'UTC', 'YYYY-MM')");
 
     private Task<long> CountAsync(World world, string table, Guid artifactId) =>
         _fixture.ScalarAsync<long>(

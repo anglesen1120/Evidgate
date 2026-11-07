@@ -39,7 +39,12 @@ public enum QuotaScope
 /// project (null for a tenant-level limit) and the quantity the call is about to commit.
 /// </summary>
 /// <param name="Metric">The metric being metered.</param>
-/// <param name="Period">The billing period, exactly <c>YYYY-MM</c>.</param>
+/// <param name="Period">
+/// The billing period, exactly <c>YYYY-MM</c>, or null for the month of the caller's open database transaction, which
+/// the gate reads inside its own first statement: the instant the batch's own rows and the ledger row metering them
+/// are stamped with, so a batch is gated and metered in one month even when it straddles a month end. Callers pass
+/// null; an answer that names a counter carries the month it used (<see cref="QuotaCheckResult.Period"/>).
+/// </param>
 /// <param name="ProjectId">The project the usage belongs to, or null for a tenant-level limit.</param>
 /// <param name="Quantity">
 /// The amount this call would add to <c>quota_counter.used</c>, strictly positive: a hot path asks about work it is
@@ -54,7 +59,7 @@ public enum QuotaScope
 /// </param>
 public sealed record QuotaCheckRequest(
     UsageMetric Metric,
-    string Period,
+    string? Period,
     Guid? ProjectId,
     decimal Quantity,
     bool IncludeTenantScope = false);
@@ -81,10 +86,50 @@ public sealed record QuotaCheckRequest(
 /// On <see cref="QuotaDecision.Block"/> only: the scope that refused, in lock order (the tenant counter, then the
 /// project's) when both refuse. Null on every other verdict.
 /// </param>
+/// <param name="Period">
+/// The billing month the verdict was decided in, <c>YYYY-MM</c>; null when no counter answered (no configured limit, or
+/// the gate switched off). A caller that must write the refusal stamp after its own rollback builds the stamp's request
+/// from it, so the stamp names the month that refused and not a later one.
+/// </param>
 public sealed record QuotaCheckResult(
     QuotaDecision Decision,
     decimal? Used = null,
     decimal? Limit = null,
     TimeSpan? RetryAfter = null,
     string? RaisePath = null,
-    QuotaScope? RefusedScope = null);
+    QuotaScope? RefusedScope = null,
+    string? Period = null);
+
+/// <summary>
+/// The answer of one <see cref="IQuotaGate.PeekAsync"/> call. It is a different type from
+/// <see cref="QuotaCheckResult"/> on purpose: an advisory read that refused nothing and admitted nobody can never be
+/// passed where the authoritative verdict is expected, and there is no Ok or Warn to mistake for an admission.
+/// </summary>
+/// <param name="Blocked">
+/// True when a counter of the period exists and has no room for the quantity right now. False means only "the
+/// authoritative check still decides": there is no counter, or every charged scope has room.
+/// </param>
+/// <param name="Used">When blocked, the refusing counter's usage; otherwise null.</param>
+/// <param name="Limit">When blocked, the refusing counter's limit; otherwise null.</param>
+/// <param name="RetryAfter">When blocked, the time until the next period starts, at least one second; otherwise null.</param>
+/// <param name="RaisePath">When blocked, the operator route that raises the refusing scope's limit; otherwise null.</param>
+/// <param name="RefusedScope">When blocked, the refusing scope, in lock order; otherwise null.</param>
+/// <param name="Period">When blocked, the month that refused, <c>YYYY-MM</c>; otherwise null.</param>
+/// <param name="Unstamped">
+/// When blocked: true when the refusing counter carries no <c>blocked_at</c> yet, so a caller that must write the stamp
+/// after its own rollback knows the write would change a row. False for a counter that already carries the stamp — a
+/// repeated refusal of the same month — and on a clear answer, where no counter refused at all.
+/// </param>
+public sealed record QuotaPeekResult(
+    bool Blocked,
+    decimal? Used = null,
+    decimal? Limit = null,
+    TimeSpan? RetryAfter = null,
+    string? RaisePath = null,
+    QuotaScope? RefusedScope = null,
+    string? Period = null,
+    bool Unstamped = false)
+{
+    /// <summary>The answer when nothing refuses: the authoritative check still decides.</summary>
+    public static QuotaPeekResult Clear { get; } = new(false);
+}
