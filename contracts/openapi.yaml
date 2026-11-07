@@ -13750,7 +13750,7 @@ components:
           description: Why the metric cannot be reported, or null when it can.
         projects:
           type: array
-          description: The page's per-project counters, ordered by project `created_at`, then id; empty when the metric is unavailable.
+          description: The per-project counters of the page, ordered by project `created_at`, then id; empty when the metric is unavailable.
           items:
             $ref: '#/components/schemas/UsageSummaryProjectDto'
     UsageSummaryProjectDto:

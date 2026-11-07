@@ -2802,7 +2802,7 @@ export type UsageSummaryMetricDto = {
      */
     unavailable_reason: string | null;
     /**
-     * The page's per-project counters, ordered by project `created_at`, then id; empty when the metric is unavailable.
+     * The per-project counters of the page, ordered by project `created_at`, then id; empty when the metric is unavailable.
      */
     projects: Array<UsageSummaryProjectDto>;
 };
