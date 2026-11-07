@@ -96,26 +96,51 @@ public sealed partial class UsageQuotaSchemaTests
         await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
         await connection.OpenAsync(TestContext.Current.CancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(TestContext.Current.CancellationToken);
-        await using (var set = new NpgsqlCommand("select set_config('evidgate.org_id', @org, true)", connection, transaction))
-        {
-            set.Parameters.AddWithValue("org", org.ToString("D", CultureInfo.InvariantCulture));
-            await set.ExecuteScalarAsync(TestContext.Current.CancellationToken);
-        }
+        await PinTenantAsync(connection, transaction, org);
 
-        var tenantLevel = await ExplainAsync(
-            connection, transaction, UsageQuotaGateSql.Peek, org, [Guid.Empty], "2026-10", "results", quantity: 1m);
-        var projectScoped = await ExplainAsync(
-            connection, transaction, UsageQuotaGateSql.Peek, org, [Guid.Empty, project], "2026-10", "results",
-            quantity: 1m);
-        var openMonth = await ExplainAsync(
-            connection, transaction, UsageQuotaGateSql.Peek, org, [Guid.Empty, project], null, "results",
-            quantity: 1m);
+        await AssertScopedPlansAsync(connection, transaction, org, project);
+        await AssertNeutralisedPlanAsync(connection, transaction, org, project);
+    }
 
+    /// <summary>The tenant the plan must see, published for the transaction's lifetime: the policy reads it there.</summary>
+    /// <param name="connection">The open connection.</param>
+    /// <param name="transaction">The transaction whose policy input it is.</param>
+    /// <param name="org">The tenant every peek is asked about.</param>
+    private static async Task PinTenantAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid org)
+    {
+        await using var set = new NpgsqlCommand(
+            "select set_config('evidgate.org_id', @org, true)", connection, transaction);
+        set.Parameters.AddWithValue("org", org.ToString("D", CultureInfo.InvariantCulture));
+        await set.ExecuteScalarAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// The three shapes of the peek — the tenant scope alone, the project beside it, and a caller that names no month —
+    /// each read through the scope index and pinned to the tenant by the statement's own predicate.
+    /// </summary>
+    /// <param name="connection">The open connection.</param>
+    /// <param name="transaction">The transaction the statements run in.</param>
+    /// <param name="org">The tenant every peek is asked about.</param>
+    /// <param name="project">The project the scoped shapes name.</param>
+    private static async Task AssertScopedPlansAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid org,
+        Guid project)
+    {
         var plans = new List<(string Label, PlanView Plan)>
         {
-            ("the tenant-level peek", tenantLevel),
-            ("the project-scoped peek", projectScoped),
-            ("the peek of a caller that names no month", openMonth),
+            ("the tenant-level peek", await ExplainAsync(
+                connection, transaction, UsageQuotaGateSql.Peek, org, [Guid.Empty], "2026-10", "results", quantity: 1m)),
+            ("the project-scoped peek", await ExplainAsync(
+                connection, transaction, UsageQuotaGateSql.Peek, org, [Guid.Empty, project], "2026-10", "results",
+                quantity: 1m)),
+            ("the peek of a caller that names no month", await ExplainAsync(
+                connection, transaction, UsageQuotaGateSql.Peek, org, [Guid.Empty, project], null, "results",
+                quantity: 1m)),
         };
 
         foreach (var (label, plan) in plans)
@@ -131,9 +156,22 @@ public sealed partial class UsageQuotaSchemaTests
                     $"{label} must pin the tenant with the uuid its own predicate names in the index condition, not "
                     + "in a filter applied after the read, and not by the policy alone");
         }
+    }
 
-        // The control: the same statement with its tenant predicate neutralised, so only the policy names the tenant.
-        // Its plan must not carry the bound equality any more, which is what the assertion above would have seen.
+    /// <summary>
+    /// The control: the same statement with its tenant predicate neutralised, so only the policy names the tenant. Its
+    /// plan must not carry the bound equality any more, which is what the assertion above would have seen.
+    /// </summary>
+    /// <param name="connection">The open connection.</param>
+    /// <param name="transaction">The transaction the statements run in.</param>
+    /// <param name="org">The tenant every peek is asked about.</param>
+    /// <param name="project">The project the scoped shape names.</param>
+    private static async Task AssertNeutralisedPlanAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid org,
+        Guid project)
+    {
         const string TenantPredicate = "where c.org_id = @org_id";
         var neutralised = UsageQuotaGateSql.Peek.Replace(
             TenantPredicate, "where @org_id::uuid is not null", StringComparison.Ordinal);

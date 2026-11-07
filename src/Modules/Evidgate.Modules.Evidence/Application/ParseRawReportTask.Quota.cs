@@ -24,10 +24,10 @@ namespace Evidgate.Modules.Evidence.Application;
 /// <para>
 /// A report the queue already deferred is asked once more, before its bytes are fetched: a counter with no room for a
 /// single event cannot admit the batch whatever the document holds, so the attempt waits again instead of spending the
-/// lease on a read and a parse that would roll back. That answer never admits work: a block writes the same stamp the
-/// transaction's block does (the raise may have cleared it and still left too little room), a database fault of the read
-/// defers the attempt with the queue's floor and stamps nothing, and a run the admission already refuses is not asked
-/// at all, because its own refusal is the loss to report.
+/// lease on a read and a parse that would roll back. That answer never admits work: a block writes the stamp when the
+/// peek reports the counter unstamped — a raise may have cleared it and still left too little room — a transient
+/// database fault of the probe defers the attempt and stamps nothing, a permanent fault fails the attempt like any
+/// other, and a run the admission already refuses is not asked at all, because its own refusal is the loss to report.
 /// </para>
 /// </summary>
 internal sealed partial class ParseRawReportHandler
@@ -49,6 +49,13 @@ internal sealed partial class ParseRawReportHandler
 
     /// <summary>The telemetry kind of a pre-check that could not read its facts, kept apart from a refusal's rate.</summary>
     private const string ReportQuotaPreCheckFault = "report_quota_precheck_fault";
+
+    /// <summary>
+    /// How long a pre-check that could not read its facts waits: long enough for a restart or a failover to finish
+    /// before the retry, and identical for every report of every tenant, so one outage cannot become a retry storm that
+    /// keeps the recovering database busy.
+    /// </summary>
+    internal static readonly TimeSpan PreCheckFaultDelay = TimeSpan.FromSeconds(15);
 
     /// <summary>
     /// The longest a blocked report may wait. A month-long wait outlives every chance to recover the batch: an
@@ -136,25 +143,33 @@ internal sealed partial class ParseRawReportHandler
     /// to roll it back spends the lease on a wait that is already known.
     /// <para>
     /// It decides nothing. <see cref="IQuotaGate.PeekAsync"/> writes no counter, takes no lock and admits nobody, and
-    /// an unblocked answer only means the transactional gate still decides after the insert. A block re-stamps the
-    /// counter through <see cref="StampQuotaBlockAsync"/>, because the raise that cleared the first stamp may still
-    /// have left less than one event of room. A first attempt is never probed, so evidence that fits is never refused
-    /// at the door.
+    /// an unblocked answer only means the transactional gate still decides after the insert. A block writes the stamp
+    /// the transaction's block does only when the peek reports the counter still unstamped: a raise that left too
+    /// little room cleared the stamp and must see it again, while a counter that already carries it needs no write at
+    /// all. A first attempt is never probed, so evidence that fits is never refused at the door.
     /// </para>
     /// <para>
-    /// It runs in the caller's read-only scope, so the probe, the admission facts and the gate share one connection.
-    /// A transient database fault there defers the attempt and stamps nothing: a read that failed decided nothing.
+    /// Only the probe's own reads are guarded: a transient database fault there defers the attempt and stamps nothing,
+    /// because a read that failed decided nothing. A permanent fault — a permission denied, a schema that no longer
+    /// matches — is a failed attempt, never a deferral that would retry a broken deployment until it dead-letters. The
+    /// deferred-report check itself is not guarded: it is one indexed read, and a fault there is the attempt's own
+    /// failure to report.
     /// </para>
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind; the artifact is the task row's probe key.</param>
-    /// <param name="cancellationToken">Cancels the probe, the admission read and the advisory question.</param>
+    /// <param name="cancellationToken">Cancels the deferred check, the probe and the advisory question.</param>
     /// <returns>The blocked outcome to defer, or null when the report continues to the fetch.</returns>
     private async Task<ParseRawReportOutcome?> PreCheckQuotaAsync(
         Guid orgId,
         ParseRawReportPayload payload,
         CancellationToken cancellationToken)
     {
+        if (!await IsDeferredAsync(orgId, payload.ArtifactId, cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
         try
         {
             return await ProbeQuotaAsync(orgId, payload, cancellationToken).ConfigureAwait(false);
@@ -162,21 +177,21 @@ internal sealed partial class ParseRawReportHandler
         catch (Exception exception) when (IsProbeFault(exception, cancellationToken))
         {
             // The probe never answered, so the attempt goes back to the queue rather than spending a lease on a fault;
-            // no stamp is written because nothing refused. Only the type is logged: a statement's text can quote
-            // counter values and ids.
+            // no stamp is written because nothing refused. Only the type and the SQLSTATE are logged: a statement's text
+            // can quote counter values and ids, while a SQLSTATE is a code.
             EvidgateTelemetry.RecordIngestQuotaDenied(ReportQuotaPreCheckFault);
-            LogQuotaPreCheckFault(logger, exception.GetType().Name);
+            LogQuotaPreCheckFault(logger, exception.GetType().Name, SqlState(exception));
             return new ParseRawReportOutcome(ParseRawReportOutcome.QuotaBlocked, PreCheckUnavailableReason)
             {
-                RetryAfter = TaskDeferredException.MinimumDelay,
+                RetryAfter = PreCheckFaultDelay,
             };
         }
     }
 
     /// <summary>
-    /// The probe itself: whether the queue already deferred this report, whether the run still admits evidence, and
-    /// whether a counter of the month has room for one event. The run facts are read once and answer both questions,
-    /// so the counter this asks about is the one the write transaction will charge.
+    /// The probe itself: whether the run still admits evidence and whether a counter of the month has room for one
+    /// event. The run facts are read once and answer both questions, so the counter this asks about is the one the
+    /// write transaction will charge.
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
@@ -187,11 +202,6 @@ internal sealed partial class ParseRawReportHandler
         ParseRawReportPayload payload,
         CancellationToken cancellationToken)
     {
-        if (!await IsDeferredAsync(orgId, payload.ArtifactId, cancellationToken).ConfigureAwait(false))
-        {
-            return null;
-        }
-
         var run = await ReadRunGateAsync(orgId, payload.RunId, cancellationToken).ConfigureAwait(false);
         if (run is not null && !RunAdmissionPolicy.Decide(run.ProjectState, run.RunState, run.LateWindowOpen).Allowed)
         {
@@ -231,20 +241,34 @@ internal sealed partial class ParseRawReportHandler
         return new ParseRawReportOutcome(ParseRawReportOutcome.QuotaBlocked, QuotaExceededReason)
         {
             RetryAfter = answer.RetryAfter,
-            QuotaRequest = StampRequest(request, answer.Period),
+            // A counter that already carries the stamp needs no write: the queue's next wait changes nothing an operator
+            // can see, so the stamp's own transaction is not opened at all.
+            QuotaRequest = answer.Unstamped ? StampRequest(request, answer.Period) : null,
         };
     }
 
     /// <summary>
-    /// True for a database or timeout fault of the probe, never for the caller's own cancellation: a cancelled attempt
-    /// is shutting down or lost its lease, and turning that into a deferral would hide the reason it stopped.
+    /// True only for a fault the retry can plausibly clear: a timeout, or a driver fault the provider itself classifies
+    /// as transient. Everything else — a denied privilege, a missing table, a shape mismatch — is a permanent condition
+    /// of this deployment, and deferring it would re-run the same failure on the queue's floor until the task
+    /// dead-letters without ever naming the fault. A cancelled attempt is never deferred either: the caller's shutdown
+    /// or lost lease is what stopped it, and masking that as a quota wait would hide the real reason.
     /// </summary>
     /// <param name="exception">What the probe threw.</param>
     /// <param name="cancellationToken">The attempt's token.</param>
     /// <returns>True when the attempt should defer instead of failing.</returns>
     private static bool IsProbeFault(Exception exception, CancellationToken cancellationToken) =>
-        exception is DbException or TimeoutException
-        && !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested);
+        !cancellationToken.IsCancellationRequested
+        && (exception is TimeoutException || (exception is DbException fault && fault.IsTransient));
+
+    /// <summary>
+    /// The SQLSTATE a database fault carries, for the fault line: a five-character code, never a statement's text or a
+    /// value the statement read.
+    /// </summary>
+    /// <param name="exception">What the probe threw.</param>
+    /// <returns>The SQLSTATE, or <c>none</c> for a fault that is not a database fault.</returns>
+    private static string SqlState(Exception exception) =>
+        exception is DbException { SqlState: { } state } ? state : "none";
 
     /// <summary>
     /// The run's admission facts and its project, read unlocked: this answer only chooses between waiting and the
@@ -440,6 +464,6 @@ internal sealed partial class ParseRawReportHandler
     [LoggerMessage(
         EventId = 2474,
         Level = LogLevel.Warning,
-        Message = "raw report parse pre-check could not read the quota facts ({ExceptionType}): the task defers instead of spending an attempt")]
-    private static partial void LogQuotaPreCheckFault(ILogger logger, string exceptionType);
+        Message = "raw report parse pre-check could not read the quota facts ({ExceptionType}, sqlstate {SqlState}): the task defers instead of spending an attempt")]
+    private static partial void LogQuotaPreCheckFault(ILogger logger, string exceptionType, string sqlState);
 }

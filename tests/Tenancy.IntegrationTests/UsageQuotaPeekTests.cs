@@ -80,6 +80,29 @@ public sealed class UsageQuotaPeekTests
     }
 
     [Fact]
+    public async Task QuotaGatePeek_BlockedCounter_ReportsWhetherItsStampIsStillUnwritten()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        var counterId = await SeedAsync(world, used: Limit, projectId: world.Project);
+
+        var fresh = await world.PeekAsync(Request(world, 1m));
+
+        fresh.Blocked.ShouldBeTrue();
+        fresh.Unstamped.ShouldBeTrue("the counter reached the refusal without a stamp of its own");
+        QuotaPeekResult.Clear.Unstamped.ShouldBeFalse("a clear answer names no counter a caller could stamp");
+
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.quota_counter set blocked_at = now() where id = '{counterId:D}'");
+
+        var stamped = await world.PeekAsync(Request(world, 1m));
+
+        stamped.Blocked.ShouldBeTrue("the stamp frees no room, so the counter still refuses");
+        stamped.Unstamped.ShouldBeFalse(
+            "a caller must not open a stamp transaction for a row that already carries the stamp");
+    }
+
+    [Fact]
     public async Task QuotaGatePeek_TenantCounterFull_BlocksTenantScope()
     {
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);

@@ -115,6 +115,11 @@ public sealed record QuotaCheckResult(
 /// <param name="RaisePath">When blocked, the operator route that raises the refusing scope's limit; otherwise null.</param>
 /// <param name="RefusedScope">When blocked, the refusing scope, in lock order; otherwise null.</param>
 /// <param name="Period">When blocked, the month that refused, <c>YYYY-MM</c>; otherwise null.</param>
+/// <param name="Unstamped">
+/// When blocked: true when the refusing counter carries no <c>blocked_at</c> yet, so a caller that must write the stamp
+/// after its own rollback knows the write would change a row. False for a counter that already carries the stamp — a
+/// repeated refusal of the same month — and on a clear answer, where no counter refused at all.
+/// </param>
 public sealed record QuotaPeekResult(
     bool Blocked,
     decimal? Used = null,
@@ -122,7 +127,8 @@ public sealed record QuotaPeekResult(
     TimeSpan? RetryAfter = null,
     string? RaisePath = null,
     QuotaScope? RefusedScope = null,
-    string? Period = null)
+    string? Period = null,
+    bool Unstamped = false)
 {
     /// <summary>The answer when nothing refuses: the authoritative check still decides.</summary>
     public static QuotaPeekResult Clear { get; } = new(false);

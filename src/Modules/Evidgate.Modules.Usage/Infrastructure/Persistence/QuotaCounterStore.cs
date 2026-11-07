@@ -103,8 +103,9 @@ internal sealed record QuotaRaiseRow(Guid Id, decimal Used, decimal QuotaLimit);
 /// <param name="QuotaLimit">The stored limit.</param>
 /// <param name="DatabaseNow">The transaction's clock for the retry calculation.</param>
 /// <param name="Period">The refusing counter's billing month.</param>
+/// <param name="Unstamped">True when the counter carries no refusal stamp yet.</param>
 internal sealed record QuotaPeekRow(
-    Guid ScopeKey, decimal Used, decimal QuotaLimit, DateTimeOffset DatabaseNow, string Period);
+    Guid ScopeKey, decimal Used, decimal QuotaLimit, DateTimeOffset DatabaseNow, string Period, bool Unstamped);
 
 /// <summary>The transaction's billing month and the instant it is measured from, read together.</summary>
 /// <param name="Period">The transaction's month, <c>YYYY-MM</c> in UTC.</param>

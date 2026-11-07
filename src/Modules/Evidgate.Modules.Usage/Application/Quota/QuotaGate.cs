@@ -98,7 +98,8 @@ internal sealed class QuotaGate(
                 UsagePeriod.RetryUntilNextPeriod(refused.Period, refused.DatabaseNow),
                 RaisePath(orgId),
                 QuotaScopeKeys.KindOf(refused.ScopeKey),
-                refused.Period);
+                refused.Period,
+                refused.Unstamped);
     }
 
     /// <inheritdoc />

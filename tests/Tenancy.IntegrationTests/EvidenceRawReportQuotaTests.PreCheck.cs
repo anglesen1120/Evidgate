@@ -141,7 +141,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         storage.Gets.ShouldBe(1, "the pre-check let the attempt through, which is what makes the race reachable");
 
         // The block came from the transaction, so the evidence rolled back and the stamp it earned survives the
-        // rollback in its own scope — unlike a pre-check refusal, which writes nothing at all.
+        // rollback in its own scope. The pre-check admitted this attempt, so it wrote no stamp of its own.
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
         (await CountAsync(world, "event_batch")).ShouldBe(0);
         (await CountRawReportsAsync(world, artifactId)).ShouldBe(0);
@@ -208,7 +208,7 @@ public sealed partial class EvidenceRawReportQuotaTests
     }
 
     [Fact]
-    public async Task A_Raise_That_Leaves_Less_Than_One_Event_Re_Stamps_And_Ten_Repeats_Stay_Idempotent()
+    public async Task A_Raise_That_Leaves_Less_Than_One_Event_Re_Stamps_And_A_Repeat_Stays_Idempotent()
     {
         var gate = new ReportPreCheckGate();
         var world = await StartAsync(services => ReplaceQuotaGate(services, inner => gate.Wrap(inner)));
@@ -258,9 +258,12 @@ public sealed partial class EvidenceRawReportQuotaTests
     }
 
     [Fact]
-    public async Task A_Database_Fault_In_The_PreCheck_Defers_Without_An_Attempt_And_Stamps_Nothing()
+    public async Task A_Transient_Database_Fault_In_The_PreCheck_Defers_Without_An_Attempt_And_Stamps_Nothing()
     {
-        var gate = new ReportPreCheckGate(peekFault: () => new NpgsqlException("the quota store is unavailable"));
+        // A connection reset is the shape a failover produces: the driver classifies it as transient, which is the one
+        // kind of database fault the probe turns into a deferral.
+        var gate = new ReportPreCheckGate(
+            peekFault: () => new NpgsqlException("the quota store is unavailable", new IOException("connection reset")));
         var world = await StartAsync(services => ReplaceQuotaGate(services, inner => gate.Wrap(inner)));
         await using var _ = world;
         await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
@@ -275,13 +278,14 @@ public sealed partial class EvidenceRawReportQuotaTests
 
         outcome.Status.ShouldBe(ParseRawReportOutcome.QuotaBlocked);
         outcome.Reason.ShouldBe("quota_precheck_unavailable", "a fault is not a refusal word");
-        outcome.RetryAfter.ShouldBe(TaskDeferredException.MinimumDelay);
+        outcome.RetryAfter.ShouldBe(PreCheckFaultDelay, "a fault waits long enough for a failover to finish");
         outcome.QuotaRequest.ShouldBeNull("nothing refused, so there is nothing to stamp");
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
         (await CountRawReportsAsync(world, artifactId)).ShouldBe(0);
 
-        // Only the exception's type is logged: a database message can quote counter values and ids.
+        // Only the exception's type and the SQLSTATE are logged: a database message can quote counter values and ids.
         log.Lines.ShouldContain(line => line.Contains("NpgsqlException", StringComparison.Ordinal));
+        log.Lines.ShouldContain(line => line.Contains("sqlstate none", StringComparison.Ordinal));
         log.Lines.ShouldNotContain(line => line.Contains("the quota store is unavailable", StringComparison.Ordinal));
 
         var after = (await ReadCounterAsync(counters, world)).ShouldNotBeNull();
@@ -292,7 +296,118 @@ public sealed partial class EvidenceRawReportQuotaTests
         var deferred = await Should.ThrowAsync<TaskDeferredException>(
             async () => await CreateHandler(world).HandleAsync(
                 new ParseRawReportPayload(world.RunId, artifactId, ProducerKind), world.Org, Token));
-        deferred.Delay.ShouldBe(TaskDeferredException.MinimumDelay, "a fault waits the queue's floor, never a month");
+        deferred.Delay.ShouldBeInRange(
+            TaskDeferredException.MinimumDelay,
+            PreCheckFaultDelay,
+            "the jitter only ever shortens the fault's wait, never lengthens it past the month-end cap");
+    }
+
+    [Fact]
+    public async Task A_Permanent_Database_Fault_In_The_PreCheck_Fails_The_Attempt_With_Its_SqlState()
+    {
+        // A denied privilege is permanent: deferring it would retry a broken deployment until the task dead-letters.
+        var gate = new ReportPreCheckGate(peekFault: () => new PostgresException(
+            "permission denied for table quota_counter", "ERROR", "ERROR", PostgresErrorCodes.InsufficientPrivilege));
+        var world = await StartAsync(services => ReplaceQuotaGate(services, inner => gate.Wrap(inner)));
+        await using var _ = world;
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, OneEventBody);
+        await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
+        await SeedDeferredTaskAsync(world, artifactId);
+        var before = (await ReadCounterAsync(counters, world)).ShouldNotBeNull();
+
+        var failure = await Should.ThrowAsync<PostgresException>(
+            async () => await ParseAsync(world, artifactId));
+
+        failure.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+
+        // The task entry point lets it escape as an ordinary failure, so the queue spends the attempt.
+        await Should.ThrowAsync<PostgresException>(
+            async () => await CreateHandler(world).HandleAsync(
+                new ParseRawReportPayload(world.RunId, artifactId, ProducerKind), world.Org, Token));
+
+        (await ReadCounterAsync(counters, world)).ShouldNotBeNull().ShouldBe(before);
+        (await CountRawReportsAsync(world, artifactId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_Cancelled_Attempt_Is_Never_Turned_Into_A_Quota_Deferral()
+    {
+        var gate = new ReportPreCheckGate();
+        var world = await StartAsync(services => ReplaceQuotaGate(services, inner => gate.Wrap(inner)));
+        await using var _ = world;
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, OneEventBody);
+        await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
+        await SeedDeferredTaskAsync(world, artifactId);
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        // The token, not the quota, is what stopped the attempt: a deferral here would hide a shutdown or a lost lease.
+        await Should.ThrowAsync<OperationCanceledException>(
+            async () => await CreateHandler(world).ExecuteAsync(
+                new ParseRawReportPayload(world.RunId, artifactId, ProducerKind), world.Org, cancelled.Token));
+
+        (await ReadCounterAsync(counters, world)).ShouldNotBeNull().BlockedAt.ShouldBeNull();
+        (await CountRawReportsAsync(world, artifactId)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_Probe_Fault_On_A_First_Attempt_Cannot_Defer_It()
+    {
+        // No deferred task row yet: the pre-check is not reached at all, so the fault this gate would throw is never
+        // asked and the attempt is parsed instead of being answered as a quota wait.
+        var gate = new ReportPreCheckGate(peekFault: () => new TimeoutException("the quota read timed out"));
+        var world = await StartAsync(services => ReplaceQuotaGate(services, inner => gate.Wrap(inner)));
+        await using var _ = world;
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, OneEventBody);
+        await SeedCounterAsync(counters, world, used: 0m, limit: 10m);
+        var log = new CapturedLog();
+
+        var outcome = await ParseAsync(world, artifactId, log);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
+        gate.Peeks.ShouldBe(0, "a first attempt is never questioned about quota");
+        log.Lines.ShouldNotContain(line => line.Contains("deferred", StringComparison.OrdinalIgnoreCase));
+        log.Lines.ShouldNotContain(line => line.Contains("quota_blocked_then_closed", StringComparison.Ordinal));
+        (await CountRawReportsAsync(world, artifactId)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task An_Already_Stamped_Refusal_Opens_No_Stamp_Transaction_On_The_Next_Wait()
+    {
+        var gate = new ReportPreCheckGate();
+        var world = await StartAsync(services => ReplaceQuotaGate(services, inner => gate.Wrap(inner)));
+        await using var _ = world;
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, OneEventBody);
+        await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
+        await SeedDeferredTaskAsync(world, artifactId);
+        (await ParseAsync(world, artifactId)).Status.ShouldBe(ParseRawReportOutcome.QuotaBlocked);
+        var stamped = (await ReadCounterAsync(counters, world)).ShouldNotBeNull();
+        stamped.BlockedAt.ShouldNotBeNull();
+        world.Host.Statements.Clear();
+
+        var repeat = await ParseAsync(world, artifactId);
+
+        repeat.Status.ShouldBe(ParseRawReportOutcome.QuotaBlocked);
+        repeat.QuotaRequest.ShouldBeNull("a counter that already carries the stamp needs no write");
+
+        // The peek still reads the counter, but no statement writes one: neither the stamp nor the carry-forward runs.
+        var counterStatements = world.Host.Statements.Snapshot()
+            .Where(statement => statement.Contains("public.quota_counter", StringComparison.Ordinal))
+            .ToList();
+        counterStatements.ShouldNotBeEmpty("the pre-check still asks the counter");
+        counterStatements.ShouldNotContain(
+            statement => statement.Contains("update public.quota_counter", StringComparison.Ordinal)
+                || statement.Contains("insert into public.quota_counter", StringComparison.Ordinal),
+            "a repeated refusal writes no counter row, so its stamp transaction never opens");
+        (await ReadCounterAsync(counters, world)).ShouldNotBeNull().ShouldBe(stamped);
     }
 
     [Fact]

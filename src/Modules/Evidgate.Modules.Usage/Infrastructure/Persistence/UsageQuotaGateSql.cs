@@ -41,11 +41,13 @@ internal static class UsageQuotaGateSql
     /// <summary>
     /// Reads only existing refusing counters; the first scope is the tenant's. The instant is the transaction's own
     /// clock, the one that named the period, so a refusal's wait never contradicts the month it refuses in. A null
-    /// <c>@period</c> is the transaction's own month, and every row answers the month it was read in.
+    /// <c>@period</c> is the transaction's own month, and every row answers the month it was read in. <c>unstamped</c>
+    /// tells a caller whether a stamp written after its rollback would change the row at all.
     /// </summary>
     internal const string Peek = $"""
         select coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) as scope_key,
-               c.used, c.quota_limit, transaction_timestamp() as database_now, c.period
+               c.used, c.quota_limit, transaction_timestamp() as database_now, c.period,
+               c.blocked_at is null as unstamped
         from public.quota_counter as c
         where c.org_id = @org_id
           and c.period = {ResolvedMonth}
@@ -250,9 +252,11 @@ internal static class UsageQuotaGateSql
     /// <summary>
     /// The durable stamp of a refusal whose caller rolled its transaction back: the scopes are locked in the same order
     /// as above and only a counter still without room and still unstamped is written, so a repeated refusal, a counter
-    /// a raise has since freed and a scope with no counter row all cost the one statement and no version bump. The
+    /// a raise has since freed and a scope with no counter row all leave every version where it was. The
     /// <c>blocked_at is null</c> predicate sits inside the locking sub-statement, so a repeated refusal locks no row
-    /// at all rather than locking one it then leaves untouched.
+    /// at all rather than locking one it then leaves untouched. <see cref="CarryForward"/> runs before this statement,
+    /// so a stamp at the first call of a period is two statements; only this one is a write, and it writes no row when
+    /// the counters are already stamped.
     /// </summary>
     internal const string StampBlocked = """
         with blocked as materialized (
