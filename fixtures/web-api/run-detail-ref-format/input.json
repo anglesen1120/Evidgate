@@ -33,6 +33,8 @@
       "revision_hash": "sha256:018f000100000000000000000000000000000000000000000000000000000000"
     },
     "shard_count": 2,
-    "declared_producers": ["shard-1", "shard-2"]
+    "declared_producers": ["shard-1", "shard-2"],
+    "releases": [],
+    "after_cancel_events": 0
   }
 }
