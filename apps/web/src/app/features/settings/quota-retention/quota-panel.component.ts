@@ -9,8 +9,10 @@ import { quotaMetricLabel } from './quota-metric-label';
 import { QuotaStore } from './quota.store';
 
 /**
- * The per-project breakdown is unbounded on the wire, so the panel renders the first few rows and
- * counts the rest instead of growing the tab with every project the org has.
+ * The service pages the per-project breakdown (50 projects unless the request asks for another
+ * page size), and one page can still be more rows than the tab should grow with: the panel renders
+ * the first few and counts the rest. The org totals beside them already cover every project, so no
+ * figure here is a page's sum.
  */
 const PROJECT_ROW_LIMIT = 5;
 

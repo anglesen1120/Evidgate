@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
@@ -15,8 +16,93 @@ internal sealed partial class UsageReadsWorld
 {
     /// <summary>The url of the tenant usage summary of this world's org.</summary>
     /// <param name="project">The project filter, or null for the org-wide answer.</param>
-    internal string SummaryUrl(Guid? project = null) =>
-        $"/v1/orgs/{Org:D}/usage/summary" + (project is { } id ? $"?project_id={id:D}" : string.Empty);
+    internal string SummaryUrl(Guid? project = null) => SummaryPageUrl(project);
+
+    /// <summary>The url of one summary request, with the paging parameters the test names.</summary>
+    /// <param name="project">The project filter, or null for the org-wide answer.</param>
+    /// <param name="limit">The <c>limit</c> query value as it goes on the wire, or null to send none.</param>
+    /// <param name="cursor">The <c>cursor</c> query value, or null to send none.</param>
+    internal string SummaryPageUrl(Guid? project = null, string? limit = null, string? cursor = null)
+    {
+        var query = new List<string>(3);
+        if (project is { } id)
+        {
+            query.Add(string.Create(CultureInfo.InvariantCulture, $"project_id={id:D}"));
+        }
+
+        if (limit is not null)
+        {
+            query.Add("limit=" + limit);
+        }
+
+        if (cursor is not null)
+        {
+            query.Add("cursor=" + Uri.EscapeDataString(cursor));
+        }
+
+        return $"/v1/orgs/{Org:D}/usage/summary"
+            + (query.Count == 0 ? string.Empty : "?" + string.Join("&", query));
+    }
+
+    /// <summary>
+    /// A new project of this world's org whose creation instant is pinned, so a page boundary is a fact rather than a
+    /// race between two requests.
+    /// </summary>
+    /// <param name="createdAt">The <c>created_at</c> the keyset orders by.</param>
+    internal async Task<Guid> AddProjectAtAsync(DateTimeOffset createdAt)
+    {
+        var project = await RegistryApi.CreateProjectAsync(Client, User, Org, Unique.Slug("billing"));
+        await PinProjectCreatedAtAsync(project, createdAt);
+        return project;
+    }
+
+    /// <summary>Pins a project's creation instant, the first member of the keyset the summary pages by.</summary>
+    /// <param name="projectId">The project to move.</param>
+    /// <param name="createdAt">The instant it was created at.</param>
+    internal async Task PinProjectCreatedAtAsync(Guid projectId, DateTimeOffset createdAt)
+    {
+        await using var connection = await OpenOwnerAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "update public.project set created_at = @created_at where id = @id";
+        command.Parameters.Add(new NpgsqlParameter("created_at", createdAt));
+        command.Parameters.Add(new NpgsqlParameter("id", projectId));
+
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>The creation instant of one project, anywhere in the database: what a cursor for it must carry.</summary>
+    /// <param name="projectId">The project to read.</param>
+    internal async Task<DateTimeOffset> ProjectCreatedAtAsync(Guid projectId)
+    {
+        await using var connection = await OpenOwnerAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select created_at from public.project where id = @id";
+        command.Parameters.Add(new NpgsqlParameter("id", projectId));
+
+        return new DateTimeOffset(
+            DateTime.SpecifyKind((DateTime)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!, DateTimeKind.Utc));
+    }
+
+    /// <summary>
+    /// Removes a project's counter and roll-up rows of one period, so the summary stops naming it: the shape of a
+    /// project the period no longer holds, which a cursor may still point at.
+    /// </summary>
+    /// <param name="projectId">The project to remove from the month.</param>
+    /// <param name="period">The period whose rows go.</param>
+    internal async Task RemoveProjectFromSummaryAsync(Guid projectId, string period)
+    {
+        await using var connection = await OpenOwnerAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            delete from public.quota_counter where project_id = @project_id and period = @period;
+            delete from public.usage_rollup where project_id = @project_id and period = @period;
+            """;
+        command.Parameters.Add(new NpgsqlParameter("project_id", projectId));
+        command.Parameters.Add(new NpgsqlParameter("period", period));
+
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
 
     /// <summary>Sends a GET as the founder of this world's org, who holds <c>tenant_admin</c>.</summary>
     /// <param name="url">The route.</param>

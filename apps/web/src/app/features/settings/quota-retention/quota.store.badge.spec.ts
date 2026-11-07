@@ -2,7 +2,7 @@
 // (`quota.store.test-support.ts`):
 //
 // - a blocked counter wins over a warned one;
-// - a project's counter is named as well as the tenant's;
+// - a project crossing, read from the metric's org-wide count, is named as well as the tenant's;
 // - a counter with no measurement never proves a threshold, so it is never read as a warning.
 
 import { TestBed } from '@angular/core/testing';
@@ -51,6 +51,7 @@ describe('QuotaStore badge', () => {
         projects: [
           project({ project_id: 'project-one', used: 90, warned_at: '2026-11-01T09:00:00Z' }),
         ],
+        projects_status: { blocked_count: 0, warned_count: 1 },
       }),
     );
     TestBed.inject(TenantStore).setOrg('org-one');
@@ -75,6 +76,7 @@ describe('QuotaStore badge', () => {
             warned_at: '2026-11-01T09:00:00Z',
           }),
         ],
+        projects_status: { blocked_count: 1, warned_count: 0 },
       }),
     );
     TestBed.inject(TenantStore).setOrg('org-one');
