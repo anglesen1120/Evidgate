@@ -177,6 +177,10 @@ internal static class SchemaConventionScan
             "public.raw_report",
             SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only parse records (04.4.1-T4.1; migration 0078): the app role holds SELECT + INSERT, UPDATE/DELETE/TRUNCATE are revoked and `raw_report_immutable` raises 23514 for every role, so a parse is written once and keeps created_at only — no updated_at/version and no version trigger. Its reference to `report_parser` is deliberately `(parser_id, parser_version) -> (parser_id, version)`: a built-in parser row carries `org_id IS NULL`, so the composite tenant key could never match one, and the registry is written only by the migration and the owner role (0075), so no tenant can register a release a row names. Its tenant key, its composite run and artifact FKs and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.raw_report_reprocess",
+            SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only reprocess requests (migration 0081): the app role holds SELECT + INSERT, UPDATE/DELETE/TRUNCATE are revoked and `raw_report_reprocess_immutable` raises 23514 for every role, so a request is written once and keeps created_at only — no updated_at/version and no version trigger. Its reference to `report_parser` is the catalogue's own `(parser_id, parser_version) -> (parser_id, version)`, because a built-in release carries `org_id IS NULL` and the composite tenant key could never match one; the trigger `raw_report_reprocess_parser_visible` refuses another org's project-owned release. Its tenant key, its composite run, artifact and source FKs and RLS are NOT exempt."),
     ];
 
     /// <summary>

@@ -63,12 +63,15 @@ public sealed class CompositeFkTests : HarnessTest
     /// <summary>
     /// Cross-org guarded catalogue keys whose corrupt row this suite cannot generate. <c>report_parser</c> is the
     /// owner-written catalogue (0075 revokes INSERT from <c>evidgate_app</c>), so the other org's project-owned
-    /// release the corrupt <c>raw_report</c> row must name cannot be created through the application role this
-    /// matrix runs as. <c>RawReportSchemaTests</c> exercises that guard: an owner-seeded org-A release and an org-B
-    /// insert naming it, refused with 23514 <c>raw_report_parser_invisible</c>.
+    /// release the corrupt <c>raw_report</c> or <c>raw_report_reprocess</c> row must name cannot be created through
+    /// the application role this matrix runs as. <c>RawReportSchemaTests</c> exercises <c>raw_report</c>'s guard:
+    /// an owner-seeded org-A release and an org-B insert naming it, refused with 23514
+    /// <c>raw_report_parser_invisible</c>; its reprocess part does the same for the 0081 guard
+    /// (<c>raw_report_reprocess_parser_invisible</c>), on which the exclusion below of
+    /// <c>raw_report_reprocess_parser_fk</c> from the corruption matrix rests.
     /// </summary>
     private static readonly HashSet<(string Table, string Constraint)> GuardedCatalogueNotGeneratable =
-        [("public.raw_report", "raw_report_parser_fk")];
+        [("public.raw_report", "raw_report_parser_fk"), ("public.raw_report_reprocess", "raw_report_reprocess_parser_fk")];
 
     private readonly ITestOutputHelper _output;
 
@@ -124,6 +127,13 @@ public sealed class CompositeFkTests : HarnessTest
         // while keeping the catalogue key would fail here instead of silently leaving the reference unguarded.
         TenantFkScan.HasCrossOrgGuard("public.raw_report", "raw_report_parser_fk").ShouldBeTrue(
             "raw_report_parser_fk is excluded from the corruption matrix on the strength of raw_report_parser_visible");
+        TenantFkScan.HasCrossOrgGuard("public.raw_report_reprocess", "raw_report_reprocess_parser_fk").ShouldBeTrue(
+            "raw_report_reprocess_parser_fk is excluded from the corruption matrix on the strength of "
+            + "raw_report_reprocess_parser_visible");
+
+        // The harness reset truncated the migration-seeded report_parser catalogue, and the rows this matrix
+        // generates for raw_report_reprocess name that built-in release (TenantRowFactory): restore it first.
+        await BuiltInCatalogue.SeedReportParserAsync(Fixture, Token);
 
         var attempts = 0;
         var structural = new List<string>();
@@ -215,16 +225,22 @@ public sealed class CompositeFkTests : HarnessTest
     }
 
     /// <summary>
-    /// The constraint names a corrupt row's rejection may carry. <c>raw_report</c> names its run twice — the run
-    /// foreign key and the <c>(org_id, artifact_id, run_id)</c> pairing — so a row whose run is moved to the other
-    /// org breaks both references, and PostgreSQL answers with whichever check it reaches first. A table with one
-    /// foreign key to the moved parent has exactly one expected name.
+    /// The constraint names a corrupt row's rejection may carry. <c>raw_report</c> and <c>raw_report_reprocess</c>
+    /// name their run twice — the run foreign key and the <c>(org_id, artifact_id, run_id)</c> pairing — so a row
+    /// whose run is moved to the other org breaks both references, and PostgreSQL answers with whichever check it
+    /// reaches first. A table with one foreign key to the moved parent has exactly one expected name.
     /// </summary>
-    private static string[] ExpectedConstraints(string table, string corrupted) =>
-        string.Equals(table, "public.raw_report", StringComparison.Ordinal)
-            && string.Equals(corrupted, "raw_report_run_fk", StringComparison.Ordinal)
-            ? ["raw_report_run_fk", "raw_report_artifact_fk"]
-            : [corrupted];
+    private static string[] ExpectedConstraints(string table, string corrupted)
+    {
+        var paired = (table, corrupted) switch
+        {
+            ("public.raw_report", "raw_report_run_fk") => "raw_report_artifact_fk",
+            ("public.raw_report_reprocess", "raw_report_reprocess_run_fk") => "raw_report_reprocess_artifact_fk",
+            _ => null,
+        };
+
+        return paired is null ? [corrupted] : [corrupted, paired];
+    }
 
     /// <summary>
     /// The connection one table's generated rows run on: <c>evidgate_app</c> for every tenant table whose

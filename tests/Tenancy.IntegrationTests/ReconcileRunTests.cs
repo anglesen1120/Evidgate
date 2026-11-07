@@ -188,11 +188,13 @@ public sealed partial class ReconcileRunTests
         public async ValueTask<ReconcileOutcome> ReconcileAsync(
             Guid runId,
             bool lateTrigger,
+            bool reprocessTrigger,
             CancellationToken cancellationToken)
         {
             counter.Record();
 
-            return await inner.ReconcileAsync(runId, lateTrigger, cancellationToken).ConfigureAwait(false);
+            return await inner.ReconcileAsync(runId, lateTrigger, reprocessTrigger, cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 
@@ -302,19 +304,21 @@ public sealed partial class ReconcileRunTests
 
     /// <summary>
     /// One reconcile attempt in a fresh ambient tenant scope for the world's org, committed when it returns.
-    /// <paramref name="lateTrigger"/> is what the outbox payload carries: only a late-evidence trigger may compare a run
-    /// that already finished, and only inside its late window.
+    /// <paramref name="lateTrigger"/> and <paramref name="reprocessTrigger"/> are what the outbox payload carries: only a
+    /// late-evidence trigger may compare a run that already finished, and only a reprocess trigger may compare a canceled
+    /// one.
     /// </summary>
     private static async Task<ReconcileOutcome> ReconcileAsync(
         IngestTestWorld world,
         Guid runId,
-        bool lateTrigger = false)
+        bool lateTrigger = false,
+        bool reprocessTrigger = false)
     {
         await using var services = world.Api.Services.CreateAsyncScope();
         await using var scope = await services.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
             .BeginAsync(world.Org, null, false, Token);
         var outcome = await services.ServiceProvider.GetRequiredService<IRunReconciler>()
-            .ReconcileAsync(runId, lateTrigger, Token);
+            .ReconcileAsync(runId, lateTrigger, reprocessTrigger, Token);
 
         await scope.CommitAsync();
 
@@ -329,8 +333,9 @@ public sealed partial class ReconcileRunTests
     private static Task<(ReconcileOutcome Outcome, ReconcileFinalization? Finalization)> ReconcileAndFinishAsync(
         IngestTestWorld world,
         Guid runId,
-        bool lateTrigger = false) =>
-        ReconcileAndFinishCoreAsync(world.Api.Services, world, runId, lateTrigger);
+        bool lateTrigger = false,
+        bool reprocessTrigger = false) =>
+        ReconcileAndFinishCoreAsync(world.Api.Services, world, runId, lateTrigger, reprocessTrigger);
 
     /// <summary>
     /// The same attempt, resolved from the principal-carrying host instead of the API host. Only that container receives
@@ -341,22 +346,25 @@ public sealed partial class ReconcileRunTests
     private static Task<(ReconcileOutcome Outcome, ReconcileFinalization? Finalization)> ReconcileAndFinishOnHostAsync(
         IngestTestWorld world,
         Guid runId,
-        bool lateTrigger = false) =>
-        ReconcileAndFinishCoreAsync(world.Host.Services, world, runId, lateTrigger);
+        bool lateTrigger = false,
+        bool reprocessTrigger = false) =>
+        ReconcileAndFinishCoreAsync(world.Host.Services, world, runId, lateTrigger, reprocessTrigger);
 
     private static async Task<(ReconcileOutcome Outcome, ReconcileFinalization? Finalization)> ReconcileAndFinishCoreAsync(
         IServiceProvider provider,
         IngestTestWorld world,
         Guid runId,
-        bool lateTrigger)
+        bool lateTrigger,
+        bool reprocessTrigger)
     {
         await using var services = provider.CreateAsyncScope();
         await using var scope = await services.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
             .BeginAsync(world.Org, null, false, Token);
         var outcome = await services.ServiceProvider.GetRequiredService<IRunReconciler>()
-            .ReconcileAsync(runId, lateTrigger, Token);
+            .ReconcileAsync(runId, lateTrigger, reprocessTrigger, Token);
         ReconcileFinalization? finalization = null;
         if (outcome.Disposition is ReconcileDisposition.Compared or ReconcileDisposition.ComparedLate
+                or ReconcileDisposition.ComparedReprocess
             && outcome.Comparison is { } comparison)
         {
             finalization = await services.ServiceProvider.GetRequiredService<IReconcileFinisher>()
@@ -381,9 +389,10 @@ public sealed partial class ReconcileRunTests
         await using var scope = await services.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
             .BeginAsync(world.Org, null, false, Token);
         var outcome = await services.ServiceProvider.GetRequiredService<IRunReconciler>()
-            .ReconcileAsync(runId, lateTrigger, Token);
+            .ReconcileAsync(runId, lateTrigger, reprocessTrigger: false, Token);
         ReconcileFinalization? finalization = null;
         if (outcome.Disposition is ReconcileDisposition.Compared or ReconcileDisposition.ComparedLate
+                or ReconcileDisposition.ComparedReprocess
             && outcome.Comparison is { } comparison)
         {
             finalization = await services.ServiceProvider.GetRequiredService<IReconcileFinisher>()
@@ -600,13 +609,14 @@ public sealed partial class ReconcileRunTests
             + $"and object_id = '{runId:D}' and actor_type = 'system'");
 
     /// <summary>
-    /// The settlement the consumer derives from an outcome: only a late comparison appends a revision to a run that
-    /// already finished, and an overdue comparison is a forced close, so neither leaves the decision to the collecting
-    /// edge.
+    /// The settlement the consumer derives from an outcome: a late or reprocess comparison appends a revision to a run
+    /// that already finished, and an overdue comparison is a forced close, so neither leaves the decision to the
+    /// collecting edge.
     /// </summary>
     private static ReconcileSettlement Settlement(ReconcileOutcome outcome) => outcome.Disposition switch
     {
         ReconcileDisposition.ComparedLate => ReconcileSettlement.AppendLateEvidence,
+        ReconcileDisposition.ComparedReprocess => ReconcileSettlement.AppendReprocessEvidence,
         ReconcileDisposition.ComparedOverdue => ReconcileSettlement.CloseOverdue,
         _ => ReconcileSettlement.DecideCollection,
     };
@@ -1342,7 +1352,7 @@ public sealed partial class ReconcileRunTests
         await using var holding = await services.ServiceProvider.GetRequiredService<ITenantScopeFactory>()
             .BeginAsync(world.Org, null, false, Token);
         var outcome = await services.ServiceProvider.GetRequiredService<IRunReconciler>()
-            .ReconcileAsync(runId, lateTrigger: false, Token);
+            .ReconcileAsync(runId, lateTrigger: false, reprocessTrigger: false, Token);
         outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
 
         // KEY SHARE is compatible with FOR NO KEY UPDATE (and with FOR KEY SHARE, and with FOR SHARE): it must pass.
