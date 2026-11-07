@@ -32,6 +32,14 @@
 //    `rotated`, `expired`, `revoked`, which the step-2 page renders) are exempt, and the exemption
 //    matches per value — a fixture that grows any other status or provider word keeps it as a
 //    needle, so it cannot hide a new fixture string behind a common member name.
+//    The error envelope's `details[].path` (`body.error.details[].path`, 00 §9.2) names the
+//    request member a refusal is about, so it holds contract property names such as
+//    `artifact_days`; production code names the same property. That one member is exempt per
+//    value, and only when the value is a property name declared under `components.schemas` of
+//    `contracts/openapi.yaml` or a dotted/pointer/indexed path whose every segment is one
+//    (`retention_limits.min_artifact_days`, `/components/0/name`). Any other `path` value, and
+//    every other member holding a property name, stays a needle. The names are read from the
+//    contract at scan time; a missing, unparsable or property-less contract fails the gate.
 //
 // The production invocation forbids all 18 markers. The review web image is the one caller that
 // may carry a dev-only surface: `npm run build:review -w apps/web` adds the `review` angular.json
@@ -47,14 +55,15 @@
 // The check fails closed: a missing/empty dist directory, or a corpus with no `input.json`, is a
 // failure, not a pass — otherwise a broken build or a moved corpus would make the gate vacuous.
 //
-// Dependency-free (node: fs/path/url only) like `check-bundle-budget.mjs`, so a CI job that ran
-// `npm ci --ignore-scripts` needs nothing extra. The dist directory is resolved from this file's
+// Needs only node: fs/path/url and the root `yaml` package (a CI job that ran
+// `npm ci --ignore-scripts` has it), used to read the contract's property names. The dist directory is resolved from this file's
 // own location (`apps/web/dist/browser`), so the answer does not depend on the caller's cwd.
-// `EVIDGATE_WEB_DIST_DIR` and `EVIDGATE_WEB_FIXTURE_DIR` exist ONLY to run the synthetic proofs of
+// `EVIDGATE_WEB_DIST_DIR`, `EVIDGATE_WEB_FIXTURE_DIR` and `EVIDGATE_WEB_CONTRACT_FILE` exist ONLY to run the synthetic proofs of
 // this gate (packages/cli/src/webFixtureLeakGate{,.needles,.runViews,.signIn}.test.ts); they are not build knobs.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse as parseYaml } from 'yaml';
 
 // `@angular/build:application` writes the deployable assets into `<outputPath>/browser`
 // (angular.json: outputPath "dist"), exactly as `check-bundle-budget.mjs` reads them.
@@ -65,6 +74,10 @@ const DIST_DIR = process.env.EVIDGATE_WEB_DIST_DIR
 const FIXTURE_DIR = process.env.EVIDGATE_WEB_FIXTURE_DIR
   ? resolve(process.env.EVIDGATE_WEB_FIXTURE_DIR)
   : resolve(fileURLToPath(new URL('../../../fixtures/web-api/', import.meta.url)));
+// repository root -> contracts/openapi.yaml, the source of the contract property names.
+const CONTRACT_FILE = process.env.EVIDGATE_WEB_CONTRACT_FILE
+  ? resolve(process.env.EVIDGATE_WEB_CONTRACT_FILE)
+  : resolve(fileURLToPath(new URL('../../../contracts/openapi.yaml', import.meta.url)));
 
 /**
  * Everything the browser can serve, including source maps, the copied assets and the
@@ -234,6 +247,79 @@ function fail(message) {
   process.exit(1);
 }
 
+/** Adds the key of every `properties` map found anywhere below `node` to `names`. */
+function collectPropertyNames(node, names) {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      collectPropertyNames(item, names);
+    }
+    return;
+  }
+  if (node === null || typeof node !== 'object') {
+    return;
+  }
+  for (const [key, child] of Object.entries(node)) {
+    if (key === 'properties' && child !== null && typeof child === 'object') {
+      for (const name of Object.keys(child)) {
+        names.add(name);
+      }
+    }
+    collectPropertyNames(child, names);
+  }
+}
+
+/** Every property name declared in `components.schemas` of the contract; fails closed. */
+function contractPropertyNames(file) {
+  if (!existsSync(file)) {
+    fail(`no ${file} — the contract the error-path exemption reads is missing.`);
+  }
+  let schemas;
+  try {
+    schemas = parseYaml(readFileSync(file, 'utf8'))?.components?.schemas;
+  } catch (error) {
+    fail(`cannot parse ${shown(file)}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const names = new Set();
+  collectPropertyNames(schemas, names);
+  if (names.size === 0) {
+    fail(`${shown(file)} declares no components.schemas property, so the exemption has no names.`);
+  }
+  return names;
+}
+
+const PROPERTY_NAMES = contractPropertyNames(CONTRACT_FILE);
+
+/**
+ * Whether `value` is a contract property name or a dotted / `/`-pointer path of them, where a
+ * non-leading segment may also be an array index (`a.0.b`, `a[0].b`, `/components/0/name`).
+ */
+function isContractPath(value) {
+  const segments = (value.startsWith('/') ? value.slice(1) : value).split(/[./]/);
+  if (segments.some((segment) => segment === '')) {
+    return false;
+  }
+  return segments.every((segment, position) => {
+    const bare = segment.replace(/(\[\d+\])+$/, '');
+    if (position > 0 && /^\d+$/.test(segment)) {
+      return true;
+    }
+    return PROPERTY_NAMES.has(bare);
+  });
+}
+
+/** `body.error.details[].path`, the one member whose contract-name values are exempt. */
+function isErrorDetailPath(key, child, trail) {
+  const depth = trail.length;
+  return (
+    key === 'path' &&
+    typeof child === 'string' &&
+    trail[depth - 1] === '[]' &&
+    trail[depth - 2] === 'details' &&
+    trail[depth - 3] === 'error' &&
+    isContractPath(child)
+  );
+}
+
 /** `path` relative to the caller's cwd when it is below it, absolute otherwise. */
 function shown(path) {
   const relativePath = relative(process.cwd(), path);
@@ -297,10 +383,10 @@ function isProtocolValue(key, child) {
 /**
  * Adds every string leaf of `value` that is long enough to be a leak signal to `strings`
  * (value -> fixture name). A protocol slot is skipped together with its whole subtree, and an
- * enum member is skipped only for its enumerated words: their values are shared with production
- * code, not fixture data.
+ * enum member is skipped only for its enumerated words, and an error-detail `path` only when it
+ * names contract properties: their values are shared with production code, not fixture data.
  */
-function collectFixtureStrings(value, name, strings) {
+function collectFixtureStrings(value, name, strings, trail = []) {
   if (typeof value === 'string') {
     if (value.length >= MIN_FIXTURE_STRING_LENGTH && !strings.has(value)) {
       strings.set(value, name);
@@ -309,17 +395,21 @@ function collectFixtureStrings(value, name, strings) {
   }
   if (Array.isArray(value)) {
     for (const item of value) {
-      collectFixtureStrings(item, name, strings);
+      collectFixtureStrings(item, name, strings, [...trail, '[]']);
     }
     return;
   }
   if (value !== null && typeof value === 'object') {
     const permissionRow = isPermissionRow(value);
     for (const [key, child] of Object.entries(value)) {
-      if (isProtocolValue(key, child) || (permissionRow && PERMISSION_HALVES.includes(key))) {
+      if (
+        isProtocolValue(key, child) ||
+        (permissionRow && PERMISSION_HALVES.includes(key)) ||
+        isErrorDetailPath(key, child, trail)
+      ) {
         continue;
       }
-      collectFixtureStrings(child, name, strings);
+      collectFixtureStrings(child, name, strings, [...trail, key]);
     }
   }
 }
