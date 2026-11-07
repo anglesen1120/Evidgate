@@ -15,11 +15,6 @@ const REFUSALS = {
     code: 'project_deleting',
     message: 'This project is being deleted; retention cannot be changed.',
   },
-  'out-of-range': {
-    status: 422,
-    code: 'retention_out_of_range',
-    message: 'artifact_days must be between 1 and 90',
-  },
   quota: { status: 429, code: 'quota_exceeded', message: 'The project quota has been exceeded.' },
   unavailable: {
     status: 503,
@@ -52,13 +47,6 @@ export function findRetentionFixture(
   const operation = method === 'GET' ? 'getRetentionPolicy' : 'setRetentionPolicy';
   const refusal = Object.entries(REFUSALS).find(([key]) => key === variant)?.[1];
   if (refusal) {
-    const details =
-      variant === 'out-of-range'
-        ? [
-            { path: 'artifact_days', reason: 'below_min_artifact_days' },
-            { path: 'retention_limits.min_artifact_days', reason: '1' },
-          ]
-        : [];
     return {
       name: `retention-${operation}-${variant}`,
       document: {
@@ -73,7 +61,7 @@ export function findRetentionFixture(
             message: refusal.message,
             request_id: '018f0000-0000-7000-8000-00000000a579',
             retryable: false,
-            details,
+            details: [],
           },
         },
       },
