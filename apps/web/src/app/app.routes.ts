@@ -55,13 +55,8 @@ import {
   phaseGuard,
   projectScopeGuard,
 } from './core/guards';
-import { ShellComponent } from './shell/layout/shell.component';
 import type { NavEntry } from './shell/nav/nav.models';
 import { NAV_ENTRIES } from './shell/nav/nav-registry';
-import { ForbiddenPage } from './shell/pages/forbidden.page';
-import { NoOrganizationPage } from './shell/pages/no-organization.page';
-import { NotFoundPage } from './shell/pages/not-found.page';
-import { ServiceUnavailablePage } from './shell/pages/service-unavailable.page';
 
 /**
  * The lazy route table of each `features/<area>` folder. A registry row whose `area` is not named
@@ -167,7 +162,7 @@ export const routes: Routes = [
 
   {
     path: '',
-    component: ShellComponent,
+    loadComponent: () => import('./shell/layout/shell.component').then((m) => m.ShellComponent),
     children: [
       // `/` decides where a session lands and mounts nothing itself.
       { path: '', pathMatch: 'full', canActivate: [landingRedirectGuard], children: [] },
@@ -194,12 +189,26 @@ export const routes: Routes = [
         ],
       },
 
-      { path: 'forbidden', component: ForbiddenPage },
-      { path: 'welcome', component: NoOrganizationPage },
-      { path: 'unavailable', component: ServiceUnavailablePage },
+      {
+        path: 'forbidden',
+        loadComponent: () => import('./shell/pages/forbidden.page').then((m) => m.ForbiddenPage),
+      },
+      {
+        path: 'welcome',
+        loadComponent: () =>
+          import('./shell/pages/no-organization.page').then((m) => m.NoOrganizationPage),
+      },
+      {
+        path: 'unavailable',
+        loadComponent: () =>
+          import('./shell/pages/service-unavailable.page').then((m) => m.ServiceUnavailablePage),
+      },
       // The only wildcard: the shell route matches every URL, so an unknown path, a foreign org or
       // project id and a phase-hidden entry all land here, with the shell around them.
-      { path: '**', component: NotFoundPage },
+      {
+        path: '**',
+        loadComponent: () => import('./shell/pages/not-found.page').then((m) => m.NotFoundPage),
+      },
     ],
   },
 ];
