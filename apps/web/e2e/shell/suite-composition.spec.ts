@@ -8,8 +8,8 @@ import draftFixture from '../../../../fixtures/web-api/suite-revision/input.json
 import emptyFixture from '../../../../fixtures/web-api/suite-revision-empty/input.json';
 import largeFixture from '../../../../fixtures/web-api/suite-revision-large/input.json';
 import publishedFixture from '../../../../fixtures/web-api/suite-revision-published/input.json';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
-  expectNoA11yViolations,
   localePath,
   LOCALES,
   ORG_ACME,

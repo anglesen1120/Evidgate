@@ -9,6 +9,7 @@ import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { ScopeSwitcherComponent } from './scope-switcher.component';
 import { NavigationEnd, Router, provideRouter } from '@angular/router';
 import axe from 'axe-core';
+import { AXE_JSDOM_RUN_OPTIONS } from '../../../../e2e/a11y/axe-config';
 import { SessionStore } from '../../core/session/session.store';
 import { QuotaStore } from '../../features/settings/quota-retention/quota.store';
 import { NavViewService } from '../nav/nav-view';
@@ -427,10 +428,7 @@ describe('ShellComponent', () => {
   it('passes the shell structure/ARIA axe checks (jsdom cannot measure contrast)', async () => {
     await TestBed.inject(Router).navigateByUrl('/orgs/org-one/projects/project-one/overview');
     await fixture.whenStable();
-    const results = await axe.run(root, {
-      runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
-      rules: { 'color-contrast': { enabled: false } },
-    });
+    const results = await axe.run(root, AXE_JSDOM_RUN_OPTIONS);
     expect(
       results.violations.map((violation) => ({
         id: violation.id,

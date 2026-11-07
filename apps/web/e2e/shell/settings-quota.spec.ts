@@ -1,10 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   LOCALES,
   ORG_ACME,
   SETTINGS_ADMIN_USAGE_GRANTS,
   THEMES,
-  expectNoA11yViolations,
   localePath,
   seedStoredTheme,
   withVariants,

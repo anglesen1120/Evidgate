@@ -14,13 +14,8 @@ import {
   type RunDecisionVariant,
   type RunRevisionsVariant,
 } from './run-detail.support';
-import {
-  expectNoA11yViolations,
-  LOCALES,
-  seedStoredTheme,
-  THEMES,
-  type ShellLocale,
-} from './support';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
+import { LOCALES, seedStoredTheme, THEMES, type ShellLocale } from './support';
 
 /** Revisions arrive newest first: the newest is the default pin, the incomplete one is 2. */
 const REVISIONS = revisionsDocument.body.items;
@@ -41,7 +36,7 @@ const EVIDENCE_TAB: Record<ShellLocale, string> = {
 
 const DECISION_TAB: Record<ShellLocale, string> = {
   en: 'Latest live decision',
-  vi: 'Quyết định chính thức mới nhất',
+  vi: 'Quyết định hiện hành mới nhất',
 };
 
 /** `Revision N · <timestamp> UTC` is the trigger and the option text; the number is the key. */

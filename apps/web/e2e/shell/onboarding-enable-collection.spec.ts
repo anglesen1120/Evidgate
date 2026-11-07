@@ -56,9 +56,9 @@ import {
   shell,
   type OnboardingSeed,
 } from './onboarding-support';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   currentTheme,
-  expectNoA11yViolations,
   LOCALES,
   seedStoredTheme,
   THEMES,

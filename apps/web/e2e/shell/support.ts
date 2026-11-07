@@ -15,8 +15,6 @@
 //    query handling never sees a session fact. The variants below name corpus directories that
 //    exist in `fixtures/web-api/`.
 import { expect, type Page } from '@playwright/test';
-import axe from 'axe-core';
-import type { AxeResults, RunOptions } from 'axe-core';
 
 /** The org and project ids of `fixtures/web-api/orgs-list` + `projects-list` (org 1). */
 export const ORG_ACME = '018f0000-0000-7000-8000-000000000001';
@@ -174,75 +172,6 @@ export async function seedStoredTheme(page: Page, theme: ShellTheme | null): Pro
       localStorage.setItem('evidgate-theme', stored);
     }
   }, theme);
-}
-
-/** `axe-core`'s WCAG 2.2 A/AA tag set: everything the product claims, contrast included. */
-const AXE_OPTIONS: RunOptions = {
-  runOnly: {
-    type: 'tag',
-    values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'],
-  },
-};
-
-/** The subset of the injected `axe` global these specs use. */
-interface AxeGlobal {
-  run: (context: Document, options: RunOptions) => Promise<AxeResults>;
-}
-
-/**
- * Runs axe in the real page, in real Chromium, with `color-contrast` ENABLED — the difference to
- * the jsdom gallery spec, which has no layout and must disable that rule.
- *
- * axe is injected from the workspace's own `axe-core` devDependency (`axe.source`), so no package
- * is added and the rule set is the version the repo pins.
- */
-export async function axeScan(page: Page, context?: string): Promise<AxeResults> {
-  await page.addScriptTag({ content: axe.source });
-  return page.evaluate(
-    async ({ context, options }: { context: string | undefined; options: RunOptions }) => {
-      // `window.axe` is the global the injected script just defined; axe-core ships no typing for
-      // the browser copy it injects, so this is the boundary where the shape is known.
-      const axeGlobal = window as typeof window & { axe: AxeGlobal };
-      // `context` is a CSS selector string here; axe resolves it inside the page.
-      return axeGlobal.axe.run((context ?? document) as Document, options);
-    },
-    { context, options: AXE_OPTIONS },
-  );
-}
-
-/** One axe finding, trimmed to what a report can quote. */
-export interface AxeFinding {
-  readonly id: string;
-  readonly impact: string | null;
-  /** axe's selector list; a frame-crossing selector is itself an array, so the shape stays open. */
-  readonly targets: readonly unknown[];
-  readonly summaries: readonly string[];
-}
-
-/** The violations of a scan, in the same shape the gallery's jsdom spec reports them. */
-export function axeViolations(results: AxeResults): AxeFinding[] {
-  return results.violations.map((violation) => ({
-    id: violation.id,
-    impact: violation.impact ?? null,
-    targets: violation.nodes.map((node) => node.target),
-    summaries: violation.nodes.map((node) => node.failureSummary ?? ''),
-  }));
-}
-
-/**
- * Asserts a page is WCAG 2.2 A/AA clean AND that the colour-contrast rule actually produced an
- * outcome (a pass or an "incomplete"): a silent rule would make "no violations" meaningless.
- */
-export async function expectNoA11yViolations(page: Page, context: string): Promise<void> {
-  const results = await axeScan(page);
-  const contrast = [...results.passes, ...results.incomplete].filter(
-    (rule) => rule.id === 'color-contrast',
-  );
-  expect(
-    contrast.length,
-    `axe evaluated color-contrast on ${context} (violations: ${results.violations.length})`,
-  ).toBeGreaterThan(0);
-  expect(axeViolations(results), `axe violations on ${context}`).toEqual([]);
 }
 
 /**

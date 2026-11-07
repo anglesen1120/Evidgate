@@ -32,9 +32,9 @@ import { readFile } from 'node:fs/promises';
 import auditList from '../../../../fixtures/web-api/audit-list/input.json';
 import auditListEmpty from '../../../../fixtures/web-api/audit-list-empty/input.json';
 import auditListSupport from '../../../../fixtures/web-api/audit-list-support/input.json';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   expectIndistinguishableNotFound,
-  expectNoA11yViolations,
   LOCALES,
   MEMBERS_READONLY_GRANTS,
   ORG_ACME,

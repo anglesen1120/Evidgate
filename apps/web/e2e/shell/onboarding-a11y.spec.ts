@@ -21,7 +21,8 @@ import {
   revealValue,
   shell,
 } from './onboarding-support';
-import { currentTheme, expectNoA11yViolations, LOCALES, seedStoredTheme, THEMES } from './support';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
+import { currentTheme, LOCALES, seedStoredTheme, THEMES } from './support';
 
 /** The token name the reveal cases type before submitting the token form. */
 const TOKEN_NAME = 'CI upload (a11y)';
