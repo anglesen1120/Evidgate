@@ -18,7 +18,8 @@ tests
 fixtures/*
 !fixtures/web-api
 src
-contracts
+contracts/*
+!contracts/openapi.yaml
 migrations
 infra/docker
 node_modules
