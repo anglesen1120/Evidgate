@@ -27,23 +27,14 @@ public interface IQuotaGate
     Task<QuotaCheckResult> CheckAsync(QuotaCheckRequest request, CancellationToken cancellationToken);
 
     /// <summary>
-    /// The billing month, <c>YYYY-MM</c> in UTC, of the caller's open database transaction: the instant the batch's own
-    /// rows and the ledger row metering them are stamped with, so a batch is gated and metered in one month even when
-    /// it straddles a month end. Callers build <see cref="QuotaCheckRequest.Period"/> from this, never from an
-    /// application clock, and ask inside the transaction that later calls <see cref="CheckAsync"/>.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation.</param>
-    /// <returns>The period of the transaction's start time.</returns>
-    Task<string> CurrentPeriodAsync(CancellationToken cancellationToken);
-
-    /// <summary>
     /// An advisory, read-only answer to the question <see cref="CheckAsync"/> would decide: it writes nothing, locks
-    /// nothing and never carries a limit forward. <see cref="QuotaDecision.Block"/> means a counter of the period
+    /// nothing and never carries a limit forward. <see cref="QuotaPeekResult.Blocked"/> means a counter of the period
     /// exists and has no room for the quantity right now; every other answer, including a period with no counter yet,
-    /// means only "do not skip the authoritative check". It never admits work.
+    /// means only "do not skip the authoritative check". It never admits work, and its result type is not
+    /// <see cref="QuotaCheckResult"/>, so the two cannot be swapped.
     /// </summary>
     /// <param name="request">The same question the authoritative call would ask.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    /// <returns>Block with the wait to the next period, or Ok.</returns>
-    Task<QuotaCheckResult> PeekAsync(QuotaCheckRequest request, CancellationToken cancellationToken);
+    /// <returns>Blocked with the wait to the next period, or <see cref="QuotaPeekResult.Clear"/>.</returns>
+    Task<QuotaPeekResult> PeekAsync(QuotaCheckRequest request, CancellationToken cancellationToken);
 }

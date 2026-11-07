@@ -1,5 +1,6 @@
-// The advisory quota read and the transaction month: a peek blocks only on a counter of the period that has no room,
-// writes and carries nothing, and the month callers gate with is the month the caller's own rows are stamped with.
+// The advisory quota read and the transaction month: a peek blocks only on a counter of the month that has no room,
+// writes and carries nothing, and a question that names no month is gated in the caller's own transaction.
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Usage.Application.Quota;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,9 +13,9 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The read-only half of the gate against a real PostgreSQL: a period whose counter has no room answers Block with the
-/// wait and the refusing scope, a period with room or with no counter at all answers Ok, and neither answer writes a
-/// counter, stamps one or carries a limit forward.
+/// The read-only half of the gate against a real PostgreSQL: a month whose counter has no room answers Blocked with the
+/// wait, the month and the refusing scope, a month with room or with no counter at all answers Clear, and neither answer
+/// writes a counter, stamps one or carries a limit forward.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class UsageQuotaPeekTests
@@ -31,7 +32,7 @@ public sealed class UsageQuotaPeekTests
     private static QuotaCheckRequest Request(
         UsageQuotaWorld world,
         decimal quantity,
-        string period = Period,
+        string? period = Period,
         Guid? project = null,
         bool includeTenantScope = false) =>
         new(UsageMetric.Results, period, project ?? world.Project, quantity, includeTenantScope);
@@ -66,11 +67,12 @@ public sealed class UsageQuotaPeekTests
 
         var blocked = await world.PeekAsync(Request(world, 1m));
 
-        blocked.Decision.ShouldBe(QuotaDecision.Block);
+        blocked.Blocked.ShouldBeTrue();
         blocked.Used.ShouldBe(Limit);
         blocked.Limit.ShouldBe(Limit);
         blocked.RetryAfter.ShouldNotBeNull().ShouldBeGreaterThanOrEqualTo(TimeSpan.FromSeconds(1));
         blocked.RaisePath.ShouldBe($"/internal/operator/billing/orgs/{world.Org:D}/quota-raise");
+        blocked.Period.ShouldBe(Period, "a blocked answer names the month the counter refused in");
 
         // The project's own counter is the one that refused: the tenant scope was not named.
         blocked.RefusedScope.ShouldBe(QuotaScope.Project, "the project's counter of the period has no room");
@@ -86,13 +88,13 @@ public sealed class UsageQuotaPeekTests
 
         var bothScopes = await world.PeekAsync(Request(world, 1m, includeTenantScope: true));
 
-        bothScopes.Decision.ShouldBe(QuotaDecision.Block);
+        bothScopes.Blocked.ShouldBeTrue();
         bothScopes.RefusedScope.ShouldBe(QuotaScope.Tenant, "the organization-wide counter is the first that refuses");
 
         // The positive control: the project's own counter has room, so the same call without the tenant scope proceeds.
         var projectOnly = await world.PeekAsync(Request(world, 1m));
 
-        projectOnly.Decision.ShouldBe(QuotaDecision.Ok);
+        projectOnly.Blocked.ShouldBeFalse();
     }
 
     [Fact]
@@ -108,18 +110,17 @@ public sealed class UsageQuotaPeekTests
 
         var projectOnly = await world.PeekAsync(Request(world, 1m));
 
-        projectOnly.Decision.ShouldBe(QuotaDecision.Ok, "another organization's full counter refuses nothing here");
+        projectOnly.Blocked.ShouldBeFalse("another organization's full counter refuses nothing here");
         var bothScopes = await world.PeekAsync(Request(world, 1m, includeTenantScope: true));
 
-        bothScopes.Decision.ShouldBe(
-            QuotaDecision.Ok,
+        bothScopes.Blocked.ShouldBeFalse(
             "the same period, metric and tenant scope under another organization is a different counter");
 
         // The positive control: the same two counters under this organization refuse the same question.
         await SeedAsync(world, used: Limit, projectId: null);
         var refused = await world.PeekAsync(Request(world, 1m, includeTenantScope: true));
 
-        refused.Decision.ShouldBe(QuotaDecision.Block);
+        refused.Blocked.ShouldBeTrue();
         refused.RefusedScope.ShouldBe(QuotaScope.Tenant, "this organization's own full tenant counter refuses");
         (await world.CounterAsync(org: otherOrg, project: otherProject)).ShouldBe(foreignProject);
         (await world.CounterAsync(org: otherOrg)).ShouldBe(foreignTenant);
@@ -128,27 +129,29 @@ public sealed class UsageQuotaPeekTests
     // ------------------------------------------------------------------ the admission
 
     [Fact]
-    public async Task QuotaGatePeek_RoomOrExactFit_ReturnsOk()
+    public async Task QuotaGatePeek_RoomOrExactFit_ReturnsClear()
     {
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);
         await SeedAsync(world, used: 9m, projectId: world.Project);
 
         var exactFit = await world.PeekAsync(Request(world, 1m));
-        exactFit.Decision.ShouldBe(QuotaDecision.Ok, "the last unit inside the limit still fits");
+        exactFit.Blocked.ShouldBeFalse("the last unit inside the limit still fits");
+        exactFit.Used.ShouldBeNull("a clear answer carries no numbers a caller could read as an admission");
 
         var overTheLine = await world.PeekAsync(Request(world, 2m));
-        overTheLine.Decision.ShouldBe(QuotaDecision.Block, "the same counter has no room for two units");
+        overTheLine.Blocked.ShouldBeTrue("the same counter has no room for two units");
     }
 
     [Fact]
-    public async Task QuotaGatePeek_NoCounterOfThePeriod_ReturnsOkWithoutCarry()
+    public async Task QuotaGatePeek_NoCounterOfThePeriod_ReturnsClearWithoutCarry()
     {
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);
         await SeedAsync(world, used: Limit, period: PreviousPeriod, projectId: world.Project);
 
         var answer = await world.PeekAsync(Request(world, 1m));
 
-        answer.Decision.ShouldBe(QuotaDecision.Ok, "a period without a counter has no configured limit to refuse with");
+        answer.Blocked.ShouldBeFalse("a period without a counter has no configured limit to refuse with");
+        answer.Period.ShouldBeNull("no counter answered, so no month answers either");
         (await world.CounterCountAsync()).ShouldBe(1, "the earlier month's limit is not carried into this period");
         (await world.CounterIdAsync(project: world.Project, period: Period)).ShouldBeNull();
         (await world.CounterAsync(project: world.Project, period: PreviousPeriod))
@@ -167,7 +170,7 @@ public sealed class UsageQuotaPeekTests
 
         var blocked = await world.PeekAsync(Request(world, 6m));
 
-        blocked.Decision.ShouldBe(QuotaDecision.Block);
+        blocked.Blocked.ShouldBeTrue();
         (await world.CounterAsync(project: world.Project)).ShouldBe(
             before,
             "a peek reserves nothing, stamps nothing and bumps no version");
@@ -194,7 +197,7 @@ public sealed class UsageQuotaPeekTests
     }
 
     [Fact]
-    public async Task QuotaGatePeek_Disabled_ReturnsOkWithoutRead()
+    public async Task QuotaGatePeek_Disabled_ReturnsClearWithoutRead()
     {
         await using var world = await UsageQuotaWorld.StartAsync(
             _fixture,
@@ -206,10 +209,10 @@ public sealed class UsageQuotaPeekTests
         var before = (await world.CounterAsync(project: world.Project)).ShouldNotBeNull();
         world.ClearStatementLog();
 
-        var answer = await world.PeekAsync(Request(world, 1m));
+        var answer = await world.PeekAsync(Request(world, 1m, period: null));
 
-        answer.Decision.ShouldBe(QuotaDecision.Ok, "the operator switch answers Ok explicitly, it is not a stub");
-        answer.RetryAfter.ShouldBeNull();
+        answer.ShouldBe(QuotaPeekResult.Clear, "the operator switch answers Clear explicitly, it is not a stub");
+        answer.Period.ShouldBeNull();
         world.CounterStatements().ShouldBeEmpty("a switched-off gate does not read a counter");
 
         var after = (await world.CounterAsync(project: world.Project)).ShouldNotBeNull();
@@ -218,37 +221,78 @@ public sealed class UsageQuotaPeekTests
         after.BlockedAt.ShouldBe(before.BlockedAt);
     }
 
-    // ------------------------------------------------------------------ the transaction's billing month
+    // ------------------------------------------------------------------ a question that names no month
 
     [Fact]
-    public async Task QuotaGateCurrentPeriod_IsTheTransactionAndRowMonth()
+    public async Task QuotaGatePeek_NullPeriod_BlocksAndNamesTheTransactionsMonth()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        var token = TestContext.Current.CancellationToken;
+        await using var services = world.Api.Services.CreateAsyncScope();
+        var provider = services.ServiceProvider;
+        await using var scope = await provider.GetRequiredService<ITenantScopeFactory>()
+            .BeginAsync(world.Org, null, false, token);
+
+        // transaction_timestamp() is fixed for the whole transaction, so the month read here is the one the gate's own
+        // statement resolves in this same transaction.
+        var month = (await provider.GetRequiredService<ITenantDb>().QuerySingleOrDefaultAsync<string>(
+            "select to_char(transaction_timestamp() at time zone 'UTC','YYYY-MM')", cancellationToken: token))!;
+        await SeedAsync(world, used: Limit, period: month, projectId: world.Project);
+
+        var blocked = await provider.GetRequiredService<IQuotaGate>()
+            .PeekAsync(Request(world, 1m, period: null), token);
+        await scope.CommitAsync(token);
+
+        blocked.Blocked.ShouldBeTrue("the month's counter has no room");
+        blocked.Period.ShouldBe(month, "the statement resolved the month of its own transaction");
+        blocked.Used.ShouldBe(Limit);
+        blocked.Limit.ShouldBe(Limit);
+        blocked.RetryAfter.ShouldNotBeNull().ShouldBeGreaterThanOrEqualTo(TimeSpan.FromSeconds(1));
+        blocked.RefusedScope.ShouldBe(QuotaScope.Project);
+        (await world.CounterCountAsync()).ShouldBe(1, "a peek creates no counter");
+    }
+
+    [Fact]
+    public async Task QuotaGatePeek_NullPeriod_NoCounterOrRoomLeft_IsClear()
     {
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);
 
-        var (gate, transaction, stamped) = await world.PeriodAsync();
+        var noCounter = await world.PeekAsync(Request(world, 1m, period: null));
 
-        gate.ShouldBe(transaction, "the gate answers the month of the caller's open transaction");
-        gate.ShouldBe(stamped, "the ledger row metered in that transaction carries the same month");
-        gate.Length.ShouldBe(7);
-        char.IsAsciiDigit(gate[0]).ShouldBeTrue();
-        gate[4].ShouldBe('-');
+        noCounter.Blocked.ShouldBeFalse("a month without a counter has no configured limit to refuse with");
+        noCounter.Period.ShouldBeNull();
+
+        var (month, _) = await world.DatabaseMonthsAsync();
+        await SeedAsync(world, used: 0m, period: month, projectId: world.Project);
+        var roomLeft = await world.PeekAsync(Request(world, 1m, period: null));
+
+        roomLeft.Blocked.ShouldBeFalse("the counter has room for the call");
+        roomLeft.Period.ShouldBeNull("only a blocked answer names a month");
+        (await world.CounterCountAsync()).ShouldBe(1);
     }
 
     [Fact]
-    public async Task QuotaGateCurrentPeriod_DisabledSwitch_StillAnswers()
+    public async Task QuotaGatePeek_NullPeriod_IsOneStatement()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(
-            _fixture,
-            configuration: new Dictionary<string, string?>(StringComparer.Ordinal)
-            {
-                ["EVIDGATE:Usage:QuotaGate:Enabled"] = "false",
-            });
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        var (month, _) = await world.DatabaseMonthsAsync();
+        await SeedAsync(world, used: 0m, period: month, projectId: world.Project);
+        world.ClearStatementLog();
 
-        var (gate, transaction, stamped) = await world.PeriodAsync();
+        var answer = await world.PeekAsync(Request(world, 1m, period: null));
 
-        gate.ShouldBe(transaction, "the period is not gated: callers meter their rows with it either way");
-        gate.ShouldBe(stamped);
+        answer.Blocked.ShouldBeFalse();
+        world.CounterStatements().ShouldHaveSingleItem();
+        ClockReads(world).ShouldBe(
+            1,
+            "the month is resolved inside the statement that reads the counter, not by another round trip");
     }
+
+    /// <summary>How many statements the host sent that read the transaction's clock, whatever else they say.</summary>
+    /// <param name="world">The world whose Api host recorded the statements.</param>
+    private static int ClockReads(UsageQuotaWorld world) =>
+        world.Api.Statements.Snapshot().Count(statement =>
+            statement.Contains("to_char(transaction_timestamp()", StringComparison.Ordinal));
 }
 
 /// <summary>

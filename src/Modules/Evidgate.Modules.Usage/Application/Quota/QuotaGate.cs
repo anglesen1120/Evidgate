@@ -20,8 +20,8 @@ internal sealed class QuotaGateOptions
     internal const string Section = "EVIDGATE:Usage:QuotaGate";
 
     /// <summary>
-    /// False makes checks answer <see cref="QuotaDecision.Ok"/> without reading or writing a counter.
-    /// The transaction's billing month remains available; Api and Worker must use the same switch value.
+    /// False makes checks answer <see cref="QuotaDecision.Ok"/> and peeks answer nothing without reading or writing a
+    /// counter. Api and Worker must use the same switch value.
     /// </summary>
     public bool Enabled { get; set; } = true;
 }
@@ -42,9 +42,13 @@ internal sealed class QuotaGateOptions
 /// refuses work it now has room for and never drops the usage it admitted.
 /// </para>
 /// <para>
-/// The same gate answers the caller's transaction month, which is the month its own rows and the ledger row metering
-/// them are stamped with, and an advisory <see cref="PeekAsync"/> that reads a counter without reserving, stamping or
-/// carrying anything: a caller that must decide before it parses asks that one, and never treats Ok as an admission.
+/// A question leaves <see cref="QuotaCheckRequest.Period"/> null when it should be gated in the month of the caller's
+/// open transaction. The gate resolves that month inside its first statement and answers it
+/// (<see cref="QuotaCheckResult.Period"/>, <see cref="QuotaPeekResult.Period"/>), so one call names one month without a
+/// second round trip, and a caller that must stamp the refusal after its own rollback builds the stamp's request from
+/// it. The advisory <see cref="PeekAsync"/> reads a counter without reserving, stamping or carrying anything: a caller
+/// that must decide before it parses asks that one, never treats a clear answer as an admission, and its different
+/// result type keeps the two apart.
 /// </para>
 /// <para>
 /// A refusal names the wait until the next period, measured from the database's transaction clock — the clock that
@@ -67,11 +71,7 @@ internal sealed class QuotaGate(
     IOptions<QuotaGateOptions> options) : IQuotaGate
 {
     /// <inheritdoc />
-    public async Task<string> CurrentPeriodAsync(CancellationToken cancellationToken) =>
-        (await store.CurrentPeriodClockAsync(cancellationToken).ConfigureAwait(false)).Period;
-
-    /// <inheritdoc />
-    public async Task<QuotaCheckResult> PeekAsync(
+    public async Task<QuotaPeekResult> PeekAsync(
         QuotaCheckRequest request,
         CancellationToken cancellationToken)
     {
@@ -80,7 +80,7 @@ internal sealed class QuotaGate(
 
         if (!options.Value.Enabled)
         {
-            return new QuotaCheckResult(QuotaDecision.Ok);
+            return QuotaPeekResult.Clear;
         }
 
         var orgId = scopes.Require().OrgId;
@@ -90,20 +90,22 @@ internal sealed class QuotaGate(
             .ConfigureAwait(false);
 
         return refused is null
-            ? new QuotaCheckResult(QuotaDecision.Ok)
-            : new QuotaCheckResult(
-                QuotaDecision.Block,
+            ? QuotaPeekResult.Clear
+            : new QuotaPeekResult(
+                true,
                 refused.Used,
                 refused.QuotaLimit,
-                UsagePeriod.RetryUntilNextPeriod(request.Period, refused.DatabaseNow),
+                UsagePeriod.RetryUntilNextPeriod(refused.Period, refused.DatabaseNow),
                 RaisePath(orgId),
-                QuotaScopeKeys.KindOf(refused.ScopeKey));
+                QuotaScopeKeys.KindOf(refused.ScopeKey),
+                refused.Period);
     }
 
     /// <inheritdoc />
     /// <exception cref="ArgumentOutOfRangeException">
-    /// A non-positive quantity or a period outside <c>2000-01</c>..<c>2999-12</c> is a caller bug: it is
-    /// refused before any statement runs rather than silently granting or charging the wrong amount.
+    /// A non-positive quantity, or a period that is neither null (the caller's own month) nor one from
+    /// <c>2000-01</c> to <c>2999-12</c>, is a caller bug: it is refused before any statement runs rather than
+    /// silently granting or charging the wrong amount.
     /// </exception>
     public async Task<QuotaCheckResult> CheckAsync(
         QuotaCheckRequest request,
@@ -121,67 +123,56 @@ internal sealed class QuotaGate(
         var metric = UsageMetricWire.ToWireValue(request.Metric);
         var scopeKeys = QuotaScopeKeys.Of(request);
 
-        var answer = await ReserveWithCarryAsync(orgId, request, metric, scopeKeys, cancellationToken)
+        var answer = await ReserveAsync(orgId, request.Period, request.Quantity, metric, scopeKeys, cancellationToken)
             .ConfigureAwait(false);
 
         if (answer.Count == 0)
         {
+            // No counter for the scope and none earlier to carry: no configured limit, so no month answers either.
             return new QuotaCheckResult(QuotaDecision.Ok);
         }
 
-        return answer.Any(row => !row.Reserved)
-            ? await SettledAsync(orgId, request, metric, scopeKeys, cancellationToken).ConfigureAwait(false)
-            : await ReservedAsync(request, metric, scopeKeys, answer, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// The first statement, plus the one carry-forward a month without a counter needs for the call's scopes: each
-    /// scope's latest earlier month lends it its limit, every missing counter of the period is created at once in lock
-    /// order, and the same statement runs again against rows that now all exist.
-    /// </summary>
-    private async Task<IReadOnlyList<QuotaCounterRow>> ReserveWithCarryAsync(
-        Guid orgId,
-        QuotaCheckRequest request,
-        string metric,
-        Guid[] scopeKeys,
-        CancellationToken cancellationToken)
-    {
-        var answer = await ReserveAsync(orgId, request, metric, scopeKeys, cancellationToken).ConfigureAwait(false);
-
-        if (!answer.Any(row => row.NeedsCarry))
-        {
-            return answer;
-        }
-
-        // Carried before any scope is locked, and one statement for every missing scope: the reservation holds no
-        // counter while it creates the others, so a rollover cannot take the project's lock and then wait for the
-        // organization's, which is the order a second caller's charge takes.
-        await store
-            .CarryForwardAsync(orgId, request.Period, metric, scopeKeys, cancellationToken)
-            .ConfigureAwait(false);
-
-        answer = await ReserveAsync(orgId, request, metric, scopeKeys, cancellationToken).ConfigureAwait(false);
+        // The first statement names the month when the caller left it open; the carry, the second charge, the settle
+        // and the answer all name that month, so a call across a month end stays in one month throughout.
+        var period = answer[0].Period;
 
         if (answer.Any(row => row.NeedsCarry))
         {
-            throw new InvalidOperationException(
-                $"the quota counter for {request.Period} still has no row after the carry-forward");
+            // Carried before any scope is locked, and one statement for every missing scope: the reservation holds no
+            // counter while it creates the others, so a rollover cannot take the project's lock and then wait for the
+            // organization's, which is the order a second caller's charge takes.
+            await store
+                .CarryForwardAsync(orgId, period, metric, scopeKeys, cancellationToken)
+                .ConfigureAwait(false);
+
+            answer = await ReserveAsync(orgId, period, request.Quantity, metric, scopeKeys, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (answer.Any(row => row.NeedsCarry))
+            {
+                throw new InvalidOperationException(
+                    $"the quota counter for {period} still has no row after the carry-forward");
+            }
         }
 
-        return answer;
+        return answer.Any(row => !row.Reserved)
+            ? await SettledAsync(orgId, period, request.Quantity, metric, scopeKeys, cancellationToken)
+                .ConfigureAwait(false)
+            : await ReservedAsync(period, metric, scopeKeys, answer, cancellationToken).ConfigureAwait(false);
     }
 
     private Task<IReadOnlyList<QuotaCounterRow>> ReserveAsync(
         Guid orgId,
-        QuotaCheckRequest request,
+        string? period,
+        decimal quantity,
         string metric,
         Guid[] scopeKeys,
         CancellationToken cancellationToken) =>
-        store.ReserveAsync(orgId, request.Period, metric, scopeKeys, request.Quantity, cancellationToken);
+        store.ReserveAsync(orgId, period, metric, scopeKeys, quantity, cancellationToken);
 
     /// <summary>The charged answer, and one warning task per counter whose warning transition this call owns.</summary>
     private async Task<QuotaCheckResult> ReservedAsync(
-        QuotaCheckRequest request,
+        string period,
         string metric,
         Guid[] scopeKeys,
         IReadOnlyList<QuotaCounterRow> answer,
@@ -190,7 +181,7 @@ internal sealed class QuotaGate(
         foreach (var warned in answer.Where(row => row.WarnedNow))
         {
             await EnqueueWarningAsync(
-                    request, metric, warned.ScopeKey, warned.Id, warned.Used, warned.QuotaLimit, warned.WarnRatio,
+                    period, metric, warned.ScopeKey, warned.Id, warned.Used, warned.QuotaLimit, warned.WarnRatio,
                     cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -200,7 +191,8 @@ internal sealed class QuotaGate(
         return new QuotaCheckResult(
             answer.Any(row => row.IsAtOrAboveWarnLine) ? QuotaDecision.Warn : QuotaDecision.Ok,
             tightest.Used,
-            tightest.QuotaLimit);
+            tightest.QuotaLimit,
+            Period: period);
     }
 
     /// <summary>
@@ -209,23 +201,24 @@ internal sealed class QuotaGate(
     /// </summary>
     private async Task<QuotaCheckResult> SettledAsync(
         Guid orgId,
-        QuotaCheckRequest request,
+        string period,
+        decimal quantity,
         string metric,
         Guid[] scopeKeys,
         CancellationToken cancellationToken)
     {
         var settled = await store
-            .SettleAsync(orgId, request.Period, metric, scopeKeys, request.Quantity, cancellationToken)
+            .SettleAsync(orgId, period, metric, scopeKeys, quantity, cancellationToken)
             .ConfigureAwait(false);
 
         if (settled.Count == 0)
         {
-            return new QuotaCheckResult(QuotaDecision.Ok);
+            return new QuotaCheckResult(QuotaDecision.Ok, Period: period);
         }
 
         foreach (var warned in settled.Where(row => row.WarnedNow))
         {
-            await EnqueueWarningAsync(request, metric, warned.ScopeKey, warned.Id, warned.Used, warned.QuotaLimit,
+            await EnqueueWarningAsync(period, metric, warned.ScopeKey, warned.Id, warned.Used, warned.QuotaLimit,
                     warned.WarnRatio, cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -241,9 +234,10 @@ internal sealed class QuotaGate(
                 QuotaDecision.Block,
                 refusing.Used,
                 refusing.QuotaLimit,
-                UsagePeriod.RetryUntilNextPeriod(request.Period, refusing.DatabaseNow),
+                UsagePeriod.RetryUntilNextPeriod(period, refusing.DatabaseNow),
                 RaisePath(orgId),
-                QuotaScopeKeys.KindOf(refusing.ScopeKey));
+                QuotaScopeKeys.KindOf(refusing.ScopeKey),
+                period);
         }
 
         var tightest = Tightest(settled, scopeKeys);
@@ -251,7 +245,8 @@ internal sealed class QuotaGate(
         return new QuotaCheckResult(
             settled.Any(row => row.IsAtOrAboveWarnLine) ? QuotaDecision.Warn : QuotaDecision.Ok,
             tightest.Used,
-            tightest.QuotaLimit);
+            tightest.QuotaLimit,
+            Period: period);
     }
 
     /// <summary>
@@ -291,7 +286,7 @@ internal sealed class QuotaGate(
     /// leaves neither the counter change nor the announcement behind.
     /// </summary>
     private Task<Guid> EnqueueWarningAsync(
-        QuotaCheckRequest request,
+        string period,
         string metric,
         Guid scopeKey,
         Guid counterId,
@@ -304,7 +299,7 @@ internal sealed class QuotaGate(
             // The payload names the counter's own project, which is null for the organization-wide counter: a
             // consumer repairs the row it announces and must not be told the caller's project instead.
             QuotaWarningTask.PayloadJson(new QuotaWarningPayload(
-                counterId, QuotaScopeKeys.ProjectOf(scopeKey), request.Period, metric, used, quotaLimit, warnRatio)),
+                counterId, QuotaScopeKeys.ProjectOf(scopeKey), period, metric, used, quotaLimit, warnRatio)),
             QuotaWarningTask.AggregateType,
             counterId,
             QuotaWarningTask.IdempotencyKey(counterId),

@@ -28,8 +28,9 @@ internal sealed class QuotaBlockStamp(ITenantScopeFactory scopes, QuotaCounterSt
         ArgumentNullException.ThrowIfNull(request);
 
         // A question the gate would have refused before writing cannot have produced a block, so a stamp for it
-        // would report nothing: the same bound the gate enforces keeps a caller bug from writing a counter here.
-        if (!QuotaCheckRequestRules.IsValid(request))
+        // would report nothing: the same bound the gate enforces keeps a caller bug from writing a counter here. The
+        // month must be spelled out, because the stamp names the month that refused, not the one it runs in.
+        if (request.Period is not { } period || !QuotaCheckRequestRules.IsValid(request))
         {
             return;
         }
@@ -42,11 +43,11 @@ internal sealed class QuotaBlockStamp(ITenantScopeFactory scopes, QuotaCounterSt
             .ConfigureAwait(false);
 
         await store
-            .CarryForwardAsync(orgId, request.Period, metric, scopeKeys, cancellationToken)
+            .CarryForwardAsync(orgId, period, metric, scopeKeys, cancellationToken)
             .ConfigureAwait(false);
 
         await store
-            .StampBlockedAsync(orgId, request.Period, metric, scopeKeys, request.Quantity, cancellationToken)
+            .StampBlockedAsync(orgId, period, metric, scopeKeys, request.Quantity, cancellationToken)
             .ConfigureAwait(false);
 
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
