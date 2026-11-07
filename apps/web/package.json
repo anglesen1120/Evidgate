@@ -13,7 +13,7 @@
     "e2e": "npm run build && playwright test",
     "build:fixtures:e2e": "ng build --configuration fixtures --localize=true --output-path dist/fixtures",
     "e2e:fixtures": "playwright test -c playwright.fixtures.config.ts",
-    "build:core:e2e": "ng build --configuration fixtures --localize=true --output-path dist/core-fixtures",
+    "build:core:e2e": "ng build --configuration fixtures --localize=true",
     "e2e:core": "playwright test -c playwright.core.config.ts"
   },
   "dependencies": {

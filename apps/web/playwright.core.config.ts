@@ -14,6 +14,8 @@ import { randomInt } from 'node:crypto';
 import { resolve } from 'node:path';
 import { defineConfig } from '@playwright/test';
 
+import { AUTH_STATE } from './e2e/core/auth-state';
+
 // Ephemeral port: lanes share one machine, and Playwright evaluates this file in the runner and in
 // every worker, so the first evaluation pins the port in the environment.
 const PORT_ENV = 'EVIDGATE_WEB_FIXTURES_E2E_PORT';
@@ -23,32 +25,39 @@ const PORT =
 process.env[PORT_ENV] = String(PORT);
 
 const baseURL = `http://127.0.0.1:${PORT}`;
-const CORE_ROOT = resolve(__dirname, 'dist/core-fixtures/browser');
+// Everything a run writes is keyed on the shard, so shards started together on one machine never
+// delete each other's bundle, traces or stored state.
 const shard = process.env['EVIDGATE_E2E_CORE_SHARD'];
-const junitFile = `test-results/e2e-core-junit${shard === undefined || shard === '' ? '' : `-${shard}`}.xml`;
+const suffix = shard === undefined || shard === '' ? '' : `-${shard}`;
+const BUNDLE = `dist/core-fixtures${suffix}`;
+const CORE_ROOT = resolve(__dirname, BUNDLE, 'browser');
+const junitFile = `test-results/e2e-core-junit${suffix}.xml`;
 
 export default defineConfig({
   testDir: './e2e/core',
   forbidOnly: Boolean(process.env['CI']),
-  retries: process.env['CI'] ? 2 : 0,
+  // No blanket retries: a product assertion that passes on a second try must not turn green.
+  retries: 0,
   timeout: 60_000,
   // Own artefact directory: Playwright empties it at the start of every run, and the JUnit and
   // auth-state files must survive a second shard run on the same machine.
-  outputDir: 'test-results/core-artifacts',
+  outputDir: `test-results/core-artifacts${suffix}`,
   reporter: [
     ['list'],
-    ['html', { open: 'never', outputFolder: 'playwright-report-core' }],
+    ['html', { open: 'never', outputFolder: `playwright-report-core${suffix}` }],
     ['junit', { outputFile: junitFile }],
   ],
   use: {
     baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    // The static server sends the app-origin CSP; CSP is covered by `e2e/csp.spec.ts`.
-    bypassCSP: true,
   },
   projects: [
-    { name: 'setup', testMatch: /.*\.setup\.ts/ },
+    {
+      name: 'setup',
+      testMatch: /.*\.setup\.ts/,
+      use: { browserName: 'chromium', channel: 'chrome' },
+    },
     {
       name: 'core',
       testMatch: '**/*.spec.ts',
@@ -56,12 +65,12 @@ export default defineConfig({
       use: {
         browserName: 'chromium',
         channel: 'chrome',
-        storageState: 'test-results/core-auth-state.json',
+        storageState: AUTH_STATE,
       },
     },
   ],
   webServer: {
-    command: 'npm run build:core:e2e && node e2e/static-server.mjs',
+    command: `npm run build:core:e2e -- --output-path ${BUNDLE} && node e2e/static-server.mjs`,
     url: `${baseURL}/vi/`,
     env: {
       EVIDGATE_WEB_E2E_ROOT: CORE_ROOT,
