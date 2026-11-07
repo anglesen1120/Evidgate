@@ -119,12 +119,19 @@ describe('API token one-time reveal lifetime', () => {
     submitCreate();
     await h.settle();
     expect(control<HTMLInputElement>('[data-testid="reveal-value"]').value).toBe(CREATED.token);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    control<HTMLButtonElement>('[data-testid="reveal-copy"]').click();
+    await h.settle();
+    expect(writeText).toHaveBeenCalledWith(CREATED.token);
     control<HTMLButtonElement>('[data-testid="reveal-dismiss"]').click();
     await h.settle();
+    // Error arguments hide their message and stack from JSON, so flatten those explicitly.
+    const flatten = (arg: unknown): string =>
+      arg instanceof Error ? `${arg.message}\n${arg.stack ?? ''}` : JSON.stringify(arg);
     for (const sink of sinks) {
-      expect(JSON.stringify(sink.mock.calls), String(sink.getMockName())).not.toContain(
-        CREATED.token,
-      );
+      const seen = sink.mock.calls.map((call) => call.map(flatten).join(' ')).join('\n');
+      expect(seen, String(sink.getMockName())).not.toContain(CREATED.token);
     }
   });
 });

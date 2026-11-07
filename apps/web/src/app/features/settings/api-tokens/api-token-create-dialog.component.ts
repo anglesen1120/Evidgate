@@ -119,7 +119,7 @@ function refusesExpiry(failure: ApiError): boolean {
               [value]="expires()"
               [disabled]="locked()"
               [attr.min]="minExpiry"
-              [attr.aria-invalid]="expiryInvalid() || !!store.createError()"
+              [attr.aria-invalid]="expiryInvalid() || expiryRefused() || !!store.createError()"
               [attr.aria-describedby]="
                 (expiryRefused()
                   ? 'api-expiry-required api-expiry-refusal'
