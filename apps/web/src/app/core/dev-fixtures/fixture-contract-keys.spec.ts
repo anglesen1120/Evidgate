@@ -28,11 +28,12 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     // share one, so the selection is unambiguous, and (d) the revision ids a corpus page offers are
     // exactly the documents a read can address — otherwise a page load would ask for an id no
     // document answers and silently get the variant.
-    const keyed = FIXTURE_ROUTE_ROWS.filter((route) => route.idKeyParameter !== undefined);
+    const idKeyed = FIXTURE_ROUTE_ROWS.filter((route) => route.idKeyParameter !== undefined);
     expect(
-      keyed.map((route) => route.operationId),
-      'only getPolicyRevision is id-keyed; a second id-keyed row needs its own pin here',
-    ).toEqual(['getPolicyRevision']);
+      idKeyed.map((route) => route.operationId),
+      'getPolicyRevision and getRelease are id-keyed; a third id-keyed row needs its own pin here',
+    ).toEqual(['getPolicyRevision', 'getRelease']);
+    const keyed = idKeyed.filter((route) => route.operationId === 'getPolicyRevision');
 
     const page = corpusDocument('policy-revisions-list-after-publish');
     const pageItems = (page.body as { items?: readonly { id?: unknown }[] } | undefined)?.items;
@@ -76,6 +77,14 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
         `the ids '${route.operationId}' can answer differ from the revision ids the corpus page offers, so a page load would fall back to the variant`,
       ).toEqual(pageIds.map(String).sort());
     }
+  });
+
+  it('pins the id-keyed release read to distinct corpus release ids', () => {
+    const ids = CORPUS.map(readDocument)
+      .filter((document) => document.operation_id === 'getRelease' && document.status < 400)
+      .map((document) => (isRecord(document.body) ? document.body['release_id'] : undefined));
+    expect(ids.every((id) => typeof id === 'string')).toBe(true);
+    expect(new Set(ids).size, 'two documents share one release_id').toBe(ids.length);
   });
 
   it('pins the cursor-keyed CI-binding and run-list walks to their corpus pages (09.7.1-F15, 09.3.1-T1)', () => {
