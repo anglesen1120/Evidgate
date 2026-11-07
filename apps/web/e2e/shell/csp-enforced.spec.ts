@@ -80,6 +80,7 @@ const READY: Readonly<Record<string, string>> = {
   SettingsTabPlaceholderPage: 'app-settings-tab-placeholder',
   // The list renders one row per reference, so the first row is the surface's unique ready target.
   SecretsPage: 'app-secrets-page app-secret-reference-list [data-secret-reference]:first-child',
+  ApiTokensPage: 'app-api-tokens-page [data-api-token-row]:first-child',
   SettingsNoTabsPage: 'app-settings-no-tabs',
   PolicyPage: 'app-policy-page[data-policy-phase="ready"]',
   QuotaPanelComponent: 'app-quota-panel[data-quota-state="ready"]',
@@ -119,6 +120,12 @@ const GRANTS: readonly GrantSet[] = [
     codes: grantedCodes(secretsGrants),
   },
   { query: USAGE_READ_GRANTS, codes: grantedCodes(usageGrants) },
+  {
+    // A TypeScript specimen (dev-fixtures), not a corpus directory: the admin rows plus the
+    // API token codes, so the dev-only token screen is walked as a rendered page.
+    query: '?fixture.variant.listPermissions=settings-api-tokens-write',
+    codes: [...grantedCodes(adminGrants), 'api_token:read', 'api_token:write', 'run:read'],
+  },
 ];
 
 const SURFACES: readonly Surface[] = surfacesInRouteTable();

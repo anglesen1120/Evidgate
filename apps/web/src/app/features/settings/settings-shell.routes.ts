@@ -44,7 +44,12 @@ const TAB_BODIES: Readonly<Partial<Record<SettingsTabId, Type<unknown>>>> = {
 const TAB_ROUTES: readonly Route[] = SETTINGS_TABS.map((tab) => ({
   path: tab.segment,
   canMatch: [settingsTabGuard(tab)],
-  component: TAB_BODIES[tab.id] ?? SettingsTabPlaceholderPage,
+  ...(tab.id === 'api-tokens'
+    ? {
+        loadComponent: () =>
+          import('./api-tokens/api-tokens.page').then((module) => module.ApiTokensPage),
+      }
+    : { component: TAB_BODIES[tab.id] ?? SettingsTabPlaceholderPage }),
   data: { settingsTabId: tab.id },
 }));
 

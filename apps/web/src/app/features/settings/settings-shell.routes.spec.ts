@@ -167,12 +167,15 @@ describe('Settings shell route table (09.7.1-T1.2)', () => {
     expect(tabs?.find((route) => route.path === 'quota-retention')?.component).toBe(
       QuotaPanelComponent,
     );
+    expect(tabs?.find((route) => route.path === 'api-tokens')?.loadComponent).toEqual(
+      expect.any(Function),
+    );
     // Delivered bodies are independent of phase visibility: Secrets is G2 and Policy is G4, so
     // both are hidden in the G1 build even though their bodies exist.
     const delivered = tabs?.filter((route) => route.component !== SettingsTabPlaceholderPage);
     expect(delivered?.map((route) => route.path)).toEqual(
       SETTINGS_TABS.filter((tab) =>
-        ['members', 'audit', 'secrets', 'policy', 'quota-retention'].includes(tab.id),
+        ['members', 'audit', 'secrets', 'api-tokens', 'policy', 'quota-retention'].includes(tab.id),
       ).map((tab) => tab.segment),
     );
     const harness = await setUp(new Set(['membership:read']));

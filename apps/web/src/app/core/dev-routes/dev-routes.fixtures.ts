@@ -73,6 +73,26 @@ export function devRoutes(): Routes {
       ],
     },
     {
+      path: 'dev/settings-api-tokens',
+      component: ShellComponent,
+      children: [
+        {
+          path: 'orgs/:orgId',
+          canMatch: [
+            authGuard,
+            orgScopeGuard,
+            permissionGuard('organization:read'),
+            permissionGuard('api_token:read'),
+          ],
+          loadComponent: () =>
+            // eslint-disable-next-line evidgate/no-feature-cross-import -- review-only replacement mounts the real G4 page without changing its product phase.
+            import('../../features/settings/api-tokens/api-tokens.page').then(
+              (module) => module.ApiTokensPage,
+            ),
+        },
+      ],
+    },
+    {
       path: 'dev/settings-policy',
       component: ShellComponent,
       children: [
