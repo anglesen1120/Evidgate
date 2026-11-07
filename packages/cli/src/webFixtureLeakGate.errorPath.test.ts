@@ -205,6 +205,13 @@ describe('no-fixture-code gate: error-envelope path', () => {
     const result = ws.run();
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('sample_only_name');
+    // Each name the collector must not take stays a needle once the bundle carries it.
+    for (const leaked of ['default_only_name', 'nested_only_name']) {
+      await ws.output('main-ABC123.js', `const k="${leaked}";`);
+      const bitten = ws.run();
+      expect(bitten.status).toBe(1);
+      expect(bitten.stderr).toContain(leaked);
+    }
     await ws.output('main-ABC123.js', 'const k="real_member_name";');
     expect(ws.run().status).toBe(0);
   });
