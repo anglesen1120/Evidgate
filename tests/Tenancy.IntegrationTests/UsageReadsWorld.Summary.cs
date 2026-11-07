@@ -79,7 +79,8 @@ internal sealed partial class UsageReadsWorld
         command.CommandText = "select created_at from public.project where id = @id";
         command.Parameters.Add(new NpgsqlParameter("id", projectId));
 
-        return (DateTimeOffset)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
+        return new DateTimeOffset(
+            DateTime.SpecifyKind((DateTime)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!, DateTimeKind.Utc));
     }
 
     /// <summary>

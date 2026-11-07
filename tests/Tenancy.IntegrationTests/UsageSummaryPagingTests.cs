@@ -133,7 +133,7 @@ public sealed class UsageSummaryPagingTests
             "-" + guid,
             guid + "-",
             "zzzzzzzzzzzzzzzz-" + guid,
-            "0000000000000000000000000000-" + guid,
+            "ffffffffffffffff-" + guid,
         ];
 
         foreach (var cursor in cursors)

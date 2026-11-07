@@ -164,9 +164,13 @@ internal static class UsageSummaryPaging
             return null;
         }
 
-        return int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed)
-            ? LimitError(parsed)
-            : LimitInvalid();
+        if (!int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return LimitInvalid();
+        }
+
+        limit = parsed;
+        return LimitError(parsed);
     }
 
     /// <summary>The range half of the same rule, for a page size the route already parsed.</summary>
