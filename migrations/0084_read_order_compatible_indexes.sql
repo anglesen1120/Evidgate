@@ -16,6 +16,9 @@
 -- SHAPE: indexes only; no column, grant, policy or statement changes. The two period indexes end in
 -- `project_id` because both statements also filter `project_id is not null` or `project_id = @project`;
 -- `metric` is not added because the statements group by it over a per-period set of one org.
+-- The `quota_counter` index is partial (`project_id is not null`): both summary probes carry that predicate,
+-- and the quota gate's tenant-level and project-scoped probes (which name the `coalesce(project_id, …)` scope
+-- key and must stay on `quota_counter_scope_key`) cannot use it, so it never competes with the gate's hot path.
 --
 -- DROP: `release_run_run_idx (org_id, run_id)` is a strict prefix of the new
 -- `release_run_run_created_idx (org_id, run_id, created_at, id)`, so every lookup it served (the run's
@@ -45,4 +48,4 @@ create index if not exists usage_rollup_org_period_idx
   on public.usage_rollup (org_id, period, project_id);
 
 create index if not exists quota_counter_org_period_idx
-  on public.quota_counter (org_id, period, project_id);
+  on public.quota_counter (org_id, period, project_id) where project_id is not null;
