@@ -23,6 +23,7 @@
 import { computed, signal } from '@angular/core';
 import type { Signal } from '@angular/core';
 
+import { clampTimerDelay } from '../../shared/time/timer-delay';
 import { isApiRequestError } from './api-error';
 import type { ApiError } from './api-error';
 import { createIntent } from './intent';
@@ -89,9 +90,6 @@ function isAbortError(value: unknown): boolean {
   );
 }
 
-/** Largest delay a browser or Node timer accepts; a longer server interval is clamped to it. */
-const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
-
 /**
  * A server `Retry-After` usable as a wait: a finite, non-negative number of seconds. A negative
  * or non-finite value is not an interval, so it is treated like an absent one ([DECISION 2]).
@@ -150,7 +148,7 @@ export function createIntentRunner<T>(
     }
     // A delay above the timer maximum fires immediately in browsers and warns in Node, which
     // would turn a hostile or malformed interval into no wait at all; clamp it instead.
-    const delayMs = Math.min(seconds * 1000, MAX_TIMER_DELAY_MS);
+    const delayMs = clampTimerDelay(seconds * 1000);
     // The interval runs from the failure instant; the timer only wakes the signal at its end.
     waitDeadlineState.set(now() + delayMs);
     retryTimer = setTimeout(() => {

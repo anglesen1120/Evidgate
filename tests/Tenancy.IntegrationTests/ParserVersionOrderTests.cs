@@ -5,10 +5,11 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The reprocess route's version order, as a pure unit beside the evidence domain tests: it decides whether a
-/// requested release is strictly newer than the one that judged a stored report, so the equality and unorderable
-/// cases matter as much as the ascending one — an equal version would replace a report with itself, and a guessed
-/// pre-release order would let a release the catalogue cannot rank replace a newer report.
+/// The one parser-release order, as a pure unit beside the evidence domain tests: it decides which registered release
+/// a producer kind resolves to and whether a requested release is strictly newer than the one that judged a stored
+/// report, so the equality and unorderable cases matter as much as the ascending one — an equal version would replace
+/// a report with itself, and a guessed pre-release order would let a release the catalogue cannot rank replace a newer
+/// report.
 /// </summary>
 public sealed class ParserVersionOrderTests
 {
@@ -54,4 +55,50 @@ public sealed class ParserVersionOrderTests
         ParserVersionOrder.IsNewer(requested, source).ShouldBeTrue();
         ParserVersionOrder.IsNewer(source, requested).ShouldBeFalse();
     }
+
+    [Theory]
+    [InlineData("1.10", "1.9")]
+    [InlineData("2.0", "1.10.9")]
+    [InlineData("1.0.1", "1.0.0")]
+    [InlineData("1.10.1", "1.10")]
+    public void Compare_OrdersSegmentBySegmentAndNotAsText(string newer, string older)
+    {
+        ParserVersionOrder.Compare(newer, older).ShouldBe(1, $"{newer} > {older}");
+        ParserVersionOrder.Compare(older, newer).ShouldBe(-1, $"{older} < {newer}");
+    }
+
+    [Theory]
+    [InlineData("1.10", "1.10.0")]
+    [InlineData("1", "1.0.0")]
+    [InlineData("0.0", "0")]
+    public void Compare_NamesTheSameReleaseForAZeroPaddedVersion(string left, string right) =>
+        ParserVersionOrder.Compare(left, right).ShouldBe(0, $"{left} and {right} are the same release");
+
+    [Theory]
+    [InlineData("1.0.0-rc.1", "1.0.0")]
+    [InlineData("1.0.0", "1.0.0+build")]
+    [InlineData("1..2", "1.0.0")]
+    [InlineData("v1", "1")]
+    [InlineData("", "1")]
+    [InlineData(null, "1")]
+    [InlineData("1", null)]
+    public void Compare_AnswersNoOrderWhenALabelCannotBePlaced(string? left, string? right) =>
+        ParserVersionOrder.Compare(left, right).ShouldBeNull();
+
+    [Theory]
+    [InlineData("1.10")]
+    [InlineData("2")]
+    [InlineData("1.0.0.1")]
+    public void IsOrderable_AcceptsANumericVersion(string version) =>
+        ParserVersionOrder.IsOrderable(version).ShouldBeTrue($"{version} is a dotted numeric release");
+
+    [Theory]
+    [InlineData("1.0.0-rc.1")]
+    [InlineData("1.0.0+build")]
+    [InlineData("1..2")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void IsOrderable_RefusesALabelTheOrderCannotPlace(string? version) =>
+        ParserVersionOrder.IsOrderable(version).ShouldBeFalse($"{version} cannot be placed");
 }

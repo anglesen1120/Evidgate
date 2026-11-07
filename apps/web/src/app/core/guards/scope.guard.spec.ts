@@ -164,7 +164,7 @@ describe('projectScopeGuard (09.1.1-T4.1/T4.2)', () => {
 
     expect(result).toBe(true);
     // One call, one pair: the store already holds the org and its project list, so the project
-    // guard never triggers a read of its own (asserted end to end in `session.store.spec.ts`).
+    // guard never triggers a read of its own (asserted end to end in `session.store.*.spec.ts`).
     expect(session.calls).toEqual([{ orgId: 'o-1', projectId: 'p-1' }]);
   });
 

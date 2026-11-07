@@ -22,6 +22,9 @@ public sealed partial class ReportComparisonTests
     private const string ProducerKind = "pytest-junitxml";
     private const string ParserId = "junit-pytest";
     private const string ParserVersion = "1.0.0";
+
+    /// <summary>The release a reprocess pins: newer than the source, so it is a real second parse of the artifact.</summary>
+    private const string ReprocessVersion = "1.1.0";
     private const string Checksum = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
     private const string PayloadHash = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 

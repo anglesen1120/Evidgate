@@ -13,8 +13,8 @@ import { App } from './app';
 class BlankRoute {}
 
 // 09.1.1-T4.1: the root component is the router host, so the spec pins exactly that — an outlet
-// and no page of its own. Routing behaviour is `app.routes.spec.ts`'s subject; a route table here
-// would make this spec fail for a reason it does not own.
+// and no page of its own. Routing behaviour is `app.routes.matching.spec.ts`'s subject; a route
+// table here would make this spec fail for a reason it does not own.
 //
 // The shell runs zoneless (00 §5.6 W3, ADR-0008), so the provider mirrors `appConfig`; `ng test`
 // already puts a mock platform location in the TestBed (no `provideLocationMocks()` needed, which

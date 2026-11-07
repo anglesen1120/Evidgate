@@ -1,8 +1,7 @@
 import { signal, type Signal } from '@angular/core';
 import type { IngestTokenView } from '@evidgate/sdk';
 
-/** Browsers clamp larger timeout delays; re-arm long-lived credentials after each capped wait. */
-const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+import { clampTimerDelay } from '../../../shared/time/timer-delay';
 
 /**
  * How long to wait for a boundary `next`, measured from `now`.
@@ -11,7 +10,7 @@ const MAX_TIMEOUT_MS = 2 ** 31 - 1;
  * steps; a boundary already behind `now` yields a negative delay, which a timer fires at once.
  */
 export function boundaryDelayMs(next: number, now: number): number {
-  return Math.min(next - now, MAX_TIMEOUT_MS);
+  return clampTimerDelay(next - now);
 }
 
 /**

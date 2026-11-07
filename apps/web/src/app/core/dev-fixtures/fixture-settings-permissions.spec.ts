@@ -6,6 +6,8 @@ import type { PermissionView } from '@evidgate/sdk';
 import { findFixtureEntry } from './fixture-catalog';
 import {
   findSettingsRetentionWriteFixture,
+  SETTINGS_API_TOKENS_READ_VARIANT,
+  SETTINGS_API_TOKENS_WRITE_VARIANT,
   SETTINGS_RETENTION_WRITE_VARIANT,
 } from './fixture-settings-permissions';
 
@@ -50,4 +52,20 @@ describe('settings retention-write permissions specimen', () => {
     expect(codes).toEqual([...codes].sort());
     expect(specimen().next_cursor).toBeNull();
   });
+
+  it.each([SETTINGS_API_TOKENS_READ_VARIANT, SETTINGS_API_TOKENS_WRITE_VARIANT])(
+    'derives API token review grants from the catalogue: %s',
+    (variant) => {
+      const entry = findSettingsRetentionWriteFixture(variant);
+      const body = entry?.document.body as {
+        items: { code: string; tenant_assignable: boolean }[];
+      };
+      const codes = body.items.map((row) => row.code);
+      expect(codes).toContain('api_token:read');
+      expect(codes).toContain('run:read');
+      expect(codes.includes('api_token:write')).toBe(variant === SETTINGS_API_TOKENS_WRITE_VARIANT);
+      expect(new Set(codes).size).toBe(codes.length);
+      expect(codes).toEqual([...codes].sort());
+    },
+  );
 });

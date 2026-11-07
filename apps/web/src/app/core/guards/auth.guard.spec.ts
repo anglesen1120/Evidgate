@@ -3,7 +3,7 @@
 // built — never a value echoed back from the request.
 //
 // The store is faked to its public surface so each case states one guard decision; the real store's
-// own read paths are pinned in `../session/session.store.spec.ts`.
+// own read paths are pinned in `../session/session.store.*.spec.ts`.
 
 import { TestBed } from '@angular/core/testing';
 import { Router, UrlSegment, UrlTree, provideRouter } from '@angular/router';

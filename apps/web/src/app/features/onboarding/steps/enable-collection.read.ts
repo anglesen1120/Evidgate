@@ -3,6 +3,7 @@ import type { PolicyActivationStateDto } from '@evidgate/sdk';
 
 import type { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
+import { clampTimerDelay } from '../../../shared/time/timer-delay';
 
 /** What the page knows about the project's activation at one moment. */
 export type ActivationRead =
@@ -11,9 +12,6 @@ export type ActivationRead =
   | { readonly kind: 'none' }
   | { readonly kind: 'forbidden' }
   | { readonly kind: 'error'; readonly error: ApiError };
-
-/** Largest delay a browser or Node timer accepts; a longer interval is clamped to it. */
-const MAX_WAIT_DELAY_MS = 2 ** 31 - 1;
 
 /**
  * The clock a failed read's `Retry-After` wait is measured against. `createIntentRunner` takes its
@@ -93,7 +91,7 @@ export function createReadWaitWindow(now: () => number): ReadWaitWindow {
       instant.set(startedAt);
       // Clamped like a runner's delay: a value above the timer maximum would fire at once and turn
       // a hostile interval into no wait at all.
-      deadline.set(startedAt + Math.min(interval * 1000, MAX_WAIT_DELAY_MS));
+      deadline.set(startedAt + clampTimerDelay(interval * 1000));
       timer = setInterval(() => {
         const at = now();
         instant.set(at);

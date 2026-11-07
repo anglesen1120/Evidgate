@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Evidgate.Modules.Evidence.Application.Freeze;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
+using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Microsoft.Extensions.Logging;
 
 namespace Evidgate.Modules.Evidence.Application;
@@ -56,35 +57,6 @@ internal sealed partial class ReprocessReportHandler
         [property: JsonPropertyName("count")] int Count);
 
     /// <summary>
-    /// The one insert of a reprocessed report's row. The id is the request's, so the row a trigger names and the row this
-    /// attempt wrote are the same identity. A replay and a second request for the same key conflict and write nothing;
-    /// the table refuses every update.
-    /// </summary>
-    private const string InsertRawReportSql = """
-        insert into public.raw_report (
-            id, org_id, run_id, artifact_id, producer_kind, parser_id, parser_version,
-            outcome, reason, declared_tests, declared_failures, declared_errors, declared_skipped,
-            observed_tests, observed_failures, observed_errors, observed_skipped, discrepancies)
-        values (
-            @id, @org_id, @run_id, @artifact_id, @producer_kind, @parser_id::text, @parser_version::text,
-            @outcome, @reason::text, @declared_tests::integer, @declared_failures::integer,
-            @declared_errors::integer, @declared_skipped::integer,
-            @observed_tests, @observed_failures, @observed_errors, @observed_skipped, @discrepancies::jsonb)
-        on conflict do nothing
-        """;
-
-    /// <summary>
-    /// The outcome the row with this attempt's id already stores. A conflicting insert waits for the transaction that
-    /// holds the key, so the read sees that row's committed verdict and never a half-written one.
-    /// </summary>
-    private const string StoredOutcomeByIdSql = """
-        select outcome
-        from public.raw_report
-        where org_id = @org_id
-          and id = @id
-        """;
-
-    /// <summary>
     /// Writes the report's own row inside the caller's transaction. A parsed attempt's row follows the events, so a
     /// rolled-back or conflicting attempt leaves no row; a refusal's row is the only thing its transaction writes.
     /// </summary>
@@ -101,7 +73,7 @@ internal sealed partial class ReprocessReportHandler
     {
         var inserted = await db
             .ExecuteAsync(
-                InsertRawReportSql,
+                RawReportWorkerSql.InsertRawReport,
                 RawReportParameters(orgId, prepared, report),
                 cancellationToken)
             .ConfigureAwait(false);
@@ -123,7 +95,7 @@ internal sealed partial class ReprocessReportHandler
         CancellationToken cancellationToken) =>
         await db
             .ScalarAsync<string?>(
-                StoredOutcomeByIdSql,
+                RawReportWorkerSql.StoredOutcomeById,
                 new { org_id = orgId, id = parsingId },
                 cancellationToken)
             .ConfigureAwait(false);
