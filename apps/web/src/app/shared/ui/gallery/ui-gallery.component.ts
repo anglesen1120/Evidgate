@@ -28,7 +28,8 @@ import {
   dataTableFixtureRows,
   type DataTableFixtureRow,
 } from '../data-table/data-table.fixture';
-import { ConflictDialogComponent, RetryAfterComponent, type ConflictField } from '../conflict';
+import { RetryAfterComponent, type ConflictField } from '../conflict';
+import { ConflictDialogComponent } from '../conflict/conflict-dialog.component';
 import {
   EmptyPatternComponent,
   ErrorPatternComponent,

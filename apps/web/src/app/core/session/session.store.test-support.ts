@@ -3,25 +3,11 @@ import { Router, provideRouter } from '@angular/router';
 import type { OrganizationSummaryDto, ProjectDto } from '@evidgate/sdk';
 import { vi } from 'vitest';
 
-import { ApiRequestError, type ApiErrorKind } from '../http/api-error';
 import { IdentityDataService } from '../data/identity-data.service';
 import { EffectivePermissionsSource } from './effective-permissions.source';
 import { SESSION_ENDER, type SessionEnder } from './session-ender';
 import { SessionStore } from './session.store';
 import { TenantStore } from './tenant.store';
-
-export function apiError(kind: ApiErrorKind, status: number): ApiRequestError {
-  return new ApiRequestError({
-    kind,
-    status,
-    code: kind,
-    message: `${kind} (test)`,
-    requestId: null,
-    retryable: false,
-    details: [],
-    retryAfterSeconds: null,
-  });
-}
 
 export const ORG_ONE: OrganizationSummaryDto = {
   id: 'o-1',

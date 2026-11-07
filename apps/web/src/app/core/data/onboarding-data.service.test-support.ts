@@ -3,12 +3,7 @@
 // Each test creates its own TestBed services and verifies outstanding requests.
 
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
-import type { HttpRequest } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-  type TestRequest,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type {
@@ -178,33 +173,6 @@ export const RUN_STATE: RunStateDto = {
   after_cancel_events: 0,
   state_history: null,
 };
-
-/**
- * The served media type: the adapter reads bodies as text (`responseType: 'text'`) and `flush`
- * adds no content type of its own, while the SDK picks its parser from the response
- * `Content-Type` (`parseAs: 'auto'`), so a flush without this header reaches the SDK as an unparsed
- * stream — exactly what a server that omitted the header would do.
- */
-export const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
-
-/**
- * The SDK -> adapter -> `HttpClient` pipeline is asynchronous, so a request is registered a few
- * microtasks after the call starts. `expectOne` throws when nothing matches yet, so this drains
- * the queue first and then matches — the request is still `verify()`-checked like any other.
- */
-export async function takeRequest(
-  httpMock: HttpTestingController,
-  match: string | ((request: HttpRequest<unknown>) => boolean),
-): Promise<TestRequest> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const [request] = httpMock.match(match);
-    if (request !== undefined) {
-      return request;
-    }
-    await Promise.resolve();
-  }
-  throw new Error('no HTTP request reached HttpTestingController');
-}
 
 /** The rejection a promise answered with, so a case can assert on it. */
 export async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {

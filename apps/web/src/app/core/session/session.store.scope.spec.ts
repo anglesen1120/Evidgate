@@ -2,10 +2,10 @@ import { effect } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { IdentityDataService } from '../data/identity-data.service';
+import { apiError } from '../../shared/testing/http-data.testing';
 import { EffectivePermissionsSource } from './effective-permissions.source';
 import { SessionStore } from './session.store';
 import {
-  apiError,
   ORG_ONE,
   ORG_TWO,
   PROJECT_P1,

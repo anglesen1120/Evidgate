@@ -56,7 +56,7 @@ Each family exports its named declarations and an `Hlm…Imports` readonly array
 | `alert` | `[hlmAlert]`; `HlmAlert` | `variant`: default/destructive; title, description and action helpers |
 | `card` | `[hlmCard]`, `hlm-card`; `HlmCard` | `size`: default/sm; title, description, header, content, action and footer helpers |
 | `separator` | `[hlmSeparator]`, `hlm-separator` | Brain `orientation` and `decorative` semantics |
-| `utils` | `classes`, `hlm`, `provideSpartanHlm` | Shared class merging; optional CDK overlay configuration, not automatically installed |
+| `utils` | `classes`, `hlm` | Shared class merging |
 
 ## Alternatives rejected
 

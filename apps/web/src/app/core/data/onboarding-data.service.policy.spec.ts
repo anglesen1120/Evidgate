@@ -6,19 +6,24 @@ import type { PolicyActivationDto, PolicyRevisionDto } from '@evidgate/sdk';
 
 import { isApiRequestError } from '../http/api-error';
 import { createIntent } from '../http/intent';
+import {
+  EXACT_MATCH_PROFILE,
+  JSON_HEADERS,
+  takeRequestWith,
+} from '../../shared/testing/http-data.testing';
 import { OnboardingDataService } from './onboarding-data.service';
 import {
   ACTIVATION,
   ACTIVATION_STATE,
   API_BASE_URL,
-  JSON_HEADERS,
   POLICY_BODY,
   POLICY_REVISION,
   POLICY_REVISION_ID,
   rejectionOf,
   setupOnboardingDataService,
-  takeRequest,
 } from './onboarding-data.service.test-support';
+
+const takeRequest = takeRequestWith(EXACT_MATCH_PROFILE);
 
 describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
   let httpMock: HttpTestingController;

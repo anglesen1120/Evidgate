@@ -1,10 +1,5 @@
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
-import type { HttpRequest } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-  type TestRequest,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { ReleaseDetail } from '@evidgate/sdk';
@@ -12,11 +7,16 @@ import type { ReleaseDetail } from '@evidgate/sdk';
 import { isApiRequestError } from '../http/api-error';
 import { provideApi } from '../http/api-client';
 import { API_BASE_PATH } from '../http/api-origin';
+import {
+  EXACT_MATCH_PROFILE,
+  JSON_HEADERS,
+  takeRequestWith,
+} from '../../shared/testing/http-data.testing';
 import { ReleasesDataService } from './releases-data.service';
 
+const takeRequest = takeRequestWith(EXACT_MATCH_PROFILE);
 const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
 const RELEASE_URL = `${API_BASE_URL}/releases/rel-1`;
-const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
 const RELEASE: ReleaseDetail = {
   release_id: 'rel-1',
@@ -46,21 +46,6 @@ const RELEASE: ReleaseDetail = {
     },
   ],
 };
-
-/** The SDK -> adapter -> `HttpClient` pipeline registers a request a few microtasks later. */
-async function takeRequest(
-  httpMock: HttpTestingController,
-  match: string | ((request: HttpRequest<unknown>) => boolean),
-): Promise<TestRequest> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const [request] = httpMock.match(match);
-    if (request !== undefined) {
-      return request;
-    }
-    await Promise.resolve();
-  }
-  throw new Error('no HTTP request reached HttpTestingController');
-}
 
 describe('ReleasesDataService', () => {
   let httpMock: HttpTestingController;
