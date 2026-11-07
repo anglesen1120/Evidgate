@@ -318,7 +318,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 |---|---|---|---|---|---|---|---|
 | 04.9.1-T1 | L | `evidgate replay` CLI command | yes | no | no (`packages/cli`) | T1.1+T1.2 \| T1.3+T1.4 | yes |
 | 04.9.2-T2 | M | Docs site skeleton | yes | no | no (`scripts/verify.sh`, `ci.yml`, `docs/`) | n/a | yes |
-| 09.8.1-T3 | L | Playwright E2E suite for core flows, wired into CI and dogfooded into Evidgate | yes | no | no | T3.1+T3.2 \| T3.3+T3.4 | yes |
+| 09.8.1-T3 | L | Playwright E2E suite for core flows, wired into CI and dogfooded into Evidgate | yes | no | no | T3.1+T3.2 \| T3.3+T3.4 | yesLanded S273 (#561): T3.1 scaffold (`playwright.core.config.ts`, `e2e/core/**`) and T3.2 specs for login, project switch, run detail, onboarding; failure triage and evidence viewer specs open by design (no screen on develop); T3.3, T3.4 open. |
 | 04.9.2-T1 | M | Publish pipeline for `@evidgate/*`, changelog, signed tag, N-1 window | yes | no | no (`.github/workflows/release.yml`, `scripts/`) | n/a | no |
 
 #### G3 web-only lane
