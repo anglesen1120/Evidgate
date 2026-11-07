@@ -5,10 +5,12 @@
 // - an org switch refetches, and the previous org's counters leave the screen immediately;
 // - a failure, a null answer or a revoked permission reads as `unavailable`, never as zero, and
 //   the badge stays hidden;
-// - a 429 `quota_exceeded` refusal asks for exactly one reload, and the reload cannot ask for
-//   another one;
-// - the badge names a blocked metric before a warned one and never infers a threshold from a
-//   counter with no measurement.
+// - a 429 `quota_exceeded` refusal asks for exactly one reload, a refusal that lands mid-read
+//   asks for one trailing read when that read settles, and neither can ask for another one;
+// - a reload keeps the counters already served on screen, while an org switch, an error or a
+//   null answer hides them;
+// - the badge names a blocked counter before a warned one, a project's counter as well as the
+//   tenant's, and never infers a threshold from a counter with no measurement.
 
 import {
   ChangeDetectionStrategy,
@@ -17,7 +19,7 @@ import {
   signal,
 } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import type { UsageSummaryDto, UsageSummaryMetricDto } from '@evidgate/sdk';
+import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } from '@evidgate/sdk';
 
 import { QuotaDataService } from '../../../core/data/quota-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
@@ -47,6 +49,20 @@ function metric(changes: Partial<UsageSummaryMetricDto> = {}): UsageSummaryMetri
 
 function summary(...metrics: UsageSummaryMetricDto[]): UsageSummaryDto {
   return { period: '2026-11', project: null, metrics };
+}
+
+/** One project's counter under a metric; below both lines unless the test says otherwise. */
+function project(changes: Partial<UsageSummaryProjectDto> = {}): UsageSummaryProjectDto {
+  return {
+    project_id: 'project-one',
+    scope: 'project',
+    used: 1,
+    limit: 100,
+    warned_at: null,
+    blocked_at: null,
+    retry_after_seconds: null,
+    ...changes,
+  };
 }
 
 /** The refusal a 5xx reaches the store as. */
@@ -93,6 +109,11 @@ class FakeQuotaDataService {
   /** Answers the oldest held read. */
   release(value: UsageSummaryDto | null = this.answer): void {
     this.held.shift()?.resolve(value);
+  }
+
+  /** Fails the oldest held read. */
+  fail(error: unknown): void {
+    this.held.shift()?.reject(error);
   }
 }
 
@@ -193,6 +214,7 @@ describe('QuotaStore', () => {
     expect(data.calls.map((call) => call.orgId)).toEqual(['org-one', 'org-two']);
     expect(store.loadState()).toBe('loading');
     expect(store.usageSummary()).toBeNull();
+    expect(store.badge()).toBeNull();
 
     data.release(summary(metric({ metric: 'ai_tokens', used: 1 })));
     await settle();
@@ -244,7 +266,7 @@ describe('QuotaStore', () => {
     expect(store.loadState()).toBe('unavailable');
   });
 
-  it('reloads exactly once for a quota refusal, and the reload never reloads itself', async () => {
+  it('reloads once for a quota refusal and once more when that read lands', async () => {
     TestBed.inject(TenantStore).setOrg('org-one');
     store.load();
     await settle();
@@ -260,9 +282,149 @@ describe('QuotaStore', () => {
     expect(data.calls).toHaveLength(2);
 
     data.release();
+    await advance();
+    // The refusal that arrived during the read is not dropped: one trailing read, no second one.
+    expect(data.calls).toHaveLength(3);
+
+    data.hold = false;
+    data.release();
     await settle();
+    expect(data.calls).toHaveLength(3);
+    expect(store.loadState()).toBe('ready');
+  });
+
+  it('coalesces fifty concurrent refusals into one in-flight read and one trailing read', async () => {
+    TestBed.inject(TenantStore).setOrg('org-one');
+    store.load();
+    await settle();
+    expect(data.calls).toHaveLength(1);
+
+    data.hold = true;
+    for (let refusal = 0; refusal < 50; refusal += 1) {
+      relay.notify();
+    }
+    await advance();
+    expect(data.calls).toHaveLength(2);
+
+    data.release();
+    await advance();
+    expect(data.calls).toHaveLength(3);
+
+    data.hold = false;
+    data.release();
+    await settle();
+    expect(data.calls).toHaveLength(3);
+    expect(store.loadState()).toBe('ready');
+  });
+
+  it('still answers a refusal that landed while its read failed', async () => {
+    TestBed.inject(TenantStore).setOrg('org-one');
+    store.load();
+    await settle();
+    expect(data.calls).toHaveLength(1);
+
+    data.hold = true;
+    relay.notify();
+    await advance();
+    relay.notify();
+    await advance();
+    expect(data.calls).toHaveLength(2);
+
+    // The read fails instead of resolving: the refusal still gets its one trailing read, and the
+    // counters already served stay on screen meanwhile instead of flickering away.
+    data.fail(serverFailure());
+    await advance();
+    expect(data.calls).toHaveLength(3);
+    expect(store.loadState()).toBe('ready');
+    expect(store.usageSummary()).toEqual(summary());
+
+    data.hold = false;
+    data.release(summary(metric({ metric: 'ai_tokens', warned_at: '2026-11-01T09:00:00Z' })));
+    await settle();
+    expect(store.loadState()).toBe('ready');
+    expect(store.badge()).toEqual({ severity: 'warn', metric: 'ai_tokens', scope: 'tenant' });
+  });
+
+  it('keeps the served counters on screen during a reload and replaces them when it lands', async () => {
+    const served = summary(metric({ metric: 'results', warned_at: '2026-11-01T09:00:00Z' }));
+    data.answer = served;
+    TestBed.inject(TenantStore).setOrg('org-one');
+    store.load();
+    await settle();
+    expect(store.badge()).toEqual({ severity: 'warn', metric: 'results', scope: 'tenant' });
+
+    data.hold = true;
+    store.reload();
+    await advance();
+
+    // The read is in flight: the badge still names the served counter instead of flapping.
     expect(data.calls).toHaveLength(2);
     expect(store.loadState()).toBe('ready');
+    expect(store.usageSummary()).toEqual(served);
+    expect(store.badge()).toEqual({ severity: 'warn', metric: 'results', scope: 'tenant' });
+
+    data.release(summary(metric({ metric: 'ai_tokens', blocked_at: '2026-11-02T09:00:00Z' })));
+    await settle();
+
+    expect(store.usageSummary()?.metrics[0]?.metric).toBe('ai_tokens');
+    expect(store.badge()).toEqual({ severity: 'blocked', metric: 'ai_tokens', scope: 'tenant' });
+  });
+
+  it('hides the counters on a failed reload and never resurrects them on the next read', async () => {
+    TestBed.inject(TenantStore).setOrg('org-one');
+    store.load();
+    await settle();
+    expect(store.usageSummary()).not.toBeNull();
+
+    data.failure = serverFailure();
+    store.reload();
+    await settle();
+    expect(store.usageSummary()).toBeNull();
+    expect(store.loadState()).toBe('unavailable');
+    expect(store.badge()).toBeNull();
+
+    // The retry stays hidden while it is in flight: the failed read cleared what was served.
+    data.failure = null;
+    data.hold = true;
+    store.reload();
+    await advance();
+    expect(store.usageSummary()).toBeNull();
+    expect(store.badge()).toBeNull();
+
+    data.release(summary(metric({ metric: 'ai_tokens', warned_at: '2026-11-01T09:00:00Z' })));
+    await settle();
+    expect(store.badge()).toEqual({ severity: 'warn', metric: 'ai_tokens', scope: 'tenant' });
+  });
+
+  it('never answers a delayed read with the organization it was started for', async () => {
+    const tenant = TestBed.inject(TenantStore);
+    tenant.setOrg('org-one');
+    store.load();
+    await settle();
+    expect(data.calls.map((call) => call.orgId)).toEqual(['org-one']);
+
+    data.hold = true;
+    relay.notify();
+    await advance();
+    relay.notify();
+    await advance();
+    expect(data.calls.map((call) => call.orgId)).toEqual(['org-one', 'org-one']);
+
+    tenant.setOrg('org-two');
+    await advance();
+    expect(data.calls.map((call) => call.orgId)).toEqual(['org-one', 'org-one', 'org-two']);
+    expect(store.usageSummary()).toBeNull();
+
+    // Answering the abandoned org-one read asks for nothing more and shows nothing.
+    data.release(summary(metric({ metric: 'ai_tokens', used: 1 })));
+    await advance();
+    expect(data.calls.map((call) => call.orgId)).toEqual(['org-one', 'org-one', 'org-two']);
+    expect(store.usageSummary()).toBeNull();
+
+    data.hold = false;
+    data.release(summary(metric({ metric: 'egress_gb', used: 5 })));
+    await settle();
+    expect(store.usageSummary()?.metrics[0]?.metric).toBe('egress_gb');
   });
 
   it('names a warned metric, and a blocked metric wins over it', async () => {
@@ -274,7 +436,49 @@ describe('QuotaStore', () => {
     store.load();
     await settle();
 
-    expect(store.badge()).toEqual({ severity: 'blocked', metric: 'ai_tokens' });
+    expect(store.badge()).toEqual({ severity: 'blocked', metric: 'ai_tokens', scope: 'tenant' });
+  });
+
+  it('names a warned project counter while the tenant counter is below its warning line', async () => {
+    data.answer = summary(
+      metric({
+        metric: 'results',
+        used: 10,
+        limit: 1000,
+        projects: [
+          project({ project_id: 'project-one', used: 90, warned_at: '2026-11-01T09:00:00Z' }),
+        ],
+      }),
+    );
+    TestBed.inject(TenantStore).setOrg('org-one');
+    store.load();
+    await settle();
+
+    expect(store.badge()).toEqual({ severity: 'warn', metric: 'results', scope: 'project' });
+  });
+
+  it('names a blocked project counter and prefers it over a warned tenant counter', async () => {
+    data.answer = summary(
+      metric({ metric: 'results', used: 900, limit: 1000, warned_at: '2026-11-01T09:00:00Z' }),
+      metric({
+        metric: 'ai_tokens',
+        used: 10,
+        limit: 100,
+        projects: [
+          project({
+            project_id: 'project-two',
+            used: 100,
+            blocked_at: '2026-11-02T09:00:00Z',
+            warned_at: '2026-11-01T09:00:00Z',
+          }),
+        ],
+      }),
+    );
+    TestBed.inject(TenantStore).setOrg('org-one');
+    store.load();
+    await settle();
+
+    expect(store.badge()).toEqual({ severity: 'blocked', metric: 'ai_tokens', scope: 'project' });
   });
 
   it('reads a warned metric as warn and never infers a threshold from an unmeasured counter', async () => {
@@ -293,7 +497,7 @@ describe('QuotaStore', () => {
     store.reload();
     await settle();
 
-    expect(store.badge()).toEqual({ severity: 'warn', metric: 'results' });
+    expect(store.badge()).toEqual({ severity: 'warn', metric: 'results', scope: 'tenant' });
   });
 
   it('clears the summary when the tenant is gone', async () => {

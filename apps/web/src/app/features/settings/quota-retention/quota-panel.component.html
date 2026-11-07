@@ -31,14 +31,14 @@
       </p>
     }
     <div class="grid min-w-0 gap-4 min-[768px]:grid-cols-2">
-      @for (metric of summary.metrics; track metric.metric) {
+      @for (metric of summary.metrics; track metric.metric; let index = $index) {
         <section
           hlmCard
           class="min-w-0 gap-3 p-4 wrap-anywhere"
           [attr.data-quota-metric]="metric.metric"
-          [attr.aria-labelledby]="'quota-metric-' + metric.metric"
+          [attr.aria-labelledby]="'quota-metric-' + index"
         >
-          <h3 [id]="'quota-metric-' + metric.metric" class="font-semibold">
+          <h3 [id]="'quota-metric-' + index" class="font-semibold">
             {{ metricLabel(metric.metric) }}
           </h3>
           <dl class="grid grid-cols-2 gap-3">
@@ -102,6 +102,70 @@
                 </div>
               }
             </dl>
+          }
+          @if (metric.projects.length > 0) {
+            <div class="grid min-w-0 gap-2" data-quota-projects>
+              <h4 class="m-0 text-sm font-semibold" i18n="@@quota.panel.projects">Per project</h4>
+              <dl class="m-0 grid min-w-0 gap-3">
+                @for (
+                  project of metric.projects.slice(0, projectRowLimit);
+                  track project.project_id
+                ) {
+                  <div class="grid min-w-0 gap-1" data-quota-project-row>
+                    <dt class="m-0 text-sm font-mono" data-quota-project>
+                      {{ project.project_id }}
+                    </dt>
+                    <dd class="m-0 grid grid-cols-2 gap-3 text-sm">
+                      <span class="grid gap-1" data-quota-project-used>
+                        <span class="text-muted-foreground" i18n="@@quota.panel.project-used"
+                          >Used</span
+                        >
+                        <span>{{ project.used | number: '1.0-6' }}</span>
+                      </span>
+                      <span class="grid gap-1" data-quota-project-limit>
+                        <span class="text-muted-foreground" i18n="@@quota.panel.project-limit"
+                          >Limit</span
+                        >
+                        @if (project.limit === null) {
+                          <span i18n="@@quota.panel.project-unavailable">Unavailable</span>
+                        } @else {
+                          <span>{{ project.limit | number: '1.0-6' }}</span>
+                        }
+                      </span>
+                    </dd>
+                    @if (project.blocked_at) {
+                      <dd class="m-0">
+                        <span
+                          hlmBadge
+                          [variant]="'outline'"
+                          [class]="blockedClasses"
+                          i18n="@@quota.panel.project-blocked"
+                          >Limit reached</span
+                        >
+                      </dd>
+                    } @else if (project.warned_at) {
+                      <dd class="m-0">
+                        <span
+                          hlmBadge
+                          [variant]="'outline'"
+                          [class]="warnClasses"
+                          i18n="@@quota.panel.project-warned"
+                          >Approaching limit</span
+                        >
+                      </dd>
+                    }
+                  </div>
+                }
+              </dl>
+              @if (metric.projects.length > projectRowLimit) {
+                <p class="m-0 text-sm text-muted-foreground" data-quota-projects-more>
+                  <span i18n="@@quota.panel.projects-truncated"
+                    >Further project counters are not shown:</span
+                  >
+                  <span>{{ metric.projects.length - projectRowLimit }}</span>
+                </p>
+              }
+            </div>
           }
         </section>
       }

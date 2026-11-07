@@ -2,7 +2,7 @@ import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import type { UsageSummaryDto, UsageSummaryMetricDto } from '@evidgate/sdk';
+import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } from '@evidgate/sdk';
 
 import { QuotaPanelComponent } from './quota-panel.component';
 import { QuotaStore, type QuotaLoadState } from './quota.store';
@@ -10,6 +10,7 @@ import { QuotaStore, type QuotaLoadState } from './quota.store';
 class QuotaPanelHarness extends ComponentHarness {
   static hostSelector = 'app-quota-panel';
   readonly metrics = this.locatorForAll('[data-quota-metric]');
+  readonly projectRows = this.locatorForAll('[data-quota-project-row]');
   readonly retry = this.locatorFor('button');
 }
 
@@ -24,6 +25,20 @@ function metric(changes: Partial<UsageSummaryMetricDto> = {}): UsageSummaryMetri
     retry_after_seconds: null,
     unavailable_reason: 'The egress producer is unavailable.',
     projects: [],
+    ...changes,
+  };
+}
+
+/** One project's counter under a metric; below both lines unless the test says otherwise. */
+function project(changes: Partial<UsageSummaryProjectDto> = {}): UsageSummaryProjectDto {
+  return {
+    project_id: 'project-one',
+    scope: 'project',
+    used: 1,
+    limit: 100,
+    warned_at: null,
+    blocked_at: null,
+    retry_after_seconds: null,
     ...changes,
   };
 }
@@ -122,5 +137,75 @@ describe('QuotaPanelComponent', () => {
     const { root } = await render();
     expect(root.querySelector('[data-quota-empty]')).not.toBeNull();
     expect(root.querySelector('[data-quota-unavailable]')).toBeNull();
+  });
+
+  it('renders the project counters, reading a null limit as unavailable and a zero as zero', async () => {
+    usageSummary.set({
+      period: '2026-11',
+      project: null,
+      metrics: [
+        metric({
+          used: 120,
+          limit: 1000,
+          unavailable_reason: null,
+          projects: [
+            project({ project_id: 'project-one', used: 7, limit: null }),
+            project({
+              project_id: 'project-two',
+              used: 0,
+              limit: 100,
+              warned_at: '2026-11-01T00:00:00Z',
+            }),
+          ],
+        }),
+      ],
+    });
+    const { harness, root } = await render();
+    const rows = await harness.projectRows();
+    expect(rows).toHaveLength(2);
+    expect(await rows[0]?.text()).toContain('project-one');
+    expect(root.querySelectorAll('[data-quota-project-used]')[0]?.textContent).toContain('7');
+    const unavailable = root.querySelectorAll('[data-quota-project-limit]')[0]?.textContent;
+    expect(unavailable).toContain('Unavailable');
+    expect(unavailable).not.toContain('0');
+    expect(root.querySelectorAll('[data-quota-project-used]')[1]?.textContent).toContain('0');
+    expect(await rows[1]?.text()).toContain('Approaching limit');
+  });
+
+  it('renders the first project rows and counts the ones it leaves out', async () => {
+    usageSummary.set({
+      period: '2026-11',
+      project: null,
+      metrics: [
+        metric({
+          used: 120,
+          limit: 1000,
+          unavailable_reason: null,
+          projects: Array.from({ length: 7 }, (_unused, index) =>
+            project({ project_id: `project-${index}` }),
+          ),
+        }),
+      ],
+    });
+    const { harness, root } = await render();
+    expect(await harness.projectRows()).toHaveLength(5);
+    expect(root.querySelector('[data-quota-projects-more]')?.textContent).toContain('2');
+  });
+
+  it('derives the metric ids from the row index rather than the served metric key', async () => {
+    usageSummary.set({
+      period: '2026-11',
+      project: null,
+      metrics: [
+        metric({ metric: 'results', unavailable_reason: null }),
+        metric({ metric: 'egress_gb', unavailable_reason: null }),
+      ],
+    });
+    const { root } = await render();
+    const sections = root.querySelectorAll('[data-quota-metric]');
+    expect(sections[0]?.querySelector('h3')?.id).toBe('quota-metric-0');
+    expect(sections[1]?.querySelector('h3')?.id).toBe('quota-metric-1');
+    expect(sections[0]?.getAttribute('aria-labelledby')).toBe('quota-metric-0');
+    expect(sections[1]?.getAttribute('aria-labelledby')).toBe('quota-metric-1');
   });
 });

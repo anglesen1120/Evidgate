@@ -3,7 +3,7 @@ import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import type { UsageSummaryDto, UsageSummaryMetricDto } from '@evidgate/sdk';
+import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } from '@evidgate/sdk';
 
 import { QuotaDataService } from '../../core/data/quota-data.service';
 import { SessionStore } from '../../core/session/session.store';
@@ -34,6 +34,20 @@ function summary(changes: Partial<UsageSummaryMetricDto> = {}): UsageSummaryDto 
         ...changes,
       },
     ],
+  };
+}
+
+/** One project's counter under the metric; below both lines unless the test says otherwise. */
+function project(changes: Partial<UsageSummaryProjectDto> = {}): UsageSummaryProjectDto {
+  return {
+    project_id: 'project-one',
+    scope: 'project',
+    used: 1,
+    limit: 100,
+    warned_at: null,
+    blocked_at: null,
+    retry_after_seconds: null,
+    ...changes,
   };
 }
 
@@ -100,6 +114,41 @@ describe('QuotaBadgeComponent', () => {
     read.mockResolvedValue({ ...payload, metrics: [...payload.metrics, blocked] });
     const { harness } = await render();
     expect(await (await harness.link())?.text()).toContain('AI tokens');
+  });
+
+  it('names a project counter the tenant counter does not warn about', async () => {
+    read.mockResolvedValue(
+      summary({
+        used: 10,
+        limit: 100,
+        warned_at: null,
+        projects: [project({ warned_at: '2026-11-01T09:00:00Z' })],
+      }),
+    );
+    const { harness } = await render();
+    const link = await harness.link();
+    expect(await link?.getAttribute('data-quota-severity')).toBe('warn');
+    expect(await link?.getAttribute('data-quota-scope')).toBe('project');
+    expect(await link?.text()).toContain('Approaching quota limit:');
+    expect(await link?.text()).toContain('Results');
+    expect(await link?.text()).toContain('(project)');
+  });
+
+  it('names a blocked project counter without a tenant warning', async () => {
+    read.mockResolvedValue(
+      summary({
+        used: 10,
+        limit: 100,
+        warned_at: null,
+        projects: [project({ used: 100, blocked_at: '2026-11-02T00:00:00Z' })],
+      }),
+    );
+    const { harness } = await render();
+    const link = await harness.link();
+    expect(await link?.getAttribute('data-quota-severity')).toBe('blocked');
+    expect(await link?.getAttribute('data-quota-scope')).toBe('project');
+    expect(await link?.text()).toContain('Quota limit reached:');
+    expect(await link?.text()).toContain('(project)');
   });
 
   it('hides and does not read without usage permission; restores with permission', async () => {

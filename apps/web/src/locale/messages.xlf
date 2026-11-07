@@ -2963,6 +2963,14 @@
       <trans-unit id="quota.panel.blocked-at" datatype="html"><source>Block recorded</source></trans-unit>
       <trans-unit id="quota.panel.summary-unavailable" datatype="html"><source>Usage summary unavailable. Try loading it again.</source></trans-unit>
       <trans-unit id="quota.panel.retry" datatype="html"><source>Reload usage</source></trans-unit>
+      <trans-unit id="quota.badge.project-scope" datatype="html"><source>(project)</source></trans-unit>
+      <trans-unit id="quota.panel.projects" datatype="html"><source>Per project</source></trans-unit>
+      <trans-unit id="quota.panel.project-used" datatype="html"><source>Used</source></trans-unit>
+      <trans-unit id="quota.panel.project-limit" datatype="html"><source>Limit</source></trans-unit>
+      <trans-unit id="quota.panel.project-unavailable" datatype="html"><source>Unavailable</source></trans-unit>
+      <trans-unit id="quota.panel.project-blocked" datatype="html"><source>Limit reached</source></trans-unit>
+      <trans-unit id="quota.panel.project-warned" datatype="html"><source>Approaching limit</source></trans-unit>
+      <trans-unit id="quota.panel.projects-truncated" datatype="html"><source>Further project counters are not shown:</source></trans-unit>
       <trans-unit id="quota.panel.storage-title" datatype="html"><source>Daily storage counters</source></trans-unit>
       <trans-unit id="quota.panel.storage-reason" datatype="html"><source>Daily storage and egress counters are unavailable because the service does not expose a read for them.</source></trans-unit>
       <trans-unit id="quota.panel.storage-bytes" datatype="html"><source>Stored bytes</source></trans-unit>

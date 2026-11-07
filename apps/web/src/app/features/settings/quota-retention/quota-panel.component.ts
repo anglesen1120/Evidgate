@@ -8,6 +8,12 @@ import { BADGE_CLASSES, BADGE_TONE_CLASSES } from '../../../shared/ui/chips/badg
 import { quotaMetricLabel } from './quota-metric-label';
 import { QuotaStore } from './quota.store';
 
+/**
+ * The per-project breakdown is unbounded on the wire, so the panel renders the first few rows and
+ * counts the rest instead of growing the tab with every project the org has.
+ */
+const PROJECT_ROW_LIMIT = 5;
+
 @Component({
   selector: 'app-quota-panel',
   imports: [DecimalPipe, HlmBadge, HlmButton, HlmCardImports],
@@ -18,6 +24,7 @@ import { QuotaStore } from './quota.store';
 export class QuotaPanelComponent {
   protected readonly quota = inject(QuotaStore);
   protected readonly metricLabel = quotaMetricLabel;
+  protected readonly projectRowLimit = PROJECT_ROW_LIMIT;
   protected readonly warnClasses = `${BADGE_CLASSES} ${BADGE_TONE_CLASSES.warning}`;
   protected readonly blockedClasses = `${BADGE_CLASSES} ${BADGE_TONE_CLASSES.danger}`;
 

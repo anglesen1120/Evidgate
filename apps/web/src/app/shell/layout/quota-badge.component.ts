@@ -27,6 +27,7 @@ import { BADGE_CLASSES, BADGE_TONE_CLASSES } from '../../shared/ui/chips/badge-c
           [class]="badge.severity === 'blocked' ? blockedClasses : warnClasses"
           [routerLink]="['/orgs', orgId, 'settings', 'quota-retention']"
           [attr.data-quota-severity]="badge.severity"
+          [attr.data-quota-scope]="badge.scope"
           data-quota-badge
         >
           @if (badge.severity === 'blocked') {
@@ -35,6 +36,9 @@ import { BADGE_CLASSES, BADGE_TONE_CLASSES } from '../../shared/ui/chips/badge-c
             <span i18n="@@quota.badge.warned">Approaching quota limit:</span>
           }
           <span>{{ metricLabel(badge.metric) }}</span>
+          @if (badge.scope === 'project') {
+            <span i18n="@@quota.badge.project-scope">(project)</span>
+          }
         </a>
       }
     }
