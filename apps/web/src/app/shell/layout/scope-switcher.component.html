@@ -11,8 +11,9 @@
     class="min-w-0"
     [attr.data-value]="currentOrg()?.id ?? ''"
     [value]="currentOrg()?.id ?? ''"
-    [disabled]="organizations().length === 0"
+    [disabled]="orgDisabled()"
     (valueChange)="select('org', $event)"
+    (stateChanged)="popupState('org', $event)"
   >
     <hlm-select-trigger [buttonId]="orgId" class="min-h-(--eg-control-touch) w-full min-w-0">
       <span class="truncate">{{ currentOrg()?.name || chooseOrganization }}</span>
@@ -42,8 +43,9 @@
     class="min-w-0"
     [attr.data-value]="currentProject()?.id ?? ''"
     [value]="currentProject()?.id ?? ''"
-    [disabled]="projects().length === 0 || !currentOrg()"
+    [disabled]="projectDisabled()"
     (valueChange)="select('project', $event)"
+    (stateChanged)="popupState('project', $event)"
   >
     <hlm-select-trigger [buttonId]="projectId" class="min-h-(--eg-control-touch) w-full min-w-0">
       <span class="truncate">{{

@@ -130,6 +130,11 @@ const EXPECTED = [
   ['/projects/{p}/ingest-tokens', 'get', 'ingest_token:read', 'v1'],
   ['/ingest-tokens/{t}/rotate', 'post', 'ingest_token:write', 'v1'],
   ['/ingest-tokens/{t}', 'delete', 'ingest_token:write', 'v1'],
+  // 02.4.4: project API tokens for automation — the create and revoke carry `api_token:write`, the
+  // list `api_token:read`; a token can never hold `api_token:*`, so it cannot manage tokens.
+  ['/projects/{p}/api-tokens', 'post', 'api_token:write', 'v1'],
+  ['/projects/{p}/api-tokens', 'get', 'api_token:read', 'v1'],
+  ['/api-tokens/{t}', 'delete', 'api_token:write', 'v1'],
   ['/orgs/{o}/audit', 'get', 'audit:read', 'v1'],
   ['/orgs/{o}/audit/export', 'get', 'audit:read', 'v1'],
   ['/support-grants', 'post', 'support:grant', 'v1'],
@@ -285,9 +290,9 @@ const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // single-use (02 §4 endpoint table, FR-02-6); webhooks/github = delivery_id
 // dedupe (00 §9.3); events = per-event event_id dedupe (00 §9.4);
 // pull-request = idempotent by (branch, commit) (00 §9.3); heartbeat =
-// extends only the current epoch (00 §9.3); ci-bindings/ingest-tokens/rotate = the
+// extends only the current epoch (00 §9.3); ci-bindings/ingest-tokens/api-tokens/rotate = the
 // response carries a one-time secret, and the replay store persists response bodies,
-// so they are never replayed (02.4.1, 02.4.2, 00 §5.7 S3); the auth routes of 02.3.1-T2 =
+// so they are never replayed (02.4.1, 02.4.2, 02.4.4, 00 §5.7 S3); the auth routes of 02.3.1-T2 =
 // the invite staging writes only a short-lived cookie (no resource), and the link surface is
 // driven by one staged-link cookie that one confirmation spends, so a replay cannot write twice; the session
 // routes of 02.3.2-T2 = revocation is a row state (`revoked_at` set once) and every answer is the same on a
@@ -300,6 +305,7 @@ const IDEM_EXEMPT = new Set([
   'post /ci/token',
   'post /projects/{p}/ci-bindings',
   'post /projects/{p}/ingest-tokens',
+  'post /projects/{p}/api-tokens',
   'post /ingest-tokens/{t}/rotate',
   'post /webhooks/github',
   'post /runs/{r}/events',
@@ -312,6 +318,7 @@ const IDEM_EXEMPT = new Set([
   'post /auth/link/{provider}',
   'delete /auth/link/pending',
   'post /auth/link/confirm',
+  'delete /api-tokens/{t}',
   'delete /auth/sessions/{s}',
   'post /auth/sessions/revoke-all',
   'post /auth/logout',

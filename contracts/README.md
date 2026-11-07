@@ -118,11 +118,11 @@ otherwise the envelope filter's default `60` (00 §9.2).
   the `ci_token_issue` row; `jti` single-use already rejects replays
   (02 §4 endpoint table, FR-02-6/02.4.1).
 - `POST /v1/projects/{p}/ci-bindings`, `POST /v1/projects/{p}/ingest-tokens`,
-  `POST /v1/ingest-tokens/{t}/rotate` — the response carries a one-time secret
-  (a binding challenge or an ingest token). The idempotency store persists
+  `POST /v1/ingest-tokens/{t}/rotate`, `POST /v1/projects/{p}/api-tokens` — the response carries a one-time
+  secret (a binding challenge, an ingest token or an API token). The idempotency store persists
   response bodies, and a secret must never be stored in the clear (00 §5.7 S3), so
   these responses are never replayed and no key is honoured; a retried create makes
-  a second secret the admin can revoke (02.4.1, 02.4.2).
+  a second secret the admin can revoke (02.4.1, 02.4.2, 02.4.4).
 - `POST /v1/webhooks/github` — replay-safe by provider `delivery_id` dedupe
   (00 §9.3).
 - `POST /v1/runs/{r}/events` — per-event `event_id` dedupe is the arbiter; a
@@ -160,9 +160,9 @@ otherwise the envelope filter's default `60` (00 §9.2).
   write a second identity; the store itself converges on `already_linked`
   (02.3.1-T2 Q4, AC6).
 - `DELETE /v1/auth/sessions/{s}`, `POST /v1/auth/sessions/revoke-all`,
-  `POST /v1/auth/logout` — revocation is a row state: the first call sets
+  `POST /v1/auth/logout`, `DELETE /v1/api-tokens/{t}` — revocation is a row state: the first call sets
   `revoked_at`, a repeat of the delete answers the same `404 not_found` on the
-  dead row, a repeat of `revoke-all` the same `204`, and a replay of a logged-out
+  dead row (the API token's answers the same `204`), a repeat of `revoke-all` the same `204`, and a replay of a logged-out
   cookie is `401 session_revoked` — so a key could change nothing the second time
   (02.3.2-T2.1 §5, AC4/AC8).
 - `PATCH /v1/me` — the body sets one column (`preferred_locale`) to one of two

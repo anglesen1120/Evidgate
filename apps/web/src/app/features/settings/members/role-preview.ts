@@ -168,6 +168,8 @@ export const BUILTIN_ROLE_GRANTS: ReadonlyMap<string, readonly string[]> = new M
       'agent_pool:read',
       'agent_pool:write',
       'ai_draft:request',
+      'api_token:read',
+      'api_token:write',
       'artifact:read',
       'artifact:write',
       'audit:read',

@@ -80,7 +80,8 @@ internal static class IdentityAccessSql
     /// <summary>
     /// The caller's whole member-assignable permission set in one statement (W7-SEC-02):
     /// the same <see cref="MemberGrantJoin"/> under the same active-membership
-    /// subquery, projected as a set instead of a boolean. The write commands resolve the
+    /// subquery, projected as a set instead of a boolean, beside the membership id
+    /// every tenant-scoped write names as its actor. The write commands resolve the
     /// caller's effective set with this rather than by asking
     /// <see cref="MemberGrant"/> once per candidate code, so a create carrying 200 codes
     /// is still one round trip (P3's no-N+1 rule).
@@ -93,7 +94,7 @@ internal static class IdentityAccessSql
                and m.user_id = @user_id
                and m.status = 'active'
         )
-        select (select count(*) from active_member)::int as active_memberships,
+        select (select id from active_member order by id limit 1) as membership_id,
                array(
                    select distinct rp.permission_code
         """ + MemberGrantJoin + """
@@ -123,9 +124,12 @@ internal static class IdentityAccessSql
 internal sealed record MemberGrantRow(int ActiveMemberships, bool Granted);
 
 /// <summary>One row of <see cref="IdentityAccessSql.MemberPermissionSet"/> (W7-SEC-02).</summary>
-/// <param name="ActiveMemberships">How many active memberships the caller has in the org (0 = the caller holds nothing).</param>
+/// <param name="MembershipId">
+/// The caller's active membership of the org — <c>membership_org_user_key</c> (0011) makes the subquery at most one
+/// row — or null when the caller has none, in which case the caller holds nothing.
+/// </param>
 /// <param name="Codes">Every member-assignable code the caller's `member`-kind roles grant in the org (T79-filtered, W7-SEC-03/W7-SEC-05-joined).</param>
-internal sealed record MemberPermissionSetRow(int ActiveMemberships, string[] Codes);
+internal sealed record MemberPermissionSetRow(Guid? MembershipId, string[] Codes);
 
 /// <summary>One row of <see cref="IdentityAccessSql.CatalogueFlags"/>.</summary>
 /// <param name="Code">The submitted <c>resource:action</c> string.</param>

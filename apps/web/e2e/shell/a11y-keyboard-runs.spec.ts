@@ -153,9 +153,18 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(copy).toBeFocused();
   expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 
-  // The producer table's scroll region is the last stop; it is named, then the page ends.
+  // The producer table's scroll region is the section's only stop. The run's bound release sits
+  // below it, and its component digest copy button is the last stop of the page; a run with more
+  // than one release adds its selector before that button.
   await page.keyboard.press('Tab');
   await expect(page.locator('[data-producer-scroll]')).toBeFocused();
+  await page.keyboard.press('Tab');
+  const digest = page.getByRole('button', {
+    name: 'Copy full digest for component web',
+    exact: true,
+  });
+  await expect(digest).toBeFocused();
+  expect((await digest.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');
   await expect(page.getByRole('dialog')).toHaveCount(0);

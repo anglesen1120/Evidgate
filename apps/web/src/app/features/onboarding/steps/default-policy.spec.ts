@@ -257,6 +257,12 @@ describe('the display guards for a member the answer may not carry (F5)', () => 
     expect(activationInstantLabel('2026-10-27T01:00:00Z')).toBe('2026-10-27T01:00:00Z');
     // `DatePipe` throws on these; the panel must render "unavailable" instead of breaking.
     expect(activationInstantLabel('not a date')).toBeNull();
+    for (const lenient of ['1', '2026', '2026-13-01T00:00:00Z']) {
+      expect(activationInstantLabel(lenient)).toBeNull();
+    }
+    // A calendar-impossible instant is refused too, so the pipe never renders the next day.
+    expect(activationInstantLabel('2026-02-30T00:00:00Z')).toBeNull();
+    expect(activationInstantLabel('2026-10-27T08:00:00+07:00')).toBe('2026-10-27T08:00:00+07:00');
     expect(activationInstantLabel('')).toBeNull();
     expect(activationInstantLabel(null)).toBeNull();
   });

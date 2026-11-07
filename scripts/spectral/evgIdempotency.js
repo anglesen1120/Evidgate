@@ -10,6 +10,8 @@ var IDEMPOTENCY_EXEMPT = {
     'the response carries a one-time challenge and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.1)',
   'post /projects/{p}/ingest-tokens':
     'the response carries a one-time secret and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.2)',
+  'post /projects/{p}/api-tokens':
+    'the response carries a one-time secret and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.4)',
   'post /ingest-tokens/{t}/rotate':
     'the response carries a one-time secret and is never replayed, so no key can be honoured (00 §5.7 S3, 02.4.2)',
   'post /webhooks/github': 'replay-safe by provider delivery_id dedupe (00 §9.3)',
@@ -30,6 +32,8 @@ var IDEMPOTENCY_EXEMPT = {
     'no resource is created: the answer is a state cookie and the provider authorization URL, and a repeat replaces the browser own pending state (02.3.1-T2 Q4)',
   'delete /auth/link/pending':
     'DELETE is idempotent by contract: the answer is 204 whether or not a staged link existed (02.3.1-T2 Q4)',
+  'delete /api-tokens/{t}':
+    'revocation is a row state: the first call sets revoked_at and every repeat answers the same 204 on the dead row, so a key could change nothing (02.4.4)',
   'post /auth/link/confirm':
     'one staged-link cookie buys one confirmation and is deleted on every terminal outcome, so a replay cannot write a second identity; the store converges on already_linked (02.3.1-T2 Q4, AC6)',
   'delete /auth/sessions/{s}':

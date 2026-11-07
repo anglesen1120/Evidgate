@@ -26,12 +26,13 @@ namespace Contract.Tests;
 /// scaffolding surface: the test-only probe route is excluded from the description. The served path
 /// keys are mounted route templates while the spec's <c>paths</c> keys are relative
 /// to <c>servers[0].url</c> (<c>/v1</c>), so the comparison strips the prefix
-/// before diffing. Operation <em>body</em> diffs (parameters, request/response
-/// shapes) are still absent: the spec's path items use folded block scalars the
-/// test-side reader rejects by design, so the comparable surface stays the dialect
-/// line plus the served path and DTO-name sets — asserted below, with non-vacuity
-/// checks that the comparison catches an undocumented route and that the prefix
-/// strip is what makes a documented route match its spec key.
+/// before diffing. Operation <em>body</em> diffs stay narrow: the spec's path items
+/// use folded block scalars the test-side reader rejects by design, so the document
+/// is compared on its dialect line, its served path and DTO-name sets, and — for the
+/// API-token operations only — the response schema each served operation names and
+/// the bodiless 204 of the revoke. Each is asserted below with non-vacuity checks
+/// that the comparison catches an undocumented route and that the prefix strip is
+/// what makes a documented route match its spec key.
 /// </para>
 /// <para>
 /// <b>Document-level drift observed but not asserted</b> (it is host configuration
@@ -123,6 +124,50 @@ public sealed class ServedDocumentTests
             paths,
             path => ForbiddenPathPrefixes.Any(prefix => path.StartsWith(prefix, StringComparison.Ordinal)));
     }
+
+    /// <summary>
+    /// The host serves the API-token operations the spec declares: create answers the schema that carries the
+    /// one-time secret, the list answers the metadata page, revoke answers a bodiless 204, and the served list view
+    /// exposes no secret-shaped member. A host that stopped serving one of them, or that widened the view, fails
+    /// here instead of in a generated client.
+    /// </summary>
+    [Fact]
+    public async Task Served_Document_Carries_TheApiTokenOperations()
+    {
+        using var document = await FetchServedDocumentAsync();
+        var root = document.RootElement;
+        var paths = root.GetProperty("paths");
+
+        var collection = paths.GetProperty("/v1/projects/{p}/api-tokens");
+        Assert.Equal(
+            "#/components/schemas/ApiTokenCreatedResponse",
+            ResponseSchemaRef(collection.GetProperty("post"), "200"));
+        Assert.Equal(
+            "#/components/schemas/ApiTokenListResponse",
+            ResponseSchemaRef(collection.GetProperty("get"), "200"));
+
+        var revoke = paths.GetProperty("/v1/api-tokens/{t}").GetProperty("delete");
+        Assert.False(
+            revoke.GetProperty("responses").GetProperty("204").TryGetProperty("content", out _),
+            "a 204 revoke must not advertise a body");
+
+        var schemas = root.GetProperty("components").GetProperty("schemas");
+        var view = MemberNames(schemas.GetProperty("ApiTokenView").GetProperty("properties"));
+        Assert.Equal(
+            ["created_by", "expires_at", "id", "last_used_at", "name", "permissions", "prefix", "status"],
+            view.Order(StringComparer.Ordinal).ToArray());
+        Assert.DoesNotContain("token", view);
+
+        Assert.Contains(
+            "token",
+            MemberNames(schemas.GetProperty("ApiTokenCreatedResponse").GetProperty("properties")));
+    }
+
+    /// <summary>The schema reference one served response's JSON body declares.</summary>
+    private static string ResponseSchemaRef(JsonElement operation, string status) =>
+        operation.GetProperty("responses").GetProperty(status)
+            .GetProperty("content").GetProperty("application/json").GetProperty("schema")
+            .GetProperty("$ref").GetString()!;
 
     /// <summary>Strips the spec's server prefix from a served route template (00 §9.1).</summary>
     private static string SpecRelative(string servedPath) =>

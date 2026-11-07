@@ -137,6 +137,28 @@ describe('ScopeSwitcherComponent', () => {
     expect(await trigger.getAttribute('aria-expanded')).toBe('false');
   });
 
+  it('stops claiming the Escape of a scope whose select became disabled', async () => {
+    const { fixture, harness } = await createFixture();
+    const escapes = vi.fn();
+    fixture.componentInstance.popupEscape.subscribe(escapes);
+    await (await harness.trigger(1)).click();
+    expect(await (await harness.trigger(1)).getAttribute('aria-expanded')).toBe('true');
+
+    // Emptying the project list disables the select whose popup was open: it can no longer report
+    // that close, so the entry must not swallow the Escape that now belongs to the drawer.
+    fixture.componentRef.setInput('projects', []);
+    await fixture.whenStable();
+    expect(await (await harness.trigger(1)).getProperty<boolean>('disabled')).toBe(true);
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(escapes).not.toHaveBeenCalled();
+
+    // Brain keeps that popup mounted with no disabled-to-close path, so this Escape closes the
+    // popup and the drawer together. Accepted: a disabled select can never reopen one, and a
+    // retained entry would keep the drawer closed to Escape for as long as the page lives.
+    expect(await (await harness.trigger(1)).getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('retains accessible labels in compact mode and ignores the current selection', async () => {
     const { fixture, harness, root } = await createFixture();
     fixture.componentRef.setInput('compact', true);

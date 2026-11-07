@@ -147,10 +147,18 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     await page.keyboard.press('Tab');
     await expect(github).toBeFocused();
 
-    // After the provider choices, no hidden route details introduce extra focus stops.
+    // After the provider choices, no hidden route details introduce extra focus stops. The
+    // development sign-in extension this build mounts below them is not one of them (its
+    // file replacement removes it from production), so the walk passes through its disclosure and
+    // then leaves the page.
     await expect(page.locator('main a, main input, main [tabindex="0"]')).toHaveCount(0);
     await expect(page.locator('.login-providers button')).toHaveCount(2);
+    const devDisclosure = page.locator('app-dev-sign-in summary');
     await page.keyboard.press('Tab');
+    if ((await devDisclosure.count()) === 1) {
+      await expect(devDisclosure).toBeFocused();
+      await page.keyboard.press('Tab');
+    }
     expect(await activeElement(page)).toMatchObject({ tag: 'body' });
 
     // No dialog or overlay exists here, so Escape neither moves focus nor navigates.
@@ -160,7 +168,12 @@ test.describe('sign-in, keyboard only (AC2, T1.2)', () => {
     expect(page.url()).toBe(before);
     expect(await activeElement(page)).toMatchObject({ tag: 'body' });
 
-    // Going back to the first provider is one Shift+Tab from inside the page.
+    // Going back to the first provider is one Shift+Tab from inside the page, and two when the
+    // development extension sits between it and the providers.
+    if ((await devDisclosure.count()) === 1) {
+      await page.keyboard.press('Shift+Tab');
+      await expect(devDisclosure).toBeFocused();
+    }
     await page.keyboard.press('Shift+Tab');
     await expect(page.locator('.login-providers button')).toHaveCount(2);
     await expect(github).toBeFocused();

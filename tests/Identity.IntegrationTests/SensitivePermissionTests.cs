@@ -285,10 +285,12 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         using var client = factory.CreateClient();
 
         var token = await CreateIngestTokenAsync(client, project);
+        var apiToken = await CreateApiTokenAsync(client, project);
         var binding = await CreateCiBindingAsync(client, project);
 
         IngestTokenShape().IsMatch(token.Secret).ShouldBeTrue(
             "the ingest token secret must be the egt_ plaintext (02.4.2); the message must not echo the value");
+        apiToken.Secret.ShouldStartWith("evg_", Case.Sensitive, "the API token secret is the evg_ plaintext");
         binding.Challenge.ShouldNotBeNullOrWhiteSpace("the binding challenge is a one-time value (02.4.1)");
 
         // Two more one-time values a later GET must never carry: the successor the
@@ -306,6 +308,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             IngestSecretPart(rotated),
             binding.Challenge,
             exchanged,
+            apiToken.Secret,
+            apiToken.Secret[^43..],
         ];
 
         // The routes whose path names a resource the identity routes do not create:
@@ -363,6 +367,7 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // Non-vacuity: the identity list routes really returned the objects created
         // above, so the clean scan is a statement about real data, not empty pages.
         answered.ShouldContain("/v1/projects/{p}/ingest-tokens");
+        answered.ShouldContain("/v1/projects/{p}/api-tokens");
         answered.ShouldContain("/v1/projects/{p}/ci-bindings");
         answered.ShouldContain("/v1/permissions");
         answered.ShouldContain("/v1/roles");
@@ -472,6 +477,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/orgs/{o}/security-events"] = $"/v1/orgs/{org}/security-events",
             ["/v1/projects/{p}/ci-bindings"] = $"/v1/projects/{project}/ci-bindings",
             ["/v1/projects/{p}/ingest-tokens"] = $"/v1/projects/{project}/ingest-tokens",
+            // The API-token list: one row was created above, so the scan is not vacuous, and the route answers
+            // metadata only — the plaintext and the HMAC are never selected.
+            ["/v1/projects/{p}/api-tokens"] = $"/v1/projects/{project}/api-tokens",
             ["/v1/projects/{p}/cases"] = $"/v1/projects/{project}/cases",
             ["/v1/projects/{p}/suites"] = $"/v1/projects/{project}/suites",
             ["/v1/projects/{p}/waivers"] = $"/v1/projects/{project}/waivers",
@@ -917,6 +925,40 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         return new CreatedToken(root.GetProperty("token").GetProperty("id").GetGuid(), secret);
     }
 
+    /// <summary>
+    /// Creates an API token through the real route and captures the plaintext it shows once. The create response is
+    /// the place the secret appears; the list route scanned afterwards must not carry it.
+    /// </summary>
+    private static async Task<CreatedToken> CreateApiTokenAsync(HttpClient client, Guid project)
+    {
+        using var response = await client.PostAsync(
+            $"/v1/projects/{project}/api-tokens",
+            JsonContent.Create(
+                new
+                {
+                    Name = "ac5-probe",
+                    Permissions = ApiTokenPermissions,
+                    ExpiresAt = DateTimeOffset.UtcNow.AddDays(30),
+                },
+                options: Wire),
+            Token);
+
+        var body = await response.Content.ReadAsStringAsync(Token);
+
+        // Booleans, not ShouldBe/ShouldContain: a failure message must never echo the plaintext.
+        (response.StatusCode == HttpStatusCode.OK).ShouldBeTrue(
+            $"the API token create route must answer 200, not {(int)response.StatusCode}");
+
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        var secret = root.GetProperty("token").GetString()!;
+
+        body.Contains(secret, StringComparison.Ordinal).ShouldBeTrue(
+            "the create response is the one place the API token appears");
+
+        return new CreatedToken(root.GetProperty("id").GetGuid(), secret);
+    }
+
     /// <summary>Creates a CI binding through the real route and captures the one-time challenge.</summary>
     private static async Task<CreatedBinding> CreateCiBindingAsync(HttpClient client, Guid project)
     {
@@ -1016,6 +1058,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
 
     /// <summary>An ingest token created through the API: its id and its one-time secret.</summary>
     private sealed record CreatedToken(Guid Id, string Secret);
+
+    /// <summary>The subset the API-token probe asks for: a read the tenant admin holds and the deny set allows.</summary>
+    private static readonly string[] ApiTokenPermissions = ["run:read"];
 
     /// <summary>A CI binding created through the API: its id and its one-time challenge.</summary>
     private sealed record CreatedBinding(Guid Id, string Challenge);

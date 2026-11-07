@@ -169,9 +169,13 @@ internal sealed class IdentityApiFactory : WebApplicationFactory<Program>
 /// Grants every permission — the member the tests assume (02.6.2's real evaluator is
 /// <c>EvaluatorTests</c>'). It answers the W7-SEC-02 caller-set seam with the whole
 /// catalogue, so a fake-authorized caller holds everything and a test that is about a
-/// different rule is never refused by the self-escalation check.
+/// different rule is never refused by the self-escalation check. It publishes no
+/// membership row unless one is named: a route that records its caller as a row
+/// (the api-token create's <c>created_by</c>) must run on the real evaluator or pass
+/// the id of a membership that exists.
 /// </summary>
-internal sealed class GrantAllPermissionEvaluator : IPermissionEvaluator, ICallerPermissionSet
+/// <param name="membershipId">The membership the seam reports, or null for "this caller has no row".</param>
+internal sealed class GrantAllPermissionEvaluator(Guid? membershipId = null) : IPermissionEvaluator, ICallerPermissionSet
 {
     /// <inheritdoc />
     public ValueTask<PermissionDecision> EvaluateAsync(
@@ -181,11 +185,13 @@ internal sealed class GrantAllPermissionEvaluator : IPermissionEvaluator, ICalle
         CancellationToken cancellationToken) => ValueTask.FromResult(PermissionDecision.Granted);
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlySet<string>> ResolveAsync(
+    public ValueTask<CallerAccess> ResolveAsync(
         Guid orgId,
         IRequestPrincipal principal,
         CancellationToken cancellationToken) =>
-        ValueTask.FromResult<IReadOnlySet<string>>(Permissions.All.ToHashSet(StringComparer.Ordinal));
+        ValueTask.FromResult(new CallerAccess(
+            membershipId,
+            Permissions.All.ToHashSet(StringComparer.Ordinal)));
 }
 
 /// <summary>
@@ -203,9 +209,9 @@ internal sealed class FixedPermissionEvaluator(string denyCode) : IPermissionEva
         ValueTask.FromResult(PermissionDecision.Denied(denyCode));
 
     /// <inheritdoc />
-    public ValueTask<IReadOnlySet<string>> ResolveAsync(
+    public ValueTask<CallerAccess> ResolveAsync(
         Guid orgId,
         IRequestPrincipal principal,
         CancellationToken cancellationToken) =>
-        ValueTask.FromResult<IReadOnlySet<string>>(new HashSet<string>(StringComparer.Ordinal));
+        ValueTask.FromResult(new CallerAccess(null, new HashSet<string>(StringComparer.Ordinal)));
 }

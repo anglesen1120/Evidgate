@@ -59,6 +59,7 @@ public sealed class RlsIsolationTests : HarnessTest
         "public.audit_log",
         "public.ci_binding",
         "public.ingest_token",
+        "public.api_token",
         "public.test_case",
         "public.manifest",
         "public.policy_revision",

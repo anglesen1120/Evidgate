@@ -254,7 +254,7 @@ public sealed class EvaluatorTests : CatalogueTestBase
 
             (await EvaluateAsync(evaluator, org, token, staffCode)).DenyCode.ShouldBe(ApiErrorCode.Forbidden);
             (await EvaluateAsync(evaluator, org, token, Permissions.Run.Create)).DenyCode.ShouldBe(ApiErrorCode.Forbidden);
-            (await evaluator.ResolveAsync(org, token, Token)).ShouldBeEmpty();
+            (await evaluator.ResolveAsync(org, token, Token)).Codes.ShouldBeEmpty();
         }
 
         // 02.6.2 AC6: nothing outside the service roles either — a service token cannot
@@ -393,9 +393,10 @@ public sealed class EvaluatorTests : CatalogueTestBase
 
     /// <summary>
     /// W7-SEC-02: <see cref="PermissionEvaluator"/> answers <c>ICallerPermissionSet</c>
-    /// with the caller's effective set — the same rows the per-permission verdict reads
-    /// (one statement, P3) — while a caller without an active membership and the operator
-    /// stub hold nothing, so a write command's self-escalation rule fails closed.
+    /// with the caller's effective set and the active membership it came from — the same
+    /// rows the per-permission verdict reads (one statement, P3) — while a caller without
+    /// an active membership and the operator stub hold nothing and name no membership, so
+    /// a write command's self-escalation rule fails closed.
     /// </summary>
     [Fact]
     public async Task Caller_Permission_Set_Matches_The_Per_Permission_Verdict()
@@ -407,9 +408,11 @@ public sealed class EvaluatorTests : CatalogueTestBase
         var counting = new CountingTenantDb(Fixture.Db);
         var evaluator = new PermissionEvaluator(counting);
 
-        var set = await evaluator.ResolveAsync(org, RequestPrincipal.Member(userId), Token);
+        var access = await evaluator.ResolveAsync(org, RequestPrincipal.Member(userId), Token);
 
         counting.Statements.ShouldBe(1, "the whole set is one statement (P3), never one per code");
+
+        var set = access.Codes;
 
         foreach (var code in set)
         {
@@ -421,23 +424,31 @@ public sealed class EvaluatorTests : CatalogueTestBase
         set.ShouldNotContain(Permissions.Billing.Read, "a non-assignable code is never granted to a member (T79)");
         set.ShouldNotContain(Permissions.Support.Read, "no staff-kind role may reach a membership (W7-SEC-03)");
 
+        // The same statement answers the actor row: a token's or a run's `created_by` is the membership, and the
+        // membership id is its own value, never the platform user's (0011's `membership_org_user_key`).
+        access.MembershipId.ShouldNotBeNull("an active member has a membership row to name");
+        access.MembershipId.ShouldNotBe(
+            userId,
+            "the creator a command records is the membership, not the user, or the composite FK it names fails");
+
         (await evaluator.ResolveAsync(org, RequestPrincipal.Member(Guid.CreateVersion7()), Token))
-            .ShouldBeEmpty("a caller with no active membership holds nothing");
+            .Codes.ShouldBeEmpty("a caller with no active membership holds nothing");
 
         (await evaluator.ResolveAsync(org, RequestPrincipal.Operator(), Token))
-            .ShouldBeEmpty("the operator stub holds nothing until 02.8.1");
+            .Codes.ShouldBeEmpty("the operator stub holds nothing until 02.8.1");
 
         var malformed = RequestPrincipal.Service(projectScope: null, [Permissions.Run.Create, "not_a:permission"]);
 
         (await EvaluateAsync(evaluator, org, malformed, Permissions.Run.Create))
             .IsGranted.ShouldBeFalse("one unknown claim makes the token malformed for the verdict");
         (await evaluator.ResolveAsync(org, malformed, Token))
-            .ShouldBeEmpty("the set must agree with the verdict: a malformed token holds nothing");
+            .Codes.ShouldBeEmpty("the set must agree with the verdict: a malformed token holds nothing");
 
         var producer = RequestPrincipal.Service(projectScope: null, [Permissions.Run.Create]);
+        var serviceAccess = await evaluator.ResolveAsync(org, producer, Token);
 
-        (await evaluator.ResolveAsync(org, producer, Token))
-            .ShouldBe([Permissions.Run.Create], ignoreOrder: true, "a well-formed token holds exactly its claims");
+        serviceAccess.Codes.ShouldBe([Permissions.Run.Create], ignoreOrder: true, "a well-formed token holds exactly its claims");
+        serviceAccess.MembershipId.ShouldBeNull("a service identity has no membership row to record as an actor");
     }
 
     private static ValueTask<PermissionDecision> EvaluateAsync(

@@ -7,7 +7,8 @@
 // One nested class per resource, one const per action, so `Permissions.Run.Create`
 // reads as the string it is and a typo cannot compile. `All` and `IsKnown` are what
 // the service-principal path needs (00 §5.5 C2: a claim outside the catalogue is
-// denied).
+// denied); `TokenDenied` is the expanded deny set an automation token is filtered
+// against, so no token can hold an administrative code.
 
 #nullable enable
 
@@ -36,6 +37,17 @@ public static class Permissions
         /// ai_draft:request — Request an AI-generated case/suite draft (V2, 03.6.x). The draft is never
         /// gate-eligible.
         public const string Request = "ai_draft:request";
+    }
+
+    /// <summary>The <c>api_token</c> resource.</summary>
+    public static class ApiToken
+    {
+        /// api_token:read — List project API-token metadata (id, name, prefix, permissions, status, last_used_at) —
+        /// never the secret or its HMAC (02.4.4).
+        public const string Read = "api_token:read";
+        /// api_token:write — Create or revoke a project API token; the plaintext secret is returned exactly once
+        /// (02.4.4).
+        public const string Write = "api_token:write";
     }
 
     /// <summary>The <c>artifact</c> resource.</summary>
@@ -339,6 +351,8 @@ public static class Permissions
         "agent_pool:read",
         "agent_pool:write",
         "ai_draft:request",
+        "api_token:read",
+        "api_token:write",
         "artifact:read",
         "artifact:read_sensitive",
         "artifact:write",
@@ -398,6 +412,45 @@ public static class Permissions
         "webhook:write"
     ];
 
+    /// <summary>
+    /// The catalogue codes an automation token can never hold, in ordinal order:
+    /// <c>token_denied</c> with every <c>resource:*</c> wildcard expanded. A token's
+    /// stored permission subset is filtered against this set at creation and at use,
+    /// so a catalogue edit that adds an administrative code tightens every token.
+    /// </summary>
+    public static IReadOnlySet<string> TokenDenied { get; } =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "api_token:read",
+            "api_token:write",
+            "artifact:read_sensitive",
+            "audit:read",
+            "billing:read",
+            "billing:write",
+            "ci_binding:write",
+            "healing:approve",
+            "healing:configure",
+            "healing:revoke",
+            "ingest_token:write",
+            "membership:read",
+            "membership:write",
+            "organization:write",
+            "policy:write",
+            "project:create",
+            "project:write",
+            "role:read",
+            "role:write",
+            "security_event:read",
+            "service_identity:read",
+            "service_identity:write",
+            "sso:read",
+            "sso:write",
+            "support:approve",
+            "support:grant",
+            "support:read",
+            "webhook:write"
+        };
+
     /// <summary>True when <paramref name="code"/> is a code this catalogue declares.</summary>
     public static bool IsKnown(string? code) => code is not null && Known.Contains(code);
 
@@ -406,6 +459,8 @@ public static class Permissions
         "agent_pool:read",
         "agent_pool:write",
         "ai_draft:request",
+        "api_token:read",
+        "api_token:write",
         "artifact:read",
         "artifact:read_sensitive",
         "artifact:write",

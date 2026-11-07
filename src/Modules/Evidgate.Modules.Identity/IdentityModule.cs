@@ -127,6 +127,7 @@ internal static class IdentityModule
         services.TryAddSingleton<IOrganizationFounder, OrganizationFounder>();
 
         services.AddCiAuthentication(configuration);
+        services.AddApiTokens(configuration);
         services.AddInviteMinting(configuration);
 
         // 02.3.1-T1 (AC8): the federated login — EVIDGATE:Login and EVIDGATE:SESSION options, the
@@ -199,6 +200,25 @@ internal static class IdentityModule
         services.TryAddSingleton<MembershipBinder>();
         services.TryAddSingleton<IMembershipBinder>(
             provider => provider.GetRequiredService<MembershipBinder>());
+
+        return services;
+    }
+
+    /// <summary>
+    /// Project API tokens: the lifetime bound the create command enforces, and the command's shape validator. The
+    /// hashing, evaluator and tenant seams are the ones the CI and custom-role blocks already register, so a token
+    /// peppers and authorizes through the same single instances as every other identity write.
+    /// </summary>
+    private static IServiceCollection AddApiTokens(this IServiceCollection services, IConfiguration configuration)
+    {
+        services
+            .AddOptions<ApiTokenOptions>()
+            .Bind(configuration.GetSection(ApiTokenOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidator<CreateApiTokenCommand>, CreateApiTokenCommandValidator>());
 
         return services;
     }
