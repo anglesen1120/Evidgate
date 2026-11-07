@@ -44,7 +44,7 @@ export default defineConfig({
   outputDir: `test-results/core-artifacts${suffix}`,
   reporter: [
     ['list'],
-    ['html', { open: 'never', outputFolder: `playwright-report-core${suffix}` }],
+    ['html', { open: 'never', outputFolder: `test-results/core-report${suffix}` }],
     ['junit', { outputFile: junitFile }],
   ],
   use: {

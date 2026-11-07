@@ -28,7 +28,6 @@ artifacts/
 playwright-report/
 # 09.1.1-T4.4: the fixtures-build shell suite writes its own report (playwright.fixtures.config.ts).
 playwright-report-fixtures/
-playwright-report-core/
 test-results/
 blob-report/
 
