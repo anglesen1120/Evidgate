@@ -4,8 +4,14 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
 
-/** Adds the key of every `properties` map found anywhere below `node` to `names`. */
-function collectPropertyNames(node, names) {
+/** Schema keywords whose value is sample data, not schema: a `properties` key there is no name. */
+const SAMPLE_KEYWORDS = new Set(['example', 'examples', 'default', 'enum', 'const']);
+
+/**
+ * Adds the key of every `properties` map found below `node` to `names`. `isNameMap` marks a
+ * `properties` map itself, whose keys are property names (even `default`), not keywords.
+ */
+function collectPropertyNames(node, names, isNameMap = false) {
   if (Array.isArray(node)) {
     for (const item of node) {
       collectPropertyNames(item, names);
@@ -16,19 +22,23 @@ function collectPropertyNames(node, names) {
     return;
   }
   for (const [key, child] of Object.entries(node)) {
-    if (key === 'properties' && child !== null && typeof child === 'object') {
+    if (!isNameMap && SAMPLE_KEYWORDS.has(key)) {
+      continue;
+    }
+    const isMap = !isNameMap && key === 'properties' && child !== null && typeof child === 'object';
+    if (isMap && !Array.isArray(child)) {
       for (const name of Object.keys(child)) {
         names.add(name);
       }
     }
-    collectPropertyNames(child, names);
+    collectPropertyNames(child, names, isMap && !Array.isArray(child));
   }
 }
 
 /** Every property name declared in `components.schemas` of the contract; fails closed. */
 export function contractPropertyNames(file, fail, shown) {
   if (!existsSync(file)) {
-    fail(`no ${file} — the contract the error-path exemption reads is missing.`);
+    fail(`no ${shown(file)} — the contract the error-path exemption reads is missing.`);
   }
   let schemas;
   try {

@@ -247,17 +247,19 @@ function fail(message) {
   process.exit(1);
 }
 
-/** `body.error.details[].path`, the one member whose contract-name values are exempt. */
+/** Trail marker of an array element; a Symbol, so no JSON object key can spell it. */
+const ARRAY_ITEM = Symbol('array item');
+const ERROR_DETAIL_TRAIL = ['body', 'error', 'details', ARRAY_ITEM];
+
+/** `body.error.details[].path` and nowhere else: the one member whose contract names are exempt. */
 const PROPERTY_NAMES = contractPropertyNames(CONTRACT_FILE, fail, shown);
 
 function isErrorDetailPath(key, child, trail) {
-  const depth = trail.length;
   return (
     key === 'path' &&
     typeof child === 'string' &&
-    trail[depth - 1] === '[]' &&
-    trail[depth - 2] === 'details' &&
-    trail[depth - 3] === 'error' &&
+    trail.length === ERROR_DETAIL_TRAIL.length &&
+    trail.every((step, index) => step === ERROR_DETAIL_TRAIL[index]) &&
     isContractPath(child, PROPERTY_NAMES)
   );
 }
@@ -337,7 +339,7 @@ function collectFixtureStrings(value, name, strings, trail = []) {
   }
   if (Array.isArray(value)) {
     for (const item of value) {
-      collectFixtureStrings(item, name, strings, [...trail, '[]']);
+      collectFixtureStrings(item, name, strings, [...trail, ARRAY_ITEM]);
     }
     return;
   }

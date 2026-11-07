@@ -75,7 +75,7 @@ describe('no-fixture-code gate: error-envelope path', () => {
     const result = await gate(
       ws,
       refusal(paths.map((path) => ({ path, reason: 'r' }))),
-      'const k=["artifact_days","min_artifact_days","display_name"];',
+      `const k=${JSON.stringify(paths)};`,
     );
     expect(result.status).toBe(0);
   });
@@ -151,6 +151,61 @@ describe('no-fixture-code gate: error-envelope path', () => {
     );
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('a_fixture_only_reason');
+  });
+
+  it.each([
+    [
+      'a sibling envelope below another member',
+      { body: { items: [{ error: { details: [{ path: 'artifact_days' }] } }] } },
+    ],
+    ['a root-level envelope', { error: { details: [{ path: 'artifact_days' }] } }],
+    [
+      'a doubled error member',
+      { body: { error: { error: { details: [{ path: 'artifact_days' }] } } } },
+    ],
+    [
+      'an object keyed like the array marker',
+      { body: { error: { details: { '[]': { path: 'artifact_days' } } } } },
+    ],
+    ['details that is an object', { body: { error: { details: { path: 'artifact_days' } } } }],
+  ])('keeps_a_contract_name_in_%s_as_a_needle', async (_label, document) => {
+    const ws = await workspace();
+    const result = await gate(
+      ws,
+      { operation_id: 'x', variant: 'ok', status: 422, headers: {}, latency_ms: 0, ...document },
+      'const k="artifact_days";',
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('artifact_days');
+  });
+
+  it('does_not_take_names_from_sample_data_or_a_properties_list', async () => {
+    const ws = await workspace();
+    await ws.contract(`components:
+  schemas:
+    Real:
+      properties:
+        real_member_name: { type: string, example: { properties: { sample_only_name: 1 } } }
+      default:
+        properties: { default_only_name: 1 }
+    Listed:
+      properties: [listed_only_name]
+`);
+    await ws.fixture(
+      'probe',
+      refusal([
+        { path: 'real_member_name', reason: 'r' },
+        { path: 'sample_only_name', reason: 'r' },
+        { path: 'default_only_name', reason: 'r' },
+        { path: '0', reason: 'r' },
+      ]),
+    );
+    await ws.output('main-ABC123.js', 'const k="sample_only_name";');
+    const result = ws.run();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('sample_only_name');
+    await ws.output('main-ABC123.js', 'const k="real_member_name";');
+    expect(ws.run().status).toBe(0);
   });
 
   // The corpus case that had to leave fixtures/web-api (content of
