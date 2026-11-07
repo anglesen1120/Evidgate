@@ -3179,6 +3179,32 @@
       <trans-unit id="quota.panel.storage-reason" datatype="html"><source>Daily storage and egress counters are unavailable because the service does not expose a read for them.</source><target>Số liệu lưu trữ và truyền ra hằng ngày không khả dụng vì dịch vụ chưa cung cấp API đọc cho các số liệu này.</target></trans-unit>
       <trans-unit id="quota.panel.storage-bytes" datatype="html"><source>Stored bytes</source><target>Số byte lưu trữ</target></trans-unit>
       <trans-unit id="quota.panel.egress-bytes" datatype="html"><source>Egress bytes</source><target>Số byte truyền ra</target></trans-unit>
+      <trans-unit id="retention.title" datatype="html"><source>Project retention</source><target>Lưu giữ dự án</target></trans-unit>
+      <trans-unit id="retention.description" datatype="html"><source>Choose how long artifacts and their metadata are kept. Shorter windows can make evidence links unavailable sooner.</source><target>Chọn thời gian lưu giữ hiện vật và siêu dữ liệu. Thời hạn ngắn hơn có thể khiến liên kết bằng chứng không còn khả dụng sớm hơn.</target></trans-unit>
+      <trans-unit id="retention.project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
+      <trans-unit id="retention.no-project" datatype="html"><source>No project is available in this organization.</source><target>Không có dự án khả dụng trong tổ chức này.</target></trans-unit>
+      <trans-unit id="retention.forbidden" datatype="html"><source>Retention is unavailable because you do not have permission to read project settings.</source><target>Không thể xem thời hạn lưu giữ vì bạn không có quyền đọc cài đặt dự án.</target></trans-unit>
+      <trans-unit id="retention.read-only" datatype="html"><source>Read only. You need permission to write project settings to change retention.</source><target>Chỉ đọc. Bạn cần quyền ghi cài đặt dự án để thay đổi thời hạn lưu giữ.</target></trans-unit>
+      <trans-unit id="retention.loading" datatype="html"><source>Loading retention…</source><target>Đang tải thời hạn lưu giữ…</target></trans-unit>
+      <trans-unit id="retention.unavailable" datatype="html"><source>Retention could not be loaded. Try again.</source><target>Không thể tải thời hạn lưu giữ. Hãy thử lại.</target></trans-unit>
+      <trans-unit id="retention.retry" datatype="html"><source>Reload retention</source><target>Tải lại thời hạn lưu giữ</target></trans-unit>
+      <trans-unit id="retention.artifact" datatype="html"><source>Artifact retention (days)</source><target>Lưu giữ hiện vật (ngày)</target></trans-unit>
+      <trans-unit id="retention.metadata" datatype="html"><source>Metadata retention (days)</source><target>Lưu giữ siêu dữ liệu (ngày)</target></trans-unit>
+      <trans-unit id="retention.hint" datatype="html"><source>Enter whole days. Metadata must be kept at least as long as artifacts. The server validates the configured limits.</source><target>Nhập số ngày nguyên. Siêu dữ liệu phải được lưu ít nhất bằng thời gian lưu hiện vật. Máy chủ kiểm tra các giới hạn đã cấu hình.</target></trans-unit>
+      <trans-unit id="retention.integer" datatype="html"><source>Enter a whole number of days.</source><target>Nhập số ngày nguyên.</target></trans-unit>
+      <trans-unit id="retention.cross-rule" datatype="html"><source>Metadata retention must be at least as long as artifact retention.</source><target>Thời hạn lưu siêu dữ liệu phải ít nhất bằng thời hạn lưu hiện vật.</target></trans-unit>
+      <trans-unit id="retention.save" datatype="html"><source>Save retention</source><target>Lưu thời hạn</target></trans-unit>
+      <trans-unit id="retention.saving" datatype="html"><source>Saving retention…</source><target>Đang lưu thời hạn…</target></trans-unit>
+      <trans-unit id="retention.saved" datatype="html"><source>Retention saved. The stored windows are shown below.</source><target>Đã lưu thời hạn. Các thời hạn đã lưu được hiển thị bên dưới.</target></trans-unit>
+      <trans-unit id="retention.failure" datatype="html"><source>Retention was not confirmed. Review the values and try again.</source><target>Chưa xác nhận được thời hạn lưu giữ. Kiểm tra các giá trị rồi thử lại.</target></trans-unit>
+      <trans-unit id="retention.warning" datatype="html"><source>Review deletion impact</source><target>Xem tác động xoá</target></trans-unit>
+      <trans-unit id="retention.impact" datatype="html"><source>Artifacts or metadata older than the new window become eligible for deletion. Links may become unavailable. The API does not provide affected counts; no count is estimated.</source><target>Hiện vật hoặc siêu dữ liệu cũ hơn thời hạn mới sẽ đủ điều kiện bị xoá. Liên kết có thể không còn khả dụng. API không cung cấp số lượng bị ảnh hưởng; không ước tính số lượng.</target></trans-unit>
+      <trans-unit id="retention.from" datatype="html"><source>Current window (days)</source><target>Thời hạn hiện tại (ngày)</target></trans-unit>
+      <trans-unit id="retention.to" datatype="html"><source>New window (days)</source><target>Thời hạn mới (ngày)</target></trans-unit>
+      <trans-unit id="retention.band" datatype="html"><source>Newly eligible age band: older than the new window, up to the current window.</source><target>Khoảng tuổi mới đủ điều kiện xoá: cũ hơn thời hạn mới, đến thời hạn hiện tại.</target></trans-unit>
+      <trans-unit id="retention.cancel" datatype="html"><source>Cancel</source><target>Huỷ</target></trans-unit>
+      <trans-unit id="retention.confirm" datatype="html"><source>Confirm and save retention</source><target>Xác nhận và lưu thời hạn</target></trans-unit>
+      <trans-unit id="retention.retry-save" datatype="html"><source>Retry saving retention</source><target>Thử lưu lại thời hạn</target></trans-unit>
     </body>
   </file>
 </xliff>

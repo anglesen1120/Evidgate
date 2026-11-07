@@ -52,7 +52,7 @@ import {
   makeEnvironmentProviders,
   type EnvironmentProviders,
 } from '@angular/core';
-import type { RunPage } from '@evidgate/sdk';
+import type { RetentionPolicy, RunPage } from '@evidgate/sdk';
 import { mergeMap, type Observable, of, throwError, timer } from 'rxjs';
 
 import { newUuid } from '../http/random-id';
@@ -63,6 +63,7 @@ import {
   type FixtureEntry,
 } from './fixture-catalog';
 import { FIXTURE_REQUEST_LOG, type FixtureCallRecord } from './fixture-request-log';
+import { findRetentionFixture } from './fixture-retention';
 import {
   apiRelativePath,
   matchFixtureRoute,
@@ -212,6 +213,7 @@ function recordRequest(request: HttpRequest<unknown>): void {
 @Injectable()
 export class FixtureHttpBackend implements HttpBackend {
   private readonly toggles: FixtureToggles = inject(FixtureToggles);
+  private readonly retentionPolicies = new Map<string, RetentionPolicy>();
 
   handle(request: HttpRequest<unknown>): Observable<HttpEvent<unknown>> {
     recordRequest(request);
@@ -241,6 +243,17 @@ export class FixtureHttpBackend implements HttpBackend {
     request: HttpRequest<unknown>,
     relativePath: string,
   ): FixtureEntry | undefined {
+    const retention = /^\/projects\/([^/]+)\/retention$/.exec(relativePath);
+    if (retention?.[1] && (request.method === 'GET' || request.method === 'PUT')) {
+      const operation = request.method === 'GET' ? 'getRetentionPolicy' : 'setRetentionPolicy';
+      return findRetentionFixture(
+        request.method,
+        this.toggles.variantFor(operation),
+        retention[1],
+        request.body,
+        this.retentionPolicies,
+      );
+    }
     // Keep computed UI specimens outside the corpus registry, whose rows mirror on-disk examples.
     if (request.method === 'GET' && /^\/orgs\/[^/]+\/usage\/summary$/.test(relativePath)) {
       return findUsageSummaryFixture(this.toggles.variantFor('getUsageSummary'));

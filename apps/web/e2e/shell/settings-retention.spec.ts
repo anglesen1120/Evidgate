@@ -1,0 +1,154 @@
+import { expect, test, type Page } from '@playwright/test';
+import { FIXTURE_REQUEST_LOG } from '../../src/app/core/dev-fixtures/fixture-request-log';
+import {
+  LOCALES,
+  ORG_ACME,
+  SETTINGS_ADMIN_USAGE_GRANTS,
+  THEMES,
+  expectNoA11yViolations,
+  localePath,
+  seedStoredTheme,
+  withVariants,
+  type ShellLocale,
+} from './support';
+
+const FORM = 'app-retention-form';
+const RETENTION_GRANTS = SETTINGS_ADMIN_USAGE_GRANTS.replace(
+  'settings-admin-usage',
+  'settings-retention-write',
+);
+
+function path(locale: ShellLocale, variant = 'ok', writable = true): string {
+  return withVariants(localePath(locale, `/orgs/${ORG_ACME}/settings/quota-retention`), [
+    writable ? RETENTION_GRANTS : SETTINGS_ADMIN_USAGE_GRANTS,
+    `?fixture.variant.setRetentionPolicy=${variant}`,
+  ]);
+}
+
+async function putCount(page: Page): Promise<number> {
+  return page.evaluate(
+    (key) =>
+      (window[key] ?? []).filter((call) => call.method === 'PUT' && /\/retention$/.test(call.url))
+        .length,
+    FIXTURE_REQUEST_LOG,
+  );
+}
+
+async function tabTo(page: Page, selector: string): Promise<void> {
+  const target = page.locator(selector);
+  for (let step = 0; step < 80; step += 1) {
+    if (await target.evaluate((element) => element === document.activeElement)) return;
+    await page.keyboard.press('Tab');
+  }
+  await expect(target).toBeFocused();
+}
+
+async function enterDays(page: Page, field: string, value: string): Promise<void> {
+  await tabTo(page, field);
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.type(value);
+}
+
+for (const locale of LOCALES) {
+  test.describe(`Project retention (${locale})`, () => {
+    test('keyboard lowering requires confirmation; cancel and Escape retain the unsent draft', async ({
+      page,
+    }) => {
+      await page.goto(path(locale));
+      await expect(page.locator('#retention-artifact')).toHaveValue('14');
+      await enterDays(page, '#retention-artifact', '7');
+      await tabTo(page, '[data-retention-save]');
+      await page.keyboard.press('Enter');
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('[data-retention-impact="artifact_days"]')).toContainText('14');
+      await expect(dialog.locator('[data-retention-impact="artifact_days"]')).toContainText('7');
+      expect(await putCount(page)).toBe(0);
+      await expectNoA11yViolations(page, `retention warning ${locale}`);
+      await tabTo(page, '[data-retention-cancel]');
+      await page.keyboard.press('Enter');
+      await expect(dialog).not.toBeVisible();
+      await expect(page.locator('[data-retention-save]')).toBeFocused();
+      await expect(page.locator('#retention-artifact')).toHaveValue('7');
+      expect(await putCount(page)).toBe(0);
+      await page.keyboard.press('Enter');
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).not.toBeVisible();
+      await expect(page.locator('[data-retention-save]')).toBeFocused();
+      expect(await putCount(page)).toBe(0);
+      await page.keyboard.press('Enter');
+      await expect(dialog).toBeVisible();
+      await tabTo(page, '[data-retention-confirm]');
+      await page.keyboard.press('Enter');
+      await expect(page.locator('[data-retention-saved]')).toBeVisible();
+      expect(await putCount(page)).toBe(1);
+      await expect(page.locator('#retention-artifact')).toHaveValue('7');
+    });
+
+    test('raising saves directly without an impact dialog', async ({ page }) => {
+      await page.goto(path(locale));
+      await expect(page.locator('#retention-artifact')).toHaveValue('14');
+      await enterDays(page, '#retention-artifact', '30');
+      await tabTo(page, '[data-retention-save]');
+      await page.keyboard.press('Enter');
+      await expect(page.locator('[data-retention-saved]')).toBeVisible();
+      await expect(page.getByRole('dialog')).not.toBeVisible();
+      expect(await putCount(page)).toBe(1);
+    });
+
+    test('422 renders server limits inline while retaining the draft', async ({ page }) => {
+      await page.goto(path(locale, 'out-of-range'));
+      await expect(page.locator('#retention-artifact')).toHaveValue('14');
+      await enterDays(page, '#retention-artifact', '100');
+      await enterDays(page, '#retention-metadata', '120');
+      await tabTo(page, '[data-retention-save]');
+      await page.keyboard.press('Enter');
+      await expect(page.locator('[data-retention-error]')).toHaveText(
+        'artifact_days must be between 1 and 90',
+      );
+      await expect(page.locator('#retention-artifact-error')).toContainText(
+        'retention_limits.min_artifact_days: 1',
+      );
+      await expect(page.locator('#retention-artifact')).toHaveAttribute('aria-invalid', 'true');
+      await expect(page.locator('#retention-artifact')).toHaveValue('100');
+      await expectNoA11yViolations(page, `retention refusal ${locale}`);
+    });
+
+    test('read permission alone shows a visible read-only explanation and no save action', async ({
+      page,
+    }) => {
+      await page.goto(path(locale, 'ok', false));
+      await expect(page.locator('#retention-artifact')).toHaveValue('14');
+      await expect(page.locator('#retention-read-only')).toBeVisible();
+      await expect(page.locator('#retention-artifact')).toHaveAttribute('readonly');
+      await expect(page.locator('[data-retention-save]')).toHaveCount(0);
+    });
+
+    for (const theme of THEMES) {
+      test(`retention and warning reflow at 320px in ${theme}`, async ({ page }) => {
+        await seedStoredTheme(page, theme);
+        await page.setViewportSize({ width: 320, height: 800 });
+        await page.goto(path(locale));
+        await expect(page.locator('#retention-artifact')).toHaveValue('14');
+        await expect(page.locator(FORM)).toContainText(
+          locale === 'vi' ? 'Lưu giữ dự án' : 'Project retention',
+        );
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        ).toBe(true);
+        await expectNoA11yViolations(page, `retention ${locale} ${theme} 320px`);
+        const size = await page.locator('[data-retention-save]').boundingBox();
+        expect(size?.height).toBeGreaterThanOrEqual(44);
+        await enterDays(page, '#retention-artifact', '7');
+        await tabTo(page, '[data-retention-save]');
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('dialog')).toBeVisible();
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        ).toBe(true);
+        await expectNoA11yViolations(page, `retention dialog ${locale} ${theme} 320px`);
+      });
+    }
+  });
+}

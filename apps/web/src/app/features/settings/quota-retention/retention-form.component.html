@@ -1,0 +1,196 @@
+<section hlmCard class="min-w-0 gap-4 p-3 md:p-4" aria-labelledby="retention-title">
+  <header class="grid gap-2">
+    <h2 id="retention-title" class="m-0 text-lg font-semibold">{{ copy.title }}</h2>
+    <p class="m-0 text-sm text-muted-foreground">{{ copy.description }}</p>
+  </header>
+  @if (!store.readable()) {
+    <p role="status" class="m-0 text-sm" data-retention-forbidden>{{ copy.forbidden }}</p>
+  } @else if (store.session.projects().length === 0) {
+    <p role="status" class="m-0 text-sm">{{ copy.noProject }}</p>
+  } @else {
+    <div class="grid min-w-0 gap-2">
+      <label hlmLabel for="retention-project">{{ copy.project }}</label>
+      <select
+        hlmInput
+        id="retention-project"
+        class="w-full min-w-0 min-h-(--eg-control-touch)"
+        [disabled]="store.saving()"
+        #project
+        (change)="store.selectProject(project.value)"
+      >
+        @for (row of store.session.projects(); track row.id) {
+          <option [value]="row.id" [selected]="row.id === store.selectedProject()">
+            {{ row.name }}
+          </option>
+        }
+      </select>
+    </div>
+    @if (store.loading()) {
+      <p role="status" [attr.aria-busy]="true" class="m-0 min-h-(--eg-control-touch) text-sm">
+        {{ copy.loading }}
+      </p>
+    } @else if (store.policy()) {
+      @if (!store.writable()) {
+        <p id="retention-read-only" class="m-0 text-sm text-muted-foreground">
+          {{ copy.readOnly }}
+        </p>
+      }
+      <form
+        [formGroup]="form()"
+        (ngSubmit)="submit()"
+        class="grid min-w-0 gap-4"
+        [attr.aria-busy]="store.saving()"
+        [attr.aria-describedby]="!store.writable() ? 'retention-read-only' : null"
+      >
+        <p id="retention-hint" class="m-0 text-sm text-muted-foreground">{{ copy.hint }}</p>
+        <div class="grid min-w-0 gap-4 lg:grid-cols-2">
+          <div class="grid min-w-0 content-start gap-2">
+            <label hlmLabel for="retention-artifact">{{ copy.artifact }}</label>
+            <input
+              hlmInput
+              id="retention-artifact"
+              type="number"
+              step="1"
+              required
+              formControlName="artifact_days"
+              class="w-full min-w-0 min-h-(--eg-control-touch)"
+              [readOnly]="!store.writable() || store.saving()"
+              [attr.aria-invalid]="fieldError('artifact_days') ? true : null"
+              [attr.aria-describedby]="
+                fieldError('artifact_days')
+                  ? 'retention-hint retention-artifact-error'
+                  : 'retention-hint'
+              "
+            />
+            @if (fieldError('artifact_days'); as error) {
+              <p id="retention-artifact-error" class="m-0 text-sm text-destructive">{{ error }}</p>
+            }
+          </div>
+          <div class="grid min-w-0 content-start gap-2">
+            <label hlmLabel for="retention-metadata">{{ copy.metadata }}</label>
+            <input
+              hlmInput
+              id="retention-metadata"
+              type="number"
+              step="1"
+              required
+              formControlName="metadata_days"
+              class="w-full min-w-0 min-h-(--eg-control-touch)"
+              [readOnly]="!store.writable() || store.saving()"
+              [attr.aria-invalid]="fieldError('metadata_days') ? true : null"
+              [attr.aria-describedby]="
+                fieldError('metadata_days')
+                  ? 'retention-hint retention-metadata-error'
+                  : 'retention-hint'
+              "
+            />
+            @if (fieldError('metadata_days'); as error) {
+              <p id="retention-metadata-error" class="m-0 text-sm text-destructive">{{ error }}</p>
+            }
+          </div>
+        </div>
+        @if (store.writeFailed()) {
+          <p role="alert" data-retention-error class="m-0 text-sm text-destructive">
+            {{ store.writeError()?.message ?? copy.failure }}
+          </p>
+        }
+        @if (store.saved() && form().pristine) {
+          <p role="status" data-retention-saved class="m-0 text-sm">{{ copy.saved }}</p>
+        }
+        @if (store.writable()) {
+          <button
+            hlmBtn
+            #submitButton
+            type="submit"
+            data-retention-save
+            class="min-h-(--eg-control-touch) w-full whitespace-normal sm:w-fit"
+            [disabled]="store.saving()"
+          >
+            {{
+              store.saving()
+                ? copy.saving
+                : store.writeError()?.kind === 'network' || store.writeError()?.kind === 'timeout'
+                  ? copy.retrySave
+                  : copy.save
+            }}
+          </button>
+        }
+      </form>
+    } @else {
+      <div class="grid gap-3" data-retention-unavailable>
+        <p role="alert" class="m-0 text-sm text-destructive">
+          {{ store.readError()?.message ?? copy.unavailable }}
+        </p>
+        <button
+          hlmBtn
+          type="button"
+          [variant]="'outline'"
+          (click)="store.reload()"
+          class="min-h-(--eg-control-touch) w-full whitespace-normal sm:w-fit"
+        >
+          {{ copy.retry }}
+        </button>
+      </div>
+    }
+  }
+</section>
+<hlm-dialog
+  [state]="pending() ? 'open' : 'closed'"
+  [restoreFocus]="false"
+  [disableClose]="store.saving()"
+  [closeOnOutsidePointerEvents]="false"
+  (stateChanged)="dialogStateChanged($event)"
+  (closed)="restoreFocus()"
+>
+  <hlm-dialog-content
+    *hlmDialogPortal
+    [showCloseButton]="false"
+    class="max-h-[calc(100dvh-var(--eg-space-10))] min-w-0 overflow-y-auto wrap-anywhere"
+  >
+    <header hlmDialogHeader>
+      <h2 hlmDialogTitle>{{ copy.warning }}</h2>
+      <p hlmDialogDescription>{{ copy.impact }}</p>
+    </header>
+    @for (row of reductions(); track row.field) {
+      <section class="grid min-w-0 gap-2" [attr.data-retention-impact]="row.field">
+        <h3 class="m-0 text-base font-semibold">{{ row.label }}</h3>
+        <dl class="m-0 grid min-w-0 gap-2">
+          <div class="flex flex-wrap justify-between gap-2">
+            <dt>{{ copy.from }}</dt>
+            <dd class="m-0 font-semibold">{{ row.old }}</dd>
+          </div>
+          <div class="flex flex-wrap justify-between gap-2">
+            <dt>{{ copy.to }}</dt>
+            <dd class="m-0 font-semibold">{{ row.next }}</dd>
+          </div>
+        </dl>
+        <p class="m-0 text-sm">{{ copy.band }}</p>
+      </section>
+    }
+    <footer hlmDialogFooter class="gap-2">
+      <button
+        hlmBtn
+        type="button"
+        [variant]="'outline'"
+        data-retention-cancel
+        (click)="cancel()"
+        class="min-h-(--eg-control-touch) whitespace-normal"
+        [disabled]="store.saving()"
+      >
+        {{ copy.cancel }}
+      </button>
+      <button
+        hlmBtn
+        type="button"
+        [variant]="'destructive'"
+        data-retention-confirm
+        (click)="confirm()"
+        class="min-h-(--eg-control-touch) whitespace-normal"
+        [disabled]="store.saving()"
+        [attr.aria-busy]="store.saving()"
+      >
+        {{ store.saving() ? copy.saving : copy.confirm }}
+      </button>
+    </footer>
+  </hlm-dialog-content>
+</hlm-dialog>
