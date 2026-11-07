@@ -5,8 +5,8 @@
 // A toggle is read per request, from memory, by the dev fixture backend only (`fixture-backend.ts`).
 // It never becomes a request header, a query parameter or a cookie, so flipping a state can never
 // change what the app believes about the server; the fixture corpus stays the only source of
-// response bodies. Initial values come from the page URL so a bookmarked review URL reopens in the
-// same state:
+// response bodies (a derived catalog row replaces one member of a corpus body, never the body).
+// Initial values come from the page URL so a bookmarked review URL reopens in the same state:
 //
 //   ?fixture.variant.<operationId>=<variant>   e.g. ?fixture.variant.listRuns=forbidden
 //   ?fixture.latency=<ms>                      every operation, unless a per-operation latency wins

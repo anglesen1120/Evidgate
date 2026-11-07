@@ -1,7 +1,8 @@
 // One review address for the run detail page. Four specs open it with their own combination of
 // per-operation fixtures, so the route, the run id and the session are spelled once and each caller
 // names only the operations it reads. An omitted operation keeps its corpus default, which is why
-// the options are named and not positional.
+// the options are named and not positional. `run` chooses the run state: `canceled` is derived from
+// the `run-detail` document rather than a corpus directory of its own.
 import runDetail from '../../../../fixtures/web-api/run-detail/input.json';
 import {
   localePath,
@@ -24,9 +25,16 @@ export type RunAttemptsVariant = 'ok' | 'empty' | 'unavailable';
 /** The answers the evidence revision list can be asked for. */
 export type RunRevisionsVariant = 'ok' | 'empty' | 'unavailable';
 
+/**
+ * The states `GET /v1/runs/{r}` answers. `canceled` is a derived catalog row, because the corpus
+ * has no canceled detail document: it is `run-detail` with `state` replaced.
+ */
+export type RunStateVariant = 'ready' | 'canceled';
+
 /** The operations whose answer a caller chooses; every other one keeps the corpus default. */
 export interface RunDetailAddress {
   readonly locale?: ShellLocale;
+  readonly run?: RunStateVariant;
   readonly decision?: RunDecisionVariant;
   readonly attempts?: RunAttemptsVariant;
   readonly revisions?: RunRevisionsVariant;
@@ -39,7 +47,7 @@ export interface RunDetailAddress {
  * fragment to the result and still name the revision it lands on.
  */
 export function runDetailPath(options: RunDetailAddress = {}): string {
-  const { locale = 'en', decision, attempts, revisions, evidenceRevision } = options;
+  const { locale = 'en', run = 'ready', decision, attempts, revisions, evidenceRevision } = options;
   const pin = evidenceRevision === undefined ? '' : `?evidence_revision=${evidenceRevision}`;
   return withVariants(
     localePath(
@@ -48,7 +56,7 @@ export function runDetailPath(options: RunDetailAddress = {}): string {
     ),
     [
       RUN_DETAIL_GRANT,
-      '?fixture.variant.getRun=detail-ready',
+      `?fixture.variant.getRun=detail-${run}`,
       ...(attempts === undefined ? [] : [`?fixture.variant.listRunAttempts=${attempts}`]),
       ...(decision === undefined ? [] : [`?fixture.variant.getRunDecision=${decision}`]),
       ...(revisions === undefined ? [] : [`?fixture.variant.listEvidenceRevisions=${revisions}`]),

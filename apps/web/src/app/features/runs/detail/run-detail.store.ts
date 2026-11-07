@@ -9,6 +9,7 @@ import { toDecisionCandidate } from './decision/decision-mapper';
 import { refusesAccess } from './decision/decision-refusal';
 import type { DecisionViewModel } from './decision/decision-view-model';
 import { manifestFromRun, UNAVAILABLE_MANIFEST, type ManifestSummary } from './manifest-summary';
+import { withRunDetailRelease } from './release/run-detail-release.feature';
 import { toAttemptRow, type AttemptRow } from './attempts/attempt-summary';
 import { isCanonicalRevisionNo } from './revision-pin';
 import {
@@ -158,6 +159,7 @@ export const RunDetailStore = signalStore(
       return pinned !== null && latest !== null && latest > pinned;
     }),
   })),
+  withRunDetailRelease(),
   withMethods((store) => {
     const data = inject(RunsDataService);
     // The decision read goes through the feature service, which validates the stale-typed body
@@ -353,6 +355,7 @@ export const RunDetailStore = signalStore(
         // A decision answer for the run this route just left must not land on the new one.
         ++decisionGeneration;
         ++revisionsGeneration;
+        store.resetRelease();
         loadedAttemptIds = new Set<string>();
         loadedRevisionNumbers = new Set<number>();
         explicitPin = null;

@@ -119,6 +119,11 @@
         [view]="'context'"
       />
       <app-manifest-panel [summary]="store.manifest()" />
+      <!-- Neither region reads: the run response serves no release id to address and no transition
+           history, so the release region shows its shared unavailable state and the timeline marks
+           the current state instead of inventing either. -->
+      <app-release-panel [runId]="run.run_id" [releaseId]="null" />
+      <app-run-timeline [state]="run.state" [afterCancelEvents]="null" />
     </div>
   }
 </app-request-state>

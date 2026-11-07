@@ -6,6 +6,7 @@ import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import type { EvidenceRevisionPage, RunAttemptPage, RunStateDto } from '@evidgate/sdk';
 import { RunsDataService } from '../../../../core/data/runs-data.service';
+import { ReleasesDataService } from '../../../../core/data/releases-data.service';
 import { RunDataService } from '../../data/run-data.service';
 import {
   first as attemptPage,
@@ -59,6 +60,7 @@ describe('Run detail evidence revision', () => {
         provideRouter([{ path: 'projects/:projectId/runs', children: routes }]),
         { provide: RunsDataService, useValue: { get, listAttempts, listEvidenceRevisions } },
         { provide: RunDataService, useValue: { getDecision } },
+        { provide: ReleasesDataService, useValue: { get: vi.fn() } },
       ],
     });
   });

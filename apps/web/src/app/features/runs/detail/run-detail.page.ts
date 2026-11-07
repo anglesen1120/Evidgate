@@ -25,9 +25,11 @@ import { DecisionViewComponent } from './decision/decision-view.component';
 import { EvidencePanelComponent } from './evidence/evidence-panel.component';
 import { resolveEvidenceAnchor } from './evidence/run-evidence-anchors';
 import { ManifestPanelComponent } from './manifest-panel.component';
+import { ReleasePanelComponent } from './release/release-panel.component';
 import { parsePinnedRevision } from './revision-pin';
 import { RunHeaderComponent } from './run-header.component';
 import { RunDetailStore } from './run-detail.store';
+import { RunTimelineComponent } from './timeline/run-timeline.component';
 
 @Component({
   selector: 'app-run-detail-page',
@@ -36,6 +38,8 @@ import { RunDetailStore } from './run-detail.store';
     RequestStateComponent,
     RunHeaderComponent,
     ManifestPanelComponent,
+    ReleasePanelComponent,
+    RunTimelineComponent,
     EvidencePanelComponent,
     DecisionViewComponent,
     AttemptsTableComponent,
