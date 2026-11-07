@@ -1,3 +1,4 @@
+using System.Globalization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -20,13 +21,16 @@ namespace Evidgate.Modules.Usage.Application.Queries;
 /// </summary>
 /// <param name="OrgId">The org the route names; it must be the request's tenant.</param>
 /// <param name="ProjectId">The project the request named, or null for the org-wide answer.</param>
-internal sealed record GetUsageSummaryQuery(Guid OrgId, Guid? ProjectId) : IQuery<Result<UsageSummaryDto>>;
+/// <param name="Cursor">The previous page's <c>next_cursor</c>, or null for the first page.</param>
+/// <param name="Limit">Projects per page, already bound by the route.</param>
+internal sealed record GetUsageSummaryQuery(Guid OrgId, Guid? ProjectId, string? Cursor, int Limit)
+    : IQuery<Result<UsageSummaryDto>>;
 
 /// <summary>
-/// Handler of <see cref="GetUsageSummaryQuery"/>: the C2 project-scope rule, the reading transaction's own month, then
-/// one statement that reads that month's counters, roll-up totals and the requested project's visibility together. The
-/// organization resolves through the pipeline's tenant context, so an org outside the caller's visibility never reaches
-/// this handler.
+/// Handler of <see cref="GetUsageSummaryQuery"/>: the C2 project-scope rule, the cursor and page-size refusals, the
+/// reading transaction's own month, then one statement that reads that month's counters, roll-up totals, the requested
+/// project's visibility and one page of projects together. The organization resolves through the pipeline's tenant
+/// context, so an org outside the caller's visibility never reaches this handler.
 /// </summary>
 /// <remarks>
 /// The statement answers "is the named project in this org?" by itself, so a foreign id is the same 404 an unknown one
@@ -68,13 +72,41 @@ internal sealed class GetUsageSummaryQueryHandler(
             return Result.Failure<UsageSummaryDto>(mismatch);
         }
 
+        if (UsageSummaryPaging.LimitError(query.Limit) is { } invalidLimit)
+        {
+            return Result.Failure<UsageSummaryDto>(invalidLimit);
+        }
+
+        // The cursor is decoded even on the filtered answer, so a caller cannot learn that paging is ignored there by
+        // sending a cursor the statement would have refused.
+        DateTimeOffset? cursorCreatedAt = null;
+        Guid? cursorId = null;
+        if (query.Cursor is not null)
+        {
+            if (!KeysetCursor.TryDecode(query.Cursor, out var createdAt, out var id))
+            {
+                return Result.Failure<UsageSummaryDto>(UsageSummaryPaging.CursorInvalid);
+            }
+
+            cursorCreatedAt = createdAt;
+            cursorId = id;
+        }
+
         // Both reads run in this request's tenant transaction, so the counters and the clock that names them are the
         // gate's own.
         var clock = await counters.CurrentPeriodClockAsync(cancellationToken).ConfigureAwait(false);
         var rows = await store
-            .ReadSummaryAsync(scope.OrgId, clock.Period, query.ProjectId, cancellationToken)
+            .ReadSummaryAsync(
+                scope.OrgId,
+                clock.Period,
+                query.ProjectId,
+                cursorCreatedAt,
+                cursorId,
+                query.Limit + 1,
+                cancellationToken)
             .ConfigureAwait(false);
-        var summary = UsageSummaryComposition.Compose(clock.Period, query.ProjectId, clock.DatabaseNow, rows);
+        var summary = UsageSummaryComposition.Compose(
+            clock.Period, query.ProjectId, clock.DatabaseNow, rows, query.Limit);
 
         return summary is null
             ? Result.Failure<UsageSummaryDto>(ProjectNotFound)
@@ -105,4 +137,53 @@ internal static class UsageProjectScope
             ? Error.Denied(ApiErrorCode.ProjectScopeMismatch, "the project is outside the request's scope")
             : null;
     }
+}
+
+/// <summary>
+/// The summary page's bounds and its two refusals (00 §9.1): the route parses <c>?limit=</c> through
+/// <see cref="Limit(string?, out int)"/> and the handler repeats the range check, so an in-process caller that never
+/// went through the route is bounded by the same numbers.
+/// </summary>
+internal static class UsageSummaryPaging
+{
+    /// <summary>00 §9.1 default when <c>limit</c> is absent.</summary>
+    internal const int DefaultLimit = 50;
+
+    /// <summary>00 §9.1 maximum <c>limit</c>.</summary>
+    internal const int MaxLimit = 200;
+
+    /// <summary>Reads <c>?limit=</c>: absent → <see cref="DefaultLimit"/>; anything else outside 1..200 → 422.</summary>
+    /// <param name="raw">The raw query value, or null when the caller sent none.</param>
+    /// <param name="limit">The page size to use; <see cref="DefaultLimit"/> when the value is refused.</param>
+    internal static Error? Limit(string? raw, out int limit)
+    {
+        limit = DefaultLimit;
+
+        if (string.IsNullOrEmpty(raw))
+        {
+            return null;
+        }
+
+        if (!int.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return LimitInvalid();
+        }
+
+        limit = parsed;
+        return LimitError(parsed);
+    }
+
+    /// <summary>The range half of the same rule, for a page size the route already parsed.</summary>
+    /// <param name="limit">The page size to check.</param>
+    internal static Error? LimitError(int limit) => limit is >= 1 and <= MaxLimit ? null : LimitInvalid();
+
+    /// <summary>422: <c>limit</c> is not an integer between 1 and 200 (00 §9.1).</summary>
+    internal static Error LimitInvalid() => Error.Invalid(
+        string.Create(CultureInfo.InvariantCulture, $"limit must be an integer between 1 and {MaxLimit} (00 §9.1)"),
+        [new ErrorDetail("limit", "out_of_range")]);
+
+    /// <summary>422: the cursor is not a value this endpoint issued (00 §9.1).</summary>
+    internal static Error CursorInvalid => Error.Invalid(
+        "the cursor is not a page continuation this endpoint issued",
+        [new ErrorDetail("cursor", "malformed")]);
 }

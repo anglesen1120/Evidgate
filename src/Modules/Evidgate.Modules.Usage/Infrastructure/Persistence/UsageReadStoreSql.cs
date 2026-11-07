@@ -166,17 +166,32 @@ internal static class UsageReadStoreSql
 
     /// <summary>
     /// The current period's counters and roll-ups for one org: the organization-wide counter row per metric
-    /// (<c>quota_counter.project_id</c> null), one row per project that has a counter or a roll-up in the period,
-    /// and the roll-up total as the fallback for a scope the month has no counter for. A project filter adds that
-    /// project as a scope even when it has no data, so the caller always reads its zero; a project the caller
-    /// cannot see answers one marker row instead (<c>project_missing</c>), which the caller maps to the same 404
-    /// the other Usage reads answer.
+    /// (<c>quota_counter.project_id</c> null), one page of project rows for the projects that have a counter or a
+    /// roll-up in the period, and the roll-up total as the fallback for a scope the month has no counter for. A
+    /// project filter adds that project as a scope even when it has no data, so the caller always reads its zero; a
+    /// project the caller cannot see answers one marker row instead (<c>project_missing</c>), which the caller maps to
+    /// the same 404 the other Usage reads answer.
     /// </summary>
     /// <remarks>
     /// One statement, so a summary is one read inside the request's transaction. Every counter probe names the
     /// <c>(org_id, coalesce(project_id, zero), period, metric)</c> unique index expression and every roll-up probe
     /// names its own scope key, so both are index probes rather than table scans. The tenant total sums the period's
-    /// roll-ups across every project (the org-wide cap covers all of them); a project total is that project's rows.
+    /// roll-ups across every project (the org-wide cap covers all of them) and is the same on every page; a project
+    /// total is that project's rows.
+    /// <para>
+    /// The page is keyset on the project's own <c>(created_at, id)</c>, which is why the statement joins the named
+    /// project ids to <c>public.project</c> before the counters: only the page's projects become scopes, so a page
+    /// never reads another page's project rows. <c>limit @project_limit</c> is one more than the caller reports, so
+    /// "is there a next page?" needs no count, and a filter names one project, which is a page of one whatever the
+    /// cursor says.
+    /// </para>
+    /// <para>
+    /// The projects status counts are the org's whole set and never the page, so each page and a filtered answer carry
+    /// the same figures. They aggregate every project counter of the period: no index leads with <c>(org_id,
+    /// period)</c>, so the read walks the org's counters on the unique key's leading column and filters the period,
+    /// which is a small set per tenant. A project, a roll-up and a marker row answer null there; only the alert rows
+    /// carry counts.
+    /// </para>
     /// </remarks>
     internal const string Summary =
         """
@@ -188,35 +203,49 @@ internal static class UsageReadStoreSql
                     where p.org_id = @org_id
                       and p.id = @project_id) as visible
         ),
+        named_projects as (
+            select c.project_id
+            from public.quota_counter as c
+            where c.org_id = @org_id
+              and c.period = @period
+              and c.project_id is not null
+              and (@project_id is null or c.project_id = @project_id)
+            union
+            select r.project_id
+            from public.usage_rollup as r
+            where r.org_id = @org_id
+              and r.period = @period
+              and r.project_id is not null
+              and (@project_id is null or r.project_id = @project_id)
+            union
+            select @project_id::uuid
+            where @project_id is not null
+              and (select visible from project_visible)
+        ),
+        project_page as (
+            select p.id as project_id, p.created_at as project_created_at
+            from public.project as p
+            join named_projects as named on named.project_id = p.id
+            where p.org_id = @org_id
+              and (@project_id is not null
+                   or (p.created_at, p.id) > (
+                       coalesce(@cursor_created_at::timestamptz, '-infinity'::timestamptz),
+                       coalesce(@cursor_id::uuid, '00000000-0000-0000-0000-000000000000'::uuid)))
+            order by p.created_at, p.id
+            limit @project_limit
+        ),
         scopes as (
             select 'tenant'::text as scope,
                    null::uuid as project_id,
-                   '00000000-0000-0000-0000-000000000000'::uuid as scope_key
+                   '00000000-0000-0000-0000-000000000000'::uuid as scope_key,
+                   null::timestamptz as project_created_at
             where (select visible from project_visible)
             union all
-            select 'project'::text, named.project_id, named.project_id
-            from (
-                select c.project_id
-                from public.quota_counter as c
-                where c.org_id = @org_id
-                  and c.period = @period
-                  and c.project_id is not null
-                  and (@project_id is null or c.project_id = @project_id)
-                union
-                select r.project_id
-                from public.usage_rollup as r
-                where r.org_id = @org_id
-                  and r.period = @period
-                  and r.project_id is not null
-                  and (@project_id is null or r.project_id = @project_id)
-                union
-                select @project_id::uuid
-                where @project_id is not null
-                  and (select visible from project_visible)
-            ) as named
+            select 'project'::text, project_id, project_id, project_created_at
+            from project_page
         ),
         counters as (
-            select s.scope, s.project_id, s.scope_key,
+            select s.scope, s.project_id, s.scope_key, s.project_created_at,
                    c.metric, c.used, c.quota_limit, c.warned_at, c.blocked_at
             from scopes as s
             join public.quota_counter as c
@@ -225,14 +254,14 @@ internal static class UsageReadStoreSql
              and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = s.scope_key
         ),
         project_rollups as (
-            select s.project_id, r.metric, sum(r.total_quantity) as used
+            select s.project_id, s.project_created_at, r.metric, sum(r.total_quantity) as used
             from scopes as s
             join public.usage_rollup as r
               on r.org_id = @org_id
              and r.period = @period
              and coalesce(r.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = s.scope_key
             where s.scope = 'project'
-            group by s.project_id, r.metric
+            group by s.project_id, s.project_created_at, r.metric
         ),
         tenant_rollups as (
             select r.metric, sum(r.total_quantity) as used
@@ -242,12 +271,24 @@ internal static class UsageReadStoreSql
               and (select visible from project_visible)
             group by r.metric
         ),
+        project_alerts as (
+            select c.metric,
+                   count(*) filter (where c.blocked_at is not null) as blocked_projects,
+                   count(*) filter (where c.blocked_at is null and c.warned_at is not null) as warned_projects
+            from public.quota_counter as c
+            where c.org_id = @org_id
+              and c.period = @period
+              and c.project_id is not null
+              and (select visible from project_visible)
+            group by c.metric
+        ),
         rows as (
-            select scope, project_id, metric, used, quota_limit, warned_at, blocked_at
+            select scope, project_id, project_created_at, metric, used, quota_limit, warned_at, blocked_at,
+                   null::bigint as blocked_projects, null::bigint as warned_projects
             from counters
             union all
-            select 'tenant'::text, null::uuid, t.metric, t.used,
-                   null::numeric, null::timestamptz, null::timestamptz
+            select 'tenant'::text, null::uuid, null::timestamptz, t.metric, t.used,
+                   null::numeric, null::timestamptz, null::timestamptz, null::bigint, null::bigint
             from tenant_rollups as t
             where not exists (
                 select 1
@@ -255,8 +296,8 @@ internal static class UsageReadStoreSql
                 where c.scope = 'tenant'
                   and c.metric = t.metric)
             union all
-            select 'project'::text, p.project_id, p.metric, p.used,
-                   null::numeric, null::timestamptz, null::timestamptz
+            select 'project'::text, p.project_id, p.project_created_at, p.metric, p.used,
+                   null::numeric, null::timestamptz, null::timestamptz, null::bigint, null::bigint
             from project_rollups as p
             where not exists (
                 select 1
@@ -265,12 +306,16 @@ internal static class UsageReadStoreSql
                   and c.scope_key = p.project_id
                   and c.metric = p.metric)
         )
-        select scope, project_id, metric, used, quota_limit, warned_at, blocked_at,
-               false as project_missing
+        select scope, project_id, project_created_at, metric, used, quota_limit, warned_at, blocked_at,
+               blocked_projects, warned_projects, false as project_missing
         from rows
         union all
-        select 'tenant'::text, null::uuid, null::text, null::numeric, null::numeric,
-               null::timestamptz, null::timestamptz, true as project_missing
+        select 'alerts'::text, null::uuid, null::timestamptz, a.metric, null::numeric, null::numeric,
+               null::timestamptz, null::timestamptz, a.blocked_projects, a.warned_projects, false as project_missing
+        from project_alerts as a
+        union all
+        select 'tenant'::text, null::uuid, null::timestamptz, null::text, null::numeric, null::numeric,
+               null::timestamptz, null::timestamptz, null::bigint, null::bigint, true as project_missing
         where not (select visible from project_visible)
         """;
 }

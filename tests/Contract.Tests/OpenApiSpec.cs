@@ -51,6 +51,42 @@ internal sealed class OpenApiSpec
     /// <exception cref="KeyNotFoundException">The path or the method is absent from the spec.</exception>
     public IReadOnlyList<string> ResponseKeys(string pathKey, string method)
     {
+        var operation = OperationLine(pathKey, method);
+        var responses = FindMember(_lines, operation + 1, SectionEnd(_lines, operation + 1, 4), 6, "responses")
+            ?? throw new InvalidOperationException($"'{method} {pathKey}' declares no responses");
+
+        return MemberNames(_lines, responses + 1, SectionEnd(_lines, responses + 1, 6), 8);
+    }
+
+    /// <summary>
+    /// The <c>components.parameters</c> names one operation references under <c>parameters</c>, in document order.
+    /// An opaque <c>$ref</c> chain is resolved by name, so a suite asserts the shared parameter rather than a copy.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">The path or the method is absent from the spec.</exception>
+    public IReadOnlyList<string> ParameterRefs(string pathKey, string method)
+    {
+        var operation = OperationLine(pathKey, method);
+        var parameters = FindMember(_lines, operation + 1, SectionEnd(_lines, operation + 1, 4), 6, "parameters")
+            ?? throw new InvalidOperationException($"'{method} {pathKey}' declares no parameters");
+
+        const string Prefix = "- $ref: '#/components/parameters/";
+        var names = new List<string>();
+        foreach (var line in _lines[(parameters + 1)..SectionEnd(_lines, parameters + 1, 6)])
+        {
+            var entry = line.Trim();
+            if (entry.StartsWith(Prefix, StringComparison.Ordinal) && entry.EndsWith('\''))
+            {
+                names.Add(entry[Prefix.Length..^1]);
+            }
+        }
+
+        return names;
+    }
+
+    /// <summary>The line of one <c>paths.&lt;path&gt;.&lt;method&gt;</c> operation.</summary>
+    /// <exception cref="KeyNotFoundException">The path or the method is absent from the spec.</exception>
+    private int OperationLine(string pathKey, string method)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(pathKey);
         ArgumentException.ThrowIfNullOrWhiteSpace(method);
 
@@ -58,12 +94,9 @@ internal sealed class OpenApiSpec
             ?? throw new InvalidOperationException("the spec has no top-level 'paths' block");
         var path = FindMember(_lines, paths + 1, SectionEnd(_lines, paths + 1, 0), 2, pathKey)
             ?? throw new KeyNotFoundException($"the spec declares no path '{pathKey}'");
-        var operation = FindMember(_lines, path + 1, SectionEnd(_lines, path + 1, 2), 4, method)
-            ?? throw new KeyNotFoundException($"'{pathKey}' declares no '{method}' operation");
-        var responses = FindMember(_lines, operation + 1, SectionEnd(_lines, operation + 1, 4), 6, "responses")
-            ?? throw new InvalidOperationException($"'{method} {pathKey}' declares no responses");
 
-        return MemberNames(_lines, responses + 1, SectionEnd(_lines, responses + 1, 6), 8);
+        return FindMember(_lines, path + 1, SectionEnd(_lines, path + 1, 2), 4, method)
+            ?? throw new KeyNotFoundException($"'{pathKey}' declares no '{method}' operation");
     }
 
     /// <summary>Loads the repository's <c>contracts/openapi.yaml</c>.</summary>
