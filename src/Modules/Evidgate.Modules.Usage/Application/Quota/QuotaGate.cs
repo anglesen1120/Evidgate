@@ -20,8 +20,8 @@ internal sealed class QuotaGateOptions
     internal const string Section = "EVIDGATE:Usage:QuotaGate";
 
     /// <summary>
-    /// False answers <see cref="QuotaDecision.Ok"/> without reading or writing a counter, the explicit
-    /// operator escape hatch for a pilot whose limits are not loaded yet.
+    /// False makes checks answer <see cref="QuotaDecision.Ok"/> without reading or writing a counter.
+    /// The transaction's billing month remains available; Api and Worker must use the same switch value.
     /// </summary>
     public bool Enabled { get; set; } = true;
 }
@@ -42,6 +42,16 @@ internal sealed class QuotaGateOptions
 /// refuses work it now has room for and never drops the usage it admitted.
 /// </para>
 /// <para>
+/// The same gate answers the caller's transaction month, which is the month its own rows and the ledger row metering
+/// them are stamped with, and an advisory <see cref="PeekAsync"/> that reads a counter without reserving, stamping or
+/// carrying anything: a caller that must decide before it parses asks that one, and never treats Ok as an admission.
+/// </para>
+/// <para>
+/// A refusal names the wait until the next period, measured from the database's transaction clock — the clock that
+/// named the period — so a host whose clock runs ahead of the database cannot shorten it to a second of a month the
+/// database still has open.
+/// </para>
+/// <para>
 /// A month starts with no counter, so the gate carries each scope's previous month's limit and warning line into it
 /// before answering, and only the scopes that need it: a configured limit covers every later month instead of lapsing
 /// at the rollover. The carry runs before any counter is locked, and it creates every missing counter of the call in
@@ -54,9 +64,42 @@ internal sealed class QuotaGate(
     ITenantScopeAccessor scopes,
     QuotaCounterStore store,
     IOutboxWriter outbox,
-    IOptions<QuotaGateOptions> options,
-    TimeProvider time) : IQuotaGate
+    IOptions<QuotaGateOptions> options) : IQuotaGate
 {
+    /// <inheritdoc />
+    public async Task<string> CurrentPeriodAsync(CancellationToken cancellationToken) =>
+        (await store.CurrentPeriodClockAsync(cancellationToken).ConfigureAwait(false)).Period;
+
+    /// <inheritdoc />
+    public async Task<QuotaCheckResult> PeekAsync(
+        QuotaCheckRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        QuotaCheckRequestRules.EnsureValid(request);
+
+        if (!options.Value.Enabled)
+        {
+            return new QuotaCheckResult(QuotaDecision.Ok);
+        }
+
+        var orgId = scopes.Require().OrgId;
+        var refused = await store.PeekAsync(
+                orgId, request.Period, UsageMetricWire.ToWireValue(request.Metric),
+                QuotaScopeKeys.Of(request), request.Quantity, cancellationToken)
+            .ConfigureAwait(false);
+
+        return refused is null
+            ? new QuotaCheckResult(QuotaDecision.Ok)
+            : new QuotaCheckResult(
+                QuotaDecision.Block,
+                refused.Used,
+                refused.QuotaLimit,
+                UsagePeriod.RetryUntilNextPeriod(request.Period, refused.DatabaseNow),
+                RaisePath(orgId),
+                QuotaScopeKeys.KindOf(refused.ScopeKey));
+    }
+
     /// <inheritdoc />
     /// <exception cref="ArgumentOutOfRangeException">
     /// A non-positive quantity or a period outside <c>2000-01</c>..<c>2999-12</c> is a caller bug: it is
@@ -198,7 +241,7 @@ internal sealed class QuotaGate(
                 QuotaDecision.Block,
                 refusing.Used,
                 refusing.QuotaLimit,
-                UsagePeriod.RetryUntilNextPeriod(request.Period, time.GetUtcNow()),
+                UsagePeriod.RetryUntilNextPeriod(request.Period, refusing.DatabaseNow),
                 RaisePath(orgId),
                 QuotaScopeKeys.KindOf(refusing.ScopeKey));
         }

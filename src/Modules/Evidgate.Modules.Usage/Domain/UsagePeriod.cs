@@ -80,7 +80,8 @@ internal static class UsagePeriod
     /// </summary>
     /// <param name="period">A period <see cref="IsQuotaPeriod"/> accepts; both the parse and the next month stay
     /// inside <see cref="DateTimeOffset"/> for it, so this never throws.</param>
-    /// <param name="now">The caller's clock instant, so the answer is the same everywhere the same instant is read.</param>
+    /// <param name="now">The instant the wait is measured from. The gate passes the transaction's own clock, the one
+    /// that named the period, so a host clock ahead of the database cannot contradict a month it still has open.</param>
     internal static TimeSpan RetryUntilNextPeriod(string period, DateTimeOffset now)
     {
         var year = int.Parse(period.AsSpan(0, 4), NumberStyles.None, CultureInfo.InvariantCulture);

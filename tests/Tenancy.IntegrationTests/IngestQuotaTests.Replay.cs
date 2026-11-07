@@ -1,10 +1,14 @@
-// The reserve-once half of the events route's quota admission: a resend of a committed batch spends nothing, and
-// two identical batches racing each other reserve the one event they commit between them instead of the batch
-// each of them asked for.
+// The reserve-once half of the events route's quota admission: a resend of a committed batch spends nothing, two
+// identical batches racing each other reserve the one event they commit between them instead of the batch each of
+// them asked for, and the month the gate was asked about is the month the batch's own ledger row bills.
 #pragma warning disable CA1861
 using System.Net;
 using System.Text;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Modules.Ingestion.Application;
+using Evidgate.Modules.Ingestion.Application.Commands;
 using Evidgate.Modules.Orchestrator.Contracts;
+using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
 
@@ -13,7 +17,7 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// The replay cases of <see cref="IngestQuotaTests"/>: the gate is asked only for the rows a batch's insert
 /// really adds, so a batch that adds nothing — every event already on file — neither moves the counter nor
-/// consumes a row lock.
+/// consumes a row lock; and the month it is asked about is the month the batch and its ledger row are stamped with.
 /// </summary>
 public sealed partial class IngestQuotaTests
 {
@@ -31,6 +35,7 @@ public sealed partial class IngestQuotaTests
         first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
         first.Body.GetProperty("accepted").GetInt32().ShouldBe(2);
         spy.Calls.ShouldBe(1);
+        spy.PeriodCalls.ShouldBe(1);
         spy.Requests.ShouldHaveSingleItem().Quantity.ShouldBe(2m);
 
         var replay = await IngestQaRequests.PostAsync(world.Client, world.RunId, new StringContent(json, Encoding.UTF8, "application/json"));
@@ -41,10 +46,40 @@ public sealed partial class IngestQuotaTests
         replay.Body.GetProperty("accepted").GetInt32().ShouldBe(0);
         replay.Body.GetProperty("duplicates").GetInt32().ShouldBe(2);
         spy.Calls.ShouldBe(1);
+        spy.PeriodCalls.ShouldBe(1, "a batch that adds no row bills nothing, so it asks neither the month nor the gate");
 
         (await ReadAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(2m);
         (await EventRowsAsync(world)).ShouldBe(2);
         (await world.CountAsync("outbox", $"org_id = '{world.Org:D}' and task_type = 'usage.batch_accepted'")).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task IngestEvents_GatedAndMeteredInTheSameMonth()
+    {
+        var spy = new QuotaGateSpy();
+        await using var world = await StartIngestAsync(spy);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedAsync(counters, world, used: 0m, limit: 10m);
+
+        var answer = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L));
+
+        answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
+        var batchId = answer.Body.GetProperty("batch_id").GetGuid();
+        var request = spy.Requests.ShouldHaveSingleItem();
+
+        // The month the gate was asked about is the month the batch's own row was stamped with: one reading of the
+        // transaction's clock, never a second reading of an application clock that could have crossed midnight first.
+        var batchMonth = await world.ScalarAsync<string>(
+            $"select to_char(created_at at time zone 'UTC', 'YYYY-MM') from public.event_batch where id = '{batchId:D}'");
+        request.Period.ShouldBe(batchMonth);
+
+        // And the ledger row the batch's metering writes bills that same month, so a batch is never gated in one
+        // month and metered in the next.
+        await MeterAsync(world, batchId, answer.Body.GetProperty("accepted").GetInt32());
+
+        (await world.ScalarAsync<string>(
+            $"select period from public.usage_ledger_entry where org_id = '{world.Org:D}' "
+            + $"and billing_key = 'batch:{batchId:D}:event'")).ShouldBe(request.Period);
     }
 
     [Fact]
@@ -100,6 +135,24 @@ public sealed partial class IngestQuotaTests
         (await EventRowsAsync(world)).ShouldBe(1);
         (await ReadAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(initialUsed + 1m);
         (await WarningRowsAsync(world)).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// Runs the batch's own metering task the way its consumer does — the real handler inside the org's scope — so the
+    /// ledger row carries the month production would write, without dispatching every pending row of this database.
+    /// </summary>
+    private static async Task MeterAsync(IngestTestWorld world, Guid batchId, int accepted)
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var services = world.Host.Services.CreateAsyncScope();
+        var provider = services.ServiceProvider;
+        await using var scope = await provider.GetRequiredService<ITenantScopeFactory>()
+            .BeginAsync(world.Org, null, false, token);
+
+        await new MeterEventBatchTaskHandler(provider.GetRequiredService<IServiceScopeFactory>())
+            .HandleAsync(new MeterEventBatchPayload(batchId, IngestEventBatchHandler.UsageMetric, accepted), scope, token);
+
+        await scope.CommitAsync(token);
     }
 
     /// <summary>Two-request rendezvous: the second arrival releases both callers.</summary>

@@ -25,16 +25,18 @@ public sealed partial class IngestQuotaTests
 {
     private const string RaiseReason = "additional capacity for the pilot";
 
-    private static Task<Guid> SeedTenantAsync(
+    private static async Task<Guid> SeedTenantAsync(
         UsageQuotaWorld counters,
         IngestTestWorld world,
         decimal used,
         decimal limit) =>
-        counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), ProjectId: null, Period(world), "results", used, limit, WarnRatio, Org: world.Org));
+        await counters.SeedCounterAsync(new CounterSeed(
+            Guid.CreateVersion7(), ProjectId: null, await PeriodAsync(world), "results", used, limit, WarnRatio,
+            Org: world.Org));
 
-    private static Task<CounterState?> ReadTenantAsync(UsageQuotaWorld counters, IngestTestWorld world) =>
-        counters.CounterAsync(org: world.Org, project: null, period: Period(world), metric: "results");
+    private static async Task<CounterState?> ReadTenantAsync(UsageQuotaWorld counters, IngestTestWorld world) =>
+        await counters.CounterAsync(
+            org: world.Org, project: null, period: await PeriodAsync(world), metric: "results");
 
     [Fact]
     public async Task IngestEvents_TenantCapBelowProjectCap_Returns429()
@@ -106,11 +108,11 @@ public sealed partial class IngestQuotaTests
 
         var (otherOrg, otherProject) = await world.CreateOtherOrgAsync(Unique.Slug("quota-foreign"));
         await counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), otherProject, Period(world), "results", 1m, 1m, WarnRatio, Org: otherOrg));
+            Guid.CreateVersion7(), otherProject, await PeriodAsync(world), "results", 1m, 1m, WarnRatio, Org: otherOrg));
         await counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), ProjectId: null, Period(world), "results", 1m, 1m, WarnRatio, Org: otherOrg));
-        var foreignProject = (await counters.CounterAsync(otherOrg, otherProject, Period(world))).ShouldNotBeNull();
-        var foreignTenant = (await counters.CounterAsync(otherOrg, project: null, Period(world))).ShouldNotBeNull();
+            Guid.CreateVersion7(), ProjectId: null, await PeriodAsync(world), "results", 1m, 1m, WarnRatio, Org: otherOrg));
+        var foreignProject = (await counters.CounterAsync(otherOrg, otherProject, await PeriodAsync(world))).ShouldNotBeNull();
+        var foreignTenant = (await counters.CounterAsync(otherOrg, project: null, await PeriodAsync(world))).ShouldNotBeNull();
 
         await using var secondHost = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database),
@@ -138,11 +140,11 @@ public sealed partial class IngestQuotaTests
         (await ReadTenantAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(
             2m, "the organization's counter holds only the units it admitted");
         (await ReadAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(2m);
-        (await counters.CounterAsync(world.Org, secondProject, Period(world))).ShouldNotBeNull().Used.ShouldBe(
+        (await counters.CounterAsync(world.Org, secondProject, await PeriodAsync(world))).ShouldNotBeNull().Used.ShouldBe(
             0m, "and the refused project is not charged for the batch it never committed");
 
-        (await counters.CounterAsync(otherOrg, otherProject, Period(world))).ShouldBe(foreignProject);
-        (await counters.CounterAsync(otherOrg, project: null, Period(world))).ShouldBe(foreignTenant);
+        (await counters.CounterAsync(otherOrg, otherProject, await PeriodAsync(world))).ShouldBe(foreignProject);
+        (await counters.CounterAsync(otherOrg, project: null, await PeriodAsync(world))).ShouldBe(foreignTenant);
     }
 
     /// <summary>
@@ -164,7 +166,7 @@ public sealed partial class IngestQuotaTests
         await IngestTestWorld.SeedSlotsAsync(
             _fixture, world.Database, world.Org, plan.RunId, count: 1, boundJti: null);
         await counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), project, Period(world), "results", 0m, 100m, WarnRatio, Org: world.Org));
+            Guid.CreateVersion7(), project, await PeriodAsync(world), "results", 0m, 100m, WarnRatio, Org: world.Org));
 
         return (project, plan);
     }
@@ -200,7 +202,7 @@ public sealed partial class IngestQuotaTests
         // batch's two units.
         await SeedTenantAsync(counters, world, used: 0m, limit: 100m);
         await counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), world.Project, PreviousMonth(world), "results", 0m, 1m, WarnRatio,
+            Guid.CreateVersion7(), world.Project, await PreviousMonthAsync(world), "results", 0m, 1m, WarnRatio,
             Org: world.Org));
 
         var refused = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L));
@@ -241,10 +243,14 @@ public sealed partial class IngestQuotaTests
     }
 
     /// <summary>The counter's tuple version: an update writes a new tuple with a new <c>xmin</c>, so an equal value proves no write.</summary>
-    private static Task<string> CounterXminAsync(IngestTestWorld world) =>
-        world.ScalarAsync<string>(
+    private static async Task<string> CounterXminAsync(IngestTestWorld world)
+    {
+        var period = await PeriodAsync(world);
+
+        return await world.ScalarAsync<string>(
             $"select xmin::text from public.quota_counter where org_id = '{world.Org:D}' "
-            + $"and project_id = '{world.Project:D}' and period = '{Period(world)}' and metric = 'results'");
+            + $"and project_id = '{world.Project:D}' and period = '{period}' and metric = 'results'");
+    }
 
     [Fact]
     public async Task IngestEvents_BlockedByTenantScope_StampsTheTenantCounter()
@@ -319,7 +325,7 @@ public sealed partial class IngestQuotaTests
             .Publish(RequestPrincipal.Service(world.Project, [Permissions.Billing.Write]));
 
         return await provider.GetRequiredService<IMediator>().Send(
-            new RaiseQuotaLimit(world.Project, Period(world), UsageMetric.Results, limit, RaiseReason),
+            new RaiseQuotaLimit(world.Project, await PeriodAsync(world), UsageMetric.Results, limit, RaiseReason),
             TestContext.Current.CancellationToken);
     }
 }

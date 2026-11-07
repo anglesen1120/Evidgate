@@ -131,10 +131,10 @@ internal sealed partial class ParseRawReportHandler
     }
 
     /// <summary>
-    /// The run's state, its project's state and its late window, read under the run's own lock (the same admission facts
-    /// the event batch route reads, plus the lock the synthetic slot's shard index needs).
+    /// The run's state, its project's state and its late window: the admission facts the event batch route reads, shared
+    /// by the write transaction's lock read and the unlocked read the pre-check asks before the fetch.
     /// </summary>
-    private const string RunGateSql = """
+    private const string RunFactsSql = """
         select r.state as "RunState",
                p.status as "ProjectState",
                (r.state = 'incomplete'
@@ -144,8 +144,13 @@ internal sealed partial class ParseRawReportHandler
           join public.project p on p.org_id = r.org_id and p.id = r.project_id
          where r.org_id = @org_id
            and r.id = @run_id
-         for no key update of r
         """;
+
+    /// <summary>
+    /// The same facts under the run's own lock (the same admission facts the event batch route reads, plus the lock the
+    /// synthetic slot's shard index needs).
+    /// </summary>
+    private const string RunGateSql = RunFactsSql + "\nfor no key update of r";
 
     /// <summary>The next free shard index of the run (1 when the run has no slot yet).</summary>
     private const string NextShardIndexSql = """
@@ -222,7 +227,7 @@ internal sealed partial class ParseRawReportHandler
         IJUnitMapper Mapper,
         PlannedExecutionIndex Plan);
 
-    /// <summary>The admission facts of the run, as the one lock read returns them.</summary>
+    /// <summary>The admission facts of the run, as the locked write read and the unlocked pre-check read return them.</summary>
     /// <param name="RunState">The run's state (0031's closed vocabulary).</param>
     /// <param name="ProjectState">The project's state (<c>active</c>, <c>suspended</c>, <c>deleted</c>).</param>
     /// <param name="LateWindowOpen">True when <c>now()</c> is at or before the run's late-window end.</param>
