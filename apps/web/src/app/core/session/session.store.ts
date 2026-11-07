@@ -80,15 +80,15 @@ type SessionDependencies = {
 
 /** The store's public method map; the read-only state signals are added by the store itself. */
 type SessionMethods = {
-  readonly bootstrap: () => Promise<void>;
-  readonly reload: () => Promise<void>;
-  readonly resolveScope: (orgId: string, projectId: string | null) => Promise<ScopeResolution>;
-  readonly has: (code: string) => boolean;
-  readonly adoptCreatedProject: (project: ProjectDto) => void;
-  readonly logout: () => Promise<void>;
-  readonly reauth: () => void;
-  readonly handleUnauthenticated: (attemptedUrl: string | null) => void;
-  readonly onSessionEnd: (callback: () => void) => () => void;
+  bootstrap: () => Promise<void>;
+  reload: () => Promise<void>;
+  resolveScope: (orgId: string, projectId: string | null) => Promise<ScopeResolution>;
+  has: (code: string) => boolean;
+  adoptCreatedProject: (project: ProjectDto) => void;
+  logout: () => Promise<void>;
+  reauth: () => void;
+  handleUnauthenticated: (attemptedUrl: string | null) => void;
+  onSessionEnd: (callback: () => void) => () => void;
 };
 
 /**
