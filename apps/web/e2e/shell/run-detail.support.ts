@@ -1,8 +1,4 @@
-// One review address for the run detail page. Four specs open it with their own combination of
-// per-operation fixtures, so the route, the run id and the session are spelled once and each caller
-// names only the operations it reads. An omitted operation keeps its corpus default, which is why
-// the options are named and not positional. `run` chooses the run state: `canceled` is derived from
-// the `run-detail` document rather than a corpus directory of its own.
+// Per-operation fixture choices keep each run-detail scenario on the real page and session.
 import runDetail from '../../../../fixtures/web-api/run-detail/input.json';
 import {
   localePath,
@@ -25,11 +21,15 @@ export type RunAttemptsVariant = 'ok' | 'empty' | 'unavailable';
 /** The answers the evidence revision list can be asked for. */
 export type RunRevisionsVariant = 'ok' | 'empty' | 'unavailable';
 
-/**
- * The states `GET /v1/runs/{r}` answers. `canceled` is a derived catalog row, because the corpus
- * has no canceled detail document: it is `run-detail` with `state` replaced.
- */
-export type RunStateVariant = 'ready' | 'canceled';
+/** Additional run states and bindings derived from the validated run-detail response. */
+export type RunStateVariant =
+  | 'ready'
+  | 'canceled'
+  | 'many-producers'
+  | 'no-producers'
+  | 'release'
+  | 'releases'
+  | 'release-refused';
 
 /** The operations whose answer a caller chooses; every other one keeps the corpus default. */
 export interface RunDetailAddress {
@@ -38,6 +38,7 @@ export interface RunDetailAddress {
   readonly decision?: RunDecisionVariant;
   readonly attempts?: RunAttemptsVariant;
   readonly revisions?: RunRevisionsVariant;
+  readonly release?: 'forbidden' | 'not-found';
   /** The evidence revision the page pins; omitted, the decision's own revision stays selected. */
   readonly evidenceRevision?: number | undefined;
 }
@@ -60,6 +61,7 @@ export function runDetailPath(options: RunDetailAddress = {}): string {
       ...(attempts === undefined ? [] : [`?fixture.variant.listRunAttempts=${attempts}`]),
       ...(decision === undefined ? [] : [`?fixture.variant.getRunDecision=${decision}`]),
       ...(revisions === undefined ? [] : [`?fixture.variant.listEvidenceRevisions=${revisions}`]),
+      ...(options.release === undefined ? [] : [`?fixture.variant.getRelease=${options.release}`]),
     ],
   );
 }

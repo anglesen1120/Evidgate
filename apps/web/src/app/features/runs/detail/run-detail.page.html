@@ -119,11 +119,25 @@
         [view]="'context'"
       />
       <app-manifest-panel [summary]="store.manifest()" />
-      <!-- Neither region reads: the run response serves no release id to address and no transition
-           history, so the release region shows its shared unavailable state and the timeline marks
-           the current state instead of inventing either. -->
-      <app-release-panel [runId]="run.run_id" [releaseId]="null" />
-      <app-run-timeline [state]="run.state" [afterCancelEvents]="null" />
+      <app-producer-status-table
+        [slots]="producerSlots()"
+        [status]="'ready'"
+        [runAfterCancelEvents]="run.after_cancel_events"
+        [targetAnchor]="producerTargetAnchor()"
+      />
+      <!-- Release reads have their own status and retry window, independent of the run read. -->
+      <app-release-panel
+        [runId]="run.run_id"
+        [releases]="releases()"
+        [selectedReleaseId]="store.selectedReleaseId()"
+        [release]="release()"
+        [status]="store.releaseStatus()"
+        [error]="store.releaseError()"
+        [retryEligible]="releaseRetryEligible()"
+        (selectRelease)="store.selectRelease($event)"
+        (retry)="retryRelease()"
+      />
+      <app-run-timeline [state]="run.state" [afterCancelEvents]="run.after_cancel_events" />
     </div>
   }
 </app-request-state>

@@ -23,9 +23,12 @@ import { RequestStateComponent } from '../../../shared/ui/states/request-state.c
 import { AttemptsTableComponent } from './attempts/attempts-table.component';
 import { DecisionViewComponent } from './decision/decision-view.component';
 import { EvidencePanelComponent } from './evidence/evidence-panel.component';
-import { resolveEvidenceAnchor } from './evidence/run-evidence-anchors';
+import { decodeEvidenceAnchor, resolveEvidenceAnchor } from './evidence/run-evidence-anchors';
 import { ManifestPanelComponent } from './manifest-panel.component';
+import { producerSlotsFromRun } from './producers/producer-slots';
+import { ProducerStatusTableComponent } from './producers/producer-status-table.component';
 import { ReleasePanelComponent } from './release/release-panel.component';
+import { releaseFromDetail } from './release/release-summary';
 import { parsePinnedRevision } from './revision-pin';
 import { RunHeaderComponent } from './run-header.component';
 import { RunDetailStore } from './run-detail.store';
@@ -38,6 +41,7 @@ import { RunTimelineComponent } from './timeline/run-timeline.component';
     RequestStateComponent,
     RunHeaderComponent,
     ManifestPanelComponent,
+    ProducerStatusTableComponent,
     ReleasePanelComponent,
     RunTimelineComponent,
     EvidencePanelComponent,
@@ -58,6 +62,27 @@ import { RunTimelineComponent } from './timeline/run-timeline.component';
 export class RunDetailPage {
   protected readonly store = inject(RunDetailStore);
   protected readonly detailTab = signal('evidence');
+  protected readonly producerSlots = computed(() => {
+    const run = this.store.run();
+    return run === null ? null : producerSlotsFromRun(run);
+  });
+  protected readonly release = computed(() => {
+    const release = this.store.release();
+    return release === null ? null : releaseFromDetail(release);
+  });
+  protected readonly releases = computed(() => {
+    const seen = new Set<string>();
+    return (this.store.run()?.releases ?? [])
+      .filter((binding) => {
+        if (seen.has(binding.release_id)) return false;
+        seen.add(binding.release_id);
+        return true;
+      })
+      .map((binding) => ({
+        releaseId: binding.release_id,
+        name: binding.release_name ?? null,
+      }));
+  });
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
@@ -66,6 +91,9 @@ export class RunDetailPage {
   private runId: string | null = null;
   /** The fragment this view was opened (or navigated) with; the landing target lives there. */
   private readonly fragment = signal<string | null>(null);
+  protected readonly producerTargetAnchor = computed(() =>
+    decodeEvidenceAnchor(this.fragment() ?? ''),
+  );
   /** The fragment landed once: a polling update never moves focus a second time. */
   private landed = false;
   protected readonly retryEligible = signal(false);
@@ -73,6 +101,7 @@ export class RunDetailPage {
   protected readonly decisionRetryEligible = signal(false);
   /** The revision list's own retry window: its failure never gates the decision or attempts. */
   protected readonly revisionsRetryEligible = signal(false);
+  protected readonly releaseRetryEligible = signal(false);
   protected readonly requestStatus = computed<'loading' | 'ready' | 'error'>(() => {
     const status = this.store.status();
     return status === 'idle' || status === 'loading'
@@ -159,14 +188,16 @@ export class RunDetailPage {
     this.watchRetryWindow(this.store.loadError, this.retryEligible);
     this.watchRetryWindow(this.store.decisionError, this.decisionRetryEligible);
     this.watchRetryWindow(this.store.revisionsError, this.revisionsRetryEligible);
-    // Initial-fragment landing: `#attempt-…`/`#producer-…` names a row the attempts table renders
-    // only after its first page lands, so resolution waits for that state. A target on a page the
-    // visitor has not loaded yet is left alone: the landing retries after a visitor-requested page
-    // arrives and never paginates on its own. One landing per fragment, so a poll never moves focus.
+    this.watchRetryWindow(this.store.releaseError, this.releaseRetryEligible);
+    // Producer anchors depend on the run declaration, not a successful attempts read.
+    // Unloaded attempt targets retry only when their requested page arrives.
     effect(() => {
       const fragment = this.fragment();
+      const run = this.store.run();
       const attempts = this.store.attempts();
-      if (fragment === null || attempts === null || this.landed) return;
+      const anchor = decodeEvidenceAnchor(fragment ?? '');
+      if (fragment === null || anchor === null || run === null || this.landed) return;
+      if (anchor.startsWith('attempt-') && attempts === null) return;
       afterNextRender(
         () => {
           if (this.landed || this.fragment() !== fragment) return;
@@ -196,6 +227,10 @@ export class RunDetailPage {
         onCleanup(() => clearTimeout(timer));
       }
     });
+  }
+  protected retryRelease(): void {
+    const selected = this.store.selectedReleaseId();
+    if (selected !== null) void this.store.loadRelease(selected);
   }
   protected retryAttempts(): void {
     void this.store.retryAttempts();

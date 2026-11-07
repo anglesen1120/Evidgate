@@ -139,7 +139,7 @@ describe('settingsIndexGuard (09.7.1-T1.2)', () => {
 
     await harness.navigateByUrl('/orgs/o1/settings');
 
-    // Only Audit is available: Members needs `membership:read`, Quota & Retention `project:read`.
+    // Only Audit is available: Members needs `membership:read`, Quota & Retention `usage:read`.
     expect(router.url).toBe('/orgs/o1/settings/audit');
     expect(renderedTabBody()).toBe('audit');
   });

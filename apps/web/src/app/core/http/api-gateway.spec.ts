@@ -21,7 +21,8 @@ import type { Client, ErrorEnvelope } from '@evidgate/sdk';
 
 import { isApiRequestError } from './api-error';
 import { API_CLIENT } from './api-client';
-import { ApiGateway, type SdkResult } from './api-gateway';
+import { ApiGateway, type CallOptions, type SdkResult } from './api-gateway';
+import { QuotaExceededRelay } from './quota-exceeded-relay';
 
 const REQUEST_ID = 'req-t8-1';
 
@@ -294,6 +295,82 @@ describe('ApiGateway classification (09.1.1-T8)', () => {
         throw rejection;
       }
       expect(rejection.error.retryAfterSeconds).toBe(120);
+    });
+  });
+
+  describe('the quota hook', () => {
+    const QUOTA_EXCEEDED: ErrorEnvelope = {
+      error: {
+        code: 'quota_exceeded',
+        message: 'The billing period has no results left.',
+        request_id: REQUEST_ID,
+        retryable: true,
+      },
+    };
+    let reports: number;
+    let relay: QuotaExceededRelay;
+
+    beforeEach(() => {
+      reports = 0;
+      relay = TestBed.inject(QuotaExceededRelay);
+      relay.register(() => {
+        reports += 1;
+      });
+    });
+
+    /** Runs one refusal and returns it, so both the report and the rejection are observable. */
+    async function refuse(
+      status: number,
+      envelope: ErrorEnvelope,
+      options?: CallOptions,
+    ): Promise<unknown> {
+      return captureRejection(
+        gateway.call<SdkResult>(
+          () => Promise.resolve({ response: envelopeResponse(status, envelope), error: envelope }),
+          options,
+        ),
+      );
+    }
+
+    it('reports one 429 quota_exceeded and still rejects with the typed failure', async () => {
+      const rejection = await refuse(429, QUOTA_EXCEEDED);
+
+      expect(reports).toBe(1);
+      if (!isApiRequestError(rejection)) {
+        throw rejection;
+      }
+      expect(rejection.error.kind).toBe('rate_limited');
+      expect(rejection.error.code).toBe('quota_exceeded');
+    });
+
+    it('reports nothing for a 429 rate_limited burst, which is not a quota answer', async () => {
+      const rejection = await refuse(429, RATE_LIMITED);
+
+      expect(reports).toBe(0);
+      expect(isApiRequestError(rejection)).toBe(true);
+    });
+
+    it('reports nothing for a 409 quota_exceeded, which is a per-object counter, not the summary', async () => {
+      await refuse(409, QUOTA_EXCEEDED);
+
+      expect(reports).toBe(0);
+    });
+
+    it('reports nothing when the caller opts out, which is how the summary read avoids a loop', async () => {
+      await refuse(429, QUOTA_EXCEEDED, { reportQuota: false });
+
+      expect(reports).toBe(0);
+    });
+
+    it('reports nothing for a 2xx, even one carrying a quota-shaped body', async () => {
+      await gateway.call<SdkResult>(() =>
+        Promise.resolve({
+          data: { metrics: [] },
+          response: new Response(JSON.stringify({ metrics: [] }), { status: 200 }),
+        }),
+      );
+
+      expect(reports).toBe(0);
     });
   });
 

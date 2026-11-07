@@ -389,6 +389,8 @@ export const RunDetailStore = signalStore(
           const run = await data.get(runId);
           if (read !== generation) return;
           patchState(store, { run, manifest: manifestFromRun(run), status: 'ready' });
+          const firstRelease = run.releases?.[0];
+          if (firstRelease) void store.selectRelease(firstRelease.release_id);
           void readAttempts(runId, null);
         } catch (failure: unknown) {
           if (read !== generation) return;

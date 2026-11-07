@@ -25,12 +25,7 @@ import type {
   ReleaseStatus,
 } from './release-summary';
 
-/**
- * The release region of one run: the served release header and its components, with the
- * components `bound_runs` bound to this run marked. Nothing is derived beyond that narrowing —
- * a missing release (no id on the run), a refused read and a run that is not bound each render
- * their own state instead of a value-like placeholder.
- */
+/** Release failures stay local; component bindings are narrowed to the run being viewed. */
 @Component({
   selector: 'app-release-panel',
   imports: [
@@ -53,8 +48,9 @@ import type {
   },
 })
 export class ReleasePanelComponent {
-  /** The release the run names, or `null` when the run data carries none. */
-  readonly releaseId = input<string | null>(null);
+  readonly releases = input<readonly { releaseId: string; name: string | null }[]>([]);
+  readonly selectedReleaseId = input<string | null>(null);
+  readonly selectRelease = output<string>();
   /** The run being viewed: only bindings that name it mark a component. */
   readonly runId = input.required<string>();
   readonly release = input<ReleaseDetailViewModel | null>(null);
@@ -70,7 +66,7 @@ export class ReleasePanelComponent {
   protected readonly copy = {
     title: $localize`:@@runs.detail.release.title:Release`,
     loading: $localize`:@@runs.detail.release.loading:Loading release`,
-    unavailable: $localize`:@@runs.detail.release.unavailable:This run does not name a release, so release data is not shown.`,
+    selectLabel: $localize`:@@runs.detail.release.select-label:Releases bound to this run`,
     unbound: $localize`:@@runs.detail.release.unbound:No release bound to this run`,
     name: $localize`:@@runs.detail.release.name:Release name`,
     state: $localize`:@@runs.detail.release.state:State`,

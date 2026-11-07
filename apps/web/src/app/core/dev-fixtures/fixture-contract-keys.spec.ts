@@ -28,11 +28,12 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     // share one, so the selection is unambiguous, and (d) the revision ids a corpus page offers are
     // exactly the documents a read can address — otherwise a page load would ask for an id no
     // document answers and silently get the variant.
-    const keyed = FIXTURE_ROUTE_ROWS.filter((route) => route.idKeyParameter !== undefined);
+    const idKeyed = FIXTURE_ROUTE_ROWS.filter((route) => route.idKeyParameter !== undefined);
     expect(
-      keyed.map((route) => route.operationId),
-      'only getPolicyRevision is id-keyed; a second id-keyed row needs its own pin here',
-    ).toEqual(['getPolicyRevision']);
+      idKeyed.map((route) => route.operationId),
+      'getPolicyRevision and getRelease are id-keyed; a third id-keyed row needs its own pin here',
+    ).toEqual(['getPolicyRevision', 'getRelease']);
+    const keyed = idKeyed.filter((route) => route.operationId === 'getPolicyRevision');
 
     const page = corpusDocument('policy-revisions-list-after-publish');
     const pageItems = (page.body as { items?: readonly { id?: unknown }[] } | undefined)?.items;

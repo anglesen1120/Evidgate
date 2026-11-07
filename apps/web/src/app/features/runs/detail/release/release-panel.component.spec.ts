@@ -54,7 +54,8 @@ const WAIT_FAILURE: ApiError = {
 };
 
 interface PanelInputs {
-  releaseId?: string | null;
+  releases?: readonly { releaseId: string; name: string | null }[];
+  selectedReleaseId?: string | null;
   release?: ReleaseDetailViewModel | null;
   status?: ReleaseStatus;
   error?: ApiError | null;
@@ -76,7 +77,8 @@ describe('ReleasePanelComponent', () => {
 
   async function render(overrides: Partial<PanelInputs> = {}) {
     const inputs: PanelInputs = {
-      releaseId: overrides.releaseId === undefined ? 'rel-1' : overrides.releaseId,
+      releases: overrides.releases ?? [{ releaseId: 'rel-1', name: RELEASE.name }],
+      selectedReleaseId: overrides.selectedReleaseId ?? 'rel-1',
       release: overrides.release === undefined ? RELEASE : overrides.release,
       status: overrides.status ?? 'ready',
       error: overrides.error === undefined ? null : overrides.error,
@@ -84,7 +86,8 @@ describe('ReleasePanelComponent', () => {
     };
     const fixture = TestBed.createComponent(ReleasePanelComponent);
     fixture.componentRef.setInput('runId', RUN_ID);
-    fixture.componentRef.setInput('releaseId', inputs.releaseId);
+    fixture.componentRef.setInput('releases', inputs.releases);
+    fixture.componentRef.setInput('selectedReleaseId', inputs.selectedReleaseId);
     fixture.componentRef.setInput('release', inputs.release);
     fixture.componentRef.setInput('status', inputs.status);
     fixture.componentRef.setInput('error', inputs.error);
@@ -152,22 +155,59 @@ describe('ReleasePanelComponent', () => {
     expect(root.querySelectorAll('[data-release-component]')).toHaveLength(2);
   });
 
-  it('renders the shared unavailable state, not the bound empty copy, when the run names no release', async () => {
-    const { root } = await render({ releaseId: null });
-    expect(root.querySelector('[data-release-unavailable]')).not.toBeNull();
-    expect(root.querySelector('[data-release-unavailable] app-status-pill')).not.toBeNull();
-    expect(root.querySelector('[data-release-unavailable]')?.textContent).toContain(
-      'does not name a release',
+  it('renders unbound copy for an empty releases list', async () => {
+    const { root } = await render({ releases: [] });
+    expect(root.querySelector('[data-release-unbound]')?.textContent).toContain(
+      'No release bound to this run',
     );
-    expect(root.querySelector('[data-release-unbound]')).toBeNull();
     expect(root.querySelector('table')).toBeNull();
+  });
+
+  it('shows no selector for one release', async () => {
+    const { root } = await render();
+    expect(root.querySelector('[role="group"]')).toBeNull();
+    expect(root.querySelector('table')).not.toBeNull();
+  });
+
+  it('labels and selects two releases with the id as a missing-name fallback', async () => {
+    const { fixture, root } = await render({
+      releases: [
+        { releaseId: 'rel-1', name: 'Web\u202e2026' },
+        { releaseId: 'rel-2', name: null },
+      ],
+    });
+    const group = root.querySelector('[role="group"]');
+    expect(group?.getAttribute('aria-label')).toBe('Releases bound to this run');
+    const buttons = [...(group?.querySelectorAll('button') ?? [])];
+    expect(buttons.map((button) => button.textContent?.trim())).toEqual([
+      'Web⟨U+202E⟩2026',
+      'rel-2',
+    ]);
+    expect(buttons.map((button) => button.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
+    const selected = vi.fn();
+    fixture.componentInstance.selectRelease.subscribe(selected);
+    buttons[1]?.click();
+    expect(selected).toHaveBeenCalledExactlyOnceWith('rel-2');
+    fixture.componentRef.setInput('selectedReleaseId', 'rel-2');
+    await fixture.whenStable();
+    expect(buttons[1]?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it.each(['', '   ', '\t\n'])('uses the release id for a blank selector name %j', async (name) => {
+    const { root } = await render({
+      releases: [
+        { releaseId: 'rel-1', name: RELEASE.name },
+        { releaseId: 'rel-2', name },
+      ],
+    });
+    const buttons = root.querySelectorAll('[role="group"] button');
+    expect(buttons[1]?.textContent?.trim()).toBe('rel-2');
   });
 
   it('renders the loading state before a release lands', async () => {
     const { root } = await render({ release: null, status: 'loading' });
     expect(root.querySelector('app-loading-pattern')).not.toBeNull();
     expect(root.querySelector('table')).toBeNull();
-    expect(root.querySelector('[data-release-unavailable]')).toBeNull();
   });
 
   it('renders a retryable error and emits retry from the panel', async () => {

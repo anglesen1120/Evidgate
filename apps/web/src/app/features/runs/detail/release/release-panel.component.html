@@ -1,13 +1,31 @@
 <section hlmCard aria-labelledby="release-title" data-release-panel>
   <h2 hlmCardTitle id="release-title" class="m-0">{{ copy.title }}</h2>
 
-  @if (releaseId() === null) {
-    <!-- The run document carries no release id, so there is nothing to read or guess. -->
-    <p class="m-0 grid justify-items-start gap-(--eg-space-2)" data-release-unavailable>
-      <app-status-pill [tone]="'neutral'" [label]="''" />
-      <span class="text-muted-foreground">{{ copy.unavailable }}</span>
-    </p>
+  @if (releases().length === 0) {
+    <p class="m-0 text-muted-foreground" data-release-unbound>{{ copy.unbound }}</p>
   } @else {
+    @if (releases().length > 1) {
+      <div
+        role="group"
+        [attr.aria-label]="copy.selectLabel"
+        class="flex min-w-0 flex-wrap gap-(--eg-space-2)"
+      >
+        @for (binding of releases(); track binding.releaseId) {
+          <button
+            hlmBtn
+            type="button"
+            [variant]="selectedReleaseId() === binding.releaseId ? 'secondary' : 'outline'"
+            [attr.aria-pressed]="selectedReleaseId() === binding.releaseId"
+            class="min-h-(--eg-control-touch) h-auto max-w-full min-w-0 whitespace-normal text-start transition-none"
+            (click)="selectRelease.emit(binding.releaseId)"
+          >
+            <bdi class="wrap-anywhere">{{
+              display(binding.name?.trim() || binding.releaseId)
+            }}</bdi>
+          </button>
+        }
+      </div>
+    }
     @switch (status()) {
       @case ('loading') {
         <app-loading-pattern [label]="copy.loading" />

@@ -71,7 +71,9 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   {
     id: 'quota-retention',
     segment: 'quota-retention',
-    permission: 'project:read',
+    // The tab's own read is `GET /orgs/{o}/usage/summary`, whose declared permission is
+    // `usage:read`; the sidebar's `quota` entry already uses the same code.
+    permission: 'usage:read',
     phase: 'G1',
     label: $localize`:@@settings.tab.quota-retention:Quota & retention`,
   },
