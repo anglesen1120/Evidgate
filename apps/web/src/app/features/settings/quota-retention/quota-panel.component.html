@@ -22,7 +22,7 @@
     </p>
   } @else if (quota.usageSummary(); as summary) {
     <p class="text-muted-foreground">
-      <span i18n="@@quota.panel.period">Billing period</span>:
+      <span i18n="@@quota.panel.period">Billing period:</span>
       <span data-quota-period>{{ summary.period }}</span>
     </p>
     @if (summary.metrics.length === 0) {

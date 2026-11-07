@@ -41,7 +41,7 @@ const EVIDENCE_TAB: Record<ShellLocale, string> = {
 
 const DECISION_TAB: Record<ShellLocale, string> = {
   en: 'Latest live decision',
-  vi: 'Quyết định chính thức mới nhất',
+  vi: 'Quyết định hiện hành mới nhất',
 };
 
 /** `Revision N · <timestamp> UTC` is the trigger and the option text; the number is the key. */

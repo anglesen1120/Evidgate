@@ -17,8 +17,8 @@ const COPY: Record<
     timeline: 'Dòng thời gian trạng thái lượt chạy',
     release: 'Bản phát hành',
     note: 'Các sự kiện đến sau khi hủy vẫn được giữ làm bằng chứng và không bao giờ làm lượt chạy hoàn tất.',
-    unbound: 'Không có bản phát hành nào gắn với lần chạy này',
-    selector: 'Các bản phát hành gắn với lần chạy này',
+    unbound: 'Không có bản phát hành nào gắn với lượt chạy này',
+    selector: 'Các bản phát hành gắn với lượt chạy này',
   },
 };
 

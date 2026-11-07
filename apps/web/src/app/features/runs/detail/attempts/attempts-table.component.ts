@@ -84,6 +84,11 @@ export class AttemptsTableComponent {
         : 0,
   });
   protected readonly visibleGroups = computed(() => this.pages()[this.page()] ?? []);
+  protected readonly pageLabel = computed(() => {
+    const page = this.page() + 1;
+    const pages = this.pages().length;
+    return $localize`:@@runs.detail.attempts.page:Page ${page}:page: / ${pages}:pages:`;
+  });
   protected readonly copy = {
     title: $localize`:@@runs.detail.attempts.title:Attempts`,
     scrollRegion: $localize`:@@runs.detail.attempts.scroll-region:Attempts table`,
@@ -103,7 +108,6 @@ export class AttemptsTableComponent {
     candidate: $localize`:@@runs.detail.attempts.candidate:Healing candidate`,
     shadow: $localize`:@@runs.detail.attempts.shadow:Shadow evaluation`,
     official: $localize`:@@runs.detail.attempts.official:Official evaluation`,
-    page: $localize`:@@runs.detail.attempts.page:Page`,
     previous: $localize`:@@runs.detail.attempts.previous:Previous page`,
     next: $localize`:@@runs.detail.attempts.next:Next page`,
   };

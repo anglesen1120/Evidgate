@@ -48,7 +48,7 @@
       </trans-unit>
       <trans-unit id="auth.login.destination-heading" datatype="html">
         <source>Your return destination</source>
-        <target>Đích trở về của bạn</target>
+        <target>Đích quay về của bạn</target>
       </trans-unit>
       <trans-unit id="auth.login.saved-destination" datatype="html">
         <source>After sign-in, continue to your saved workspace destination. Access is checked before it opens.</source>
@@ -327,7 +327,7 @@
       </trans-unit>
       <trans-unit id="shared.label-chip.shadow" datatype="html">
         <source>Shadow evaluation</source>
-        <target>Đánh giá shadow</target>
+        <target>Đánh giá đối chứng</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/annotations/label-chip.component.ts</context>
           <context context-type="linenumber">42,45</context>
@@ -575,7 +575,7 @@
       </trans-unit>
       <trans-unit id="shared.conflict.title" datatype="html">
         <source>Review conflict</source>
-        <target>Xem xét xung đột</target>
+        <target>Xung đột khi xem xét</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
           <context context-type="linenumber">36,38</context>
@@ -599,7 +599,7 @@
       </trans-unit>
       <trans-unit id="shared.conflict.current-revision" datatype="html">
         <source>Current revision</source>
-        <target>Bản sửa đổi hiện tại</target>
+        <target>Phiên bản hiện tại</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
           <context context-type="linenumber">47,50</context>
@@ -607,7 +607,7 @@
       </trans-unit>
       <trans-unit id="shared.conflict.revision-unavailable" datatype="html">
         <source>Revision unavailable</source>
-        <target>Chưa có bản sửa đổi</target>
+        <target>Chưa có phiên bản</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/conflict/conflict-dialog.component.ts</context>
           <context context-type="linenumber">52,57</context>
@@ -995,7 +995,7 @@
       </trans-unit>
       <trans-unit id="shared.gallery.request-host" datatype="html">
         <source>Route-level request host</source>
-        <target>Vùng trạng thái yêu cầu của trang</target>
+        <target>Thành phần hiển thị trạng thái yêu cầu cấp trang</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
           <context context-type="linenumber">231,235</context>
@@ -1131,7 +1131,7 @@
       </trans-unit>
       <trans-unit id="shared.gallery.reason-linked" datatype="html">
         <source>Review the missing artifact example</source>
-        <target>Xem ví dụ về hiện vật bị thiếu</target>
+        <target>Xem ví dụ về tệp bằng chứng bị thiếu</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
           <context context-type="linenumber">128</context>
@@ -1139,7 +1139,7 @@
       </trans-unit>
       <trans-unit id="shared.gallery.reason-plain" datatype="html">
         <source>The declared producer has not supplied evidence.</source>
-        <target>Bên tạo bằng chứng đã khai báo chưa cung cấp bằng chứng.</target>
+        <target>Nguồn gửi dữ liệu đã khai báo chưa cung cấp bằng chứng.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.ts</context>
           <context context-type="linenumber">133</context>
@@ -1659,7 +1659,7 @@
       </trans-unit>
       <trans-unit id="shell.nav.knowledge" datatype="html">
         <source>Knowledge lineage</source>
-        <target>Tri thức và thu hồi</target>
+        <target>Nguồn gốc tri thức</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
           <context context-type="linenumber">208</context>
@@ -1667,7 +1667,7 @@
       </trans-unit>
       <trans-unit id="shell.nav.availability" datatype="html">
         <source>Availability</source>
-        <target>Trạng thái sửa lỗi</target>
+        <target>Tính sẵn sàng</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
           <context context-type="linenumber">220</context>
@@ -1683,7 +1683,7 @@
       </trans-unit>
       <trans-unit id="shell.nav.suites" datatype="html">
         <source>Suite composition</source>
-        <target>Bộ kiểm thử</target>
+        <target>Thành phần bộ kiểm thử</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/nav/nav-registry.ts</context>
           <context context-type="linenumber">246</context>
@@ -1843,7 +1843,7 @@
       </trans-unit>
       <trans-unit id="shell.page.unavailable.explanation" datatype="html">
         <source>We could not load your workspace. Try again.</source>
-        <target>Không thể tải không gian làm việc. Vui lòng thử lại.</target>
+        <target>Không thể tải không gian làm việc. Hãy thử lại.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/pages/service-unavailable.page.ts</context>
           <context context-type="linenumber">24</context>
@@ -1867,7 +1867,7 @@
       </trans-unit>
       <trans-unit id="shell.page.unavailable.failed" datatype="html">
         <source>The workspace is still unavailable. Try again later.</source>
-        <target>Không gian làm việc vẫn chưa khả dụng. Vui lòng thử lại sau.</target>
+        <target>Không gian làm việc vẫn chưa khả dụng. Hãy thử lại sau.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/pages/service-unavailable.page.ts</context>
           <context context-type="linenumber">27</context>
@@ -1883,7 +1883,7 @@
       </trans-unit>
       <trans-unit id="shell.stub.body" datatype="html">
         <source> This screen arrives with its own feature story. Its route, permission guard and navigation entry are in place so the shell can be reviewed end to end. </source>
-        <target>Màn hình này sẽ ra mắt cùng câu chuyện tính năng của riêng nó. Tuyến đường, bộ chặn quyền và mục điều hướng đã được đặt sẵn để có thể đánh giá toàn bộ khung ứng dụng từ đầu đến cuối.</target>
+        <target>Màn hình này sẽ ra mắt cùng câu chuyện tính năng của riêng nó. Đường dẫn, bộ chặn quyền và mục điều hướng đã được đặt sẵn để có thể đánh giá toàn bộ khung ứng dụng từ đầu đến cuối.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shell/stub/route-stub.page.ts</context>
           <context context-type="linenumber">45,51</context>
@@ -1999,7 +1999,7 @@
       </trans-unit>
       <trans-unit id="onboarding.evidence.tokens" datatype="html">
         <source>Ingest tokens</source>
-        <target>Token thu thập dữ liệu</target>
+        <target>Mã nạp dữ liệu</target>
       </trans-unit>
       <trans-unit id="onboarding.evidence.sample" datatype="html">
         <source>Sample run ID</source>
@@ -2147,11 +2147,11 @@
       </trans-unit>
       <trans-unit id="onboarding.connect.token-name" datatype="html">
         <source>Token name</source>
-        <target>Tên mã</target>
+        <target>Tên mã nạp dữ liệu</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.token-name-error" datatype="html">
         <source>Enter a token name between 1 and <x id="MAX_TOKEN_NAME_LENGTH" equiv-text="${MAX_TOKEN_NAME_LENGTH}"/> characters.</source>
-        <target>Nhập tên mã dài từ 1 đến <x id="MAX_TOKEN_NAME_LENGTH"/> ký tự.</target>
+        <target>Nhập tên mã nạp dữ liệu dài từ 1 đến <x id="MAX_TOKEN_NAME_LENGTH"/> ký tự.</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.token-submit" datatype="html">
         <source>Create ingest token</source>
@@ -2211,7 +2211,7 @@
       </trans-unit>
       <trans-unit id="onboarding.connect.rotate" datatype="html">
         <source>Rotate token</source>
-        <target>Thay mã</target>
+        <target>Thay mã nạp dữ liệu</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.overlap" datatype="html">
         <source>The previous token continues verifying until (UTC):</source>
@@ -2283,7 +2283,7 @@
       </trans-unit>
       <trans-unit id="onboarding.connect.rotated" datatype="html">
         <source>Rotated</source>
-        <target>Đã thay mã</target>
+        <target>Đã thay mã nạp dữ liệu</target>
       </trans-unit>
       <trans-unit id="onboarding.connect.expired" datatype="html">
         <source>Expired</source>
@@ -2307,7 +2307,7 @@
       </trans-unit>
       <trans-unit id="onboarding.connect.rotate-named" datatype="html">
         <source>Rotate token <x id="TOKEN_NAME" equiv-text="${name}"/></source>
-        <target>Thay mã <x id="TOKEN_NAME"/></target>
+        <target>Thay mã nạp dữ liệu <x id="TOKEN_NAME"/></target>
       </trans-unit>
       <trans-unit id="onboarding.health.title" datatype="html">
         <source>Connection health</source>
@@ -2675,7 +2675,7 @@
       <trans-unit id="runs.list.filter-hint" datatype="html"><source>Decision and ref name filter the server list. State and run scope filter loaded runs only. Load more to search older runs.</source><target>Quyết định và tên tham chiếu lọc danh sách trên máy chủ. Trạng thái và phạm vi chỉ lọc các lượt chạy đã tải. Tải thêm để tìm các lượt chạy cũ hơn.</target></trans-unit>
       <trans-unit id="runs.list.state-filter" datatype="html"><source>State in loaded runs</source><target>Trạng thái trong các lượt đã tải</target></trans-unit>
       <trans-unit id="runs.list.decision-filter" datatype="html"><source>Decision</source><target>Quyết định</target></trans-unit>
-      <trans-unit id="runs.list.decision-hint" datatype="html"><source>The latest live evaluation determines the decision. Not evaluated means no live evaluation yet.</source><target>Quyết định dựa trên lần đánh giá chính thức mới nhất. Chưa đánh giá nghĩa là chưa có lần đánh giá chính thức nào.</target></trans-unit>
+      <trans-unit id="runs.list.decision-hint" datatype="html"><source>The latest live evaluation determines the decision. Not evaluated means no live evaluation yet.</source><target>Quyết định dựa trên lần đánh giá hiện hành mới nhất. Chưa đánh giá nghĩa là chưa có lần đánh giá hiện hành nào.</target></trans-unit>
       <trans-unit id="runs.list.scope-filter" datatype="html"><source>Scope in loaded runs</source><target>Phạm vi trong các lượt đã tải</target></trans-unit>
       <trans-unit id="runs.list.ref-filter" datatype="html"><source>Ref name (exact match)</source><target>Tên tham chiếu (khớp chính xác)</target></trans-unit>
       <trans-unit id="runs.list.any" datatype="html"><source>All</source><target>Tất cả</target></trans-unit>
@@ -2685,7 +2685,7 @@
       <trans-unit id="runs.list.apply" datatype="html"><source>Apply filters</source><target>Áp dụng bộ lọc</target></trans-unit>
       <trans-unit id="runs.list.clear" datatype="html"><source>Clear filters</source><target>Xóa bộ lọc</target></trans-unit>
       <trans-unit id="runs.list.empty-title" datatype="html"><source>No runs recorded</source><target>Chưa ghi nhận lượt chạy nào</target></trans-unit>
-      <trans-unit id="runs.list.empty-description" datatype="html"><source>Runs will appear here when a producer creates them.</source><target>Các lượt chạy sẽ xuất hiện khi bên gửi tạo chúng.</target></trans-unit>
+      <trans-unit id="runs.list.empty-description" datatype="html"><source>Runs will appear here when a producer creates them.</source><target>Các lượt chạy sẽ xuất hiện khi nguồn gửi dữ liệu tạo chúng.</target></trans-unit>
       <trans-unit id="runs.list.filtered-title" datatype="html"><source>No matching runs in the loaded rows</source><target>Không có lượt chạy khớp trong các hàng đã tải</target></trans-unit>
       <trans-unit id="runs.list.filtered-description" datatype="html"><source>No loaded runs match these filters. Load more when available, or clear filters.</source><target>Không có lượt chạy đã tải nào khớp các bộ lọc này. Tải thêm khi có thể hoặc xóa bộ lọc.</target></trans-unit>
       <trans-unit id="runs.list.pagination" datatype="html"><source>More runs</source><target>Các lượt chạy tiếp theo</target></trans-unit>
@@ -2729,8 +2729,8 @@
       <trans-unit id="onboarding.enable.unchanged" datatype="html"><source>This project was already enabled in advisory mode, so this confirmation changed nothing on the server.</source><target>Dự án này đã được bật ở chế độ cố vấn, nên lần xác nhận này không thay đổi gì trên máy chủ.</target></trans-unit>
       <trans-unit id="onboarding.enable.mode" datatype="html"><source>Mode</source><target>Chế độ</target></trans-unit>
       <trans-unit id="onboarding.enable.mode-advisory" datatype="html"><source>Advisory</source><target>Cố vấn</target></trans-unit>
-      <trans-unit id="onboarding.enable.revision" datatype="html"><source>Policy revision</source><target>Bản sửa chính sách</target></trans-unit>
-      <trans-unit id="onboarding.enable.hash" datatype="html"><source>Revision hash</source><target>Mã băm bản sửa</target></trans-unit>
+      <trans-unit id="onboarding.enable.revision" datatype="html"><source>Policy revision</source><target>Phiên bản chính sách</target></trans-unit>
+      <trans-unit id="onboarding.enable.hash" datatype="html"><source>Revision hash</source><target>Mã băm phiên bản</target></trans-unit>
       <trans-unit id="onboarding.enable.activated-at" datatype="html"><source>Activated (UTC)</source><target>Đã kích hoạt (UTC)</target></trans-unit>
       <trans-unit id="onboarding.enable.replaces-active" datatype="html"><source>Confirming activates the default advisory policy for this project. It can only replace a policy activated after this page read that the project had no activation.</source><target>Xác nhận này sẽ kích hoạt chính sách cố vấn mặc định cho dự án này. Nó chỉ có thể thay thế một chính sách được kích hoạt sau khi trang này đọc được rằng dự án chưa có kích hoạt nào.</target></trans-unit>
       <trans-unit id="onboarding.enable.activation-unreadable" datatype="html"><source>The project's activation state could not be read with your permissions. Confirmation is disabled.</source><target>Không thể đọc trạng thái kích hoạt của dự án với quyền hiện có của bạn. Việc xác nhận đã bị tắt.</target></trans-unit>
@@ -2744,7 +2744,7 @@
       <trans-unit id="onboarding.enable.read-wait" datatype="html"><source>The server asked you to wait before reading the activation again: <x id="remaining" equiv-text="${remaining}"/> s left of the <x id="supplied" equiv-text="${supplied}"/> s it named.</source><target>Máy chủ yêu cầu chờ trước khi đọc lại trạng thái kích hoạt: còn <x id="remaining" equiv-text="${remaining}"/> giây trong <x id="supplied" equiv-text="${supplied}"/> giây đã nêu.</target></trans-unit>
       <trans-unit id="onboarding.enable.project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
       <trans-unit id="onboarding.enable.activated-by" datatype="html"><source>Activated by</source><target>Được kích hoạt bởi</target></trans-unit>
-      <trans-unit id="onboarding.enable.previous-revision" datatype="html"><source>Revision this replaced</source><target>Bản sửa đã bị thay thế</target></trans-unit>
+      <trans-unit id="onboarding.enable.previous-revision" datatype="html"><source>Revision this replaced</source><target>Phiên bản đã bị thay thế</target></trans-unit>
       <trans-unit id="onboarding.enable.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
       <trans-unit id="runs.detail.title" datatype="html"><source>Run detail</source><target>Chi tiết lượt chạy</target></trans-unit>
       <trans-unit id="runs.detail.sections" datatype="html"><source>Run sections</source><target>Các mục của lượt chạy</target></trans-unit>
@@ -2772,19 +2772,19 @@
       <trans-unit id="runs.detail.manifest-hash" datatype="html"><source>Manifest hash</source><target>Mã băm bản kê</target></trans-unit>
       <trans-unit id="runs.detail.suite" datatype="html"><source>Suite revision</source><target>Phiên bản bộ kiểm thử</target></trans-unit>
       <trans-unit id="runs.detail.shards" datatype="html"><source>Shard count</source><target>Số phân đoạn</target></trans-unit>
-      <trans-unit id="runs.detail.producers" datatype="html"><source>Declared producers</source><target>Bên gửi đã khai báo</target></trans-unit>
-      <trans-unit id="runs.detail.no-producers" datatype="html"><source>No producers declared</source><target>Chưa khai báo bên gửi nào</target></trans-unit>
+      <trans-unit id="runs.detail.producers" datatype="html"><source>Declared producers</source><target>Nguồn gửi dữ liệu đã khai báo</target></trans-unit>
+      <trans-unit id="runs.detail.no-producers" datatype="html"><source>No producers declared</source><target>Chưa khai báo nguồn gửi dữ liệu nào</target></trans-unit>
       <trans-unit id="runs.detail.copy-hash" datatype="html"><source>Copy full manifest hash</source><target>Sao chép toàn bộ mã băm bản kê</target></trans-unit>
       <trans-unit id="runs.detail.copied" datatype="html"><source>Manifest hash copied</source><target>Đã sao chép mã băm bản kê</target></trans-unit>
       <trans-unit id="runs.detail.copy-failed" datatype="html"><source>Copy failed. Select and copy the full hash shown above.</source><target>Không thể sao chép. Hãy chọn và sao chép toàn bộ mã băm ở trên.</target></trans-unit>
       <trans-unit id="runs.detail.release.title" datatype="html"><source>Release</source><target>Bản phát hành</target></trans-unit>
       <trans-unit id="runs.detail.release.loading" datatype="html"><source>Loading release</source><target>Đang tải bản phát hành</target></trans-unit>
-      <trans-unit id="runs.detail.release.select-label" datatype="html"><source>Releases bound to this run</source><target>Các bản phát hành gắn với lần chạy này</target></trans-unit>
-      <trans-unit id="runs.detail.release.unbound" datatype="html"><source>No release bound to this run</source><target>Không có bản phát hành nào gắn với lần chạy này</target></trans-unit>
+      <trans-unit id="runs.detail.release.select-label" datatype="html"><source>Releases bound to this run</source><target>Các bản phát hành gắn với lượt chạy này</target></trans-unit>
+      <trans-unit id="runs.detail.release.unbound" datatype="html"><source>No release bound to this run</source><target>Không có bản phát hành nào gắn với lượt chạy này</target></trans-unit>
       <trans-unit id="runs.detail.release.name" datatype="html"><source>Release name</source><target>Tên bản phát hành</target></trans-unit>
       <trans-unit id="runs.detail.release.state" datatype="html"><source>State</source><target>Trạng thái</target></trans-unit>
       <trans-unit id="runs.detail.release.version" datatype="html"><source>Version</source><target>Phiên bản</target></trans-unit>
-      <trans-unit id="runs.detail.release.bound-run" datatype="html"><source>Bound run</source><target>Lần chạy được gắn</target></trans-unit>
+      <trans-unit id="runs.detail.release.bound-run" datatype="html"><source>Bound run</source><target>Lượt chạy được gắn</target></trans-unit>
       <trans-unit id="runs.detail.release.draft" datatype="html"><source>Draft</source><target>Bản nháp</target></trans-unit>
       <trans-unit id="runs.detail.release.active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
       <trans-unit id="runs.detail.release.components" datatype="html"><source>Release components</source><target>Thành phần bản phát hành</target></trans-unit>
@@ -2806,7 +2806,7 @@
       <trans-unit id="runs.detail.producers.title" datatype="html"><source>Producers</source><target>Nguồn gửi dữ liệu</target></trans-unit>
       <trans-unit id="runs.detail.producers.loading" datatype="html"><source>Loading producers</source><target>Đang tải nguồn gửi dữ liệu</target></trans-unit>
       <trans-unit id="runs.detail.producers.empty" datatype="html"><source>No declared producers</source><target>Không có nguồn gửi dữ liệu được khai báo</target></trans-unit>
-      <trans-unit id="runs.detail.producers.empty-description" datatype="html"><source>This run declares no producer slots. This is not a collection result.</source><target>Lần chạy này không khai báo ô nguồn gửi dữ liệu nào. Đây không phải kết quả thu thập.</target></trans-unit>
+      <trans-unit id="runs.detail.producers.empty-description" datatype="html"><source>This run declares no producer slots. This is not a collection result.</source><target>Lượt chạy này không khai báo ô nguồn gửi dữ liệu nào. Đây không phải kết quả thu thập.</target></trans-unit>
       <trans-unit id="runs.detail.producers.producer" datatype="html"><source>Producer slot</source><target>Ô nguồn gửi dữ liệu</target></trans-unit>
       <trans-unit id="runs.detail.producers.identity" datatype="html"><source>Bound identity state</source><target>Trạng thái định danh đã liên kết</target></trans-unit>
       <trans-unit id="runs.detail.producers.finalize" datatype="html"><source>Finalize status</source><target>Trạng thái chốt dữ liệu</target></trans-unit>
@@ -2815,13 +2815,13 @@
       <trans-unit id="runs.detail.producers.mismatch" datatype="html"><source>Count does not match expected</source><target>Số lượng không khớp dự kiến</target></trans-unit>
       <trans-unit id="runs.detail.producers.events" datatype="html"><source>Informational events</source><target>Sự kiện chỉ mang tính thông tin</target></trans-unit>
       <trans-unit id="runs.detail.producers.no-events" datatype="html"><source>No informational events</source><target>Không có sự kiện chỉ mang tính thông tin</target></trans-unit>
-      <trans-unit id="runs.detail.producers.event-note" datatype="html"><source>Stale-epoch and after-cancel event counts are informational and do not affect completeness.</source><target>Số sự kiện thuộc epoch cũ và sau khi hủy chỉ mang tính thông tin, không ảnh hưởng đến tính đầy đủ.</target></trans-unit>
-      <trans-unit id="runs.detail.producers.stale-epoch" datatype="html"><source><x id="count" equiv-text="count"/> stale-epoch events</source><target><x id="count"/> sự kiện thuộc epoch cũ</target></trans-unit>
+      <trans-unit id="runs.detail.producers.event-note" datatype="html"><source>Stale-epoch and after-cancel event counts are informational and do not affect completeness.</source><target>Số sự kiện thuộc thế hệ cũ và sau khi hủy chỉ mang tính thông tin, không ảnh hưởng đến tính đầy đủ.</target></trans-unit>
+      <trans-unit id="runs.detail.producers.stale-epoch" datatype="html"><source><x id="count" equiv-text="count"/> stale-epoch events</source><target><x id="count"/> sự kiện thuộc thế hệ cũ</target></trans-unit>
       <trans-unit id="runs.detail.producers.after-cancel" datatype="html"><source><x id="count" equiv-text="count"/> after-cancel events</source><target><x id="count"/> sự kiện sau khi hủy</target></trans-unit>
-      <trans-unit id="runs.detail.producers.stale-epoch-one" datatype="html"><source>1 stale-epoch event</source><target>1 sự kiện thuộc epoch cũ</target></trans-unit>
+      <trans-unit id="runs.detail.producers.stale-epoch-one" datatype="html"><source>1 stale-epoch event</source><target>1 sự kiện thuộc thế hệ cũ</target></trans-unit>
       <trans-unit id="runs.detail.producers.after-cancel-one" datatype="html"><source>1 after-cancel event</source><target>1 sự kiện sau khi hủy</target></trans-unit>
-      <trans-unit id="runs.detail.producers.run-after-cancel-one" datatype="html"><source>1 after-cancel event for this run</source><target>1 sự kiện sau khi hủy của lần chạy này</target></trans-unit>
-      <trans-unit id="runs.detail.producers.run-after-cancel" datatype="html"><source><x id="count" equiv-text="count"/> after-cancel events for this run</source><target><x id="count"/> sự kiện sau khi hủy của lần chạy này</target></trans-unit>
+      <trans-unit id="runs.detail.producers.run-after-cancel-one" datatype="html"><source>1 after-cancel event for this run</source><target>1 sự kiện sau khi hủy của lượt chạy này</target></trans-unit>
+      <trans-unit id="runs.detail.producers.run-after-cancel" datatype="html"><source><x id="count" equiv-text="count"/> after-cancel events for this run</source><target><x id="count"/> sự kiện sau khi hủy của lượt chạy này</target></trans-unit>
       <trans-unit id="runs.detail.producers.previous" datatype="html"><source>Previous producers</source><target>Nguồn gửi dữ liệu trước</target></trans-unit>
       <trans-unit id="runs.detail.producers.next" datatype="html"><source>Next producers</source><target>Nguồn gửi dữ liệu tiếp theo</target></trans-unit>
       <trans-unit id="runs.detail.producers.pagination" datatype="html"><source>Producer pages</source><target>Các trang nguồn gửi dữ liệu</target></trans-unit>
@@ -2831,7 +2831,7 @@
       <trans-unit id="runs.detail.timeline.reached" datatype="html"><source>Reached</source><target>Đã qua</target></trans-unit>
       <trans-unit id="runs.detail.timeline.current" datatype="html"><source>Current step</source><target>Bước hiện tại</target></trans-unit>
       <trans-unit id="runs.detail.timeline.upcoming" datatype="html"><source>Not reached yet</source><target>Chưa tới bước này</target></trans-unit>
-      <trans-unit id="runs.detail.timeline.not-reached" datatype="html"><source>Not reached</source><target>Không tới được</target></trans-unit>
+      <trans-unit id="runs.detail.timeline.not-reached" datatype="html"><source>Not reached</source><target>Không đạt tới</target></trans-unit>
       <trans-unit id="runs.detail.timeline.unrecorded" datatype="html"><source>Not recorded</source><target>Không được ghi nhận</target></trans-unit>
       <trans-unit id="runs.detail.timeline.step-status" datatype="html"><source>Step status</source><target>Trạng thái bước</target></trans-unit>
       <trans-unit id="runs.detail.timeline.step-times" datatype="html"><source>Step times are not available yet</source><target>Chưa có thời điểm của từng bước</target></trans-unit>
@@ -2847,20 +2847,20 @@
       <trans-unit id="runs.detail.attempts.raw" datatype="html"><source>Raw status</source><target>Trạng thái gốc</target></trans-unit>
       <trans-unit id="runs.detail.attempts.normalised" datatype="html"><source>Normalised status</source><target>Trạng thái chuẩn hóa</target></trans-unit>
       <trans-unit id="runs.detail.attempts.duration" datatype="html"><source>Duration</source><target>Thời lượng</target></trans-unit>
-      <trans-unit id="runs.detail.attempts.artifacts" datatype="html"><source>Artifacts</source><target>Hiện vật</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.artifacts" datatype="html"><source>Artifacts</source><target>Tệp bằng chứng</target></trans-unit>
       <trans-unit id="runs.detail.attempts.empty" datatype="html"><source>No attempts recorded</source><target>Chưa ghi nhận lần thử nào</target></trans-unit>
       <trans-unit id="runs.detail.attempts.pre-healing" datatype="html"><source>Pre-healing failure</source><target>Lỗi trước khi tự sửa</target></trans-unit>
       <trans-unit id="runs.detail.attempts.candidate" datatype="html"><source>Healing candidate</source><target>Ứng viên tự sửa</target></trans-unit>
       <trans-unit id="runs.detail.attempts.shadow" datatype="html"><source>Shadow evaluation</source><target>Đánh giá đối chứng</target></trans-unit>
       <trans-unit id="runs.detail.attempts.official" datatype="html"><source>Official evaluation</source><target>Đánh giá chính thức</target></trans-unit>
-      <trans-unit id="runs.detail.attempts.page" datatype="html"><source>Page</source><target>Trang</target></trans-unit>
+      <trans-unit id="runs.detail.attempts.page" datatype="html"><source>Page <x id="page" equiv-text="page"/> / <x id="pages" equiv-text="pages"/></source><target>Trang <x id="page"/> / <x id="pages"/></target></trans-unit>
       <trans-unit id="runs.detail.attempts.previous" datatype="html"><source>Previous page</source><target>Trang trước</target></trans-unit>
       <trans-unit id="runs.detail.attempts.next" datatype="html"><source>Next page</source><target>Trang sau</target></trans-unit>
       <trans-unit id="runs.detail.attempts.healing-candidates" datatype="html"><source>Healing candidates</source><target>Ứng viên tự sửa</target></trans-unit>
       <trans-unit id="runs.detail.attempts.more" datatype="html"><source>Load more attempts</source><target>Tải thêm lần thử</target></trans-unit>
       <trans-unit id="runs.detail.attempts.loading-more" datatype="html"><source>Loading more attempts</source><target>Đang tải thêm lần thử</target></trans-unit>
       <trans-unit id="runs.detail.attempts.more-loaded" datatype="html"><source>More attempts loaded</source><target>Đã tải thêm lần thử</target></trans-unit>
-      <trans-unit id="runs.detail.environment-revision" datatype="html"><source>Revision</source><target>Bản sửa đổi</target></trans-unit>
+      <trans-unit id="runs.detail.environment-revision" datatype="html"><source>Revision</source><target>Phiên bản</target></trans-unit>
       <trans-unit id="suites.composition.suite-composition" datatype="html"><source>Suite composition</source><target>Thành phần bộ kiểm thử</target></trans-unit>
       <trans-unit id="suites.composition.revision" datatype="html"><source>Revision</source><target>Bản sửa đổi</target></trans-unit>
       <trans-unit id="suites.composition.status" datatype="html"><source>Status</source><target>Trạng thái</target></trans-unit>
@@ -2927,7 +2927,7 @@
       </trans-unit>
       <trans-unit id="runs.evidence.no-evaluation" datatype="html">
         <source>No live evaluation recorded for this revision</source>
-        <target>Chưa ghi nhận đánh giá chính thức cho phiên bản này</target>
+        <target>Chưa ghi nhận đánh giá hiện hành cho phiên bản này</target>
       </trans-unit>
       <trans-unit id="runs.evidence.revision-label" datatype="html">
         <source>Evidence revision</source>
@@ -2975,11 +2975,11 @@
       </trans-unit>
       <trans-unit id="runs.evidence.empty-description" datatype="html">
         <source>Collection may still be in progress. No evidence verdict is inferred.</source>
-        <target>Quá trình thu thập có thể vẫn đang diễn ra. Không suy diễn kết luận từ bằng chứng.</target>
+        <target>Quá trình thu thập có thể vẫn đang diễn ra. Không có kết luận nào được suy ra từ bằng chứng.</target>
       </trans-unit>
       <trans-unit id="runs.evidence.selected-unavailable" datatype="html">
         <source>Selected revision unavailable</source>
-        <target>Không có phiên bản đã chọn</target>
+        <target>Phiên bản đã chọn không khả dụng</target>
       </trans-unit>
       <trans-unit id="runs.evidence.search-older" datatype="html">
         <source>This revision is not in the loaded pages. Load older revisions to look for it.</source>
@@ -2987,7 +2987,7 @@
       </trans-unit>
       <trans-unit id="runs.evidence.evaluation-reference" datatype="html">
         <source>Live evaluation reference</source>
-        <target>Mã tham chiếu đánh giá chính thức</target>
+        <target>Mã tham chiếu đánh giá hiện hành</target>
       </trans-unit>
       <trans-unit id="runs.evidence.historical-details" datatype="html">
         <source>Historical decision details are not available from this reference.</source>
@@ -2999,11 +2999,11 @@
       </trans-unit>
       <trans-unit id="runs.evidence.invalid-body" datatype="html">
         <source>Evidence response unavailable: <x id="CODE" equiv-text="${diagnostic}"/></source>
-        <target>Không có phản hồi bằng chứng hợp lệ: <x id="CODE"/></target>
+        <target>Phản hồi bằng chứng không khả dụng: <x id="CODE"/></target>
       </trans-unit>
       <trans-unit id="runs.evidence.producer-link" datatype="html">
         <source>View producer <x id="SHARD" equiv-text="${shard}"/></source>
-        <target>Xem producer <x id="SHARD"/></target>
+        <target>Xem nguồn gửi dữ liệu <x id="SHARD"/></target>
       </trans-unit>
       <trans-unit id="runs.evidence.attempt-link" datatype="html">
         <source>View attempt <x id="ATTEMPT" equiv-text="${target.attemptNo}"/> for <x id="EXECUTION_KEY" equiv-text="${executionKey}"/></source>
@@ -3011,7 +3011,7 @@
       </trans-unit>
       <trans-unit id="runs.evidence.reason.missing-shard" datatype="html">
         <source>Shard evidence is missing.</source>
-        <target>Thiếu bằng chứng từ phân mảnh.</target>
+        <target>Thiếu bằng chứng từ phân đoạn.</target>
       </trans-unit>
       <trans-unit id="runs.evidence.reason.count-mismatch" datatype="html">
         <source>Collected and expected counts do not match.</source>
@@ -3023,7 +3023,7 @@
       </trans-unit>
       <trans-unit id="runs.evidence.reason.build-mismatch" datatype="html">
         <source>The reported build does not match the manifest.</source>
-        <target>Bản dựng được báo cáo không khớp với bản kê khai.</target>
+        <target>Bản dựng được báo cáo không khớp với bản kê.</target>
       </trans-unit>
       <trans-unit id="runs.evidence.reason.unknown-status" datatype="html">
         <source>A reported result status is not recognized.</source>
@@ -3035,7 +3035,7 @@
       </trans-unit>
       <trans-unit id="runs.evidence.reason.stale-epoch" datatype="html">
         <source>Evidence belongs to a stale producer epoch.</source>
-        <target>Bằng chứng thuộc thế hệ producer đã cũ.</target>
+        <target>Bằng chứng thuộc thế hệ nguồn gửi đã cũ.</target>
       </trans-unit>
       <trans-unit id="runs.evidence.reason.missing-result" datatype="html">
         <source>An expected test result is missing.</source>
@@ -3055,11 +3055,11 @@
       </trans-unit>
       <trans-unit id="runs.decision.title" datatype="html">
         <source>Latest live decision</source>
-        <target>Quyết định chính thức mới nhất</target>
+        <target>Quyết định hiện hành mới nhất</target>
       </trans-unit>
       <trans-unit id="runs.decision.loading" datatype="html">
         <source>Loading live decision</source>
-        <target>Đang tải quyết định chính thức</target>
+        <target>Đang tải quyết định hiện hành</target>
       </trans-unit>
       <trans-unit id="runs.decision.updating" datatype="html">
         <source>Updating decision</source>
@@ -3067,11 +3067,11 @@
       </trans-unit>
       <trans-unit id="runs.decision.pending-description" datatype="html">
         <source>No live evaluation is available yet.</source>
-        <target>Chưa có đánh giá chính thức.</target>
+        <target>Chưa có đánh giá hiện hành.</target>
       </trans-unit>
       <trans-unit id="runs.decision.unavailable" datatype="html">
         <source>Live decision unavailable</source>
-        <target>Không có quyết định chính thức</target>
+        <target>Không có quyết định hiện hành</target>
       </trans-unit>
       <trans-unit id="runs.decision.refresh-failed" datatype="html">
         <source>Decision refresh failed. Previously loaded decision retained.</source>
@@ -3079,11 +3079,11 @@
       </trans-unit>
       <trans-unit id="runs.decision.shadow-ignored" datatype="html">
         <source>Shadow evaluation ignored</source>
-        <target>Đã bỏ qua đánh giá shadow</target>
+        <target>Đã bỏ qua đánh giá đối chứng</target>
       </trans-unit>
       <trans-unit id="runs.decision.shadow-description" datatype="html">
         <source>A shadow evaluation does not replace the live decision.</source>
-        <target>Đánh giá shadow không thay thế quyết định chính thức.</target>
+        <target>Đánh giá đối chứng không thay thế quyết định hiện hành.</target>
       </trans-unit>
       <trans-unit id="runs.decision.reasons-title" datatype="html">
         <source>Decision reasons</source>
@@ -3107,7 +3107,7 @@
       </trans-unit>
       <trans-unit id="runs.decision.manifest-hash" datatype="html">
         <source>Manifest hash</source>
-        <target>Mã băm bản kê khai</target>
+        <target>Mã băm bản kê</target>
       </trans-unit>
       <trans-unit id="runs.decision.evaluator-version" datatype="html">
         <source>Evaluator version</source>
@@ -3123,7 +3123,7 @@
       </trans-unit>
       <trans-unit id="runs.decision.updated-announcement" datatype="html">
         <source>Live decision updated for evidence revision <x id="REVISION" equiv-text="${revision}"/></source>
-        <target>Đã cập nhật quyết định chính thức cho phiên bản bằng chứng <x id="REVISION"/></target>
+        <target>Đã cập nhật quyết định hiện hành cho phiên bản bằng chứng <x id="REVISION"/></target>
       </trans-unit>
       <trans-unit id="runs.decision.revision-mismatch" datatype="html">
         <source>This decision was evaluated at evidence revision <x id="DECISION" equiv-text="${decisionRevision}"/> while the selected evidence revision is <x id="SELECTED" equiv-text="${selectedRevision}"/>.</source>
@@ -3156,7 +3156,7 @@
       <trans-unit id="quota.panel.title" datatype="html"><source>Quota &amp; retention</source><target>Hạn mức và lưu giữ</target></trans-unit>
       <trans-unit id="quota.panel.description" datatype="html"><source>Organization-wide counters and limits supplied by the service. Quota state does not change recorded test outcomes.</source><target>Số liệu và giới hạn toàn tổ chức do dịch vụ cung cấp. Trạng thái hạn mức không thay đổi kết quả kiểm thử đã ghi nhận.</target></trans-unit>
       <trans-unit id="quota.panel.loading" datatype="html"><source>Loading usage summary…</source><target>Đang tải tổng hợp mức sử dụng…</target></trans-unit>
-      <trans-unit id="quota.panel.period" datatype="html"><source>Billing period</source><target>Kỳ tính phí</target></trans-unit>
+      <trans-unit id="quota.panel.period" datatype="html"><source>Billing period:</source><target>Kỳ tính phí:</target></trans-unit>
       <trans-unit id="quota.panel.empty" datatype="html"><source>No usage counters were supplied for this period.</source><target>Chưa có số liệu sử dụng được cung cấp cho kỳ này.</target></trans-unit>
       <trans-unit id="quota.panel.used" datatype="html"><source>Used</source><target>Đã dùng</target></trans-unit>
       <trans-unit id="quota.panel.limit" datatype="html"><source>Limit</source><target>Giới hạn</target></trans-unit>

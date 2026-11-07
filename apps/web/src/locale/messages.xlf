@@ -2838,7 +2838,7 @@
       <trans-unit id="runs.detail.attempts.candidate" datatype="html"><source>Healing candidate</source></trans-unit>
       <trans-unit id="runs.detail.attempts.shadow" datatype="html"><source>Shadow evaluation</source></trans-unit>
       <trans-unit id="runs.detail.attempts.official" datatype="html"><source>Official evaluation</source></trans-unit>
-      <trans-unit id="runs.detail.attempts.page" datatype="html"><source>Page</source></trans-unit>
+      <trans-unit id="runs.detail.attempts.page" datatype="html"><source>Page <x id="page" equiv-text="page"/> / <x id="pages" equiv-text="pages"/></source></trans-unit>
       <trans-unit id="runs.detail.attempts.previous" datatype="html"><source>Previous page</source></trans-unit>
       <trans-unit id="runs.detail.attempts.next" datatype="html"><source>Next page</source></trans-unit>
       <trans-unit id="runs.detail.attempts.healing-candidates" datatype="html"><source>Healing candidates</source></trans-unit>
@@ -2976,7 +2976,7 @@
       <trans-unit id="quota.panel.title" datatype="html"><source>Quota &amp; retention</source></trans-unit>
       <trans-unit id="quota.panel.description" datatype="html"><source>Organization-wide counters and limits supplied by the service. Quota state does not change recorded test outcomes.</source></trans-unit>
       <trans-unit id="quota.panel.loading" datatype="html"><source>Loading usage summary…</source></trans-unit>
-      <trans-unit id="quota.panel.period" datatype="html"><source>Billing period</source></trans-unit>
+      <trans-unit id="quota.panel.period" datatype="html"><source>Billing period:</source></trans-unit>
       <trans-unit id="quota.panel.empty" datatype="html"><source>No usage counters were supplied for this period.</source></trans-unit>
       <trans-unit id="quota.panel.used" datatype="html"><source>Used</source></trans-unit>
       <trans-unit id="quota.panel.limit" datatype="html"><source>Limit</source></trans-unit>
