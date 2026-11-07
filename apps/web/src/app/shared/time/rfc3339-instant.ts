@@ -30,8 +30,9 @@ export function rfc3339InstantMs(value: string): number | null {
   if (monthLength === undefined) return null;
   const lastDay = month === 2 && isLeapYear(year) ? 29 : monthLength;
   if (day < 1 || day > lastDay) return null;
-  // A second is 00-59 in RFC 3339: a leap second and `24:00:00` are both refused, as the parsing
-  // fallback would roll them into the following second or day.
+  // `24:00:00`, and a leap second, are both refused on purpose. RFC 3339 does name `60`, but the
+  // platform cannot represent a leap second and `Date.parse` answers NaN for it, and the parsing
+  // fallback would roll `24:00:00` into the next day instead of refusing it.
   if (Number(match[4]) > 23 || Number(match[5]) > 59 || Number(match[6]) > 59) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;

@@ -17,6 +17,10 @@ describe('rfc3339InstantMs', () => {
     // The shape is uppercase-only, and surrounding whitespace is not part of an instant.
     '2026-11-07t12:00:00z',
     '2026-11-07T12:00:00Z ',
+    // An offset the parser cannot read is refused by the parse fallback, not accepted as-is.
+    '2026-11-07T12:00:00+99:99',
+    '2026-11-07T12:00:00+24:00',
+    '2026-11-07T12:00:00+00:60',
   ])('refuses %j', (value) => {
     expect(rfc3339InstantMs(value)).toBeNull();
   });
