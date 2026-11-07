@@ -1,3 +1,4 @@
+import { TelemetryService } from '../../../core/telemetry/telemetry.service';
 import { TestBed } from '@angular/core/testing';
 import { control, fillCreate, openCreate, submitCreate } from './api-token-dialog.test-support';
 import { CREATED, mount, deferred, project } from './api-tokens.test-support';
@@ -100,5 +101,30 @@ describe('API token one-time reveal lifetime', () => {
     // Dropping the answer would leave a token nobody can copy and few can even find to revoke.
     expect(control<HTMLInputElement>('[data-testid="reveal-value"]').value).toBe(CREATED.token);
     expect(h.store.createOpen()).toBe(true);
+  });
+
+  it('never sends the secret to console or telemetry across create, reveal, copy and dismiss', async () => {
+    const sinks = [
+      ...(['log', 'info', 'warn', 'error', 'debug', 'trace'] as const).map((level) =>
+        vi.spyOn(console, level).mockImplementation(() => undefined),
+      ),
+      vi.spyOn(TelemetryService.prototype, 'reportError'),
+      vi.spyOn(TelemetryService.prototype, 'reportEvent'),
+      vi.spyOn(TelemetryService.prototype, 'startApiCall'),
+    ];
+    const h = mount();
+    await h.settle();
+    await openCreate(h);
+    await fillCreate(h);
+    submitCreate();
+    await h.settle();
+    expect(control<HTMLInputElement>('[data-testid="reveal-value"]').value).toBe(CREATED.token);
+    control<HTMLButtonElement>('[data-testid="reveal-dismiss"]').click();
+    await h.settle();
+    for (const sink of sinks) {
+      expect(JSON.stringify(sink.mock.calls), String(sink.getMockName())).not.toContain(
+        CREATED.token,
+      );
+    }
   });
 });

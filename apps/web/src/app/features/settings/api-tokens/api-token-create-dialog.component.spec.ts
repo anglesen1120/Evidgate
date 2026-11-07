@@ -106,6 +106,7 @@ describe('API token creation dialog', () => {
       await h.settle();
       const text = control('[data-api-create-dialog]').textContent;
       expect(text).toContain('These permissions cannot be granted');
+      expect(text).toContain('Cannot grant this permission.');
       expect(text).toContain(code);
       expect(text).toContain('permissions[0]');
       expect(text).toContain('write-request');
@@ -218,33 +219,76 @@ describe('API token creation dialog', () => {
     expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
   });
 
-  it('does not resubmit the expiry a 422 refused until a field changes', async () => {
+  it('shows the server expiry refusal beside the field and keeps submit disabled until the expiry changes', async () => {
+    const message = 'expires_at must be at most 90 days from now (maximum 2026-02-04T00:00:00Z).';
     const h = mount();
     await h.settle();
     await openCreate(h);
     await fillCreate(h);
     h.create.mockRejectedValueOnce(
       writeFailure({
-        message: 'Expiry must be in the future.',
-        details: [{ path: 'expires_at', reason: 'past' }],
+        message,
+        details: [{ path: 'expires_at', reason: 'out_of_range' }],
       }),
     );
     submitCreate();
     await h.settle();
-    expect(control('[data-api-create-dialog]').textContent).toContain(
-      'Expiry must be in the future.',
+    // The server's sentence, maximum included, is rendered verbatim next to the expiry field.
+    expect(control('[data-api-expiry-refusal]').textContent?.trim()).toBe(message);
+    expect(control('#api-create-expiry').getAttribute('aria-describedby')).toContain(
+      'api-expiry-refusal',
     );
     expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
     submitCreate();
     await h.settle();
     expect(h.create).toHaveBeenCalledTimes(1);
+    // A name-only edit leaves the refused expiry in place, so it stays refused.
     const name = control<HTMLInputElement>('#api-create-name');
     name.value = 'Renamed reader';
     name.dispatchEvent(new Event('input', { bubbles: true }));
     await h.settle();
+    expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
+    expect(control('[data-api-expiry-refusal]').textContent?.trim()).toBe(message);
+    submitCreate();
+    await h.settle();
+    expect(h.create).toHaveBeenCalledTimes(1);
+    const expiry = control<HTMLInputElement>('#api-create-expiry');
+    expiry.value = '2026-12-01T00:00';
+    expiry.dispatchEvent(new Event('input', { bubbles: true }));
+    await h.settle();
+    expect(document.querySelector('[data-api-expiry-refusal]')).toBeNull();
     expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(false);
     submitCreate();
     await h.settle();
     expect(h.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses at submit an expiry the clock passed while the dialog stayed open', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-06T12:00:00Z') });
+    try {
+      const h = mount();
+      await h.settle();
+      await openCreate(h);
+      await fillCreate(h);
+      const expiry = control<HTMLInputElement>('#api-create-expiry');
+      expiry.value = '2026-11-06T12:30';
+      expiry.dispatchEvent(new Event('input', { bubbles: true }));
+      await h.settle();
+      expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(false);
+      vi.setSystemTime(new Date('2026-11-06T13:00:00Z'));
+      submitCreate();
+      await h.settle();
+      expect(h.create).not.toHaveBeenCalled();
+      expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
+      expect(control('#api-expiry-required').getAttribute('role')).toBe('status');
+      expiry.value = '2026-11-06T14:00';
+      expiry.dispatchEvent(new Event('input', { bubbles: true }));
+      await h.settle();
+      submitCreate();
+      await h.settle();
+      expect(h.create).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

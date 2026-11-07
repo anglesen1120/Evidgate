@@ -121,7 +121,9 @@ function refusesExpiry(failure: ApiError): boolean {
               [attr.min]="minExpiry"
               [attr.aria-invalid]="expiryInvalid() || !!store.createError()"
               [attr.aria-describedby]="
-                store.createError() ? 'api-expiry-required api-create-error' : 'api-expiry-required'
+                (expiryRefused()
+                  ? 'api-expiry-required api-expiry-refusal'
+                  : 'api-expiry-required') + (store.createError() ? ' api-create-error' : '')
               "
               (input)="updateExpiry($event)"
             />
@@ -132,6 +134,11 @@ function refusesExpiry(failure: ApiError): boolean {
             >
               {{ copy.required }}
             </p>
+            @if (expiryRefused()) {
+              <p id="api-expiry-refusal" role="alert" class="m-0 text-sm" data-api-expiry-refusal>
+                {{ expiryRefusal() }}
+              </p>
+            }
             <fieldset class="m-0 min-w-0 rounded-md border border-border p-3" [disabled]="locked()">
               <legend>{{ copy.permissions }}</legend>
               <p class="m-0 mb-2 text-sm text-muted-foreground">{{ copy.permissionHint }}</p>
@@ -193,13 +200,17 @@ export class ApiTokenCreateDialogComponent {
   protected readonly expires = signal('');
   /** The expiry value a 422 refused, so an unchanged resubmit cannot repeat the same refusal. */
   protected readonly rejectedExpiry = signal<string | null>(null);
-  // The picker floor and the past check share one instant: a relative minimum can never disagree
-  // with what the field accepts. A dialog open across the boundary is caught by the server.
+  /** The server's own words for that refusal, shown beside the field with its maximum. */
+  protected readonly expiryRefusal = signal<string | null>(null);
+  /** Set when a submit finds the expiry already past; cleared by the next edit of the field. */
+  protected readonly elapsed = signal(false);
+  // The picker floor and the live check share the open instant so the field and its minimum agree;
+  // submit re-checks against the clock, since a dialog can stay open past the chosen expiry.
   private readonly openedAtMs = Date.now();
   protected readonly minExpiry = new Date(this.openedAtMs).toISOString().slice(0, 16);
   protected readonly expiryInvalid = computed(() => {
     const instant = expiryInstant(this.expires());
-    return instant === null || instant <= this.openedAtMs;
+    return instant === null || instant <= this.openedAtMs || this.elapsed();
   });
   protected readonly choices = computed(() =>
     tokenPermissionChoices(this.session.permissions(), (code) => this.session.has(code)),
@@ -216,6 +227,9 @@ export class ApiTokenCreateDialogComponent {
   });
   protected readonly locked = computed(
     () => this.store.creating() || !!this.store.createError()?.retryable || this.uncertain(),
+  );
+  protected readonly expiryRefused = computed(
+    () => this.expiryRefusal() !== null && this.expires() === this.rejectedExpiry(),
   );
   protected readonly valid = computed(
     () =>
@@ -256,6 +270,9 @@ export class ApiTokenCreateDialogComponent {
   protected updateExpiry(event: Event): void {
     if (event.target instanceof HTMLInputElement && !this.locked()) {
       this.expires.set(event.target.value);
+      this.rejectedExpiry.set(null);
+      this.expiryRefusal.set(null);
+      this.elapsed.set(false);
       this.changed();
     }
   }
@@ -269,7 +286,6 @@ export class ApiTokenCreateDialogComponent {
   }
   private changed(): void {
     this.intent = null;
-    this.rejectedExpiry.set(null);
     this.store.resetCreateError();
   }
   protected async submit(event: Event, form: HTMLFormElement): Promise<void> {
@@ -288,6 +304,10 @@ export class ApiTokenCreateDialogComponent {
     // throwing a RangeError if the two ever disagree.
     const instant = expiryInstant(this.expires());
     if (instant === null) return;
+    if (instant <= Date.now()) {
+      this.elapsed.set(true);
+      return;
+    }
     this.intent ??= createIntent();
     const answer = await this.store.create(
       {
@@ -302,7 +322,10 @@ export class ApiTokenCreateDialogComponent {
       return;
     }
     const failure = this.store.createError();
-    if (!answer && failure && refusesExpiry(failure)) this.rejectedExpiry.set(this.expires());
+    if (!answer && failure && refusesExpiry(failure)) {
+      this.rejectedExpiry.set(this.expires());
+      this.expiryRefusal.set(failure.message);
+    }
   }
   protected escape(event: Event): void {
     event.preventDefault();
