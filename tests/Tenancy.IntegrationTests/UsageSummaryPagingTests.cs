@@ -153,13 +153,15 @@ public sealed class UsageSummaryPagingTests
         await using var world = await StartAsync();
         var (period, instant) = await world.DatabaseClockAsync();
         var created = await SeedProjectsAsync(world, period, instant, count: 3);
-        var (_, foreignProject) = await world.AddOtherOrgAsync();
-        var foreignAt = instant.AddHours(-10);
+        var (otherOrg, foreignProject) = await world.AddOtherOrgAsync();
+        var foreignAt = instant.AddMinutes(-2.5);
         await world.PinProjectCreatedAtAsync(foreignProject, foreignAt);
+        await world.SeedRollupAsync(new RollupSeed(
+            Guid.CreateVersion7(), foreignProject, period, UsageLedgerMetricNames.Results, 9m, 1, instant, Org: otherOrg));
 
-        // The foreign key sorts before every project of this org, so an unfiltered page would start with the foreign
-        // project if the tenant boundary were not the scope's own.
-        var cursor = KeysetCursor.Encode(foreignAt, foreignProject);
+        // The foreign project has usage and sorts between this org's projects, after the cursor: only the org's own
+        // scope keeps it off the page.
+        var cursor = KeysetCursor.Encode(instant.AddMinutes(-10), Guid.CreateVersion7());
         var answer = await world.GetAsMemberAsync(world.SummaryPageUrl(limit: "200", cursor: cursor));
 
         answer.Status.ShouldBe(HttpStatusCode.OK);
@@ -180,13 +182,13 @@ public sealed class UsageSummaryPagingTests
         var cursor = NextCursor(first);
         cursor.ShouldNotBeNull();
 
-        // The project between the cursor and the rest leaves the month, so the continuation names a keyset no row of
+        // The project the cursor names leaves the month, so the continuation names a keyset no row of
         // the page holds: the page after it is still the projects that follow, not an error.
-        await world.RemoveProjectFromSummaryAsync(created[1], period);
+        await world.RemoveProjectFromSummaryAsync(created[0], period);
         var second = await world.GetAsMemberAsync(world.SummaryPageUrl(limit: "2", cursor: cursor));
 
         second.Status.ShouldBe(HttpStatusCode.OK);
-        ProjectIds(second).ShouldBe([created[2]]);
+        ProjectIds(second).ShouldBe([created[1], created[2]]);
         NextCursor(second).ShouldBeNull();
     }
 
