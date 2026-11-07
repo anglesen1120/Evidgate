@@ -152,4 +152,38 @@ describe('no-fixture-code gate: error-envelope path', () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('a_fixture_only_reason');
   });
+
+  // The corpus case that had to leave fixtures/web-api (content of
+  // fixtures/web-api/retention-put-out-of-range/input.json at 38ea862f^) against the real contract.
+  it('passes_the_retention_out_of_range_case_against_the_repository_contract', async () => {
+    const ws = await workspace();
+    await ws.fixture('retention-put-out-of-range', {
+      operation_id: 'setRetentionPolicy',
+      variant: 'out_of_range',
+      status: 422,
+      headers: { 'X-Request-Id': '018f0000-0000-7000-8000-00000000b10e' },
+      latency_ms: 0,
+      body: {
+        error: {
+          code: 'retention_out_of_range',
+          message: 'the retention window is outside the configured range',
+          request_id: '018f0000-0000-7000-8000-00000000b10e',
+          retryable: false,
+          details: [
+            { path: 'artifact_days', reason: 'below_min_artifact_days' },
+            { path: 'retention_limits.min_artifact_days', reason: '1' },
+          ],
+        },
+      },
+    });
+    await ws.output(
+      'main-ABC123.js',
+      'const k=["artifact_days","min_artifact_days","retention_limits"];',
+    );
+    expect(ws.run().status).toBe(0);
+    await ws.output('leak.js', 'const r="below_min_artifact_days";');
+    const leaked = ws.run();
+    expect(leaked.status).toBe(1);
+    expect(leaked.stderr).toContain('below_min_artifact_days');
+  });
 });
