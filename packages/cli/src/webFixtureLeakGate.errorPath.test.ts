@@ -140,6 +140,7 @@ describe('no-fixture-code gate: error-envelope path', () => {
     const result = ws.run();
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('fixture code:');
+    expect(result.stderr).toContain('openapi.yaml');
   });
 
   it('still_fails_on_a_real_fixture_leak_beside_an_exempt_path', async () => {
@@ -220,6 +221,7 @@ describe('no-fixture-code gate: error-envelope path', () => {
   // fixtures/web-api/retention-put-out-of-range/input.json at 38ea862f^) against the real contract.
   it('passes_the_retention_out_of_range_case_against_the_repository_contract', async () => {
     const ws = await workspace();
+    ws.useRepositoryContract();
     await ws.fixture('retention-put-out-of-range', {
       operation_id: 'setRetentionPolicy',
       variant: 'out_of_range',
