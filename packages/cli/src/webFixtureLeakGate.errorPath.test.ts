@@ -189,7 +189,7 @@ describe('no-fixture-code gate: error-envelope path', () => {
       default:
         properties: { default_only_name: 1 }
     Listed:
-      properties: [listed_only_name]
+      properties: [listed_only_name, { properties: { nested_only_name: 1 } }]
 `);
     await ws.fixture(
       'probe',
@@ -198,6 +198,7 @@ describe('no-fixture-code gate: error-envelope path', () => {
         { path: 'sample_only_name', reason: 'r' },
         { path: 'default_only_name', reason: 'r' },
         { path: '0', reason: 'r' },
+        { path: 'nested_only_name', reason: 'r' },
       ]),
     );
     await ws.output('main-ABC123.js', 'const k="sample_only_name";');

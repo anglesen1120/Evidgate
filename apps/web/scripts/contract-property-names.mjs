@@ -25,13 +25,17 @@ function collectPropertyNames(node, names, isNameMap = false) {
     if (!isNameMap && SAMPLE_KEYWORDS.has(key)) {
       continue;
     }
-    const isMap = !isNameMap && key === 'properties' && child !== null && typeof child === 'object';
-    if (isMap && !Array.isArray(child)) {
-      for (const name of Object.keys(child)) {
-        names.add(name);
+    if (key === 'properties' && !isNameMap) {
+      // Only a map is a name list; an array or scalar there is not schema, so it is not walked.
+      if (child !== null && typeof child === 'object' && !Array.isArray(child)) {
+        for (const name of Object.keys(child)) {
+          names.add(name);
+        }
+        collectPropertyNames(child, names, true);
       }
+      continue;
     }
-    collectPropertyNames(child, names, isMap && !Array.isArray(child));
+    collectPropertyNames(child, names, false);
   }
 }
 
