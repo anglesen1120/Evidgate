@@ -125,8 +125,18 @@
         [runAfterCancelEvents]="run.after_cancel_events"
         [targetAnchor]="producerTargetAnchor()"
       />
-      <!-- Transition history is not served, so the timeline never invents step timestamps. -->
-      <app-release-panel [runId]="run.run_id" [releaseId]="null" />
+      <!-- Release reads have their own status and retry window, independent of the run read. -->
+      <app-release-panel
+        [runId]="run.run_id"
+        [releases]="releases()"
+        [selectedReleaseId]="store.selectedReleaseId()"
+        [release]="release()"
+        [status]="store.releaseStatus()"
+        [error]="store.releaseError()"
+        [retryEligible]="releaseRetryEligible()"
+        (selectRelease)="store.selectRelease($event)"
+        (retry)="retryRelease()"
+      />
       <app-run-timeline [state]="run.state" [afterCancelEvents]="run.after_cancel_events" />
     </div>
   }

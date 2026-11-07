@@ -2766,7 +2766,7 @@
       <trans-unit id="runs.detail.copy-failed" datatype="html"><source>Copy failed. Select and copy the full hash shown above.</source></trans-unit>
       <trans-unit id="runs.detail.release.title" datatype="html"><source>Release</source></trans-unit>
       <trans-unit id="runs.detail.release.loading" datatype="html"><source>Loading release</source></trans-unit>
-      <trans-unit id="runs.detail.release.unavailable" datatype="html"><source>This run does not name a release, so release data is not shown.</source></trans-unit>
+      <trans-unit id="runs.detail.release.select-label" datatype="html"><source>Releases bound to this run</source></trans-unit>
       <trans-unit id="runs.detail.release.unbound" datatype="html"><source>No release bound to this run</source></trans-unit>
       <trans-unit id="runs.detail.release.name" datatype="html"><source>Release name</source></trans-unit>
       <trans-unit id="runs.detail.release.state" datatype="html"><source>State</source></trans-unit>

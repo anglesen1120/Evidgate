@@ -28,6 +28,7 @@ import { ManifestPanelComponent } from './manifest-panel.component';
 import { producerSlotsFromRun } from './producers/producer-slots';
 import { ProducerStatusTableComponent } from './producers/producer-status-table.component';
 import { ReleasePanelComponent } from './release/release-panel.component';
+import { releaseFromDetail } from './release/release-summary';
 import { parsePinnedRevision } from './revision-pin';
 import { RunHeaderComponent } from './run-header.component';
 import { RunDetailStore } from './run-detail.store';
@@ -65,6 +66,23 @@ export class RunDetailPage {
     const run = this.store.run();
     return run === null ? null : producerSlotsFromRun(run);
   });
+  protected readonly release = computed(() => {
+    const release = this.store.release();
+    return release === null ? null : releaseFromDetail(release);
+  });
+  protected readonly releases = computed(() => {
+    const seen = new Set<string>();
+    return (this.store.run()?.releases ?? [])
+      .filter((binding) => {
+        if (seen.has(binding.release_id)) return false;
+        seen.add(binding.release_id);
+        return true;
+      })
+      .map((binding) => ({
+        releaseId: binding.release_id,
+        name: binding.release_name ?? null,
+      }));
+  });
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
@@ -83,6 +101,7 @@ export class RunDetailPage {
   protected readonly decisionRetryEligible = signal(false);
   /** The revision list's own retry window: its failure never gates the decision or attempts. */
   protected readonly revisionsRetryEligible = signal(false);
+  protected readonly releaseRetryEligible = signal(false);
   protected readonly requestStatus = computed<'loading' | 'ready' | 'error'>(() => {
     const status = this.store.status();
     return status === 'idle' || status === 'loading'
@@ -169,6 +188,7 @@ export class RunDetailPage {
     this.watchRetryWindow(this.store.loadError, this.retryEligible);
     this.watchRetryWindow(this.store.decisionError, this.decisionRetryEligible);
     this.watchRetryWindow(this.store.revisionsError, this.revisionsRetryEligible);
+    this.watchRetryWindow(this.store.releaseError, this.releaseRetryEligible);
     // Producer anchors depend on the run declaration, not a successful attempts read.
     // Unloaded attempt targets retry only when their requested page arrives.
     effect(() => {
@@ -207,6 +227,10 @@ export class RunDetailPage {
         onCleanup(() => clearTimeout(timer));
       }
     });
+  }
+  protected retryRelease(): void {
+    const selected = this.store.selectedReleaseId();
+    if (selected !== null) void this.store.loadRelease(selected);
   }
   protected retryAttempts(): void {
     void this.store.retryAttempts();

@@ -58,17 +58,8 @@
 // same header on the revision it created, and the `200` (identical body already stored) with the
 // head's.
 //
-// 09.7.1-F15 note (3) makes `getPolicyRevision` the one ID-KEYED row (`idKeyParameter: 'id'`): the
-// corpus holds one document per revision, each carrying its own `body.id`, so a read for a
-// revision the corpus has answers THAT document and the browser's revision-vs-revision diff (and
-// the 412 dialog's server column) can hold two different bodies. The variant selection stays as
-// it was and is the FALLBACK for an id no document carries — a revision another writer published
-// (`…a005`), say — so `?fixture.variant.getPolicyRevision=previous`/`=first`/`=created` still
-// opens the retired, the first and the published revision on their own. The order is: matching
-// `body.id` first, then the variant, never the other way round, because the variant is a review's
-// explicit selection of a document while the path id is what the app asked for; an id no
-// document holds changes nothing. Every other row stays id-agnostic: `{p}`, `{m}`, `{r}` and `{t}`
-// are matched against the template only.
+// ID-keyed routes compare a path parameter to the resource-id field declared on the route.
+// Policy revisions use `id`; releases use `release_id`. Unknown ids fall back to the URL variant.
 //
 // 09.7.1-F15 note (4) is the same selection one dimension over, on the QUERY string: `listCiBindings`
 // declares `cursorQueryParameter: 'cursor'`, and a request that carries a cursor some catalog row
@@ -105,6 +96,8 @@ export interface FixtureRoute {
    * 3). Absent on every id-agnostic row, where the variant alone selects the document.
    */
   readonly idKeyParameter?: string;
+  /** Body field carrying the route's resource id, when it is not `id`. */
+  readonly idKeyField?: string;
   /**
    * The *query* parameter whose request value selects the answer among this operation's catalog
    * documents — the same selection as `idKeyParameter`, one dimension over (09.7.1-F15 note 4).
@@ -205,6 +198,13 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   // revision read issues, with the same quoted `ETag`.
   { operationId: 'getPolicyHead', method: 'GET', path: '/projects/{p}/policies/head' },
   { operationId: 'getPolicyRevision', method: 'GET', path: '/policies/{id}', idKeyParameter: 'id' },
+  {
+    operationId: 'getRelease',
+    method: 'GET',
+    path: '/releases/{id}',
+    idKeyParameter: 'id',
+    idKeyField: 'release_id',
+  },
   { operationId: 'listPolicyRevisions', method: 'GET', path: '/policies/{id}/revisions' },
   // The pinned revision read of the composition screen. Its states are selected by variant, the
   // same way the run detail's are: the id in the path never picks the document.
