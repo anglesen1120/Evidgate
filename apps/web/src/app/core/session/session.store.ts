@@ -310,12 +310,21 @@ const SessionStoreDefinition = signalStore(
       clearScope();
     }
 
-    /** Forgets the resolved pair, its project list, and every cached project list. */
+    /**
+     * Forgets the resolved pair, its project list, the grants that were read for it, and every
+     * cached project list. A grant set without a scope has no org to answer `has()` for, so it goes
+     * with the scope instead of staying published under no attribution.
+     */
     function clearScope(): void {
       scopeRevision += 1;
       permissionsOrgId = null;
       tenant.clear();
-      patchState(store, { currentOrg: null, currentProject: null, projects: NO_PROJECTS });
+      patchState(store, {
+        currentOrg: null,
+        currentProject: null,
+        projects: NO_PROJECTS,
+        permissions: NO_PERMISSIONS,
+      });
       projectsByOrg.clear();
     }
 

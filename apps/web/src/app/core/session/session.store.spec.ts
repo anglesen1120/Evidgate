@@ -564,6 +564,18 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       expect(store.currentOrg()).toBeNull();
     });
 
+    it('publishes no grants once the scope is cleared', async () => {
+      await store.resolveScope('o-1', 'p-1');
+      expect(store.has('run:read')).toBe(true);
+
+      expect(await store.resolveScope('o-foreign', null)).toBe('not-found');
+
+      // No scope, no org the published codes were read for: `has()` must not keep answering.
+      expect(store.currentOrg()).toBeNull();
+      expect(store.permissions().size).toBe(0);
+      expect(store.has('run:read')).toBe(false);
+    });
+
     for (const [kind, status] of [
       ['unavailable', 503],
       ['forbidden', 403],
