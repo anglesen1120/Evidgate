@@ -18,11 +18,12 @@
 // A `POST` row answers its corpus document whatever request body arrives (09.2.1-T2): the corpus
 // is a *response* corpus, so a create's answer never depends on what was sent and, being fixed,
 // cannot change a later list read — the wizard's "created" and "resumed" states are separate
-// documents (see `fixture-catalog.ts`). The three secret-bearing creates (`createCiBinding`,
-// `createIngestToken`, `rotateIngestToken`) take no `Idempotency-Key` in `contracts/openapi.yaml`,
-// so the backend ignores the header the app's interceptor still adds. The invite pair below takes
-// one (`createMembership`, `resendMembershipInvite`) and answers a secret too; a fixture neither
-// validates nor replays a key, so the header changes nothing here either.
+// documents (see `fixture-catalog.ts`). The four secret-bearing creates (`createCiBinding`,
+// `createIngestToken`, `rotateIngestToken`, `createApiToken`) take no `Idempotency-Key` in
+// `contracts/openapi.yaml`, so the backend ignores the header the app's interceptor still adds.
+// The invite pair below takes one (`createMembership`, `resendMembershipInvite`) and answers a
+// secret too; a fixture neither validates nor replays a key, so the header changes nothing here
+// either.
 //
 // 09.7.1-F6 routes the role edit's three calls. They follow the same response-corpus rule, with one
 // consequence worth stating: the `{m}` and `{r}` path parameters are matched against the route
@@ -132,6 +133,10 @@ export const FIXTURE_ROUTES: readonly FixtureRoute[] = [
   { operationId: 'createIngestToken', method: 'POST', path: '/projects/{p}/ingest-tokens' },
   { operationId: 'listIngestTokens', method: 'GET', path: '/projects/{p}/ingest-tokens' },
   { operationId: 'rotateIngestToken', method: 'POST', path: '/ingest-tokens/{t}/rotate' },
+  // The project API-token pair. One path, two verbs, so the method is what tells them apart; the
+  // list's `ok` page ends the walk (`next_cursor: null`), so it is not cursor-keyed.
+  { operationId: 'createApiToken', method: 'POST', path: '/projects/{p}/api-tokens' },
+  { operationId: 'listApiTokens', method: 'GET', path: '/projects/{p}/api-tokens' },
   { operationId: 'listMemberships', method: 'GET', path: '/orgs/{o}/memberships' },
   { operationId: 'getMembership', method: 'GET', path: '/orgs/{o}/memberships/{m}' },
   { operationId: 'createMembership', method: 'POST', path: '/orgs/{o}/memberships' },

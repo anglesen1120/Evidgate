@@ -463,6 +463,15 @@ import type { FixtureCatalogRow } from './fixture-document';
  * the only row that opens the flat table and its `Show more` control (288 members, one chunk of 200
  * first). Every 2xx document carries the wire
  * members and none of them a warnings member, because the read has none to send.
+ *
+ * The project API-token pair is one path's two verbs. `api-token-create` (`createApiToken`,
+ * `POST /projects/{p}/api-tokens`) is the one-time plaintext answer: the token's metadata plus the
+ * `evg_…_FIXTURE_ONLY_…` secret the page reveals once and no later read can return again, so the
+ * document is the operation's `ok` answer and needs no toggle. `api-tokens-list` (`listApiTokens`,
+ * `GET` on the same path) is the metadata page — one `active` and one `revoked` row, the two states
+ * the list must render apart — and it ends the walk (`next_cursor: null`), so the route is not
+ * cursor-keyed and no catalog row declares a cursor for it. The pair's `X-Request-Id`s (`…f1`,
+ * `…f2`) are distinct from every row above.
  */
 
 export const FIXTURE_CATALOG: readonly FixtureCatalogRow[] = [
