@@ -94,52 +94,18 @@ internal sealed class CreateApiTokenCommandHandler(
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Identity, nameof(CreateApiTokenCommand));
 
-        if (!secrets.CanHash)
+        if (Validate(command) is { } invalid)
         {
-            return Result.Failure<ApiTokenCreatedResponse>(ApiTokenErrors.NotConfigured);
+            return Result.Failure<ApiTokenCreatedResponse>(invalid);
         }
 
-        var now = clock.GetUtcNow();
         var requested = command.Permissions ?? [];
-
-        if (command.ExpiresAt is not { } expiresAt)
-        {
-            return Result.Failure<ApiTokenCreatedResponse>(
-                ApiTokenErrors.Expiry("required", "expires_at is required: a token always expires"));
-        }
-
-        if (ExpiryError(expiresAt, now, options.Value.MaxLifetimeDays) is { } expiry)
-        {
-            return Result.Failure<ApiTokenCreatedResponse>(expiry);
-        }
-
-        if (PermissionError(requested) is { } refused)
-        {
-            return Result.Failure<ApiTokenCreatedResponse>(refused);
-        }
-
-        var caller = principals.Current;
         var orgId = scopes.Require().OrgId;
+        var creator = await ResolveCreatorAsync(orgId, requested, cancellationToken).ConfigureAwait(false);
 
-        if (caller is null)
+        if (!creator.IsSuccess)
         {
-            return Result.Failure<ApiTokenCreatedResponse>(ApiTokenErrors.NoMembership);
-        }
-
-        // `created_by` names the caller's MEMBERSHIP, not the platform user: `api_token_created_by_fk` is
-        // (org_id, created_by) → membership (org_id, id), and a founder's or an invitee's membership id is its own
-        // value. The id comes from the same join that answers the escalation check below, so the creator recorded and
-        // the creator whose permissions are compared are one row.
-        var access = await callerPermissions.ResolveAsync(orgId, caller, cancellationToken).ConfigureAwait(false);
-
-        if (access.MembershipId is not { } createdBy)
-        {
-            return Result.Failure<ApiTokenCreatedResponse>(ApiTokenErrors.NoMembership);
-        }
-
-        if (requested.Any(code => !access.Codes.Contains(code)))
-        {
-            return Result.Failure<ApiTokenCreatedResponse>(ApiTokenErrors.Escalation);
+            return Result.Failure<ApiTokenCreatedResponse>(creator.Error!);
         }
 
         var generated = ApiTokenFormat.Generate();
@@ -154,37 +120,91 @@ internal sealed class CreateApiTokenCommandHandler(
             TokenHmac = hash,
             PepperVersion = version,
             Permissions = [.. requested.Distinct(StringComparer.Ordinal)],
-            ExpiresAt = expiresAt,
-            CreatedBy = createdBy,
+            ExpiresAt = command.ExpiresAt!.Value,
+            CreatedBy = creator.Value,
         };
 
+        if (await PersistAsync(token, cancellationToken).ConfigureAwait(false) is { } refused)
+        {
+            return Result.Failure<ApiTokenCreatedResponse>(refused);
+        }
+
+        audit.Describe(new AuditObject("api_token", token.Id.ToString("D")));
+
+        return Result.Success(ApiTokenViews.Created(token, generated.Full));
+    }
+
+    /// <summary>The first refusal among key material, expiry bounds and the permission set, or null.</summary>
+    private Error? Validate(CreateApiTokenCommand command)
+    {
+        if (!secrets.CanHash)
+        {
+            return ApiTokenErrors.NotConfigured;
+        }
+
+        if (command.ExpiresAt is not { } expiresAt)
+        {
+            return ApiTokenErrors.Expiry("required", "expires_at is required: a token always expires");
+        }
+
+        return ExpiryError(expiresAt, clock.GetUtcNow(), options.Value.MaxLifetimeDays)
+            ?? PermissionError(command.Permissions ?? []);
+    }
+
+    /// <summary>
+    /// The membership id to record as creator, or the refusal. <c>created_by</c> names the caller's MEMBERSHIP, not the
+    /// platform user: <c>api_token_created_by_fk</c> is (org_id, created_by) → membership (org_id, id). The id comes
+    /// from the same join that answers the escalation check, so the creator recorded and the creator whose
+    /// permissions are compared are one row.
+    /// </summary>
+    private async ValueTask<Result<Guid>> ResolveCreatorAsync(
+        Guid orgId,
+        IReadOnlyList<string> requested,
+        CancellationToken cancellationToken)
+    {
+        if (principals.Current is not { } caller)
+        {
+            return Result.Failure<Guid>(ApiTokenErrors.NoMembership);
+        }
+
+        var access = await callerPermissions.ResolveAsync(orgId, caller, cancellationToken).ConfigureAwait(false);
+
+        if (access.MembershipId is not { } createdBy)
+        {
+            return Result.Failure<Guid>(ApiTokenErrors.NoMembership);
+        }
+
+        return requested.Any(code => !access.Codes.Contains(code))
+            ? Result.Failure<Guid>(ApiTokenErrors.Escalation)
+            : Result.Success(createdBy);
+    }
+
+    /// <summary>Inserts the row, mapping the constraint races to their refusals; null when written.</summary>
+    private async ValueTask<Error?> PersistAsync(ApiToken token, CancellationToken cancellationToken)
+    {
         await using var context = contexts.Create();
         await context.ApiTokens.AddAsync(token, cancellationToken).ConfigureAwait(false);
 
         try
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return null;
         }
         catch (DbUpdateException exception) when (PgErrors.IsForeignKey(exception, "api_token_project_fk"))
         {
-            return Result.Failure<ApiTokenCreatedResponse>(
-                Error.NotFound("no such project is visible to this tenant"));
+            return Error.NotFound("no such project is visible to this tenant");
         }
         catch (DbUpdateException exception) when (PgErrors.IsForeignKey(exception, "api_token_created_by_fk"))
         {
-            // The membership resolved above was removed between the resolve and this insert. Nothing was written and
-            // no other project's answer fits, so the caller is told what the next attempt would answer anyway.
-            return Result.Failure<ApiTokenCreatedResponse>(ApiTokenErrors.NoMembership);
+            // The membership resolved earlier was removed between the resolve and this insert; the caller is told
+            // what the next attempt would answer anyway.
+            return ApiTokenErrors.NoMembership;
         }
         catch (DbUpdateException exception) when (PgErrors.IsUnique(exception))
         {
             // The platform-wide prefix index lost a 62^12 draw; nothing is written and the client retries.
-            return Result.Failure<ApiTokenCreatedResponse>(ApiTokenErrors.MintingUnavailable);
+            return ApiTokenErrors.MintingUnavailable;
         }
-
-        audit.Describe(new AuditObject("api_token", token.Id.ToString("D")));
-
-        return Result.Success(ApiTokenViews.Created(token, generated.Full));
     }
 
     /// <summary>The expiry refusal, or null when <paramref name="expiresAt"/> is usable.</summary>
