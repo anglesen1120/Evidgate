@@ -29,7 +29,8 @@ export type RunStateVariant =
   | 'no-producers'
   | 'release'
   | 'releases'
-  | 'release-refused';
+  | 'release-refused'
+  | 'with-history';
 
 /** The operations whose answer a caller chooses; every other one keeps the corpus default. */
 export interface RunDetailAddress {
