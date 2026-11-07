@@ -64,18 +64,15 @@ internal interface IReportParserResolver
 internal sealed class ReportParserResolver(ITenantDb db) : IReportParserResolver
 {
     /// <summary>
-    /// One row per producer kind. A built-in row (<c>org_id is null</c>) is the platform default; a tenant row wins over
-    /// it, because a project that registered its own dialect must not be overruled by the platform seed. Among rows of
-    /// equal scope the most recently registered release wins, so a parser upgrade is a new row and a re-parse picks it
-    /// up; stored events keep the version they were parsed with. The ordering is total (<c>id</c> breaks a tie), so two
-    /// runs of the same read cannot disagree.
+    /// Every release the caller can see for the kind, widest scope first and the newest registration before an older
+    /// one. The candidates come back unsorted by version because <c>1.10</c> is newer than <c>1.9</c> and a
+    /// pre-release has no place in that order: <see cref="ParserVersionOrder"/> ranks them, as a reprocess does.
     /// </summary>
     internal const string SelectSql = """
-        select parser_id as "ParserId", version as "Version"
+        select parser_id as "ParserId", version as "Version", (org_id is not null) as "TenantOwned"
           from public.report_parser
          where producer_kind = @producer_kind
-         order by (org_id is not null) desc, created_at desc, version desc, id
-         limit 1
+         order by (org_id is not null) desc, created_at desc, id
         """;
 
     /// <summary>The code word an unsupported producer kind carries; it names the registry, never the producer's text.</summary>
@@ -92,17 +89,58 @@ internal sealed class ReportParserResolver(ITenantDb db) : IReportParserResolver
             return ReportParserResolution.Unsupported(UnknownProducerKind);
         }
 
-        var row = await db
-            .QuerySingleOrDefaultAsync<ParserRow>(SelectSql, new { producer_kind = producerKind }, cancellationToken)
+        // The kind is bound as a parameter, never composed into the statement: it is the report's own declared text.
+        var rows = await db
+            .QueryAsync<ParserRow>(SelectSql, new { producer_kind = producerKind }, cancellationToken)
             .ConfigureAwait(false);
 
-        return row is null
+        var release = HighestRelease(VisibleScope(rows));
+
+        return release is null
             ? ReportParserResolution.Unsupported(UnknownProducerKind)
-            : ReportParserResolution.Resolved(row.ParserId, row.Version);
+            : ReportParserResolution.Resolved(release.ParserId, release.Version);
     }
 
-    /// <summary>The two stored columns, before they become the resolution record.</summary>
+    /// <summary>
+    /// The releases that may compete: a project-owned row outranks the platform default, and every row of the winning
+    /// scope competes because which of them wins is a version question. The read puts the wider scope first, so the
+    /// scope is the run of rows sharing the first row's ownership.
+    /// </summary>
+    /// <param name="rows">The caller's visible releases for one kind, widest scope first.</param>
+    private static IReadOnlyList<ParserRow> VisibleScope(IReadOnlyList<ParserRow> rows) =>
+        rows.Count == 0 ? [] : [.. rows.TakeWhile(row => row.TenantOwned == rows[0].TenantOwned)];
+
+    /// <summary>
+    /// The release a parse runs under: the highest under the dotted numeric order, so an upgrade is a new row and every
+    /// read agrees with the reprocess route. A release the order cannot place is never chosen — a scope that holds
+    /// nothing else answers an unsupported kind — and releases that name the same version keep the read's order, the
+    /// newest registration first, so the choice is total.
+    /// </summary>
+    /// <param name="candidates">The releases of the winning scope, the most recent registration first.</param>
+    private static ParserRow? HighestRelease(IReadOnlyList<ParserRow> candidates)
+    {
+        ParserRow? highest = null;
+
+        foreach (var candidate in candidates)
+        {
+            if (!ParserVersionOrder.IsOrderable(candidate.Version))
+            {
+                // Unplaceable: no rule ranks it against a release it cannot be compared with, so it never parses.
+                continue;
+            }
+
+            if (highest is null || ParserVersionOrder.Compare(candidate.Version, highest.Version) is > 0)
+            {
+                highest = candidate;
+            }
+        }
+
+        return highest;
+    }
+
+    /// <summary>The stored columns the selection reads, and the scope the row belongs to.</summary>
     /// <param name="ParserId">The registry's <c>parser_id</c>.</param>
     /// <param name="Version">The registry's <c>version</c>.</param>
-    private sealed record ParserRow(string ParserId, string Version);
+    /// <param name="TenantOwned">True for a project-owned row, false for the platform default.</param>
+    private sealed record ParserRow(string ParserId, string Version, bool TenantOwned);
 }
