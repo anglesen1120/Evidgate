@@ -3,9 +3,9 @@
 
 import type { CiBindingView } from '@evidgate/sdk';
 
+import { apiError } from '../../shared/testing/http-data.testing';
 import { OnboardingStore, type OnboardingFailure } from './onboarding.store';
 import {
-  apiError,
   BINDING,
   bindingPage,
   FakeOnboardingDataService,

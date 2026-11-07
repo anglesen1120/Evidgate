@@ -8,7 +8,6 @@
 // `ng test` runs on) refuses the relative `/v1` the browser resolves for us.
 
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
-import type { HttpRequest } from '@angular/common/http';
 import {
   HttpTestingController,
   provideHttpClientTesting,
@@ -21,15 +20,13 @@ import type { OrganizationSummaryDto, PermissionView, ProjectDto } from '@evidga
 import { isApiRequestError } from '../http/api-error';
 import { provideApi } from '../http/api-client';
 import { API_BASE_PATH } from '../http/api-origin';
+import { JSON_HEADERS, takeRequest } from '../../shared/testing/http-data.testing';
 import { IdentityDataService, MAX_CURSOR_PAGES } from './identity-data.service';
 
 const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
 const PERMISSIONS_URL = `${API_BASE_URL}/permissions`;
 const ORGANIZATIONS_URL = `${API_BASE_URL}/orgs`;
 const PROJECTS_URL = `${API_BASE_URL}/orgs/o-1/projects`;
-
-/** The served media type: the adapter reads bodies as text and `flush` does not derive it (`parseAs: 'auto'`). */
-const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
 function permission(code: string, tenantAssignable = true): PermissionView {
   const [resource = code, action = 'read'] = code.split(':');
@@ -65,31 +62,6 @@ const PROJECT: ProjectDto = {
   monthly_run_quota: null,
   case_prefix: 'STOR',
 };
-
-/**
- * The SDK -> adapter -> `HttpClient` pipeline is asynchronous, so a request is registered after
- * the call starts — and after a *page* is flushed the next one waits on the blob parse, which is a
- * macrotask in jsdom, so yielding only microtasks stalls the second page. Each attempt yields a
- * macrotask before matching; `expectOne` would throw on the first empty look.
- */
-async function takeRequest(
-  httpMock: HttpTestingController,
-  match: string | ((request: HttpRequest<unknown>) => boolean),
-): Promise<TestRequest> {
-  // A string match is a URL prefix, not an exact URL: a cursor page's `url` still equals the bare
-  // path while its `urlWithParams` carries `?cursor=…`, and an exact-match argument would silently
-  // never see page two.
-  const matches = (candidate: HttpRequest<unknown>): boolean =>
-    typeof match === 'string' ? candidate.url.startsWith(match) : match(candidate);
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const [request] = httpMock.match(matches);
-    if (request !== undefined) {
-      return request;
-    }
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  }
-  throw new Error('no HTTP request reached HttpTestingController');
-}
 
 /** Answers one page with a body, so the SDK's parser sees the served media type. */
 function flushPage(request: TestRequest, body: unknown, status = 200): void {
