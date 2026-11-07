@@ -359,7 +359,7 @@ public sealed class UsageQuotaStartupNoticeTests
 
         var entry = logger.Entries.ShouldHaveSingleItem();
         entry.Level.ShouldBe(LogLevel.Warning);
-        entry.EventId.ShouldBe(2473);
+        entry.EventId.ShouldBe(2476);
         entry.Message.ShouldContain("disabled", Case.Insensitive);
         entry.Message.ShouldContain("QuotaGate Enabled=false");
         entry.Message.ShouldContain("Api");
@@ -376,7 +376,7 @@ public sealed class UsageQuotaStartupNoticeTests
 
         var entry = logger.Entries.ShouldHaveSingleItem();
         entry.Level.ShouldBe(LogLevel.Information);
-        entry.EventId.ShouldBe(2472);
+        entry.EventId.ShouldBe(2475);
         logger.Entries.ShouldNotContain(line => line.Level == LogLevel.Warning);
     }
 
