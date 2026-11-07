@@ -2999,6 +2999,32 @@
       <trans-unit id="quota.panel.storage-reason" datatype="html"><source>Daily storage and egress counters are unavailable because the service does not expose a read for them.</source></trans-unit>
       <trans-unit id="quota.panel.storage-bytes" datatype="html"><source>Stored bytes</source></trans-unit>
       <trans-unit id="quota.panel.egress-bytes" datatype="html"><source>Egress bytes</source></trans-unit>
+      <trans-unit id="retention.title" datatype="html"><source>Project retention</source></trans-unit>
+      <trans-unit id="retention.description" datatype="html"><source>Choose how long artifacts and their metadata are kept. Shorter windows can make evidence links unavailable sooner.</source></trans-unit>
+      <trans-unit id="retention.project" datatype="html"><source>Project</source></trans-unit>
+      <trans-unit id="retention.no-project" datatype="html"><source>No project is available in this organization.</source></trans-unit>
+      <trans-unit id="retention.forbidden" datatype="html"><source>Retention is unavailable because you do not have permission to read project settings.</source></trans-unit>
+      <trans-unit id="retention.read-only" datatype="html"><source>Read only. You need permission to write project settings to change retention.</source></trans-unit>
+      <trans-unit id="retention.loading" datatype="html"><source>Loading retention…</source></trans-unit>
+      <trans-unit id="retention.unavailable" datatype="html"><source>Retention could not be loaded. Try again.</source></trans-unit>
+      <trans-unit id="retention.retry" datatype="html"><source>Reload retention</source></trans-unit>
+      <trans-unit id="retention.artifact" datatype="html"><source>Artifact retention (days)</source></trans-unit>
+      <trans-unit id="retention.metadata" datatype="html"><source>Metadata retention (days)</source></trans-unit>
+      <trans-unit id="retention.hint" datatype="html"><source>Enter whole days. Metadata must be kept at least as long as artifacts. The server validates the configured limits.</source></trans-unit>
+      <trans-unit id="retention.integer" datatype="html"><source>Enter a whole number of days.</source></trans-unit>
+      <trans-unit id="retention.cross-rule" datatype="html"><source>Metadata retention must be at least as long as artifact retention.</source></trans-unit>
+      <trans-unit id="retention.save" datatype="html"><source>Save retention</source></trans-unit>
+      <trans-unit id="retention.saving" datatype="html"><source>Saving retention…</source></trans-unit>
+      <trans-unit id="retention.saved" datatype="html"><source>Retention saved. The stored windows are shown below.</source></trans-unit>
+      <trans-unit id="retention.failure" datatype="html"><source>Retention was not confirmed. Review the values and try again.</source></trans-unit>
+      <trans-unit id="retention.warning" datatype="html"><source>Review deletion impact</source></trans-unit>
+      <trans-unit id="retention.impact" datatype="html"><source>Artifacts or metadata older than the new window become eligible for deletion. Links may become unavailable. The API does not provide affected counts; no count is estimated.</source></trans-unit>
+      <trans-unit id="retention.from" datatype="html"><source>Current window (days)</source></trans-unit>
+      <trans-unit id="retention.to" datatype="html"><source>New window (days)</source></trans-unit>
+      <trans-unit id="retention.band" datatype="html"><source>Newly eligible age band: older than the new window, up to the current window.</source></trans-unit>
+      <trans-unit id="retention.cancel" datatype="html"><source>Cancel</source></trans-unit>
+      <trans-unit id="retention.confirm" datatype="html"><source>Confirm and save retention</source></trans-unit>
+      <trans-unit id="retention.retry-save" datatype="html"><source>Retry saving retention</source></trans-unit>
     </body>
   </file>
 </xliff>

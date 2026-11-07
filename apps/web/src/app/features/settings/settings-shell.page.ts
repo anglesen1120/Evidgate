@@ -16,6 +16,7 @@ import { HlmCardImports } from '@evidgate/ui/card';
 
 import { SessionStore } from '../../core/session/session.store';
 import { availableSettingsTabs } from './settings-tabs';
+import { RetentionFormComponent } from './quota-retention/retention-form.component';
 
 @Component({
   selector: 'app-settings-shell',
@@ -27,6 +28,7 @@ import { availableSettingsTabs } from './settings-tabs';
     HlmInput,
     HlmLabel,
     HlmCardImports,
+    RetentionFormComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings-shell.page.html',
