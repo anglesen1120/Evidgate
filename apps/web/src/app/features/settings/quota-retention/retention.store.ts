@@ -107,16 +107,24 @@ export const RetentionStore = signalStore(
         patchState(store, { write: { scope, phase: 'saved', error: null } });
         return true;
       } catch (error) {
+        // A programming error is a defect, not a server refusal: surface it instead of reporting a
+        // write failure the retry copy would invite the user to repeat.
+        if (!isApiRequestError(error)) throw error;
         if (scope === store.scope()) {
           patchState(store, {
             write: {
               scope,
               phase: 'error',
-              error: isApiRequestError(error) ? error.error : null,
+              error: error.error,
             },
           });
         }
         return false;
+      } finally {
+        // Every path out of this attempt must stop it claiming to still be saving, including a
+        // rethrown error and a write whose scope moved on while it was in flight.
+        if (store.write().scope === scope && store.write().phase === 'saving')
+          patchState(store, { write: { scope, phase: 'idle', error: null } });
       }
     },
   })),

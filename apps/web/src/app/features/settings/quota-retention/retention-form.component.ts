@@ -17,7 +17,7 @@ import {
 import type { RetentionPolicy } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
-import { HlmDialogImports } from '@evidgate/ui/dialog';
+import { HlmDialog, HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 
@@ -87,6 +87,7 @@ export class RetentionFormComponent {
       }));
   });
   private readonly submitButton = viewChild<ElementRef<HTMLButtonElement>>('submitButton');
+  private readonly dialog = viewChild<HlmDialog>('confirmationDialog');
 
   protected fieldError(field: RetentionField): string | null {
     const form = this.form();
@@ -122,9 +123,14 @@ export class RetentionFormComponent {
 
   protected async confirm(): Promise<void> {
     const body = this.pending();
-    if (!body || this.store.saving()) return;
+    const scope = this.store.scope();
+    if (!body || !scope || this.store.saving()) return;
     await this.store.save(body);
-    this.pending.set(null);
+    // A settled write can arrive after the user moved to another organization and opened that
+    // organization's own warning; only the confirmation this write was opened for may go away.
+    const current = this.store.scope();
+    if (this.pending() === body && current?.org === scope.org && current.project === scope.project)
+      this.pending.set(null);
   }
 
   protected cancel(): void {
@@ -132,7 +138,14 @@ export class RetentionFormComponent {
   }
 
   protected dialogStateChanged(state: 'open' | 'closed'): void {
-    if (state === 'closed') this.cancel();
+    if (state !== 'closed') return;
+    if (this.store.saving()) {
+      // Spartan freezes `disableClose` when the dialog opens, so Escape still starts a close during
+      // the confirmed write. Reopening it in the same tick keeps the dialog and its focus in place.
+      this.dialog()?.open();
+      return;
+    }
+    this.cancel();
   }
 
   protected restoreFocus(): void {

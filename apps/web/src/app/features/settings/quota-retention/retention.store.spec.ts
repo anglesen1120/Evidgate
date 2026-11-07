@@ -8,6 +8,7 @@ const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 describe('RetentionStore', () => {
   afterEach(() => {
     document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+    vi.restoreAllMocks();
     TestBed.resetTestingModule();
   });
 
@@ -103,6 +104,18 @@ describe('RetentionStore', () => {
     const retry = h.store.save({ artifact_days: 30, metadata_days: 90 });
     flush(await h.take('PUT'), { artifact_days: 30, metadata_days: 90 });
     expect(await retry).toBe(true);
+  });
+
+  it('rethrows an unexpected write failure and stops reporting the attempt as saving', async () => {
+    const h = mountRetention();
+    await h.load();
+    const defect = new Error('retention writer is not implemented');
+    vi.spyOn(h.store.data, 'save').mockRejectedValueOnce(defect);
+    await expect(h.store.save({ artifact_days: 30, metadata_days: 90 })).rejects.toBe(defect);
+    expect(h.store.saving()).toBe(false);
+    expect(h.store.writeFailed()).toBe(false);
+    expect(h.store.policy()).toEqual(STORED);
+    h.http.expectNone((request) => request.method === 'PUT');
   });
 
   it('uses the existing quota relay for a 429 quota refusal without retrying the write', async () => {

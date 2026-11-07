@@ -102,6 +102,30 @@ describe('RetentionFormComponent', () => {
     h.http.expectNone((request) => request.method === 'PUT');
   });
 
+  it('ignores Escape while the confirmed write is in flight', async () => {
+    const h = mountRetention();
+    await h.load();
+    await h.edit('7', '90');
+    submit(h.root);
+    await h.settle();
+    dialogButton('[data-retention-confirm]').click();
+    const put = await h.take('PUT');
+    const content = document.querySelector<HTMLElement>('[data-slot="dialog-content"]');
+    if (!content) throw new Error('Expected the deletion-impact dialog');
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    content.dispatchEvent(escape);
+    TestBed.tick();
+    h.fixture.detectChanges();
+    expect(escape.defaultPrevented).toBe(true);
+    // The write owns the dialog: Escape must not even start its closing state.
+    expect(content.getAttribute('data-state')).toBe('open');
+    expect(content.isConnected).toBe(true);
+    flush(put, { artifact_days: 7, metadata_days: 90 });
+    await h.settle();
+    expect(h.store.policy()).toEqual({ artifact_days: 7, metadata_days: 90 });
+    h.http.verify();
+  });
+
   it.each([422, 403, 404, 409])(
     'shows a %s refusal verbatim without replacing the stored windows',
     async (status) => {

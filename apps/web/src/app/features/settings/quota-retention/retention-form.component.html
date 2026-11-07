@@ -135,9 +135,9 @@
   }
 </section>
 <hlm-dialog
+  #confirmationDialog
   [state]="pending() ? 'open' : 'closed'"
   [restoreFocus]="false"
-  [disableClose]="store.saving()"
   [closeOnOutsidePointerEvents]="false"
   (stateChanged)="dialogStateChanged($event)"
   (closed)="restoreFocus()"

@@ -8,6 +8,7 @@ import {
   expectNoA11yViolations,
   localePath,
   seedStoredTheme,
+  waitForDialogAnimations,
   withVariants,
   type ShellLocale,
 } from './support';
@@ -64,6 +65,8 @@ for (const locale of LOCALES) {
       await expect(dialog.locator('[data-retention-impact="artifact_days"]')).toContainText('14');
       await expect(dialog.locator('[data-retention-impact="artifact_days"]')).toContainText('7');
       expect(await putCount(page)).toBe(0);
+      // The dialog fades in; axe would otherwise read colours blended by the entrance opacity.
+      await waitForDialogAnimations(page, '[role="dialog"]');
       await expectNoA11yViolations(page, `retention warning ${locale}`);
       await tabTo(page, '[data-retention-cancel]');
       await page.keyboard.press('Enter');
@@ -144,6 +147,8 @@ for (const locale of LOCALES) {
         await tabTo(page, '[data-retention-save]');
         await page.keyboard.press('Enter');
         await expect(page.getByRole('dialog')).toBeVisible();
+        // The dialog fades in; axe would otherwise read colours blended by the entrance opacity.
+        await waitForDialogAnimations(page, '[role="dialog"]');
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
