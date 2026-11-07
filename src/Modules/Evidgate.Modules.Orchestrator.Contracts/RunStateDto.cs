@@ -7,9 +7,9 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// locked (the pinned manifest, its suite and policy revisions, its environment revision and the producer slots it
 /// registered). The wire names are <c>run_id</c>, <c>state</c>, <c>current_evidence_revision_id</c>, <c>version</c>,
 /// <c>purpose</c>, <c>ref</c>, <c>unverified_ref</c>, <c>manifest_hash</c>, <c>suite_revision_id</c>,
-/// <c>policy_revision_id</c>, <c>environment</c>, <c>shard_count</c> and <c>declared_producers</c> (the host's
-/// <c>SnakeCaseLower</c> policy). Another tenant's — or, for a project-scoped credential, another project's — run is
-/// <c>404 not_found</c>, the same code and body as an unknown id (00 §5.4).
+/// <c>policy_revision_id</c>, <c>environment</c>, <c>shard_count</c>, <c>declared_producers</c>, <c>releases</c> and
+/// <c>after_cancel_events</c> (the host's <c>SnakeCaseLower</c> policy). Another tenant's — or, for a project-scoped
+/// credential, another project's — run is <c>404 not_found</c>, the same code and body as an unknown id (00 §5.4).
 /// <para>
 /// Every member is required and comes from a stored column: nothing here is a placeholder. Evidence
 /// <c>completeness</c>/<c>missing[]</c> are a later, separate read (09.3.1-T3 with 07.5.2), not part of this body.
@@ -56,6 +56,15 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// The run's producer slot ids in <c>shard_index</c> order, the values the manifest's shards declare
 /// (<c>shard-&lt;n&gt;</c>, written at run creation, 0029).
 /// </param>
+/// <param name="Releases">
+/// The releases the run is bound to, one item per stored <c>release_run</c> row, ordered by that row's
+/// <c>created_at</c> then id. An unbound run carries an empty array — never null — and a release of another tenant,
+/// or of a sibling project the bind path refused, is never listed.
+/// </param>
+/// <param name="AfterCancelEvents">
+/// How many of the run's <c>event</c> rows are flagged <c>after_cancel</c>: late events a canceled run kept accepting.
+/// It counts events, not case attempts, and a run with none reports zero.
+/// </param>
 public sealed record RunStateDto(
     Guid RunId,
     string State,
@@ -69,7 +78,19 @@ public sealed record RunStateDto(
     Guid? PolicyRevisionId,
     RunEnvironmentRef Environment,
     int ShardCount,
-    IReadOnlyList<string> DeclaredProducers);
+    IReadOnlyList<string> DeclaredProducers,
+    IReadOnlyList<RunReleaseRef> Releases,
+    int AfterCancelEvents);
+
+/// <summary>
+/// One release a run is bound to (<c>GET /v1/runs/{r}</c>): the release's id and name, and the component key the stored
+/// binding covers, so a run bound to a three-component release carries three items of one release. The wire names are
+/// <c>release_id</c>, <c>release_name</c> and <c>component_key</c>.
+/// </summary>
+/// <param name="ReleaseId"><c>release.id</c> the run is bound to.</param>
+/// <param name="ReleaseName">The release's declared name (<c>release.name</c>).</param>
+/// <param name="ComponentKey">The release component this binding row covers.</param>
+public sealed record RunReleaseRef(Guid ReleaseId, string ReleaseName, string ComponentKey);
 
 /// <summary>
 /// The run's pinned environment revision (<c>GET /v1/runs/{r}</c>, F44, S143): the identity of the

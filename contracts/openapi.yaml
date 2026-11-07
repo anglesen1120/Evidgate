@@ -9465,6 +9465,8 @@ components:
           environment,
           shard_count,
           declared_producers,
+          releases,
+          after_cancel_events,
         ]
       properties:
         run_id:
@@ -9534,6 +9536,36 @@ components:
             minLength: 1
             maxLength: 128
             pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'
+        releases:
+          type: array
+          description: >-
+            The releases this run is bound to, one item per stored `release_run` row, ordered by its `created_at`
+            then id. An empty array — never `null` — is a run bound to nothing. A release of another org or project is
+            never listed.
+          items:
+            $ref: '#/components/schemas/RunReleaseRef'
+        after_cancel_events:
+          type: integer
+          minimum: 0
+          description: >-
+            How many of the run's stored `event` rows are flagged `after_cancel` (0034): late events that arrived
+            after the cancel. A count of events, not of case attempts.
+    RunReleaseRef:
+      type: object
+      description: One release binding of a run (`release_run`, the only run-release binding).
+      additionalProperties: false
+      required: [release_id, release_name, component_key]
+      properties:
+        release_id:
+          type: string
+          format: uuid
+        release_name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        component_key:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9_-]{0,63}$'
     RunSummary:
       type: object
       description: >-
