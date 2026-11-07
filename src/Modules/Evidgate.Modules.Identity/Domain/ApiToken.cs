@@ -62,7 +62,12 @@ internal sealed class ApiToken
     public bool MatchesHash(ReadOnlySpan<byte> candidateHash) =>
         CryptographicOperations.FixedTimeEquals(TokenHmac, candidateHash);
 
-    /// <summary>Revokes the token; revocation is final and a second call is refused as a bug, not a no-op.</summary>
+    /// <summary>
+    /// Revokes the token; revocation is final and a second call is refused as a bug, not a no-op. The instant is
+    /// clamped to the row's <see cref="CreatedAt"/>: the column is written by the database's clock while the caller
+    /// supplied this clock's, and a clock that sits behind the database by a few milliseconds would otherwise trip
+    /// the table's <c>api_token_revoked_after_created_check</c> — a token revoked in the same breath it was minted.
+    /// </summary>
     /// <param name="now">The transition time.</param>
     public void Revoke(DateTimeOffset now)
     {
@@ -71,6 +76,6 @@ internal sealed class ApiToken
             throw new InvalidOperationException($"api token {Id} is already revoked");
         }
 
-        RevokedAt = now;
+        RevokedAt = now >= CreatedAt ? now : CreatedAt;
     }
 }

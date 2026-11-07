@@ -25,7 +25,7 @@
 -- PERMISSIONS: `text[]`, non-empty and bounded. The catalogue membership and the deny set are
 -- contracts/permissions.json data that the create command and the evaluator enforce at create and at
 -- use time; SQL cannot read that file, so a duplicated list here would drift from it. The array shape
--- (one dimension, non-empty, no empty element) is checked.
+-- (one dimension, non-empty, no empty element, no NULL element) is checked.
 --
 -- RLS: ENABLE + FORCE, with the tenant policy `to evidgate_app` over `evidgate.current_org_id()` (never
 -- the raw setting, so a missing or blank setting yields zero rows) and the owner backfill policy FORCE
@@ -93,6 +93,7 @@ create table if not exists public.api_token (
       when array_ndims(permissions) is distinct from 1 then false
       else cardinality(permissions) between 1 and 64
            and array_position(permissions, '') is null
+           and array_position(permissions, null) is null
     end),
   constraint api_token_expiry_check check (expires_at > created_at),
   constraint api_token_revoked_after_created_check check (revoked_at is null or revoked_at >= created_at)

@@ -75,9 +75,9 @@ internal static class SelfEscalation
             return distinct;
         }
 
-        var held = await permissions.ResolveAsync(orgId, caller, cancellationToken).ConfigureAwait(false);
+        var access = await permissions.ResolveAsync(orgId, caller, cancellationToken).ConfigureAwait(false);
 
-        return [.. distinct.Where(code => !held.Contains(code))];
+        return [.. distinct.Where(code => !access.Codes.Contains(code))];
     }
 
     /// <summary>

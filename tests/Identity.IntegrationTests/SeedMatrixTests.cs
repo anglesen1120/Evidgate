@@ -176,7 +176,7 @@ public sealed class SeedMatrixTests : CatalogueTestBase
                 }
 
                 evaluatorRoles.Add(role);
-                foreach (var code in await evaluator.ResolveAsync(org, principal, Token))
+                foreach (var code in (await evaluator.ResolveAsync(org, principal, Token)).Codes)
                 {
                     evaluatorCells.Add((role, code));
                 }

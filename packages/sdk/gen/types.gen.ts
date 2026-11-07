@@ -8154,6 +8154,10 @@ export type CreateApiTokenErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 413 payload_too_large — the request body exceeds the 16384-byte cap, checked before parsing
+     */
+    413: ErrorEnvelope;
+    /**
      * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
      */
     422: ErrorEnvelope;
@@ -8209,6 +8213,10 @@ export type RevokeApiTokenErrors = {
      * 404 not found — also for other-tenant ids (00 §9.2)
      */
     404: ErrorEnvelope;
+    /**
+     * 412 precondition failed — stale ETag; current revision id in `error.details` (00 §9.1/§9.2)
+     */
+    412: ErrorEnvelope;
     /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */

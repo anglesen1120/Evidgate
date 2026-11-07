@@ -41,8 +41,9 @@ namespace Evidgate.Modules.Identity.Authorization;
 /// </summary>
 internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, ICallerPermissionSet
 {
-    /// <summary>The empty set a fail-closed resolution answers (never null).</summary>
-    private static readonly IReadOnlySet<string> NoPermissions = new HashSet<string>(StringComparer.Ordinal);
+    /// <summary>The answer of a fail-closed resolution: no membership row to name, nothing held (never null).</summary>
+    private static readonly CallerAccess NoAccess =
+        new(null, new HashSet<string>(StringComparer.Ordinal));
 
     /// <inheritdoc />
     public async ValueTask<PermissionDecision> EvaluateAsync(
@@ -172,19 +173,22 @@ internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, 
     /// <summary>
     /// The member path's set-shaped answer (W7-SEC-02): one statement over the same
     /// join the per-permission verdict uses, projected as the caller's whole
-    /// member-assignable code set instead of a single boolean. The write commands
-    /// compare a grant against it before writing, so "may I hand this out?" is answered
-    /// by the same rows that will answer "do I hold it?" on the next request.
+    /// member-assignable code set instead of a single boolean — plus the membership
+    /// that set came from, because a tenant-scoped write names that row as its actor.
+    /// The write commands compare a grant against the set before writing, so "may I
+    /// hand this out?" is answered by the same rows that will answer "do I hold it?" on
+    /// the next request, and <c>created_by</c> is the membership those rows belong to.
     /// </summary>
     /// <remarks>
     /// Fail-closed in every branch that is not a resolved member: a caller with no
     /// active membership, a kind the module does not resolve, a null principal or a read
-    /// that returned nothing all answer the empty set, and the caller's own commands
-    /// then refuse anything that grants a permission. A service identity's set is its
-    /// token claims bounded by the catalogue — the same bound
-    /// <see cref="Service"/> applies — and an operator holds nothing until 02.8.1.
+    /// that returned nothing all answer no membership and the empty set, and the caller's
+    /// own commands then refuse anything that grants a permission or records an actor. A
+    /// service identity's set is its token claims bounded by the catalogue — the same
+    /// bound <see cref="Service"/> applies — and it has no membership row; an operator
+    /// holds nothing until 02.8.1.
     /// </remarks>
-    public async ValueTask<IReadOnlySet<string>> ResolveAsync(
+    public async ValueTask<CallerAccess> ResolveAsync(
         Guid orgId,
         IRequestPrincipal principal,
         CancellationToken cancellationToken)
@@ -199,19 +203,19 @@ internal sealed class PermissionEvaluator(ITenantDb db) : IPermissionEvaluator, 
                     new { org_id = orgId, user_id = userId },
                     cancellationToken).ConfigureAwait(false);
 
-                return row is null || row.ActiveMemberships == 0
-                    ? NoPermissions
-                    : row.Codes.ToHashSet(StringComparer.Ordinal);
+                return row is { MembershipId: { } membershipId }
+                    ? new CallerAccess(membershipId, row.Codes.ToHashSet(StringComparer.Ordinal))
+                    : NoAccess;
 
             case PrincipalKind.ServicePrincipal:
                 // Same bound as Service(): one claim outside the catalogue makes the
                 // token malformed, so it holds nothing rather than the rest of its claims.
                 return principal.ClaimedPermissions.All(IsServiceClaim)
-                    ? principal.ClaimedPermissions.ToHashSet(StringComparer.Ordinal)
-                    : NoPermissions;
+                    ? new CallerAccess(null, principal.ClaimedPermissions.ToHashSet(StringComparer.Ordinal))
+                    : NoAccess;
 
             default:
-                return NoPermissions;
+                return NoAccess;
         }
     }
 }

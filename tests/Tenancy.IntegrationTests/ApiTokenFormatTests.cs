@@ -34,6 +34,12 @@ public sealed class ApiTokenFormatTests
         first.Secret.ShouldNotBe(second.Secret);
     }
 
+    /// <summary>
+    /// The grammar itself: the <c>evg_</c> scheme, a twelve-character alphanumeric prefix, one separator and a
+    /// forty-three-character base64url secret. Each refusal below breaks exactly one of those terms at a fixed
+    /// position, so a green run means the parser reads that shape rather than refusing whatever it is given;
+    /// the two literals above the loop are the positive control.
+    /// </summary>
     [Fact]
     public void TryParse_AcceptsOnlyTheEvgShape()
     {
@@ -43,20 +49,36 @@ public sealed class ApiTokenFormatTests
         prefix.ShouldBe(generated.Prefix);
         secret.ShouldBe(generated.Secret);
 
+        ApiTokenFormat.TryParse(Valid, out var fixedPrefix, out var fixedSecret).ShouldBeTrue(
+            "the control must be accepted, or the refusals below prove nothing about the grammar");
+        fixedPrefix.ShouldBe(ValidPrefix);
+        fixedSecret.ShouldBe(ValidSecret);
+
         foreach (var rejected in new[]
                  {
                      null,
                      string.Empty,
+                     " " + Valid,
+                     Valid + " ",
                      "hunter2",
-                     "egt_" + generated.Prefix + "_" + generated.Secret,
-                     "evg_" + generated.Prefix.ToLowerInvariant() + "_" + generated.Secret,
-                     "evg_" + generated.Prefix + "_" + generated.Secret[..42],
-                     "evg_" + generated.Prefix + "_" + generated.Secret + "A",
-                     "evg_" + generated.Prefix + "_" + generated.Secret.Replace('-', '!'),
-                     " " + generated.Full,
+                     "egt_" + ValidPrefix + "_" + ValidSecret,
+                     "EVG_" + ValidPrefix + "_" + ValidSecret,
+                     "evg_" + ValidPrefix[..11] + "_" + ValidSecret,
+                     "evg_" + ValidPrefix + "a_" + ValidSecret,
+                     "evg_" + ValidPrefix[..3] + "!" + ValidPrefix[4..] + "_" + ValidSecret,
+                     "evg_" + ValidPrefix + "_" + ValidSecret[..20] + "!" + ValidSecret[21..],
+                     "evg_" + ValidPrefix + "_" + ValidSecret[..20] + "+" + ValidSecret[21..],
+                     "evg_" + ValidPrefix + "_" + ValidSecret[..42] + "=",
+                     "evg_" + ValidPrefix + ValidSecret,
+                     "evg" + ValidPrefix + "_" + ValidSecret,
+                     "evg_" + ValidPrefix + "_" + ValidSecret[..42],
+                     "evg_" + ValidPrefix + "_" + ValidSecret + "A",
+                     "evg_" + ValidPrefix + "_" + ValidSecret + new string('A', 30),
                  })
         {
-            ApiTokenFormat.TryParse(rejected, out var refusedPrefix, out var refusedSecret).ShouldBeFalse();
+            var shown = rejected ?? "(null)";
+            ApiTokenFormat.TryParse(rejected, out var refusedPrefix, out var refusedSecret).ShouldBeFalse(
+                $"the parser accepted a value outside the evg grammar: {shown}");
             refusedPrefix.ShouldBeEmpty();
             refusedSecret.ShouldBeEmpty();
         }
@@ -104,6 +126,15 @@ public sealed class ApiTokenFormatTests
         var expired = new ApiToken { Id = Guid.CreateVersion7(), ExpiresAt = now.AddDays(-1) };
         expired.StatusAt(now).ShouldBe(ApiTokenStatus.Expired);
     }
+
+    /// <summary>A prefix of exactly twelve alphanumeric characters, the shape the parser accepts.</summary>
+    private const string ValidPrefix = "Ab3dEf6hIj9L";
+
+    /// <summary>A secret of exactly forty-three base64url characters, carrying both <c>-</c> and <c>_</c>.</summary>
+    private static readonly string ValidSecret = string.Concat(Enumerable.Repeat("Az09-_", 7)) + "A";
+
+    /// <summary>The well-formed literal every refusal above is derived from by one fixed-position change.</summary>
+    private static readonly string Valid = $"evg_{ValidPrefix}_{ValidSecret}";
 
     private static string Key(byte seed) => Convert.ToBase64String(Enumerable.Repeat(seed, 32).ToArray());
 }

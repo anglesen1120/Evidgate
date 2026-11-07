@@ -32,6 +32,15 @@ internal static class ApiTokenErrors
         ApiTokenErrorCodes.PermissionEscalation,
         "the requested permissions exceed what the creator holds on this project");
 
+    /// <summary>
+    /// 403: the caller has no active membership in this org, so there is no membership row the token could record as
+    /// its creator — the same <c>no_membership</c> the C2 gate denies with, and the reason a token is never minted
+    /// anonymously.
+    /// </summary>
+    public static Error NoMembership { get; } = Error.Denied(
+        ApiErrorCode.NoMembership,
+        "API tokens are created by an active member of the org: no membership to record as the creator");
+
     /// <summary>422: <c>expires_at</c> is absent, in the past, or beyond the configured maximum.</summary>
     /// <param name="reason">The field reason: <c>required</c>, <c>past</c> or <c>out_of_range</c>.</param>
     /// <param name="message">The secret-free explanation.</param>

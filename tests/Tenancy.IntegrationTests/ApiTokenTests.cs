@@ -61,7 +61,16 @@ public sealed class ApiTokenTests : IAsyncLifetime
         var item = list.Body.GetProperty("items")[0];
         item.GetProperty("status").GetString().ShouldBe("active");
         item.GetProperty("prefix").GetString().ShouldBe(prefix);
-        item.GetProperty("created_by").GetGuid().ShouldBe(user);
+
+        // `created_by` is the creator's MEMBERSHIP, not the platform user: the row's `api_token_created_by_fk` is
+        // (org_id, created_by) → membership (org_id, id), and a founder's membership id is its own value. The founder
+        // here comes from the real POST /v1/orgs path, so the two ids differ and this assertion is not vacuous.
+        var membership = await MembershipIdAsync(user, org);
+        membership.ShouldNotBe(
+            user,
+            "the founder's membership must have its own id, or asserting the membership id proves nothing");
+        item.GetProperty("created_by").GetGuid().ShouldBe(membership);
+        (await _fixture.ScalarAsync<Guid>(_database!, "select created_by from public.api_token")).ShouldBe(membership);
         item.GetProperty("last_used_at").ValueKind.ShouldBe(System.Text.Json.JsonValueKind.Null);
 
         // Nothing of the secret reaches the row: not the plaintext, not its prefix columns, not the label.
@@ -212,6 +221,14 @@ public sealed class ApiTokenTests : IAsyncLifetime
 
         // A revoked token is never resurrected by the plaintext: the row keeps revoked_at and the verifier is T2's.
         (await _fixture.ScalarAsync<bool>(_database!, $"select revoked_at is not null from public.api_token where id = '{id}'")).ShouldBeTrue();
+
+        // Revoked in the same breath it was minted: `created_at` is the database's clock and this request's clock
+        // answered earlier, so the stored instant is clamped to the row's creation instead of tripping
+        // `api_token_revoked_after_created_check`.
+        (await _fixture.ScalarAsync<bool>(
+                _database!,
+                $"select revoked_at >= created_at from public.api_token where id = '{id}'"))
+            .ShouldBeTrue("a revocation can never precede the creation it ends");
     }
 
     [Fact]
@@ -228,6 +245,29 @@ public sealed class ApiTokenTests : IAsyncLifetime
         (await CreateAsync(client, user, org, Guid.CreateVersion7(), new { name = "ghost", permissions = ReadOnly, expires_at = In(30) }))
             .Status.ShouldBe(HttpStatusCode.NotFound);
         (await _fixture.ScalarAsync<bool>(_database!, $"select revoked_at is null from public.api_token where id = '{id}'")).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task ApiToken_Create_RefusesABodyOverTheRouteCap()
+    {
+        var (api, client, user, org, project) = await StartAsync();
+        await using var _ = api;
+
+        // The route caps the create body at 16 KiB and refuses it before parsing: 32 codes of at most 64 characters
+        // plus a 120-character name is a few KiB, so this is a request no legal create could send.
+        var oversize = await client.SendRawAsync(
+            HttpMethod.Post,
+            $"/v1/projects/{project}/api-tokens",
+            Admin(user, org),
+            $$"""{"name":"{{new string('x', 20 * 1024)}}","permissions":["run:read"],"expires_at":"{{In(30):O}}"}""");
+
+        oversize.Status.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
+        oversize.ErrorCode.ShouldBe("payload_too_large");
+        (await _fixture.ScalarAsync<long>(_database!, "select count(*) from public.api_token")).ShouldBe(0);
+
+        // The control: the same route accepts the same body under the cap, so the refusal is about its size.
+        (await CreateAsync(client, user, org, project, new { name = "within the cap", permissions = ReadOnly, expires_at = In(30) }))
+            .Status.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -250,6 +290,14 @@ public sealed class ApiTokenTests : IAsyncLifetime
     // ---------------------------------------------------------------- helpers
 
     private string? _database;
+
+    /// <summary>The id of the membership a user holds in an org — the row a `created_by` column names.</summary>
+    /// <param name="user">The account.</param>
+    /// <param name="org">The tenant.</param>
+    private Task<Guid> MembershipIdAsync(Guid user, Guid org) =>
+        _fixture.ScalarAsync<Guid>(
+            _database!,
+            $"select id from public.membership where org_id = '{org}' and user_id = '{user}'");
 
     private async Task<(TenancyApiFactory Api, HttpClient Client, Guid User, Guid Org, Guid Project)> StartAsync()
     {

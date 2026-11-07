@@ -1254,7 +1254,7 @@ export const revokeIngestToken = <ThrowOnError extends boolean = false>(options:
 });
 
 /**
- * Cursor page of a project's API tokens, metadata only (02.4.4)
+ * Cursor page of the API tokens of a project, metadata only (02.4.4)
  *
  * Keyset-ordered on `(created_at, id)`; the page carries each token's id, name, prefix, permission subset, derived `status` (`active`, `expired` or `revoked`) and timestamps — never the secret or its HMAC. An unknown project, or one of another org, is 404.
  */
@@ -1271,7 +1271,7 @@ export const listApiTokens = <ThrowOnError extends boolean = false>(options: Opt
 /**
  * Create a project API token; the plaintext is returned once (02.4.4)
  *
- * The token is bound to this one project and carries exactly the requested `permissions`: each must be held by the creator at creation time and none may be in the deny set (`membership:*`, `role:*`, `organization:write`, `project:create`, `project:write`, `ci_binding:write`, `api_token:*`, `ingest_token:write`, `service_identity:*`, `sso:*`, `support:*`, `billing:*`, `healing:approve`, `healing:revoke`, `healing:configure`, `policy:write`, `artifact:read_sensitive`, `audit:read`, `security_event:read`, `webhook:write`). The row keeps the 12-character prefix, an `HMAC-SHA256(pepper_vN, secret)` and the pepper version — never the plaintext — so no later call can return the token again. `expires_at` is mandatory, in the future and at most the configured maximum lifetime (365 days by default); a missing or out-of-range value is 422 `schema_invalid`. A permission the creator does not hold is 403 `permission_escalation`; a deny-set code is 422 `forbidden_token_permission`. The response carries a one-time secret and is never replayed, so this route takes no `Idempotency-Key` (README): a retried create mints a second token the admin revokes.
+ * The token is bound to this one project and carries exactly the requested `permissions`: each must be held by the creator at creation time and none may be in the deny set (`membership:*`, `role:*`, `organization:write`, `project:create`, `project:write`, `ci_binding:write`, `api_token:*`, `ingest_token:write`, `service_identity:*`, `sso:*`, `support:*`, `billing:*`, `healing:approve`, `healing:revoke`, `healing:configure`, `policy:write`, `artifact:read_sensitive`, `audit:read`, `security_event:read`, `webhook:write`). The row keeps the 12-character prefix, an `HMAC-SHA256(pepper_vN, secret)` and the pepper version — never the plaintext — so no later call can return the token again. `expires_at` is mandatory, in the future and at most the configured maximum lifetime (365 days by default); a missing or out-of-range value is 422 `schema_invalid`. A permission the creator does not hold is 403 `permission_escalation`; a deny-set code is 422 `forbidden_token_permission`. The response carries a one-time secret and is never replayed, so this route takes no `Idempotency-Key` (README): a retried create mints a second token the admin revokes. The request body is capped at 16384 bytes and is refused with 413 `payload_too_large` before it is parsed.
  */
 export const createApiToken = <ThrowOnError extends boolean = false>(options: Options<CreateApiTokenData, ThrowOnError>): RequestResult<CreateApiTokenResponses, CreateApiTokenErrors, ThrowOnError> => (options.client ?? client).post<CreateApiTokenResponses, CreateApiTokenErrors, ThrowOnError>({
     security: [{
@@ -1290,7 +1290,7 @@ export const createApiToken = <ThrowOnError extends boolean = false>(options: Op
 /**
  * Revoke a project API token (02.4.4)
  *
- * Sets `revoked_at`; the next request that presents the token is 401 `token_revoked`, with no cache to wait out. Revocation is a row state, so a repeat answers the same 204 and the route takes no `Idempotency-Key` (README). An unknown id, or one of another org, is 404. A token can never hold `api_token:write`, so a token cannot revoke anything.
+ * Sets `revoked_at`; the next request that presents the token is 401 `token_revoked`, with no cache to wait out. Revocation is a row state, so a repeat answers the same 204 and the route takes no `Idempotency-Key` (README). An unknown id, or one of another org, is 404. A token can never hold `api_token:write`, so a token cannot revoke anything. No `If-Match` is bound: the row `version` makes two revocations racing one token answer one 204 and one 412 `precondition_failed`, and the loser writes neither the row nor an audit event.
  */
 export const revokeApiToken = <ThrowOnError extends boolean = false>(options: Options<RevokeApiTokenData, ThrowOnError>): RequestResult<RevokeApiTokenResponses, RevokeApiTokenErrors, ThrowOnError> => (options.client ?? client).delete<RevokeApiTokenResponses, RevokeApiTokenErrors, ThrowOnError>({
     security: [{

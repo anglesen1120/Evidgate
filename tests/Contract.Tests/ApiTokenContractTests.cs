@@ -54,7 +54,8 @@ public sealed class ApiTokenContractTests
     {
         var spec = OpenApiSpec.Load();
 
-        spec.ResponseKeys(CollectionPath, "post").ShouldBe(["200", "401", "403", "404", "422", "429", "503"]);
+        spec.ResponseKeys(CollectionPath, "post").ShouldBe(
+            ["200", "401", "403", "404", "413", "422", "429", "503"]);
 
         var documented = spec.DocumentedText("createApiToken");
         documented.ShouldContain(
@@ -109,15 +110,24 @@ public sealed class ApiTokenContractTests
             "the page's rows must be the metadata view, not the create answer that carries the secret");
     }
 
-    /// <summary>Revocation answers one bodiless success or the 404 of an id the tenant cannot see.</summary>
+    /// <summary>
+    /// Revocation answers one bodiless success, the 404 of an id the tenant cannot see, or the 412 a losing
+    /// writer of the same row gets — the handler maps a lost concurrency check to <c>precondition_failed</c>.
+    /// </summary>
     [Fact]
-    public void Revoke_Operation_AnswersNoContentOrNotFound()
+    public void Revoke_Operation_AnswersNoContentNotFoundOrConcurrencyRefusal()
     {
         var spec = OpenApiSpec.Load();
 
         spec.ResponseKeys(RevokePath, "delete").ShouldBe(
-            ["204", "401", "403", "404", "429", "503"],
-            "revocation answers one bodiless success (204) or the 404 of an id this tenant cannot see");
+            ["204", "401", "403", "404", "412", "429", "503"],
+            "revocation answers one bodiless success (204), the 404 of an id this tenant cannot see, "
+            + "or the 412 of a revocation that lost the row to a concurrent writer");
+
+        spec.DocumentedText("revokeApiToken").ShouldContain(
+            "412 `precondition_failed`",
+            Case.Sensitive,
+            "a client reading the operation must be told the concurrency refusal it can receive");
 
         ParameterNames(spec, RevokePath, "delete", "path").ShouldBe(["t"]);
         ParameterNames(spec, RevokePath, "delete", "header")

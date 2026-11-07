@@ -33,9 +33,26 @@ internal interface ICallerPermissionSet
     /// <param name="orgId">The request tenant (never the route's org, 00 §5.5 C2).</param>
     /// <param name="principal">The published caller.</param>
     /// <param name="cancellationToken">The request's cancellation token.</param>
-    /// <returns>The caller's set; empty when no active membership resolves or the read fails.</returns>
-    ValueTask<IReadOnlySet<string>> ResolveAsync(
+    /// <returns>
+    /// The caller's access; an empty set and no membership when no active membership resolves or the read fails.
+    /// </returns>
+    ValueTask<CallerAccess> ResolveAsync(
         Guid orgId,
         IRequestPrincipal principal,
         CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// What <see cref="ICallerPermissionSet"/> resolved: the caller's ACTIVE membership in the tenant and the codes it
+/// effectively holds. Both halves come from one statement — the active-membership subquery and the grant join —
+/// because a tenant-scoped write has to name the membership as its actor (<c>api_token.created_by</c> is
+/// <c>(org_id, created_by) → membership (org_id, id)</c>) while the grant check has to read that same membership's
+/// roles. Resolving the id on a second path could name one membership and authorize another.
+/// </summary>
+/// <param name="MembershipId">
+/// The caller's active membership of the tenant — the row a <c>created_by</c> column names — or null when the
+/// caller has none (a service identity, the operator stub, or a member whose row is not <c>active</c>). A command
+/// that must record an actor row refuses the request rather than guessing one.
+/// </param>
+/// <param name="Codes">Every code the caller holds, never null; empty whenever <paramref name="MembershipId"/> is null.</param>
+internal sealed record CallerAccess(Guid? MembershipId, IReadOnlySet<string> Codes);

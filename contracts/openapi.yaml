@@ -4452,6 +4452,8 @@ paths:
         A permission the creator does not hold is 403 `permission_escalation`; a deny-set code is 422
         `forbidden_token_permission`. The response carries a one-time secret and is never replayed, so this
         route takes no `Idempotency-Key` (README): a retried create mints a second token the admin revokes.
+        The request body is capped at 16384 bytes and is refused with 413 `payload_too_large` before it is
+        parsed.
       x-permission: api_token:write
       x-version: v1
       parameters:
@@ -4481,6 +4483,15 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '413':
+          description: 413 payload_too_large — the request body exceeds the 16384-byte cap, checked before parsing
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
         '422':
           $ref: '#/components/responses/Unprocessable'
         '429':
@@ -4532,7 +4543,9 @@ paths:
         Sets `revoked_at`; the next request that presents the token is 401 `token_revoked`, with no cache
         to wait out. Revocation is a row state, so a repeat answers the same 204 and the route takes no
         `Idempotency-Key` (README). An unknown id, or one of another org, is 404. A token can never hold
-        `api_token:write`, so a token cannot revoke anything.
+        `api_token:write`, so a token cannot revoke anything. No `If-Match` is bound: the row `version`
+        makes two revocations racing one token answer one 204 and one 412 `precondition_failed`, and the
+        loser writes neither the row nor an audit event.
       x-permission: api_token:write
       x-version: v1
       parameters:
@@ -4550,6 +4563,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':

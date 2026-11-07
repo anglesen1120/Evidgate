@@ -196,6 +196,54 @@ public sealed class ApiTokenResolverTests : HarnessTest
             ("later", Past));
     }
 
+    /// <summary>
+    /// The array shape the table refuses: a NULL element — which no permission check can match, yet a resolver
+    /// would hand on as a grant — an empty array and a blank element are all 23514 on
+    /// <c>api_token_permissions_check</c>. The seeded row is the positive control: the same insert path stores
+    /// a valid grant list.
+    /// </summary>
+    [Fact]
+    public async Task Permissions_RefuseANullElementAnEmptyArrayAndABlankElement()
+    {
+        var (org, project) = await Fixture.SeedProjectAsync(cancellationToken: Token);
+        await SeedTokenAsync(org, project, Past, Future, revokedAt: null);
+        var createdBy = await SeedMembershipAsync(org);
+
+        foreach (var (permissions, because) in new[]
+                 {
+                     ("array[null]::text[]", "a NULL element is not a permission"),
+                     ("array[]::text[]", "an empty grant list"),
+                     ("array['run:read', '']::text[]", "a blank permission"),
+                 })
+        {
+            await using var owner = await TenantScope.BeginAsync(Fixture.OwnerConnectionString);
+            var error = await owner.CaptureErrorAsync(
+                $"""
+                insert into public.api_token
+                  (id, org_id, project_id, name, prefix, token_hmac, pepper_version, permissions,
+                   expires_at, created_by, created_at)
+                values
+                  (@id, @org_id, @project_id, 'probe', @prefix, @hmac, 1, {permissions},
+                   @expires_at::timestamptz, @created_by, @created_at::timestamptz)
+                """,
+                ("id", Guid.CreateVersion7()),
+                ("org_id", org),
+                ("project_id", project),
+                ("prefix", NewPrefix()),
+                ("hmac", new byte[32]),
+                ("expires_at", Future),
+                ("created_by", createdBy),
+                ("created_at", Past));
+
+            error.SqlState.ShouldBe("23514", $"the permissions CHECK must refuse {because}: {error.MessageText}");
+            error.ConstraintName.ShouldBe("api_token_permissions_check");
+        }
+
+        await using var scope = await TenantScope.BeginAsync(Fixture.AppConnectionString, org);
+        (await scope.ScalarAsync<string>("select permissions[1] from public.api_token"))
+            .ShouldBe("run:read", "the control: the seeded grant list was stored by the same insert path");
+    }
+
     /// <summary>When a seeded token's window ended: later than <see cref="Past"/>, as the expiry CHECK demands.</summary>
     private static DateTimeOffset Past => new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
 

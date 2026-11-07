@@ -68,8 +68,11 @@ internal sealed class CreateApiTokenCommandValidator : AbstractValidator<CreateA
 /// Handler of <see cref="CreateApiTokenCommand"/>. Every refusal happens before the row exists, in this
 /// order: key material configured, expiry bounds, permission set known, deny set, then the creator's own
 /// effective set. The escalation check asks <see cref="ICallerPermissionSet"/> — the same join the C2 gate
-/// evaluates — so a token can never hold what the next request would refuse its creator. In V1 a member's
-/// roles carry no project dimension, so the org-level set is exactly the creator's set on this project.
+/// evaluates — so a token can never hold what the next request would refuse its creator. That one answer also
+/// carries the caller's active membership, which is what the row records: <c>created_by</c> is
+/// <c>(org_id, created_by) → membership (org_id, id)</c>, a membership and never a platform user, so a caller
+/// with no active membership is refused instead of guessed. In V1 a member's roles carry no project
+/// dimension, so the org-level set is exactly the creator's set on this project.
 /// </summary>
 [Permission(Permissions.ApiToken.Write)]
 [AuditedAction("api_token.create")]
@@ -118,13 +121,23 @@ internal sealed class CreateApiTokenCommandHandler(
         var caller = principals.Current;
         var orgId = scopes.Require().OrgId;
 
-        if (caller?.UserId is not { } createdBy)
+        if (caller is null)
         {
-            return Result.Failure<ApiTokenCreatedResponse>(ApiTokenErrors.Escalation);
+            return Result.Failure<ApiTokenCreatedResponse>(ApiTokenErrors.NoMembership);
         }
 
-        var held = await callerPermissions.ResolveAsync(orgId, caller, cancellationToken).ConfigureAwait(false);
-        if (requested.Any(code => !held.Contains(code)))
+        // `created_by` names the caller's MEMBERSHIP, not the platform user: `api_token_created_by_fk` is
+        // (org_id, created_by) → membership (org_id, id), and a founder's or an invitee's membership id is its own
+        // value. The id comes from the same join that answers the escalation check below, so the creator recorded and
+        // the creator whose permissions are compared are one row.
+        var access = await callerPermissions.ResolveAsync(orgId, caller, cancellationToken).ConfigureAwait(false);
+
+        if (access.MembershipId is not { } createdBy)
+        {
+            return Result.Failure<ApiTokenCreatedResponse>(ApiTokenErrors.NoMembership);
+        }
+
+        if (requested.Any(code => !access.Codes.Contains(code)))
         {
             return Result.Failure<ApiTokenCreatedResponse>(ApiTokenErrors.Escalation);
         }
@@ -152,10 +165,16 @@ internal sealed class CreateApiTokenCommandHandler(
         {
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (DbUpdateException exception) when (PgErrors.IsForeignKey(exception))
+        catch (DbUpdateException exception) when (PgErrors.IsForeignKey(exception, "api_token_project_fk"))
         {
             return Result.Failure<ApiTokenCreatedResponse>(
                 Error.NotFound("no such project is visible to this tenant"));
+        }
+        catch (DbUpdateException exception) when (PgErrors.IsForeignKey(exception, "api_token_created_by_fk"))
+        {
+            // The membership resolved above was removed between the resolve and this insert. Nothing was written and
+            // no other project's answer fits, so the caller is told what the next attempt would answer anyway.
+            return Result.Failure<ApiTokenCreatedResponse>(ApiTokenErrors.NoMembership);
         }
         catch (DbUpdateException exception) when (PgErrors.IsUnique(exception))
         {
