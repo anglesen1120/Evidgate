@@ -152,6 +152,11 @@ describe('ScopeSwitcherComponent', () => {
 
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     expect(escapes).not.toHaveBeenCalled();
+
+    // Brain keeps that popup mounted with no disabled-to-close path, so this Escape closes the
+    // popup and the drawer together. Accepted: a disabled select can never reopen one, and a
+    // retained entry would keep the drawer closed to Escape for as long as the page lives.
+    expect(await (await harness.trigger(1)).getAttribute('aria-expanded')).toBe('true');
   });
 
   it('retains accessible labels in compact mode and ignores the current selection', async () => {
