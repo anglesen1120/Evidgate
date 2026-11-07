@@ -138,6 +138,7 @@ public sealed class OrgProjectSchemaTests
         [
             "project_default_environment_idx:CREATE INDEX project_default_environment_idx ON public.project USING btree (org_id, default_environment_id) WHERE (default_environment_id IS NOT NULL)",
             "project_org_case_prefix_uq:CREATE UNIQUE INDEX project_org_case_prefix_uq ON public.project USING btree (org_id, case_prefix)",
+            "project_org_created_id_idx:CREATE INDEX project_org_created_id_idx ON public.project USING btree (org_id, created_at, id)",
             "project_org_id_key:CREATE UNIQUE INDEX project_org_id_key ON public.project USING btree (org_id, id)",
             "project_org_slug_key:CREATE UNIQUE INDEX project_org_slug_key ON public.project USING btree (org_id, slug)",
             "project_org_status_created_id_idx:CREATE INDEX project_org_status_created_id_idx ON public.project USING btree (org_id, status, created_at, id)",
