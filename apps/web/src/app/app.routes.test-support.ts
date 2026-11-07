@@ -134,10 +134,10 @@ class SettingsNoTabsStub {
 }
 
 /**
- * The production components this spec replaces with markers: the layout slice's shell and pattern
- * pages, plus the Settings shell's three pages (09.7.1-T1) whose templates their own specs cover.
- * Keyed by the production class, so a route the table stops mounting through one of them simply
- * renders the real thing instead.
+ * The production components this spec replaces with markers: the shell host and the four pattern
+ * pages the table loads through `loadComponent`, plus the Settings shell's three pages whose
+ * templates their own specs cover. Keyed by the production class, so a route the table stops
+ * mounting through one of them simply renders the real thing instead.
  */
 const COMPONENT_STUBS = new Map<unknown, Type<unknown>>([
   [ShellComponent, ShellHostStub],
@@ -169,9 +169,9 @@ function withComponentStubs(table: readonly Route[]): Routes {
     if (route.component !== undefined) {
       next.component = COMPONENT_STUBS.get(route.component) ?? route.component;
     }
-    // 09.1.1-T5.1: `/login` and `/auth/callback` are lazy screens, so the stub has to sit behind
-    // their loader — the route table is otherwise untouched and the loader is still the production
-    // one, which is what makes the lazy boundary itself part of this spec.
+    // `/login` and `/auth/callback` are lazy screens, so the stub has to sit behind their loader —
+    // the route table is otherwise untouched and the loader is still the production one, which is
+    // what makes the lazy boundary itself part of this spec.
     if (typeof route.loadComponent === 'function') {
       const load = route.loadComponent as () => Promise<Type<unknown>>;
       next.loadComponent = async () => {
@@ -218,7 +218,7 @@ export const PROJECT: ProjectDto = {
 export const FOREIGN_ORG_ID = '018f0000-0000-7000-8000-0000000000ff';
 export const FOREIGN_PROJECT_ID = '018f0000-0000-7000-8000-0000000000fe';
 
-/** Two permissions the "signed in, allowed to read the project" cases start from (AC4). */
+/** Two permissions the "signed in, allowed to read the project" cases start from. */
 export const BASE_PERMISSIONS: ReadonlySet<string> = new Set(['project:read', 'organization:read']);
 
 /** The typed 401 the store turns into `sessionState === 'anonymous'`. */
@@ -333,7 +333,7 @@ export function entryWithPermission(permission: string): NavEntry {
   return entry;
 }
 
-/** The URL a registry entry lives at (Q4: the scope picks the prefix, the registry the segment). */
+/** The URL a registry entry lives at (the scope picks the prefix, the registry the segment). */
 export function urlOf(entry: NavEntry): string {
   return entry.scope === 'org'
     ? `/orgs/${ORG.id}/${entry.segment}`

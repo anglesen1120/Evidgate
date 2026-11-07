@@ -1,17 +1,16 @@
-// 09.1.1-T4.1 (plan 09.1.1 §2 AC4, §10 T4; 00 §5.6 W5, 00 §9.2; D-S68-Q1..Q4): the route table at
-// router level, against the real guards, the real entry routes and the real `SessionStore` — only
-// the two seams that talk to the server are faked (`IdentityDataService` and
+// The route table at router level, against the real guards, the real entry routes and the real
+// `SessionStore` — only the two seams that talk to the server are faked (`IdentityDataService` and
 // `EffectivePermissionsSource`), because the point of these cases is what the client decides from a
 // server-declared set, not what the server answers.
 //
 // What is stubbed, and why: `app.routes.ts` is imported unchanged and walked, replacing only the
-// *components* whose own specs cover their templates — the shell host, the pattern pages and the
-// Settings shell's three pages (09.7.1-T1) — with marker components. Every route, guard,
-// `data.entryId` and lazy boundary in the table under test is the production one; `RouteStubPage`
-// and `ProjectOverviewPage` are rendered for real, and the Settings shell table is reached through
-// its real `ENTRY_ROUTES` override.
+// *components* whose own specs cover their templates — the shell host and the four pattern pages,
+// which the table loads through `loadComponent`, and the Settings shell's three pages — with
+// marker components. Every route, guard, `data.entryId` and lazy boundary in the table under test
+// is the production one; `RouteStubPage` and `ProjectOverviewPage` are rendered for real, and the
+// Settings shell table is reached through its real `ENTRY_ROUTES` override.
 //
-// The five behaviours AC4 names:
+// The five behaviours these cases cover:
 //   - a route whose permission the server-declared set lacks is not matched → `/forbidden`;
 //   - a foreign org id, a foreign project id and a made-up path render the SAME not-found page;
 //   - a later-phase entry does not match in the G1 build → not found;
@@ -60,9 +59,9 @@ describe('App routes (09.1.1-T4.1)', () => {
     const foreignProjectUrl = `/orgs/${ORG.id}/projects/${FOREIGN_PROJECT_ID}/overview`;
     const unknownUrl = '/no-such-screen';
 
-    // A foreign id must never become a 403: that would confirm the id exists in another tenant
-    // (00 §9.2). The scope guards refuse the match, so the wildcard answers exactly like it does
-    // for a path that exists nowhere.
+    // A foreign id must never become a 403: that would confirm the id exists in another tenant.
+    // The scope guards refuse the match, so the wildcard answers exactly like it does for a path
+    // that exists nowhere.
     await harness.navigateByUrl(foreignOrgUrl);
     expect(renderedMarker()).toBe(NOT_FOUND_MARKER);
     expect(router.url).toBe(foreignOrgUrl);
