@@ -34,6 +34,7 @@ function summary(changes: Partial<UsageSummaryMetricDto> = {}): UsageSummaryDto 
         ...changes,
       },
     ],
+    next_cursor: null,
   };
 }
 

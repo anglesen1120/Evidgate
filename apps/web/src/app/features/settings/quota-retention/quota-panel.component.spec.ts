@@ -50,7 +50,12 @@ describe('QuotaPanelComponent', () => {
   const reload = vi.fn();
 
   beforeEach(() => {
-    usageSummary.set({ period: '2026-11', project: null, metrics: [metric()] });
+    usageSummary.set({
+      period: '2026-11',
+      project: null,
+      metrics: [metric()],
+      next_cursor: null,
+    });
     loadState.set('ready');
     vi.clearAllMocks();
     TestBed.configureTestingModule({
@@ -88,6 +93,7 @@ describe('QuotaPanelComponent', () => {
       period: '2026-11',
       project: null,
       metrics: [metric({ used: 0, limit: 100, unavailable_reason: null })],
+      next_cursor: null,
     });
     const { root } = await render();
     expect(root.querySelector('[data-quota-used]')?.textContent?.trim()).toBe('0');
@@ -108,6 +114,7 @@ describe('QuotaPanelComponent', () => {
           blocked_at: severity === 'blocked' ? '2026-11-02T00:00:00Z' : null,
         }),
       ],
+      next_cursor: null,
     });
     const { root } = await render();
     expect(root.textContent).toContain(
@@ -133,7 +140,7 @@ describe('QuotaPanelComponent', () => {
   });
 
   it('distinguishes an empty metric list from an unavailable summary', async () => {
-    usageSummary.set({ period: '2026-11', project: null, metrics: [] });
+    usageSummary.set({ period: '2026-11', project: null, metrics: [], next_cursor: null });
     const { root } = await render();
     expect(root.querySelector('[data-quota-empty]')).not.toBeNull();
     expect(root.querySelector('[data-quota-unavailable]')).toBeNull();
@@ -159,6 +166,7 @@ describe('QuotaPanelComponent', () => {
           ],
         }),
       ],
+      next_cursor: null,
     });
     const { harness, root } = await render();
     const rows = await harness.projectRows();
@@ -186,6 +194,7 @@ describe('QuotaPanelComponent', () => {
           ),
         }),
       ],
+      next_cursor: null,
     });
     const { harness, root } = await render();
     expect(await harness.projectRows()).toHaveLength(5);
@@ -200,6 +209,7 @@ describe('QuotaPanelComponent', () => {
         metric({ metric: 'results', unavailable_reason: null }),
         metric({ metric: 'egress_gb', unavailable_reason: null }),
       ],
+      next_cursor: null,
     });
     const { root } = await render();
     const sections = root.querySelectorAll('[data-quota-metric]');

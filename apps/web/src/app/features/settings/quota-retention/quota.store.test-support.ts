@@ -38,7 +38,7 @@ export function metric(changes: Partial<UsageSummaryMetricDto> = {}): UsageSumma
 }
 
 export function summary(...metrics: UsageSummaryMetricDto[]): UsageSummaryDto {
-  return { period: '2026-11', project: null, metrics };
+  return { period: '2026-11', project: null, metrics, next_cursor: null };
 }
 
 /** One project's counter under a metric; below both lines unless the test says otherwise. */

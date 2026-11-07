@@ -46,6 +46,7 @@ const SUMMARY: UsageSummaryDto = {
       projects: [],
     },
   ],
+  next_cursor: null,
 };
 
 const QUOTA_EXCEEDED = {

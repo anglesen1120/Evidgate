@@ -9,7 +9,9 @@
 // - a 429 `quota_exceeded` refusal asks for exactly one reload, a refusal that lands mid-read
 //   asks for one trailing read when that read settles, and neither can ask for another one;
 // - a reload keeps the counters already served on screen, while an org switch, an error or a
-//   null answer hides them.
+//   null answer hides them;
+// - a paged answer (`next_cursor` names more projects) is kept as served: the org totals and the
+//   badge come from the tenant counters, never from a sum of the page's project rows.
 
 import type { WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -21,6 +23,7 @@ import {
   FakeQuotaDataService,
   metric,
   mountQuotaStore,
+  project,
   serverFailure,
   summary,
 } from './quota.store.test-support';
@@ -302,6 +305,41 @@ describe('QuotaStore', () => {
     data.release(summary(metric({ metric: 'egress_gb', used: 5 })));
     await settle();
     expect(store.usageSummary()?.metrics[0]?.metric).toBe('egress_gb');
+  });
+
+  it('keeps a paged answer as served: the badge reads the org totals, not the page rows', async () => {
+    // The service pages the per-project breakdown: `next_cursor` names a further page, and every
+    // page carries the same org totals. The badge must therefore read the tenant counter, never a
+    // total summed from the page's project rows (which here add up below the warning line).
+    data.answer = {
+      ...summary(
+        metric({
+          metric: 'results',
+          used: 900,
+          limit: 1000,
+          warned_at: '2026-11-01T09:00:00Z',
+          projects: [
+            project({ project_id: 'project-one', used: 10 }),
+            project({ project_id: 'project-two', used: 20 }),
+          ],
+        }),
+      ),
+      next_cursor: 'cursor-page-two',
+    };
+    TestBed.inject(TenantStore).setOrg('org-one');
+    store.load();
+    await settle();
+
+    // One read: the first page is the answer, and nothing follows the cursor on its own.
+    expect(data.calls).toHaveLength(1);
+    expect(store.loadState()).toBe('ready');
+    expect(store.usageSummary()).toEqual(data.answer);
+    expect(store.usageSummary()?.metrics[0]?.used).toBe(900);
+    expect(store.usageSummary()?.metrics[0]?.projects.map((row) => row.project_id)).toEqual([
+      'project-one',
+      'project-two',
+    ]);
+    expect(store.badge()).toEqual({ severity: 'warn', metric: 'results', scope: 'tenant' });
   });
 
   it('clears the summary when the tenant is gone', async () => {
