@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Xunit;
 
 namespace Contract.Tests;
@@ -95,9 +96,9 @@ public sealed class PermissionCatalogueTests
         // a malformed code and an unknown extra member must all be rejected.
         foreach (var mutated in new[]
         {
-            """{"version":1,"comment":"c","roles":[{"code":"viewer","name":"V","kind":"member","description":"d","permissions":["run:read"]}],"permissions":[{"code":"run:read","resource":"run","action":"read","description":"d","sensitive":false,"reserved":false}]}""",
-            """{"version":1,"comment":"c","roles":[{"code":"viewer","name":"V","kind":"member","description":"d","permissions":["RUN READ"]}],"permissions":[{"code":"RUN READ","resource":"run","action":"read","description":"d","sensitive":false,"reserved":false,"tenant_assignable":true}]}""",
-            """{"version":1,"comment":"c","roles":[{"code":"viewer","name":"V","kind":"member","description":"d","permissions":["run:read"]}],"permissions":[{"code":"run:read","resource":"run","action":"read","description":"d","sensitive":false,"reserved":false,"tenant_assignable":true,"extra":1}]}""",
+            """{"version":1,"comment":"c","roles":[{"code":"viewer","name":"V","kind":"member","description":"d","permissions":["run:read"]}],"permissions":[{"code":"run:read","resource":"run","action":"read","description":"d","sensitive":false,"reserved":false,"tenant_assignable":true}],"token_denied":["run:read"]}""",
+            """{"version":1,"comment":"c","roles":[{"code":"viewer","name":"V","kind":"member","description":"d","permissions":["RUN READ"]}],"permissions":[{"code":"RUN READ","resource":"run","action":"read","description":"d","sensitive":false,"reserved":false,"tenant_assignable":true,"admin":false}],"token_denied":["run:read"]}""",
+            """{"version":1,"comment":"c","roles":[{"code":"viewer","name":"V","kind":"member","description":"d","permissions":["run:read"]}],"permissions":[{"code":"run:read","resource":"run","action":"read","description":"d","sensitive":false,"reserved":false,"tenant_assignable":true,"admin":false,"extra":1}],"token_denied":["run:read"]}""",
         })
         {
             Assert.NotEmpty(Validate(mutated));
@@ -158,6 +159,82 @@ public sealed class PermissionCatalogueTests
                 .Where(entry => !entry!["tenant_assignable"]!.GetValue<bool>())
                 .Select(entry => entry!["code"]!.GetValue<string>())
                 .Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// AC4: the token deny set is catalogue data, not a list inside a handler. The
+    /// <c>token_denied</c> entries — exact codes and <c>resource:*</c> wildcards — expand to
+    /// exactly the <c>admin</c>-flagged codes, so a new administrative permission is denied to
+    /// every automation token the moment it is added, and the generated set the create command
+    /// and the evaluator read (<c>Permissions.TokenDenied</c>) is that same expansion.
+    /// </summary>
+    [Fact]
+    public void DenySet_CoversEveryAdminPermission()
+    {
+        var catalogue = JsonNode.Parse(CatalogueJson())!.AsObject();
+        var permissions = catalogue["permissions"]!.AsArray();
+        var codes = permissions
+            .Select(entry => entry!["code"]!.GetValue<string>())
+            .ToHashSet(StringComparer.Ordinal);
+
+        var admin = permissions
+            .Where(entry => entry!["admin"]!.GetValue<bool>())
+            .Select(entry => entry!["code"]!.GetValue<string>())
+            .ToHashSet(StringComparer.Ordinal);
+        var declared = catalogue["token_denied"]!.AsArray()
+            .Select(entry => entry!.GetValue<string>())
+            .ToList();
+        var denied = Expand(declared, codes);
+
+        // Non-vacuity: both families the token route adds are flagged, the set spans more than one
+        // resource, and at least one entry is a wildcard (the expansion is not a copy of the list).
+        Assert.Contains("api_token:read", admin);
+        Assert.Contains("api_token:write", admin);
+        Assert.Contains("membership:write", admin);
+        Assert.Contains("artifact:read_sensitive", admin);
+        Assert.True(admin.Count > 20, "the administrative set is a slice of the catalogue, not one code");
+        Assert.Contains(declared, entry => entry.EndsWith(":*", StringComparison.Ordinal));
+
+        Assert.Empty(admin.Except(denied));
+        Assert.Empty(denied.Except(admin));
+
+        // The generated set is what handlers and the evaluator read, so it must be this expansion
+        // exactly — a stale `Permissions.g.cs` fails here as well as in the drift gate.
+        Assert.Equal(
+            denied.Order(StringComparer.Ordinal),
+            Permissions.TokenDenied.Order(StringComparer.Ordinal));
+
+        // The coverage assertion bites: dropping one entry from the list leaves an administrative
+        // code ungranted, which is the failure this test exists to catch (X4 positive control).
+        var shortList = declared.Where(entry => entry != "role:*").ToList();
+        Assert.NotEmpty(admin.Except(Expand(shortList, codes)));
+    }
+
+    /// <summary>
+    /// The deny set with every <c>resource:*</c> wildcard expanded against the catalogue, and an
+    /// entry that matches nothing rejected: a typo must not shrink the set silently.
+    /// </summary>
+    private static HashSet<string> Expand(IEnumerable<string> entries, IReadOnlySet<string> codes)
+    {
+        var expanded = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in entries)
+        {
+            if (entry.EndsWith(":*", StringComparison.Ordinal))
+            {
+                var matched = codes
+                    .Where(code => code.StartsWith(entry[..^1], StringComparison.Ordinal))
+                    .ToList();
+                Assert.NotEmpty(matched);
+                expanded.UnionWith(matched);
+            }
+            else
+            {
+                Assert.Contains(entry, codes);
+                expanded.Add(entry);
+            }
+        }
+
+        return expanded;
     }
 
     /// <summary>Validates an instance against the catalogue schema; returns one row per failure.</summary>

@@ -667,6 +667,14 @@ internal sealed class TenantRowFactory
             ("public.ci_binding", "provider") or ("public.ci_token_issue", "provider") => "github_actions",
             ("public.ingest_token", "prefix") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
             ("public.ingest_token", "scopes") => new[] { "run:create" },
+            // api_token's prefix is one platform-wide public lookup key: a closed 12-character grammar plus a
+            // unique constraint, so the generic 13-character text candidate would trip the CHECK before the
+            // composite FK under test; a fresh value per row keeps two generated rows (a valid one and its
+            // corrupt sibling) from colliding on the prefix key first.
+            ("public.api_token", "prefix") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
+            // The token's grant: a fresh row names a real catalogue code rather than the generic text
+            // candidate, so the shape stays readable next to the permission set the row is created with.
+            ("public.api_token", "permissions") => new[] { "run:read" },
             ("public.test_case", "first_seen_commit") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
             ("public.case_identity_source", "source") => "annotation",
             ("public.test_revision", "commit_sha") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],

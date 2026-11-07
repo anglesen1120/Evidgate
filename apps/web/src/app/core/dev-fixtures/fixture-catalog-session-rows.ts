@@ -2,6 +2,8 @@
 // bindings, ingest tokens, memberships, permissions, policy, project and retention reads. Rows
 // keep the catalog order, so the concatenation in `fixture-catalog-entries.ts` serves the same list.
 
+import apiTokenCreate from '../../../../../../fixtures/web-api/api-token-create/input.json';
+import apiTokensList from '../../../../../../fixtures/web-api/api-tokens-list/input.json';
 import ciBindingCreate from '../../../../../../fixtures/web-api/ci-binding-create/input.json';
 import ciBindingCreateConflict from '../../../../../../fixtures/web-api/ci-binding-create-conflict/input.json';
 import ciBindingCreateValidation from '../../../../../../fixtures/web-api/ci-binding-create-validation/input.json';
@@ -134,6 +136,8 @@ export const FIXTURE_CATALOG_SESSION_ROWS: readonly FixtureCatalogRow[] = [
     document: ciBindingsListSettingsPage2,
     cursor: '08df2cdfd69f6800-018f0000-0000-7000-8000-000000000063',
   },
+  { name: 'api-token-create', document: apiTokenCreate },
+  { name: 'api-tokens-list', document: apiTokensList },
   { name: 'ingest-token-create', document: ingestTokenCreate },
   { name: 'ingest-token-create-name-invalid', document: ingestTokenCreateNameInvalid },
   { name: 'ingest-token-rotate', document: ingestTokenRotate },

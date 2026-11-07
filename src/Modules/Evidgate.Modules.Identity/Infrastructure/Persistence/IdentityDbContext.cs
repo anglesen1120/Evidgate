@@ -36,4 +36,7 @@ internal sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> opti
     public DbSet<CiTokenIssue> CiTokenIssues => Set<CiTokenIssue>();
 
     public DbSet<IngestToken> IngestTokens => Set<IngestToken>();
+
+    /// <summary>The project API tokens (create/revoke only; the list is the Dapper read path).</summary>
+    public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
 }

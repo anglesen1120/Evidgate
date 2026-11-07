@@ -26,6 +26,7 @@ export const UNPARSED_API_PATH = `${API_BASE_PATH}/unparsed`;
 export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'agents',
   'ai-settings',
+  'api-tokens',
   'approve',
   'artifact-kind-policy',
   'artifacts',

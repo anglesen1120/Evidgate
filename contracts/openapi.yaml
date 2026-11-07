@@ -47,6 +47,8 @@ tags:
     description: Orgs, projects, memberships (02)
   - name: ci-admin
     description: CI bindings and ingest tokens (02)
+  - name: api-tokens
+    description: Project API tokens for automation (02.4.4)
   - name: audit
     description: Tenant-visible audit log (02, 11)
   - name: support
@@ -4432,6 +4434,141 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/api-tokens:
+    post:
+      operationId: createApiToken
+      tags: [api-tokens]
+      summary: Create a project API token; the plaintext is returned once (02.4.4)
+      description: >-
+        The token is bound to this one project and carries exactly the requested `permissions`: each must
+        be held by the creator at creation time and none may be in the deny set (`membership:*`, `role:*`,
+        `organization:write`, `project:create`, `project:write`, `ci_binding:write`, `api_token:*`,
+        `ingest_token:write`, `service_identity:*`, `sso:*`, `support:*`, `billing:*`, `healing:approve`,
+        `healing:revoke`, `healing:configure`, `policy:write`, `artifact:read_sensitive`, `audit:read`,
+        `security_event:read`, `webhook:write`). The row keeps the 12-character prefix, an
+        `HMAC-SHA256(pepper_vN, secret)` and the pepper version — never the plaintext — so no later call
+        can return the token again. `expires_at` is mandatory, in the future and at most the configured
+        maximum lifetime (365 days by default); a missing or out-of-range value is 422 `schema_invalid`.
+        A permission the creator does not hold is 403 `permission_escalation`; a deny-set code is 422
+        `forbidden_token_permission`. The response carries a one-time secret and is never replayed, so this
+        route takes no `Idempotency-Key` (README): a retried create mints a second token the admin revokes.
+        The request body is capped at 16384 bytes and is refused with 413 `payload_too_large` before it is
+        parsed.
+      x-permission: api_token:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiTokenRequest'
+      responses:
+        '200':
+          description: Token created; the plaintext is returned once and can never be read again
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiTokenCreatedResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          description: 413 payload_too_large — the request body exceeds the 16384-byte cap, checked before parsing
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+    get:
+      operationId: listApiTokens
+      tags: [api-tokens]
+      summary: Cursor page of the API tokens of a project, metadata only (02.4.4)
+      description: >-
+        Keyset-ordered on `(created_at, id)`; the page carries each token's id, name, prefix, permission
+        subset, derived `status` (`active`, `expired` or `revoked`) and timestamps — never the secret or
+        its HMAC. An unknown project, or one of another org, is 404.
+      x-permission: api_token:read
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Page of tokens; never the secret or its hash
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiTokenListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /api-tokens/{t}:
+    delete:
+      operationId: revokeApiToken
+      tags: [api-tokens]
+      summary: Revoke a project API token (02.4.4)
+      description: >-
+        Sets `revoked_at`; the next request that presents the token is 401 `token_revoked`, with no cache
+        to wait out. Revocation is a row state, so a repeat answers the same 204 and the route takes no
+        `Idempotency-Key` (README). An unknown id, or one of another org, is 404. A token can never hold
+        `api_token:write`, so a token cannot revoke anything. No `If-Match` is bound: the row `version`
+        makes two revocations racing one token answer one 204 and one 412 `precondition_failed`, and the
+        loser writes neither the row nor an audit event.
+      x-permission: api_token:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ApiTokenId'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: Token revoked (or already revoked)
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /orgs/{o}/audit:
     get:
       operationId: listAudit
@@ -8311,6 +8448,15 @@ components:
       schema:
         type: string
         format: uuid
+    ApiTokenId:
+      name: t
+      in: path
+      required: true
+      description: >-
+        The API token's id. An id of another org is 404, exactly as an unknown one is (02.9.1).
+      schema:
+        type: string
+        format: uuid
     ProviderPath:
       name: provider
       in: path
@@ -11780,6 +11926,100 @@ components:
         expires_at:
           type: [string, 'null']
           format: date-time
+    ApiTokenView:
+      type: object
+      description: The metadata of an API token; never the secret or its HMAC.
+      required: [id, name, prefix, permissions, status, expires_at, last_used_at, created_by]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 120
+        prefix:
+          type: string
+          pattern: '^[A-Za-z0-9]{12}$'
+          description: The public 12-character part of `evg_<prefix>_<secret>`; the lookup key.
+        permissions:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          description: The stored subset; at use time intersected with the current permissions of its creator.
+        status:
+          type: string
+          enum: [active, expired, revoked]
+          description: Derived — `expired` from `expires_at`, `revoked` from `revoked_at`; never stored.
+        expires_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: [string, 'null']
+          format: date-time
+          description: Updated on successful use, throttled to 60-second granularity.
+        created_by:
+          type: string
+          format: uuid
+          description: The membership that created the token; its current permissions cap every use.
+    ApiTokenCreatedResponse:
+      type: object
+      required: [id, name, prefix, token, permissions, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 120
+        prefix:
+          type: string
+          pattern: '^[A-Za-z0-9]{12}$'
+        token:
+          type: string
+          description: >-
+            The full `evg_<prefix>_<secret>`. Shown only here: the row keeps the prefix and an HMAC, so
+            no other response, log line or error can return it.
+        permissions:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+    ApiTokenListResponse:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiTokenView'
+        next_cursor:
+          type: [string, 'null']
+    CreateApiTokenRequest:
+      type: object
+      required: [name, permissions, expires_at]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        permissions:
+          type: array
+          minItems: 1
+          maxItems: 32
+          uniqueItems: true
+          items:
+            type: string
+          description: >-
+            The token's whole authority: each code must be held by the creator and outside the deny set.
+            It never grows when the creator gains rights.
+        expires_at:
+          type: string
+          format: date-time
+          description: Mandatory; in the future and at most the configured maximum lifetime.
     CiTokenRequest:
       type: object
       properties:

@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace Contract.Tests;
 
@@ -101,6 +102,127 @@ internal sealed class OpenApiSpec
 
     /// <summary>Loads the repository's <c>contracts/openapi.yaml</c>.</summary>
     public static OpenApiSpec Load() => Load(Path.Combine(ContractPaths.ContractsDirectory, "openapi.yaml"));
+
+    /// <summary>
+    /// One operation of a path item as a parsed mapping: its <c>parameters</c>, <c>requestBody</c> and
+    /// <c>responses</c>. Folded prose is dropped, as it is for a schema, because <see cref="YamlSubset"/> refuses
+    /// block scalars by design.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">The path or the method is absent from the spec.</exception>
+    public JsonObject Operation(string pathKey, string method)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(pathKey);
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+
+        var paths = FindMember(_lines, 0, _lines.Length, 0, "paths")
+            ?? throw new InvalidOperationException("the spec has no top-level 'paths' block");
+        var path = FindMember(_lines, paths + 1, SectionEnd(_lines, paths + 1, 0), 2, pathKey)
+            ?? throw new KeyNotFoundException($"the spec declares no path '{pathKey}'");
+        var operation = FindMember(_lines, path + 1, SectionEnd(_lines, path + 1, 2), 4, method)
+            ?? throw new KeyNotFoundException($"'{pathKey}' declares no '{method}' operation");
+
+        return ParseEntry(operation, $"'{method} {pathKey}'");
+    }
+
+    /// <summary>
+    /// The parameters an operation declares, every <c>$ref</c> resolved to the parameter it names, so an inline
+    /// parameter and a shared one are read the same way.
+    /// </summary>
+    /// <param name="pathKey">The spec path key.</param>
+    /// <param name="method">The lower-case HTTP method.</param>
+    /// <param name="location">The <c>in</c> value to keep (<c>header</c>, <c>path</c>, <c>query</c>), or null for all.</param>
+    public IReadOnlyList<JsonObject> OperationParameters(string pathKey, string method, string? location = null)
+    {
+        var resolved = new List<JsonObject>();
+        if (Operation(pathKey, method)["parameters"] is not JsonArray declared)
+        {
+            return resolved;
+        }
+
+        foreach (var entry in declared.OfType<JsonObject>())
+        {
+            var parameter = entry["$ref"] is JsonValue reference
+                ? ComponentEntry("parameters", Leaf(reference.GetValue<string>()))
+                : entry;
+
+            if (location is null || string.Equals(parameter["in"]?.GetValue<string>(), location, StringComparison.Ordinal))
+            {
+                resolved.Add(parameter);
+            }
+        }
+
+        return resolved;
+    }
+
+    /// <summary>
+    /// A line block joined into one line. Only for prose the parsed model cannot carry: a folded
+    /// <c>description</c> is dropped when the entry is parsed, so a documented sentence is read as text.
+    /// </summary>
+    /// <param name="operationId">The operation's <c>operationId</c>, unique in the spec.</param>
+    public string DocumentedText(string operationId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
+        var operation = Array.FindIndex(_lines, line => line.Trim() == $"operationId: {operationId}");
+        if (operation < 0)
+        {
+            throw new KeyNotFoundException($"the spec declares no operation '{operationId}'");
+        }
+
+        var start = operation;
+        while (start > 0 && IndentOf(_lines[start]) > 2)
+        {
+            start--;
+        }
+
+        return BlockText(start);
+    }
+
+    /// <summary>A <c>components</c> child entry as a parsed mapping.</summary>
+    private JsonObject ComponentEntry(string section, string name) =>
+        ParseEntry(FindEntryLine(section, name), $"components.{section}.{name}");
+
+    /// <summary>The line a <c>components</c> child entry starts on.</summary>
+    private int FindEntryLine(string section, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        var components = FindMember(_lines, 0, _lines.Length, 0, "components")
+            ?? throw new InvalidOperationException("the spec has no top-level 'components' block");
+        var block = FindMember(_lines, components + 1, SectionEnd(_lines, components + 1, 0), 2, section)
+            ?? throw new KeyNotFoundException($"the spec has no 'components.{section}' block");
+
+        return FindMember(_lines, block + 1, SectionEnd(_lines, block + 1, 2), 4, name)
+            ?? throw new KeyNotFoundException($"'components.{section}' declares no '{name}'");
+    }
+
+    /// <summary>The line block starting at <paramref name="start"/>, joined into one line.</summary>
+    private string BlockText(int start)
+    {
+        var indent = IndentOf(_lines[start]);
+        var end = SectionEnd(_lines, start + 1, indent);
+        return Regex.Replace(string.Join(' ', _lines[start..end].Select(line => line.Trim())), @"\s+", " ");
+    }
+
+    /// <summary>The mapping entry starting at <paramref name="start"/>, its members dedented to column zero.</summary>
+    private JsonObject ParseEntry(int start, string what)
+    {
+        var indent = IndentOf(_lines[start]);
+        var end = SectionEnd(_lines, start + 1, indent);
+        var text = new System.Text.StringBuilder();
+        foreach (var line in ShapeLines(start + 1, end))
+        {
+            text.Append(line.Length >= indent + 2 ? line[(indent + 2)..] : line.Trim()).Append('\n');
+        }
+
+        if (YamlSubset.Parse(text.ToString()) is not JsonObject mapping)
+        {
+            throw new InvalidOperationException($"'{what}' did not parse to a mapping");
+        }
+
+        return mapping;
+    }
+
+    /// <summary>The last segment of a <c>#/components/…/Name</c> reference.</summary>
+    private static string Leaf(string reference) => reference[(reference.LastIndexOf('/') + 1)..];
 
     /// <summary>Loads a spec file.</summary>
     /// <exception cref="InvalidOperationException">A required member is missing.</exception>

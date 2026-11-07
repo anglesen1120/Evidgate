@@ -1,0 +1,17 @@
+{
+  "operation_id": "createApiToken",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000f1"
+  },
+  "latency_ms": 0,
+  "body": {
+    "id": "018f0000-0000-7000-8000-0000000000a1",
+    "name": "Dashboard (fixture)",
+    "prefix": "fx0000000001",
+    "token": "evg_fx0000000001_FIXTURE_ONLY_not_a_real_token",
+    "permissions": ["run:read", "suite:read"],
+    "expires_at": "2027-02-05T00:00:00Z"
+  }
+}

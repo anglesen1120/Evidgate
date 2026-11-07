@@ -270,6 +270,8 @@ public static class IsolationRouteCases
                 Fixed(bp.BindingIds), aAdmin, $"/v1/projects/{ap.Id}/ci-bindings?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/ingest-tokens"), $"org B project {bp.Slug} ingest tokens", bAdmin, $"/v1/projects/{bp.Id}/ingest-tokens?limit=1", "id",
                 Fixed([bp.ActiveTokenId, bp.RevokedTokenId]), aAdmin, $"/v1/projects/{ap.Id}/ingest-tokens?limit=1"));
+            walks.Add(new(Get("/v1/projects/{p}/api-tokens"), $"org B project {bp.Slug} api tokens", bAdmin, $"/v1/projects/{bp.Id}/api-tokens?limit=1", "id",
+                Fixed([.. bp.ApiTokenIds]), aAdmin, $"/v1/projects/{ap.Id}/api-tokens?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/cases"), $"org B project {bp.Slug} cases", bAdmin, $"/v1/projects/{bp.Id}/cases?limit=1", "id",
                 Fixed(bp.CaseIds), aAdmin, $"/v1/projects/{ap.Id}/cases?limit=1"));
             walks.Add(new(Get("/v1/projects/{p}/suites"), $"org B project {bp.Slug} suites", bAdmin, $"/v1/projects/{bp.Id}/suites?limit=1", "id",
@@ -615,6 +617,17 @@ public static class IsolationRouteCases
         ObjectCase("POST", "/v1/ingest-tokens/{t}/rotate", p => [("active token", p.ActiveTokenId), ("revoked token", p.RevokedTokenId)], id =>
             new(HttpMethod.Post, $"/v1/ingest-tokens/{id}/rotate")),
         ObjectCase("DELETE", "/v1/ingest-tokens/{t}", p => [("active token", p.ActiveTokenId)], id => new(HttpMethod.Delete, $"/v1/ingest-tokens/{id}")),
+
+        // ---- API tokens (ApiTokenEndpoints.cs:23-36) -----------------------------------------------------------
+        ProjectCase("POST", "/v1/projects/{p}/api-tokens", p => new(HttpMethod.Post, $"/v1/projects/{p}/api-tokens", new JsonObject
+        {
+            ["name"] = "intruder",
+            ["permissions"] = new JsonArray("run:read"),
+            ["expires_at"] = DateTimeOffset.UtcNow.AddDays(30).ToString("O"),
+        })),
+        ProjectCase("GET", "/v1/projects/{p}/api-tokens", p => new(HttpMethod.Get, $"/v1/projects/{p}/api-tokens"), list: true),
+        ObjectCase("DELETE", "/v1/api-tokens/{t}", p => [("api token", p.ApiTokenIds[0]), ("revoked api token", p.ApiTokenIds[1])], id =>
+            new(HttpMethod.Delete, $"/v1/api-tokens/{id}")),
 
         // ---- CI token exchange (CiTokenEndpoints.cs:41): pre-tenant, credential-authenticated --------------------
         Case("POST", "/v1/ci/token", (route, w) =>
