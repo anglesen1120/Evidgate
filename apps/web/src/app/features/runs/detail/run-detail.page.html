@@ -119,11 +119,15 @@
         [view]="'context'"
       />
       <app-manifest-panel [summary]="store.manifest()" />
-      <!-- Neither region reads: the run response serves no release id to address and no transition
-           history, so the release region shows its shared unavailable state and the timeline marks
-           the current state instead of inventing either. -->
+      <app-producer-status-table
+        [slots]="producerSlots()"
+        [status]="'ready'"
+        [runAfterCancelEvents]="run.after_cancel_events"
+        [targetAnchor]="producerTargetAnchor()"
+      />
+      <!-- Transition history is not served, so the timeline never invents step timestamps. -->
       <app-release-panel [runId]="run.run_id" [releaseId]="null" />
-      <app-run-timeline [state]="run.state" [afterCancelEvents]="null" />
+      <app-run-timeline [state]="run.state" [afterCancelEvents]="run.after_cancel_events" />
     </div>
   }
 </app-request-state>
