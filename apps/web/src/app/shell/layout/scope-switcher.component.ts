@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  inject,
+  input,
+  output,
+} from '@angular/core';
 import type { OrganizationSummaryDto, ProjectDto } from '@evidgate/sdk';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
@@ -27,9 +35,38 @@ export class ScopeSwitcherComponent {
   readonly currentProject = input<ProjectDto | null>(null);
   readonly orgSelected = output<string>();
   readonly projectSelected = output<string>();
+  /**
+   * The Escape an open scope popup consumed. A containing drawer reads it to stay open, because the
+   * popup flushes its closed state before the drawer's own keydown handler runs — a rendered
+   * `aria-expanded` probe misses there, while the popup state read here cannot.
+   */
+  readonly popupEscape = output<KeyboardEvent>();
   readonly chooseOrganization = $localize`:@@shell.switcher.choose-organization:Choose an organization`;
   readonly chooseProject = $localize`:@@shell.switcher.choose-project:Choose a project`;
   readonly noProjects = $localize`:@@shell.switcher.no-projects:No projects`;
+  private readonly document = inject(DOCUMENT);
+  private readonly openPopups = new Set<Scope>();
+  /**
+   * Capture on the window, so it reads the popup state before any handler that dismisses it for the
+   * same Escape, including the one that renders `aria-expanded` closed.
+   */
+  private readonly recordEscape = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && this.openPopups.size > 0) this.popupEscape.emit(event);
+  };
+
+  constructor() {
+    const view = this.document.defaultView;
+    view?.addEventListener('keydown', this.recordEscape, true);
+    inject(DestroyRef).onDestroy(() =>
+      view?.removeEventListener('keydown', this.recordEscape, true),
+    );
+  }
+
+  /** Tracks the popup state Brain reports, rather than the async rendered attribute. */
+  popupState(scope: Scope, state: unknown): void {
+    if (state === 'open') this.openPopups.add(scope);
+    else this.openPopups.delete(scope);
+  }
 
   // Brain commits only activated options; arrow-key exploration does not navigate.
   select(scope: Scope, value: unknown): void {

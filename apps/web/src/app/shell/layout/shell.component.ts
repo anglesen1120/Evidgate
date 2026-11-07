@@ -61,7 +61,6 @@ export class ShellComponent {
   private readonly document = inject(DOCUMENT);
   private readonly injector = inject(Injector);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly aside = viewChild<ElementRef<HTMLElement>>('navigation');
   private readonly topbar = viewChild<ElementRef<HTMLElement>>('topbar');
   private readonly closeButton = viewChild<ElementRef<HTMLButtonElement>>('closeButton');
   private readonly toggleButton = viewChild<ElementRef<HTMLButtonElement>>('toggleButton');
@@ -89,6 +88,8 @@ export class ShellComponent {
   /** Path (no query, no fragment) of the previous NavigationEnd, for the focus handoff. */
   private lastPath: string | null = null;
   private focusRequest = 0;
+  /** The Escape the drawer's scope popup consumed and rendered closed before the drawer saw it. */
+  private scopeEscape: KeyboardEvent | null = null;
 
   constructor() {
     // The bar is a wrapping flex row, so its height only exists after layout: measure it once the
@@ -200,13 +201,18 @@ export class ShellComponent {
   }
 
   onDrawerKeydown(event: KeyboardEvent): void {
+    const popupEscape = this.scopeEscape;
+    this.scopeEscape = null;
     if (!this.mobile() || !this.drawerOpen() || event.key !== 'Escape' || event.defaultPrevented)
       return;
-    // The scope popup owns Escape before the containing navigation drawer does.
-    if (this.aside()?.nativeElement.querySelector('[role="combobox"][aria-expanded="true"]'))
-      return;
+    // The scope popup owns the Escape it closes with, so the drawer waits for the next one.
+    if (popupEscape === event) return;
     event.preventDefault();
     this.closeDrawer();
+  }
+
+  onScopeEscape(event: KeyboardEvent): void {
+    this.scopeEscape = event;
   }
 
   /**
