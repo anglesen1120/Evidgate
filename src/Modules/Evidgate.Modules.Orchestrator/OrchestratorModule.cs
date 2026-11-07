@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Orchestrator.Application.Attempts;
 using Evidgate.Modules.Orchestrator.Application.Evaluation;
+using Evidgate.Modules.Orchestrator.Application.Queries;
 using Evidgate.Modules.Orchestrator.Application.Runs;
 using Evidgate.Modules.Orchestrator.Application.Releases;
 using Evidgate.Modules.Orchestrator.Contracts;
@@ -34,6 +35,10 @@ internal static class OrchestratorModule
         // The release read's binding section: insertion order over the binding key, so no query here can become a
         // "latest run" join.
         services.TryAddScoped<BoundRunsQuery>();
+
+        // The run detail's state history: the transitions the trigger on `public.run` appended, read over the ambient
+        // scope. Scoped like every other read seam, and no writer is registered because the trigger is the only one.
+        services.TryAddScoped<IRunStateHistoryReader, RunStateHistoryReader>();
 
         // The plan the Policy evaluator judges a run against: the run's pinned scope, the manifest's planned count and
         // every planned execution, read over the ambient tenant scope through Orchestrator.Contracts only.

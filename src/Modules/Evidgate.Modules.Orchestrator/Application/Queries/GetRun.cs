@@ -20,7 +20,8 @@ internal sealed record GetRunQuery(Guid RunId) : IQuery<Result<RunStateDto>>;
 /// Handler of <see cref="GetRunQuery"/>: one Dapper read over the ambient tenant scope (00 §5.5 C1/C3/C5), so RLS
 /// scopes the row and another tenant's run is the same <c>404 not_found</c> as an unknown id. The body reports the
 /// run's state machine position and the identity it records (05.2.2-T1: the <c>ref</c> block and
-/// <c>unverified_ref</c>; <c>advisory_only</c> is 05.2.2-T3.2's). The route names the run
+/// <c>unverified_ref</c>; <c>advisory_only</c> is 05.2.2-T3.2's), plus the two separate reads that follow the row: the
+/// releases the run is bound to and the state transitions the write trigger recorded. The route names the run
 /// by id alone, so a project-scoped credential asking for a sibling project's run of the same org is that same
 /// <c>404 not_found</c>: <see cref="OrchestratorScope.Project"/>'s scope mismatch is mapped to it below, never to
 /// <c>403 project_scope_mismatch</c> — the same shape as the module's other read route
@@ -32,6 +33,7 @@ internal sealed record GetRunQuery(Guid RunId) : IQuery<Result<RunStateDto>>;
 internal sealed class GetRunQueryHandler(
     ITenantDb db,
     IReleaseBindingReader bindings,
+    IRunStateHistoryReader history,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant)
     : IQueryHandler<GetRunQuery, Result<RunStateDto>>
@@ -98,8 +100,10 @@ internal sealed class GetRunQueryHandler(
             return Result.Failure<RunStateDto>(RunNotFound);
         }
 
-        // Only a run the caller may see reads its bindings, so a 404 run answers before any release statement runs.
+        // Only a run the caller may see reads its bindings and its history, so a 404 run answers before any of those
+        // statements run.
         var releases = await bindings.BoundReleasesAsync(query.RunId, cancellationToken).ConfigureAwait(false);
+        var stateHistory = await history.HistoryAsync(query.RunId, cancellationToken).ConfigureAwait(false);
 
         return Result.Success(new RunStateDto(
             row.RunId,
@@ -128,7 +132,8 @@ internal sealed class GetRunQueryHandler(
             row.ShardCount,
             [.. row.DeclaredProducers],
             releases,
-            row.AfterCancelEvents));
+            row.AfterCancelEvents,
+            stateHistory));
     }
 
     /// <summary>
