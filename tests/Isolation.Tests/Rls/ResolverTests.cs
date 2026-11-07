@@ -37,6 +37,7 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate_resolve.member_organizations"] = ["org_id", "slug", "name", "status"],
         ["evidgate_resolve.resolve_ci_binding"] = ["org_id", "project_id", "binding_id", "status"],
         ["evidgate_resolve.resolve_ingest_token"] = ["org_id", "project_id", "binding_id", "status"],
+        ["evidgate_resolve.resolve_api_token"] = ["org_id", "project_id", "token_id", "status"],
         ["evidgate_resolve.login_upsert_identity"] = ["user_id", "status"],
         ["evidgate_resolve.session_create"] = ["session_id", "expires_at", "status"],
         ["evidgate_resolve.invite_by_secret"] = ["org_id", "membership_id"],
@@ -118,8 +119,8 @@ public sealed class ResolverTests : HarnessTest
 
     /// <summary>
     /// The tables the resolvers read (0014: <c>membership</c>/<c>organization</c>; 0016:
-    /// <c>ci_binding</c>; 0018: <c>ingest_token</c>), with the policy predicate that keeps a
-    /// direct read inside one org.
+    /// <c>ci_binding</c>; 0018: <c>ingest_token</c>; 0083: <c>api_token</c>), with the policy predicate that
+    /// keeps a direct read inside one org.
     /// </summary>
     private static readonly (string Table, string OrgPredicate)[] ResolvedTables =
     [
@@ -127,6 +128,7 @@ public sealed class ResolverTests : HarnessTest
         ("public.organization", RlsTableCatalog.OrganizationPredicate),
         ("public.ci_binding", RlsTableCatalog.TenantPredicate),
         ("public.ingest_token", RlsTableCatalog.TenantPredicate),
+        ("public.api_token", RlsTableCatalog.TenantPredicate),
     ];
 
     /// <summary>

@@ -261,6 +261,18 @@ public sealed class TenantGucTests
             ("binding_id", bindingId));
         await scope.ExecuteAsync(
             """
+            insert into public.api_token
+                (id, org_id, project_id, name, prefix, token_hmac, pepper_version, permissions,
+                 expires_at, created_by)
+            values (@id, @org_id, @project_id, 'probe', 'mnopqrstuvwx', decode(repeat('02', 32), 'hex'), 1,
+                    array['run:read'], now() + interval '30 days', @created_by)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("created_by", aiMembership));
+        await scope.ExecuteAsync(
+            """
             insert into public.ingest_token (id, org_id, project_id, name, prefix, token_hmac, pepper_version, scopes)
             values (@id, @org_id, @project_id, 'probe', 'abcdefghijkl', decode(repeat('00', 32), 'hex'), 1, array['run:create'])
             """,
