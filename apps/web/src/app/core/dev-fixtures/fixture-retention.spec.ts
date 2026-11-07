@@ -1,7 +1,7 @@
 import { findRetentionFixture, RETENTION_DEFAULT } from './fixture-retention';
+import { findFixtureEntry } from './fixture-catalog';
 import {
-  findSettingsAdminUsageFixture,
-  SETTINGS_ADMIN_USAGE_VARIANT,
+  findSettingsRetentionWriteFixture,
   SETTINGS_RETENTION_WRITE_VARIANT,
 } from './fixture-settings-permissions';
 import type { RetentionPolicy } from '@evidgate/sdk';
@@ -28,7 +28,6 @@ describe('retention fixture supplement', () => {
     ['forbidden', 403],
     ['not-found', 404],
     ['conflict', 409],
-    ['out-of-range', 422],
     ['quota', 429],
     ['unavailable', 503],
   ] as const)('answers the %s refusal without storing the requested values', (variant, status) => {
@@ -49,16 +48,22 @@ describe('retention fixture supplement', () => {
     expect(findRetentionFixture('GET', 'typo', 'p-1', null, new Map())).toBeUndefined();
   });
 
-  it('adds only project write permission to the existing settings admin usage variant', () => {
-    const read = findSettingsAdminUsageFixture(SETTINGS_ADMIN_USAGE_VARIANT)?.document.body as {
+  it('serves the out-of-range 422 from the corpus, not from the supplement', () => {
+    expect(findRetentionFixture('PUT', 'out_of_range', 'p-1', null, new Map())).toBeUndefined();
+    expect(findRetentionFixture('PUT', 'out-of-range', 'p-1', null, new Map())).toBeUndefined();
+    expect(findFixtureEntry('setRetentionPolicy', 'out_of_range')?.document.status).toBe(422);
+  });
+
+  it('adds only project write permission to the corpus settings admin page', () => {
+    const admin = findFixtureEntry('listPermissions', 'settings-admin')?.document.body as {
       items: { code: string }[];
     };
-    const write = findSettingsAdminUsageFixture(SETTINGS_RETENTION_WRITE_VARIANT)?.document
+    const write = findSettingsRetentionWriteFixture(SETTINGS_RETENTION_WRITE_VARIANT)?.document
       .body as { items: { code: string }[] };
     expect(write.items.map((row) => row.code).sort()).toEqual(
-      [...read.items.map((row) => row.code), 'project:write'].sort(),
+      [...admin.items.map((row) => row.code), 'project:write'].sort(),
     );
-    expect(read.items.some((row) => row.code === 'project:write')).toBe(false);
-    expect(write.items.some((row) => row.code === 'project:read')).toBe(true);
+    expect(admin.items.some((row) => row.code === 'project:write')).toBe(false);
+    expect(write.items.some((row) => row.code === 'project:write')).toBe(true);
   });
 });
