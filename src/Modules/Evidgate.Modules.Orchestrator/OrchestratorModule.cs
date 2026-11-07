@@ -36,10 +36,6 @@ internal static class OrchestratorModule
         // "latest run" join.
         services.TryAddScoped<BoundRunsQuery>();
 
-        // The run detail's state history: the transitions the trigger on `public.run` appended, read over the ambient
-        // scope. Scoped like every other read seam, and no writer is registered because the trigger is the only one.
-        services.TryAddScoped<IRunStateHistoryReader, RunStateHistoryReader>();
-
         // The plan the Policy evaluator judges a run against: the run's pinned scope, the manifest's planned count and
         // every planned execution, read over the ambient tenant scope through Orchestrator.Contracts only.
         services.TryAddScoped<IOrchestratorEvaluationPlan, EvaluationPlanReader>();

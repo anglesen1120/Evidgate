@@ -63,9 +63,11 @@ public sealed partial class GetRunDetailFieldsTests
         served.ShouldHaveSingleItem();
         served[0].FromState.ShouldBe("queued");
         served[0].ToState.ShouldBe("canceled");
-        served[0].OccurredAt.ShouldBe(await _fixture.ScalarAsync<DateTimeOffset>(
+        var storedTransition = await _fixture.ScalarAsync<DateTime>(
             world.Database,
-            $"select occurred_at from public.run_state_event where run_id = '{runId:D}' and seq = 2"));
+            $"select occurred_at from public.run_state_event where run_id = '{runId:D}' and seq = 2");
+        storedTransition.Kind.ShouldBe(DateTimeKind.Utc, "the column is timestamptz, which the driver reads as UTC");
+        served[0].OccurredAt.ShouldBe(new DateTimeOffset(storedTransition));
         (await _fixture.ScalarAsync<long>(
             world.Database,
             $"select count(*) from public.run_state_event where run_id = '{runId:D}'")).ShouldBe(
@@ -91,9 +93,9 @@ public sealed partial class GetRunDetailFieldsTests
         await _fixture.ExecuteAsync(
             world.Database,
             $"""
-            insert into public.run_state_event (org_id, run_id, seq, from_state, to_state, occurred_at)
-            values ('{world.Org:D}', '{runId:D}', 2, 'queued', 'running', '2026-11-07T10:00:00Z'),
-                   ('{world.Org:D}', '{runId:D}', 3, 'running', 'collecting', '2026-11-07T09:00:00Z');
+            insert into public.run_state_event (id, org_id, run_id, seq, from_state, to_state, occurred_at)
+            values (uuidv7(), '{world.Org:D}', '{runId:D}', 2, 'queued', 'running', '2026-11-07T10:00:00Z'),
+                   (uuidv7(), '{world.Org:D}', '{runId:D}', 3, 'running', 'collecting', '2026-11-07T09:00:00Z');
             """);
 
         var answer = await GetAsync(world, runId);
@@ -116,15 +118,20 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_RunWithoutTheCreationMarker_ServesNullHistory()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        // Dedicated: disabling the append-only guard is DDL and takes a table-wide lock no sibling class may share.
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await RunCreationTests.StartAsync(_fixture, database: owned.Name);
         var runId = await CreateQueuedRunAsync(world);
 
-        // The marker is removed as the superuser with the table's write guards disabled — the only way a stored
-        // history row can disappear — and they are re-enabled immediately, so the state is the row's, not the trigger's.
-        await _fixture.ExecuteAsync(world.Database, "alter table public.run_state_event disable trigger user");
-        await _fixture.ExecuteAsync(
-            world.Database, $"delete from public.run_state_event where run_id = '{runId:D}'");
-        await _fixture.ExecuteAsync(world.Database, "alter table public.run_state_event enable trigger user");
+        // The marker is removed as the owner with the table's guard disabled for the one statement and restored before
+        // the commit — the erasure handover, in one transaction, so a failure cannot leave the table writable.
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
+        {
+            await owner.ExecuteAsync("alter table public.run_state_event disable trigger run_state_event_immutable");
+            (await owner.ExecuteAsync($"delete from public.run_state_event where run_id = '{runId:D}'")).ShouldBe(1);
+            await owner.ExecuteAsync("alter table public.run_state_event enable trigger run_state_event_immutable");
+            await owner.CommitAsync();
+        }
 
         var answer = await GetAsync(world, runId);
 
@@ -154,8 +161,8 @@ public sealed partial class GetRunDetailFieldsTests
         await _fixture.ExecuteAsync(
             world.Database,
             $"""
-            insert into public.run_state_event (org_id, run_id, seq, from_state, to_state, occurred_at)
-            select '{world.Org:D}', '{runId:D}', n, 'queued', 'running',
+            insert into public.run_state_event (id, org_id, run_id, seq, from_state, to_state, occurred_at)
+            select uuidv7(), '{world.Org:D}', '{runId:D}', n, 'queued', 'running',
                    '2026-11-07T00:00:00Z'::timestamptz + (n || ' seconds')::interval
               from generate_series(2, 71) as n;
             """);
@@ -170,10 +177,12 @@ public sealed partial class GetRunDetailFieldsTests
             $"select count(*) from public.run_state_event where run_id = '{runId:D}'")).ShouldBe(
             71,
             "the table keeps every row; the bound is the read's");
+        var lastServed = await _fixture.ScalarAsync<DateTime>(
+            world.Database,
+            $"select occurred_at from public.run_state_event where run_id = '{runId:D}' and seq = 65");
+        lastServed.Kind.ShouldBe(DateTimeKind.Utc);
         served[^1].OccurredAt.ShouldBe(
-            await _fixture.ScalarAsync<DateTimeOffset>(
-                world.Database,
-                $"select occurred_at from public.run_state_event where run_id = '{runId:D}' and seq = 65"),
+            new DateTimeOffset(lastServed),
             "the read takes the first 64 rows in sequence order, so the last served row is sequence 65");
     }
 

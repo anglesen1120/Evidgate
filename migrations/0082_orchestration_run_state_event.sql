@@ -15,7 +15,7 @@
 --   the writer       one trigger function on `public.run`: `AFTER INSERT` records the creation row (`seq` 1,
 --                    `from_state` NULL, `to_state` = the inserted state, which the create path writes as `queued` and
 --                    the seeded `created` row writes as `created`), and `AFTER UPDATE OF state` records one row per
---                    real state change. A same-state update (the T82 replay/no-op) writes nothing.
+--                    real state change. A same-state update — a replay, not a transition — writes nothing.
 --
 -- ORDER OF WRITES: `seq` is `coalesce(max(seq), 0) + 1` for the run. That is safe without a lock of its own because
 -- every writer of one run's state serialises on the run row itself: the UPDATE that fires this trigger holds that
@@ -43,11 +43,12 @@
 -- SELECT (no policy, so it reads zero rows until a grant-gated operator policy lands — 0028/0069/0072 posture).
 -- `evidgate_worker_sched` holds nothing: no scheduled job reads or writes run history.
 --
--- GUARDS: append-only for every role, not only the app one. An `UPDATE` or a `DELETE` raises 23514 (`run_state_event_
--- immutable`), which is the backstop for the owner and for any future grant; an erasure that must remove a run's
--- history disables the guard first, exactly as the other append-only tables' erasure handover records. The composite
--- foreign key to `run` has no `ON DELETE`: a run with history is erased through that erasure path, never by a cascade
--- that would silently delete the record of what happened.
+-- GUARDS: `UPDATE` and `DELETE` are refused for every role, not only the app one — the guard trigger raises 23514
+-- (`run_state_event_immutable`), which is the backstop for the owner and for any future grant. That trigger is
+-- row-level on those two events, so it does not fire on `TRUNCATE`: erasing a run's history is the owner-only
+-- handover the other append-only tables record — the owner truncates, or disables the guard trigger and deletes, and
+-- nothing but an owner can. The composite foreign key to `run` has no `ON DELETE`: a run with history is erased
+-- through that erasure path, never by a cascade that would silently delete the record of what happened.
 --
 -- LOCKS: `set local lock_timeout = '5s'` bounds the DDL's wait, so a busy database fails the migration for a retry
 -- instead of stalling run writes. Everything here is a catalogue write on a new relation plus one trigger on `run`,
@@ -122,8 +123,8 @@ create or replace function evidgate.orchestration_run_state_event_append() retur
   set search_path = ''
   as $$
   begin
-    -- A replay of the state a run already holds is not a transition (T82): nothing is appended, so `seq` stays gapless
-    -- and the history has no zero-length moves.
+    -- A replay of the state a run already holds is not a transition: nothing is appended, so `seq` stays gapless and
+    -- the history has no zero-length moves.
     if tg_op = 'UPDATE' and old.state is not distinct from new.state then
       return null;
     end if;
@@ -160,9 +161,9 @@ create trigger run_state_event_transition
   after update of state on public.run
   for each row execute function evidgate.orchestration_run_state_event_append();
 
--- Append-only for every role: the grants keep the app role out, and this is the backstop for the owner and for any
--- future grant. An erasure that must remove history disables this trigger first (the other append-only tables record
--- the same handover).
+-- `UPDATE` and `DELETE` are refused for every role: the grants keep the app role out, and this trigger is the backstop
+-- for the owner and for any future grant. It is row-level on those two events, so it does not fire on `TRUNCATE`;
+-- truncating, or disabling this trigger, is the owner-only erasure handover the other append-only tables record.
 create or replace function evidgate.orchestration_run_state_event_immutable() returns trigger
   language plpgsql
   set search_path = ''
