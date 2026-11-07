@@ -2769,7 +2769,7 @@ export type AiSettingsTemplateListResponse = {
 };
 
 /**
- * The `200` answer of `GET /v1/orgs/{o}/usage/summary`: one entry per wire metric for the current billing period, the organization-wide counter and, when the request names a project, that project's counter.
+ * The `200` answer of `GET /v1/orgs/{o}/usage/summary`: one entry per wire metric for the current billing period, the organization-wide counter across all projects and a page of per-project counters, or only the named project's counter when `project_id` is given. An unfiltered page holds the projects that have a counter or roll-up row for the period; with `project_id` the answer is that project alone, answering 0 when it has no row. Paging never narrows the organization-wide totals or threshold state.
  */
 export type UsageSummaryDto = {
     /**
@@ -2784,6 +2784,10 @@ export type UsageSummaryDto = {
      * One entry per metric, in the ledger metric order.
      */
     metrics: Array<UsageSummaryMetricDto>;
+    /**
+     * Opaque cursor of the next page of projects; null on the last page and when `project_id` is given.
+     */
+    next_cursor: string | null;
 };
 
 /**
@@ -2820,9 +2824,10 @@ export type UsageSummaryMetricDto = {
      */
     unavailable_reason: string | null;
     /**
-     * The per-project counters, ordered by project id.
+     * The per-project counters of the page, ordered by project `created_at`, then id; empty when the metric is unavailable.
      */
     projects: Array<UsageSummaryProjectDto>;
+    projects_status: UsageSummaryProjectsStatusDto;
 };
 
 /**
@@ -2848,6 +2853,20 @@ export type UsageSummaryProjectDto = {
      * On a blocked counter only, whole seconds until the next period starts.
      */
     retry_after_seconds: number | null;
+};
+
+/**
+ * How many of the organization's projects a metric warns or blocks in the current period, counted over all projects rather than the page: the values are identical on every page and when `project_id` is given, so a quota badge never narrows when the per-project rows are paged. Only project quota counters count, never the roll-up fallback, which carries no threshold stamps. A blocked project is counted in `blocked_count` only, so the two counts never describe the same project twice. A metric with no producer in this build answers 0 and 0.
+ */
+export type UsageSummaryProjectsStatusDto = {
+    /**
+     * Projects whose counter for this metric is blocked, that is its `blocked_at` is set.
+     */
+    blocked_count: number;
+    /**
+     * Projects whose counter for this metric warned without blocking, that is `warned_at` is set and `blocked_at` is null.
+     */
+    warned_count: number;
 };
 
 /**
@@ -3450,7 +3469,7 @@ export type AuditFrom = string;
 export type AuditTo = string;
 
 /**
- * The project whose counter the summary adds. Absent answers the organization-wide counters and every project's; present, the project must be inside the credential's and the request's scope (403 `project_scope_mismatch`) and be in the caller's org (404 otherwise, also for another tenant's project).
+ * The project whose counter the summary adds. Absent answers the organization-wide counters and a page of projects; present, the project must be inside the credential's and the request's scope (403 `project_scope_mismatch`) and be in the caller's org (404 otherwise, also for another tenant's project).
  */
 export type UsageSummaryProject = string;
 
@@ -9534,9 +9553,14 @@ export type GetUsageSummaryData = {
     };
     query?: {
         /**
-         * The project whose counter the summary adds. Absent answers the organization-wide counters and every project's; present, the project must be inside the credential's and the request's scope (403 `project_scope_mismatch`) and be in the caller's org (404 otherwise, also for another tenant's project).
+         * The project whose counter the summary adds. Absent answers the organization-wide counters and a page of projects; present, the project must be inside the credential's and the request's scope (403 `project_scope_mismatch`) and be in the caller's org (404 otherwise, also for another tenant's project).
          */
         project_id?: string;
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
     };
     url: '/orgs/{o}/usage/summary';
 };
@@ -9559,6 +9583,10 @@ export type GetUsageSummaryErrors = {
      */
     404: ErrorEnvelope;
     /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
      * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
      */
     429: ErrorEnvelope;
@@ -9572,7 +9600,7 @@ export type GetUsageSummaryError = GetUsageSummaryErrors[keyof GetUsageSummaryEr
 
 export type GetUsageSummaryResponses = {
     /**
-     * The current period's per-metric counters: the organization-wide counter and, when `project_id` names one, that project's counter, plus the roll-up total for a scope the month has no counter for.
+     * The current period's per-metric counters, with per-project rows paged by project when `project_id` is absent. Every available metric lists the same page of projects, ordered by project `created_at`, then id; a metric without a producer answers `projects: []`. Organization-wide counters, roll-up totals and the per-metric `projects_status` warning and block counts cover all projects and remain identical on every page, and `projects_status` is the same with `project_id`. With `project_id`, only that project's counters are included and `next_cursor` is null; `limit` and `cursor` are still syntactically validated.
      */
     200: UsageSummaryDto;
 };

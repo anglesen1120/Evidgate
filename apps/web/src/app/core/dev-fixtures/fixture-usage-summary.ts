@@ -43,6 +43,7 @@ function metric(
     retry_after_seconds: null,
     unavailable_reason: null,
     projects: [],
+    projects_status: { blocked_count: 0, warned_count: 0 },
     ...changes,
   };
 }
@@ -67,7 +68,12 @@ const DOCUMENTS: Record<UsageSummaryVariant, UsageSummaryDocument> = {
   ok: {
     status: 200,
     headers: {},
-    body: { period: PERIOD, project: null, metrics: [...measured()] } satisfies UsageSummaryDto,
+    body: {
+      period: PERIOD,
+      project: null,
+      metrics: [...measured()],
+      next_cursor: null,
+    } satisfies UsageSummaryDto,
   },
   warn: {
     status: 200,
@@ -79,6 +85,7 @@ const DOCUMENTS: Record<UsageSummaryVariant, UsageSummaryDocument> = {
         metric('results', 800, 1000, { warned_at: '2026-11-01T09:00:00Z' }),
         ...measured().slice(1),
       ],
+      next_cursor: null,
     } satisfies UsageSummaryDto,
   },
   blocked: {
@@ -95,12 +102,18 @@ const DOCUMENTS: Record<UsageSummaryVariant, UsageSummaryDocument> = {
         }),
         ...measured().slice(1),
       ],
+      next_cursor: null,
     } satisfies UsageSummaryDto,
   },
   empty: {
     status: 200,
     headers: {},
-    body: { period: PERIOD, project: null, metrics: [] } satisfies UsageSummaryDto,
+    body: {
+      period: PERIOD,
+      project: null,
+      metrics: [],
+      next_cursor: null,
+    } satisfies UsageSummaryDto,
   },
   unavailable: {
     status: 200,
@@ -114,6 +127,7 @@ const DOCUMENTS: Record<UsageSummaryVariant, UsageSummaryDocument> = {
           unavailable_reason: 'storage_usage_daily.egress_bytes has no rows for this period',
         }),
       ],
+      next_cursor: null,
     } satisfies UsageSummaryDto,
   },
   error: {

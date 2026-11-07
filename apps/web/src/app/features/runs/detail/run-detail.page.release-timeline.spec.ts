@@ -86,6 +86,37 @@ describe('RunDetailPage release and timeline regions', () => {
     );
   });
 
+  it('passes served history to the timeline without deriving timestamps from run metadata', async () => {
+    get.mockResolvedValue({
+      ...run,
+      state_history: [
+        { from_state: 'queued', to_state: 'running', occurred_at: '2026-11-07T10:00:00Z' },
+        { from_state: 'running', to_state: 'collecting', occurred_at: '2026-11-07T10:01:00Z' },
+        { from_state: 'collecting', to_state: 'complete', occurred_at: '2026-11-07T10:02:00Z' },
+      ],
+    });
+    const { root } = await open();
+    const timeline = region(root, 'app-run-timeline');
+    expect(
+      [...timeline.querySelectorAll('[data-step-time]')].map((time) =>
+        time.getAttribute('datetime'),
+      ),
+    ).toEqual(['2026-11-07T10:00:00Z', '2026-11-07T10:01:00Z', '2026-11-07T10:02:00Z']);
+    expect(timeline.querySelector('[data-step="created"] time')).toBeNull();
+    expect(timeline.querySelector('[data-step-times]')).toBeNull();
+  });
+
+  it.each([
+    { history: null, copy: 'History unavailable for this run' },
+    { history: [], copy: 'No state changes recorded yet' },
+  ])('distinguishes the served history note "$copy"', async ({ history, copy }) => {
+    get.mockResolvedValue({ ...run, state_history: history });
+    const { root } = await open();
+    const timeline = region(root, 'app-run-timeline');
+    expect(timeline.querySelector('[data-step-times]')?.textContent).toContain(copy);
+    expect(timeline.querySelector('time')).toBeNull();
+  });
+
   it('shows the unbound release state without making a release request', async () => {
     get.mockResolvedValue({ ...run, releases: [] });
     const { root } = await open();

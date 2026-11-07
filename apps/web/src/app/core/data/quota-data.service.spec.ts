@@ -44,8 +44,10 @@ const SUMMARY: UsageSummaryDto = {
       retry_after_seconds: null,
       unavailable_reason: 'storage_usage_daily.egress_bytes has no rows for this period',
       projects: [],
+      projects_status: { blocked_count: 0, warned_count: 0 },
     },
   ],
+  next_cursor: null,
 };
 
 const QUOTA_EXCEEDED = {

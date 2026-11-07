@@ -1,3 +1,4 @@
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import type { RunStateDto } from '@evidgate/sdk';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
@@ -8,24 +9,21 @@ import {
 import { RUN_STATE_TONES, type RunState } from '../../../../shared/ui/chips/run-state-tone';
 import { runTimelineSteps, type TimelineStepStatus } from './run-timeline-steps';
 
-/**
- * Collection lifecycle of one run as an ordered list. The run detail response carries no
- * transition history, so only the current state and the states the main path guarantees are
- * marked; step timestamps are never invented.
- */
+/** Served transitions supply step times; legacy runs retain an explicitly unknown history. */
 @Component({
   selector: 'app-run-timeline',
-  imports: [StatusPillComponent, HlmCard, HlmCardTitle],
+  imports: [DatePipe, StatusPillComponent, HlmCard, HlmCardTitle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-timeline.component.html',
   host: { class: 'block min-w-0 text-foreground wrap-anywhere' },
 })
 export class RunTimelineComponent {
   readonly state = input.required<RunStateDto['state']>();
+  readonly stateHistory = input<RunStateDto['state_history']>(null);
   /** Events stored with `after_cancel = true`; null when the response does not serve a count. */
   readonly afterCancelEvents = input<number | null>(null);
 
-  protected readonly steps = computed(() => runTimelineSteps(this.state()));
+  protected readonly steps = computed(() => runTimelineSteps(this.state(), this.stateHistory()));
   protected readonly canceled = computed(() => this.state() === 'canceled');
 
   // Same custom ids as the shared run-state pill so both surfaces share one translation.
@@ -50,7 +48,8 @@ export class RunTimelineComponent {
   protected readonly copy = {
     title: $localize`:@@runs.detail.timeline:Run state timeline`,
     stepStatus: $localize`:@@runs.detail.timeline.step-status:Step status`,
-    stepTimes: $localize`:@@runs.detail.timeline.step-times:Step times are not available yet`,
+    historyUnavailable: $localize`:@@runs.detail.timeline.history-unavailable:History unavailable for this run`,
+    historyEmpty: $localize`:@@runs.detail.timeline.history-empty:No state changes recorded yet`,
     afterCancelNote: $localize`:@@runs.detail.timeline.after-cancel-note:Events that arrive after cancel are kept as evidence and never complete the run.`,
     afterCancelEvents: $localize`:@@runs.detail.timeline.after-cancel-events:After-cancel events`,
     afterCancelNone: $localize`:@@runs.detail.timeline.after-cancel-none:No events after cancel`,

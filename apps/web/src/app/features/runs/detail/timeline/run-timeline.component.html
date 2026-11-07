@@ -20,6 +20,11 @@
         <span class="min-w-0 font-(weight:--eg-weight-medium)" data-step-label>{{
           stepLabel(step.state)
         }}</span>
+        @if (step.at; as at) {
+          <time class="min-w-0" data-step-time [attr.datetime]="at">{{
+            at | date: 'medium' : '+0000'
+          }}</time>
+        }
         <app-status-pill
           data-step-status
           [tone]="stepTone(step.status, step.state)"
@@ -29,9 +34,15 @@
       </li>
     }
   </ol>
-  <p class="m-0 min-w-0" data-step-times>
-    <app-status-pill [tone]="'neutral'" [label]="copy.stepTimes" />
-  </p>
+  @if (stateHistory() === null) {
+    <p class="m-0 min-w-0" data-step-times>
+      <app-status-pill [tone]="'neutral'" [label]="copy.historyUnavailable" />
+    </p>
+  } @else if (stateHistory()?.length === 0) {
+    <p class="m-0 min-w-0" data-step-times>
+      <app-status-pill [tone]="'neutral'" [label]="copy.historyEmpty" />
+    </p>
+  }
   @if (canceled()) {
     <div
       class="grid min-w-0 gap-(--eg-space-2) rounded-(--eg-radius-sm) border border-(--eg-info-fg) bg-(--eg-info-bg) p-(--eg-space-3) text-(--eg-info-fg)"
