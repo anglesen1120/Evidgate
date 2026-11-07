@@ -3,6 +3,7 @@
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Application;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -241,6 +242,95 @@ public sealed class ReportParserResolverTests
         resolution.IsResolved.ShouldBeFalse("the kind is the report's own text, and no row names it");
         resolution.UnsupportedReason.ShouldBe(ReportParserResolver.UnknownProducerKind);
         (await CatalogueSizeAsync(world)).ShouldBe(before, "the kind is bound as a parameter, never composed into SQL");
+    }
+
+    [Fact]
+    public async Task SelectSql_RunUnderAConnectionThatBypassesRowSecurity_StillHidesAnotherOrgsRelease()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        const string kind = "probe-predicate";
+
+        await SeedReleaseAsync(world, world.OtherOrg, kind, version: "9.0", registeredAt: "2026-01-01T00:00:00Z");
+        await SeedReleaseAsync(world, null, kind, version: "1.0", registeredAt: "2026-01-01T00:00:00Z");
+
+        // The superuser is exempt from row security, so only the statement's own org predicate can hide the foreign row.
+        await using var connection = await _fixture.OpenSuperuserAsync(world.Database);
+        await using var command = new Npgsql.NpgsqlCommand(
+            ReportParserResolver.SelectSql.Replace("@producer_kind", "$1").Replace("@org_id", "$2"), connection);
+        command.Parameters.Add(new Npgsql.NpgsqlParameter { Value = kind });
+        command.Parameters.Add(new Npgsql.NpgsqlParameter { Value = world.Org });
+
+        var versions = new List<string>();
+        await using (var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken))
+        {
+            while (await reader.ReadAsync(TestContext.Current.CancellationToken))
+            {
+                versions.Add(reader.GetString(1));
+            }
+        }
+
+        versions.ShouldBe(["1.0"]);
+    }
+
+    [Fact]
+    public async Task Resolve_BindsTheAmbientScopesOrgIntoTheStatement()
+    {
+        var org = Guid.CreateVersion7();
+        var db = new RecordingDb();
+        var scope = Substitute.For<ITenantScope>();
+        scope.OrgId.Returns(org);
+        var accessor = Substitute.For<ITenantScopeAccessor>();
+        accessor.Require().Returns(scope);
+
+        await new ReportParserResolver(db, accessor).ResolveAsync("probe-kind", TestContext.Current.CancellationToken);
+
+        db.Parameters.ShouldNotBeNull();
+        db.Parameters.GetType().GetProperty("org_id")!.GetValue(db.Parameters).ShouldBe(org);
+        db.Parameters.GetType().GetProperty("producer_kind")!.GetValue(db.Parameters).ShouldBe("probe-kind");
+    }
+
+    [Fact]
+    public async Task Resolve_VersionsThatDifferOnlyInPaddingAndSegmentWidth_KeepTheNewestRegistration()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        const string kind = "probe-width";
+
+        // 1.10 equals 1.10.0 and beats 1.9.9: one parse per candidate must keep the tie rule and the numeric order.
+        await SeedReleaseAsync(world, null, kind, version: "1.9.9", registeredAt: "2026-03-01T00:00:00Z", parserId: "p-a");
+        await SeedReleaseAsync(world, null, kind, version: "1.10", registeredAt: "2026-01-01T00:00:00Z", parserId: "p-b");
+        await SeedReleaseAsync(world, null, kind, version: "1.10.0", registeredAt: "2026-02-01T00:00:00Z", parserId: "p-c");
+
+        var resolved = await ResolveAsync(world, world.Org, kind);
+
+        resolved.ParserId.ShouldBe("p-c");
+        resolved.Version.ShouldBe("1.10.0");
+    }
+
+    /// <summary>A db that records the parameters of its one query and answers no rows.</summary>
+    private sealed class RecordingDb : ITenantDb
+    {
+        public object? Parameters { get; private set; }
+
+        public System.Data.Common.DbConnection Connection => throw new NotSupportedException();
+
+        public System.Data.Common.DbTransaction Transaction => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<T>> QueryAsync<T>(string sql, object? parameters = null, CancellationToken cancellationToken = default)
+        {
+            Parameters = parameters;
+            return Task.FromResult<IReadOnlyList<T>>([]);
+        }
+
+        public Task<T?> QuerySingleOrDefaultAsync<T>(string sql, object? parameters = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<int> ExecuteAsync(string sql, object? parameters = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<T?> ScalarAsync<T>(string sql, object? parameters = null, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     // ------------------------------------------------------------------ helpers

@@ -1,3 +1,4 @@
+using System.Numerics;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 
 namespace Evidgate.Modules.Evidence.Application;
@@ -61,7 +62,8 @@ internal interface IReportParserResolver
 /// commits: the one statement runs in the scope the caller already opened.
 /// </summary>
 /// <param name="db">The Dapper path over the ambient scope; it demands an active scope before touching the database.</param>
-internal sealed class ReportParserResolver(ITenantDb db) : IReportParserResolver
+/// <param name="scopes">The ambient scope, read for the org the statement restates beside forced row security.</param>
+internal sealed class ReportParserResolver(ITenantDb db, ITenantScopeAccessor scopes) : IReportParserResolver
 {
     /// <summary>
     /// Every release the caller can see for the kind, widest scope first and the newest registration before an older
@@ -72,6 +74,7 @@ internal sealed class ReportParserResolver(ITenantDb db) : IReportParserResolver
         select parser_id as "ParserId", version as "Version", (org_id is not null) as "TenantOwned"
           from public.report_parser
          where producer_kind = @producer_kind
+           and (org_id is null or org_id = @org_id)
          order by (org_id is not null) desc, created_at desc, id
         """;
 
@@ -90,8 +93,9 @@ internal sealed class ReportParserResolver(ITenantDb db) : IReportParserResolver
         }
 
         // The kind is bound as a parameter, never composed into the statement: it is the report's own declared text.
+        // The org is restated here so a connection that bypasses row security still sees only its own overrides.
         var rows = await db
-            .QueryAsync<ParserRow>(SelectSql, new { producer_kind = producerKind }, cancellationToken)
+            .QueryAsync<ParserRow>(SelectSql, new { producer_kind = producerKind, org_id = scopes.Require().OrgId }, cancellationToken)
             .ConfigureAwait(false);
 
         var release = HighestRelease(VisibleScope(rows));
@@ -120,18 +124,20 @@ internal sealed class ReportParserResolver(ITenantDb db) : IReportParserResolver
     private static ParserRow? HighestRelease(IReadOnlyList<ParserRow> candidates)
     {
         ParserRow? highest = null;
+        BigInteger[] highestSegments = [];
 
         foreach (var candidate in candidates)
         {
-            if (!ParserVersionOrder.IsOrderable(candidate.Version))
+            if (!ParserVersionOrder.TryParse(candidate.Version, out var segments))
             {
                 // Unplaceable: no rule ranks it against a release it cannot be compared with, so it never parses.
                 continue;
             }
 
-            if (highest is null || ParserVersionOrder.Compare(candidate.Version, highest.Version) is > 0)
+            if (highest is null || ParserVersionOrder.CompareSegments(segments, highestSegments) > 0)
             {
                 highest = candidate;
+                highestSegments = segments;
             }
         }
 
