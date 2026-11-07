@@ -4,6 +4,7 @@
 using System.Net;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.Modules.Evidence.Application;
+using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -38,7 +39,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         spy.Calls.ShouldBe(1);
         var request = spy.Requests.ShouldHaveSingleItem();
         request.Metric.ShouldBe(UsageMetric.Results);
-        request.Period.ShouldBe(Period(world));
+        request.Period.ShouldBe(await PeriodAsync(world), "the transaction's month is what the counter and the ledger carry");
         request.ProjectId.ShouldBe(world.Project, "the run's own project is the counter's owner");
         request.Quantity.ShouldBe(3m, "the quantity is exactly what the batch receipt meters");
         request.IncludeTenantScope.ShouldBeTrue("an org-wide limit must cap a single project's report too");
@@ -85,15 +86,15 @@ public sealed partial class EvidenceRawReportQuotaTests
         blocked.RetryAfter.ShouldNotBeNull();
 
         // The task entry point answers a block with the deferral the queue understands: the same row waits for the
-        // gate's wait instead of spending an attempt on a refusal only a rollover or an operator raise can lift.
+        // gate's wait instead of spending an attempt on a refusal only a rollover or an operator raise can lift. The
+        // handler draws a real jitter sample, so the delay sits inside the clamped band rather than at one value.
         var deferred = await Should.ThrowAsync<TaskDeferredException>(
             async () => await CreateHandler(world).HandleAsync(payload, world.Org, Token));
 
-        deferred.Delay.ShouldBe(
-            ParseRawReportHandler.QuotaRetryDelay(blocked.RetryAfter, clock.GetUtcNow()),
-            "the frozen clock makes the clamp deterministic");
+        var unjittered = ParseRawReportHandler.QuotaRetryDelay(blocked.RetryAfter, clock.GetUtcNow(), 0);
+        deferred.Delay.ShouldBeLessThanOrEqualTo(unjittered, "the jitter only ever shortens the clamped delay");
         deferred.Delay.ShouldBeGreaterThanOrEqualTo(TimeSpan.FromSeconds(1));
-        deferred.Delay.ShouldBeLessThanOrEqualTo(TimeSpan.FromDays(17));
+        deferred.Delay.ShouldBeLessThanOrEqualTo(TimeSpan.FromMinutes(15));
     }
 
     [Theory]
@@ -117,20 +118,20 @@ public sealed partial class EvidenceRawReportQuotaTests
         {
             // A block with no usable wait names no retry either: the ordinary failure path answers it, not the deferral.
             Should.Throw<InvalidOperationException>(
-                () => ParseRawReportHandler.QuotaRetryDelay(retryAfter, MidMarch));
+                () => ParseRawReportHandler.QuotaRetryDelay(retryAfter, MidMarch, 0));
             return;
         }
 
         // The three bounds of a mid-March attempt: the gate's one-second floor lifts anything under it, the
         // fifteen-minute cap brings an attempt back in time for a raise or the run's late window, and a wait between
-        // the two stands as asked.
+        // the two stands as asked. Sample 0 is the clamped delay itself, before any jitter.
         var expected = retryAfter < TimeSpan.FromSeconds(1)
             ? TimeSpan.FromSeconds(1)
             : retryAfter > TimeSpan.FromMinutes(15)
                 ? TimeSpan.FromMinutes(15)
                 : retryAfter!.Value;
 
-        ParseRawReportHandler.QuotaRetryDelay(retryAfter, MidMarch).ShouldBe(expected);
+        ParseRawReportHandler.QuotaRetryDelay(retryAfter, MidMarch, 0).ShouldBe(expected);
     }
 
     [Fact]
@@ -138,7 +139,7 @@ public sealed partial class EvidenceRawReportQuotaTests
     {
         var nearlyApril = new DateTimeOffset(2026, 3, 31, 23, 55, 0, TimeSpan.Zero);
 
-        ParseRawReportHandler.QuotaRetryDelay(TimeSpan.FromMinutes(10), nearlyApril)
+        ParseRawReportHandler.QuotaRetryDelay(TimeSpan.FromMinutes(10), nearlyApril, 0)
             .ShouldBe(TimeSpan.FromMinutes(5), "the month's own end is the shortest of the three bounds");
     }
 
@@ -147,7 +148,7 @@ public sealed partial class EvidenceRawReportQuotaTests
     {
         var lastMoment = new DateTimeOffset(2026, 3, 31, 23, 59, 59, 500, TimeSpan.Zero);
 
-        var delay = ParseRawReportHandler.QuotaRetryDelay(TimeSpan.FromMilliseconds(200), lastMoment);
+        var delay = ParseRawReportHandler.QuotaRetryDelay(TimeSpan.FromMilliseconds(200), lastMoment, 0);
 
         delay.ShouldBe(
             TimeSpan.FromSeconds(1),
@@ -333,6 +334,8 @@ public sealed partial class EvidenceRawReportQuotaTests
                 world.Database, $"select last_error from public.task where id = '{taskId:D}'"))
             .ShouldBe(TaskDeferredException.PersistedError, "the probe compares the text the consumer really writes");
 
+        // The run closes while the row still carries its deferral: the retry is refused by the admission, which is the
+        // loss this case names. The deferral stays on the task row either way.
         await _fixture.ExecuteAsync(
             world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
         var log = new CapturedLog();
@@ -340,6 +343,50 @@ public sealed partial class EvidenceRawReportQuotaTests
 
         outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
         log.Lines.ShouldContain(line => line.Contains("quota_blocked_then_closed", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_Deferred_Report_Of_A_Closed_Run_Ends_Terminal_Instead_Of_Waiting_For_Room()
+    {
+        var queue = "report-closed-terminal";
+        var storage = new ReportStorageSpy();
+        var gate = new ReportPreCheckGate();
+        var world = await StartAsync(services =>
+        {
+            ReplaceObjectStorage(services, inner => storage.Wrap(inner));
+            ReplaceQuotaGate(services, inner => gate.Wrap(inner));
+        });
+        await using var _ = world;
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedPlanAsync(world);
+        var artifactId = await SeedArtifactAsync(world, OneEventBody);
+        // No room for a single event and a run that has already closed: room would not admit the report, so waiting for
+        // it only postpones a refusal the operator must see now.
+        await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
+        var taskId = await SeedDeferredTaskAsync(world, artifactId, queue);
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
+
+        var log = new CapturedLog();
+        var outcome = await ParseAsync(world, artifactId, log);
+
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Skipped);
+        outcome.Reason.ShouldBe(RunAdmissionPolicy.RunClosed, "the run's own refusal answers, not a quota wait");
+        gate.Peeks.ShouldBe(0, "a closed run is not asked about room it would never use");
+        gate.Checks.ShouldBe(0, "and the batch is refused before any reservation");
+        log.Lines.ShouldContain(line => line.Contains("quota_blocked_then_closed", StringComparison.Ordinal));
+        log.Lines.ShouldNotContain(line => line.Contains("deferred before the fetch", StringComparison.Ordinal));
+        (await CountAsync(world, "event", artifactId)).ShouldBe(0);
+        (await CountRawReportsAsync(world, artifactId)).ShouldBe(0);
+
+        // The same attempt through the real consumer: the row ends instead of being handed back with the deferral.
+        await using var worker = StartReportWorker(world);
+        var consumer = worker.GetRequiredService<TaskConsumer>();
+        (await consumer.PollOnceAsync(queue, Token)).ShouldBe(1);
+        (await TaskStateAsync(world, taskId)).ShouldBe("done");
+        (await TaskAttemptsAsync(world, taskId)).ShouldBe(
+            1,
+            "a deferral gives the attempt back, so a row deferred again would still hold zero");
     }
 
     [Fact]

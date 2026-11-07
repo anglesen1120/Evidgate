@@ -1,3 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Time.Testing;
 using Npgsql;
 using Xunit;
 
@@ -71,4 +74,31 @@ internal sealed partial class UsageReadsWorld
             await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         }
     }
+
+    /// <summary>
+    /// The database's own month and instant, read as the owner: what the summary's tenant transaction will name, and
+    /// the instant its retry hint is measured from.
+    /// </summary>
+    internal async Task<(string Period, DateTimeOffset Instant)> DatabaseClockAsync()
+    {
+        await using var connection = await OpenOwnerAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            "select to_char(now() at time zone 'UTC','YYYY-MM'), (extract(epoch from now()) * 1000)::bigint";
+        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        await reader.ReadAsync(TestContext.Current.CancellationToken);
+
+        return (reader.GetString(0), DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(1)));
+    }
+
+    /// <summary>A second host over this world's database whose own clock reports <paramref name="instant"/>.</summary>
+    /// <param name="instant">The instant the host's <see cref="TimeProvider"/> answers.</param>
+    internal TenancyApiFactory HostAt(DateTimeOffset instant) =>
+        TenancyApiFactory.RealResolver(
+            _fixture.AppConnectionString(Database),
+            services: services =>
+            {
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton<TimeProvider>(new FakeTimeProvider(instant));
+            });
 }

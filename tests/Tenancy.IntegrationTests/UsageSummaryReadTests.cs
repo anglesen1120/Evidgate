@@ -3,8 +3,6 @@ using System.Net;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.Modules.Usage.Contracts;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -17,38 +15,28 @@ namespace Tenancy.IntegrationTests;
 /// outside the org answers, and the service ceiling that keeps a service credential without <c>usage:read</c> out.
 /// </summary>
 /// <remarks>
-/// Every world runs on the same fixed clock, so the period the seeds name and the period the read answers cannot move
-/// under a test that straddles a month edge. The viewer deny matrix covers the member-without-<c>usage:read</c> answer
-/// for this route like every other route; the service half here is the ceiling the evaluator applies to a service
-/// credential that asks for the permission.
+/// Every world names its period and instant from the database's own clock, which is the clock the summary answers from,
+/// so a seed and the read that answers it cannot disagree about the month under a host clock that has moved on. The
+/// viewer deny matrix covers the member-without-<c>usage:read</c> answer for this route like every other route; the
+/// service half here is the ceiling the evaluator applies to a service credential that asks for the permission.
 /// </remarks>
 [Trait("Category", "Docker")]
 public sealed class UsageSummaryReadTests
 {
-    /// <summary>
-    /// The instant every world of this class reports: mid-month, so no run of this suite can cross a rollover and the
-    /// seeded period is the period under test.
-    /// </summary>
-    private static readonly DateTimeOffset Fixed = new(2026, 11, 15, 9, 30, 0, TimeSpan.Zero);
-
     private readonly PostgresTenancyFixture _fixture;
 
     public UsageSummaryReadTests(PostgresTenancyFixture fixture) => _fixture = fixture;
-
-    private static string Period => Fixed.ToString("yyyy-MM", CultureInfo.InvariantCulture);
-
-    private static string PreviousPeriod => Fixed.AddMonths(-1).ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
     [Fact]
     public async Task Summary_EmptyProject_MeteredMetricsAreZeroAndUnmeteredNull()
     {
         await using var world = await StartAsync();
-        world.Host.Services.GetRequiredService<TimeProvider>().GetUtcNow().ShouldBe(Fixed);
+        var (period, _) = await world.DatabaseClockAsync();
 
         var answer = await world.GetAsMemberAsync(world.SummaryUrl(world.Project));
 
         answer.Status.ShouldBe(HttpStatusCode.OK);
-        answer.Body.GetProperty("period").GetString().ShouldBe(Period);
+        answer.Body.GetProperty("period").GetString().ShouldBe(period);
         answer.Body.GetProperty("project").GetGuid().ShouldBe(world.Project);
 
         var results = Metric(answer, UsageLedgerMetricNames.Results);
@@ -70,9 +58,10 @@ public sealed class UsageSummaryReadTests
     public async Task Summary_TenantAndProjectCounters_AreLabelledAndScoped()
     {
         await using var world = await StartAsync();
+        var (period, _) = await world.DatabaseClockAsync();
         await world.SeedCounterAsync(
-            new CounterSeed(Guid.CreateVersion7(), null, Period, UsageLedgerMetricNames.Results, 4m, 10m),
-            new CounterSeed(Guid.CreateVersion7(), world.Project, Period, UsageLedgerMetricNames.Results, 2m, 5m));
+            new CounterSeed(Guid.CreateVersion7(), null, period, UsageLedgerMetricNames.Results, 4m, 10m),
+            new CounterSeed(Guid.CreateVersion7(), world.Project, period, UsageLedgerMetricNames.Results, 2m, 5m));
 
         var answer = await world.GetAsMemberAsync(world.SummaryUrl(world.Project));
 
@@ -89,13 +78,16 @@ public sealed class UsageSummaryReadTests
     public async Task Summary_PreviousPeriodCounter_SuppliesNoLimit()
     {
         await using var world = await StartAsync();
+        var (period, instant) = await world.DatabaseClockAsync();
+        var previous = Month(instant.AddMonths(-1));
         await world.SeedCounterAsync(
-            new CounterSeed(Guid.CreateVersion7(), null, PreviousPeriod, UsageLedgerMetricNames.Results, 9m, 10m),
-            new CounterSeed(Guid.CreateVersion7(), world.Project, PreviousPeriod, UsageLedgerMetricNames.Results, 1m, 10m));
+            new CounterSeed(Guid.CreateVersion7(), null, previous, UsageLedgerMetricNames.Results, 9m, 10m),
+            new CounterSeed(Guid.CreateVersion7(), world.Project, previous, UsageLedgerMetricNames.Results, 1m, 10m));
 
         var answer = await world.GetAsMemberAsync(world.SummaryUrl(world.Project));
 
         answer.Status.ShouldBe(HttpStatusCode.OK);
+        answer.Body.GetProperty("period").GetString().ShouldBe(period);
         var results = Metric(answer, UsageLedgerMetricNames.Results);
 
         // The read reports the month it is in. Carrying the previous limit is the gate's write-time job, so an empty
@@ -110,10 +102,11 @@ public sealed class UsageSummaryReadTests
     public async Task Summary_RollupOnlyMonth_UsesRollupTotalsWithNoLimit()
     {
         await using var world = await StartAsync();
+        var (period, instant) = await world.DatabaseClockAsync();
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("billing"));
         await world.SeedRollupAsync(
-            new RollupSeed(Guid.CreateVersion7(), world.Project, Period, UsageLedgerMetricNames.Results, 3m, 2, Fixed),
-            new RollupSeed(Guid.CreateVersion7(), sibling, Period, UsageLedgerMetricNames.Results, 4m, 1, Fixed));
+            new RollupSeed(Guid.CreateVersion7(), world.Project, period, UsageLedgerMetricNames.Results, 3m, 2, instant),
+            new RollupSeed(Guid.CreateVersion7(), sibling, period, UsageLedgerMetricNames.Results, 4m, 1, instant));
 
         var answer = await world.GetAsMemberAsync(world.SummaryUrl());
 
@@ -137,11 +130,12 @@ public sealed class UsageSummaryReadTests
     public async Task Summary_CounterAndRollup_PrefersTheCounter()
     {
         await using var world = await StartAsync();
+        var (period, instant) = await world.DatabaseClockAsync();
         await world.SeedCounterAsync(
-            new CounterSeed(Guid.CreateVersion7(), null, Period, UsageLedgerMetricNames.Results, 2m, 10m),
-            new CounterSeed(Guid.CreateVersion7(), world.Project, Period, UsageLedgerMetricNames.Results, 1m, 5m));
+            new CounterSeed(Guid.CreateVersion7(), null, period, UsageLedgerMetricNames.Results, 2m, 10m),
+            new CounterSeed(Guid.CreateVersion7(), world.Project, period, UsageLedgerMetricNames.Results, 1m, 5m));
         await world.SeedRollupAsync(
-            new RollupSeed(Guid.CreateVersion7(), world.Project, Period, UsageLedgerMetricNames.Results, 9m, 9, Fixed));
+            new RollupSeed(Guid.CreateVersion7(), world.Project, period, UsageLedgerMetricNames.Results, 9m, 9, instant));
 
         var answer = await world.GetAsMemberAsync(world.SummaryUrl(world.Project));
 
@@ -161,11 +155,12 @@ public sealed class UsageSummaryReadTests
     public async Task Summary_ProjectFilter_ReturnsOnlyThatProject()
     {
         await using var world = await StartAsync();
+        var (period, _) = await world.DatabaseClockAsync();
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("billing"));
         await world.SeedCounterAsync(
-            new CounterSeed(Guid.CreateVersion7(), null, Period, UsageLedgerMetricNames.Results, 5m, 20m),
-            new CounterSeed(Guid.CreateVersion7(), world.Project, Period, UsageLedgerMetricNames.Results, 2m, 10m),
-            new CounterSeed(Guid.CreateVersion7(), sibling, Period, UsageLedgerMetricNames.Results, 3m, 10m));
+            new CounterSeed(Guid.CreateVersion7(), null, period, UsageLedgerMetricNames.Results, 5m, 20m),
+            new CounterSeed(Guid.CreateVersion7(), world.Project, period, UsageLedgerMetricNames.Results, 2m, 10m),
+            new CounterSeed(Guid.CreateVersion7(), sibling, period, UsageLedgerMetricNames.Results, 3m, 10m));
 
         var answer = await world.GetAsMemberAsync(world.SummaryUrl(world.Project));
 
@@ -270,12 +265,12 @@ public sealed class UsageSummaryReadTests
         answer.Status.ShouldBe(HttpStatusCode.Forbidden);
     }
 
-    /// <summary>One world whose host reports <see cref="Fixed"/> as the current instant.</summary>
-    private Task<UsageReadsWorld> StartAsync()
-    {
-        var clock = new FakeTimeProvider(Fixed);
-        return UsageReadsWorld.StartAsync(_fixture, OperatorGateMode.Permitted, clock);
-    }
+    /// <summary>One world over the shared database; its period comes from that database's own clock.</summary>
+    private Task<UsageReadsWorld> StartAsync() =>
+        UsageReadsWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+
+    private static string Month(DateTimeOffset instant) =>
+        instant.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
     private static JsonElement Metric(ApiAnswer answer, string wire) =>
         answer.Body.GetProperty("metrics").EnumerateArray()

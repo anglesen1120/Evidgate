@@ -182,7 +182,7 @@ internal sealed record ParseRawReportOutcome(string Status, string? Reason = nul
 /// <param name="scopeFactory">Reaches the scoped case-attempt writer: handlers are singletons, and the writer joins the ambient tenant transaction and never commits.</param>
 /// <param name="outbox">The reconcile trigger's transactional outbox writer.</param>
 /// <param name="audit">The attempt's audit buffer, which the run transition inside the write transaction records into.</param>
-/// <param name="time">The UTC billing-month clock shared with quota admission.</param>
+/// <param name="time">The attempt's clock: it bounds the retry a quota block defers for, never the gate's billing month, which the transaction supplies.</param>
 /// <param name="logger">The one structured line each attempt writes.</param>
 internal sealed partial class ParseRawReportHandler(
     ITenantScopeFactory scopes,
@@ -233,7 +233,9 @@ internal sealed partial class ParseRawReportHandler(
         var outcome = await ExecuteAsync(payload, orgId, cancellationToken).ConfigureAwait(false);
         if (outcome.Status == ParseRawReportOutcome.QuotaBlocked)
         {
-            throw new TaskDeferredException(QuotaRetryDelay(outcome.RetryAfter, time.GetUtcNow()));
+            // The real sample is drawn here only: the delay itself stays a pure function a test can pin.
+            throw new TaskDeferredException(
+                QuotaRetryDelay(outcome.RetryAfter, time.GetUtcNow(), Random.Shared.NextDouble()));
         }
     }
 
@@ -249,27 +251,20 @@ internal sealed partial class ParseRawReportHandler(
         Guid orgId,
         CancellationToken cancellationToken)
     {
-        if (payload.ProducerKind is not { Length: > 0 } || payload.ProducerIssue is not null)
+        if (await RefuseUnknownProducerAsync(payload, orgId, cancellationToken).ConfigureAwait(false)
+            is { } unknownProducer)
         {
-            // No single producer kind to resolve, so no parser can judge the bytes: the report is refused before they
-            // are read and leaves its one row. A null kind without an issue is the same refusal, so a hand-written
-            // payload can never reach the registry with a null.
-            var issue = string.IsNullOrEmpty(payload.ProducerIssue)
-                ? ParseRawReportPayload.ProducerUnknown
-                : payload.ProducerIssue;
-            LogUnsupported(logger, payload.ArtifactId, issue);
-            return await RefuseAsync(
-                    orgId,
-                    payload,
-                    RawReportOutcomes.Unsupported,
-                    issue,
-                    parserId: null,
-                    parserVersion: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            return unknownProducer;
         }
 
         var preparation = await PrepareAsync(orgId, payload, cancellationToken).ConfigureAwait(false);
+        if (preparation.Blocked is { } blocked)
+        {
+            // A report the queue already deferred and the counter still has no room for: nothing is fetched, parsed or
+            // written, and the deferral repeats. The stamp the first block left stands; this read writes nothing.
+            return blocked;
+        }
+
         if (preparation.Prepared is not { } prepared)
         {
             // A refusal is the one stop that still leaves evidence: an unsupported producer kind writes its row, a skip

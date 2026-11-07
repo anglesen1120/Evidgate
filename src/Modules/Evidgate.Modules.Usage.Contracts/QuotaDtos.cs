@@ -70,8 +70,9 @@ public sealed record QuotaCheckRequest(
 /// </param>
 /// <param name="Limit">That scope's limit, or null when there is no counter row.</param>
 /// <param name="RetryAfter">
-/// On <see cref="QuotaDecision.Block"/> only: the time until the next period starts, at least one second. An
-/// early retry cannot succeed — only a period rollover or an operator raise can.
+/// On <see cref="QuotaDecision.Block"/> only: the time until the next period starts, at least one second. Measured from
+/// the gate transaction's own clock, the clock that named the period, never from the host's. An early retry cannot
+/// succeed — only a period rollover or an operator raise can.
 /// </param>
 /// <param name="RaisePath">
 /// On <see cref="QuotaDecision.Block"/> only: the operator route that raises this scope's limit.

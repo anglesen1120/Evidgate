@@ -8,6 +8,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
+using System.Runtime.CompilerServices;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -29,6 +30,9 @@ public sealed partial class IngestQuotaTests
 
     /// <summary>The outbox task type the gate enqueues when a counter crosses its warning line.</summary>
     private const string WarningTask = "usage.quota.warn";
+
+    /// <summary>One database month per test world, so a case reads the clock once and cannot see two of them.</summary>
+    private static readonly ConditionalWeakTable<IngestTestWorld, Task<string>> Months = new();
 
     private readonly PostgresTenancyFixture _fixture;
 
@@ -52,10 +56,11 @@ public sealed partial class IngestQuotaTests
         // One batch, one question: the quantity is the batch's event count, so a per-event implementation
         // would show three calls (or three increments) instead of one.
         spy.Calls.ShouldBe(1);
+        spy.PeriodCalls.ShouldBe(1, "and the transaction's month is asked for once per batch, never per event");
         var request = spy.Requests.ShouldHaveSingleItem();
         request.Metric.ShouldBe(UsageMetric.Results);
         request.ProjectId.ShouldBe(world.Project);
-        request.Period.ShouldBe(Period(world));
+        request.Period.ShouldBe(await PeriodAsync(world));
         request.Quantity.ShouldBe(3m);
 
         (await ReadAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(3m);
@@ -80,7 +85,7 @@ public sealed partial class IngestQuotaTests
         answer.Body.GetProperty("error").GetProperty("retryable").GetBoolean().ShouldBeTrue();
 
         var retryAfter = RetryAfter(answer);
-        var expected = SecondsUntilNextPeriod(world);
+        var expected = await SecondsUntilNextPeriodAsync(world);
         retryAfter.ShouldBeGreaterThanOrEqualTo(1);
         retryAfter.ShouldBeInRange(expected - 1, expected + 2);
 
@@ -236,15 +241,15 @@ public sealed partial class IngestQuotaTests
         await SeedAsync(counters, world, used: 0m, limit: 10m);
         var (otherOrg, otherProject) = await world.CreateOtherOrgAsync(Unique.Slug("quota-other"));
         await counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), otherProject, Period(world), "results", 1m, 1m, WarnRatio, Org: otherOrg));
-        var otherBefore = (await counters.CounterAsync(otherOrg, otherProject, Period(world))).ShouldNotBeNull();
+            Guid.CreateVersion7(), otherProject, await PeriodAsync(world), "results", 1m, 1m, WarnRatio, Org: otherOrg));
+        var otherBefore = (await counters.CounterAsync(otherOrg, otherProject, await PeriodAsync(world))).ShouldNotBeNull();
 
         var answer = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L));
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         (await ReadAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(2m);
 
-        var otherAfter = (await counters.CounterAsync(otherOrg, otherProject, Period(world))).ShouldNotBeNull();
+        var otherAfter = (await counters.CounterAsync(otherOrg, otherProject, await PeriodAsync(world))).ShouldNotBeNull();
         otherAfter.Used.ShouldBe(otherBefore.Used);
         otherAfter.Version.ShouldBe(otherBefore.Version);
     }
@@ -314,29 +319,39 @@ public sealed partial class IngestQuotaTests
             wrap((TService)ActivatorUtilities.CreateInstance(provider, implementation)));
     }
 
-    private static Task<Guid> SeedAsync(UsageQuotaWorld counters, IngestTestWorld world, decimal used, decimal limit) =>
-        counters.SeedCounterAsync(new CounterSeed(
-            Guid.CreateVersion7(), world.Project, Period(world), "results", used, limit, WarnRatio, Org: world.Org));
+    private static async Task<Guid> SeedAsync(UsageQuotaWorld counters, IngestTestWorld world, decimal used, decimal limit) =>
+        await counters.SeedCounterAsync(new CounterSeed(
+            Guid.CreateVersion7(), world.Project, await PeriodAsync(world), "results", used, limit, WarnRatio,
+            Org: world.Org));
 
-    private static Task<CounterState?> ReadAsync(UsageQuotaWorld counters, IngestTestWorld world) =>
-        counters.CounterAsync(org: world.Org, project: world.Project, period: Period(world), metric: "results");
+    private static async Task<CounterState?> ReadAsync(UsageQuotaWorld counters, IngestTestWorld world) =>
+        await counters.CounterAsync(
+            org: world.Org, project: world.Project, period: await PeriodAsync(world), metric: "results");
 
-    private static string Period(IngestTestWorld world) =>
-        world.Host.Services.GetRequiredService<TimeProvider>().GetUtcNow()
-            .ToString("yyyy-MM", CultureInfo.InvariantCulture);
+    /// <summary>
+    /// The billing month the route's admission asks about: the database clock's, which is the instant that stamps the
+    /// batch and its ledger row. Read once per test world, so a case that straddles a month end reads one month.
+    /// </summary>
+    private static Task<string> PeriodAsync(IngestTestWorld world) =>
+        Months.GetValue(world, candidate => DatabaseMonthAsync(candidate));
 
-    /// <summary>The billing month before <see cref="Period"/>: the month a rollover carries its limit from.</summary>
-    private static string PreviousMonth(IngestTestWorld world) =>
-        world.Host.Services.GetRequiredService<TimeProvider>().GetUtcNow().AddMonths(-1)
-            .ToString("yyyy-MM", CultureInfo.InvariantCulture);
+    private static Task<string> DatabaseMonthAsync(IngestTestWorld world) =>
+        world.ScalarAsync<string>("select to_char(now() at time zone 'UTC', 'YYYY-MM')");
 
-    private static int SecondsUntilNextPeriod(IngestTestWorld world)
-    {
-        var now = world.Host.Services.GetRequiredService<TimeProvider>().GetUtcNow();
-        var next = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(1);
+    /// <summary>The real month before <see cref="PeriodAsync"/>: the month a rollover carries its limit from.</summary>
+    private static async Task<string> PreviousMonthAsync(IngestTestWorld world) =>
+        DateTime.SpecifyKind(
+            DateTime.ParseExact(await PeriodAsync(world), "yyyy-MM", CultureInfo.InvariantCulture),
+            DateTimeKind.Utc).AddMonths(-1).ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
-        return (int)Math.Ceiling((next - now).TotalSeconds);
-    }
+    /// <summary>Whole seconds from the database clock to the next period, measured as the gate's Retry-After is.</summary>
+    private static Task<int> SecondsUntilNextPeriodAsync(IngestTestWorld world) =>
+        world.ScalarAsync<int>(
+            """
+            select ceil(extract(epoch from (
+                date_trunc('month', now() at time zone 'UTC') + interval '1 month' - (now() at time zone 'UTC')
+            )))::int
+            """);
 
     /// <summary>One batch of <c>test.step</c> events (no attempt slot), one per given id and producer sequence.</summary>
     private static object StepBatch(IngestTestWorld world, params (Guid Id, long Sequence)[] events) =>
@@ -386,10 +401,14 @@ public sealed partial class IngestQuotaTests
 internal sealed class QuotaGateSpy
 {
     private int _calls;
+    private int _periodCalls;
     private readonly ConcurrentQueue<QuotaCheckRequest> _requests = new();
 
     /// <summary>How many <see cref="IQuotaGate.CheckAsync"/> calls the host made.</summary>
     internal int Calls => Volatile.Read(ref _calls);
+
+    /// <summary>How many <see cref="IQuotaGate.CurrentPeriodAsync"/> calls the host made.</summary>
+    internal int PeriodCalls => Volatile.Read(ref _periodCalls);
 
     /// <summary>Every question, in arrival order.</summary>
     internal IReadOnlyList<QuotaCheckRequest> Requests => [.. _requests];
@@ -399,11 +418,21 @@ internal sealed class QuotaGateSpy
         Interlocked.Increment(ref _calls);
         _requests.Enqueue(request);
     }
+
+    internal void RecordPeriod() => Interlocked.Increment(ref _periodCalls);
 }
 
-/// <summary>The registered gate, counted: the batch's one question is what the counter sees.</summary>
+/// <summary>The registered gate, counted: the batch's one month and its one question are what the counter sees.</summary>
 internal sealed class SpyQuotaGate(IQuotaGate inner, QuotaGateSpy spy) : IQuotaGate
 {
+    /// <inheritdoc />
+    public Task<string> CurrentPeriodAsync(CancellationToken cancellationToken)
+    {
+        spy.RecordPeriod();
+
+        return inner.CurrentPeriodAsync(cancellationToken);
+    }
+
     /// <inheritdoc />
     public Task<QuotaCheckResult> CheckAsync(QuotaCheckRequest request, CancellationToken cancellationToken)
     {
@@ -411,12 +440,26 @@ internal sealed class SpyQuotaGate(IQuotaGate inner, QuotaGateSpy spy) : IQuotaG
 
         return inner.CheckAsync(request, cancellationToken);
     }
+
+    /// <inheritdoc />
+    public Task<QuotaCheckResult> PeekAsync(QuotaCheckRequest request, CancellationToken cancellationToken) =>
+        inner.PeekAsync(request, cancellationToken);
 }
 
 /// <summary>A gate that cannot answer, so the route's fail-closed path is what the test sees.</summary>
 internal sealed class ThrowingQuotaGate : IQuotaGate
 {
+    private const string Unavailable = "the quota store is unavailable";
+
+    /// <inheritdoc />
+    public Task<string> CurrentPeriodAsync(CancellationToken cancellationToken) =>
+        throw new InvalidOperationException(Unavailable);
+
     /// <inheritdoc />
     public Task<QuotaCheckResult> CheckAsync(QuotaCheckRequest request, CancellationToken cancellationToken) =>
-        throw new InvalidOperationException("the quota store is unavailable");
+        throw new InvalidOperationException(Unavailable);
+
+    /// <inheritdoc />
+    public Task<QuotaCheckResult> PeekAsync(QuotaCheckRequest request, CancellationToken cancellationToken) =>
+        throw new InvalidOperationException(Unavailable);
 }

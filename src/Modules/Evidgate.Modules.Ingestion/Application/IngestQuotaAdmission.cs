@@ -1,4 +1,3 @@
-using System.Globalization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -9,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 namespace Evidgate.Modules.Ingestion.Application;
 
 /// <summary>
-/// The events route's quota admission: one <see cref="IQuotaGate"/> call per batch, never per event (ruling
+/// The events route's quota admission: one <see cref="IQuotaGate"/> decision per batch, never per event (ruling
 /// T53), made after the batch's insert has written its rows and answered how many units the batch adds.
 /// <para>
 /// The reserved quantity is the unit the ledger bills: the rows this batch's insert actually added, so two
@@ -31,8 +30,7 @@ namespace Evidgate.Modules.Ingestion.Application;
 internal sealed class IngestQuotaAdmission(
     IQuotaGate gate,
     IngestQuotaVeto veto,
-    ITenantScopeAccessor scopes,
-    TimeProvider time)
+    ITenantScopeAccessor scopes)
 {
     /// <summary>
     /// Reserves <paramref name="quantity"/> units on the project's counter and the organization's, or answers the
@@ -61,10 +59,10 @@ internal sealed class IngestQuotaAdmission(
             return null;
         }
 
-        // The billing month of the admitted work, in the UTC form the counter and the ledger both store. The
-        // batch commits milliseconds later, so a reservation made across a month boundary can land one month
-        // before its ledger row; that window is one instant and the two months carry the same limit.
-        var period = time.GetUtcNow().ToString("yyyy-MM", CultureInfo.InvariantCulture);
+        // The billing month of the admitted work, read from the transaction's own clock: the instant that stamps the
+        // batch's rows is the one the ledger row metering them carries, so a batch never passes the gate in one month
+        // and lands in the ledger of the next.
+        var period = await gate.CurrentPeriodAsync(cancellationToken).ConfigureAwait(false);
         var request = new QuotaCheckRequest(
             UsageMetric.Results, period, scopedProject, quantity, IncludeTenantScope: true);
         var answer = await gate.CheckAsync(request, cancellationToken).ConfigureAwait(false);

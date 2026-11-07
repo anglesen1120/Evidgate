@@ -14,6 +14,10 @@
 # in `ps` output (00 §5.7 S3). The template printed at the end carries
 # placeholders, never the values.
 #
+# The superuser psql path and the two role statements are shared with
+# scripts/env/bootstrap-db.sh through scripts/env/lib-db.sh, so the dev stack and
+# an environment bootstrap cannot drift apart.
+#
 # usage: scripts/dev/db-init.sh [--with-token] [--help]
 #
 #   --with-token  after the role grants, run `Evidgate.Migrator seed-dev
@@ -44,22 +48,16 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
+EVG_DB_LABEL=db-init
+# shellcheck source=scripts/env/lib-db.sh
+. "$ROOT/scripts/env/lib-db.sh"
+
 DB_HOST="${EVIDGATE_DB_HOST:-127.0.0.1}"
 DB_PORT="${EVIDGATE_DB_PORT:-5432}"
 DB_NAME="${EVIDGATE_DB_NAME:-evidgate}"
 DB_SUPERUSER="${EVIDGATE_DB_SUPERUSER:-postgres}"
 DB_SUPERUSER_PASSWORD="${EVIDGATE_DB_SUPERUSER_PASSWORD:-postgres}"
 DB_CONTAINER="${EVIDGATE_DB_CONTAINER:-}"
-
-# Password variables psql reads with \getenv; exported so both the host psql and
-# `docker exec -e NAME` (which copies from this environment, never from argv) see
-# them.
-PASSWORD_VARS=(
-  EVIDGATE_OWNER_PASSWORD
-  EVIDGATE_APP_PASSWORD
-  EVIDGATE_OPERATOR_PASSWORD
-  EVIDGATE_WORKER_SCHED_PASSWORD
-)
 
 usage() {
   cat <<'USAGE'
@@ -98,11 +96,6 @@ and read there with \getenv.
 USAGE
 }
 
-die() {
-  printf 'db-init: %s\n' "$*" >&2
-  exit 1
-}
-
 # A connection-string value, quoted and escaped so a password that contains ';'
 # or '"' still yields a valid DSN (Npgsql accepts the quoted form).
 dsn_quote() {
@@ -118,69 +111,25 @@ for arg in "$@"; do
       usage
       exit 0
       ;;
-    *) die "unexpected argument '$arg' (try --help)" ;;
+    *) evg_db_die "unexpected argument '$arg' (try --help)" ;;
   esac
 done
 
-missing=""
-for name in "${PASSWORD_VARS[@]}"; do
-  if [[ -z "${!name:-}" ]]; then
-    missing="$missing $name"
-  fi
-done
-if [[ -n "$missing" ]]; then
-  die "missing required environment:$missing (see --help)"
-fi
+evg_db_require_env "${EVG_DB_PASSWORD_VARS[@]}"
 
 # Exported so both a host psql and `docker exec -e NAME` (which copies from this
 # environment, never from argv) can read them with \getenv.
-export EVIDGATE_OWNER_PASSWORD
-export EVIDGATE_APP_PASSWORD
-export EVIDGATE_OPERATOR_PASSWORD
-export EVIDGATE_WORKER_SCHED_PASSWORD
+evg_db_export_passwords "${EVG_DB_PASSWORD_VARS[@]}"
 
 # psql lives in the PostgreSQL container on this host: prefer the container path
 # when told which container to use, otherwise require a host psql.
-if [[ -n "$DB_CONTAINER" ]]; then
-  command -v docker >/dev/null 2>&1 || die "docker is required with EVIDGATE_DB_CONTAINER"
-  psql_super() {
-    docker exec -i \
-      -e EVIDGATE_OWNER_PASSWORD -e EVIDGATE_APP_PASSWORD \
-      -e EVIDGATE_OPERATOR_PASSWORD -e EVIDGATE_WORKER_SCHED_PASSWORD \
-      "$DB_CONTAINER" psql -X -q -v ON_ERROR_STOP=1 -U "$DB_SUPERUSER" -d postgres "$@"
-  }
-elif command -v psql >/dev/null 2>&1; then
-  psql_super() {
-    PGPASSWORD="$DB_SUPERUSER_PASSWORD" psql -X -q -v ON_ERROR_STOP=1 \
-      -h "$DB_HOST" -p "$DB_PORT" -U "$DB_SUPERUSER" -d postgres "$@"
-  }
-else
-  die "no psql on PATH — install it, or set EVIDGATE_DB_CONTAINER to a running PostgreSQL container
-     (e.g. EVIDGATE_DB_CONTAINER=\$(docker ps --filter ancestor=postgres --format '{{.Names}}' | head -1))"
-fi
+evg_db_psql_init "$DB_CONTAINER" "$DB_HOST" "$DB_PORT" "$DB_SUPERUSER" "$DB_SUPERUSER_PASSWORD"
 
 printf 'db-init: preparing %s on %s:%s as superuser %s\n' "$DB_NAME" "$DB_HOST" "$DB_PORT" "$DB_SUPERUSER"
 
-# 1. Migration role + database. The owner needs LOGIN (it connects to migrate) and
-#    CREATEROLE (migration 0001 creates the three application roles as the owner,
-#    because a non-superuser migration role cannot grant SUPERUSER/BYPASSRLS flags).
-psql_super -v db_name="$DB_NAME" <<'SQL'
-\getenv owner_password EVIDGATE_OWNER_PASSWORD
-
-do $$
-begin
-  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'evidgate_owner') then
-    create role evidgate_owner login createrole;
-  end if;
-end
-$$;
-
-alter role evidgate_owner login createrole nosuperuser nocreatedb nobypassrls password :'owner_password';
-
-select format('create database %I owner evidgate_owner', :'db_name')
- where not exists (select 1 from pg_catalog.pg_database where datname = :'db_name')
-\gexec
-SQL
+# 1. Migration role + database (scripts/env/lib-db.sh, shared with the
+#    per-environment bootstrap).
+evg_db_create_owner_and_database "$DB_NAME"
 
 # 2. Bring the database to head as evidgate_owner; migration 0001 creates
 #    evidgate_app, evidgate_operator and evidgate_worker_sched without LOGIN.
@@ -192,23 +141,15 @@ migrator_connection_string="Host=$DB_HOST;Port=$DB_PORT;Database=$DB_NAME;Userna
 if ! status_output="$(EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
   dotnet run --project "$ROOT/src/Evidgate.Migrator" -- --status 2>&1)"; then
   printf '%s\n' "$status_output" >&2
-  die "Evidgate.Migrator --status failed against $DB_HOST:$DB_PORT/$DB_NAME (output above)"
+  evg_db_die "Evidgate.Migrator --status failed against $DB_HOST:$DB_PORT/$DB_NAME (output above)"
 fi
 EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
   dotnet run --project "$ROOT/src/Evidgate.Migrator"
 
 # 3. Credentials for the application roles created by migration 0001: LOGIN +
 #    password are granted here, by the superuser bootstrap, never in a migration
-#    (00 §5.7 S3).
-psql_super <<'SQL'
-\getenv app_password EVIDGATE_APP_PASSWORD
-\getenv operator_password EVIDGATE_OPERATOR_PASSWORD
-\getenv worker_sched_password EVIDGATE_WORKER_SCHED_PASSWORD
-
-alter role evidgate_app login password :'app_password';
-alter role evidgate_operator login password :'operator_password';
-alter role evidgate_worker_sched login password :'worker_sched_password';
-SQL
+#    (00 §5.7 S3). The statements live in scripts/env/lib-db.sh.
+evg_db_grant_application_logins
 
 # 3b. The dev seed: the synthetic tenant, the dev project's sample case, suite
 #     and suite revision (written by the Catalog module, so a manifest has a suite

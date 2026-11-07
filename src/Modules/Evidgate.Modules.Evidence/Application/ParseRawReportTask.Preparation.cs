@@ -26,7 +26,14 @@ internal sealed partial class ParseRawReportHandler
         Prepared? Prepared,
         ParseRawReportOutcome? Stopped,
         string? ParserId = null,
-        string? ParserVersion = null);
+        string? ParserVersion = null)
+    {
+        /// <summary>
+        /// The advisory quota stop: the read scope asked about a deferred report's counter and it has no room for one
+        /// event, so the attempt carries the blocked outcome instead of the inputs the fetch needs.
+        /// </summary>
+        public ParseRawReportOutcome? Blocked { get; init; }
+    }
 
     /// <summary>
     /// The one read-only scope: the artifact, its kind's cap, the parser pair and the run's plan. It closes before the
@@ -74,6 +81,15 @@ internal sealed partial class ParseRawReportHandler
         if (MapperFor(resolution) is not { } mapper)
         {
             return ParserUnavailable(payload);
+        }
+
+        // The advisory quota question runs here, inside the scope the read already holds and before the fetch inputs are
+        // resolved: a deferred report whose counter has no room for one event stops without an object read, and a first
+        // attempt pays only the probe statement this asks first.
+        if (await PreCheckQuotaAsync(orgId, artifact.ProjectId, payload, cancellationToken).ConfigureAwait(false)
+            is { } blocked)
+        {
+            return new Preparation(null, null) { Blocked = blocked };
         }
 
         return new Preparation(
