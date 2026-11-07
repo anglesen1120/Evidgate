@@ -445,6 +445,32 @@ test('survives a malformed request line and answers it with 400', async ({ reque
   expect(after.status()).toBe(200);
 });
 
+test('survives clients that hang up while an asset is opening', async ({ request }) => {
+  const { port, url, tempDir } = getTempServer();
+  writeFileSync(join(tempDir, 'dist', 'browser', 'big.js'), 'x'.repeat(256 * 1024));
+
+  // Each socket sends a full request and is destroyed in the same tick, so the response is
+  // gone before the read stream opens; piping into it must not stop the server.
+  await Promise.all(
+    Array.from(
+      { length: 300 },
+      () =>
+        new Promise<void>((resolveAbort) => {
+          const socket = connect(port, '127.0.0.1', () => {
+            socket.write('GET /big.js HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n');
+            socket.destroy();
+          });
+          socket.once('error', () => undefined);
+          socket.once('close', () => resolveAbort());
+        }),
+    ),
+  );
+
+  const after = await request.get(`${url}/big.js`);
+  expect(after.status()).toBe(200);
+  expect((await after.body()).length).toBe(256 * 1024);
+});
+
 test('answers 500 for a file it cannot read and keeps serving the bundle', async ({ request }) => {
   test.skip(IS_ROOT, 'chmod 000 does not deny reads to root, so the 500 path cannot be produced');
   const { url } = getTempServer();

@@ -288,6 +288,13 @@ function sendFile(response, file, status = 200, includeBody = true) {
   const source = createReadStream(file);
   let started = false;
   source.once('open', () => {
+    // A client that hung up while the file was opening has already destroyed `response`;
+    // piping into it raises ERR_STREAM_UNABLE_TO_PIPE as an uncaught exception that would
+    // stop the server for the rest of the run, so release the descriptor and stop instead.
+    if (response.destroyed || response.writableEnded) {
+      source.destroy();
+      return;
+    }
     started = true;
     writeResponseHead(response, status, {
       'content-type': CONTENT_TYPES.get(type) ?? 'application/octet-stream',
