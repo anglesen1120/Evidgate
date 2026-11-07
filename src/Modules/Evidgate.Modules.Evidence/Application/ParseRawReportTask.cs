@@ -261,8 +261,11 @@ internal sealed partial class ParseRawReportHandler(
         if (preparation.Blocked is { } blocked)
         {
             // A report the queue already deferred and the counter still has no room for: nothing is fetched, parsed or
-            // written, and the deferral repeats. The stamp the first block left stands; this read writes nothing.
-            return blocked;
+            // written, and the deferral repeats. The stamp is written again because the raise that cleared the first
+            // one can still have left less than one event of room; the statement touches only counters that are
+            // unstamped and still full, so a second pre-check stamps nothing. A pre-check fault carries no request and
+            // writes nothing here.
+            return await StampQuotaBlockAsync(orgId, blocked, cancellationToken).ConfigureAwait(false);
         }
 
         if (preparation.Prepared is not { } prepared)

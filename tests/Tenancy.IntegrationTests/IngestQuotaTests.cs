@@ -56,12 +56,12 @@ public sealed partial class IngestQuotaTests
         // One batch, one question: the quantity is the batch's event count, so a per-event implementation
         // would show three calls (or three increments) instead of one.
         spy.Calls.ShouldBe(1);
-        spy.PeriodCalls.ShouldBe(1, "and the transaction's month is asked for once per batch, never per event");
         var request = spy.Requests.ShouldHaveSingleItem();
         request.Metric.ShouldBe(UsageMetric.Results);
         request.ProjectId.ShouldBe(world.Project);
-        request.Period.ShouldBe(await PeriodAsync(world));
+        request.Period.ShouldBeNull("the gate resolves the transaction's month inside its own first statement");
         request.Quantity.ShouldBe(3m);
+        spy.Answers.ShouldHaveSingleItem().Period.ShouldBe(await PeriodAsync(world));
 
         (await ReadAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(3m);
     }
@@ -397,21 +397,24 @@ public sealed partial class IngestQuotaTests
     }
 }
 
-/// <summary>The gate questions one host asked, in arrival order.</summary>
+/// <summary>The gate questions one host asked, in arrival order, with the answers they received.</summary>
 internal sealed class QuotaGateSpy
 {
     private int _calls;
-    private int _periodCalls;
     private readonly ConcurrentQueue<QuotaCheckRequest> _requests = new();
+    private readonly ConcurrentQueue<QuotaCheckResult> _answers = new();
 
     /// <summary>How many <see cref="IQuotaGate.CheckAsync"/> calls the host made.</summary>
     internal int Calls => Volatile.Read(ref _calls);
 
-    /// <summary>How many <see cref="IQuotaGate.CurrentPeriodAsync"/> calls the host made.</summary>
-    internal int PeriodCalls => Volatile.Read(ref _periodCalls);
-
     /// <summary>Every question, in arrival order.</summary>
     internal IReadOnlyList<QuotaCheckRequest> Requests => [.. _requests];
+
+    /// <summary>
+    /// Every answer, in arrival order: the month a satisfied question resolved is here and never on the request,
+    /// because the gate reads it inside its own first statement.
+    /// </summary>
+    internal IReadOnlyList<QuotaCheckResult> Answers => [.. _answers];
 
     internal void Record(QuotaCheckRequest request)
     {
@@ -419,30 +422,26 @@ internal sealed class QuotaGateSpy
         _requests.Enqueue(request);
     }
 
-    internal void RecordPeriod() => Interlocked.Increment(ref _periodCalls);
+    internal void Record(QuotaCheckResult answer) => _answers.Enqueue(answer);
 }
 
-/// <summary>The registered gate, counted: the batch's one month and its one question are what the counter sees.</summary>
+/// <summary>The registered gate, counted: the batch's one question and its answer are what the counter sees.</summary>
 internal sealed class SpyQuotaGate(IQuotaGate inner, QuotaGateSpy spy) : IQuotaGate
 {
     /// <inheritdoc />
-    public Task<string> CurrentPeriodAsync(CancellationToken cancellationToken)
-    {
-        spy.RecordPeriod();
-
-        return inner.CurrentPeriodAsync(cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public Task<QuotaCheckResult> CheckAsync(QuotaCheckRequest request, CancellationToken cancellationToken)
+    public async Task<QuotaCheckResult> CheckAsync(
+        QuotaCheckRequest request,
+        CancellationToken cancellationToken)
     {
         spy.Record(request);
+        var answer = await inner.CheckAsync(request, cancellationToken).ConfigureAwait(false);
+        spy.Record(answer);
 
-        return inner.CheckAsync(request, cancellationToken);
+        return answer;
     }
 
     /// <inheritdoc />
-    public Task<QuotaCheckResult> PeekAsync(QuotaCheckRequest request, CancellationToken cancellationToken) =>
+    public Task<QuotaPeekResult> PeekAsync(QuotaCheckRequest request, CancellationToken cancellationToken) =>
         inner.PeekAsync(request, cancellationToken);
 }
 
@@ -452,14 +451,10 @@ internal sealed class ThrowingQuotaGate : IQuotaGate
     private const string Unavailable = "the quota store is unavailable";
 
     /// <inheritdoc />
-    public Task<string> CurrentPeriodAsync(CancellationToken cancellationToken) =>
-        throw new InvalidOperationException(Unavailable);
-
-    /// <inheritdoc />
     public Task<QuotaCheckResult> CheckAsync(QuotaCheckRequest request, CancellationToken cancellationToken) =>
         throw new InvalidOperationException(Unavailable);
 
     /// <inheritdoc />
-    public Task<QuotaCheckResult> PeekAsync(QuotaCheckRequest request, CancellationToken cancellationToken) =>
+    public Task<QuotaPeekResult> PeekAsync(QuotaCheckRequest request, CancellationToken cancellationToken) =>
         throw new InvalidOperationException(Unavailable);
 }

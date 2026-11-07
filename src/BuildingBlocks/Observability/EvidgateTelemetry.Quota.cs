@@ -12,8 +12,8 @@ public static partial class EvidgateTelemetry
     /// <summary>
     /// Counter of event batches refused because the project's billing-period quota is used up, tagged by
     /// <c>kind</c> from a closed set (<c>quota_exceeded</c>, <c>report_quota_exceeded</c>,
-    /// <c>quota_blocked_then_closed</c>, <c>report_quota_precheck</c>). Low cardinality only: never an org id, a project
-    /// id, a counter value or any request value.
+    /// <c>quota_blocked_then_closed</c>, <c>report_quota_precheck</c>, <c>report_quota_precheck_fault</c>). Low
+    /// cardinality only: never an org id, a project id, a counter value or any request value.
     /// </summary>
     public const string IngestQuotaDeniedMetricName = "evidgate_ingest_quota_denied_total";
 
@@ -26,7 +26,7 @@ public static partial class EvidgateTelemetry
     /// Counts one event batch refused because the project's billing-period quota is used up, tagged by
     /// <paramref name="kind"/> from the closed set only — never an org id, a project id or a counter value.
     /// </summary>
-    /// <param name="kind">The refusal kind: <c>quota_exceeded</c>, <c>report_quota_exceeded</c>, <c>quota_blocked_then_closed</c> or <c>report_quota_precheck</c>.</param>
+    /// <param name="kind">The refusal or fault kind: <c>quota_exceeded</c>, <c>report_quota_exceeded</c>, <c>quota_blocked_then_closed</c>, <c>report_quota_precheck</c> or <c>report_quota_precheck_fault</c>.</param>
     public static void RecordIngestQuotaDenied(string kind) =>
         IngestQuotaDenied.Add(1, new KeyValuePair<string, object?>("kind", kind));
 }

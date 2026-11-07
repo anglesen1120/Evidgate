@@ -1,6 +1,8 @@
-// The advisory half of the report path's quota rule: a report the queue already deferred is asked about its project's
-// counter before its bytes are fetched, so a period with no room for one event refuses the attempt without a read, a
-// parse or a write. The answer never admits and never stamps; the transactional gate still decides every batch.
+// The advisory half of the report path's quota rule: a report the queue already deferred is asked about the run's
+// project counter before its bytes are fetched, so a period with no room for one event refuses the attempt without a
+// read, a parse or a write. The answer never admits work; a block writes the same stamp the transaction's block does,
+// and a database fault of the read defers the attempt without spending one. The transactional gate still decides.
+using System.Collections.Concurrent;
 using System.Globalization;
 using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
@@ -43,13 +45,15 @@ public sealed partial class EvidenceRawReportQuotaTests
         outcome.Events.ShouldBe(0);
         outcome.RetryAfter.ShouldNotBeNull().ShouldBeGreaterThanOrEqualTo(TimeSpan.FromSeconds(1));
 
-        // The question the pre-check asked: the transaction's month, the artifact's project, and one event — the
-        // smallest batch, because a deferred report's real count is unknown before it is parsed.
+        // The question the pre-check asked: the gate resolves the transaction's month itself, the run's project — the
+        // counter the write transaction charges — and one event, the smallest batch, because a deferred report's real
+        // count is unknown before it is parsed. The stamp request carries the month the answer named.
         var request = outcome.QuotaRequest.ShouldNotBeNull();
-        request.Period.ShouldBe(await PeriodAsync(world));
+        request.Period.ShouldBe(await PeriodAsync(world), "the stamp names the month the gate decided in");
         request.ProjectId.ShouldBe(world.Project);
         request.Quantity.ShouldBe(1m);
         request.IncludeTenantScope.ShouldBeTrue();
+        gate.PeekRequests.ShouldHaveSingleItem().Period.ShouldBeNull("the gate resolves the month in its own statement");
 
         storage.Gets.ShouldBe(0, "the counter's answer is known before the fetch, so no object is read");
         gate.Peeks.ShouldBe(1, "the deferred report is the one the read scope asks about");
@@ -61,8 +65,8 @@ public sealed partial class EvidenceRawReportQuotaTests
 
         var after = (await ReadCounterAsync(counters, world)).ShouldNotBeNull();
         after.Used.ShouldBe(before.Used);
-        after.Version.ShouldBe(before.Version, "an advisory answer writes nothing, so the counter does not even bump");
-        after.BlockedAt.ShouldBeNull("the stamp was earned by the first block, and a read never writes one");
+        after.Version.ShouldBeGreaterThan(before.Version, "a pre-check block writes the stamp the rollback would lose");
+        after.BlockedAt.ShouldNotBeNull("a pre-check block stamps the counter it refused");
 
         // Operators must be able to tell this deferral from one a rolled-back batch produced.
         log.Lines.ShouldContain(line => line.Contains("deferred before the fetch", StringComparison.Ordinal));
@@ -136,7 +140,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         storage.Gets.ShouldBe(1, "the pre-check let the attempt through, which is what makes the race reachable");
 
         // The block came from the transaction, so the evidence rolled back and the stamp it earned survives the
-        // rollback in its own scope — unlike a pre-check refusal, which writes nothing at all.
+        // rollback in its own scope. The pre-check admitted this attempt, so it wrote no stamp of its own.
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
         (await CountAsync(world, "event_batch")).ShouldBe(0);
         (await CountRawReportsAsync(world, artifactId)).ShouldBe(0);
@@ -196,8 +200,51 @@ public sealed partial class EvidenceRawReportQuotaTests
 
         outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
         var request = spy.Requests.ShouldHaveSingleItem();
-        request.Period.ShouldBe(await PeriodAsync(world));
-        request.Period.ShouldNotBe(elsewhere.GetUtcNow().ToString("yyyy-MM", CultureInfo.InvariantCulture));
+        request.Period.ShouldBeNull("the gate resolves the month inside its own first statement");
+        var answer = spy.Answers.ShouldHaveSingleItem();
+        answer.Period.ShouldBe(await PeriodAsync(world));
+        answer.Period.ShouldNotBe(elsewhere.GetUtcNow().ToString("yyyy-MM", CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public async Task The_PreCheck_Asks_About_The_Runs_Project_And_Another_Scopes_Full_Counter_Never_Blocks()
+    {
+        var gate = new ReportPreCheckGate();
+        var world = await StartAsync(services => ReplaceQuotaGate(services, inner => gate.Wrap(inner)));
+        await using var _ = world;
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await SeedPlanAsync(world);
+
+        // The artifact names another project of the org. Nothing ties the row's project to its run's, so the pre-check
+        // must ask the run's project — the counter the write transaction charges — and not the artifact's.
+        var otherProject = await SeedOtherProjectAsync(world);
+        var artifactId = await SeedArtifactAsync(world, OneEventBody, otherProject);
+        var (foreignOrg, foreignProject) = await SeedForeignOrgAsync(world);
+        await SeedCounterAsync(counters, world, used: 0m, limit: 10m);
+        await counters.SeedCounterAsync(new CounterSeed(
+            Guid.CreateVersion7(), otherProject, await PeriodAsync(world), "results", 5m, 5m, WarnRatio, Org: world.Org));
+        await counters.SeedCounterAsync(new CounterSeed(
+            Guid.CreateVersion7(), foreignProject, await PeriodAsync(world), "results", 5m, 5m, WarnRatio, Org: foreignOrg));
+        await SeedDeferredTaskAsync(world, artifactId);
+        var otherBefore = (await counters.CounterAsync(world.Org, otherProject, await PeriodAsync(world))).ShouldNotBeNull();
+        var foreignBefore = (await counters.CounterAsync(foreignOrg, foreignProject, await PeriodAsync(world))).ShouldNotBeNull();
+
+        var outcome = await ParseAsync(world, artifactId);
+
+        // Both other counters are full: had the pre-check asked either of them it would have deferred here.
+        outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
+        outcome.Events.ShouldBe(1);
+        gate.PeekRequests.ShouldHaveSingleItem().ProjectId.ShouldBe(
+            world.Project, "the run's project is the counter the write transaction charges");
+        gate.Checks.ShouldBe(1);
+        (await ReadCounterAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(1m);
+
+        var otherAfter = (await counters.CounterAsync(world.Org, otherProject, await PeriodAsync(world))).ShouldNotBeNull();
+        otherAfter.Used.ShouldBe(otherBefore.Used);
+        otherAfter.Version.ShouldBe(otherBefore.Version);
+        var foreignAfter = (await counters.CounterAsync(foreignOrg, foreignProject, await PeriodAsync(world))).ShouldNotBeNull();
+        foreignAfter.Used.ShouldBe(foreignBefore.Used);
+        foreignAfter.Version.ShouldBe(foreignBefore.Version, "a counter of another tenant is never charged or stamped");
     }
 
     /// <summary>
@@ -306,13 +353,18 @@ internal sealed class ReportStorageSpy : IObjectStorage, IDisposable
 
 /// <summary>
 /// The registered gate, counted by method: the pre-check's advisory question and the transaction's authority are told
-/// apart, and <paramref name="afterPeek"/> lets a case change the counter between the two.
+/// apart, <paramref name="afterPeek"/> lets a case change the counter between the two, and <paramref name="peekFault"/>
+/// makes the advisory read fail the way a database fault does.
 /// </summary>
 /// <param name="afterPeek">Runs after the advisory answer and before the authoritative one, or null for none.</param>
-internal sealed class ReportPreCheckGate(Func<CancellationToken, Task>? afterPeek = null) : IQuotaGate
+/// <param name="peekFault">Builds the exception the advisory read throws instead of answering, or null for none.</param>
+internal sealed class ReportPreCheckGate(
+    Func<CancellationToken, Task>? afterPeek = null,
+    Func<Exception>? peekFault = null) : IQuotaGate
 {
     private int _peeks;
     private int _checks;
+    private readonly ConcurrentQueue<QuotaCheckRequest> _peekRequests = new();
     private IQuotaGate? _inner;
 
     /// <summary>How many advisory questions the handler asked.</summary>
@@ -320,6 +372,9 @@ internal sealed class ReportPreCheckGate(Func<CancellationToken, Task>? afterPee
 
     /// <summary>How many authoritative checks the handler asked.</summary>
     internal int Checks => Volatile.Read(ref _checks);
+
+    /// <summary>Every advisory question, in arrival order.</summary>
+    internal IReadOnlyList<QuotaCheckRequest> PeekRequests => [.. _peekRequests];
 
     private IQuotaGate Inner =>
         _inner ?? throw new InvalidOperationException("the gate was not wrapped around the host's own");
@@ -343,13 +398,16 @@ internal sealed class ReportPreCheckGate(Func<CancellationToken, Task>? afterPee
     }
 
     /// <inheritdoc />
-    public Task<string> CurrentPeriodAsync(CancellationToken cancellationToken) =>
-        Inner.CurrentPeriodAsync(cancellationToken);
-
-    /// <inheritdoc />
-    public async Task<QuotaCheckResult> PeekAsync(QuotaCheckRequest request, CancellationToken cancellationToken)
+    public async Task<QuotaPeekResult> PeekAsync(QuotaCheckRequest request, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref _peeks);
+        _peekRequests.Enqueue(request);
+
+        if (peekFault is not null)
+        {
+            throw peekFault();
+        }
+
         var answer = await Inner.PeekAsync(request, cancellationToken).ConfigureAwait(false);
 
         if (afterPeek is not null)

@@ -32,7 +32,7 @@ public sealed partial class UsageQuotaGateTests
     private static QuotaCheckRequest Request(
         UsageQuotaWorld world,
         decimal quantity,
-        string period = Period,
+        string? period = Period,
         Guid? project = null,
         UsageMetric metric = UsageMetric.Results) =>
         new(metric, period, project ?? world.Project, quantity);

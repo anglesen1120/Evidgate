@@ -31,17 +31,17 @@ public sealed class UsageQuotaRetryAfterTests(PostgresTenancyFixture fixture)
         await SeedFullCountersAsync(world, databaseNow);
         await using var host = HostWithClockAhead(world, databaseNow);
 
-        var (blocked, expected) = await GateAsync(world, host, peek: false);
+        var (blocked, retryAfter, expected) = await GateAsync(world, host, peek: false);
 
-        blocked.Decision.ShouldBe(QuotaDecision.Block);
+        blocked.ShouldBeTrue();
         // The wait the skewed host answered is the one this transaction's own clock leaves, to the half second.
-        blocked.RetryAfter.ShouldNotBeNull().TotalSeconds.ShouldBe(expected, 0.5);
+        retryAfter.ShouldNotBeNull().TotalSeconds.ShouldBe(expected, 0.5);
 
         // The positive control: a host reading the database's clock answers the wait of its own transaction.
-        var (unskewed, unskewedExpected) = await GateAsync(world, world.Api, peek: false);
+        var (unskewed, unskewedRetryAfter, unskewedExpected) = await GateAsync(world, world.Api, peek: false);
 
-        unskewed.Decision.ShouldBe(QuotaDecision.Block);
-        unskewed.RetryAfter.ShouldNotBeNull().TotalSeconds.ShouldBe(unskewedExpected, 0.5);
+        unskewed.ShouldBeTrue();
+        unskewedRetryAfter.ShouldNotBeNull().TotalSeconds.ShouldBe(unskewedExpected, 0.5);
     }
 
     [Fact]
@@ -52,23 +52,23 @@ public sealed class UsageQuotaRetryAfterTests(PostgresTenancyFixture fixture)
         await SeedFullCountersAsync(world, databaseNow);
         await using var host = HostWithClockAhead(world, databaseNow);
 
-        var (blocked, expected) = await GateAsync(world, host, peek: true);
+        var (blocked, retryAfter, expected) = await GateAsync(world, host, peek: true);
 
-        blocked.Decision.ShouldBe(QuotaDecision.Block);
-        blocked.RetryAfter.ShouldNotBeNull().TotalSeconds.ShouldBe(expected, 0.5);
+        blocked.ShouldBeTrue();
+        retryAfter.ShouldNotBeNull().TotalSeconds.ShouldBe(expected, 0.5);
 
         // The positive control: only the host clock differs, and the wait follows the transaction all the same.
-        var (unskewed, unskewedExpected) = await GateAsync(world, world.Api, peek: true);
+        var (unskewed, unskewedRetryAfter, unskewedExpected) = await GateAsync(world, world.Api, peek: true);
 
-        unskewed.Decision.ShouldBe(QuotaDecision.Block);
-        unskewed.RetryAfter.ShouldNotBeNull().TotalSeconds.ShouldBe(unskewedExpected, 0.5);
+        unskewed.ShouldBeTrue();
+        unskewedRetryAfter.ShouldNotBeNull().TotalSeconds.ShouldBe(unskewedExpected, 0.5);
     }
 
     /// <summary>
     /// Asks the gate one question in a tenant transaction of its own and measures that transaction's month remaining on
     /// the same transaction, so the expected wait is the gate's own clock and no lapse between test steps can skew it.
     /// </summary>
-    private static async Task<(QuotaCheckResult Answer, double ExpectedSeconds)> GateAsync(
+    private static async Task<(bool Blocked, TimeSpan? RetryAfter, double ExpectedSeconds)> GateAsync(
         UsageQuotaWorld world,
         TenancyApiFactory host,
         bool peek)
@@ -82,12 +82,25 @@ public sealed class UsageQuotaRetryAfterTests(PostgresTenancyFixture fixture)
         var (period, secondsToNext) = await MonthRemainingAsync(scope, token);
         var request = new QuotaCheckRequest(UsageMetric.Results, period, world.Project, 1m);
         var gate = provider.GetRequiredService<IQuotaGate>();
-        var answer = peek
-            ? await gate.PeekAsync(request, token)
-            : await gate.CheckAsync(request, token);
+
+        bool blocked;
+        TimeSpan? retryAfter;
+        if (peek)
+        {
+            var peeked = await gate.PeekAsync(request, token);
+            blocked = peeked.Blocked;
+            retryAfter = peeked.RetryAfter;
+        }
+        else
+        {
+            var checkedAnswer = await gate.CheckAsync(request, token);
+            blocked = checkedAnswer.Decision == QuotaDecision.Block;
+            retryAfter = checkedAnswer.RetryAfter;
+        }
+
         await scope.CommitAsync(token);
 
-        return (answer, Math.Max(1, secondsToNext));
+        return (blocked, retryAfter, Math.Max(1, secondsToNext));
     }
 
     /// <summary>The scope's own month and the seconds it has left, read on that scope's transaction.</summary>
