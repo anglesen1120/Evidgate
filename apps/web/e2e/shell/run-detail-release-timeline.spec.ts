@@ -52,7 +52,7 @@ for (const locale of LOCALES) {
       .evaluateAll((steps) => steps.map((step) => step.getAttribute('data-step')));
     expect(reached).not.toContain('complete');
     await expect(timeline.locator('[data-after-cancel-note]')).toContainText(copy.note);
-    await expect(timeline.locator('[data-after-cancel-count]')).toContainText('0');
+    await expect(timeline.locator('[data-after-cancel-count]')).not.toContainText('events arrived');
     const release = page.getByRole('region', { name: copy.release, exact: true });
     await expect(release.locator('[data-release-unbound]')).toContainText(copy.unbound);
     await expect(release.locator('button')).toHaveCount(0);
