@@ -10,6 +10,7 @@ import { ScopeSwitcherComponent } from './scope-switcher.component';
 import { NavigationEnd, Router, provideRouter } from '@angular/router';
 import axe from 'axe-core';
 import { SessionStore } from '../../core/session/session.store';
+import { QuotaStore } from '../../features/settings/quota-retention/quota.store';
 import { NavViewService } from '../nav/nav-view';
 import type { NavGroupView } from '../nav/nav.models';
 import { NotFoundPage } from '../pages/not-found.page';
@@ -52,6 +53,7 @@ describe('ShellComponent', () => {
         provideZonelessChangeDetection(),
         provideRouter([{ path: '**', component: NotFoundPage }]),
         { provide: SessionStore, useValue: session },
+        { provide: QuotaStore, useValue: { badge: signal(null), load: vi.fn() } },
         { provide: NavViewService, useValue: { groups: signal(groups) } },
       ],
     }).compileComponents();

@@ -80,7 +80,7 @@ describe('SettingsShellPage', () => {
   });
 
   it('preserves Members, Quota & retention, Audit order in links and mobile choices', async () => {
-    permissions.set(new Set(['membership:read', 'audit:read', 'project:read']));
+    permissions.set(new Set(['membership:read', 'audit:read', 'usage:read']));
     const root = await render();
     const expected = ['members', 'quota-retention', 'audit'];
     expect(tabIds(root)).toEqual(expected);
@@ -106,7 +106,7 @@ describe('SettingsShellPage', () => {
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
     expect(tabIds(root)).toEqual(['audit']);
-    permissions.set(new Set(['membership:read', 'project:read']));
+    permissions.set(new Set(['membership:read', 'usage:read']));
     await fixture.whenStable();
     expect(tabIds(root)).toEqual(['members', 'quota-retention']);
     expect(root.querySelector('option[value="audit"]')).toBeNull();

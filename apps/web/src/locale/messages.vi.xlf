@@ -3082,6 +3082,33 @@
       <trans-unit id="runs.detail.view-evidence" datatype="html"><source>View evidence</source><target>Xem bằng chứng</target></trans-unit>
       <trans-unit id="runs.detail.evidence-completeness" datatype="html"><source>Evidence completeness</source><target>Độ đầy đủ của bằng chứng</target></trans-unit>
       <trans-unit id="ui.close" datatype="html"><source>Close</source><target>Đóng</target></trans-unit>
+      <trans-unit id="quota.metric.results" datatype="html"><source>Results</source><target>Kết quả</target></trans-unit>
+      <trans-unit id="quota.metric.artifact-gb-month" datatype="html"><source>Artifact storage (GB-month)</source><target>Lưu trữ hiện vật (GB-tháng)</target></trans-unit>
+      <trans-unit id="quota.metric.egress-gb" datatype="html"><source>Egress (GB)</source><target>Truyền ra (GB)</target></trans-unit>
+      <trans-unit id="quota.metric.ai-tokens" datatype="html"><source>AI tokens</source><target>Token AI</target></trans-unit>
+      <trans-unit id="quota.metric.support-hours" datatype="html"><source>Support hours</source><target>Giờ hỗ trợ</target></trans-unit>
+      <trans-unit id="quota.metric.runner-minutes" datatype="html"><source>Runner minutes</source><target>Phút chạy tác nhân</target></trans-unit>
+      <trans-unit id="quota.metric.device-minutes" datatype="html"><source>Device minutes</source><target>Phút sử dụng thiết bị</target></trans-unit>
+      <trans-unit id="quota.badge.blocked" datatype="html"><source>Quota limit reached:</source><target>Đã đạt hạn mức:</target></trans-unit>
+      <trans-unit id="quota.badge.warned" datatype="html"><source>Approaching quota limit:</source><target>Sắp đạt hạn mức:</target></trans-unit>
+      <trans-unit id="quota.panel.title" datatype="html"><source>Quota &amp; retention</source><target>Hạn mức và lưu giữ</target></trans-unit>
+      <trans-unit id="quota.panel.description" datatype="html"><source>Organization-wide counters and limits supplied by the service. Quota state does not change recorded test outcomes.</source><target>Số liệu và giới hạn toàn tổ chức do dịch vụ cung cấp. Trạng thái hạn mức không thay đổi kết quả kiểm thử đã ghi nhận.</target></trans-unit>
+      <trans-unit id="quota.panel.loading" datatype="html"><source>Loading usage summary…</source><target>Đang tải tổng hợp mức sử dụng…</target></trans-unit>
+      <trans-unit id="quota.panel.period" datatype="html"><source>Billing period</source><target>Kỳ tính phí</target></trans-unit>
+      <trans-unit id="quota.panel.empty" datatype="html"><source>No usage counters were supplied for this period.</source><target>Chưa có số liệu sử dụng được cung cấp cho kỳ này.</target></trans-unit>
+      <trans-unit id="quota.panel.used" datatype="html"><source>Used</source><target>Đã dùng</target></trans-unit>
+      <trans-unit id="quota.panel.limit" datatype="html"><source>Limit</source><target>Giới hạn</target></trans-unit>
+      <trans-unit id="quota.panel.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="quota.panel.blocked" datatype="html"><source>Limit reached</source><target>Đã đạt giới hạn</target></trans-unit>
+      <trans-unit id="quota.panel.warned" datatype="html"><source>Approaching limit</source><target>Sắp đạt giới hạn</target></trans-unit>
+      <trans-unit id="quota.panel.warned-at" datatype="html"><source>Warning recorded</source><target>Đã ghi nhận cảnh báo</target></trans-unit>
+      <trans-unit id="quota.panel.blocked-at" datatype="html"><source>Block recorded</source><target>Đã ghi nhận chặn</target></trans-unit>
+      <trans-unit id="quota.panel.summary-unavailable" datatype="html"><source>Usage summary unavailable. Try loading it again.</source><target>Tổng hợp mức sử dụng không khả dụng. Hãy thử tải lại.</target></trans-unit>
+      <trans-unit id="quota.panel.retry" datatype="html"><source>Reload usage</source><target>Tải lại mức sử dụng</target></trans-unit>
+      <trans-unit id="quota.panel.storage-title" datatype="html"><source>Daily storage counters</source><target>Số liệu lưu trữ hằng ngày</target></trans-unit>
+      <trans-unit id="quota.panel.storage-reason" datatype="html"><source>Daily storage and egress counters are unavailable because the service does not expose a read for them.</source><target>Số liệu lưu trữ và truyền ra hằng ngày không khả dụng vì dịch vụ chưa cung cấp API đọc cho các số liệu này.</target></trans-unit>
+      <trans-unit id="quota.panel.storage-bytes" datatype="html"><source>Stored bytes</source><target>Số byte lưu trữ</target></trans-unit>
+      <trans-unit id="quota.panel.egress-bytes" datatype="html"><source>Egress bytes</source><target>Số byte truyền ra</target></trans-unit>
     </body>
   </file>
 </xliff>

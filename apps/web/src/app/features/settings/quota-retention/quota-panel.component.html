@@ -1,0 +1,149 @@
+<section
+  class="grid min-w-0 gap-4"
+  aria-labelledby="quota-title"
+  [attr.aria-busy]="quota.loadState() === 'loading'"
+>
+  <header class="grid gap-2">
+    <h2 id="quota-title" class="text-lg font-semibold" i18n="@@quota.panel.title">
+      Quota & retention
+    </h2>
+    <p class="text-muted-foreground" i18n="@@quota.panel.description">
+      Organization-wide counters and limits supplied by the service. Quota state does not change
+      recorded test outcomes.
+    </p>
+  </header>
+  @if (quota.loadState() === 'loading' || quota.loadState() === 'idle') {
+    <p
+      role="status"
+      class="min-h-(--eg-space-12) text-muted-foreground"
+      i18n="@@quota.panel.loading"
+    >
+      Loading usage summary…
+    </p>
+  } @else if (quota.usageSummary(); as summary) {
+    <p class="text-muted-foreground">
+      <span i18n="@@quota.panel.period">Billing period</span>:
+      <span data-quota-period>{{ summary.period }}</span>
+    </p>
+    @if (summary.metrics.length === 0) {
+      <p role="status" data-quota-empty i18n="@@quota.panel.empty">
+        No usage counters were supplied for this period.
+      </p>
+    }
+    <div class="grid min-w-0 gap-4 min-[768px]:grid-cols-2">
+      @for (metric of summary.metrics; track metric.metric) {
+        <section
+          hlmCard
+          class="min-w-0 gap-3 p-4 wrap-anywhere"
+          [attr.data-quota-metric]="metric.metric"
+          [attr.aria-labelledby]="'quota-metric-' + metric.metric"
+        >
+          <h3 [id]="'quota-metric-' + metric.metric" class="font-semibold">
+            {{ metricLabel(metric.metric) }}
+          </h3>
+          <dl class="grid grid-cols-2 gap-3">
+            <div>
+              <dt class="text-sm text-muted-foreground" i18n="@@quota.panel.used">Used</dt>
+              <dd class="m-0 text-lg font-semibold" data-quota-used>
+                @if (metric.used === null) {
+                  <span i18n="@@quota.panel.unavailable">Unavailable</span>
+                } @else {
+                  {{ metric.used | number: '1.0-6' }}
+                }
+              </dd>
+            </div>
+            <div>
+              <dt class="text-sm text-muted-foreground" i18n="@@quota.panel.limit">Limit</dt>
+              <dd class="m-0 text-lg font-semibold" data-quota-limit>
+                @if (metric.limit === null) {
+                  <span i18n="@@quota.panel.unavailable">Unavailable</span>
+                } @else {
+                  {{ metric.limit | number: '1.0-6' }}
+                }
+              </dd>
+            </div>
+          </dl>
+          @if (metric.unavailable_reason) {
+            <p data-quota-reason class="text-sm text-muted-foreground">
+              {{ metric.unavailable_reason }}
+            </p>
+          }
+          @if (metric.used !== null) {
+            @if (metric.blocked_at) {
+              <span
+                hlmBadge
+                [variant]="'outline'"
+                [class]="blockedClasses"
+                i18n="@@quota.panel.blocked"
+                >Limit reached</span
+              >
+            } @else if (metric.warned_at) {
+              <span hlmBadge [variant]="'outline'" [class]="warnClasses" i18n="@@quota.panel.warned"
+                >Approaching limit</span
+              >
+            }
+          }
+          @if (metric.warned_at || metric.blocked_at) {
+            <dl class="grid gap-2 text-sm text-muted-foreground">
+              @if (metric.warned_at) {
+                <div>
+                  <dt i18n="@@quota.panel.warned-at">Warning recorded</dt>
+                  <dd class="m-0">
+                    <time [attr.datetime]="metric.warned_at">{{ metric.warned_at }}</time>
+                  </dd>
+                </div>
+              }
+              @if (metric.blocked_at) {
+                <div>
+                  <dt i18n="@@quota.panel.blocked-at">Block recorded</dt>
+                  <dd class="m-0">
+                    <time [attr.datetime]="metric.blocked_at">{{ metric.blocked_at }}</time>
+                  </dd>
+                </div>
+              }
+            </dl>
+          }
+        </section>
+      }
+    </div>
+  } @else {
+    <div hlmCard class="grid gap-3 p-4" data-quota-unavailable>
+      <p role="status" i18n="@@quota.panel.summary-unavailable">
+        Usage summary unavailable. Try loading it again.
+      </p>
+      <button
+        hlmBtn
+        type="button"
+        class="min-h-(--eg-control-touch) w-fit max-w-full"
+        (click)="quota.reload()"
+        i18n="@@quota.panel.retry"
+      >
+        Reload usage
+      </button>
+    </div>
+  }
+  <section
+    hlmCard
+    class="grid min-w-0 gap-3 p-4"
+    aria-labelledby="quota-storage-title"
+    data-quota-storage
+  >
+    <h3 id="quota-storage-title" class="font-semibold" i18n="@@quota.panel.storage-title">
+      Daily storage counters
+    </h3>
+    <p class="text-sm text-muted-foreground" i18n="@@quota.panel.storage-reason">
+      Daily storage and egress counters are unavailable because the service does not expose a read
+      for them.
+    </p>
+    <dl class="grid gap-3 min-[768px]:grid-cols-2">
+      <div>
+        <dt class="text-muted-foreground" i18n="@@quota.panel.storage-bytes">Stored bytes</dt>
+        <dd class="m-0" i18n="@@quota.panel.unavailable">Unavailable</dd>
+      </div>
+      <div>
+        <dt class="text-muted-foreground" i18n="@@quota.panel.egress-bytes">Egress bytes</dt>
+        <dd class="m-0" i18n="@@quota.panel.unavailable">Unavailable</dd>
+      </div>
+    </dl>
+  </section>
+</section>
