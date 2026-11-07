@@ -23,9 +23,7 @@ import type { PolicyActivationStateDto, PolicyRevisionSummaryDto } from '@evidga
 import { PolicyDataService } from '../../../core/data/policy-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { settledRead } from '../../../core/http/settled-read';
-
-/** Largest delay a browser or Node timer accepts; a longer server interval is clamped to it. */
-const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
+import { clampTimerDelay } from '../../../shared/time/timer-delay';
 
 /** What one project-level read settled to. `empty` is an absent object, which is not a failure. */
 export type PolicyReadPhase = 'idle' | 'loading' | 'ready' | 'empty' | 'forbidden' | 'error';
@@ -188,7 +186,7 @@ export class PolicyProjectReads {
     }
     // A delay above the timer maximum fires immediately in browsers and warns in Node, which
     // would turn a hostile interval into no wait at all; clamp it instead.
-    const delayMs = Math.min(seconds * 1000, MAX_TIMER_DELAY_MS);
+    const delayMs = clampTimerDelay(seconds * 1000);
     const deadline = Date.now() + delayMs;
     const current = this.waitDeadline();
     if (current !== null && current >= deadline) {

@@ -183,7 +183,7 @@ test.describe('sign-in (AC5, T5.1)', () => {
     // A signed-out tab stays on the login page: no self-redirect, no second probe, and no trace in
     // storage that a later sign-in could pick up. (The `/v1` reads of this build are answered by the
     // in-process fixture backend, so they are not observable as network requests — the store-level
-    // "no request after a sign-out" claim is proven in `session.store.spec.ts`, and this case proves
+    // "no request after a sign-out" claim is proven in `session.store.boundary.spec.ts`, and this case proves
     // the page it lands on is stable.)
     // Condition-based, no fixed sleep: the banner is up, both controls are idle and the URL has not
     // moved under them. A self-redirect would change the path and fail these locator asserts.

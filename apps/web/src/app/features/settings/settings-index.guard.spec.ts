@@ -91,7 +91,7 @@ function withPageStubs(table: readonly Route[]): Routes {
 /**
  * Where the production table mounts the shell: `/orgs/:orgId/settings`. The org id is never read
  * here — the shell's own guards do not depend on it, and the parent scope guard is exercised by
- * `app.routes.spec.ts`.
+ * `app.routes.matching.spec.ts`.
  */
 const TABLE: Routes = [{ path: 'orgs/:orgId/settings', children: withPageStubs(shellRoutes) }];
 

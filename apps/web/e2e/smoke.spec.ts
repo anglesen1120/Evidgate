@@ -19,7 +19,7 @@ import { expect, test } from '@playwright/test';
 // sign-in placeholder for an anonymous answer) inside `app-shell`. The assertions below pin what is
 // true either way — a rendered `h1`, the locale of that bundle, the `/vi/` prefix and a clean
 // console — and deliberately not which pattern page the failed probe selected, because that is
-// `app.routes.spec.ts`'s subject, not the boot chain's.
+// `app.routes.matching.spec.ts`'s subject, not the boot chain's.
 test('boots the built Angular bundle at the default locale (vi)', async ({ page }) => {
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
