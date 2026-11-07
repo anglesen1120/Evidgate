@@ -95,6 +95,8 @@ public sealed partial class ReprocessReportTaskTests
         await ConsumeEnqueuedReconcileAsync(world, producerId: null);
 
         (await RevisionCountAsync(world)).ShouldBe(1);
+        var revisionHash = await RevisionHashAsync(world, revisionNo: 1);
+        var freeze = await FreezeColumnsAsync(world, revisionNo: 1);
         var view = await FrozenViewAsync(world, revisionNo: 1);
         view.ShouldContain(ExecutionKey, Case.Sensitive, "revision 1's frozen view reads the original parse's attempt");
 
@@ -102,8 +104,8 @@ public sealed partial class ReprocessReportTaskTests
         attemptCount.ShouldBe(1, "the original parse is the run's only attempt writer so far");
 
         return new OriginalRevision(
-            await RevisionHashAsync(world, revisionNo: 1),
-            await FreezeColumnsAsync(world, revisionNo: 1),
+            revisionHash,
+            freeze,
             view,
             attemptCount,
             await AttemptDigestAsync(world));

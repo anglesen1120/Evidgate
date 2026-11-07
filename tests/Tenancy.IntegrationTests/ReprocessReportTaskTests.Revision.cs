@@ -97,11 +97,13 @@ public sealed partial class ReprocessReportTaskTests
         await ConsumeEnqueuedReconcileAsync(world, producerId: null);
 
         (await RevisionCountAsync(world)).ShouldBe(1);
+        var revisionHash = await RevisionHashAsync(world, revisionNo: 1);
+        var freeze = await FreezeColumnsAsync(world, revisionNo: 1);
         var producer = await EventProducerAsync(world);
 
         return new FirstRevision(
-            await RevisionHashAsync(world, revisionNo: 1),
-            await FreezeColumnsAsync(world, revisionNo: 1),
+            revisionHash,
+            freeze,
             producer,
             await EventDigestAsync(world, producer),
             await ReportHashAsync(world, sourceReportId),
