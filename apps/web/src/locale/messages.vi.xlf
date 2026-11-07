@@ -2834,7 +2834,8 @@
       <trans-unit id="runs.detail.timeline.not-reached" datatype="html"><source>Not reached</source><target>Không đạt tới</target></trans-unit>
       <trans-unit id="runs.detail.timeline.unrecorded" datatype="html"><source>Not recorded</source><target>Không được ghi nhận</target></trans-unit>
       <trans-unit id="runs.detail.timeline.step-status" datatype="html"><source>Step status</source><target>Trạng thái bước</target></trans-unit>
-      <trans-unit id="runs.detail.timeline.step-times" datatype="html"><source>Step times are not available yet</source><target>Chưa có thời điểm của từng bước</target></trans-unit>
+      <trans-unit id="runs.detail.timeline.history-unavailable" datatype="html"><source>History unavailable for this run</source><target>Không có lịch sử cho lượt chạy này</target></trans-unit>
+      <trans-unit id="runs.detail.timeline.history-empty" datatype="html"><source>No state changes recorded yet</source><target>Chưa ghi nhận thay đổi trạng thái nào</target></trans-unit>
       <trans-unit id="runs.detail.timeline.after-cancel-note" datatype="html"><source>Events that arrive after cancel are kept as evidence and never complete the run.</source><target>Các sự kiện đến sau khi hủy vẫn được giữ làm bằng chứng và không bao giờ làm lượt chạy hoàn tất.</target></trans-unit>
       <trans-unit id="runs.detail.timeline.after-cancel-events" datatype="html"><source>After-cancel events</source><target>Sự kiện sau khi hủy</target></trans-unit>
       <trans-unit id="runs.detail.timeline.after-cancel-none" datatype="html"><source>No events after cancel</source><target>Không có sự kiện nào sau khi hủy</target></trans-unit>
