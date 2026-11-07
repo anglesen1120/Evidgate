@@ -465,6 +465,28 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
       expect(store.has('audit:read')).toBe(true);
     });
 
+    it('empties the previous org grants while the new org read is pending', async () => {
+      await store.resolveScope('o-1', 'p-1');
+      expect(store.has('run:read')).toBe(true);
+      expect(store.projects()).toEqual([PROJECT_P1, PROJECT_P2]);
+      source.granted = new Set(['audit:read']);
+      source.manual = true;
+
+      const switching = store.resolveScope('o-2', 'q-1');
+      await settle();
+
+      // The switch is in flight: org A's codes and project list must not answer for org B.
+      expect(store.currentOrg()).toEqual(ORG_TWO);
+      expect(store.has('run:read')).toBe(false);
+      expect(store.projects()).toEqual([]);
+
+      source.pendingLoads[0]?.resolve(source.granted);
+      expect(await switching).toBe('ok');
+      expect(store.has('audit:read')).toBe(true);
+      expect(store.has('run:read')).toBe(false);
+      expect(store.projects()).toEqual([PROJECT_Q1]);
+    });
+
     it('does not reload the permissions for a navigation inside the org it already scoped', async () => {
       await store.resolveScope('o-1', 'p-1');
 
@@ -472,6 +494,8 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
 
       expect(source.calls).toBe(1);
       expect(tenant.orgId()).toBe(ORG_ONE.id);
+      // A second resolve of the same org keeps the grants that are already that org's.
+      expect(store.has('run:read')).toBe(true);
     });
 
     it('does not keep the previous org grants when the switch was superseded', async () => {
@@ -538,6 +562,18 @@ describe('SessionStore (09.1.1-T4.1/T4.2)', () => {
 
       expect(tenant.orgId()).toBeNull();
       expect(store.currentOrg()).toBeNull();
+    });
+
+    it('publishes no grants once the scope is cleared', async () => {
+      await store.resolveScope('o-1', 'p-1');
+      expect(store.has('run:read')).toBe(true);
+
+      expect(await store.resolveScope('o-foreign', null)).toBe('not-found');
+
+      // No scope, no org the published codes were read for: `has()` must not keep answering.
+      expect(store.currentOrg()).toBeNull();
+      expect(store.permissions().size).toBe(0);
+      expect(store.has('run:read')).toBe(false);
     });
 
     for (const [kind, status] of [

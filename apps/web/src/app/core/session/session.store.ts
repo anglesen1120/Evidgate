@@ -310,13 +310,45 @@ const SessionStoreDefinition = signalStore(
       clearScope();
     }
 
-    /** Forgets the resolved pair, its project list, and every cached project list. */
+    /**
+     * Forgets the resolved pair, its project list, the grants that were read for it, and every
+     * cached project list. A grant set without a scope has no org to answer `has()` for, so it goes
+     * with the scope instead of staying published under no attribution.
+     */
     function clearScope(): void {
       scopeRevision += 1;
       permissionsOrgId = null;
       tenant.clear();
-      patchState(store, { currentOrg: null, currentProject: null, projects: NO_PROJECTS });
+      patchState(store, {
+        currentOrg: null,
+        currentProject: null,
+        projects: NO_PROJECTS,
+        permissions: NO_PERMISSIONS,
+      });
       projectsByOrg.clear();
+    }
+
+    /**
+     * Publishes the org the URL now names and empties the scope it replaces. The previous org's
+     * projects, and the navigation links built from them, belong to an org the route no longer
+     * names, so neither may stay on screen while the new org's grants and project list are read.
+     * Its grants are the same kind of leftover: `permissionsOrgId` names the org they were read
+     * for, so a set that belongs to another org (or to no recorded org) is emptied here instead of
+     * answering `has()` and the navigation gating for the org being switched to. A drop for the
+     * org whose grants are already published — the retry branch of `resolveScope` — keeps them.
+     */
+    function dropScope(org: OrganizationSummaryDto): void {
+      projectsByOrg.clear();
+      const keepsGrants = permissionsOrgId === org.id;
+      if (!keepsGrants) {
+        permissionsOrgId = null;
+      }
+      patchState(store, {
+        currentOrg: org,
+        currentProject: null,
+        projects: NO_PROJECTS,
+        permissions: keepsGrants ? store.permissions() : NO_PERMISSIONS,
+      });
     }
 
     /**
@@ -484,7 +516,9 @@ const SessionStoreDefinition = signalStore(
      * and the project is answered from the cache. That keeps `currentOrg()`/`projects()` populated
      * for the whole navigation — the sidebar and the project switcher never blink empty — and
      * keeps one project-list read per navigation instead of one per guard. A real org change, a
-     * failure and `reload()` all drop the cache and read again.
+     * failure and `reload()` all drop the cache and read again; the org change also publishes the
+     * new org and empties the replaced scope before its first read, so no previous org's projects
+     * or navigation links stay on screen — and the switcher's value — while that read is in flight.
      *
      * A resolution that a newer one (or a `reload()`) overtook while it awaited answers
      * `superseded`, not `not-found`: the id was never shown to be unknown, and the guard that
@@ -521,6 +555,10 @@ const SessionStoreDefinition = signalStore(
       // tenant alone does not say the grants arrived — a load that a newer resolve overtook never
       // patched them — so the org the published grants belong to is the second half of the test.
       if (tenant.orgId() !== orgId || permissionsOrgId !== orgId) {
+        // That read is a network round trip, so the scope it replaces is dropped first: the
+        // previous org's projects and navigation links, and the switcher's own value, must not
+        // survive the switch — a second choice would then be read as "already there" and dropped.
+        dropScope(org);
         pendingAttemptedPath = scopePath(orgId, projectId);
         try {
           const granted = await loadPermissionsForTenant(tenant, permissionsSource, orgId);
@@ -551,16 +589,12 @@ const SessionStoreDefinition = signalStore(
         return 'ok';
       }
 
-      // A real org change: the previous org's list is not this one's, and refilling it is one
-      // read.
+      // The first resolve of this org, or a retry after a failure: the previous scope is dropped
+      // before the read. A real org change already dropped it above, before the grant reload, so
+      // this branch only runs for a scope whose grants were already this org's.
       if (store.currentOrg()?.id !== orgId) {
-        projectsByOrg.clear();
+        dropScope(org);
       }
-
-      // The first resolve of this org, a real org change, or a retry after a failure. The previous
-      // scope is dropped before the await: a slow project list must not keep the old org's
-      // projects (and therefore the old org's navigation links) on screen.
-      patchState(store, { currentOrg: org, currentProject: null, projects: NO_PROJECTS });
 
       let projects: readonly ProjectDto[];
       // The route this read is serving, named for the expiry redirect if the session is gone (T5.2).

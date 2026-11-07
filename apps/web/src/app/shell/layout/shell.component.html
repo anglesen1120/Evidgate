@@ -82,6 +82,7 @@
           [currentProject]="session.currentProject()"
           (orgSelected)="selectOrganization($event)"
           (projectSelected)="selectProject($event)"
+          (popupEscape)="onScopeEscape($event)"
         />
       } @placeholder {
         <div

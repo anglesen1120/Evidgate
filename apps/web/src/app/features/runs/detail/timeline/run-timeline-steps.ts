@@ -1,4 +1,5 @@
 import type { RunStateDto, RunStateTransition } from '@evidgate/sdk';
+import { rfc3339InstantMs } from '../../../../shared/time/rfc3339-instant';
 import type { RunState } from '../../../../shared/ui/chips/run-state-tone';
 
 /** How a step of the run-state timeline stands relative to the run's current state. */
@@ -34,24 +35,10 @@ function legacySteps(state: RunState, currentIndex: number): readonly TimelineSt
   return [...unknownProgress, terminal];
 }
 
-/**
- * The date-time shape `<time datetime>` and the `date` pipe render: an RFC 3339 date-time with a
- * numeric offset or `Z`. `Date.parse` alone is lenient enough to accept `'1'`, `'2026'` and
- * `'Nov 7 2026'`, which the timeline must not surface as a step time.
- */
-const INSTANT_SHAPE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
-
-/** {@link value} in milliseconds, or `null` when it is not an instant this surface can render. */
-function instantMs(value: string): number | null {
-  if (!INSTANT_SHAPE.test(value)) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function orderedHistory(history: RunStateTransition[]): RunStateTransition[] {
   const entries = history.map((transition) => ({
     transition,
-    atMs: instantMs(transition.occurred_at),
+    atMs: rfc3339InstantMs(transition.occurred_at),
   }));
   const timed: { transition: RunStateTransition; atMs: number }[] = [];
   for (const entry of entries) {
@@ -90,7 +77,7 @@ export function runTimelineSteps(
   for (const transition of orderedHistory(history)) {
     reached.add(transition.from_state);
     reached.add(transition.to_state);
-    if (!arrivals.has(transition.to_state) && instantMs(transition.occurred_at) !== null) {
+    if (!arrivals.has(transition.to_state) && rfc3339InstantMs(transition.occurred_at) !== null) {
       arrivals.set(transition.to_state, transition.occurred_at);
     }
   }
