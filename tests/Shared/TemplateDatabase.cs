@@ -19,7 +19,8 @@ namespace Evidgate.Testing;
 
 /// <summary>
 /// One migrated database per fixture instance that every test database is copied
-/// from: the real migrations run once, and per-test creation becomes a PostgreSQL
+/// from: the real migrations run once — or, when the caller names a database it already
+/// brought to head, not at all — and per-test creation becomes a PostgreSQL
 /// <c>create database … template</c> instead of another full migration run.
 /// </summary>
 /// <remarks>
@@ -36,6 +37,7 @@ internal sealed partial class TemplateDatabase : IDisposable
     private readonly Func<string, string> _ownerConnectionString;
     private readonly string _migrationsPath;
     private readonly IReadOnlyList<string> _templateStatements;
+    private readonly string? _copyFrom;
     private readonly SemaphoreSlim _copyGate = new(1, 1);
     private readonly object _templateLock = new();
     private Task<string>? _template;
@@ -47,21 +49,32 @@ internal sealed partial class TemplateDatabase : IDisposable
     /// <param name="ownerConnectionString">Migration-role connection string for the named database.</param>
     /// <param name="migrationsPath">Directory of the real migration files.</param>
     /// <param name="templateStatements">Role statements run once, after migrations, on the template.</param>
+    /// <param name="copyFrom">
+    /// A database the caller already brought to head, copied instead of running the migrations a
+    /// second time. It must have no session open: <c>CREATE DATABASE … TEMPLATE</c> refuses one.
+    /// </param>
     internal TemplateDatabase(
         Func<string, string> superuserConnectionString,
         Func<string, string> ownerConnectionString,
         string migrationsPath,
-        IReadOnlyList<string> templateStatements)
+        IReadOnlyList<string> templateStatements,
+        string? copyFrom = null)
     {
         ArgumentNullException.ThrowIfNull(superuserConnectionString);
         ArgumentNullException.ThrowIfNull(ownerConnectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(migrationsPath);
         ArgumentNullException.ThrowIfNull(templateStatements);
 
+        if (copyFrom is not null)
+        {
+            EnsureGeneratedName(copyFrom, nameof(copyFrom));
+        }
+
         _superuserConnectionString = superuserConnectionString;
         _ownerConnectionString = ownerConnectionString;
         _migrationsPath = migrationsPath;
         _templateStatements = templateStatements;
+        _copyFrom = copyFrom;
     }
 
     /// <summary>Releases the copy gate; call after the fixture has stopped creating databases.</summary>
@@ -144,7 +157,8 @@ internal sealed partial class TemplateDatabase : IDisposable
         }
     }
 
-    private Task<string> EnsureTemplateAsync()
+    /// <summary>Builds the template once per process; concurrent callers share the one build.</summary>
+    internal Task<string> EnsureTemplateAsync()
     {
         Task<string> build;
         lock (_templateLock)
@@ -165,24 +179,35 @@ internal sealed partial class TemplateDatabase : IDisposable
     {
         try
         {
-            await ExecuteSuperuserAsync(
-                MaintenanceDatabase,
-                $"create database \"{_templateName}\" owner {OwnerRole}").ConfigureAwait(false);
-
-            var outcome = MigratorRunner.Run(
-                new MigratorOptions
-                {
-                    ConnectionString = Unpooled(_ownerConnectionString(_templateName)),
-                    MigrationsPath = _migrationsPath,
-                },
-                MigrationCommand.Apply,
-                new StringWriter(CultureInfo.InvariantCulture));
-
-            if (outcome.ExitCode != MigratorExitCodes.Success)
+            if (_copyFrom is { } source)
             {
-                throw new InvalidOperationException(
-                    $"the suite could not reach head on '{_templateName}' (exit {outcome.ExitCode}): "
-                    + string.Join(" | ", outcome.Messages));
+                // The source is already at head and has no session open, so one copy is the
+                // whole build: the caller ran the migrations once instead of twice.
+                await ExecuteSuperuserAsync(
+                    MaintenanceDatabase,
+                    $"create database \"{_templateName}\" owner {OwnerRole} template \"{source}\"").ConfigureAwait(false);
+            }
+            else
+            {
+                await ExecuteSuperuserAsync(
+                    MaintenanceDatabase,
+                    $"create database \"{_templateName}\" owner {OwnerRole}").ConfigureAwait(false);
+
+                var outcome = MigratorRunner.Run(
+                    new MigratorOptions
+                    {
+                        ConnectionString = Unpooled(_ownerConnectionString(_templateName)),
+                        MigrationsPath = _migrationsPath,
+                    },
+                    MigrationCommand.Apply,
+                    new StringWriter(CultureInfo.InvariantCulture));
+
+                if (outcome.ExitCode != MigratorExitCodes.Success)
+                {
+                    throw new InvalidOperationException(
+                        $"the suite could not reach head on '{_templateName}' (exit {outcome.ExitCode}): "
+                        + string.Join(" | ", outcome.Messages));
+                }
             }
 
             foreach (var statement in _templateStatements)
@@ -238,6 +263,10 @@ internal sealed partial class TemplateDatabase : IDisposable
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The same connection string with pooling off: a template copy refuses a source database
+    /// that still has a session, and a pooled connection outlives the close that ends its block.
+    /// </summary>
     private static string Unpooled(string connectionString) =>
         new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString;
 }
