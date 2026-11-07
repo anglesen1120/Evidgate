@@ -159,6 +159,23 @@ internal static class ReleaseSql
         """;
 
     /// <summary>
+    /// The run-side mirror of <see cref="BoundRuns"/>: one row per stored binding, joined to its release for the name
+    /// and to the run so the release's project is compared with the run's. The project predicate is the same one
+    /// <see cref="MismatchSource"/> applies, so a binding row a bypassing writer pointed at a sibling project's release
+    /// is not reported. The order is the binding's own <c>created_at</c> then id, so the list is insertion order.
+    /// </summary>
+    internal const string BoundReleases = """
+        select rl.id as release_id, rl.name as release_name, rr.component_key
+          from public.release_run rr
+          join public.release rl
+            on rl.org_id = rr.org_id and rl.id = rr.release_id
+          join public.run ru
+            on ru.org_id = rr.org_id and ru.id = rr.run_id
+         where rr.org_id = @org_id and rr.run_id = @run_id and rl.project_id = ru.project_id
+         order by rr.created_at, rr.id
+        """;
+
+    /// <summary>
     /// The two sides of the match for one pair in one row — the run's recorded <c>components</c> once, and the release's
     /// components aggregated into one document in <c>component_key</c> order — so the read seam derives a mismatch list
     /// in one round trip without repeating the run document per component.

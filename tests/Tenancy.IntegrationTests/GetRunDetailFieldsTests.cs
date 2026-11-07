@@ -19,7 +19,7 @@ namespace Tenancy.IntegrationTests;
 /// another tenant, a credential scoped to a sibling project) stay the one <c>404 not_found</c> answer.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class GetRunDetailFieldsTests
+public sealed partial class GetRunDetailFieldsTests
 {
     /// <summary>A body <c>policy-revision.v1</c> accepts, both timing values unset (the shape 07.1.1's suite uses).</summary>
     private const string PolicyBody = """{"required_suites":["smoke"],"flaky_budget":3}""";

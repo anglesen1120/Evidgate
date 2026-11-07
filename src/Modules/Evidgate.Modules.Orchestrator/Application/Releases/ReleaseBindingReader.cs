@@ -29,6 +29,19 @@ internal sealed class ReleaseBindingReader(ITenantDb db, ITenantScopeAccessor sc
     }
 
     /// <inheritdoc />
+    public async ValueTask<IReadOnlyList<RunReleaseRef>> BoundReleasesAsync(
+        Guid runId,
+        CancellationToken cancellationToken)
+    {
+        var rows = await db.QueryAsync<RunReleaseRow>(
+            ReleaseSql.BoundReleases,
+            new { org_id = scopes.Require().OrgId, run_id = runId },
+            cancellationToken).ConfigureAwait(false);
+
+        return [.. rows.Select(row => new RunReleaseRef(row.ReleaseId, row.ReleaseName, row.ComponentKey))];
+    }
+
+    /// <inheritdoc />
     public async ValueTask<IReadOnlyList<ReleaseMismatch>> MismatchesAsync(
         Guid releaseId,
         Guid runId,
@@ -79,5 +92,15 @@ internal sealed class ReleaseBindingReader(ITenantDb db, ITenantScopeAccessor sc
         public string? RunComponents { get; set; }
 
         public string? ReleaseComponents { get; set; }
+    }
+
+    /// <summary>One row of <see cref="ReleaseSql.BoundReleases"/>: a stored binding with its release's name.</summary>
+    private sealed class RunReleaseRow
+    {
+        public Guid ReleaseId { get; set; }
+
+        public string ReleaseName { get; set; } = string.Empty;
+
+        public string ComponentKey { get; set; } = string.Empty;
     }
 }
