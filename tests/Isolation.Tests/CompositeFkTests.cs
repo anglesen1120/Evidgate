@@ -139,7 +139,17 @@ public sealed class CompositeFkTests : HarnessTest
         var structural = new List<string>();
         var rejected = new List<string>();
 
-        foreach (var table in scan.TenantTables)
+        // A trigger-written table has no generated row at all (TenantRowFactory refuses one), so this matrix cannot
+        // exercise its composite FK; the exclusion is asserted against the discovered set so it can never drift into
+        // a no-op that silently drops a table the matrix could still cover.
+        foreach (var triggerWritten in TenantRowFactory.TriggerWrittenTables)
+        {
+            scan.TenantTables.ShouldContain(
+                triggerWritten,
+                $"{triggerWritten} is skipped by this matrix as trigger-written but is not a discovered tenant table");
+        }
+
+        foreach (var table in scan.TenantTables.Where(candidate => !TenantRowFactory.TriggerWrittenTables.Contains(candidate)))
         {
             // A tenant parent is a key to another table of the tenant set. A catalogue principal
             // (`report_parser`, `usage_price`) carries a nullable `org_id` for its platform rows, so a

@@ -161,6 +161,18 @@ internal sealed class TenantRowFactory
     internal static readonly IReadOnlySet<string> OwnerProvisionedTables =
         new HashSet<string>(StringComparer.Ordinal) { "public.healing_llm_budget" };
 
+    /// <summary>
+    /// The tenant tables a generated row cannot be written for at all: the parent table's trigger writes
+    /// them, and they are append-only afterwards. <c>run_state_event</c> is the first — its rows come from
+    /// the trigger on <c>run</c>, the app role holds SELECT only, and the table refuses UPDATE and DELETE for
+    /// every role, so a generated insert would fail and a cleanup delete would have to disarm the guard.
+    /// Suites that seed one row per tenant table skip these and assert them by name instead; a generated row
+    /// for one of them is a bug in the suite, so <see cref="CreateAsync(string, Guid, CancellationToken)"/>
+    /// refuses it rather than producing a misleading failure.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> TriggerWrittenTables =
+        new HashSet<string>(StringComparer.Ordinal) { "public.run_state_event" };
+
     // The rows currently being built, outermost first: a foreign-key cycle that reaches the same
     // (table, org) twice must fail one test instead of recursing until the host's stack dies.
     private readonly List<(string Table, Guid Org)> _creating = [];
@@ -214,6 +226,13 @@ internal sealed class TenantRowFactory
         Guid? forcedId,
         CancellationToken cancellationToken)
     {
+        if (TriggerWrittenTables.Contains(table))
+        {
+            throw new InvalidOperationException(
+                $"{table} is written by its parent's trigger and is append-only: no generated row exists for it, "
+                + "so a suite must skip it (TriggerWrittenTables) instead of inserting one");
+        }
+
         var key = (Table: table, Org: org);
         var position = _creating.IndexOf(key);
         if (position >= 0)

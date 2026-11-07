@@ -552,6 +552,7 @@ public sealed class SchemaConventionAllowListTests
                 ("public.fixture_revision", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.raw_report", SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.raw_report_reprocess", SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+                ("public.run_state_event", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
             ]);
 
         // Every exclusion carries its reason: an exemption without one is a silencer,

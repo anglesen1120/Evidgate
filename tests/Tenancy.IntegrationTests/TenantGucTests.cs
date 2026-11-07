@@ -815,6 +815,14 @@ public sealed class TenantGucTests
             ("release_id", releaseId),
             ("run_id", runId));
 
+        // The run history (migration 0082): the run inserted above already records its creation row through the
+        // trigger on public.run; this transition adds the second row, so the seed covers a real state change and the
+        // table the discovery walks is populated rather than merely present.
+        await scope.ExecuteAsync(
+            "update public.run set state = 'running' where org_id = @org_id and id = @run_id",
+            ("org_id", orgId),
+            ("run_id", runId));
+
         await scope.CommitAsync();
     }
 }
