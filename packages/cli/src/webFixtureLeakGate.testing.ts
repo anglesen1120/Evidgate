@@ -93,6 +93,11 @@ export interface GateWorkspace {
   fixture(name: string, document: unknown): Promise<void>;
   /** Writes one file below the synthetic build output. */
   output(name: string, text: string): Promise<void>;
+  /**
+   * Points the gate at a synthetic contract file instead of `contracts/openapi.yaml`: `text` is
+   * written to the workspace, `null` names a path that does not exist.
+   */
+  contract(text: string | null): Promise<void>;
   /** Runs the gate against this workspace, with the workspace as its cwd. */
   run(args?: readonly string[]): GateResult;
 }
@@ -102,6 +107,7 @@ function spawnGate(invocation: {
   readonly cwd: string;
   readonly dist: string;
   readonly corpus: string;
+  readonly contract?: string | undefined;
   readonly args?: readonly string[] | undefined;
 }): GateResult {
   const result = spawnSync(process.execPath, [GATE, ...(invocation.args ?? [])], {
@@ -111,6 +117,9 @@ function spawnGate(invocation: {
       ...process.env,
       EVIDGATE_WEB_DIST_DIR: invocation.dist,
       EVIDGATE_WEB_FIXTURE_DIR: invocation.corpus,
+      ...(invocation.contract === undefined
+        ? {}
+        : { EVIDGATE_WEB_CONTRACT_FILE: invocation.contract }),
     },
   });
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
@@ -158,8 +167,15 @@ export async function workspace(options: WorkspaceOptions = {}): Promise<GateWor
   if (options.corpus !== false) {
     await mkdir(corpus, { recursive: true });
   }
+  let contractFile: string | undefined;
   return {
     corpus,
+    contract: async (text) => {
+      contractFile = join(root, 'openapi.yaml');
+      if (text !== null) {
+        await writeFile(contractFile, text, 'utf8');
+      }
+    },
     fixture: async (name, document) => {
       await mkdir(join(corpus, name), { recursive: true });
       await writeFile(join(corpus, name, 'input.json'), JSON.stringify(document), 'utf8');
@@ -169,7 +185,7 @@ export async function workspace(options: WorkspaceOptions = {}): Promise<GateWor
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, text, 'utf8');
     },
-    run: (args) => spawnGate({ cwd: root, dist, corpus, args }),
+    run: (args) => spawnGate({ cwd: root, dist, corpus, contract: contractFile, args }),
   };
 }
 
