@@ -24,10 +24,15 @@ describe('RunTimelineComponent', () => {
   );
   afterEach(() => TestBed.resetTestingModule());
 
-  async function render(state: State, afterCancelEvents: number | null = null) {
+  async function render(
+    state: State,
+    afterCancelEvents: number | null = null,
+    stateHistory: RunStateDto['state_history'] = null,
+  ) {
     const fixture = TestBed.createComponent(RunTimelineComponent);
     fixture.componentRef.setInput('state', state);
     fixture.componentRef.setInput('afterCancelEvents', afterCancelEvents);
+    fixture.componentRef.setInput('stateHistory', stateHistory);
     await fixture.whenStable();
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
@@ -153,12 +158,94 @@ describe('RunTimelineComponent', () => {
     },
   );
 
-  it('states that step times are unavailable through the shared status pill', async () => {
+  it('shows unknown history copy without inventing any step times', async () => {
     const { root } = await render('collecting');
     const line = root.querySelector('[data-step-times]');
     expect(line?.querySelector('app-status-pill')?.textContent).toBe(
-      'Step times are not available yet',
+      'History unavailable for this run',
     );
     expect(root.querySelector('time')).toBeNull();
+  });
+
+  it('distinguishes a known empty history from unavailable history', async () => {
+    const { root } = await render('created', null, []);
+    expect(root.querySelector('[data-step-times]')?.textContent).toContain(
+      'No state changes recorded yet',
+    );
+    expect(root.textContent).not.toContain('History unavailable for this run');
+    expect(root.querySelector('[data-step="created"]')?.getAttribute('aria-current')).toBe('step');
+    expect(root.querySelector('time')).toBeNull();
+  });
+
+  it('renders served arrival instants as formatted semantic times without a history note', async () => {
+    const history: RunStateDto['state_history'] = [
+      { from_state: 'queued', to_state: 'running', occurred_at: '2026-11-07T10:00:00Z' },
+      { from_state: 'running', to_state: 'collecting', occurred_at: '2026-11-07T10:01:00Z' },
+      { from_state: 'collecting', to_state: 'complete', occurred_at: '2026-11-07T10:02:00Z' },
+    ];
+    const { root } = await render('complete', null, history);
+    const times = [...root.querySelectorAll<HTMLTimeElement>('[data-step-time]')];
+    expect(times).toHaveLength(3);
+    expect(times.map((time) => time.tagName)).toEqual(['TIME', 'TIME', 'TIME']);
+    expect(times.map((time) => time.getAttribute('datetime'))).toEqual(
+      history.map((transition) => transition.occurred_at),
+    );
+    expect(times.map((time) => time.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+      'Nov 7, 2026, 10:00:00 AM',
+      'Nov 7, 2026, 10:01:00 AM',
+      'Nov 7, 2026, 10:02:00 AM',
+    ]);
+    expect(root.querySelector('[data-step="created"] time')).toBeNull();
+    expect(root.querySelector('[data-step="queued"] time')).toBeNull();
+    expect(root.querySelector('[data-step-times]')).toBeNull();
+  });
+
+  it('preserves after-cancel information while suppressing late completion times', async () => {
+    const history: RunStateDto['state_history'] = [
+      { from_state: 'queued', to_state: 'canceled', occurred_at: '2026-11-07T10:00:00Z' },
+      { from_state: 'running', to_state: 'complete', occurred_at: '2026-11-07T10:01:00Z' },
+    ];
+    const { root } = await render('canceled', 3, history);
+    expect(root.querySelector('[data-step="complete"]')?.getAttribute('data-status')).toBe(
+      'not-reached',
+    );
+    expect(root.querySelector('[data-step="complete"] time')).toBeNull();
+    expect(root.querySelector('[data-step="canceled"] time')?.getAttribute('datetime')).toBe(
+      '2026-11-07T10:00:00Z',
+    );
+    expect(root.querySelector('[data-after-cancel-note]')?.textContent).toContain(
+      'Events that arrive after cancel are kept as evidence and never complete the run.',
+    );
+    expect(root.querySelector('[data-after-cancel-count]')?.textContent).toContain(
+      '3 events arrived after cancel (informational)',
+    );
+  });
+
+  it('keeps malformed history timestamps from breaking the timeline', async () => {
+    const { root } = await render('running', null, [
+      { from_state: 'queued', to_state: 'running', occurred_at: 'not-a-date' },
+    ]);
+    expect(root.querySelector('[aria-current="step"]')?.getAttribute('data-step')).toBe('running');
+    expect(root.querySelector('time')).toBeNull();
+    expect(root.querySelector('[data-step-times]')).toBeNull();
+  });
+
+  it('updates derived step times and notes when the served history changes', async () => {
+    const { root, fixture } = await render('running');
+    fixture.componentRef.setInput('stateHistory', [
+      { from_state: 'queued', to_state: 'running', occurred_at: '2026-11-07T10:00:00Z' },
+    ]);
+    await fixture.whenStable();
+    expect(root.querySelector('[data-step="running"] time')?.getAttribute('datetime')).toBe(
+      '2026-11-07T10:00:00Z',
+    );
+    expect(root.querySelector('[data-step-times]')).toBeNull();
+
+    fixture.componentRef.setInput('stateHistory', null);
+    await fixture.whenStable();
+    expect(root.querySelector('time')).toBeNull();
+    expect(root.querySelector('[data-step-times]')?.textContent).toContain(
+      'History unavailable for this run',
+    );
   });
 });

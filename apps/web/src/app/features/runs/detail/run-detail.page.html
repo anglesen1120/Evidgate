@@ -137,7 +137,11 @@
         (selectRelease)="store.selectRelease($event)"
         (retry)="retryRelease()"
       />
-      <app-run-timeline [state]="run.state" [afterCancelEvents]="run.after_cancel_events" />
+      <app-run-timeline
+        [state]="run.state"
+        [stateHistory]="run.state_history"
+        [afterCancelEvents]="run.after_cancel_events"
+      />
     </div>
   }
 </app-request-state>
