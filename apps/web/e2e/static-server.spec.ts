@@ -446,11 +446,12 @@ test('survives a malformed request line and answers it with 400', async ({ reque
 });
 
 test('survives clients that hang up while an asset is opening', async ({ request }) => {
-  const { port, url, tempDir } = getTempServer();
+  const { port, url, tempDir, child } = getTempServer();
   writeFileSync(join(tempDir, 'dist', 'browser', 'big.js'), 'x'.repeat(256 * 1024));
 
-  // Each socket sends a full request and is destroyed in the same tick, so the response is
-  // gone before the read stream opens; piping into it must not stop the server.
+  // Each socket sends a request and is destroyed at once. Whether the hang-up lands before the
+  // read stream opens is a race the kernel decides, so many sockets make the bad ordering a
+  // near certainty; without the guard the server exits on the first one that loses.
   await Promise.all(
     Array.from(
       { length: 300 },
@@ -467,6 +468,7 @@ test('survives clients that hang up while an asset is opening', async ({ request
   );
 
   const after = await request.get(`${url}/big.js`);
+  expect(child.exitCode).toBeNull();
   expect(after.status()).toBe(200);
   expect((await after.body()).length).toBe(256 * 1024);
 });
