@@ -168,6 +168,7 @@ function runState(runId: string, evidenceRevisionId: string | null): RunStateDto
     declared_producers: ['shard-1', 'shard-2'],
     releases: [],
     after_cancel_events: 0,
+    state_history: null,
   };
 }
 

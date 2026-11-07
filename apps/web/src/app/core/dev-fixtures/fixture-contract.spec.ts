@@ -84,6 +84,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
           'run_id',
           'shard_count',
           'state',
+          'state_history',
           'suite_revision_id',
           'unverified_ref',
           'version',

@@ -131,6 +131,15 @@ public sealed class FinalizeEndpointTests
     private static Task<int> RunVersionAsync(IngestTestWorld world, Guid? runId = null) =>
         world.ScalarAsync<int>($"select version from public.run where id = '{runId ?? world.RunId}'");
 
+    /// <summary>
+    /// The run's recorded state history as one delimited scalar, in sequence order; the creation row reads
+    /// <c>(insert)-&gt;x</c>. The trigger on <c>public.run</c> is its only writer (migration 0082).
+    /// </summary>
+    private static Task<string> StateHistoryAsync(IngestTestWorld world) =>
+        world.ScalarAsync<string>(
+            "select coalesce(string_agg(coalesce(from_state, '(insert)') || '->' || to_state, ',' order by seq), '') "
+            + $"from public.run_state_event where org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'");
+
     private static Task<bool> SlotClosedAsync(IngestTestWorld world, string producerId = Producer) =>
         world.ScalarAsync<bool>(
             $"select closed_at is not null from public.producer_slot where run_id = '{world.RunId:D}' and producer_id = '{producerId}'");
@@ -460,6 +469,10 @@ public sealed class FinalizeEndpointTests
         (await StateChangedRowsAsync(world, "running")).ShouldBe(1);
         (await StateChangedRowsAsync(world, "collecting")).ShouldBe(1);
 
+        // Each edge also appends its history row, in order: the trigger on public.run is the only writer, so the
+        // statement that moves the state is the statement that records it (migration 0082).
+        (await StateHistoryAsync(world)).ShouldEndWith("queued->running,running->collecting");
+
         (await SlotClosedAsync(world, "shard-1")).ShouldBeTrue();
         (await SlotBoundJtiAsync(world, "shard-1")).ShouldBe(IngestTestWorld.Jti);
 
@@ -473,6 +486,8 @@ public sealed class FinalizeEndpointTests
         (await RunStateAsync(world)).ShouldBe("collecting");
         (await RunVersionAsync(world)).ShouldBe(runVersion + 2, "a collecting run is already there");
         (await StateChangedRowsAsync(world, "collecting")).ShouldBe(1);
+        // A finalize that applies no edge appends no history row: the history is still the two edges already applied.
+        (await StateHistoryAsync(world)).ShouldEndWith("queued->running,running->collecting");
 
         // One trigger per newly closed slot: two shards, two rows.
         (await ReconcileRowsAsync(world)).ShouldBe(2);

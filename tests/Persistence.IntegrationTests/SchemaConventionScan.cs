@@ -181,6 +181,10 @@ internal static class SchemaConventionScan
             "public.raw_report_reprocess",
             SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only reprocess requests (migration 0081): the app role holds SELECT + INSERT, UPDATE/DELETE/TRUNCATE are revoked and `raw_report_reprocess_immutable` raises 23514 for every role, so a request is written once and keeps created_at only — no updated_at/version and no version trigger. Its reference to `report_parser` is the catalogue's own `(parser_id, parser_version) -> (parser_id, version)`, because a built-in release carries `org_id IS NULL` and the composite tenant key could never match one; the trigger `raw_report_reprocess_parser_visible` refuses another org's project-owned release. Its tenant key, its composite run, artifact and source FKs and RLS are NOT exempt."),
+        new SchemaExemption(
+            "public.run_state_event",
+            SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
+            "Append-only run history (05.3.1; migration 0082): the rows are written only by the trigger on public.run, the app role holds SELECT only, and `run_state_event_immutable` raises 23514 for every role, so an event is written once and keeps its own `occurred_at` (the database clock that ordered it) — no created_at/updated_at/version and no version trigger. Its tenant key, composite run FK, closed state CHECKs, per-run sequence key and RLS are NOT exempt."),
     ];
 
     /// <summary>

@@ -1645,6 +1645,10 @@ public sealed partial class ReconcileRunTests
         revision.EventWatermark.ShouldBe(3, "the watermark is every stored event of the run");
 
         (await StateAsync(world, runId)).ShouldBe("complete");
+        (await world.ScalarAsync<long>(
+            $"select count(*) from public.run_state_event where run_id = '{runId:D}' "
+            + "and from_state = 'collecting' and to_state = 'complete'"))
+            .ShouldBe(1, "the finisher's own edge appends its history row in the attempt's transaction (migration 0082)");
         (await PointerAsync(world, runId)).ShouldBe(revision.Id, "the pointer names the revision just appended");
         (await RevisionCountAsync(world)).ShouldBe(1);
         (await StateChangeAuditCountAsync(world, runId))

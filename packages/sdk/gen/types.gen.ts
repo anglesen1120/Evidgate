@@ -82,6 +82,28 @@ export type RunStateDto = {
      * How many of the run's stored `event` rows are flagged `after_cancel` (0034): late events that arrived after the cancel. A count of events, not of case attempts.
      */
     after_cancel_events: number;
+    /**
+     * The run's recorded state transitions, oldest first (`run_state_event.seq` ascending). The creation row — the one with no from state — is the marker that the history is known, so it is never served, and its absence is what makes the whole member `null`: a run created before the table existed cannot have its history reconstructed. `[]` is a run whose history is known and which has not transitioned yet; `null` is an unknown history. Bounded to 64 items, which no run can reach: the forward ranks are fixed (`created` 0, `queued` 1, `running` 2, `collecting` 3) and a terminal state has no outgoing edge, so the longest declared path is four transitions (`created → queued → running → collecting → complete`/`incomplete`); a run is inserted already `queued`, so a served history holds at most three.
+     */
+    state_history: Array<RunStateTransition> | null;
+};
+
+/**
+ * One recorded transition of a run (`run_state_event`), appended by the trigger on `public.run`.
+ */
+export type RunStateTransition = {
+    /**
+     * The state the run left. Never null in a served item: an item with no from state is the creation marker and is not part of this array.
+     */
+    from_state: 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
+    /**
+     * The state the run entered, one of the same vocabulary as `state`.
+     */
+    to_state: 'created' | 'queued' | 'running' | 'collecting' | 'complete' | 'incomplete' | 'canceled';
+    /**
+     * The database clock time the transition was recorded (`clock_timestamp()`). Order comes from the row's sequence, not this value, so a clock that steps backwards cannot reorder a run's history.
+     */
+    occurred_at: string;
 };
 
 /**
