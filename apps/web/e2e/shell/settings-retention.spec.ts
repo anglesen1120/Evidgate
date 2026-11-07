@@ -1,11 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import { FIXTURE_REQUEST_LOG } from '../../src/app/core/dev-fixtures/fixture-request-log';
 import {
   LOCALES,
   ORG_ACME,
   SETTINGS_ADMIN_USAGE_GRANTS,
   THEMES,
-  expectNoA11yViolations,
   localePath,
   seedStoredTheme,
   waitForDialogAnimations,
