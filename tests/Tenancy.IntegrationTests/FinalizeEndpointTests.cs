@@ -486,9 +486,8 @@ public sealed class FinalizeEndpointTests
         (await RunStateAsync(world)).ShouldBe("collecting");
         (await RunVersionAsync(world)).ShouldBe(runVersion + 2, "a collecting run is already there");
         (await StateChangedRowsAsync(world, "collecting")).ShouldBe(1);
-        (await StateHistoryAsync(world)).ShouldEndWith(
-            "queued->running,running->collecting",
-            "a finalize that applies no edge appends no history row");
+        // A finalize that applies no edge appends no history row: the history is still the two edges already applied.
+        (await StateHistoryAsync(world)).ShouldEndWith("queued->running,running->collecting");
 
         // One trigger per newly closed slot: two shards, two rows.
         (await ReconcileRowsAsync(world)).ShouldBe(2);
