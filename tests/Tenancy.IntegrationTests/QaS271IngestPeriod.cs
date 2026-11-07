@@ -28,6 +28,11 @@ public sealed partial class IngestQuotaTests
                 services.AddSingleton<TimeProvider>(clock);
                 ReplaceWith<IQuotaGate>(services, inner => new SpyQuotaGate(inner, spy));
             });
+            await using var counters = await UsageQuotaWorld.StartAsync(fixture);
+
+            // A counter with room, so the gate's answer is a metered one and names the transaction's month: with no
+            // counter the answer is an unmetered Ok and carries no month at all, which would prove nothing here.
+            await SeedAsync(counters, world, used: 0m, limit: 1000m);
             var answer = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L));
             answer.Status.ShouldBe(System.Net.HttpStatusCode.OK, answer.ErrorMessage);
             var batch = answer.Body.GetProperty("batch_id").GetGuid();

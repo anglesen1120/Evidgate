@@ -23,6 +23,13 @@ internal static class UsageQuotaGateSql
         "coalesce(@period::text, to_char(transaction_timestamp() at time zone 'UTC','YYYY-MM'))";
 
     /// <summary>
+    /// The resolved month as the one value the statement compares columns to. It is a scalar subquery on purpose: the
+    /// planner turns it into an initplan parameter, so the open-month shape indexes the period column exactly as the
+    /// named-month shape does, where a stable expression in the predicate would fall back to another access path.
+    /// </summary>
+    private const string ResolvedMonth = $"(select {ResolvedPeriod})";
+
+    /// <summary>
     /// The UTC month stamped on rows created in the caller's transaction, beside the instant that month is measured
     /// from, so a reader of both names the month the transaction is in.
     /// </summary>
@@ -41,7 +48,7 @@ internal static class UsageQuotaGateSql
                c.used, c.quota_limit, transaction_timestamp() as database_now, c.period
         from public.quota_counter as c
         where c.org_id = @org_id
-          and c.period = {ResolvedPeriod}
+          and c.period = {ResolvedMonth}
           and c.metric = @metric
           and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = any(@scope_keys)
           and c.used + @quantity > c.quota_limit
@@ -77,7 +84,7 @@ internal static class UsageQuotaGateSql
                 where c.org_id = @org_id
                   and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = k.scope_key
                   and c.metric = @metric
-                  and c.period < {ResolvedPeriod}
+                  and c.period < {ResolvedMonth}
                 order by c.period desc
                 limit 1
             ) as p
@@ -85,7 +92,7 @@ internal static class UsageQuotaGateSql
                 select 1
                 from public.quota_counter as c
                 where c.org_id = @org_id
-                  and c.period = {ResolvedPeriod}
+                  and c.period = {ResolvedMonth}
                   and c.metric = @metric
                   and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = k.scope_key
             )
@@ -97,7 +104,7 @@ internal static class UsageQuotaGateSql
             from public.quota_counter as c
             where not exists (select 1 from missing as m)
               and c.org_id = @org_id
-              and c.period = {ResolvedPeriod}
+              and c.period = {ResolvedMonth}
               and c.metric = @metric
               and coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid) = any(@scope_keys)
             order by array_position(@scope_keys, coalesce(c.project_id, '00000000-0000-0000-0000-000000000000'::uuid))
@@ -124,16 +131,16 @@ internal static class UsageQuotaGateSql
                 old.warned_at is null and c.warned_at is not null as warned_now
         )
         select i.id, i.scope_key, i.used, i.quota_limit, i.warn_ratio, i.reserved,
-            false as needs_carry, i.warned_now, {ResolvedPeriod} as period
+            false as needs_carry, i.warned_now, {ResolvedMonth} as period
         from incremented as i
         union all
         select t.id, t.scope_key, t.used, t.quota_limit, t.warn_ratio, false as reserved,
-            false as needs_carry, false as warned_now, {ResolvedPeriod} as period
+            false as needs_carry, false as warned_now, {ResolvedMonth} as period
         from targets as t
         where not exists (select 1 from incremented as i where i.id = t.id)
         union all
         select m.id, m.scope_key, 0::numeric, m.quota_limit, m.warn_ratio, false as reserved,
-            true as needs_carry, false as warned_now, {ResolvedPeriod} as period
+            true as needs_carry, false as warned_now, {ResolvedMonth} as period
         from missing as m
         """;
 

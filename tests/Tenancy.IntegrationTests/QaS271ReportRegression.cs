@@ -78,6 +78,11 @@ public sealed partial class EvidenceRawReportQuotaTests
                 ReplaceQuotaGate(services, inner => new SpyQuotaGate(inner, spy));
             });
             await _subject.SeedPlanAsync(world);
+            await using var counters = await UsageQuotaWorld.StartAsync(fixture);
+
+            // A counter with room, so the gate's answer is a metered one and names the transaction's month: an
+            // unmetered Ok carries no month by contract, and the point here is which month the gate resolved.
+            await _subject.SeedCounterAsync(counters, world, used: 0m, limit: 100m);
             var artifact = await _subject.SeedArtifactAsync(world, OneEventBody);
             (await ParseAsync(world, artifact)).Status.ShouldBe(ParseRawReportOutcome.Parsed);
             var request = spy.Requests.ShouldHaveSingleItem();

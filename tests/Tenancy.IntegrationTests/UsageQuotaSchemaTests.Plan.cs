@@ -128,8 +128,8 @@ public sealed partial class UsageQuotaSchemaTests
                 .Select(index => index.Condition)
                 .ShouldContain(
                     condition => BoundTenantEquality.IsMatch(condition),
-                    $"{label} must pin the tenant with its own bound predicate (org_id = $n) in the index condition, "
-                    + "not in a filter applied after the read, and not by the policy alone");
+                    $"{label} must pin the tenant with the uuid its own predicate names in the index condition, not "
+                    + "in a filter applied after the read, and not by the policy alone");
         }
 
         // The control: the same statement with its tenant predicate neutralised, so only the policy names the tenant.
@@ -147,8 +147,8 @@ public sealed partial class UsageQuotaSchemaTests
             .Select(index => index.Condition)
             .ShouldNotContain(
                 condition => BoundTenantEquality.IsMatch(condition),
-                "without the statement's own predicate only the policy names the tenant, so this fingerprint can "
-                + "only come from the statement");
+                "without the statement's own predicate only the policy names the tenant, and the policy prints a "
+                + "call rather than a literal, so the fingerprint above can only come from the statement");
     }
 
     /// <summary>
@@ -232,10 +232,13 @@ public sealed partial class UsageQuotaSchemaTests
         string Json);
 
     /// <summary>
-    /// The tenant equality the explained statement itself sends: a bound parameter (<c>org_id = $1</c>). The policy's
-    /// <c>org_id = evidgate.current_org_id()</c> renders differently, which is what lets a plan tell them apart.
+    /// The tenant equality the explained statement itself sends: the uuid literal the plan macro-expands the parameter
+    /// into (or the <c>$n</c> placeholder a prepared statement keeps). The policy's
+    /// <c>org_id = evidgate.current_org_id()</c> prints a call and never a value, which is what tells the two apart.
     /// </summary>
-    private static readonly Regex BoundTenantEquality = new(@"org_id\s*=\s*\$\d+", RegexOptions.CultureInvariant);
+    private static readonly Regex BoundTenantEquality = new(
+        @"org_id\s*=\s*(?:'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'|\$\d+)",
+        RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     /// <summary>
     /// Every index the plan uses beside the condition it applies, however the plan nests: the column that pins a
