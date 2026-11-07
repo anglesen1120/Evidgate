@@ -26,12 +26,17 @@ namespace Evidgate.Testing;
 /// <remarks>
 /// PostgreSQL refuses to copy a template that has open connections, so every
 /// connection this type opens is unpooled. The copy gate serializes concurrent
-/// copies from the same template, which would otherwise fail transiently with 55006.
+/// copies from the same template, which would otherwise fail transiently with 55006;
+/// a copy from a caller-supplied source also terminates that source's stragglers and
+/// retries a bounded number of times, because a pool shutting down hands one back late.
 /// </remarks>
 internal sealed partial class TemplateDatabase : IDisposable
 {
     private const string OwnerRole = "evidgate_owner";
     private const string MaintenanceDatabase = "postgres";
+
+    // A copy still refused after this many attempts is a real failure, not a straggler.
+    private const int CopyAttempts = 5;
 
     private readonly Func<string, string> _superuserConnectionString;
     private readonly Func<string, string> _ownerConnectionString;
@@ -51,7 +56,7 @@ internal sealed partial class TemplateDatabase : IDisposable
     /// <param name="templateStatements">Role statements run once, after migrations, on the template.</param>
     /// <param name="copyFrom">
     /// A database the caller already brought to head, copied instead of running the migrations a
-    /// second time. It must have no session open: <c>CREATE DATABASE … TEMPLATE</c> refuses one.
+    /// second time. Remaining source sessions are terminated before copying.
     /// </param>
     internal TemplateDatabase(
         Func<string, string> superuserConnectionString,
@@ -149,15 +154,19 @@ internal sealed partial class TemplateDatabase : IDisposable
     /// <summary>Refuses any name that is not the generated shape, before SQL is built from it.</summary>
     private static void EnsureGeneratedName(string database, string parameterName)
     {
-        if (!GeneratedName().IsMatch(database))
+        if (database.Length > 63
+            || !GeneratedName().IsMatch(database)
+            || string.Equals(database, "postgres", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(database, "template0", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(database, "template1", StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
-                $"'{database}' is not a generated database name: letters, digits and '_' only.",
+                $"'{database}' is not a generated database name: at most 63 ASCII letters, digits or '_', excluding reserved databases.",
                 parameterName);
         }
     }
 
-    /// <summary>Builds the template once per process; concurrent callers share the one build.</summary>
+    /// <summary>Builds the template once per instance; concurrent callers share the one build.</summary>
     internal Task<string> EnsureTemplateAsync()
     {
         Task<string> build;
@@ -181,11 +190,8 @@ internal sealed partial class TemplateDatabase : IDisposable
         {
             if (_copyFrom is { } source)
             {
-                // The source is already at head and has no session open, so one copy is the
-                // whole build: the caller ran the migrations once instead of twice.
-                await ExecuteSuperuserAsync(
-                    MaintenanceDatabase,
-                    $"create database \"{_templateName}\" owner {OwnerRole} template \"{source}\"").ConfigureAwait(false);
+                // Reuse the migrated source instead of running the migrations a second time.
+                await CopyTemplateAsync(source).ConfigureAwait(false);
             }
             else
             {
@@ -229,6 +235,29 @@ internal sealed partial class TemplateDatabase : IDisposable
             // it may exist with or without the is_template flag.
             await DropTemplateDatabaseAsync().ConfigureAwait(false);
             throw;
+        }
+    }
+
+    private async Task CopyTemplateAsync(string source)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await ExecuteSuperuserAsync(
+                    MaintenanceDatabase,
+                    $"select pg_terminate_backend(pid) from pg_stat_activity where datname = '{source}' and pid <> pg_backend_pid()").ConfigureAwait(false);
+                await ExecuteSuperuserAsync(
+                    MaintenanceDatabase,
+                    $"create database \"{_templateName}\" owner {OwnerRole} template \"{source}\"").ConfigureAwait(false);
+                return;
+            }
+            catch (PostgresException exception) when (
+                exception.SqlState == PostgresErrorCodes.ObjectInUse && attempt < CopyAttempts)
+            {
+                // Pool shutdown can leave source backends exiting after termination was requested.
+                await Task.Delay(TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
+            }
         }
     }
 

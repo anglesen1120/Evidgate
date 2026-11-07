@@ -243,6 +243,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
             .WithDatabase("evidgate")
             .WithUsername("postgres")
             .WithPassword("postgres")
+            // Dedicated copies open a second pool per class while the shared pools stay up; the
+            // image's default ceiling of 100 turns that into 53300 instead of the case under test.
+            .WithCommand("-c", "max_connections=200")
             .Build();
         using var timeout = new CancellationTokenSource(StartTimeout);
         var cancellationToken = timeout.Token;
@@ -292,7 +295,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
         }
 
         // CREATE DATABASE … TEMPLATE refuses a source database that still has a session, and
-        // an idle pooled connection counts: the bootstrap above left some behind.
+        // an idle pooled connection counts: the bootstrap above left some behind. TemplateDatabase
+        // also terminates whatever survives this, so a straggler costs a retry, not a failure.
         NpgsqlConnection.ClearAllPools();
 
         // Dedicated copies come from this template: a copy of the database just brought to head,
