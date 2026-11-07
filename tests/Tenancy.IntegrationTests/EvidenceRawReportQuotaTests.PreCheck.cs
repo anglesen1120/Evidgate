@@ -278,7 +278,7 @@ public sealed partial class EvidenceRawReportQuotaTests
 
         outcome.Status.ShouldBe(ParseRawReportOutcome.QuotaBlocked);
         outcome.Reason.ShouldBe("quota_precheck_unavailable", "a fault is not a refusal word");
-        outcome.RetryAfter.ShouldBe(PreCheckFaultDelay, "a fault waits long enough for a failover to finish");
+        outcome.RetryAfter.ShouldBe(ParseRawReportHandler.PreCheckFaultDelay, "a fault waits long enough for a failover to finish");
         outcome.QuotaRequest.ShouldBeNull("nothing refused, so there is nothing to stamp");
         (await CountAsync(world, "event", artifactId)).ShouldBe(0);
         (await CountRawReportsAsync(world, artifactId)).ShouldBe(0);
@@ -298,7 +298,7 @@ public sealed partial class EvidenceRawReportQuotaTests
                 new ParseRawReportPayload(world.RunId, artifactId, ProducerKind), world.Org, Token));
         deferred.Delay.ShouldBeInRange(
             TaskDeferredException.MinimumDelay,
-            PreCheckFaultDelay,
+            ParseRawReportHandler.PreCheckFaultDelay,
             "the jitter only ever shortens the fault's wait, never lengthens it past the month-end cap");
     }
 
