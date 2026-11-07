@@ -72,6 +72,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       );
       if (document.status === 200) {
         expect(Object.keys(document.body as object).sort()).toEqual([
+          'after_cancel_events',
           'current_evidence_revision_id',
           'declared_producers',
           'environment',
@@ -79,6 +80,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
           'policy_revision_id',
           'purpose',
           'ref',
+          'releases',
           'run_id',
           'shard_count',
           'state',

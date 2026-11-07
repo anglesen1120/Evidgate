@@ -166,6 +166,8 @@ function runState(runId: string, evidenceRevisionId: string | null): RunStateDto
     },
     shard_count: 2,
     declared_producers: ['shard-1', 'shard-2'],
+    releases: [],
+    after_cancel_events: 0,
   };
 }
 

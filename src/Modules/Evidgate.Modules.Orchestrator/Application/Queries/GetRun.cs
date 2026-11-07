@@ -31,6 +31,7 @@ internal sealed record GetRunQuery(Guid RunId) : IQuery<Result<RunStateDto>>;
 [Permission(Permissions.Run.Read)]
 internal sealed class GetRunQueryHandler(
     ITenantDb db,
+    IReleaseBindingReader bindings,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant)
     : IQueryHandler<GetRunQuery, Result<RunStateDto>>
@@ -43,7 +44,9 @@ internal sealed class GetRunQueryHandler(
     /// <c>policy_revision_id</c>, the environment revision it locked (<c>environment_revision</c> +
     /// <c>environment</c> through <c>run.environment_revision_id</c>), and the one <c>producer_slot</c> aggregate the
     /// run registered — its count and its ids in <c>shard_index</c> order, both in the same statement, so the detail
-    /// read is never N+1 and its producer order never depends on the heap order the slots happen to have.
+    /// read is never N+1 and its producer order never depends on the heap order the slots happen to have. The same
+    /// statement counts the run's late events, which the <c>(org_id, run_id, …)</c> prefix of
+    /// <c>event_run_producer_sequence_key</c> already serves, so the flag needs no index of its own.
     /// <para>
     /// <c>org_id</c> is left to RLS (the row is readable only inside the caller's tenant scope, and the policy is
     /// <c>FORCE</c>d, 0031), so an unknown id and another tenant's id take the same branch. Every join is on the
@@ -60,7 +63,10 @@ internal sealed class GetRunQueryHandler(
                r.suite_revision_id, r.policy_revision_id,
                er.id as environment_revision_id, er.environment_id, e.environment_key, er.revision_no, er.revision_hash,
                coalesce(slots.shard_count, 0) as shard_count,
-               coalesce(slots.declared_producers, '{}') as declared_producers
+               coalesce(slots.declared_producers, '{}') as declared_producers,
+               (select count(*)::integer
+                  from public.event ev
+                 where ev.org_id = r.org_id and ev.run_id = r.id and ev.after_cancel) as after_cancel_events
           from public.run r
           join public.manifest m on m.org_id = r.org_id and m.id = r.manifest_id
           join public.environment_revision er on er.org_id = r.org_id and er.id = r.environment_revision_id
@@ -89,6 +95,9 @@ internal sealed class GetRunQueryHandler(
             return Result.Failure<RunStateDto>(RunNotFound);
         }
 
+        // Only a run the caller may see reads its bindings, so a 404 run answers before any release statement runs.
+        var releases = await bindings.BoundReleasesAsync(query.RunId, cancellationToken).ConfigureAwait(false);
+
         return Result.Success(new RunStateDto(
             row.RunId,
             row.State,
@@ -114,7 +123,9 @@ internal sealed class GetRunQueryHandler(
                 row.RevisionNo,
                 row.RevisionHash),
             row.ShardCount,
-            [.. row.DeclaredProducers]));
+            [.. row.DeclaredProducers],
+            releases,
+            row.AfterCancelEvents));
     }
 
     /// <summary>
@@ -175,5 +186,7 @@ internal sealed class GetRunQueryHandler(
         public int ShardCount { get; set; }
 
         public string[] DeclaredProducers { get; set; } = [];
+
+        public int AfterCancelEvents { get; set; }
     }
 }
