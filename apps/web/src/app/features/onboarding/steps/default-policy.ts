@@ -29,6 +29,7 @@
 // hash is the idempotency key").
 
 import type { PolicyRevisionV1 } from '@evidgate/sdk';
+import { rfc3339InstantMs } from '../../../shared/time/rfc3339-instant';
 
 /**
  * The one policy body step 5 appends: the neutral default, advisory by activation, with the T62
@@ -160,5 +161,5 @@ export function activationInstantLabel(value: unknown): string | null {
   if (clean === null) {
     return null;
   }
-  return Number.isFinite(Date.parse(clean)) ? clean : null;
+  return rfc3339InstantMs(clean) === null ? null : clean;
 }
