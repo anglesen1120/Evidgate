@@ -2,7 +2,7 @@
 import { Injectable, signal, type OnDestroy, type Signal } from '@angular/core';
 
 export type RevealSource =
-  'binding-challenge' | 'ingest-token' | 'ingest-token-rotation' | 'invite-token';
+  'binding-challenge' | 'ingest-token' | 'ingest-token-rotation' | 'invite-token' | 'api-token';
 
 export interface RevealEntry {
   readonly source: RevealSource;

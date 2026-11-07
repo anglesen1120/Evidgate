@@ -3206,6 +3206,49 @@
       <trans-unit id="retention.cancel" datatype="html"><source>Cancel</source><target>Huỷ</target></trans-unit>
       <trans-unit id="retention.confirm" datatype="html"><source>Confirm and save retention</source><target>Xác nhận và lưu thời hạn</target></trans-unit>
       <trans-unit id="retention.retry-save" datatype="html"><source>Retry saving retention</source><target>Thử lưu lại thời hạn</target></trans-unit>
+      <trans-unit id="settings.tab.api-tokens" datatype="html"><source>API tokens</source><target>Mã truy cập API</target></trans-unit>
+      <trans-unit id="settings.api-tokens.title" datatype="html"><source>API tokens</source><target>Mã truy cập API</target></trans-unit>
+      <trans-unit id="settings.api-tokens.description" datatype="html"><source>Manage expiring, least-privilege credentials for this project. Token values cannot be read again.</source><target>Quản lý thông tin xác thực có thời hạn và quyền tối thiểu cho dự án này. Không thể đọc lại giá trị mã truy cập.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.project" datatype="html"><source>Project</source><target>Dự án</target></trans-unit>
+      <trans-unit id="settings.api-tokens.create" datatype="html"><source>Create token</source><target>Tạo mã truy cập</target></trans-unit>
+      <trans-unit id="settings.api-tokens.directory" datatype="html"><source>Project API tokens</source><target>Mã truy cập API của dự án</target></trans-unit>
+      <trans-unit id="settings.api-tokens.name" datatype="html"><source>Name</source><target>Tên</target></trans-unit>
+      <trans-unit id="settings.api-tokens.prefix" datatype="html"><source>Token prefix</source><target>Tiền tố mã truy cập</target></trans-unit>
+      <trans-unit id="settings.api-tokens.permissions" datatype="html"><source>Permission subset</source><target>Tập quyền được cấp</target></trans-unit>
+      <trans-unit id="settings.api-tokens.expires" datatype="html"><source>Expires (UTC)</source><target>Hết hạn (UTC)</target></trans-unit>
+      <trans-unit id="settings.api-tokens.last-used" datatype="html"><source>Last used (UTC)</source><target>Sử dụng gần nhất (UTC)</target></trans-unit>
+      <trans-unit id="settings.api-tokens.never" datatype="html"><source>Never</source><target>Chưa từng</target></trans-unit>
+      <trans-unit id="settings.api-tokens.state" datatype="html"><source>State</source><target>Trạng thái</target></trans-unit>
+      <trans-unit id="settings.api-tokens.active" datatype="html"><source>Active</source><target>Đang hoạt động</target></trans-unit>
+      <trans-unit id="settings.api-tokens.expired" datatype="html"><source>Expired</source><target>Đã hết hạn</target></trans-unit>
+      <trans-unit id="settings.api-tokens.revoked" datatype="html"><source>Revoked</source><target>Đã thu hồi</target></trans-unit>
+      <trans-unit id="settings.api-tokens.empty-title" datatype="html"><source>No API tokens yet</source><target>Chưa có mã truy cập API</target></trans-unit>
+      <trans-unit id="settings.api-tokens.empty-description" datatype="html"><source>Create a token with an expiry and only the permissions your script needs.</source><target>Tạo mã truy cập có thời hạn và chỉ cấp các quyền mà tập lệnh cần.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.no-projects" datatype="html"><source>Select a project to manage its API tokens.</source><target>Chọn dự án để quản lý mã truy cập API.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.narrow" datatype="html"><source>Use a desktop to create or revoke API tokens.</source><target>Sử dụng máy tính để tạo hoặc thu hồi mã truy cập API.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.next" datatype="html"><source>Next tokens</source><target>Các mã truy cập tiếp theo</target></trans-unit>
+      <trans-unit id="settings.api-tokens.first" datatype="html"><source>First tokens</source><target>Các mã truy cập đầu tiên</target></trans-unit>
+      <trans-unit id="settings.api-tokens.pages" datatype="html"><source>API token pages</source><target>Các trang mã truy cập API</target></trans-unit>
+      <trans-unit id="settings.api-tokens.create-name" datatype="html"><source>Token name</source><target>Tên mã truy cập</target></trans-unit>
+      <trans-unit id="settings.api-tokens.create-expires" datatype="html"><source>Expiry (UTC)</source><target>Thời điểm hết hạn (UTC)</target></trans-unit>
+      <trans-unit id="settings.api-tokens.expiry-required" datatype="html"><source>Expiry is required. The server enforces the maximum lifetime.</source><target>Bắt buộc có thời hạn. Máy chủ áp dụng thời hạn tối đa.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.create-permissions" datatype="html"><source>Choose at least one permission</source><target>Chọn ít nhất một quyền</target></trans-unit>
+      <trans-unit id="settings.api-tokens.permission-hint" datatype="html"><source>Only your granted, non-administrative permissions are offered. The server decides actual access.</source><target>Chỉ hiển thị các quyền bạn đang có, không bao gồm quyền quản trị. Máy chủ quyết định quyền truy cập thực tế.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.submitting" datatype="html"><source>Submitting…</source><target>Đang gửi…</target></trans-unit>
+      <trans-unit id="settings.api-tokens.cancel" datatype="html"><source>Cancel</source><target>Hủy</target></trans-unit>
+      <trans-unit id="settings.api-tokens.reveal-title" datatype="html"><source>Copy the API token once</source><target>Sao chép mã truy cập API một lần</target></trans-unit>
+      <trans-unit id="settings.api-tokens.reveal-warning" datatype="html"><source>This token cannot be shown again. Copy and store it securely before dismissing. If copying fails, select and copy the value manually.</source><target>Không thể hiển thị lại mã này. Hãy sao chép và lưu trữ an toàn trước khi đóng. Nếu sao chép thất bại, hãy chọn giá trị và sao chép thủ công.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.copy" datatype="html"><source>Copy token</source><target>Sao chép mã truy cập</target></trans-unit>
+      <trans-unit id="settings.api-tokens.copied" datatype="html"><source>Token copied.</source><target>Đã sao chép mã truy cập.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.dismiss" datatype="html"><source>Dismiss and clear token</source><target>Đóng và xóa mã truy cập</target></trans-unit>
+      <trans-unit id="settings.api-tokens.revoke" datatype="html"><source>Revoke token</source><target>Thu hồi mã truy cập</target></trans-unit>
+      <trans-unit id="settings.api-tokens.revoke-title" datatype="html"><source>Revoke this API token?</source><target>Thu hồi mã truy cập API này?</target></trans-unit>
+      <trans-unit id="settings.api-tokens.revoke-warning" datatype="html"><source>Revocation is irreversible. Scripts using this token will lose access immediately.</source><target>Không thể hoàn tác việc thu hồi. Các tập lệnh sử dụng mã này sẽ mất quyền truy cập ngay lập tức.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.revoke-saved" datatype="html"><source>Token revoked. The list is refreshed from the server.</source><target>Đã thu hồi mã truy cập. Danh sách được tải lại từ máy chủ.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.escalation" datatype="html"><source>These permissions cannot be granted to this token. Review the server explanation below.</source><target>Không thể cấp các quyền này cho mã truy cập. Xem giải thích của máy chủ bên dưới.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.uncertain" datatype="html"><source>The create response was not received. Check the token list and revoke any token you cannot recover before creating another.</source><target>Chưa nhận được phản hồi tạo mã. Hãy kiểm tra danh sách và thu hồi mã không thể khôi phục trước khi tạo mã khác.</target></trans-unit>
+      <trans-unit id="settings.api-tokens.inspect" datatype="html"><source>Close and check token list</source><target>Đóng và kiểm tra danh sách mã</target></trans-unit>
+      <trans-unit id="settings.api-tokens.actions" datatype="html"><source>Actions</source><target>Thao tác</target></trans-unit>
     </body>
   </file>
 </xliff>

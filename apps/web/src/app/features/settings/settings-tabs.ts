@@ -21,6 +21,7 @@ import { isPhaseActive } from '../../shell/nav/product-phase';
 export type SettingsTabId =
   | 'members'
   | 'secrets'
+  | 'api-tokens'
   | 'policy'
   | 'quota-retention'
   | 'audit'
@@ -60,6 +61,13 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     permission: 'ingest_token:read',
     phase: 'G2',
     label: $localize`:@@settings.tab.secrets:Secrets`,
+  },
+  {
+    id: 'api-tokens',
+    segment: 'api-tokens',
+    permission: 'api_token:read',
+    phase: 'G4',
+    label: $localize`:@@settings.tab.api-tokens:API tokens`,
   },
   {
     id: 'policy',

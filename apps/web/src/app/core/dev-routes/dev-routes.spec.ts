@@ -18,6 +18,8 @@ import { RunDetailPage } from '../../features/runs/detail/run-detail.page';
 import { PolicyPage } from '../../features/settings/policy/policy.page';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the dev-only route's real component identity; production core never imports this page.
 import { SecretsPage } from '../../features/settings/secrets/secrets.page';
+// eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the real review-only component; production core never imports it.
+import { ApiTokensPage } from '../../features/settings/api-tokens/api-tokens.page';
 // eslint-disable-next-line evidgate/no-feature-cross-import -- verifies the review-only route loads the real composition screen.
 import { SuiteCompositionComponent } from '../../features/suites/composition/suite-composition.component';
 import { ShellComponent } from '../../shell/layout/shell.component';
@@ -28,7 +30,7 @@ describe('dev routes (review only)', () => {
   it('mounts the shared UI gallery on one lazy route', () => {
     const table = devRoutes();
 
-    expect(table).toHaveLength(6);
+    expect(table).toHaveLength(7);
     expect(table[0]?.path).toBe('dev/ui-gallery');
     // A lazy boundary, so the production graph never reaches the gallery through this file.
     expect(table[0]?.component).toBeUndefined();
@@ -56,6 +58,18 @@ describe('dev routes (review only)', () => {
     const loadComponent = orgRoute?.loadComponent;
     if (loadComponent === undefined) throw new Error('no lazy Secrets review route');
     expect(await loadComponent()).toBe(SecretsPage);
+  });
+
+  it('mounts the real API tokens page behind authenticated org and read gates, review-only', async () => {
+    const route = devRoutes().find((entry) => entry.path === 'dev/settings-api-tokens');
+    expect(route?.component).toBe(ShellComponent);
+    const org = route?.children?.[0];
+    expect(org?.path).toBe('orgs/:orgId');
+    expect(org?.canMatch?.slice(0, 2)).toEqual([authGuard, orgScopeGuard]);
+    expect(org?.canMatch).toHaveLength(4);
+    const load = org?.loadComponent;
+    if (!load) throw new Error('No API tokens review route');
+    expect(await load()).toBe(ApiTokensPage);
   });
 
   it('mounts the real Policy page under the normal authenticated org shell, review-only', async () => {

@@ -3026,6 +3026,49 @@
       <trans-unit id="retention.cancel" datatype="html"><source>Cancel</source></trans-unit>
       <trans-unit id="retention.confirm" datatype="html"><source>Confirm and save retention</source></trans-unit>
       <trans-unit id="retention.retry-save" datatype="html"><source>Retry saving retention</source></trans-unit>
+      <trans-unit id="settings.tab.api-tokens" datatype="html"><source>API tokens</source></trans-unit>
+      <trans-unit id="settings.api-tokens.title" datatype="html"><source>API tokens</source></trans-unit>
+      <trans-unit id="settings.api-tokens.description" datatype="html"><source>Manage expiring, least-privilege credentials for this project. Token values cannot be read again.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.project" datatype="html"><source>Project</source></trans-unit>
+      <trans-unit id="settings.api-tokens.create" datatype="html"><source>Create token</source></trans-unit>
+      <trans-unit id="settings.api-tokens.directory" datatype="html"><source>Project API tokens</source></trans-unit>
+      <trans-unit id="settings.api-tokens.name" datatype="html"><source>Name</source></trans-unit>
+      <trans-unit id="settings.api-tokens.prefix" datatype="html"><source>Token prefix</source></trans-unit>
+      <trans-unit id="settings.api-tokens.permissions" datatype="html"><source>Permission subset</source></trans-unit>
+      <trans-unit id="settings.api-tokens.expires" datatype="html"><source>Expires (UTC)</source></trans-unit>
+      <trans-unit id="settings.api-tokens.last-used" datatype="html"><source>Last used (UTC)</source></trans-unit>
+      <trans-unit id="settings.api-tokens.never" datatype="html"><source>Never</source></trans-unit>
+      <trans-unit id="settings.api-tokens.state" datatype="html"><source>State</source></trans-unit>
+      <trans-unit id="settings.api-tokens.active" datatype="html"><source>Active</source></trans-unit>
+      <trans-unit id="settings.api-tokens.expired" datatype="html"><source>Expired</source></trans-unit>
+      <trans-unit id="settings.api-tokens.revoked" datatype="html"><source>Revoked</source></trans-unit>
+      <trans-unit id="settings.api-tokens.empty-title" datatype="html"><source>No API tokens yet</source></trans-unit>
+      <trans-unit id="settings.api-tokens.empty-description" datatype="html"><source>Create a token with an expiry and only the permissions your script needs.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.no-projects" datatype="html"><source>Select a project to manage its API tokens.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.narrow" datatype="html"><source>Use a desktop to create or revoke API tokens.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.next" datatype="html"><source>Next tokens</source></trans-unit>
+      <trans-unit id="settings.api-tokens.first" datatype="html"><source>First tokens</source></trans-unit>
+      <trans-unit id="settings.api-tokens.pages" datatype="html"><source>API token pages</source></trans-unit>
+      <trans-unit id="settings.api-tokens.create-name" datatype="html"><source>Token name</source></trans-unit>
+      <trans-unit id="settings.api-tokens.create-expires" datatype="html"><source>Expiry (UTC)</source></trans-unit>
+      <trans-unit id="settings.api-tokens.expiry-required" datatype="html"><source>Expiry is required. The server enforces the maximum lifetime.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.create-permissions" datatype="html"><source>Choose at least one permission</source></trans-unit>
+      <trans-unit id="settings.api-tokens.permission-hint" datatype="html"><source>Only your granted, non-administrative permissions are offered. The server decides actual access.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.submitting" datatype="html"><source>Submitting…</source></trans-unit>
+      <trans-unit id="settings.api-tokens.cancel" datatype="html"><source>Cancel</source></trans-unit>
+      <trans-unit id="settings.api-tokens.reveal-title" datatype="html"><source>Copy the API token once</source></trans-unit>
+      <trans-unit id="settings.api-tokens.reveal-warning" datatype="html"><source>This token cannot be shown again. Copy and store it securely before dismissing. If copying fails, select and copy the value manually.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.copy" datatype="html"><source>Copy token</source></trans-unit>
+      <trans-unit id="settings.api-tokens.copied" datatype="html"><source>Token copied.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.dismiss" datatype="html"><source>Dismiss and clear token</source></trans-unit>
+      <trans-unit id="settings.api-tokens.revoke" datatype="html"><source>Revoke token</source></trans-unit>
+      <trans-unit id="settings.api-tokens.revoke-title" datatype="html"><source>Revoke this API token?</source></trans-unit>
+      <trans-unit id="settings.api-tokens.revoke-warning" datatype="html"><source>Revocation is irreversible. Scripts using this token will lose access immediately.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.revoke-saved" datatype="html"><source>Token revoked. The list is refreshed from the server.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.escalation" datatype="html"><source>These permissions cannot be granted to this token. Review the server explanation below.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.uncertain" datatype="html"><source>The create response was not received. Check the token list and revoke any token you cannot recover before creating another.</source></trans-unit>
+      <trans-unit id="settings.api-tokens.inspect" datatype="html"><source>Close and check token list</source></trans-unit>
+      <trans-unit id="settings.api-tokens.actions" datatype="html"><source>Actions</source></trans-unit>
     </body>
   </file>
 </xliff>

@@ -8,6 +8,8 @@ import { findFixtureEntry } from './fixture-catalog';
 import {
   findSettingsAdminUsageFixture,
   SETTINGS_ADMIN_USAGE_VARIANT,
+  SETTINGS_API_TOKENS_READ_VARIANT,
+  SETTINGS_API_TOKENS_WRITE_VARIANT,
 } from './fixture-settings-permissions';
 
 function rowsOf(variant: string): readonly PermissionView[] {
@@ -62,4 +64,23 @@ describe('settings admin+usage permissions specimen', () => {
   it('stays a complete page, like the corpus rows it merges', () => {
     expect(specimen().next_cursor).toBeNull();
   });
+
+  it.each([SETTINGS_API_TOKENS_READ_VARIANT, SETTINGS_API_TOKENS_WRITE_VARIANT])(
+    'derives API token review grants from the catalogue: %s',
+    (variant) => {
+      const entry = findSettingsAdminUsageFixture(variant);
+      const body = entry?.document.body as { items: PermissionView[] };
+      const codes = body.items.map((row) => row.code);
+      expect(codes).toContain('api_token:read');
+      expect(codes).toContain('run:read');
+      expect(codes.includes('api_token:write')).toBe(variant === SETTINGS_API_TOKENS_WRITE_VARIANT);
+      expect(new Set(codes).size).toBe(codes.length);
+      expect(codes).toEqual([...codes].sort());
+      expect(
+        body.items
+          .filter((row) => row.code.startsWith('api_token:'))
+          .every((row) => row.tenant_assignable),
+      ).toBe(true);
+    },
+  );
 });
