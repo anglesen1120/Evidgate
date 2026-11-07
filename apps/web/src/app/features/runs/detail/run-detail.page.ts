@@ -25,6 +25,8 @@ import { DecisionViewComponent } from './decision/decision-view.component';
 import { EvidencePanelComponent } from './evidence/evidence-panel.component';
 import { resolveEvidenceAnchor } from './evidence/run-evidence-anchors';
 import { ManifestPanelComponent } from './manifest-panel.component';
+import { producerSlotsFromRun } from './producers/producer-slots';
+import { ProducerStatusTableComponent } from './producers/producer-status-table.component';
 import { ReleasePanelComponent } from './release/release-panel.component';
 import { parsePinnedRevision } from './revision-pin';
 import { RunHeaderComponent } from './run-header.component';
@@ -38,6 +40,7 @@ import { RunTimelineComponent } from './timeline/run-timeline.component';
     RequestStateComponent,
     RunHeaderComponent,
     ManifestPanelComponent,
+    ProducerStatusTableComponent,
     ReleasePanelComponent,
     RunTimelineComponent,
     EvidencePanelComponent,
@@ -58,6 +61,10 @@ import { RunTimelineComponent } from './timeline/run-timeline.component';
 export class RunDetailPage {
   protected readonly store = inject(RunDetailStore);
   protected readonly detailTab = signal('evidence');
+  protected readonly producerSlots = computed(() => {
+    const run = this.store.run();
+    return run === null ? null : producerSlotsFromRun(run);
+  });
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);

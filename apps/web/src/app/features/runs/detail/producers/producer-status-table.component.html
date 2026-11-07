@@ -1,0 +1,149 @@
+<section
+  hlmCard
+  id="producers"
+  data-producer-status
+  aria-labelledby="producers-title"
+  class="min-w-0 max-w-full gap-(--eg-space-4) p-(--eg-space-5)"
+>
+  <h2 hlmCardTitle id="producers-title" class="m-0">{{ copy.title }}</h2>
+  @if (status() === 'loading') {
+    <app-loading-pattern [attr.data-state]="'loading'" [label]="copy.loading" />
+  } @else if (status() === 'error') {
+    <app-error-pattern [attr.data-state]="'error'" [headingLevel]="3" [retryDisabled]="true" />
+  } @else if (slots(); as rows) {
+    @if (rows.length === 0) {
+      <app-empty-pattern
+        [attr.data-state]="'empty'"
+        [title]="copy.empty"
+        [description]="copy.emptyDescription"
+      />
+    } @else {
+      <p id="producers-event-note" class="m-0 text-muted-foreground">{{ copy.eventNote }}</p>
+      <div
+        hlmTableContainer
+        data-producer-scroll
+        class="table-scroll min-w-0 max-w-full overflow-x-auto rounded-(--eg-radius-md) border border-border focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus) focus-visible:outline-offset-(--eg-focus-offset)"
+        role="region"
+        tabindex="0"
+        [attr.aria-label]="copy.title"
+        [attr.aria-describedby]="'producers-event-note'"
+      >
+        <table
+          hlmTable
+          class="w-full min-w-[calc(var(--eg-space-12)*16)] border-collapse [&_th]:whitespace-normal [&_th]:wrap-anywhere [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_th]:align-top [&_td]:align-top"
+        >
+          <caption hlmCaption class="sr-only">
+            {{
+              copy.title
+            }}
+          </caption>
+          <thead hlmTHead>
+            <tr hlmTr>
+              <th hlmTh scope="col">{{ copy.producer }}</th>
+              <th hlmTh scope="col">{{ copy.identity }}</th>
+              <th hlmTh scope="col">{{ copy.finalize }}</th>
+              <th hlmTh scope="col">{{ copy.lastSequence }}</th>
+              <th hlmTh scope="col">{{ copy.count }}</th>
+              <th hlmTh scope="col">{{ copy.events }}</th>
+            </tr>
+          </thead>
+          <tbody hlmTBody>
+            @for (slot of rows; track slot.producerId) {
+              <tr hlmTr [attr.data-producer-slot]="slot.producerId">
+                <th
+                  hlmTh
+                  scope="row"
+                  [id]="producerAnchorId(slot.producerId)"
+                  tabindex="-1"
+                  class="scroll-mt-[calc(2*var(--eg-space-12))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-(--eg-focus)"
+                >
+                  <bdi class="font-mono">{{ display(slot.producerId) }}</bdi>
+                </th>
+                <td
+                  hlmTd
+                  [attr.data-fact]="'identity'"
+                  [attr.data-unavailable]="slot.identityState === null ? '' : null"
+                >
+                  @if (slot.identityState !== null) {
+                    <bdi>{{ display(slot.identityState) }}</bdi>
+                  } @else {
+                    <app-status-pill [tone]="'neutral'" [label]="''" />
+                  }
+                </td>
+                <td
+                  hlmTd
+                  [attr.data-fact]="'finalize'"
+                  [attr.data-unavailable]="slot.finalizeStatus === null ? '' : null"
+                >
+                  @if (slot.finalizeStatus !== null) {
+                    <bdi>{{ display(slot.finalizeStatus) }}</bdi>
+                  } @else {
+                    <app-status-pill [tone]="'neutral'" [label]="''" />
+                  }
+                </td>
+                <td
+                  hlmTd
+                  [attr.data-fact]="'last-sequence'"
+                  [attr.data-unavailable]="slot.lastSequence === null ? '' : null"
+                >
+                  @if (slot.lastSequence !== null) {
+                    <span class="font-mono">{{ slot.lastSequence }}</span>
+                  } @else {
+                    <app-status-pill [tone]="'neutral'" [label]="''" />
+                  }
+                </td>
+                <td
+                  hlmTd
+                  [attr.data-fact]="'count'"
+                  [attr.data-unavailable]="
+                    slot.count === null || slot.expected === null ? '' : null
+                  "
+                >
+                  @if (slot.count !== null && slot.expected !== null) {
+                    <span class="font-mono">{{ slot.count }} / {{ slot.expected }}</span>
+                    @if (slot.count !== slot.expected) {
+                      <span
+                        data-count-mismatch
+                        class="mt-(--eg-space-2) flex items-start gap-(--eg-space-2) rounded-(--eg-radius-md) bg-(--eg-warning-bg) p-(--eg-space-2) text-(--eg-warning-fg)"
+                      >
+                        <span aria-hidden="true">≠</span><span>{{ copy.mismatch }}</span>
+                      </span>
+                    }
+                  } @else {
+                    <app-status-pill [tone]="'neutral'" [label]="''" />
+                  }
+                </td>
+                <td hlmTd class="space-y-(--eg-space-2)">
+                  @if (slot.staleEpochEvents === null || slot.afterCancelEvents === null) {
+                    <app-status-pill [tone]="'neutral'" [label]="''" />
+                  }
+                  @if (slot.staleEpochEvents !== null && slot.staleEpochEvents > 0) {
+                    <app-status-pill
+                      [attr.data-badge]="'stale-epoch'"
+                      [tone]="'info'"
+                      [label]="staleEpochLabel(slot.staleEpochEvents)"
+                    />
+                  }
+                  @if (slot.afterCancelEvents !== null && slot.afterCancelEvents > 0) {
+                    <app-status-pill
+                      [attr.data-badge]="'after-cancel'"
+                      [tone]="'info'"
+                      [label]="afterCancelLabel(slot.afterCancelEvents)"
+                    />
+                  }
+                  @if (slot.staleEpochEvents === 0 && slot.afterCancelEvents === 0) {
+                    <span class="text-muted-foreground">{{ copy.noEvents }}</span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  } @else {
+    <p [attr.data-state]="'unavailable'" class="m-0">
+      <app-status-pill [tone]="'neutral'" [label]="''" />
+    </p>
+  }
+</section>
