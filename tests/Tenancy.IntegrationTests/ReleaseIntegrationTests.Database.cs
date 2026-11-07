@@ -54,7 +54,10 @@ public sealed partial class ReleaseIntegrationTests
         constraints.ShouldContain(entry => entry == "u:release_run_org_id_key:UNIQUE (org_id, id)");
 
         (await _fixture.IndexesAsync(database, "release_run"))
-            .ShouldContain(index => index.Contains("(org_id, run_id)", StringComparison.Ordinal));
+            .ShouldContain(
+                index => index.StartsWith("release_run_run_created_idx:", StringComparison.Ordinal)
+                    && index.Contains("(org_id, run_id, created_at, id)", StringComparison.Ordinal),
+                "the run's bindings are read through (org_id, run_id, created_at, id)");
     }
 
     [Fact]
