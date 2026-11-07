@@ -20,27 +20,29 @@
 -- DROP: `release_run_run_idx (org_id, run_id)` is a strict prefix of the new
 -- `release_run_run_created_idx (org_id, run_id, created_at, id)`, so every lookup it served (the run's
 -- bindings, the composite FK `(org_id, run_id) -> run (org_id, id)` delete check) is served by the new
--- index. No statement, test or migration names the dropped index. A contract step that is safe in the
--- same migration because the new index is created first and an index has no reader besides the planner.
+-- index. No statement or test depends on the dropped index by name (only 0072 created it). The swap is
+-- atomic at commit, so the order of the statements below is free.
 --
 -- LOCKS: plain `create index` inside the migration transaction like 0038 and every index migration
 -- since (`create index concurrently` is not available, migrations/README.md "Known limits"). The tables
--- are pilot-size; `lock_timeout` makes a busy table fail the migration for a retry instead of stalling
--- writes. `if not exists` / `drop … if exists` make a re-run a no-op. No down migration: dropping an
--- index loses no data and a rollback needs none.
+-- are pilot-size; `lock_timeout` bounds each lock wait, not the time the earlier locks are held until
+-- commit. The drop comes first so it never upgrades a SHARE lock this transaction holds on `release_run`
+-- (a lock upgrade can deadlock with a concurrent bind), and the hottest write table `quota_counter` is
+-- indexed last so its write lock is held the shortest. `if not exists` / `drop … if exists` make a re-run
+-- a no-op. No down migration: dropping an index loses no data and a rollback needs none.
 
 set local lock_timeout = '5s';
 
-create index if not exists quota_counter_org_period_idx
-  on public.quota_counter (org_id, period, project_id);
-
-create index if not exists usage_rollup_org_period_idx
-  on public.usage_rollup (org_id, period, project_id);
-
-create index if not exists project_org_created_id_idx
-  on public.project (org_id, created_at, id);
+drop index if exists public.release_run_run_idx;
 
 create index if not exists release_run_run_created_idx
   on public.release_run (org_id, run_id, created_at, id);
 
-drop index if exists public.release_run_run_idx;
+create index if not exists project_org_created_id_idx
+  on public.project (org_id, created_at, id);
+
+create index if not exists usage_rollup_org_period_idx
+  on public.usage_rollup (org_id, period, project_id);
+
+create index if not exists quota_counter_org_period_idx
+  on public.quota_counter (org_id, period, project_id);

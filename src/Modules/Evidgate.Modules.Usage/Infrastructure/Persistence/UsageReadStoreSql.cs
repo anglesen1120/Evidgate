@@ -187,9 +187,9 @@ internal static class UsageReadStoreSql
     /// </para>
     /// <para>
     /// The projects status counts are the org's whole set and never the page, so each page and a filtered answer carry
-    /// the same figures. They aggregate every project counter of the period: no index leads with <c>(org_id,
-    /// period)</c>, so the read walks the org's counters on the unique key's leading column and filters the period,
-    /// which is a small set per tenant. A project, a roll-up and a marker row answer null there; only the alert rows
+    /// the same figures. They aggregate every project counter of the period: the read is an index range over
+    /// <c>(org_id, period)</c> on <c>quota_counter_org_period_idx</c>, which is a small set per tenant. A project,
+    /// a roll-up and a marker row answer null there; only the alert rows
     /// carry counts.
     /// </para>
     /// </remarks>
