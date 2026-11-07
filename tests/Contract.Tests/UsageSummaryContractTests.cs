@@ -14,8 +14,8 @@ namespace Contract.Tests;
 /// <remarks>
 /// The instance is built from the module's own records, never a hand-written literal, so a member renamed, dropped or
 /// retyped on either side fails here rather than in a generated client. The negative controls change the scope label of
-/// a metric entry and of a project row, which the schemas' closed enums must reject, so the valid case is proven
-/// against a live schema.
+/// a metric entry and of a project row, which the schemas' closed enums must reject, and drop the required
+/// `next_cursor`; the valid case is proven against a live schema.
 /// </remarks>
 public sealed class UsageSummaryContractTests
 {
@@ -74,7 +74,8 @@ public sealed class UsageSummaryContractTests
                 RetryAfterSeconds: null,
                 UnavailableReason: "the object store does not report egress bytes yet",
                 Projects: []),
-        ]);
+        ],
+        NextCursor: "page-after-project-2");
 
         var json = JsonSerializer.Serialize(summary, SnakeCase);
 
@@ -82,19 +83,75 @@ public sealed class UsageSummaryContractTests
         json.ShouldContain("\"retry_after_seconds\":2419200", Case.Sensitive);
         json.ShouldContain("\"unavailable_reason\":\"the object store does not report egress bytes yet\"", Case.Sensitive);
         json.ShouldContain("\"projects\":[]", Case.Sensitive);
+        json.ShouldContain("\"next_cursor\":\"page-after-project-2\"", Case.Sensitive);
 
         var failures = ContractSchema.Failures(SummaryDocument(OpenApiSpec.Load()), SchemaUri, json);
         failures.ShouldBeEmpty($"a usage summary body must validate against components.schemas.{SchemaName}: {string.Join(" | ", failures)}");
     }
 
-    /// <summary>The operation declares the 400 of a project_id that cannot bind, so a client is not left guessing.</summary>
+    /// <summary>
+    /// The operation declares the 400 of a project_id that cannot bind and the 422 of invalid paging inputs, so a client
+    /// can tell the two refusals apart.
+    /// </summary>
     [Fact]
-    public void Spec_SummaryOperation_DeclaresTheUnbindableProjectAnswer()
+    public void Spec_SummaryOperation_DeclaresTheRejectedInputs()
     {
         var responses = OpenApiSpec.Load().ResponseKeys("/orgs/{o}/usage/summary", "get");
 
         responses.ShouldContain("200");
         responses.ShouldContain("400");
+        responses.ShouldContain("422");
+    }
+
+    /// <summary>The operation pages projects with the spec's shared cursor parameters, not a second copy of them.</summary>
+    [Fact]
+    public void Spec_SummaryOperation_DeclaresTheSharedPagingParameters()
+    {
+        var parameters = OpenApiSpec.Load().ParameterRefs("/orgs/{o}/usage/summary", "get");
+
+        parameters.ShouldContain("Cursor");
+        parameters.ShouldContain("Limit");
+    }
+
+    /// <summary>`next_cursor` is required and nullable, so a last page writes null rather than dropping the member.</summary>
+    [Fact]
+    public void Spec_SummarySchema_RequiresANullableNextCursor()
+    {
+        var schema = OpenApiSpec.Load().Schema(SchemaName);
+
+        schema["required"]!.AsArray().Select(member => member!.GetValue<string>())
+            .ShouldContain("next_cursor");
+
+        var nextCursor = schema["properties"]!["next_cursor"]!.AsObject();
+        nextCursor["type"]!.AsArray().Select(type => type!.GetValue<string>())
+            .ShouldBe(NullableStringTypes, ignoreOrder: true);
+    }
+
+    /// <summary>The negative control: a body without `next_cursor` must be rejected, or the required member proves nothing.</summary>
+    [Fact]
+    public void Summary_WithoutNextCursor_IsRejected()
+    {
+        var summary = new UsageSummaryDto(
+            "2026-11",
+            null,
+        [
+            new UsageSummaryMetricDto(
+                UsageLedgerMetricNames.Results,
+                UsageSummaryScopes.Tenant,
+                Used: 0m,
+                Limit: null,
+                WarnedAt: null,
+                BlockedAt: null,
+                RetryAfterSeconds: null,
+                UnavailableReason: null,
+                Projects: []),
+        ],
+        NextCursor: null);
+        var instance = JsonNode.Parse(JsonSerializer.Serialize(summary, SnakeCase))!.AsObject();
+        instance.Remove("next_cursor");
+
+        ContractSchema.Failures(SummaryDocument(OpenApiSpec.Load()), SchemaUri, instance.ToJsonString())
+            .ShouldNotBeEmpty("a summary page always writes next_cursor, null on the last page, so its absence must be rejected");
     }
 
     /// <summary>The negative control: a metric entry claiming another scope label must be rejected.</summary>
@@ -115,7 +172,8 @@ public sealed class UsageSummaryContractTests
                 RetryAfterSeconds: null,
                 UnavailableReason: null,
                 Projects: []),
-        ]);
+        ],
+        NextCursor: null);
         var instance = JsonNode.Parse(JsonSerializer.Serialize(summary, SnakeCase))!.AsObject();
         instance["metrics"]![0]!["scope"] = UsageSummaryScopes.Project;
 
@@ -152,7 +210,8 @@ public sealed class UsageSummaryContractTests
                         BlockedAt: null,
                         RetryAfterSeconds: null),
                 ]),
-        ]);
+        ],
+        NextCursor: null);
         var instance = JsonNode.Parse(JsonSerializer.Serialize(summary, SnakeCase))!.AsObject();
         instance["metrics"]![0]!["projects"]![0]!["scope"] = "tenant";
 
@@ -187,4 +246,7 @@ public sealed class UsageSummaryContractTests
     /// <summary>The host's wire policy (<c>ApiHost</c>): snake_case, nulls written.</summary>
     private static JsonSerializerOptions SnakeCase { get; } =
         new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
+
+    /// <summary>A nullable JSON Schema type list, as the spec writes <c>[string, 'null']</c>.</summary>
+    private static readonly string[] NullableStringTypes = ["string", "null"];
 }
