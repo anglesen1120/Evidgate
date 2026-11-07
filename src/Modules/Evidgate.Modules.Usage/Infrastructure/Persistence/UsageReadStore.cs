@@ -84,22 +84,35 @@ internal sealed class UsageReadStore(ITenantDb db)
             cancellationToken);
 
     /// <summary>
-    /// Reads the current period's counters and roll-up totals in one statement: the organization-wide rows, the
-    /// project rows (all of them, or the one <paramref name="projectId"/> names), and the roll-up fallback where no
-    /// counter exists. A project outside the tenant answers one marker row instead of data.
+    /// Reads the current period's organization-wide totals and one project page, with a roll-up fallback where no
+    /// counter exists. A project filter bypasses paging; a project outside the tenant answers one marker row.
     /// </summary>
     /// <param name="orgId">The tenant of the open scope.</param>
     /// <param name="period">The current billing period, <c>YYYY-MM</c>.</param>
-    /// <param name="projectId">The project filter the request named, or null for every project of the org.</param>
+    /// <param name="projectId">The project filter the request named, or null for a page of the org's projects.</param>
+    /// <param name="cursorCreatedAt">The preceding page's project creation time, or null.</param>
+    /// <param name="cursorId">The preceding page's project id, or null.</param>
+    /// <param name="projectLimit">Projects to fetch, including the caller's lookahead project.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     internal Task<IReadOnlyList<UsageSummaryRow>> ReadSummaryAsync(
         Guid orgId,
         string period,
         Guid? projectId,
+        DateTimeOffset? cursorCreatedAt,
+        Guid? cursorId,
+        int projectLimit,
         CancellationToken cancellationToken) =>
         db.QueryAsync<UsageSummaryRow>(
             UsageReadStoreSql.Summary,
-            new { org_id = orgId, period, project_id = projectId },
+            new
+            {
+                org_id = orgId,
+                period,
+                project_id = projectId,
+                cursor_created_at = cursorCreatedAt,
+                cursor_id = cursorId,
+                project_limit = projectLimit,
+            },
             cancellationToken);
 
     /// <summary>
@@ -246,6 +259,8 @@ internal sealed class UsageSummaryRow
     public string Scope { get; set; } = string.Empty;
 
     public Guid? ProjectId { get; set; }
+
+    public DateTimeOffset? ProjectCreatedAt { get; set; }
 
     public string? Metric { get; set; }
 

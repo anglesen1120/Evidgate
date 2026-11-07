@@ -16,19 +16,23 @@ public static class UsageSummaryScopes
 
 /// <summary>
 /// The <c>200</c> answer of <c>GET /v1/orgs/{o}/usage/summary</c>: one entry per wire metric for the current
-/// billing period, the organization-wide counter and, when the caller names a project, that project's counter.
+/// billing period, the organization-wide counter and one page of project counters, or the single project the caller
+/// named.
 /// </summary>
 /// <param name="Period">The billing period the counters belong to, <c>YYYY-MM</c>, from the server's clock.</param>
 /// <param name="Project">The project filter the request named, or null for the org-wide answer.</param>
 /// <param name="Metrics">One entry per metric, in <see cref="UsageLedgerMetricNames"/> order.</param>
+/// <param name="NextCursor">The next project page's opaque continuation, or null on the last or project-filtered page.</param>
 public sealed record UsageSummaryDto(
     string Period,
     Guid? Project,
-    IReadOnlyList<UsageSummaryMetricDto> Metrics);
+    IReadOnlyList<UsageSummaryMetricDto> Metrics,
+    string? NextCursor);
 
 /// <summary>
 /// One metric's counters for the period. <see cref="Used"/>, <see cref="Limit"/> and the threshold stamps describe
-/// the organization-wide counter; <see cref="Projects"/> holds the per-project counters the request asked for.
+/// the organization-wide counter; <see cref="Projects"/> holds the page's per-project counters, or the one project the
+/// request named.
 /// <para>
 /// A metric with no producer in this build answers <see cref="Used"/> and <see cref="Limit"/> as null and names the
 /// missing producer in <see cref="UnavailableReason"/>, never as <c>0</c>: a zero would read as a measurement.
@@ -48,7 +52,7 @@ public sealed record UsageSummaryDto(
 /// On a blocked tenant counter only: whole seconds until the next period starts, so a client can retry then.
 /// </param>
 /// <param name="UnavailableReason">Why the metric cannot be reported, or null when it can.</param>
-/// <param name="Projects">The per-project counters, ordered by project id; empty when none was asked for or seen.</param>
+/// <param name="Projects">The page's per-project counters, ordered by project creation time then id.</param>
 public sealed record UsageSummaryMetricDto(
     string Metric,
     string Scope,

@@ -27,20 +27,32 @@ public static class UsageEndpoints
 
         group.MapGet("/orgs/{o}/usage/summary", GetUsageSummaryAsync)
             .Produces<UsageSummaryDto>(StatusCodes.Status200OK)
-            .WithSummary("The period's counters against quota, org-wide and per project when asked (12)");
+            .WithSummary("The period's counters against quota, org-wide plus one page of projects (12)");
 
         return group;
     }
 
     /// <summary>
-    /// <c>GET /v1/orgs/{o}/usage/summary?project_id=</c>: the org-wide counters of the current period and, when a project
-    /// is named, that project's counters too. The project is a filter on the org-wide answer, so absent is the whole
-    /// org rather than the caller's default project.
+    /// <c>GET /v1/orgs/{o}/usage/summary?project_id=&amp;limit=&amp;cursor=</c>: the org-wide counters of the current
+    /// period and, when a project is named, that project's counters too. The project is a filter on the org-wide answer,
+    /// so absent is the whole org rather than the caller's default project; <c>limit</c>/<c>cursor</c> page the project
+    /// rows of that org-wide answer, and the filtered answer ignores them but still refuses a malformed pair.
     /// </summary>
     private static async Task<Result<UsageSummaryDto>> GetUsageSummaryAsync(
         Guid o,
         [FromQuery(Name = "project_id")] Guid? project_id,
+        HttpContext context,
         IMediator mediator,
-        CancellationToken cancellationToken) =>
-        await mediator.Send(new GetUsageSummaryQuery(o, project_id), cancellationToken).ConfigureAwait(false);
+        CancellationToken cancellationToken)
+    {
+        if (UsageSummaryPaging.Limit(context.Request.Query["limit"], out var limit) is { } invalid)
+        {
+            return Result.Failure<UsageSummaryDto>(invalid);
+        }
+
+        var cursor = context.Request.Query["cursor"].ToString();
+        return await mediator.Send(
+            new GetUsageSummaryQuery(o, project_id, string.IsNullOrEmpty(cursor) ? null : cursor, limit),
+            cancellationToken).ConfigureAwait(false);
+    }
 }
