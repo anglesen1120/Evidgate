@@ -291,6 +291,19 @@ public sealed class ReportParserResolverTests
     }
 
     [Fact]
+    public async Task Resolve_WithoutAnAmbientScope_FailsClosedBeforeAnyRead()
+    {
+        var db = new RecordingDb();
+        var accessor = Substitute.For<ITenantScopeAccessor>();
+        accessor.Require().Returns(_ => throw new TenantScopeMissingException());
+
+        await Should.ThrowAsync<TenantScopeMissingException>(async () =>
+            await new ReportParserResolver(db, accessor).ResolveAsync("probe-kind", TestContext.Current.CancellationToken));
+
+        db.Parameters.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Resolve_VersionsThatDifferOnlyInPaddingAndSegmentWidth_KeepTheNewestRegistration()
     {
         var world = await StartAsync();
