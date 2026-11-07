@@ -38,6 +38,7 @@ internal interface IQuotaScopeNumbers
 /// this period before the call can be answered, and no usage has been counted yet.
 /// </param>
 /// <param name="WarnedNow">True only for the statement that moved <c>warned_at</c> from null to a stamp.</param>
+/// <param name="Period">The billing month resolved by the reservation statement.</param>
 internal sealed record QuotaCounterRow(
     Guid Id,
     Guid ScopeKey,
@@ -46,7 +47,8 @@ internal sealed record QuotaCounterRow(
     decimal WarnRatio,
     bool Reserved,
     bool NeedsCarry,
-    bool WarnedNow) : IQuotaScopeNumbers
+    bool WarnedNow,
+    string Period) : IQuotaScopeNumbers
 {
     /// <summary>True when the scope's warning line is at or below what it now holds.</summary>
     internal bool IsAtOrAboveWarnLine => Used >= QuotaLimit * WarnRatio;
@@ -100,7 +102,10 @@ internal sealed record QuotaRaiseRow(Guid Id, decimal Used, decimal QuotaLimit);
 /// <param name="Used">The stored usage.</param>
 /// <param name="QuotaLimit">The stored limit.</param>
 /// <param name="DatabaseNow">The transaction's clock for the retry calculation.</param>
-internal sealed record QuotaPeekRow(Guid ScopeKey, decimal Used, decimal QuotaLimit, DateTimeOffset DatabaseNow);
+/// <param name="Period">The refusing counter's billing month.</param>
+/// <param name="Unstamped">True when the counter carries no refusal stamp yet.</param>
+internal sealed record QuotaPeekRow(
+    Guid ScopeKey, decimal Used, decimal QuotaLimit, DateTimeOffset DatabaseNow, string Period, bool Unstamped);
 
 /// <summary>The transaction's billing month and the instant it is measured from, read together.</summary>
 /// <param name="Period">The transaction's month, <c>YYYY-MM</c> in UTC.</param>
@@ -109,8 +114,8 @@ internal sealed record QuotaPeriodClock(string Period, DateTimeOffset DatabaseNo
 
 /// <summary>
 /// The <c>quota_counter</c> path over the caller's tenant scope: the reservation, the carry-forward,
-/// the refusal settle and stamp, and the raise, plus the read-only peek and the transaction month the caller gates with,
-/// so the counter and the work it guards commit or roll back together.
+/// the refusal settle and stamp, and the raise, plus the read-only peek. The reservation and the peek resolve the
+/// caller's own month when it named none, so the counter and the work it guards commit or roll back together.
 /// </summary>
 internal sealed class QuotaCounterStore(ITenantDb db)
 {
@@ -133,11 +138,15 @@ internal sealed class QuotaCounterStore(ITenantDb db)
     }
 
     /// <summary>
-    /// Reads the first counter of the period that has no room for <paramref name="quantity"/>, in lock order, and the
-    /// database instant beside it. Null means no charged scope refuses; nothing is written, locked or carried.
+    /// Reads the first counter of <paramref name="period"/> that has no room for <paramref name="quantity"/>, in lock
+    /// order, with the database instant and the month beside it. Null means no charged scope refuses; nothing is
+    /// written, locked or carried.
     /// </summary>
     /// <param name="orgId">The tenant of the open scope.</param>
-    /// <param name="period">The billing month, <c>YYYY-MM</c>.</param>
+    /// <param name="period">
+    /// The billing month, <c>YYYY-MM</c>, or null for the month of the caller's transaction, which the statement
+    /// resolves in the same read.
+    /// </param>
     /// <param name="metric">The wire metric name.</param>
     /// <param name="scopeKeys">The scopes the call charges, the tenant's first.</param>
     /// <param name="quantity">The quantity the call would add.</param>
@@ -145,7 +154,7 @@ internal sealed class QuotaCounterStore(ITenantDb db)
     /// <returns>The refusing counter, or null when every charged scope has room or holds no counter.</returns>
     internal Task<QuotaPeekRow?> PeekAsync(
         Guid orgId,
-        string period,
+        string? period,
         string metric,
         Guid[] scopeKeys,
         decimal quantity,
@@ -162,14 +171,17 @@ internal sealed class QuotaCounterStore(ITenantDb db)
     /// in it, and <see cref="QuotaCounterRow.NeedsCarry"/> means the period has no counter yet but an earlier one did.
     /// </summary>
     /// <param name="orgId">The tenant of the open scope.</param>
-    /// <param name="period">The billing month, <c>YYYY-MM</c>.</param>
+    /// <param name="period">
+    /// The billing month, <c>YYYY-MM</c>, or null for the month of the caller's transaction, which the statement
+    /// resolves and answers on every row it returns.
+    /// </param>
     /// <param name="metric">The wire metric name.</param>
     /// <param name="scopeKeys">The scopes to lock and charge, the tenant's first.</param>
     /// <param name="quantity">The amount to add; the caller has already refused a non-positive one.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     internal async Task<IReadOnlyList<QuotaCounterRow>> ReserveAsync(
         Guid orgId,
-        string period,
+        string? period,
         string metric,
         Guid[] scopeKeys,
         decimal quantity,

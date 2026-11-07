@@ -14,7 +14,7 @@ internal sealed partial class UsageQuotaWorld
     /// </summary>
     /// <param name="request">The question.</param>
     /// <param name="org">The tenant to ask as, or null for this world's org.</param>
-    internal async Task<QuotaCheckResult> PeekAsync(QuotaCheckRequest request, Guid? org = null)
+    internal async Task<QuotaPeekResult> PeekAsync(QuotaCheckRequest request, Guid? org = null)
     {
         var token = TestContext.Current.CancellationToken;
 
@@ -40,45 +40,17 @@ internal sealed partial class UsageQuotaWorld
         }
     }
 
-    /// <summary>
-    /// The gate's transaction month beside the database's own two statements, read in one tenant transaction: the month
-    /// of the transaction and the month a row stamped by <c>now()</c> in it carries.
-    /// </summary>
-    internal async Task<(string Gate, string Transaction, string Event)> PeriodAsync()
+    /// <summary>The database's own month and the one after it, for a test that must survive a month-end rollover.</summary>
+    /// <returns>The current month and the next, both <c>YYYY-MM</c> in UTC.</returns>
+    internal async Task<(string Month, string NextMonth)> DatabaseMonthsAsync()
     {
-        var token = TestContext.Current.CancellationToken;
+        var row = await ScalarAsync<string>(
+            """
+            select to_char(now() at time zone 'UTC','YYYY-MM') || '|'
+                || to_char((date_trunc('month', now() at time zone 'UTC') + interval '1 month')::date,'YYYY-MM')
+            """);
+        var months = row.Split('|');
 
-        await GateCalls.WaitAsync(token).ConfigureAwait(false);
-
-        try
-        {
-            await using var services = Api.Services.CreateAsyncScope();
-            var provider = services.ServiceProvider;
-            var scopes = provider.GetRequiredService<ITenantScopeFactory>();
-            await using var scope = await scopes.BeginAsync(Org, null, false, token);
-
-            var gate = await provider.GetRequiredService<IQuotaGate>()
-                .CurrentPeriodAsync(token)
-                .ConfigureAwait(false);
-            var db = provider.GetRequiredService<ITenantDb>();
-            var transaction = await db
-                .ScalarAsync<string>(
-                    "select to_char(transaction_timestamp() at time zone 'UTC','YYYY-MM')",
-                    cancellationToken: token)
-                .ConfigureAwait(false)
-                ?? throw new InvalidOperationException("transaction_timestamp() answered no month");
-            var stamped = await db
-                .ScalarAsync<string>("select to_char(now() at time zone 'UTC','YYYY-MM')", cancellationToken: token)
-                .ConfigureAwait(false)
-                ?? throw new InvalidOperationException("now() answered no month");
-
-            await scope.CommitAsync(token).ConfigureAwait(false);
-
-            return (gate, transaction, stamped);
-        }
-        finally
-        {
-            GateCalls.Release();
-        }
+        return (months[0], months[1]);
     }
 }

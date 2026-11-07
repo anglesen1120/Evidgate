@@ -59,12 +59,11 @@ internal sealed class IngestQuotaAdmission(
             return null;
         }
 
-        // The billing month of the admitted work, read from the transaction's own clock: the instant that stamps the
-        // batch's rows is the one the ledger row metering them carries, so a batch never passes the gate in one month
-        // and lands in the ledger of the next.
-        var period = await gate.CurrentPeriodAsync(cancellationToken).ConfigureAwait(false);
+        // The billing month is left open: the gate reads it from this transaction's own clock inside its first
+        // statement, the clock that stamps the batch's rows and the ledger row metering them, so neither is ever a
+        // month behind and no second round trip can cross a month end between the two.
         var request = new QuotaCheckRequest(
-            UsageMetric.Results, period, scopedProject, quantity, IncludeTenantScope: true);
+            UsageMetric.Results, Period: null, scopedProject, quantity, IncludeTenantScope: true);
         var answer = await gate.CheckAsync(request, cancellationToken).ConfigureAwait(false);
 
         if (answer.Decision != QuotaDecision.Block)
@@ -75,8 +74,13 @@ internal sealed class IngestQuotaAdmission(
         EvidgateTelemetry.RecordIngestQuotaDenied(IngestBatchRejection.QuotaExceeded);
 
         // The failure rolls the batch back, and the gate's refusal stamp with it, so the question travels out to the
-        // endpoint, which writes the stamp in a scope of its own once the transaction is gone.
-        veto.Refuse(scopes.Require().OrgId, request, answer.RetryAfter);
+        // endpoint, which writes the stamp in a scope of its own once the transaction is gone. That stamp writes a
+        // counter row and cannot resolve a month itself, so it carries the one the gate decided in; a block that named
+        // none is a gate bug and refuses the batch loudly rather than guessing a month.
+        veto.Refuse(
+            scopes.Require().OrgId,
+            request with { Period = answer.Period ?? throw MissingBlockPeriod() },
+            answer.RetryAfter);
 
         // The operator raise route the gate names is not published to a tenant: only the wire code and the
         // retry wait leave here, and the envelope stays the one the burst refusal already uses.
@@ -86,4 +90,12 @@ internal sealed class IngestQuotaAdmission(
             StatusCodes.Status429TooManyRequests,
             Retryable: true);
     }
+
+    /// <summary>
+    /// The caller bug a block that named no month is: the post-rollback stamp writes a counter row and must never guess
+    /// the month a refusal belonged to.
+    /// </summary>
+    /// <returns>The exception the refusal fails closed with.</returns>
+    private static InvalidOperationException MissingBlockPeriod() =>
+        new("the quota gate blocked the batch without naming the billing month it decided in");
 }

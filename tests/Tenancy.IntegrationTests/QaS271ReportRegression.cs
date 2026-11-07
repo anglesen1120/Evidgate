@@ -78,6 +78,11 @@ public sealed partial class EvidenceRawReportQuotaTests
                 ReplaceQuotaGate(services, inner => new SpyQuotaGate(inner, spy));
             });
             await _subject.SeedPlanAsync(world);
+            await using var counters = await UsageQuotaWorld.StartAsync(fixture);
+
+            // A counter with room, so the gate's answer is a metered one and names the transaction's month: an
+            // unmetered Ok carries no month by contract, and the point here is which month the gate resolved.
+            await _subject.SeedCounterAsync(counters, world, used: 0m, limit: 100m);
             var artifact = await _subject.SeedArtifactAsync(world, OneEventBody);
             (await ParseAsync(world, artifact)).Status.ShouldBe(ParseRawReportOutcome.Parsed);
             var request = spy.Requests.ShouldHaveSingleItem();
@@ -97,9 +102,11 @@ public sealed partial class EvidenceRawReportQuotaTests
 
             var ledgerMonth = await fixture.ScalarAsync<string>(world.Database,
                 $"select period from public.usage_ledger_entry where org_id = '{world.Org:D}' and billing_key = 'batch:{batch:D}:event'");
-            request.Period.ShouldBe(batchMonth);
-            request.Period.ShouldBe(ledgerMonth);
-            request.Period.ShouldNotBe(clock.GetUtcNow().ToString("yyyy-MM", CultureInfo.InvariantCulture));
+            request.Period.ShouldBeNull("the gate resolves the month inside the batch's own transaction");
+            var period = spy.Answers.ShouldHaveSingleItem().Period.ShouldNotBeNull();
+            period.ShouldBe(batchMonth);
+            period.ShouldBe(ledgerMonth);
+            period.ShouldNotBe(clock.GetUtcNow().ToString("yyyy-MM", CultureInfo.InvariantCulture));
         }
 
         [Theory]

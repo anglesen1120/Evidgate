@@ -35,7 +35,6 @@ public sealed partial class IngestQuotaTests
         first.Status.ShouldBe(HttpStatusCode.OK, first.ErrorMessage);
         first.Body.GetProperty("accepted").GetInt32().ShouldBe(2);
         spy.Calls.ShouldBe(1);
-        spy.PeriodCalls.ShouldBe(1);
         spy.Requests.ShouldHaveSingleItem().Quantity.ShouldBe(2m);
 
         var replay = await IngestQaRequests.PostAsync(world.Client, world.RunId, new StringContent(json, Encoding.UTF8, "application/json"));
@@ -45,8 +44,7 @@ public sealed partial class IngestQuotaTests
         replay.Status.ShouldBe(HttpStatusCode.OK, replay.ErrorMessage);
         replay.Body.GetProperty("accepted").GetInt32().ShouldBe(0);
         replay.Body.GetProperty("duplicates").GetInt32().ShouldBe(2);
-        spy.Calls.ShouldBe(1);
-        spy.PeriodCalls.ShouldBe(1, "a batch that adds no row bills nothing, so it asks neither the month nor the gate");
+        spy.Calls.ShouldBe(1, "a batch that adds no row bills nothing, so it asks nobody again");
 
         (await ReadAsync(counters, world)).ShouldNotBeNull().Used.ShouldBe(2m);
         (await EventRowsAsync(world)).ShouldBe(2);
@@ -67,11 +65,13 @@ public sealed partial class IngestQuotaTests
         var batchId = answer.Body.GetProperty("batch_id").GetGuid();
         var request = spy.Requests.ShouldHaveSingleItem();
 
-        // The month the gate was asked about is the month the batch's own row was stamped with: one reading of the
-        // transaction's clock, never a second reading of an application clock that could have crossed midnight first.
+        // The month the gate answered in is the month the batch's own row was stamped with: the gate reads it inside
+        // the transaction, so a second reading of an application clock can never disagree with it.
         var batchMonth = await world.ScalarAsync<string>(
             $"select to_char(created_at at time zone 'UTC', 'YYYY-MM') from public.event_batch where id = '{batchId:D}'");
-        request.Period.ShouldBe(batchMonth);
+        request.Period.ShouldBeNull("the gate resolves the month inside the batch's own transaction");
+        var period = spy.Answers.ShouldHaveSingleItem().Period.ShouldNotBeNull();
+        period.ShouldBe(batchMonth);
 
         // And the ledger row the batch's metering writes bills that same month, so a batch is never gated in one
         // month and metered in the next.
@@ -79,7 +79,7 @@ public sealed partial class IngestQuotaTests
 
         (await world.ScalarAsync<string>(
             $"select period from public.usage_ledger_entry where org_id = '{world.Org:D}' "
-            + $"and billing_key = 'batch:{batchId:D}:event'")).ShouldBe(request.Period);
+            + $"and billing_key = 'batch:{batchId:D}:event'")).ShouldBe(period);
     }
 
     [Fact]
