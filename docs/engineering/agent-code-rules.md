@@ -152,7 +152,7 @@ Legend: ✅ verified with a link · ⚠️ unverified · `[OPEN]` gate not built
 | Tenant-scoped Dapper | `ITenantDb` | `src/BuildingBlocks/Persistence/Tenancy/ITenantDb.cs` |
 | Permissions | `Permissions` (generated), `[Permission]` | `src/BuildingBlocks/SharedKernel/Authorization/` |
 | Audit | `[AuditedAction]`, the audit trail writer | `src/BuildingBlocks/SharedKernel/Authorization/`, `src/BuildingBlocks/Persistence/Audit/` |
-| Keyset page step of a cursor walk (drop rows already shown, refuse a repeated cursor or a page without new rows; the run list's automatic top-up walk is not this step: it throws a plain `Error` naming the cursor, appends every row as served, never refuses an empty page, and caps itself at 5 pages / 1 000 rows) | `takeKeysetPage`, `KeysetStep` | `apps/web/src/app/shared/keyset-walk.ts` |
+| Keyset page step of a cursor walk (drop rows already shown, refuse a repeated cursor or a page without new rows; the run list's automatic top-up walk is not this step: it throws a plain `Error` naming the cursor, appends every row as served, never refuses an empty page, and stops fetching once 5 pages or 1 000 rows are scanned, checked before each fetch so the last page can overshoot) | `takeKeysetPage`, `KeysetStep` | `apps/web/src/app/shared/keyset-walk.ts` |
 | Timer-delay ceiling and clamp for a `Retry-After`-style wait | `MAX_TIMER_DELAY_MS`, `clampTimerDelay` | `apps/web/src/app/shared/time/timer-delay.ts` |
 | Bounded body reader, `Base64Url`, client-IP throttle key, regex `Shapes`, pepper ring, polling loop | **to be extracted** `[OPEN]`: until then, the PR that adds a third copy must extract it instead | — |
 
