@@ -43,6 +43,7 @@ function metric(
     retry_after_seconds: null,
     unavailable_reason: null,
     projects: [],
+    projects_status: { blocked_count: 0, warned_count: 0 },
     ...changes,
   };
 }

@@ -25,6 +25,7 @@ function metric(changes: Partial<UsageSummaryMetricDto> = {}): UsageSummaryMetri
     retry_after_seconds: null,
     unavailable_reason: 'The egress producer is unavailable.',
     projects: [],
+    projects_status: { blocked_count: 0, warned_count: 0 },
     ...changes,
   };
 }

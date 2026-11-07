@@ -33,6 +33,8 @@ export function metric(changes: Partial<UsageSummaryMetricDto> = {}): UsageSumma
     retry_after_seconds: null,
     unavailable_reason: null,
     projects: [],
+    // The org-wide crossing counts: no project of the org warns or blocks unless a test says so.
+    projects_status: { blocked_count: 0, warned_count: 0 },
     ...changes,
   };
 }
