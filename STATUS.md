@@ -321,6 +321,8 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 04.9.1-T1 | L | `evidgate replay` CLI command | yes | no | no (`packages/cli`) | T1.1+T1.2 \| T1.3+T1.4 | yes |
 | 04.9.2-T2 | M | Docs site skeleton | yes | no | no (`scripts/verify.sh`, `ci.yml`, `docs/`) | n/a | yes |
 | 09.8.1-T3 | L | Playwright E2E suite for core flows, wired into CI and dogfooded into Evidgate | yes | no | no | T3.1+T3.2 \| T3.3+T3.4 | yesLanded S273 (#561): T3.1 scaffold (`playwright.core.config.ts`, `e2e/core/**`) and T3.2 specs for login, project switch, run detail, onboarding; failure triage and evidence viewer specs open by design (no screen on develop); T3.3, T3.4 open. |
+| 09.8.1-T2 | S | Automated a11y checks (axe) in component tests and E2E, with a documented exception list | yes | no | no | n/a | yesLanded S280 (#575, 1819e0f5): shared axe helper (`apps/web/e2e/a11y/axe-config.ts`, `axe-scan.ts`), empty exception list `apps/web/e2e/a11y-exceptions.json` with schema and expiry checker (chained into `npm test`), Vitest axe over the gallery and login page (`npm run test:a11y`), browser axe over the core flows en/vi x light/dark (`npm run test:e2e:a11y`); triage and evidence-viewer flows open by design. |
+| 09.8.1-T4 | S | i18n coverage QA: vi review, longest-string layout, no concatenation bugs | yes | no | no | n/a | yesLanded S280 (#575, 1819e0f5): vi review `docs/i18n/vi-review-09.8.1-T4.md` (58 vi target fixes, 1 source change), 320 px longest-string e2e `e2e/core/i18n-longest.spec.ts` with horizontal and vertical clipping detection. |
 | 04.9.2-T1 | M | Publish pipeline for `@evidgate/*`, changelog, signed tag, N-1 window | yes | no | no (`.github/workflows/release.yml`, `scripts/`) | n/a | no |
 
 #### G3 web-only lane
