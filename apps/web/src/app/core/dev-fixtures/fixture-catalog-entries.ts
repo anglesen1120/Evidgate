@@ -195,7 +195,7 @@ import type { FixtureCatalogRow } from './fixture-document';
  *
  * 09.7.1-T3 (with `F12`) adds the Settings area's own pages. `permissions-list-settings-secrets-write`
  * (`?fixture.variant.listPermissions=settings-secrets-write`) is `permissions-list-settings-admin`
- * plus `ingest_token:write` — eleven rows copied verbatim from `contracts/permissions.json`, the
+ * plus `ingest_token:write` — twelve rows copied verbatim from `contracts/permissions.json`, the
  * write row's `sensitive: true` included — because the Secrets page's rotate control needs
  * `ingest_token:write` and `settings-admin` holds the read alone: one grant set proves the control
  * absent, this one proves it present with the same tab strip.

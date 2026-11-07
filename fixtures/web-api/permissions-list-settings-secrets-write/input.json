@@ -99,6 +99,15 @@
         "tenant_assignable": true
       },
       {
+        "code": "usage:read",
+        "resource": "usage",
+        "action": "read",
+        "description": "Read the org's usage summary (counters vs quota) and ledger (00 §9.3, 12).",
+        "sensitive": false,
+        "reserved": false,
+        "tenant_assignable": true
+      },
+      {
         "code": "webhook:read",
         "resource": "webhook",
         "action": "read",

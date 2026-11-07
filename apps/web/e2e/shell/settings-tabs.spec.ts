@@ -11,9 +11,8 @@
 // The session's grants come from the permission catalogue, never from a role name: the client
 // derives them from the `tenant_assignable` rows alone
 // (`core/session/effective-permissions.source.ts`). The sets are corpus variants
-// (`permissions-list-settings-*`) except `settings-admin-usage`, the strip's admin session, which
-// is the admin corpus page plus the corpus's `usage:read` row as a computed specimen
-// (`core/dev-fixtures/fixture-settings-permissions.ts`) — the Quota & retention tab's own read.
+// (`permissions-list-settings-*`); `settings-admin` is the strip's admin session and holds
+// `usage:read`, the Quota & retention tab's own read.
 import { expect, test, type Page } from '@playwright/test';
 
 import { expectNoA11yViolations } from '../a11y/axe-scan';
@@ -22,7 +21,6 @@ import {
   expectIndistinguishableNotFound,
   LOCALES,
   SETTINGS_ADMIN_GRANTS,
-  SETTINGS_ADMIN_USAGE_GRANTS,
   SETTINGS_AUDIT_ONLY_GRANTS,
   seedStoredTheme,
   SETTINGS_NO_TAB_GRANTS,
@@ -79,7 +77,7 @@ test.describe('the tab strip names only tabs the caller may open (AC1)', () => {
     test(`a session holding every tab code sees exactly the G1 tabs (${locale})`, async ({
       page,
     }) => {
-      await page.goto(withVariant(settingsPath(locale), SETTINGS_ADMIN_USAGE_GRANTS));
+      await page.goto(withVariant(settingsPath(locale), SETTINGS_ADMIN_GRANTS));
 
       // The index address redirects to the first tab the session may open, so the strip has an
       // active tab on arrival — never an empty selection.
@@ -185,7 +183,7 @@ test.describe('the strip is operable from the keyboard (negative control)', () =
   // every assertion above: the ids come from the DOM order, not from the focus order. Tab must
   // therefore reach each visible tab link, in strip order, before this slice's claims hold.
   test('Tab reaches each visible tab link, in strip order', async ({ page }) => {
-    await page.goto(withVariant(settingsTabPath('en', 'members'), SETTINGS_ADMIN_USAGE_GRANTS));
+    await page.goto(withVariant(settingsTabPath('en', 'members'), SETTINGS_ADMIN_GRANTS));
     await expect(page.locator('app-settings-shell')).toHaveCount(1);
 
     expect(await keyboardTabOrder(page, G1_TABS)).toEqual(G1_TABS);
@@ -197,9 +195,7 @@ test.describe('the Settings shell is WCAG 2.2 AA clean (AC1, 00 §5.6 W9)', () =
     for (const theme of THEMES) {
       test(`tab strip and members body, ${locale} bundle, ${theme} tokens`, async ({ page }) => {
         await seedStoredTheme(page, theme);
-        await page.goto(
-          withVariant(settingsTabPath(locale, 'members'), SETTINGS_ADMIN_USAGE_GRANTS),
-        );
+        await page.goto(withVariant(settingsTabPath(locale, 'members'), SETTINGS_ADMIN_GRANTS));
         await expect(page.locator('app-settings-shell')).toHaveCount(1);
         await expect.poll(() => settingsTabIds(page)).toEqual(G1_TABS);
 
@@ -223,7 +219,7 @@ test.describe('the Settings shell is WCAG 2.2 AA clean (AC1, 00 §5.6 W9)', () =
 
   test('at 360px the strip is a select and the page does not scroll sideways', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 740 });
-    await page.goto(withVariant(settingsTabPath('en', 'members'), SETTINGS_ADMIN_USAGE_GRANTS));
+    await page.goto(withVariant(settingsTabPath('en', 'members'), SETTINGS_ADMIN_GRANTS));
     await expect(page.locator('app-settings-shell')).toHaveCount(1);
     // The widest body of the strip: the real members table, so the overflow measurement is of the
     // table in its ready state rather than of a placeholder (09.7.1-T2).
