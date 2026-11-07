@@ -118,6 +118,8 @@
         { "permission": "agent_pool:read", "source": "00 §2:60", "basis": "explicit" },
         { "permission": "agent_pool:write", "source": "00 §2:60", "basis": "explicit" },
         { "permission": "ai_draft:request", "source": "03 §4.5:130", "basis": "explicit" },
+        { "permission": "api_token:read", "source": "02.4.4 §3:36", "basis": "explicit" },
+        { "permission": "api_token:write", "source": "02.4.4 §3:36", "basis": "explicit" },
         { "permission": "artifact:read", "source": "00 §9.3:346", "basis": "inferred" },
         { "permission": "artifact:write", "source": "00 §9.3:334", "basis": "inferred" },
         { "permission": "audit:read", "source": "02 §4.2:83", "basis": "inferred" },
@@ -213,6 +215,8 @@
     "agent_pool:read",
     "agent_pool:write",
     "ai_draft:request",
+    "api_token:read",
+    "api_token:write",
     "artifact:read",
     "artifact:read_sensitive",
     "artifact:write",
@@ -272,6 +276,7 @@
     "webhook:write"
   ],
   "sensitive": [
+    { "permission": "api_token:write", "source": "02.4.4 §2 AC1:23" },
     { "permission": "artifact:read_sensitive", "source": "00 §2:50 + 00 §2:54" },
     { "permission": "billing:read", "source": "00 §2:54 + 00 §2:58" },
     { "permission": "billing:write", "source": "00 §2:54 + 00 §2:60" },

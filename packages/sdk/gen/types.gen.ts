@@ -1450,6 +1450,64 @@ export type CreateIngestTokenRequest = {
     expires_at?: string | null;
 };
 
+/**
+ * The metadata of an API token; never the secret or its HMAC.
+ */
+export type ApiTokenView = {
+    id: string;
+    name: string;
+    /**
+     * The public 12-character part of `evg_<prefix>_<secret>`; the lookup key.
+     */
+    prefix: string;
+    /**
+     * The stored subset; at use time intersected with the current permissions of its creator.
+     */
+    permissions: Array<string>;
+    /**
+     * Derived — `expired` from `expires_at`, `revoked` from `revoked_at`; never stored.
+     */
+    status: 'active' | 'expired' | 'revoked';
+    expires_at: string;
+    /**
+     * Updated on successful use, throttled to 60-second granularity.
+     */
+    last_used_at: string | null;
+    /**
+     * The membership that created the token; its current permissions cap every use.
+     */
+    created_by: string;
+};
+
+export type ApiTokenCreatedResponse = {
+    id: string;
+    name: string;
+    prefix: string;
+    /**
+     * The full `evg_<prefix>_<secret>`. Shown only here: the row keeps the prefix and an HMAC, so no other response, log line or error can return it.
+     */
+    token: string;
+    permissions: Array<string>;
+    expires_at: string;
+};
+
+export type ApiTokenListResponse = {
+    items: Array<ApiTokenView>;
+    next_cursor: string | null;
+};
+
+export type CreateApiTokenRequest = {
+    name: string;
+    /**
+     * The token's whole authority: each code must be held by the creator and outside the deny set. It never grows when the creator gains rights.
+     */
+    permissions: Array<string>;
+    /**
+     * Mandatory; in the future and at most the configured maximum lifetime.
+     */
+    expires_at: string;
+};
+
 export type CiTokenRequest = {
     /**
      * The `egt_…` token (the GitHub grant sends its OIDC JWT as a bearer instead).
@@ -3390,6 +3448,11 @@ export type Purpose = 'regression' | 'smoke' | 'release_gate' | 'exploratory';
 export type BindingId = string;
 
 export type IngestTokenId = string;
+
+/**
+ * The API token's id. An id of another org is 404, exactly as an unknown one is (02.9.1).
+ */
+export type ApiTokenId = string;
 
 /**
  * Login provider, matched exactly in lower case against the providers the deployment registers (02.3.1 §5). `google` (02.3.1-T1.2) and `github` (02.3.1-T1.3) are the two V1 providers. A route value no provider is registered under answers 404 `not_found`; a registered provider without a client credential answers 503 `unavailable`, never 404.
@@ -8008,6 +8071,164 @@ export type RevokeIngestTokenResponses = {
 };
 
 export type RevokeIngestTokenResponse = RevokeIngestTokenResponses[keyof RevokeIngestTokenResponses];
+
+export type ListApiTokensData = {
+    body?: never;
+    path: {
+        p: string;
+    };
+    query?: {
+        /**
+         * Opaque cursor from `next_cursor`; ordering `(created_at, id)` (00 §9.1).
+         */
+        cursor?: string;
+        limit?: number;
+    };
+    url: '/projects/{p}/api-tokens';
+};
+
+export type ListApiTokensErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type ListApiTokensError = ListApiTokensErrors[keyof ListApiTokensErrors];
+
+export type ListApiTokensResponses = {
+    /**
+     * Page of tokens; never the secret or its hash
+     */
+    200: ApiTokenListResponse;
+};
+
+export type ListApiTokensResponse = ListApiTokensResponses[keyof ListApiTokensResponses];
+
+export type CreateApiTokenData = {
+    body: CreateApiTokenRequest;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        p: string;
+    };
+    query?: never;
+    url: '/projects/{p}/api-tokens';
+};
+
+export type CreateApiTokenErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 422 schema/manifest invalid — per-item causes in `error.details[]` (00 §9.2). A body the schema accepts but a published cap refuses is `cap_exceeded`: one detail with `reason: cap_exceeded`, `path` naming the cap (`manifest_executions`, `manifest_variants`, `report_cases`), and `limit`/`actual` when the server measured a value.
+     */
+    422: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CreateApiTokenError = CreateApiTokenErrors[keyof CreateApiTokenErrors];
+
+export type CreateApiTokenResponses = {
+    /**
+     * Token created; the plaintext is returned once and can never be read again
+     */
+    200: ApiTokenCreatedResponse;
+};
+
+export type CreateApiTokenResponse = CreateApiTokenResponses[keyof CreateApiTokenResponses];
+
+export type RevokeApiTokenData = {
+    body?: never;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        /**
+         * The API token's id. An id of another org is 404, exactly as an unknown one is (02.9.1).
+         */
+        t: string;
+    };
+    query?: never;
+    url: '/api-tokens/{t}';
+};
+
+export type RevokeApiTokenErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RevokeApiTokenError = RevokeApiTokenErrors[keyof RevokeApiTokenErrors];
+
+export type RevokeApiTokenResponses = {
+    /**
+     * Token revoked (or already revoked)
+     */
+    204: void;
+};
+
+export type RevokeApiTokenResponse = RevokeApiTokenResponses[keyof RevokeApiTokenResponses];
 
 export type ListAuditData = {
     body?: never;

@@ -1,0 +1,34 @@
+{
+  "operation_id": "listApiTokens",
+  "variant": "ok",
+  "status": 200,
+  "headers": {
+    "X-Request-Id": "018f0000-0000-7000-8000-0000000000f2"
+  },
+  "latency_ms": 0,
+  "body": {
+    "items": [
+      {
+        "id": "018f0000-0000-7000-8000-0000000000a1",
+        "name": "Dashboard (fixture)",
+        "prefix": "fx0000000001",
+        "permissions": ["run:read", "decision:read"],
+        "status": "active",
+        "expires_at": "2027-02-05T00:00:00Z",
+        "last_used_at": "2026-11-06T09:12:00Z",
+        "created_by": "018f0000-0000-7000-8000-000000000020"
+      },
+      {
+        "id": "018f0000-0000-7000-8000-0000000000a2",
+        "name": "Old dashboard (fixture)",
+        "prefix": "fx0000000002",
+        "permissions": ["run:read"],
+        "status": "revoked",
+        "expires_at": "2027-01-01T00:00:00Z",
+        "last_used_at": null,
+        "created_by": "018f0000-0000-7000-8000-000000000020"
+      }
+    ],
+    "next_cursor": null
+  }
+}

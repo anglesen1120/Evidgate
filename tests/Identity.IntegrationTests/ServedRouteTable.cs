@@ -517,6 +517,7 @@ internal sealed record RouteRequestContext(
     Guid QuarantineId,
     Guid CiBindingId,
     Guid IngestTokenId,
+    Guid ApiTokenId,
     Guid RunId,
     Guid NodeId,
     Guid ItemId,
@@ -528,6 +529,7 @@ internal sealed record RouteRequestContext(
     internal static RouteRequestContext Fresh(Guid orgId, Guid projectId) => new(
         orgId,
         projectId,
+        Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
         Guid.CreateVersion7(),
@@ -661,6 +663,17 @@ internal static class RouteRequests
         Add("POST", "/v1/ingest-tokens/{t}/rotate", ctx => new(HttpMethod.Post, $"/v1/ingest-tokens/{ctx.IngestTokenId}/rotate",
             IdempotencyKey: Key()));
         Add("DELETE", "/v1/ingest-tokens/{t}", ctx => new(HttpMethod.Delete, $"/v1/ingest-tokens/{ctx.IngestTokenId}", IfMatch: "\"1\""));
+
+        // ---- API tokens ---------------------------------------------------------------------------------------
+        Add("POST", "/v1/projects/{p}/api-tokens", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/api-tokens",
+            new JsonObject
+            {
+                ["name"] = "probe",
+                ["permissions"] = new JsonArray("run:read"),
+                ["expires_at"] = DateTimeOffset.UtcNow.AddDays(30).ToString("O"),
+            }));
+        Add("GET", "/v1/projects/{p}/api-tokens", ctx => new(HttpMethod.Get, $"/v1/projects/{ctx.ProjectId}/api-tokens"));
+        Add("DELETE", "/v1/api-tokens/{t}", ctx => new(HttpMethod.Delete, $"/v1/api-tokens/{ctx.ApiTokenId}"));
 
         // ---- CI token exchange (pre-tenant) ------------------------------------------------------------------
         Add("POST", "/v1/ci/token", _ => new(HttpMethod.Post, "/v1/ci/token",
