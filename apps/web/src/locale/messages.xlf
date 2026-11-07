@@ -2764,6 +2764,42 @@
       <trans-unit id="runs.detail.copy-hash" datatype="html"><source>Copy full manifest hash</source></trans-unit>
       <trans-unit id="runs.detail.copied" datatype="html"><source>Manifest hash copied</source></trans-unit>
       <trans-unit id="runs.detail.copy-failed" datatype="html"><source>Copy failed. Select and copy the full hash shown above.</source></trans-unit>
+      <trans-unit id="runs.detail.release.title" datatype="html"><source>Release</source></trans-unit>
+      <trans-unit id="runs.detail.release.loading" datatype="html"><source>Loading release</source></trans-unit>
+      <trans-unit id="runs.detail.release.unavailable" datatype="html"><source>This run does not name a release, so release data is not shown.</source></trans-unit>
+      <trans-unit id="runs.detail.release.unbound" datatype="html"><source>No release bound to this run</source></trans-unit>
+      <trans-unit id="runs.detail.release.name" datatype="html"><source>Release name</source></trans-unit>
+      <trans-unit id="runs.detail.release.state" datatype="html"><source>State</source></trans-unit>
+      <trans-unit id="runs.detail.release.version" datatype="html"><source>Version</source></trans-unit>
+      <trans-unit id="runs.detail.release.bound-run" datatype="html"><source>Bound run</source></trans-unit>
+      <trans-unit id="runs.detail.release.draft" datatype="html"><source>Draft</source></trans-unit>
+      <trans-unit id="runs.detail.release.active" datatype="html"><source>Active</source></trans-unit>
+      <trans-unit id="runs.detail.release.components" datatype="html"><source>Release components</source></trans-unit>
+      <trans-unit id="runs.detail.release.component" datatype="html"><source>Component</source></trans-unit>
+      <trans-unit id="runs.detail.release.digest" datatype="html"><source>Digest</source></trans-unit>
+      <trans-unit id="runs.detail.release.environment" datatype="html"><source>Environment revision</source></trans-unit>
+      <trans-unit id="runs.detail.release.bound" datatype="html"><source>Bound</source></trans-unit>
+      <trans-unit id="runs.detail.release.no-components" datatype="html"><source>This release declares no components</source></trans-unit>
+      <trans-unit id="runs.detail.release.copy-digest" datatype="html"><source>Copy full digest</source></trans-unit>
+      <trans-unit id="runs.detail.release.copy-failed" datatype="html"><source>Copy failed. Select and copy the full digest shown above.</source></trans-unit>
+      <trans-unit id="runs.detail.release.copy-digest-for" datatype="html">
+        <source>Copy full digest for component <x id="key" equiv-text="${componentKey}"/></source>
+      </trans-unit>
+      <trans-unit id="runs.detail.release.copied-for" datatype="html">
+        <source>Digest copied for component <x id="key" equiv-text="${componentKey}"/></source>
+      </trans-unit>
+      <trans-unit id="runs.detail.timeline" datatype="html"><source>Run state timeline</source></trans-unit>
+      <trans-unit id="runs.detail.timeline.reached" datatype="html"><source>Reached</source></trans-unit>
+      <trans-unit id="runs.detail.timeline.current" datatype="html"><source>Current step</source></trans-unit>
+      <trans-unit id="runs.detail.timeline.upcoming" datatype="html"><source>Not reached yet</source></trans-unit>
+      <trans-unit id="runs.detail.timeline.not-reached" datatype="html"><source>Not reached</source></trans-unit>
+      <trans-unit id="runs.detail.timeline.unrecorded" datatype="html"><source>Not recorded</source></trans-unit>
+      <trans-unit id="runs.detail.timeline.step-status" datatype="html"><source>Step status</source></trans-unit>
+      <trans-unit id="runs.detail.timeline.step-times" datatype="html"><source>Step times are not available yet</source></trans-unit>
+      <trans-unit id="runs.detail.timeline.after-cancel-note" datatype="html"><source>Events that arrive after cancel are kept as evidence and never complete the run.</source></trans-unit>
+      <trans-unit id="runs.detail.timeline.after-cancel-events" datatype="html"><source>After-cancel events</source></trans-unit>
+      <trans-unit id="runs.detail.timeline.after-cancel-none" datatype="html"><source>No events after cancel</source></trans-unit>
+      <trans-unit id="runs.detail.timeline.after-cancel-count" datatype="html"><source><x id="count" equiv-text="count"/> events arrived after cancel (informational)</source></trans-unit>
       <trans-unit id="runs.detail.attempts.title" datatype="html"><source>Attempts</source></trans-unit>
       <trans-unit id="runs.detail.attempts.scroll-region" datatype="html"><source>Attempts table</source></trans-unit>
       <trans-unit id="runs.detail.attempts.pagination" datatype="html"><source>Attempts pagination</source></trans-unit>

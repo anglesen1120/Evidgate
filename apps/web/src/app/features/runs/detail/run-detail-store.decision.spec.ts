@@ -1,6 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { EvidenceRevisionPage, RunAttemptPage, RunStateDto } from '@evidgate/sdk';
+import { ReleasesDataService } from '../../../core/data/releases-data.service';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { RunDataService } from '../data/run-data.service';
 import { RunDetailStore } from './run-detail.store';
@@ -26,6 +27,7 @@ describe('RunDetailStore decision', () => {
         RunDetailStore,
         { provide: RunsDataService, useValue: { get, listAttempts, listEvidenceRevisions } },
         { provide: RunDataService, useValue: { getDecision } },
+        { provide: ReleasesDataService, useValue: { get: vi.fn() } },
       ],
     });
   });

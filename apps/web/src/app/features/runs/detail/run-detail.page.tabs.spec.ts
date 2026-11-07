@@ -2,6 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import { ReleasesDataService } from '../../../core/data/releases-data.service';
 import { RunsDataService } from '../../../core/data/runs-data.service';
 import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
 import { RunDataService } from '../data/run-data.service';
@@ -30,6 +31,7 @@ describe('RunDetailPage evidence and decision tabs', () => {
         provideRouter([{ path: 'projects/:projectId/runs', children: routes }]),
         { provide: RunsDataService, useValue: { get, listAttempts, listEvidenceRevisions } },
         { provide: RunDataService, useValue: { getDecision } },
+        { provide: ReleasesDataService, useValue: { get: vi.fn() } },
       ],
     });
   });
