@@ -10,7 +10,7 @@
 // re-announces on every refresh, while a first load, an org switch, an error or a null answer
 // hides it.
 
-import { computed, DestroyRef, inject, resource } from '@angular/core';
+import { computed, DestroyRef, inject } from '@angular/core';
 import type { UsageSummaryDto } from '@evidgate/sdk';
 import { patchState, signalStore, withComputed, withProps, withState } from '@ngrx/signals';
 
@@ -18,6 +18,7 @@ import { QuotaDataService } from '../../../core/data/quota-data.service';
 import { QuotaExceededRelay } from '../../../core/http/quota-exceeded-relay';
 import { SessionStore } from '../../../core/session/session.store';
 import { TenantStore } from '../../../core/session/tenant.store';
+import { quotaSummaryRead } from './quota-summary-resource';
 
 /** The wire summary the panel renders; nothing here reshapes it. */
 export type UsageSummary = UsageSummaryDto;
@@ -46,65 +47,16 @@ export const QuotaStore = signalStore(
     const orgId = computed(() => tenant.orgId());
     const scope = computed(() => (store.started() && permitted() ? orgId() : null));
 
-    // A refusal that lands while a read is in flight is answered by one more read when that one
-    // settles, resolved or failed. The summary read never reports its own refusal
-    // (`reportQuota: false`), so the trailing read cannot ask for another one by itself. The org
-    // is kept with the request: a refresh asked for by one organization's read never runs against
-    // the next organization's.
-    let refreshPendingFor: string | null = null;
-
-    type ReadOutcome = { readonly value: UsageSummaryDto | null } | { readonly error: unknown };
-
-    /**
-     * One read, reported instead of thrown: a failed read still has to answer the refusal that
-     * landed while it was in flight, which a throw would skip.
-     */
-    async function readOnce(params: string, abortSignal: AbortSignal): Promise<ReadOutcome> {
-      try {
-        return { value: await data.summary(params, abortSignal) };
-      } catch (error) {
-        return { error };
-      }
-    }
-
-    const summary = resource<UsageSummaryDto | null, string | undefined>({
-      params: () => scope() ?? undefined,
-      loader: async ({ params, abortSignal }) => {
-        if (refreshPendingFor !== params) {
-          refreshPendingFor = null;
-        }
-        let outcome = await readOnce(params, abortSignal);
-        while (refreshPendingFor === params) {
-          refreshPendingFor = null;
-          outcome = await readOnce(params, abortSignal);
-        }
-        if ('error' in outcome) {
-          throw outcome.error;
-        }
-        return outcome.value;
-      },
-    });
-
-    /** Idempotent: the first call starts the read, later calls ask for the same request. */
-    function load(): void {
-      patchState(store, { started: true });
-    }
-
-    /**
-     * Re-reads the summary. `resource.reload()` refuses while a read is in flight, so that
-     * refusal is not dropped: it asks for exactly one trailing read, and a burst still costs one.
-     */
-    function reload(): void {
-      if (!store.started()) {
+    // The request itself (the resource, its loader and the trailing read a refusal asks for).
+    const { summary, load, reload } = quotaSummaryRead({
+      scope,
+      orgId,
+      started: () => store.started(),
+      start: () => {
         patchState(store, { started: true });
-        return;
-      }
-      if (summary.isLoading()) {
-        refreshPendingFor = orgId();
-        return;
-      }
-      summary.reload();
-    }
+      },
+      data,
+    });
 
     // A refused write means a counter or limit moved since the badge last read it.
     const relay = inject(QuotaExceededRelay);

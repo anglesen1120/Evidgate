@@ -1,5 +1,6 @@
-// The QuotaStore's rules, pinned against a fake data service and the real tenant/permission
-// signals:
+// The QuotaStore's read rules, pinned against a fake data service and the real tenant/permission
+// signals (the harness both store specs share is `quota.store.test-support.ts`; the badge rules
+// it reads out of the summary are `quota.store.badge.spec.ts`):
 //
 // - the read starts on `load()` only, once per organization, and never without `usage:read`;
 // - an org switch refetches, and the previous org's counters leave the screen immediately;
@@ -8,161 +9,37 @@
 // - a 429 `quota_exceeded` refusal asks for exactly one reload, a refusal that lands mid-read
 //   asks for one trailing read when that read settles, and neither can ask for another one;
 // - a reload keeps the counters already served on screen, while an org switch, an error or a
-//   null answer hides them;
-// - the badge names a blocked counter before a warned one, a project's counter as well as the
-//   tenant's, and never infers a threshold from a counter with no measurement.
+//   null answer hides them.
 
-import {
-  ChangeDetectionStrategy,
-  Component,
-  provideZonelessChangeDetection,
-  signal,
-} from '@angular/core';
-import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } from '@evidgate/sdk';
+import type { WritableSignal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 
-import { QuotaDataService } from '../../../core/data/quota-data.service';
-import { ApiRequestError } from '../../../core/http/api-error';
 import { QuotaExceededRelay } from '../../../core/http/quota-exceeded-relay';
-import { SessionStore } from '../../../core/session/session.store';
 import { TenantStore } from '../../../core/session/tenant.store';
 import { QuotaStore } from './quota.store';
-
-/** A mounted body: effects and `resource` settle inside a component's change detection. */
-@Component({ template: '', changeDetection: ChangeDetectionStrategy.OnPush })
-class HostComponent {}
-
-function metric(changes: Partial<UsageSummaryMetricDto> = {}): UsageSummaryMetricDto {
-  return {
-    metric: 'results',
-    scope: 'tenant',
-    used: 120,
-    limit: 1000,
-    warned_at: null,
-    blocked_at: null,
-    retry_after_seconds: null,
-    unavailable_reason: null,
-    projects: [],
-    ...changes,
-  };
-}
-
-function summary(...metrics: UsageSummaryMetricDto[]): UsageSummaryDto {
-  return { period: '2026-11', project: null, metrics };
-}
-
-/** One project's counter under a metric; below both lines unless the test says otherwise. */
-function project(changes: Partial<UsageSummaryProjectDto> = {}): UsageSummaryProjectDto {
-  return {
-    project_id: 'project-one',
-    scope: 'project',
-    used: 1,
-    limit: 100,
-    warned_at: null,
-    blocked_at: null,
-    retry_after_seconds: null,
-    ...changes,
-  };
-}
-
-/** The refusal a 5xx reaches the store as. */
-function serverFailure(): ApiRequestError {
-  return new ApiRequestError({
-    kind: 'unexpected',
-    status: 500,
-    code: 'unexpected_status',
-    message: 'The API answered 500.',
-    requestId: 'req-quota-1',
-    retryable: false,
-    details: [],
-    retryAfterSeconds: null,
-  });
-}
-
-/** The summary reads the store makes, with the org each one named. */
-class FakeQuotaDataService {
-  readonly calls: Array<{ readonly orgId: string; readonly signal: AbortSignal | undefined }> = [];
-  /** Resolves every call with this value; `null` is the "no summary" answer the badge must hide. */
-  answer: UsageSummaryDto | null = summary();
-  /** Rejects every call with this failure when set. */
-  failure: Error | null = null;
-  /** Holds every call open until the test settles it. */
-  readonly held: Array<{
-    readonly resolve: (value: UsageSummaryDto | null) => void;
-    readonly reject: (error: unknown) => void;
-  }> = [];
-  hold = false;
-
-  summary(orgId: string, signal?: AbortSignal): Promise<UsageSummaryDto | null> {
-    this.calls.push({ orgId, signal });
-    if (this.hold) {
-      return new Promise<UsageSummaryDto | null>((resolve, reject) => {
-        this.held.push({ resolve, reject });
-      });
-    }
-    if (this.failure !== null) {
-      return Promise.reject(this.failure);
-    }
-    return Promise.resolve(this.answer);
-  }
-
-  /** Answers the oldest held read. */
-  release(value: UsageSummaryDto | null = this.answer): void {
-    this.held.shift()?.resolve(value);
-  }
-
-  /** Fails the oldest held read. */
-  fail(error: unknown): void {
-    this.held.shift()?.reject(error);
-  }
-}
+import {
+  FakeQuotaDataService,
+  metric,
+  mountQuotaStore,
+  serverFailure,
+  summary,
+} from './quota.store.test-support';
 
 describe('QuotaStore', () => {
-  const permissions = signal<ReadonlySet<string>>(new Set(['usage:read']));
   let data: FakeQuotaDataService;
-  let fixture: ComponentFixture<HostComponent>;
   let store: InstanceType<typeof QuotaStore>;
   let relay: QuotaExceededRelay;
+  let permissions: WritableSignal<ReadonlySet<string>>;
+  let settle: () => Promise<void>;
+  let advance: () => Promise<void>;
 
   beforeEach(() => {
-    permissions.set(new Set(['usage:read']));
-    data = new FakeQuotaDataService();
-    TestBed.configureTestingModule({
-      imports: [HostComponent],
-      providers: [
-        provideZonelessChangeDetection(),
-        { provide: QuotaDataService, useValue: data },
-        { provide: SessionStore, useValue: { has: (code: string) => permissions().has(code) } },
-      ],
-    });
-    fixture = TestBed.createComponent(HostComponent);
-    store = TestBed.inject(QuotaStore);
-    relay = TestBed.inject(QuotaExceededRelay);
+    ({ data, store, relay, permissions, settle, advance } = mountQuotaStore());
   });
 
   afterEach(() => {
     TestBed.resetTestingModule();
   });
-
-  /** Runs the application tick (the store's effect lives in the root injector), then settles. */
-  async function settle(): Promise<void> {
-    for (let pass = 0; pass < 3; pass += 1) {
-      TestBed.tick();
-      fixture.detectChanges();
-      await fixture.whenStable();
-    }
-  }
-
-  /**
-   * Runs one tick and drains microtasks WITHOUT waiting for stability. A read the test holds open
-   * keeps Angular's pending tasks non-zero, so `whenStable()` would wait for a promise the test
-   * itself only settles later: use this to inspect the in-flight state instead.
-   */
-  async function advance(): Promise<void> {
-    TestBed.tick();
-    fixture.detectChanges();
-    await Promise.resolve();
-  }
 
   it('reads nothing until load(), then the active organization exactly once', async () => {
     TestBed.inject(TenantStore).setOrg('org-one');
@@ -425,79 +302,6 @@ describe('QuotaStore', () => {
     data.release(summary(metric({ metric: 'egress_gb', used: 5 })));
     await settle();
     expect(store.usageSummary()?.metrics[0]?.metric).toBe('egress_gb');
-  });
-
-  it('names a warned metric, and a blocked metric wins over it', async () => {
-    data.answer = summary(
-      metric({ metric: 'results', warned_at: '2026-11-01T09:00:00Z' }),
-      metric({ metric: 'ai_tokens', blocked_at: '2026-11-02T09:00:00Z' }),
-    );
-    TestBed.inject(TenantStore).setOrg('org-one');
-    store.load();
-    await settle();
-
-    expect(store.badge()).toEqual({ severity: 'blocked', metric: 'ai_tokens', scope: 'tenant' });
-  });
-
-  it('names a warned project counter while the tenant counter is below its warning line', async () => {
-    data.answer = summary(
-      metric({
-        metric: 'results',
-        used: 10,
-        limit: 1000,
-        projects: [
-          project({ project_id: 'project-one', used: 90, warned_at: '2026-11-01T09:00:00Z' }),
-        ],
-      }),
-    );
-    TestBed.inject(TenantStore).setOrg('org-one');
-    store.load();
-    await settle();
-
-    expect(store.badge()).toEqual({ severity: 'warn', metric: 'results', scope: 'project' });
-  });
-
-  it('names a blocked project counter and prefers it over a warned tenant counter', async () => {
-    data.answer = summary(
-      metric({ metric: 'results', used: 900, limit: 1000, warned_at: '2026-11-01T09:00:00Z' }),
-      metric({
-        metric: 'ai_tokens',
-        used: 10,
-        limit: 100,
-        projects: [
-          project({
-            project_id: 'project-two',
-            used: 100,
-            blocked_at: '2026-11-02T09:00:00Z',
-            warned_at: '2026-11-01T09:00:00Z',
-          }),
-        ],
-      }),
-    );
-    TestBed.inject(TenantStore).setOrg('org-one');
-    store.load();
-    await settle();
-
-    expect(store.badge()).toEqual({ severity: 'blocked', metric: 'ai_tokens', scope: 'project' });
-  });
-
-  it('reads a warned metric as warn and never infers a threshold from an unmeasured counter', async () => {
-    data.answer = summary(
-      metric({ metric: 'egress_gb', used: null, limit: null, warned_at: '2026-11-01T09:00:00Z' }),
-    );
-    TestBed.inject(TenantStore).setOrg('org-one');
-    store.load();
-    await settle();
-    expect(store.badge()).toBeNull();
-
-    data.answer = summary(
-      metric({ metric: 'egress_gb', used: null, limit: null, warned_at: '2026-11-01T09:00:00Z' }),
-      metric({ metric: 'results', warned_at: '2026-11-01T09:00:00Z' }),
-    );
-    store.reload();
-    await settle();
-
-    expect(store.badge()).toEqual({ severity: 'warn', metric: 'results', scope: 'tenant' });
   });
 
   it('clears the summary when the tenant is gone', async () => {
