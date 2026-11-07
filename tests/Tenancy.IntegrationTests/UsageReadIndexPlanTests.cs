@@ -133,6 +133,7 @@ public sealed class UsageReadIndexPlanTests
     /// <summary>
     /// One counter and one roll-up per project in the period, twelve closed periods behind the page's org, and the
     /// tenant-level rows of both orgs: a table whose period rows sit among many the statement must not read.
+    /// Split into several commands so each stays well under the driver's command timeout on a loaded host.
     /// </summary>
     private async Task SeedUsageAsync(string database, Guid org, Guid volumeOrg)
     {
@@ -146,17 +147,29 @@ public sealed class UsageReadIndexPlanTests
                 (id, org_id, project_id, period, metric, total_quantity, row_count, computed_at)
             select gen_random_uuid(), p.org_id, p.id, '{Period}', 'results', 3, 1, now()
               from public.project p;
+            """);
+        await _fixture.ExecuteAsync(
+            database,
+            $"""
             insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit)
             select gen_random_uuid(), p.org_id, p.id,
                    to_char(date '2025-01-01' + (m || ' months')::interval, 'YYYY-MM'), 'results', 3, 1000
               from public.project p
              cross join generate_series(0, 11) m;
+            """);
+        await _fixture.ExecuteAsync(
+            database,
+            $"""
             insert into public.usage_rollup
                 (id, org_id, project_id, period, metric, total_quantity, row_count, computed_at)
             select gen_random_uuid(), p.org_id, p.id,
                    to_char(date '2025-01-01' + (m || ' months')::interval, 'YYYY-MM'), 'results', 3, 1, now()
               from public.project p
              cross join generate_series(0, 11) m;
+            """);
+        await _fixture.ExecuteAsync(
+            database,
+            $"""
             insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit)
             select gen_random_uuid(), o.id, null, '{Period}', metrics.metric, 0, 100000
               from (values ('{org:D}'::uuid), ('{volumeOrg:D}'::uuid)) o (id)
