@@ -3,8 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 import attemptsFixture from '../../../../fixtures/web-api/run-attempts/input.json';
 import readyFixture from '../../../../fixtures/web-api/run-detail/input.json';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
-  expectNoA11yViolations,
   localePath,
   LOCALES,
   ORG_ACME,

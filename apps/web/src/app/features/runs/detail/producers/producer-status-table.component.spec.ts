@@ -261,7 +261,7 @@ describe('ProducerStatusTableComponent', () => {
 
   it('localizes the run-level singular count and page controls into Vietnamese', async () => {
     loadTranslations({
-      'runs.detail.producers.run-after-cancel-one': '1 sự kiện sau khi hủy của lần chạy này',
+      'runs.detail.producers.run-after-cancel-one': '1 sự kiện sau khi hủy của lượt chạy này',
       'runs.detail.producers.previous': 'Nguồn gửi dữ liệu trước',
       'runs.detail.producers.next': 'Nguồn gửi dữ liệu tiếp theo',
       'runs.detail.producers.page': 'Trang {$page} / {$pages}',
@@ -272,7 +272,7 @@ describe('ProducerStatusTableComponent', () => {
     }));
     const { root } = await render(slots, 'ready', 1);
     expect(root.querySelector('[data-run-after-cancel]')?.textContent?.trim()).toBe(
-      '1 sự kiện sau khi hủy của lần chạy này',
+      '1 sự kiện sau khi hủy của lượt chạy này',
     );
     expect(root.querySelector('[data-producer-next]')?.textContent).toContain(
       'Nguồn gửi dữ liệu tiếp theo',
@@ -297,7 +297,7 @@ describe('ProducerStatusTableComponent', () => {
       'runs.detail.producers.identity': 'Trạng thái định danh đã liên kết',
       'runs.detail.producers.finalize': 'Trạng thái chốt dữ liệu',
       'runs.detail.producers.count': 'Số lượng / dự kiến',
-      'runs.detail.producers.stale-epoch': '{$count} sự kiện thuộc epoch cũ',
+      'runs.detail.producers.stale-epoch': '{$count} sự kiện thuộc thế hệ cũ',
       'runs.detail.producers.after-cancel': '{$count} sự kiện sau khi hủy',
       'shared.status-pill.unavailable': 'Chưa có trạng thái',
     });
@@ -311,7 +311,7 @@ describe('ProducerStatusTableComponent', () => {
     expect(root.textContent).toContain('Trạng thái chốt dữ liệu');
     expect(root.textContent).toContain('Số lượng / dự kiến');
     expect(root.querySelector('[data-badge="stale-epoch"]')?.textContent).toContain(
-      '2 sự kiện thuộc epoch cũ',
+      '2 sự kiện thuộc thế hệ cũ',
     );
     expect(root.querySelector('[data-badge="after-cancel"]')?.textContent).toContain(
       '5 sự kiện sau khi hủy',

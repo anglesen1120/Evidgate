@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://evidgate.local/schemas/a11y-exceptions.schema.json",
+  "title": "Evidgate accepted a11y violations",
+  "description": "One entry per accepted axe violation. Scans fail on any violation no entry covers, and an entry only covers its own rule id on the element its selector names.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["exceptions"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Relative reference to this schema file; the shipped list carries it."
+    },
+    "exceptions": {
+      "type": "array",
+      "description": "Empty when the product is clean; every entry expires at its review-by date.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule", "selector", "reason", "owner", "review-by"],
+        "properties": {
+          "rule": {
+            "type": "string",
+            "minLength": 1,
+            "description": "axe-core rule id, for example color-contrast."
+          },
+          "selector": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The reported target selector, or the path it ends with at a step boundary; a bare last step covers every element with that leaf."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Why the violation is accepted, and what the real fix is."
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The person or role accountable for the fix."
+          },
+          "review-by": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "description": "Last day the entry may stay: YYYY-MM-DD, at most 90 days after it was added."
+          }
+        }
+      }
+    }
+  }
+}

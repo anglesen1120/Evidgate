@@ -36,8 +36,8 @@ import grantUnknownRole from '../../../../fixtures/web-api/membership-role-grant
 import revokeLastAdmin from '../../../../fixtures/web-api/membership-role-revoke-last-admin/input.json';
 import membershipsList from '../../../../fixtures/web-api/memberships-list/input.json';
 import rolesList from '../../../../fixtures/web-api/roles-list/input.json';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
-  expectNoA11yViolations,
   LOCALES,
   MEMBERS_GRANT_FORBIDDEN,
   MEMBERS_GRANT_UNKNOWN_ROLE,

@@ -7,10 +7,9 @@ import {
   type OnboardingSeed,
   type StepNumber,
 } from './onboarding-support';
+import { axeScan, axeViolations } from '../a11y/axe-scan';
 import {
   ANONYMOUS_SESSION,
-  axeScan,
-  axeViolations,
   currentTheme,
   LIMITED_GRANTS,
   localePath,

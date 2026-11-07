@@ -26,9 +26,9 @@ import membershipCreateOk from '../../../../fixtures/web-api/membership-create-o
 import removeLastAdmin from '../../../../fixtures/web-api/membership-remove-last-admin/input.json';
 import removeInvalidTransition from '../../../../fixtures/web-api/membership-remove-invalid-transition/input.json';
 import membershipsList from '../../../../fixtures/web-api/memberships-list/input.json';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
   expectIndistinguishableNotFound,
-  expectNoA11yViolations,
   LOCALES,
   MEMBERS_EMPTY_LIST,
   MEMBERS_INVITE_EXISTS,

@@ -24,8 +24,8 @@ import references from '../../../../fixtures/web-api/ingest-tokens-list-settings
 import ciBindings from '../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
 import ciBindingsPageOne from '../../../../fixtures/web-api/ci-bindings-list-settings-page-1/input.json';
 import ciBindingsPageTwo from '../../../../fixtures/web-api/ci-bindings-list-settings-page-2/input.json';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
-  expectNoA11yViolations,
   LOCALES,
   PROJECT_CHECKOUT,
   PROJECT_STOREFRONT,

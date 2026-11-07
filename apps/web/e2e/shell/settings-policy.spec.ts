@@ -13,8 +13,8 @@ import previous from '../../../../fixtures/web-api/policy-revision-previous/inpu
 import afterPublish from '../../../../fixtures/web-api/policy-revisions-list-after-publish/input.json';
 import conflictHead from '../../../../fixtures/web-api/policy-revisions-list-conflict-head/input.json';
 import revisions from '../../../../fixtures/web-api/policy-revisions-list/input.json';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
 import {
-  expectNoA11yViolations,
   LOCALES,
   ORG_ACME,
   seedStoredTheme,

@@ -4,7 +4,8 @@ import { expect, test } from '@playwright/test';
 import activationRead from '../../../../fixtures/web-api/policy-activation-read-ok/input.json';
 import head from '../../../../fixtures/web-api/policy-revision-head/input.json';
 import revisions from '../../../../fixtures/web-api/policy-revisions-list/input.json';
-import { expectNoA11yViolations, LOCALES, type ShellLocale } from './support';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
+import { LOCALES, type ShellLocale } from './support';
 
 import {
   PHASE,

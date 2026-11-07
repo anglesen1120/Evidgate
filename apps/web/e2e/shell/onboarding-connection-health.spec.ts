@@ -53,14 +53,8 @@ import {
   type OnboardingSeed,
   type StepNumber,
 } from './onboarding-support';
-import {
-  currentTheme,
-  expectNoA11yViolations,
-  LOCALES,
-  seedStoredTheme,
-  THEMES,
-  type ShellLocale,
-} from './support';
+import { expectNoA11yViolations } from '../a11y/axe-scan';
+import { currentTheme, LOCALES, seedStoredTheme, THEMES, type ShellLocale } from './support';
 
 /** The token name the create case types; the corpus echoes its own name back, never this one. */
 const TOKEN_NAME = 'CI upload (health e2e)';

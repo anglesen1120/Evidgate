@@ -9,6 +9,7 @@ The short "is the product usable" gate for the six core flows, against the fixtu
 | Project switch (org/project from the shell)     | `project-switch.spec.ts`        |
 | Run detail (list to detail, missing-shard FAIL) | `run-detail.spec.ts`            |
 | Onboarding (empty org to evidence step)         | `onboarding.spec.ts`            |
+| WCAG 2.2 AA scan of every built flow            | `a11y.spec.ts`                  |
 | Failure triage                                  | none — screen not built (below) |
 | Evidence viewer (incl. expired-URL refresh)     | none — screen not built (below) |
 
