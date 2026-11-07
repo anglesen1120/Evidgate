@@ -46,4 +46,10 @@ export interface FixtureCatalogRow {
   readonly document: FixtureDocument;
   /** The `cursor` query value this page answers; absent on the first page and every unpaged row. */
   readonly cursor?: string;
+  /**
+   * Set when the document is derived in TypeScript from a corpus document instead of imported from
+   * `fixtures/web-api/<name>/`. A state the corpus has no file for is then one field away from a
+   * contract-validated body rather than a second hand-written copy of a whole response.
+   */
+  readonly derived?: true;
 }

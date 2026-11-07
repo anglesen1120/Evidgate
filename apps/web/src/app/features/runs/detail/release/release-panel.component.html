@@ -1,0 +1,135 @@
+<section hlmCard aria-labelledby="release-title" data-release-panel>
+  <h2 hlmCardTitle id="release-title" class="m-0">{{ copy.title }}</h2>
+
+  @if (releaseId() === null) {
+    <!-- The run document carries no release id, so there is nothing to read or guess. -->
+    <p class="m-0 grid justify-items-start gap-(--eg-space-2)" data-release-unavailable>
+      <app-status-pill [tone]="'neutral'" [label]="''" />
+      <span class="text-muted-foreground">{{ copy.unavailable }}</span>
+    </p>
+  } @else {
+    @switch (status()) {
+      @case ('loading') {
+        <app-loading-pattern [label]="copy.loading" />
+      }
+      @case ('error') {
+        @if (retryAfter(); as refusal) {
+          <app-retry-after
+            [kind]="refusal.kind === 'unavailable' ? 'unavailable' : 'rate_limited'"
+            [retryAfterSeconds]="refusal.retryAfterSeconds"
+            [retryEligible]="retryEligible()"
+            [code]="refusal.code"
+            [requestId]="refusal.requestId"
+            (retry)="retry.emit()"
+          />
+        } @else {
+          <app-error-pattern
+            [error]="error()"
+            [retryDisabled]="!retryEligible()"
+            [headingLevel]="3"
+            (retry)="retry.emit()"
+          />
+        }
+      }
+      @case ('not-found') {
+        <app-not-found-pattern />
+      }
+      @case ('forbidden') {
+        <app-forbidden-pattern />
+      }
+      @case ('ready') {
+        @if (release(); as loaded) {
+          @if (boundToRun()) {
+            <dl>
+              <div>
+                <dt>{{ copy.name }}</dt>
+                <dd data-release-name>
+                  <bdi>{{ display(loaded.name) }}</bdi>
+                </dd>
+              </div>
+              <div>
+                <dt>{{ copy.state }}</dt>
+                <dd data-release-state>
+                  <app-status-pill
+                    [tone]="loaded.state === 'active' ? 'success' : 'neutral'"
+                    [label]="loaded.state === 'active' ? copy.active : copy.draft"
+                  />
+                </dd>
+              </div>
+              <div>
+                <dt>{{ copy.version }}</dt>
+                <dd data-release-version>{{ loaded.version }}</dd>
+              </div>
+              <div>
+                <dt>{{ copy.boundRun }}</dt>
+                <dd data-release-bound-run>
+                  <bdi>{{ display(runId()) }}</bdi>
+                </dd>
+              </div>
+            </dl>
+            @if (components().length === 0) {
+              <p class="m-0 text-muted-foreground" data-release-no-components>
+                {{ copy.noComponents }}
+              </p>
+            } @else {
+              <table
+                hlmTable
+                class="w-full table-fixed border-collapse [&_th]:whitespace-normal [&_th]:wrap-anywhere [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_th]:align-top [&_td]:align-top [&_bdi]:block"
+              >
+                <caption hlmCaption class="sr-only">
+                  {{
+                    copy.components
+                  }}
+                </caption>
+                <thead hlmTHead>
+                  <tr hlmTr>
+                    <th hlmTh scope="col">{{ copy.component }}</th>
+                    <th hlmTh scope="col">{{ copy.digest }}</th>
+                    <th hlmTh scope="col">{{ copy.environment }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (component of components(); track component.componentKey) {
+                    <tr hlmTr data-release-component>
+                      <th hlmTh scope="row" class="min-w-0">
+                        <bdi>{{ display(component.componentKey) }}</bdi>
+                        @if (boundKeys().has(component.componentKey)) {
+                          <app-status-pill [tone]="'info'" [label]="copy.bound" />
+                        }
+                      </th>
+                      <td hlmTd class="min-w-0">
+                        <bdi data-release-digest>{{ display(component.digest) }}</bdi>
+                        <button
+                          hlmBtn
+                          [variant]="'outline'"
+                          type="button"
+                          class="min-h-(--eg-control-touch) h-auto whitespace-normal text-start transition-none"
+                          [attr.aria-label]="copyDigestLabel(component.componentKey)"
+                          [attr.aria-busy]="copying() === component.componentKey"
+                          (click)="copyDigest(component)"
+                        >
+                          {{ copy.copyDigest }}
+                        </button>
+                      </td>
+                      <td hlmTd class="min-w-0">
+                        <bdi>{{ display(component.environmentRevisionId) }}</bdi>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          } @else {
+            <p class="m-0 text-muted-foreground" data-release-unbound>{{ copy.unbound }}</p>
+          }
+        }
+      }
+    }
+  }
+  <p
+    class="m-0 min-h-(--eg-leading-sm) text-muted-foreground"
+    role="status"
+    [attr.aria-live]="'polite'"
+    [textContent]="copyStatus()"
+  ></p>
+</section>
