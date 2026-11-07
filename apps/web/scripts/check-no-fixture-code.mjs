@@ -55,15 +55,15 @@
 // The check fails closed: a missing/empty dist directory, or a corpus with no `input.json`, is a
 // failure, not a pass — otherwise a broken build or a moved corpus would make the gate vacuous.
 //
-// Needs only node: fs/path/url and the root `yaml` package (a CI job that ran
-// `npm ci --ignore-scripts` has it), used to read the contract's property names. The dist directory is resolved from this file's
+// Needs only node: fs/path/url, the root `yaml` package (a CI job that ran
+// `npm ci --ignore-scripts` has it) and `contract-property-names.mjs` beside it. The dist directory is resolved from this file's
 // own location (`apps/web/dist/browser`), so the answer does not depend on the caller's cwd.
 // `EVIDGATE_WEB_DIST_DIR`, `EVIDGATE_WEB_FIXTURE_DIR` and `EVIDGATE_WEB_CONTRACT_FILE` exist ONLY to run the synthetic proofs of
 // this gate (packages/cli/src/webFixtureLeakGate{,.needles,.runViews,.signIn}.test.ts); they are not build knobs.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parse as parseYaml } from 'yaml';
+import { contractPropertyNames, isContractPath } from './contract-property-names.mjs';
 
 // `@angular/build:application` writes the deployable assets into `<outputPath>/browser`
 // (angular.json: outputPath "dist"), exactly as `check-bundle-budget.mjs` reads them.
@@ -247,67 +247,9 @@ function fail(message) {
   process.exit(1);
 }
 
-/** Adds the key of every `properties` map found anywhere below `node` to `names`. */
-function collectPropertyNames(node, names) {
-  if (Array.isArray(node)) {
-    for (const item of node) {
-      collectPropertyNames(item, names);
-    }
-    return;
-  }
-  if (node === null || typeof node !== 'object') {
-    return;
-  }
-  for (const [key, child] of Object.entries(node)) {
-    if (key === 'properties' && child !== null && typeof child === 'object') {
-      for (const name of Object.keys(child)) {
-        names.add(name);
-      }
-    }
-    collectPropertyNames(child, names);
-  }
-}
-
-/** Every property name declared in `components.schemas` of the contract; fails closed. */
-function contractPropertyNames(file) {
-  if (!existsSync(file)) {
-    fail(`no ${file} — the contract the error-path exemption reads is missing.`);
-  }
-  let schemas;
-  try {
-    schemas = parseYaml(readFileSync(file, 'utf8'))?.components?.schemas;
-  } catch (error) {
-    fail(`cannot parse ${shown(file)}: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  const names = new Set();
-  collectPropertyNames(schemas, names);
-  if (names.size === 0) {
-    fail(`${shown(file)} declares no components.schemas property, so the exemption has no names.`);
-  }
-  return names;
-}
-
-const PROPERTY_NAMES = contractPropertyNames(CONTRACT_FILE);
-
-/**
- * Whether `value` is a contract property name or a dotted / `/`-pointer path of them, where a
- * non-leading segment may also be an array index (`a.0.b`, `a[0].b`, `/components/0/name`).
- */
-function isContractPath(value) {
-  const segments = (value.startsWith('/') ? value.slice(1) : value).split(/[./]/);
-  if (segments.some((segment) => segment === '')) {
-    return false;
-  }
-  return segments.every((segment, position) => {
-    const bare = segment.replace(/(\[\d+\])+$/, '');
-    if (position > 0 && /^\d+$/.test(segment)) {
-      return true;
-    }
-    return PROPERTY_NAMES.has(bare);
-  });
-}
-
 /** `body.error.details[].path`, the one member whose contract-name values are exempt. */
+const PROPERTY_NAMES = contractPropertyNames(CONTRACT_FILE, fail, shown);
+
 function isErrorDetailPath(key, child, trail) {
   const depth = trail.length;
   return (
@@ -316,7 +258,7 @@ function isErrorDetailPath(key, child, trail) {
     trail[depth - 1] === '[]' &&
     trail[depth - 2] === 'details' &&
     trail[depth - 3] === 'error' &&
-    isContractPath(child)
+    isContractPath(child, PROPERTY_NAMES)
   );
 }
 
