@@ -17,7 +17,7 @@ internal static class ReprocessAdmission
 {
     /// <summary>Decides one reprocess against the run's and its project's state.</summary>
     /// <param name="projectState">The project's state: <c>active</c>, <c>suspended</c> or <c>deleted</c>.</param>
-    /// <param name="runState">The run's state (the closed 00 §8.1 vocabulary).</param>
+    /// <param name="runState">The run's state, from the closed vocabulary the run state machine defines.</param>
     /// <param name="lateWindowOpen">True when <c>now()</c> is at or before the run's late-window end.</param>
     /// <returns>The decision, with the rows' <c>after_cancel</c>/<c>late</c> markers already resolved.</returns>
     public static RunAdmission Decide(string projectState, string runState, bool lateWindowOpen)

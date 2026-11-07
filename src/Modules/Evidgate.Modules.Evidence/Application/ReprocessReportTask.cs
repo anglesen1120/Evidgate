@@ -50,7 +50,7 @@ internal sealed record ReprocessReportPayload(Guid ParsingId)
 /// <para>
 /// <b>The bytes are read, the rows are hashed, and only then does a write transaction open.</b> One short read-only
 /// scope resolves the request, the artifact, the pinned release and the plan; the object is fetched and the document
-/// mapped with no scope open (00 §5.7 P5). A store that cannot answer throws, so the queue retries and eventually
+/// mapped with no scope open. A store that cannot answer throws, so the queue retries and eventually
 /// dead-letters the attempt: the request row then still holds no report row, and the evidence of the run is untouched.
 /// </para>
 /// </summary>

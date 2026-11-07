@@ -207,7 +207,7 @@ internal enum ReconcileDisposition
     /// The comparison ran on a run that had already been <c>canceled</c>, for a reprocess its admission accepted: the
     /// re-reading of the run's own stored report wrote new rows after cancel, so the attempt appends revision N+1 and
     /// moves the run's pointer to it, and the run stays <c>canceled</c> — a canceled run is terminal and never becomes
-    /// complete, whatever its evidence now says (00 §8.1). Like the late path, the revision is the only place
+    /// complete, whatever its evidence now says. Like the late path, the revision is the only place
     /// this evidence ever counts. A <c>complete</c> run answers the same way, and stays <c>complete</c>.
     /// </summary>
     ComparedReprocess,

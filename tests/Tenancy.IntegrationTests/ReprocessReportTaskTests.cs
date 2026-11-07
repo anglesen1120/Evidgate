@@ -1,8 +1,8 @@
 // The `ingest.reprocess_report` task handler over the real Worker composition, a real PostgreSQL and a real SeaweedFS
 // container: the request row a command committed is re-read at the parser release it pinned, and the derived evidence
 // lands under a producer identity of its own without moving the run or touching what the original report left behind.
-// Expectations come from 04.4.2 §4/§5/§8 (AC1, AC2, AC5, AC6) and the coordinator decision that a reprocess writes a
-// closed synthetic slot of its own, binds no CI producer and leaves the run's completeness alone.
+// Expectations: a reprocess writes a closed synthetic slot of its own, binds no CI producer and leaves the run's
+// completeness alone.
 using System.Globalization;
 using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
@@ -54,7 +54,7 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
 
     private const string XmlType = "application/xml";
 
-    /// <summary>A well-formed execution key: sha256 hex (00 §7), the shape <c>planned_execution</c> requires.</summary>
+    /// <summary>A well-formed execution key: sha256 hex, the shape <c>planned_execution</c> requires.</summary>
     private static readonly string ExecutionKey = new('a', 64);
 
     /// <summary>One case that resolves by its bare name (the seeded plan's case is named <c>probe</c>).</summary>
@@ -108,6 +108,17 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
         outcome.Events.ShouldBe(1);
 
         var producerId = "reprocess-" + parsingId.ToString("D", CultureInfo.InvariantCulture);
+
+        await AssertEventRowsAsync(world, producerId);
+        await AssertReportRowAsync(world, parsingId);
+        await AssertSyntheticSlotAsync(world, producerId);
+        await AssertOneTriggerAsync(world, producerId);
+        await AssertRunUntouchedAsync(world);
+    }
+
+    /// <summary>The events the reprocess wrote: its own producer, its own sequences and the pinned parser pair.</summary>
+    private async Task AssertEventRowsAsync(World world, string producerId)
+    {
         (await _fixture.ScalarAsync<string?>(
             world.Database,
             $"select producer_id from public.event where org_id = '{world.Org:D}'")).ShouldBe(producerId);
@@ -118,8 +129,11 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
             world.Database,
             $"select payload #>> '{{ext,parser}}' from public.event where org_id = '{world.Org:D}'"))
             .ShouldBe("junit-pytest/1.1.0");
+    }
 
-        // The report's own row carries the request's id and the pinned pair, so the trigger and the row name one identity.
+    /// <summary>The report's own row carries the request's id and the pinned pair, so the trigger and the row name one identity.</summary>
+    private async Task AssertReportRowAsync(World world, Guid parsingId)
+    {
         (await _fixture.ScalarAsync<string?>(
             world.Database,
             $"select id::text from public.raw_report where org_id = '{world.Org:D}' and parser_version = '{PinVersion}'"))
@@ -128,8 +142,11 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
             world.Database,
             $"select outcome from public.raw_report where org_id = '{world.Org:D}' and id = '{parsingId:D}'"))
             .ShouldBe(RawReportOutcomes.Mapped);
+    }
 
-        // The synthetic slot is closed, declared and unbound: nothing finalizes it, and no credential is behind it.
+    /// <summary>The synthetic slot is closed, declared and unbound: nothing finalizes it, and no credential is behind it.</summary>
+    private async Task AssertSyntheticSlotAsync(World world, string producerId)
+    {
         (await _fixture.ScalarAsync<string?>(
             world.Database,
             $"select producer_id from public.producer_slot where org_id = '{world.Org:D}'")).ShouldBe(producerId);
@@ -146,15 +163,19 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
             world.Database,
             $"select bound_token_jti from public.producer_slot where org_id = '{world.Org:D}'"))
             .ShouldBe("synthetic:junit-report");
+    }
 
-        // One trigger names this producer and its own declaration, so the reconciler compares exactly these rows.
+    /// <summary>One trigger names this producer and its own declaration, so the reconciler compares exactly these rows.</summary>
+    private async Task AssertOneTriggerAsync(World world, string producerId) =>
         (await _fixture.ScalarAsync<int>(
             world.Database,
             $"select count(*)::int from public.outbox where org_id = '{world.Org:D}' "
             + $"and task_type = '{RunReconcileContract.OutboxTaskType}' "
             + $"and (payload ->> 'producer_id') = '{producerId}'")).ShouldBe(1);
 
-        // The run never moved: no transition row and no batch receipt, because a reprocess is not an ingest route.
+    /// <summary>The run never moved: no transition row and no batch receipt, because a reprocess is not an ingest route.</summary>
+    private async Task AssertRunUntouchedAsync(World world)
+    {
         (await _fixture.ScalarAsync<int>(
             world.Database,
             $"select count(*)::int from public.outbox where org_id = '{world.Org:D}' "

@@ -175,9 +175,9 @@ public static class RunReconcileContract
     /// <summary>
     /// The payload of the reprocess trigger: the run and the synthetic producer the re-read rows were written under, with
     /// the two declaration fields a payload of this type always carries, at zero, and
-    /// <see cref="RunReconcilePayload.ReprocessEvidence"/> set. Only the reprocess task builds it, and only for a run its
-    /// admission accepted after cancellation: a canceled run has no forward edge, so its new evidence counts through a
-    /// revision alone, which is why the marker exists.
+    /// <see cref="RunReconcilePayload.ReprocessEvidence"/> set. Only the reprocess task builds it, and it sets the marker
+    /// on every trigger it writes, whatever state its run is in: a canceled or complete run, and a live run, each take a
+    /// new revision from it without their run state moving.
     /// </summary>
     /// <param name="runId">The run the re-read evidence belongs to.</param>
     /// <param name="producerId">The synthetic producer the reprocess wrote its rows under.</param>
@@ -229,10 +229,11 @@ public sealed record RunReconcilePayload(
     public bool LateEvidence { get; init; }
 
     /// <summary>
-    /// <c>reprocess_evidence</c>: set only by the trigger the reprocess task enqueues when its admission accepted the
-    /// re-read evidence of a <c>canceled</c> run. Every other producer leaves it absent, so a canceled run is compared
-    /// only for a deliberate re-reading of its own stored report — the one path a canceled run still takes — while a redelivered
-    /// or replayed ordinary, late or finalize trigger stays not collectable.
+    /// <c>reprocess_evidence</c>: set by every trigger the reprocess task writes, whichever state its run was in. An
+    /// ordinary, late or finalize trigger leaves it absent, so this marker is what tells the reconciler those rows were a
+    /// deliberate re-reading of the run's own stored report: a canceled or complete run appends a revision and keeps its
+    /// state, an incomplete run records the evidence as late, and a live run appends beside its revision — or waits for the
+    /// collection settlement to freeze it — and never has a settlement decided by it.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool ReprocessEvidence { get; init; }

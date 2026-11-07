@@ -29,12 +29,12 @@ public sealed partial class ReprocessReportTaskTests
         """u8.ToArray();
 
     /// <summary>
-    /// AC1 + AC2: the run's first revision is frozen from the original report, then a reprocess of a second stored report
-    /// writes its events and its own parsing row, and the reconciler appends one more revision. The no-attempt proof is
-    /// the attempt count, its digest and the per-producer read: the reprocessed evidence names an execution nothing has
-    /// attempted, so a reinstated attempt writer shows up there. The revision-1 row, hash and frozen view are the AC2
-    /// regression guards; this run is sequential, so an attempt written by the reprocess would be stamped after the
-    /// freeze and those three cannot detect one on their own.
+    /// The run's first revision is frozen from the original report, then a reprocess of a second stored report writes its
+    /// events and its own parsing row, and the reconciler appends one more revision. The no-attempt proof is the attempt
+    /// count, its digest and the per-producer read: the reprocessed evidence names an execution nothing has attempted, so
+    /// a reinstated attempt writer shows up there. The revision-1 row, hash and frozen view guard the freeze contract;
+    /// this run is sequential, so an attempt written by the reprocess would be stamped after the freeze and those three
+    /// cannot detect one on their own.
     /// </summary>
     [Fact]
     public async Task Reprocess_Appends_A_Revision_And_Writes_No_Case_Attempt()
@@ -50,30 +50,10 @@ public sealed partial class ReprocessReportTaskTests
         original.Status.ShouldBe(ParseRawReportOutcome.Parsed);
         original.Events.ShouldBe(1);
 
-        // The clock closes the run, so the reconcile over the original evidence freezes revision 1: the revision whose
-        // row, hash and frozen view the reprocess must leave untouched.
-        await _fixture.ExecuteAsync(
-            world.Database,
-            $"update public.run set state = 'queued', collection_deadline_at = now() - interval '1 minute', "
-            + $"late_window_minutes = 60 where id = '{world.RunId:D}'");
-        await ConsumeEnqueuedReconcileAsync(world, producerId: null);
+        var first = await FreezeFirstRevisionAsync(world);
 
-        (await RevisionCountAsync(world)).ShouldBe(1);
-        var oldRevisionHash = await RevisionHashAsync(world, revisionNo: 1);
-        var oldFreeze = await FreezeColumnsAsync(world, revisionNo: 1);
-        var oldView = await FrozenViewAsync(world, revisionNo: 1);
-        oldView.ShouldContain(ExecutionKey, Case.Sensitive, "revision 1's frozen view reads the original parse's attempt");
+        var (producerId, outcome) = await ReprocessSecondReportAsync(world);
 
-        var attemptCount = await CountAsync(world, "case_attempt");
-        attemptCount.ShouldBe(1, "the original parse is the run's only attempt writer so far");
-        var attemptDigest = await AttemptDigestAsync(world);
-
-        var reprocessedArtifactId = await SeedArtifactAsync(world, SecondReportBody);
-        var sourceReportId = await SeedSourceReportAsync(world, reprocessedArtifactId);
-        var parsingId = await SeedRequestAsync(world, reprocessedArtifactId, sourceReportId, PinVersion);
-        var producerId = "reprocess-" + parsingId.ToString("D", CultureInfo.InvariantCulture);
-
-        var outcome = await ReprocessAsync(world, parsingId);
         outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
         outcome.Events.ShouldBe(1);
 
@@ -86,19 +66,77 @@ public sealed partial class ReprocessReportTaskTests
             + $"and run_id = '{world.RunId:D}' and producer_id = '{producerId}'"))
             .ShouldBe(UnattemptedExecutionKey);
 
-        // AC1: the reprocess still lands as its own revision, past the original event watermark.
+        // The reprocess still lands as its own revision, past the original event watermark.
         (await RevisionCountAsync(world)).ShouldBe(2, "a reprocess appends one revision");
         (await EventWatermarkAsync(world, revisionNo: 2)).ShouldBe(2);
 
-        // AC2: the old revision's row, hash and frozen view are exactly what they were. These guard the freeze contract;
-        // they cannot show a reprocess attempt in this sequential run, where its stamp would follow the freeze.
-        (await RevisionHashAsync(world, revisionNo: 1)).ShouldBe(oldRevisionHash);
-        (await FreezeColumnsAsync(world, revisionNo: 1)).ShouldBe(oldFreeze);
-        (await FrozenViewAsync(world, revisionNo: 1)).ShouldBe(oldView);
+        await AssertFirstRevisionIntactAsync(world, first);
+        await AssertNoAttemptWrittenAsync(world, first, producerId);
+    }
 
-        // The no-attempt proof: the reprocessed evidence names a planned execution nothing had attempted yet.
-        (await CountAsync(world, "case_attempt")).ShouldBe(attemptCount, "a reprocess writes events and a revision, never an attempt");
-        (await AttemptDigestAsync(world)).ShouldBe(attemptDigest);
+    /// <summary>The revision 1 row, its frozen view and the stored attempts a reprocess must leave exactly as they are.</summary>
+    private sealed record OriginalRevision(
+        string RevisionHash,
+        string Freeze,
+        string View,
+        long AttemptCount,
+        string AttemptDigest);
+
+    /// <summary>
+    /// The clock closes the run, so the reconcile over the original evidence freezes revision 1: the revision whose row,
+    /// hash and frozen view the reprocess must leave untouched.
+    /// </summary>
+    private async Task<OriginalRevision> FreezeFirstRevisionAsync(World world)
+    {
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.run set state = 'queued', collection_deadline_at = now() - interval '1 minute', "
+            + $"late_window_minutes = 60 where id = '{world.RunId:D}'");
+        await ConsumeEnqueuedReconcileAsync(world, producerId: null);
+
+        (await RevisionCountAsync(world)).ShouldBe(1);
+        var view = await FrozenViewAsync(world, revisionNo: 1);
+        view.ShouldContain(ExecutionKey, Case.Sensitive, "revision 1's frozen view reads the original parse's attempt");
+
+        var attemptCount = await CountAsync(world, "case_attempt");
+        attemptCount.ShouldBe(1, "the original parse is the run's only attempt writer so far");
+
+        return new OriginalRevision(
+            await RevisionHashAsync(world, revisionNo: 1),
+            await FreezeColumnsAsync(world, revisionNo: 1),
+            view,
+            attemptCount,
+            await AttemptDigestAsync(world));
+    }
+
+    /// <summary>
+    /// Stores the second report under the run, pins the newer release on it and runs the production reprocess handler;
+    /// the trigger it wrote is left for the caller to consume.
+    /// </summary>
+    private async Task<(string ProducerId, ParseRawReportOutcome Outcome)> ReprocessSecondReportAsync(World world)
+    {
+        var reprocessedArtifactId = await SeedArtifactAsync(world, SecondReportBody);
+        var sourceReportId = await SeedSourceReportAsync(world, reprocessedArtifactId);
+        var parsingId = await SeedRequestAsync(world, reprocessedArtifactId, sourceReportId, PinVersion);
+        var producerId = "reprocess-" + parsingId.ToString("D", CultureInfo.InvariantCulture);
+
+        return (producerId, await ReprocessAsync(world, parsingId));
+    }
+
+    /// <summary>The old revision's row, hash and frozen view are exactly what they were.</summary>
+    private async Task AssertFirstRevisionIntactAsync(World world, OriginalRevision first)
+    {
+        (await RevisionHashAsync(world, revisionNo: 1)).ShouldBe(first.RevisionHash);
+        (await FreezeColumnsAsync(world, revisionNo: 1)).ShouldBe(first.Freeze);
+        (await FrozenViewAsync(world, revisionNo: 1)).ShouldBe(first.View);
+    }
+
+    /// <summary>The no-attempt proof: the reprocessed evidence names a planned execution nothing had attempted yet.</summary>
+    private async Task AssertNoAttemptWrittenAsync(World world, OriginalRevision first, string producerId)
+    {
+        (await CountAsync(world, "case_attempt"))
+            .ShouldBe(first.AttemptCount, "a reprocess writes events and a revision, never an attempt");
+        (await AttemptDigestAsync(world)).ShouldBe(first.AttemptDigest);
         (await AttemptsForProducerAsync(world, producerId))
             .ShouldBe(0, "no attempt belongs to the evidence the reprocess produced");
     }

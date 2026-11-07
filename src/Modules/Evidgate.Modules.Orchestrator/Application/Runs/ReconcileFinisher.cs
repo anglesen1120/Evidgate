@@ -94,7 +94,7 @@ internal enum ReconcileSettlement
     /// <summary>
     /// The run was <c>canceled</c> and a reprocess its admission accepted re-read its own stored report: this revision
     /// records that evidence, and the run state stays <c>canceled</c> — a canceled run is terminal and never becomes
-    /// complete (00 §8.1). Same append as <see cref="AppendLateEvidence"/>: one revision, no edge.
+    /// complete. Same append as <see cref="AppendLateEvidence"/>: one revision, no edge.
     /// </summary>
     AppendReprocessEvidence,
 

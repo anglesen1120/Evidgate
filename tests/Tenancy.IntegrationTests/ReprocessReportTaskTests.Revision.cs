@@ -1,6 +1,6 @@
 // The revision half of the reprocess path: the report a run already holds is parsed once through the production report
 // task, the run's first evidence revision is frozen by the production reconcile task, and a reprocess at a newer release
-// appends exactly one more revision without rewriting the old row, its events or the stored report (04.4.2 §9 AC1/AC2).
+// appends exactly one more revision without rewriting the old row, its events or the stored report.
 using System.Text.Json;
 using Evidgate.BuildingBlocks.ObjectStorage;
 using Evidgate.BuildingBlocks.Persistence.Audit;
@@ -25,17 +25,17 @@ namespace Tenancy.IntegrationTests;
 
 public sealed partial class ReprocessReportTaskTests
 {
-    /// <summary>snake_case, the wire convention every payload of this platform writes (00 §9.4).</summary>
+    /// <summary>snake_case, the wire convention every payload of this platform writes.</summary>
     private static readonly JsonSerializerOptions ReconcilePayloadJson = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
     /// <summary>
-    /// AC1 + AC2: the report a run already holds is parsed at the built-in release and frozen into the run's first
-    /// revision; a reprocess that pins the newer release writes its own parsing row and trigger, and the reconcile of
-    /// that trigger appends one further revision. The old revision keeps its identity and hashes, its events and the
-    /// stored report are untouched, the run stays where it was, and the new report row is the request's own id.
+    /// The report a run already holds is parsed at the built-in release and frozen into the run's first revision; a
+    /// reprocess that pins the newer release writes its own parsing row and trigger, and the reconcile of that trigger
+    /// appends one further revision. The old revision keeps its identity and hashes, its events and the stored report are
+    /// untouched, the run stays where it was, and the new report row is the request's own id.
     /// </summary>
     [Fact]
     public async Task Reprocess_NewParser_NewRevision()
@@ -51,25 +51,7 @@ public sealed partial class ReprocessReportTaskTests
         original.Events.ShouldBe(1);
         var sourceReportId = await SourceReportIdAsync(world, artifactId);
 
-        // The run was queued when its collection deadline passed, so the attempt closes it incomplete: the finished run a
-        // reprocess may still re-read its own bytes for (04.4.2 AC6), and the one the late append below answers.
-        await _fixture.ExecuteAsync(
-            world.Database,
-            $"update public.run set state = 'queued', collection_deadline_at = now() - interval '1 minute', "
-            + $"late_window_minutes = 60 where id = '{world.RunId:D}'");
-
-        await ConsumeEnqueuedReconcileAsync(world, producerId: null);
-
-        (await RevisionCountAsync(world)).ShouldBe(1);
-        var oldRevisionHash = await RevisionHashAsync(world, revisionNo: 1);
-        var oldFreeze = await FreezeColumnsAsync(world, revisionNo: 1);
-        var oldProducer = await EventProducerAsync(world);
-        var oldEvents = await EventDigestAsync(world, oldProducer);
-        var oldReport = await ReportHashAsync(world, sourceReportId);
-        var oldArtifact = await ArtifactHashAsync(world, artifactId);
-        var oldObject = await StoredObjectDigestAsync(world, artifactId);
-        var oldState = await RunStateAsync(world);
-        var oldTransitions = await TransitionCountAsync(world);
+        var first = await FreezeFirstRevisionAsync(world, artifactId, sourceReportId);
 
         var parsingId = await SeedRequestAsync(world, artifactId, sourceReportId, PinVersion);
 
@@ -82,31 +64,91 @@ public sealed partial class ReprocessReportTaskTests
             world,
             "reprocess-" + parsingId.ToString("D", System.Globalization.CultureInfo.InvariantCulture));
 
-        // AC2: the old revision, the events it froze and the stored report are exactly what they were.
-        (await RevisionCountAsync(world)).ShouldBe(2, "a reprocess appends one revision and rewrites none");
-        (await RevisionHashAsync(world, revisionNo: 1)).ShouldBe(oldRevisionHash);
-        (await FreezeColumnsAsync(world, revisionNo: 1)).ShouldBe(oldFreeze);
-        (await EventDigestAsync(world, oldProducer)).ShouldBe(oldEvents);
-        (await ReportHashAsync(world, sourceReportId)).ShouldBe(oldReport);
-        (await ArtifactHashAsync(world, artifactId)).ShouldBe(oldArtifact);
-        (await StoredObjectDigestAsync(world, artifactId)).ShouldBe(oldObject);
+        await AssertFirstRevisionUntouchedAsync(world, artifactId, sourceReportId, first);
+        await AssertSecondRevisionAsync(world, first);
+        await AssertReprocessedRowAsync(world, parsingId);
+        await AssertRunUnmovedAsync(world, first);
+    }
 
-        // AC1: the new evidence is its own revision, one number further and past the old event watermark.
+    /// <summary>Everything the first revision froze and everything the original parse left behind.</summary>
+    private sealed record FirstRevision(
+        string RevisionHash,
+        string Freeze,
+        string Producer,
+        string Events,
+        string Report,
+        string Artifact,
+        string Object,
+        string State,
+        long Transitions);
+
+    /// <summary>
+    /// The run is queued past its collection deadline, so the attempt closes it incomplete: a finished run a reprocess
+    /// may still re-read its own bytes for, and the one the late append answers. The reconcile that closes it freezes
+    /// revision 1, and this reads back everything the reprocess must leave alone.
+    /// </summary>
+    private async Task<FirstRevision> FreezeFirstRevisionAsync(World world, Guid artifactId, Guid sourceReportId)
+    {
+        await _fixture.ExecuteAsync(
+            world.Database,
+            $"update public.run set state = 'queued', collection_deadline_at = now() - interval '1 minute', "
+            + $"late_window_minutes = 60 where id = '{world.RunId:D}'");
+
+        await ConsumeEnqueuedReconcileAsync(world, producerId: null);
+
+        (await RevisionCountAsync(world)).ShouldBe(1);
+        var producer = await EventProducerAsync(world);
+
+        return new FirstRevision(
+            await RevisionHashAsync(world, revisionNo: 1),
+            await FreezeColumnsAsync(world, revisionNo: 1),
+            producer,
+            await EventDigestAsync(world, producer),
+            await ReportHashAsync(world, sourceReportId),
+            await ArtifactHashAsync(world, artifactId),
+            await StoredObjectDigestAsync(world, artifactId),
+            await RunStateAsync(world),
+            await TransitionCountAsync(world));
+    }
+
+    /// <summary>The old revision, the events it froze, the stored report and its artifact are exactly what they were.</summary>
+    private async Task AssertFirstRevisionUntouchedAsync(
+        World world,
+        Guid artifactId,
+        Guid sourceReportId,
+        FirstRevision first)
+    {
+        (await RevisionCountAsync(world)).ShouldBe(2, "a reprocess appends one revision and rewrites none");
+        (await RevisionHashAsync(world, revisionNo: 1)).ShouldBe(first.RevisionHash);
+        (await FreezeColumnsAsync(world, revisionNo: 1)).ShouldBe(first.Freeze);
+        (await EventDigestAsync(world, first.Producer)).ShouldBe(first.Events);
+        (await ReportHashAsync(world, sourceReportId)).ShouldBe(first.Report);
+        (await ArtifactHashAsync(world, artifactId)).ShouldBe(first.Artifact);
+        (await StoredObjectDigestAsync(world, artifactId)).ShouldBe(first.Object);
+    }
+
+    /// <summary>The new evidence is its own revision, one number further and past the old event watermark.</summary>
+    private async Task AssertSecondRevisionAsync(World world, FirstRevision first)
+    {
         (await FreezeColumnsAsync(world, revisionNo: 2)).ShouldNotBeNullOrEmpty();
-        (await FreezeColumnsAsync(world, revisionNo: 2)).ShouldNotBe(oldFreeze);
+        (await FreezeColumnsAsync(world, revisionNo: 2)).ShouldNotBe(first.Freeze);
         (await EventWatermarkAsync(world, revisionNo: 2))
             .ShouldBe(2, "the run holds the original report's event and the reprocessed one");
+    }
 
-        // The parsing row the request named is the reprocessed report's own row, stamped with the pinned release.
+    /// <summary>The parsing row the request named is the reprocessed report's own row, stamped with the pinned release.</summary>
+    private async Task AssertReprocessedRowAsync(World world, Guid parsingId) =>
         (await _fixture.ScalarAsync<string>(
             world.Database,
             $"select id::text || '/' || outcome || '/' || parser_version from public.raw_report "
             + $"where org_id = '{world.Org:D}' and id = '{parsingId:D}'"))
             .ShouldBe($"{parsingId:D}/{RawReportOutcomes.Mapped}/{PinVersion}");
 
-        // AC6: the late append records a revision and never moves a finished run.
-        (await RunStateAsync(world)).ShouldBe(oldState);
-        (await TransitionCountAsync(world)).ShouldBe(oldTransitions);
+    /// <summary>The late append records a revision and never moves a finished run.</summary>
+    private async Task AssertRunUnmovedAsync(World world, FirstRevision first)
+    {
+        (await RunStateAsync(world)).ShouldBe(first.State);
+        (await TransitionCountAsync(world)).ShouldBe(first.Transitions);
         (await _fixture.ScalarAsync<string>(
             world.Database,
             $"select r.current_evidence_revision_id::text || '/' || er.revision_no::text from public.run r "

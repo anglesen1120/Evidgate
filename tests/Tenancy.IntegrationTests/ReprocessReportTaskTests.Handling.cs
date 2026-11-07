@@ -1,6 +1,5 @@
 // The admission half of the reprocess path: which finished or canceled run still accepts a re-reading of its own stored
-// report, and which reports end the attempt without a row. Expectations come from 04.4.2 §5 and the coordinator decision
-// that a reprocess never moves the run's state (D-S267-Q1/Q2).
+// report, and which reports end the attempt without a row. A reprocess never moves the run's state.
 using Evidgate.Modules.Evidence.Application;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Domain;
@@ -114,7 +113,7 @@ public sealed partial class ReprocessReportTaskTests
             world.Database,
             $"select after_cancel from public.event where org_id = '{world.Org:D}'")).ShouldBeFalse();
 
-        // The trigger this task writes now carries the reprocess marker in every state it read (04.4.2 F4): that is the
+        // The trigger this task writes carries the reprocess marker in every state it read: that is the
         // shape the reconciler routes onto the late path for an incomplete run, so the freeze still records the new
         // revision without moving the run, and no ordinary settlement trigger is written beside it.
         (await _fixture.ScalarAsync<bool>(

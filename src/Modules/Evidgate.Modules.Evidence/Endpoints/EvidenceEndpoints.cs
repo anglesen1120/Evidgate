@@ -477,4 +477,3 @@ public sealed record DownloadUrlResponse(
     [property: JsonPropertyName("artifact_id")] Guid ArtifactId,
     [property: JsonPropertyName("download_url")] Uri DownloadUrl,
     [property: JsonPropertyName("expires_at")] DateTimeOffset ExpiresAt);
-
