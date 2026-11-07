@@ -178,10 +178,8 @@ public sealed partial class ReportComparisonTests
     }
 
     /// <summary>
-    /// One reprocess of <paramref name="source"/>: the release it pins, the request row the task writes the report
-    /// under, the synthetic producer slot its events land on, and one <c>test.finished</c> event per seeded case. The
-    /// release is this org's own so the shared catalogue keeps its built-in rows, and it is dated behind them because
-    /// the registry resolves a producer kind to its most recent release.
+    /// Seeded comparison state pins a distinct org-owned release without changing the shared built-in catalogue.
+    /// The report, request, synthetic slot and case events support comparison reads, not a worker lifecycle replay.
     /// </summary>
     private async Task<SeededReport> SeedReprocessAsync(
         World world,
@@ -200,8 +198,8 @@ public sealed partial class ReportComparisonTests
     }
 
     /// <summary>
-    /// The rows one reprocess writes: the report row keyed on the request's id, the request row itself, the closed
-    /// synthetic slot its events land on, and then the events — the shape the task writes, minus the parse.
+    /// Seeded comparison state connects the report and request to a synthetic slot and its events.
+    /// The slot is left open, so no declared close is seeded; the comparison read joins on <c>producer_id</c> alone.
     /// </summary>
     private async Task SeedReprocessRowsAsync(
         World world,
@@ -262,8 +260,8 @@ public sealed partial class ReportComparisonTests
     }
 
     /// <summary>
-    /// The org-owned release the reprocess pins, written as the owner because the app role may not register parsers. It
-    /// is dated behind the built-in releases on purpose: the registry resolves a producer kind to its most recent row.
+    /// The org-owned pinned release is named and dated distinctly for comparison state, written with owner privileges.
+    /// Numeric version order, not registration recency, decides resolver selection.
     /// </summary>
     private async Task SeedReleaseAsync(World world, string parserId) =>
         await _fixture.ExecuteAsync(

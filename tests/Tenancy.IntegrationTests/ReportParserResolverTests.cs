@@ -161,6 +161,55 @@ public sealed class ReportParserResolverTests
     }
 
     [Fact]
+    public async Task Resolve_ATenantScopeWithOnlyUnorderableVersions_DoesNotFallBackToPlatform()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        const string kind = "probe-tenant-label";
+
+        await SeedReleaseAsync(world, null, kind, version: "9.0", registeredAt: "2026-02-01T00:00:00Z",
+            parserId: "junit-platform-label");
+        await SeedReleaseAsync(world, world.Org, kind, version: "preview", registeredAt: "2026-01-01T00:00:00Z",
+            parserId: "junit-tenant-label");
+
+        var refused = await ResolveAsync(world, world.Org, kind);
+
+        ParserVersionOrder.Compare("preview", "9.0").ShouldBeNull("a label has no place in the dotted order");
+        refused.IsResolved.ShouldBeFalse("tenant scope takes precedence even when none of its releases is rankable");
+        refused.Version.ShouldBeNull();
+        refused.UnsupportedReason.ShouldBe(ReportParserResolver.UnknownProducerKind);
+        (await ResolveAsync(world, world.OtherOrg, kind)).Version.ShouldBe("9.0");
+
+        await SeedReleaseAsync(world, world.Org, kind, version: "1.0", registeredAt: "2025-01-01T00:00:00Z",
+            parserId: "junit-tenant-label");
+
+        var resolved = await ResolveAsync(world, world.Org, kind);
+
+        resolved.IsResolved.ShouldBeTrue();
+        resolved.ParserId.ShouldBe("junit-tenant-label");
+        resolved.Version.ShouldBe("1.0");
+    }
+
+    [Fact]
+    public async Task Resolve_AVersionSegmentBeyondUInt64_AnswersTheHigherVersion()
+    {
+        var world = await StartAsync();
+        await using var _ = world;
+        const string kind = "probe-large-segment";
+        const string higher = "1.18446744073709551616";
+
+        await SeedReleaseAsync(world, null, kind, version: higher, registeredAt: "2026-01-01T00:00:00Z");
+        await SeedReleaseAsync(world, null, kind, version: "1.9", registeredAt: "2026-02-01T00:00:00Z");
+
+        var resolved = await ResolveAsync(world, world.Org, kind);
+
+        ParserVersionOrder.Compare(higher, "1.9").ShouldBe(1, "a segment past UInt64 still compares numerically");
+        resolved.IsResolved.ShouldBeTrue();
+        resolved.ParserId.ShouldBe(ParserId);
+        resolved.Version.ShouldBe(higher);
+    }
+
+    [Fact]
     public async Task Resolve_AnotherOrgsRelease_IsInvisible()
     {
         var world = await StartAsync();

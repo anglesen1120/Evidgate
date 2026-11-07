@@ -5,10 +5,9 @@ namespace Evidgate.Modules.Evidence.Infrastructure.Persistence;
 /// keyset page over the terminal events that report's parse wrote, ordered by the producer's sequence.
 /// </summary>
 /// <remarks>
-/// <c>org_id</c> is left to row level security (forced on both tables), so the run and report predicates are the only
-/// extra filters. The case page names the synthetic producer id of the report that answers, so another artifact of the
-/// same run contributes no row. The page groups by <c>execution_key</c> and pages on its smallest sequence, because the
-/// contract counts the events of a case rather than assuming exactly one.
+/// Row level security is forced on each table: raw_report, artifact and raw_report_reprocess; the reprocess lookup
+/// also restates <c>org_id</c>. The case page isolates the report's synthetic producer and groups by
+/// <c>execution_key</c>, paging on its smallest sequence because the contract counts all events of a case.
 /// </remarks>
 internal static class ReportComparisonSql
 {
