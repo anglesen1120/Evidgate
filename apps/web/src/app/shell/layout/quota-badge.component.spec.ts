@@ -31,9 +31,11 @@ function summary(changes: Partial<UsageSummaryMetricDto> = {}): UsageSummaryDto 
         retry_after_seconds: null,
         unavailable_reason: null,
         projects: [],
+        projects_status: { blocked_count: 0, warned_count: 0 },
         ...changes,
       },
     ],
+    next_cursor: null,
   };
 }
 
@@ -123,6 +125,7 @@ describe('QuotaBadgeComponent', () => {
         limit: 100,
         warned_at: null,
         projects: [project({ warned_at: '2026-11-01T09:00:00Z' })],
+        projects_status: { blocked_count: 0, warned_count: 1 },
       }),
     );
     const { harness } = await render();
@@ -141,6 +144,7 @@ describe('QuotaBadgeComponent', () => {
         limit: 100,
         warned_at: null,
         projects: [project({ used: 100, blocked_at: '2026-11-02T00:00:00Z' })],
+        projects_status: { blocked_count: 1, warned_count: 0 },
       }),
     );
     const { harness } = await render();

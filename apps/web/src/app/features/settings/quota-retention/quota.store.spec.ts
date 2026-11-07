@@ -9,10 +9,14 @@
 // - a 429 `quota_exceeded` refusal asks for exactly one reload, a refusal that lands mid-read
 //   asks for one trailing read when that read settles, and neither can ask for another one;
 // - a reload keeps the counters already served on screen, while an org switch, an error or a
-//   null answer hides them.
+//   null answer hides them;
+// - a paged answer (`next_cursor` names more projects) is kept as served: the org total is the
+//   tenant counter, and a project crossing comes from the metric's org-wide count, never from a
+//   sum of the page's project rows.
 
 import type { WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import type { UsageSummaryMetricDto } from '@evidgate/sdk';
 
 import { QuotaExceededRelay } from '../../../core/http/quota-exceeded-relay';
 import { TenantStore } from '../../../core/session/tenant.store';
@@ -21,6 +25,7 @@ import {
   FakeQuotaDataService,
   metric,
   mountQuotaStore,
+  project,
   serverFailure,
   summary,
 } from './quota.store.test-support';
@@ -302,6 +307,61 @@ describe('QuotaStore', () => {
     data.release(summary(metric({ metric: 'egress_gb', used: 5 })));
     await settle();
     expect(store.usageSummary()?.metrics[0]?.metric).toBe('egress_gb');
+  });
+
+  it('keeps a paged answer as served: the badge reads the org counts, not the page rows', async () => {
+    // The service pages the per-project breakdown: `next_cursor` names a further page, and every
+    // row this page serves sits below both lines. A project that crossed its line on a page this
+    // read never fetched reaches the badge only through the metric's org-wide count, which the
+    // server takes over every project and repeats on every page.
+    const page = (changes: Partial<UsageSummaryMetricDto>) => ({
+      ...summary(
+        metric({
+          metric: 'results',
+          used: 10,
+          limit: 1000,
+          projects: [
+            project({ project_id: 'project-one', used: 10 }),
+            project({ project_id: 'project-two', used: 20 }),
+          ],
+          ...changes,
+        }),
+      ),
+      next_cursor: 'cursor-page-two',
+    });
+
+    TestBed.inject(TenantStore).setOrg('org-one');
+    data.answer = page({ used: 900, warned_at: '2026-11-01T09:00:00Z' });
+    store.load();
+    await settle();
+
+    // One read: the first page is the answer, and nothing follows the cursor on its own.
+    expect(data.calls).toHaveLength(1);
+    expect(store.loadState()).toBe('ready');
+    expect(store.usageSummary()).toEqual(data.answer);
+    expect(store.usageSummary()?.metrics[0]?.used).toBe(900);
+    expect(store.usageSummary()?.metrics[0]?.projects.map((row) => row.project_id)).toEqual([
+      'project-one',
+      'project-two',
+    ]);
+    // No project crossed on this page, so the tenant counter is the only crossing it proves.
+    expect(store.badge()).toEqual({ severity: 'warn', metric: 'results', scope: 'tenant' });
+
+    // A warned project the page does not carry still reaches the badge, as a project crossing.
+    data.answer = page({ projects_status: { blocked_count: 0, warned_count: 1 } });
+    store.reload();
+    await settle();
+    expect(store.badge()).toEqual({ severity: 'warn', metric: 'results', scope: 'project' });
+
+    // And a blocked one wins, though every row served here carries no stamp of its own.
+    data.answer = page({ projects_status: { blocked_count: 1, warned_count: 0 } });
+    store.reload();
+    await settle();
+    expect(store.usageSummary()?.metrics[0]?.projects.map((row) => row.blocked_at)).toEqual([
+      null,
+      null,
+    ]);
+    expect(store.badge()).toEqual({ severity: 'blocked', metric: 'results', scope: 'project' });
   });
 
   it('clears the summary when the tenant is gone', async () => {

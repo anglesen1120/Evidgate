@@ -2,6 +2,8 @@
 // suite revisions. `fixture-catalog-entries.ts` concatenates both halves, so the served order is
 // the original single list.
 
+import type { RunStateTransition } from '@evidgate/sdk';
+
 import runAttempts from '../../../../../../fixtures/web-api/run-attempts/input.json';
 import runAttemptsEmpty from '../../../../../../fixtures/web-api/run-attempts-empty/input.json';
 import runAttemptsPage1 from '../../../../../../fixtures/web-api/run-attempts-page-1/input.json';
@@ -105,6 +107,23 @@ const runDetailReleaseRefused: FixtureDocument = {
   },
 };
 
+/**
+ * The corpus's ready run serves `state_history: null`, the unknown history of a run created before
+ * `run_state_event` existed. This row is the same complete run with its history known: the at most
+ * three transitions a stored run records, and no creation row, which the read never serves.
+ */
+const COMPLETE_HISTORY: readonly RunStateTransition[] = [
+  { from_state: 'queued', to_state: 'running', occurred_at: '2026-11-07T08:10:00Z' },
+  { from_state: 'running', to_state: 'collecting', occurred_at: '2026-11-07T08:42:00Z' },
+  { from_state: 'collecting', to_state: 'complete', occurred_at: '2026-11-07T09:05:00Z' },
+];
+
+const runDetailWithHistory: FixtureDocument = {
+  ...runDetail,
+  variant: 'detail-with-history',
+  body: { ...runDetail.body, state_history: COMPLETE_HISTORY },
+};
+
 export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
   { name: 'run-attempts', document: runAttempts },
   { name: 'run-attempts-empty', document: runAttemptsEmpty },
@@ -134,6 +153,7 @@ export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
   { name: 'run-detail-release', document: runDetailRelease, derived: true },
   { name: 'run-detail-releases', document: runDetailReleases, derived: true },
   { name: 'run-detail-release-refused', document: runDetailReleaseRefused, derived: true },
+  { name: 'run-detail-with-history', document: runDetailWithHistory, derived: true },
   { name: 'run-evidence-revisions', document: runEvidenceRevisions },
   { name: 'run-evidence-revisions-empty', document: runEvidenceRevisionsEmpty },
   { name: 'run-evidence-revisions-unavailable', document: runEvidenceRevisionsUnavailable },

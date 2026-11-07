@@ -30,7 +30,7 @@ export type QuotaLoadState = 'idle' | 'loading' | 'ready' | 'unavailable';
 export type QuotaBadge = {
   readonly severity: 'warn' | 'blocked';
   readonly metric: string;
-  /** The counter that crossed the line, kept as the summary serves it: org-wide or one project. */
+  /** Which counter crossed: the tenant's own, or one of the org's projects (counted over all). */
   readonly scope: 'tenant' | 'project';
 };
 
@@ -120,8 +120,14 @@ function badgeFor(summary: UsageSummary | null): QuotaBadge | null {
     if (metric.used !== null) {
       collect(crossed, metric.metric, metric.scope, metric);
     }
-    for (const project of metric.projects) {
-      collect(crossed, metric.metric, project.scope, project);
+    // The project rows are one page of the org's projects, so a project left on a page this read
+    // never fetched has no row here. The server counts every crossing project of the org into the
+    // metric's aggregate and repeats it on every page, so that count is what the badge reads.
+    const status = metric.projects_status;
+    if (status.blocked_count > 0) {
+      crossed.push({ severity: 'blocked', metric: metric.metric, scope: 'project' });
+    } else if (status.warned_count > 0) {
+      crossed.push({ severity: 'warn', metric: metric.metric, scope: 'project' });
     }
   }
   return crossed.find((counter) => counter.severity === 'blocked') ?? crossed[0] ?? null;

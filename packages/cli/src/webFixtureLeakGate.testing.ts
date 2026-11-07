@@ -2,9 +2,10 @@
 // @evidgate/cli for the same reason webLintBoundaries.test.ts does: a repository-level check over
 // apps/web that needs Node runs under the Vitest `node` workspaces (an existing `scripts/verify.sh`
 // stage), while `ng test` compiles only the Angular specs for the browser. Every case spawns the
-// script as a child process against a synthetic build output and a synthetic fixture corpus,
-// handed over through the gate's two proof-only environment overrides, so no case reads the real
-// `dist/`, and nothing is written outside a temp directory.
+// script as a child process against a synthetic build output, fixture corpus and contract, handed
+// over through the gate's three proof-only environment overrides, so no case reads the real
+// `dist/`, only the repository-contract pin reads `contracts/openapi.yaml`, and nothing is
+// written outside a temp directory.
 import { spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -50,6 +51,18 @@ export const DEV_SIGN_IN_MARKERS = [
 /** Every marker in the gate's order: fixture first, sign-in last. */
 export const MARKERS = [...FIXTURE_MARKERS, ...DEV_SIGN_IN_MARKERS] as const;
 
+/**
+ * The contract every workspace starts with. The gate parses the whole repository contract
+ * (13.8k lines, over 100 ms per spawn) for property names only the error-envelope exemption
+ * uses, so a case that does not name its own contract gets this one instead of the real file.
+ */
+const DEFAULT_CONTRACT = `components:
+  schemas:
+    ProofOnly:
+      properties:
+        contract_property_probe: { type: string }
+`;
+
 /** A corpus body string long enough to count as a leak signal, and absent from production code. */
 export const CORPUS_NAME = 'fixture-only-project-name';
 
@@ -94,15 +107,20 @@ export interface GateWorkspace {
   /** Writes one file below the synthetic build output. */
   output(name: string, text: string): Promise<void>;
   /**
-   * Points the gate at a synthetic contract file instead of `contracts/openapi.yaml`: `text` is
-   * written to the workspace, `null` names a path that does not exist.
+   * Replaces the workspace's default synthetic contract: `text` is written to the workspace,
+   * `null` names a path that does not exist.
    */
   contract(text: string | null): Promise<void>;
+  /**
+   * Runs against the repository's own `contracts/openapi.yaml`, not the synthetic default. A
+   * later `contract()` call replaces the default again, so the last of the two calls wins.
+   */
+  useRepositoryContract(): void;
   /** Runs the gate against this workspace, with the workspace as its cwd. */
   run(args?: readonly string[]): GateResult;
 }
 
-/** Runs the gate once; `env` carries the two proof-only overrides, everything else is inherited. */
+/** Runs the gate once; `env` carries the three proof-only overrides, everything else is inherited. */
 function spawnGate(invocation: {
   readonly cwd: string;
   readonly dist: string;
@@ -110,17 +128,21 @@ function spawnGate(invocation: {
   readonly contract?: string | undefined;
   readonly args?: readonly string[] | undefined;
 }): GateResult {
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    EVIDGATE_WEB_DIST_DIR: invocation.dist,
+    EVIDGATE_WEB_FIXTURE_DIR: invocation.corpus,
+  };
+  if (invocation.contract === undefined) {
+    // The repository-contract case reads the file the gate resolves, never a caller's override.
+    delete env.EVIDGATE_WEB_CONTRACT_FILE;
+  } else {
+    env.EVIDGATE_WEB_CONTRACT_FILE = invocation.contract;
+  }
   const result = spawnSync(process.execPath, [GATE, ...(invocation.args ?? [])], {
     cwd: invocation.cwd,
     encoding: 'utf8',
-    env: {
-      ...process.env,
-      EVIDGATE_WEB_DIST_DIR: invocation.dist,
-      EVIDGATE_WEB_FIXTURE_DIR: invocation.corpus,
-      ...(invocation.contract === undefined
-        ? {}
-        : { EVIDGATE_WEB_CONTRACT_FILE: invocation.contract }),
-    },
+    env,
   });
   return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
@@ -167,14 +189,21 @@ export async function workspace(options: WorkspaceOptions = {}): Promise<GateWor
   if (options.corpus !== false) {
     await mkdir(corpus, { recursive: true });
   }
-  let contractFile: string | undefined;
+  const contractFile = join(root, 'openapi.yaml');
+  await writeFile(contractFile, DEFAULT_CONTRACT, 'utf8');
+  let repositoryContract = false;
   return {
     corpus,
     contract: async (text) => {
-      contractFile = join(root, 'openapi.yaml');
-      if (text !== null) {
+      repositoryContract = false;
+      if (text === null) {
+        await rm(contractFile, { force: true });
+      } else {
         await writeFile(contractFile, text, 'utf8');
       }
+    },
+    useRepositoryContract: () => {
+      repositoryContract = true;
     },
     fixture: async (name, document) => {
       await mkdir(join(corpus, name), { recursive: true });
@@ -185,7 +214,14 @@ export async function workspace(options: WorkspaceOptions = {}): Promise<GateWor
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, text, 'utf8');
     },
-    run: (args) => spawnGate({ cwd: root, dist, corpus, contract: contractFile, args }),
+    run: (args) =>
+      spawnGate({
+        cwd: root,
+        dist,
+        corpus,
+        contract: repositoryContract ? undefined : contractFile,
+        args,
+      }),
   };
 }
 
