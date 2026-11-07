@@ -253,14 +253,16 @@ export class FixtureHttpBackend implements HttpBackend {
         request.body,
         this.retentionPolicies,
       );
-      if (supplement !== undefined) return supplement;
+      // The supplement stays authoritative for `ok`; a malformed write must not reach the corpus row.
+      const variant = this.toggles.variantFor(operation);
+      if (supplement !== undefined || variant === 'ok') return supplement;
     }
     // Keep computed UI specimens outside the corpus registry, whose rows mirror on-disk examples.
     if (request.method === 'GET' && /^\/orgs\/[^/]+\/usage\/summary$/.test(relativePath)) {
       return findUsageSummaryFixture(this.toggles.variantFor('getUsageSummary'));
     }
-    // The Settings strip's admin session needs one grant the corpus row predates; a toggle that
-    // names no specimen falls through, so every corpus variant answers exactly as before.
+    // The retention writer session needs one grant no corpus row holds; a toggle that names no
+    // specimen falls through, so every corpus variant answers exactly as before.
     if (request.method === 'GET' && relativePath === '/permissions') {
       const supplemental = findSettingsRetentionWriteFixture(
         this.toggles.variantFor('listPermissions'),

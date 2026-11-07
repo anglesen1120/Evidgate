@@ -6,6 +6,8 @@ import {
   createCiBinding,
   createIngestToken,
   rotateIngestToken,
+  setRetentionPolicy,
+  type RetentionPolicy,
   updateProject,
 } from '@evidgate/sdk';
 
@@ -146,5 +148,43 @@ describe('fixture backend (09.1.1-T12.1)', () => {
       expect(cause.error.code).toBe(envelope.error.code);
       expect(cause.error.details).toEqual(envelope.error.details ?? []);
     }
+  });
+
+  it('serves the retention out_of_range 422 from the corpus with its envelope details', async () => {
+    toggles.setVariant('setRetentionPolicy', 'out_of_range');
+    const envelope = envelopeOf(documentOf('retention-put-out-of-range'));
+
+    const cause = await rejectionOf(
+      gateway.call((client) =>
+        setRetentionPolicy({
+          client,
+          path: { p: 'p-1' },
+          body: { artifact_days: 100, metadata_days: 120 },
+        }),
+      ),
+    );
+
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) {
+      expect(cause.error.status).toBe(422);
+      expect(cause.error.code).toBe(envelope.error.code);
+      expect(cause.error.details).toEqual(envelope.error.details ?? []);
+    }
+  });
+
+  it('refuses a malformed ok retention write instead of answering the corpus 200', async () => {
+    const missingWindows: Partial<RetentionPolicy> = {};
+    const cause = await rejectionOf(
+      gateway.call((client) =>
+        setRetentionPolicy({
+          client,
+          path: { p: 'p-1' },
+          body: missingWindows as RetentionPolicy,
+        }),
+      ),
+    );
+
+    expect(isApiRequestError(cause)).toBe(true);
+    if (isApiRequestError(cause)) expect(cause.error.status).toBe(501);
   });
 });
