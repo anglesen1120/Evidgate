@@ -5,12 +5,15 @@
 //
 // A review selects it with `?fixture.variant.listPermissions=settings-retention-write`.
 
+import permissionsCatalogue from '../../../../../../contracts/permissions.json';
 import type { FixtureDocument } from './fixture-document';
 import { findFixtureEntry } from './fixture-catalog';
 import type { FixtureEntry } from './fixture-catalog-entries';
 
 /** The toggle value that selects this session; no corpus directory answers it. */
 export const SETTINGS_RETENTION_WRITE_VARIANT = 'settings-retention-write';
+export const SETTINGS_API_TOKENS_READ_VARIANT = 'settings-api-tokens-read';
+export const SETTINGS_API_TOKENS_WRITE_VARIANT = 'settings-api-tokens-write';
 
 const PROJECT_WRITE_ROW: PermissionRow = {
   code: 'project:write',
@@ -39,14 +42,37 @@ function adminPage(): { items: readonly PermissionRow[]; next_cursor: unknown } 
   return { items: body['items'] as readonly PermissionRow[], next_cursor: body['next_cursor'] };
 }
 
+/** API token review grants, copied from the permission catalogue so they cannot drift from it. */
+function apiTokenRows(variant: string): readonly PermissionRow[] {
+  if (variant !== SETTINGS_API_TOKENS_READ_VARIANT && variant !== SETTINGS_API_TOKENS_WRITE_VARIANT)
+    return [];
+  const codes = ['api_token:read', 'run:read'];
+  if (variant === SETTINGS_API_TOKENS_WRITE_VARIANT) codes.push('api_token:write');
+  return codes.map((code) => {
+    const row = permissionsCatalogue.permissions.find((entry) => entry.code === code);
+    if (!row) throw new Error(`The permission catalogue lost ${code}`);
+    return row;
+  });
+}
+
 /**
  * The fixture entry answering `variant`, or `undefined` so the corpus answers as usual — a typo in
  * the toggle must surface as `fixture_not_found` or the corpus page, never as a merged grant set.
  */
 export function findSettingsRetentionWriteFixture(variant: string): FixtureEntry | undefined {
-  if (variant !== SETTINGS_RETENTION_WRITE_VARIANT) return undefined;
+  if (
+    ![
+      SETTINGS_RETENTION_WRITE_VARIANT,
+      SETTINGS_API_TOKENS_READ_VARIANT,
+      SETTINGS_API_TOKENS_WRITE_VARIANT,
+    ].includes(variant)
+  ) {
+    return undefined;
+  }
   const admin = adminPage();
-  const items = [...admin.items, PROJECT_WRITE_ROW].sort((left, right) =>
+  const extra =
+    variant === SETTINGS_RETENTION_WRITE_VARIANT ? [PROJECT_WRITE_ROW] : apiTokenRows(variant);
+  const items = [...admin.items, ...extra].sort((left, right) =>
     left['code'] < right['code'] ? -1 : left['code'] > right['code'] ? 1 : 0,
   );
   const document: FixtureDocument = {
