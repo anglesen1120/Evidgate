@@ -323,10 +323,23 @@ const SessionStoreDefinition = signalStore(
      * Publishes the org the URL now names and empties the scope it replaces. The previous org's
      * projects, and the navigation links built from them, belong to an org the route no longer
      * names, so neither may stay on screen while the new org's grants and project list are read.
+     * Its grants are the same kind of leftover: `permissionsOrgId` names the org they were read
+     * for, so a set that belongs to another org (or to no recorded org) is emptied here instead of
+     * answering `has()` and the navigation gating for the org being switched to. A drop for the
+     * org whose grants are already published — the retry branch of `resolveScope` — keeps them.
      */
     function dropScope(org: OrganizationSummaryDto): void {
       projectsByOrg.clear();
-      patchState(store, { currentOrg: org, currentProject: null, projects: NO_PROJECTS });
+      const keepsGrants = permissionsOrgId === org.id;
+      if (!keepsGrants) {
+        permissionsOrgId = null;
+      }
+      patchState(store, {
+        currentOrg: org,
+        currentProject: null,
+        projects: NO_PROJECTS,
+        permissions: keepsGrants ? store.permissions() : NO_PERMISSIONS,
+      });
     }
 
     /**
