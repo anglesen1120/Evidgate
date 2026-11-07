@@ -39,7 +39,9 @@ public sealed partial class EvidenceRawReportQuotaTests
         spy.Calls.ShouldBe(1);
         var request = spy.Requests.ShouldHaveSingleItem();
         request.Metric.ShouldBe(UsageMetric.Results);
-        request.Period.ShouldBe(await PeriodAsync(world), "the transaction's month is what the counter and the ledger carry");
+        request.Period.ShouldBeNull("the gate resolves the transaction's month inside its own first statement");
+        spy.Answers.ShouldHaveSingleItem().Period.ShouldBe(
+            await PeriodAsync(world), "the month the answer names is what the counter and the ledger carry");
         request.ProjectId.ShouldBe(world.Project, "the run's own project is the counter's owner");
         request.Quantity.ShouldBe(3m, "the quantity is exactly what the batch receipt meters");
         request.IncludeTenantScope.ShouldBeTrue("an org-wide limit must cap a single project's report too");

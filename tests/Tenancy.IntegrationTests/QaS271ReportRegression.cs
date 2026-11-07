@@ -97,9 +97,11 @@ public sealed partial class EvidenceRawReportQuotaTests
 
             var ledgerMonth = await fixture.ScalarAsync<string>(world.Database,
                 $"select period from public.usage_ledger_entry where org_id = '{world.Org:D}' and billing_key = 'batch:{batch:D}:event'");
-            request.Period.ShouldBe(batchMonth);
-            request.Period.ShouldBe(ledgerMonth);
-            request.Period.ShouldNotBe(clock.GetUtcNow().ToString("yyyy-MM", CultureInfo.InvariantCulture));
+            request.Period.ShouldBeNull("the gate resolves the month inside the batch's own transaction");
+            var period = spy.Answers.ShouldHaveSingleItem().Period.ShouldNotBeNull();
+            period.ShouldBe(batchMonth);
+            period.ShouldBe(ledgerMonth);
+            period.ShouldNotBe(clock.GetUtcNow().ToString("yyyy-MM", CultureInfo.InvariantCulture));
         }
 
         [Theory]

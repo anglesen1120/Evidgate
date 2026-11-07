@@ -58,10 +58,14 @@ public sealed class QaS271WorkerGate(PostgresTasksFixture fixture)
         await using var scope = await provider.GetRequiredService<ITenantScopeFactory>()
             .BeginAsync(org, null, false, TestContext.Current.CancellationToken);
         var gate = provider.GetRequiredService<IQuotaGate>();
-        var period = await gate.CurrentPeriodAsync(TestContext.Current.CancellationToken);
-        var answer = await gate.CheckAsync(new QuotaCheckRequest(UsageMetric.Results, period, project, 1m, true),
+        var answer = await gate.CheckAsync(
+            new QuotaCheckRequest(UsageMetric.Results, Period: null, project, 1m, IncludeTenantScope: true),
             TestContext.Current.CancellationToken);
         answer.Decision.ShouldBe(enabled ? QuotaDecision.Block : QuotaDecision.Ok);
+        if (enabled)
+        {
+            answer.Period.ShouldNotBeNull("the gate names the month it decided in");
+        }
     }
 
     private sealed class NoticeProvider : ILoggerProvider

@@ -22,6 +22,7 @@ using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Ingestion.Contracts;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Usage.Application.Commands;
+using Evidgate.Modules.Usage.Application.Queries;
 using Evidgate.Modules.Usage.Application.Quota;
 using Evidgate.Modules.Usage.Contracts;
 using Mediator;
@@ -372,11 +373,19 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
         return revisionId;
     }
 
-    /// <summary>One <c>ready</c> <c>raw_report</c> artifact whose final object the store really holds.</summary>
-    private async Task<Guid> SeedArtifactAsync(World world, byte[] body)
+    /// <summary>
+    /// One <c>ready</c> <c>raw_report</c> artifact whose final object the store really holds. The row may name a
+    /// project other than the run's, which no key ties together, so a case can prove the pre-check asks about the run.
+    /// </summary>
+    /// <param name="world">The world the report belongs to.</param>
+    /// <param name="body">The report's bytes.</param>
+    /// <param name="projectId">The project the row names, or null for the run's own.</param>
+    /// <returns>The artifact's id.</returns>
+    private async Task<Guid> SeedArtifactAsync(World world, byte[] body, Guid? projectId = null)
     {
+        var owner = projectId ?? world.Project;
         var artifactId = Guid.CreateVersion7();
-        var key = ObjectKeyFor(world, artifactId);
+        var key = ObjectKeyFor(world, owner, artifactId);
         var checksum = "sha256:" + Convert.ToHexStringLower(
             System.Security.Cryptography.SHA256.HashData(body));
 
@@ -386,7 +395,7 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
             world.Database,
             "insert into public.artifact (id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, "
             + "media_type, checksum, sensitivity, scan_state, state, bytes, failure_code) values "
-            + $"('{artifactId:D}', '{world.Org:D}', '{world.Project:D}', '{world.RunId:D}', '{ExecutionKey}', 1, "
+            + $"('{artifactId:D}', '{world.Org:D}', '{owner:D}', '{world.RunId:D}', '{ExecutionKey}', 1, "
             + $"'{ArtifactKind.RawReport}', '{key}', '{XmlType}', '{checksum}', 'normal', 'pending', "
             + $"'{ArtifactState.Ready}', {body.LongLength.ToString(CultureInfo.InvariantCulture)}, null)");
 
@@ -394,8 +403,78 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
     }
 
     /// <summary>The final key the artifact row mints, so a test writes and the handler reads the same object.</summary>
-    private static string ObjectKeyFor(World world, Guid artifactId) =>
-        $"org/{world.Org:D}/project/{world.Project:D}/run/{world.RunId:D}/attempt/{ExecutionKey}/1/{artifactId:D}";
+    private static string ObjectKeyFor(World world, Guid projectId, Guid artifactId) =>
+        $"org/{world.Org:D}/project/{projectId:D}/run/{world.RunId:D}/attempt/{ExecutionKey}/1/{artifactId:D}";
+
+    /// <summary>A second project of the world's org, so a counter of another project can be seeded beside the run's.</summary>
+    /// <param name="world">The world the project belongs to.</param>
+    /// <returns>The new project's id.</returns>
+    private async Task<Guid> SeedOtherProjectAsync(World world)
+    {
+        var projectId = Guid.CreateVersion7();
+        var slug = Unique.Slug("quota-other-project");
+
+        await _fixture.ExecuteAsync(
+            world.Database,
+            "insert into public.project (id, org_id, name, slug) "
+            + $"values ('{projectId:D}', '{world.Org:D}', '{slug}', '{slug}')");
+
+        return projectId;
+    }
+
+    /// <summary>A foreign tenant with one project, so a counter that must never block this one can be seeded.</summary>
+    /// <param name="world">The world the foreign tenant is seeded beside.</param>
+    /// <returns>The foreign org and project ids.</returns>
+    private async Task<(Guid Org, Guid Project)> SeedForeignOrgAsync(World world)
+    {
+        var orgId = Guid.CreateVersion7();
+        var projectId = Guid.CreateVersion7();
+        var slug = Unique.Slug("quota-foreign");
+
+        await _fixture.ExecuteAsync(
+            world.Database,
+            "insert into public.organization (id, name, slug) "
+            + $"values ('{orgId:D}', '{slug}', '{slug}'); "
+            + "insert into public.project (id, org_id, name, slug) "
+            + $"values ('{projectId:D}', '{orgId:D}', '{slug}', '{slug}')");
+
+        return (orgId, projectId);
+    }
+
+    /// <summary>How many audit rows the tenant holds, so a stamp that writes none can be told from one that does.</summary>
+    /// <param name="world">The attempt's world.</param>
+    /// <returns>The audit count.</returns>
+    private Task<long> AuditCountAsync(World world) =>
+        _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.audit_log where org_id = '{world.Org:D}'");
+
+    /// <summary>
+    /// The blocked stamp the usage summary reports for the run's project, read through the settings page's own query:
+    /// an operator must see the pre-check's refusal there, not only in the counter row.
+    /// </summary>
+    /// <param name="counters">The counters world whose permissive host dispatches the query.</param>
+    /// <param name="world">The attempt's world.</param>
+    /// <returns>The project counter's <c>blocked_at</c>, or null when it is not blocked.</returns>
+    private static async Task<DateTimeOffset?> SummaryBlockedAtAsync(UsageQuotaWorld counters, World world)
+    {
+        await using var services = counters.Commands.Services.CreateAsyncScope();
+        var provider = services.ServiceProvider;
+        using var tenant = provider.GetRequiredService<IRequestTenantContextSetter>().Publish(world.Org, null);
+        using var principal = provider.GetRequiredService<IRequestPrincipalSetter>()
+            .Publish(RequestPrincipal.Service(world.Project, [Permissions.Usage.Read]));
+
+        var answer = await provider.GetRequiredService<IMediator>().Send(
+            new GetUsageSummaryQuery(world.Org, world.Project, Cursor: null, Limit: 50),
+            Token);
+        answer.IsSuccess.ShouldBeTrue(answer.Error?.Message);
+
+        return answer.Value.Metrics
+            .Single(metric => string.Equals(metric.Metric, "results", StringComparison.Ordinal))
+            .Projects
+            .ShouldHaveSingleItem()
+            .BlockedAt;
+    }
 
     /// <summary>The handler the task consumer builds, over the host's own registrations, minus the queue.</summary>
     /// <param name="world">The attempt's world.</param>

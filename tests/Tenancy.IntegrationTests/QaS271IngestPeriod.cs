@@ -18,13 +18,15 @@ public sealed partial class IngestQuotaTests
         public async Task Ingest_ApplicationCrossesMonthEnd_GateBatchAndLedgerKeepTheDatabaseTransactionMonth()
         {
             var subject = new IngestQuotaTests(fixture);
+            // A host clock at a month end the database is not in: were the month read from the application clock, the
+            // gate would look for a counter of 2020-03 and admit the batch without charging the real one.
             var clock = new FakeTimeProvider(new DateTimeOffset(2020, 3, 31, 23, 59, 59, TimeSpan.Zero));
             var spy = new QuotaGateSpy();
             await using var world = await subject.StartIngestAsync(services: services =>
             {
                 services.RemoveAll<TimeProvider>();
                 services.AddSingleton<TimeProvider>(clock);
-                ReplaceWith<IQuotaGate>(services, inner => new CrossingClockGate(new SpyQuotaGate(inner, spy), clock));
+                ReplaceWith<IQuotaGate>(services, inner => new SpyQuotaGate(inner, spy));
             });
             var answer = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L));
             answer.Status.ShouldBe(System.Net.HttpStatusCode.OK, answer.ErrorMessage);
@@ -36,29 +38,14 @@ public sealed partial class IngestQuotaTests
             var ledgerMonth = await world.ScalarAsync<string>(
                 $"select period from public.usage_ledger_entry where org_id = '{world.Org:D}' and billing_key = 'batch:{batch:D}:event'");
 
-            clock.GetUtcNow().ToString("yyyy-MM", CultureInfo.InvariantCulture).ShouldBe("2020-04");
-            request.Period.ShouldBe(batchMonth);
-            request.Period.ShouldBe(ledgerMonth);
-            request.Period.ShouldNotBe("2020-03");
-            request.Period.ShouldNotBe("2020-04");
+            clock.GetUtcNow().ToString("yyyy-MM", CultureInfo.InvariantCulture).ShouldBe("2020-03");
+            request.Period.ShouldBeNull("the gate resolves the month inside the batch's own transaction");
+            var period = spy.Answers.ShouldHaveSingleItem().Period.ShouldNotBeNull();
+            period.ShouldBe(batchMonth);
+            period.ShouldBe(ledgerMonth);
+            period.ShouldNotBe("2020-03");
             world.Host.Statements.Snapshot().ShouldContain(statement =>
                 statement.Contains("transaction_timestamp() at time zone 'UTC'", StringComparison.Ordinal));
-        }
-
-        private sealed class CrossingClockGate(IQuotaGate inner, FakeTimeProvider clock) : IQuotaGate
-        {
-            public Task<QuotaCheckResult> CheckAsync(QuotaCheckRequest request, CancellationToken cancellationToken) =>
-                inner.CheckAsync(request, cancellationToken);
-
-            public async Task<string> CurrentPeriodAsync(CancellationToken cancellationToken)
-            {
-                var period = await inner.CurrentPeriodAsync(cancellationToken);
-                clock.Advance(TimeSpan.FromSeconds(2));
-                return period;
-            }
-
-            public Task<QuotaCheckResult> PeekAsync(QuotaCheckRequest request, CancellationToken cancellationToken) =>
-                inner.PeekAsync(request, cancellationToken);
         }
     }
 }
