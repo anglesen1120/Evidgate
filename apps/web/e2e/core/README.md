@@ -51,10 +51,11 @@ web server builds the fixtures bundle itself (`npm run build:core:e2e`); specs r
   after it (`playwright-a11y`, `playwright-core`, `playwright-smoke`, 7 days, never the stored auth
   state) because every Playwright run empties `test-results`.
 - Retries: none, except for a test whose title carries `@infra` (browser or runner flake), which the
-  `core-infra` project (core suite) and the `chromium-infra` project (production smoke) retry twice;
+  `core-infra` project (core suite) and the `chromium-infra` project (production smoke, CI only) retry twice;
   the tag regex lives in `e2e/infra-tag.ts`. A product assertion is never tagged.
 - Ports: every Playwright webServer (`playwright.config.ts`, `playwright.core.config.ts`,
   `playwright.fixtures.config.ts`; the dev-login config reuses the production one) takes a random
   port in 20000-29999 (`e2e/infra-tag.ts`), below every OS ephemeral range (Linux 32768-60999,
-  macOS/Windows 49152-65535), so a Docker or SSH forward cannot hold it. Pin one with
-  `EVIDGATE_WEB_E2E_PORT` or `EVIDGATE_WEB_FIXTURES_E2E_PORT`.
+  macOS/Windows 49152-65535), so an automatically allocated Docker or SSH forward never lands on
+  it (an explicitly published port still can: the server then exits with `EADDRINUSE`). Pin one
+  with `EVIDGATE_WEB_E2E_PORT` or `EVIDGATE_WEB_FIXTURES_E2E_PORT`.
