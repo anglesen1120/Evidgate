@@ -10,8 +10,9 @@ namespace Tenancy.IntegrationTests;
 /// refused both because the service ceiling never carries a member's permission.
 /// </summary>
 /// <remarks>
-/// The roles are the built-in ones granted through the membership route, so this suite proves the seeded grant table as
-/// well as the handler's gate. A viewer or a release approver can still read, which is the point of separating the codes.
+/// The roles are the built-in ones seeded on the membership, so this suite proves the permission tables the evaluator
+/// joins as well as the handler's gate. A viewer or a release approver can still read, which is the point of separating
+/// the codes.
 /// </remarks>
 [Trait("Category", "Docker")]
 public sealed class AiSettingsAuthorizationTests

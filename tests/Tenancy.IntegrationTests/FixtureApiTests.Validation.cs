@@ -88,7 +88,7 @@ public sealed partial class FixtureApiTests
     {
         await using var world = await StartAsync();
         await CreateFixtureAsync(world, "orders");
-        var viewer = await AddMemberAsync(_fixture, world.Client, world.Database, world.Org, world.Admin, "viewer");
+        var viewer = await AddMemberAsync(_fixture, world.Database, world.Org, "viewer");
 
         var refused = await CreateAsync(world, Body("users"), caller: world.CallerFor(viewer));
 
@@ -107,7 +107,7 @@ public sealed partial class FixtureApiTests
     {
         await using var world = await StartAsync();
         var fixtureId = await CreateFixtureAsync(world, "orders");
-        var outsider = await AddMemberAsync(_fixture, world.Client, world.Database, world.Org, world.Admin, roleCode: null);
+        var outsider = await AddMemberAsync(_fixture, world.Database, world.Org, roleCode: null);
 
         var list = await ListAsync(world, caller: world.CallerFor(outsider));
         var detail = await GetAsync(world, fixtureId, caller: world.CallerFor(outsider));

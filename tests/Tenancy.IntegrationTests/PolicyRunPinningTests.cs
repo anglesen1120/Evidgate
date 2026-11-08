@@ -120,6 +120,7 @@ public sealed class PolicyRunPinningTests
              where m.org_id = '{world.Org}' and m.user_id = '{user}'
                and r.code = '{roleCode}' and r.org_id is null;
             """);
+        await AssertRoleSeededAsync(_fixture, world.Database, world.Org, user, roleCode);
 
         return user;
     }

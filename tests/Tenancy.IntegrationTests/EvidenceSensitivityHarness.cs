@@ -233,6 +233,7 @@ public sealed partial class EvidenceSensitivityTests
                  where m.org_id = '{world.Org:D}' and m.user_id = '{user:D}'
                    and r.code = '{roleCode}' and r.org_id is null;
                 """);
+            await AssertRoleSeededAsync(_fixture, world.Database, world.Org, user, roleCode);
         }
 
         return user;
