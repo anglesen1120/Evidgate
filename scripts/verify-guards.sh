@@ -263,6 +263,102 @@ run_trait_stage() {
   done
 }
 
+# --- parallel test stage ------------------------------------------------------
+# The `test` stage's Docker half. One Tenancy.IntegrationTests process is the
+# critical path of the whole stage (5.6k tests, one PostgreSQL container, at most
+# four classes at a time), so its classes are split over EVIDGATE_TENANCY_SHARDS
+# processes (default 3), each with its own container, and the other test projects
+# run beside them. A class belongs to the shard its name hashes to, so a new class
+# lands in exactly one shard without a manifest to forget. The shard totals must
+# add up to the discovered total, and every process's verdict is kept: one failure
+# anywhere fails the stage after all logs are shown.
+TENANCY_PROJECT=tests/Tenancy.IntegrationTests
+
+# `tenancy_classes <listing>`: the fully qualified test classes of a --list-tests listing.
+tenancy_classes() {
+  printf '%s\n' "$1" | sed -n -E '/^  [A-Za-z]/{s/\(.*$//;s/^  //;s/\.[^.]*$//;p;}' | sort -u
+}
+
+# `test_log_total <log>`: the "total:" count of one run's summary, 0 when absent.
+test_log_total() {
+  sed -n 's/^  total: \([0-9][0-9]*\)$/\1/p' "$1" | tail -n 1 | grep . || echo 0
+}
+
+# Background runs of this stage: parallel arrays of pid, name and log file.
+PT_PIDS=() PT_NAMES=() PT_FILES=()
+
+# `start_test_run <name> <log> <dotnet test args...>`: one background run.
+start_test_run() {
+  local name="$1" log="$2"
+  shift 2
+  dotnet test --no-build -c Release --no-progress "$@" >"$log" 2>&1 &
+  PT_PIDS+=("$!") PT_NAMES+=("$name") PT_FILES+=("$log")
+}
+
+# `start_tenancy_shards <shards> <logs dir> <classes>`: one run per non-empty shard.
+start_tenancy_shards() {
+  local shards="$1" logs="$2" class index i
+  local -a members
+  while IFS= read -r class; do
+    index="$(( $(printf '%s' "$class" | cksum | cut -d' ' -f1) % shards ))"
+    printf '%s\n' "$class" >>"$logs/classes.$index"
+  done <<<"$3"
+  for ((i = 0; i < shards; i++)); do
+    [[ -f "$logs/classes.$i" ]] || continue
+    members=()
+    while IFS= read -r class; do members+=("$class"); done <"$logs/classes.$i"
+    echo "   tenancy shard $i: ${#members[@]} classes"
+    start_test_run "tenancy-$i" "$logs/tenancy-$i.log" \
+      --project "$TENANCY_PROJECT" --filter-class "${members[@]}"
+  done
+}
+
+run_parallel_tests() {
+  local shards="${EVIDGATE_TENANCY_SHARDS:-3}" logs listing discovered classes project name
+  local total=0 failed=0 i
+  PT_PIDS=() PT_NAMES=() PT_FILES=()
+  if ! [[ "$shards" =~ ^[1-9][0-9]*$ ]]; then
+    echo "verify: EVIDGATE_TENANCY_SHARDS must be a positive integer, got '$shards'" >&2
+    return 2
+  fi
+  listing="$(dotnet test --no-build -c Release --project "$TENANCY_PROJECT" --list-tests 2>&1)" || {
+    printf '%s\n' "$listing" >&2
+    return 1
+  }
+  discovered="$(printf '%s\n' "$listing" | sed -n 's/^Discovered \([0-9][0-9]*\) tests in assembly.*/\1/p' | tail -n 1)"
+  classes="$(tenancy_classes "$listing")"
+  if [[ -z "$discovered" || "$discovered" -eq 0 || -z "$classes" ]]; then
+    echo "verify: test discovery of $TENANCY_PROJECT found no test" >&2
+    return 1
+  fi
+  logs="$(mktemp -d)"
+  start_tenancy_shards "$shards" "$logs" "$classes"
+  for project in tests/*/*.csproj; do
+    [[ "$project" == "$TENANCY_PROJECT"/* ]] && continue
+    name="$(basename "$(dirname "$project")")"
+    start_test_run "$name" "$logs/$name.log" --project "$project"
+  done
+  for i in "${!PT_PIDS[@]}"; do
+    if wait "${PT_PIDS[$i]}"; then
+      echo "== ${PT_NAMES[$i]}: passed ($(test_log_total "${PT_FILES[$i]}") tests)"
+    else
+      echo "== ${PT_NAMES[$i]}: FAILED (exit $?)"
+      failed=1
+      cat "${PT_FILES[$i]}"
+    fi
+    if [[ "${PT_NAMES[$i]}" == tenancy-* ]]; then
+      total=$((total + $(test_log_total "${PT_FILES[$i]}")))
+    fi
+  done
+  echo "   tenancy: $total tests run in $shards shard(s), $discovered discovered"
+  if [[ "$total" -ne "$discovered" ]]; then
+    echo "verify: the tenancy shards ran $total tests but discovery found $discovered" >&2
+    failed=1
+  fi
+  rm -rf "$logs"
+  return "$failed"
+}
+
 # --- argument parsing ---------------------------------------------------------
 # `in_list <name> <names...>`: membership over an explicit list.
 in_list() {

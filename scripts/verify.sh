@@ -158,8 +158,8 @@ run_stage() {
         exit 1
       fi
     else
-      stage "dotnet test (unit, architecture, Docker integration)"
-      dotnet test --no-build -c Release --solution Evidgate.slnx
+      stage "dotnet test (unit, architecture, Docker integration; Tenancy sharded)"
+      run_parallel_tests
     fi
     ;;
   isolation)
