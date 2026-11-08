@@ -1467,7 +1467,15 @@ paths:
         joined from `environment_revision` + `environment` through
         `run.environment_revision_id`), and `shard_count` plus
         `declared_producers` (the run's `producer_slot` rows in `shard_index`
-        order, `shard-<n>`). Evidence `completeness`/`missing[]` are a later,
+        order, `shard-<n>`) and `producers`, one item per slot in the same
+        order: its `identity_state` (`bound` once the slot holds a token
+        identity, `unbound` while it holds none — the identity's value is
+        never served) and `finalize_status`, `last_sequence`, the stored
+        `count` next to the declared `expected` (`null` while the slot is
+        open), and the slot's own `stale_epoch_events` /
+        `after_cancel_events`. A `count` below `expected` is the slot's
+        missing events, derived by the client.
+        Evidence `completeness`/`missing[]` are a later,
         separate read (09.3.1-T3 with 07.5.2). Another tenant's run —
         or, for a project-scoped credential, another project's — is 404, the same
         `not_found` body as an unknown id.
@@ -9699,6 +9707,7 @@ components:
           environment,
           shard_count,
           declared_producers,
+          producers,
           releases,
           after_cancel_events,
           state_history,
@@ -9771,6 +9780,17 @@ components:
             minLength: 1
             maxLength: 128
             pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'
+        producers:
+          type: array
+          maxItems: 256
+          description: >-
+            One item per stored `producer_slot` row of the run (`0029`/`0035`), in `shard_index`
+            order — the same order as `declared_producers` — with the slot's finalized and identity
+            facts and the counts of its stored `event` rows. An empty array — never `null` — is a run
+            whose slots were never registered. Bounded to 256 items, the range of the
+            `producer_slot.shard_index` check, so `shard_count` stays the true count.
+          items:
+            $ref: '#/components/schemas/RunProducerSlot'
         releases:
           type: array
           description: >-
@@ -9837,6 +9857,74 @@ components:
         component_key:
           type: string
           pattern: '^[a-z0-9][a-z0-9_-]{0,63}$'
+    RunProducerSlot:
+      type: object
+      description: >-
+        One producer slot of a run (`producer_slot`, 0029/0035) with the counts of its stored
+        `event` rows. The binding behind `identity_state` is never served, only the state
+        it implies.
+      additionalProperties: false
+      required:
+        [
+          producer_id,
+          identity_state,
+          finalize_status,
+          last_sequence,
+          count,
+          expected,
+          stale_epoch_events,
+          after_cancel_events,
+        ]
+      properties:
+        producer_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'
+        identity_state:
+          type: string
+          enum: [unbound, bound]
+          description: >-
+            `bound` once the slot holds a token identity, `unbound` while it holds none. The bind that sets the
+            identity also stores the slot's CI run reference in the same write, so those are the only two states; the
+            identity's value is never served.
+        finalize_status:
+          type: string
+          enum: [open, finalized]
+          description: >-
+            `finalized` once `closed_at` is set, the column 0035 keeps null together with
+            `declared_last_sequence` and `declared_count`; `open` until then.
+        last_sequence:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The highest producer sequence the slot reported, 0 before its first event.
+        count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: >-
+            How many stored `event` rows name this producer, finalized or not. A value below
+            `expected` is a slot whose events never all arrived; the client derives the mismatch.
+        expected:
+          type: [integer, 'null']
+          format: int64
+          minimum: 0
+          description: >-
+            The event count the slot declared when it finalized (`producer_slot.declared_count`),
+            `null` while the slot is open.
+        stale_epoch_events:
+          type: integer
+          format: int64
+          minimum: 0
+          description: How many of the slot's event rows are flagged `stale` (an event of an older epoch).
+        after_cancel_events:
+          type: integer
+          format: int64
+          minimum: 0
+          description: >-
+            How many of the slot's event rows are flagged `after_cancel`, the per-slot counterpart
+            of the run-level count.
     RunSummary:
       type: object
       description: >-

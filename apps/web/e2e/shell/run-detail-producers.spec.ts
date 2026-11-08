@@ -1,5 +1,6 @@
-// The producers section on the real page: `GET /v1/runs/{r}` serves only `declared_producers` and
-// `shard_count`, so a row names one slot id and every other fact is the shared unavailable state.
+// The producers section on the real page: the page reads only `declared_producers` and `shard_count`,
+// so a row names one slot id and every other fact is the shared unavailable state. The run read now
+// serves `producers` too, but wiring those facts into the table is a later change.
 // The empty and fifty-slot runs are derived catalog rows, because the corpus holds neither.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import readyFixture from '../../../../fixtures/web-api/run-detail/input.json';

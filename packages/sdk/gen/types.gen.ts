@@ -75,6 +75,10 @@ export type RunStateDto = {
      */
     declared_producers: Array<string>;
     /**
+     * One item per stored `producer_slot` row of the run (`0029`/`0035`), in `shard_index` order — the same order as `declared_producers` — with the slot's finalized and identity facts and the counts of its stored `event` rows. An empty array — never `null` — is a run whose slots were never registered. Bounded to 256 items, the range of the `producer_slot.shard_index` check, so `shard_count` stays the true count.
+     */
+    producers: Array<RunProducerSlot>;
+    /**
      * The releases this run is bound to, one item per stored `release_run` row, ordered by its `created_at` then id. An empty array — never `null` — is a run bound to nothing. A release of another org or project is never listed.
      */
     releases: Array<RunReleaseRef>;
@@ -113,6 +117,41 @@ export type RunReleaseRef = {
     release_id: string;
     release_name: string;
     component_key: string;
+};
+
+/**
+ * One producer slot of a run (`producer_slot`, 0029/0035) with the counts of its stored `event` rows. The binding behind `identity_state` is never served, only the state it implies.
+ */
+export type RunProducerSlot = {
+    producer_id: string;
+    /**
+     * `bound` once the slot holds a token identity, `unbound` while it holds none. The bind that sets the identity also stores the slot's CI run reference in the same write, so those are the only two states; the identity's value is never served.
+     */
+    identity_state: 'unbound' | 'bound';
+    /**
+     * `finalized` once `closed_at` is set, the column 0035 keeps null together with `declared_last_sequence` and `declared_count`; `open` until then.
+     */
+    finalize_status: 'open' | 'finalized';
+    /**
+     * The highest producer sequence the slot reported, 0 before its first event.
+     */
+    last_sequence: number;
+    /**
+     * How many stored `event` rows name this producer, finalized or not. A value below `expected` is a slot whose events never all arrived; the client derives the mismatch.
+     */
+    count: number;
+    /**
+     * The event count the slot declared when it finalized (`producer_slot.declared_count`), `null` while the slot is open.
+     */
+    expected: number | null;
+    /**
+     * How many of the slot's event rows are flagged `stale` (an event of an older epoch).
+     */
+    stale_epoch_events: number;
+    /**
+     * How many of the slot's event rows are flagged `after_cancel`, the per-slot counterpart of the run-level count.
+     */
+    after_cancel_events: number;
 };
 
 /**

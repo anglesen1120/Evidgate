@@ -78,6 +78,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
           'environment',
           'manifest_hash',
           'policy_revision_id',
+          'producers',
           'purpose',
           'ref',
           'releases',
