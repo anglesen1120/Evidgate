@@ -163,4 +163,66 @@ public sealed class ContractSchemaWarmUpTests
         requestError.Message.ShouldBe(warmUpError.Message);
         warmUpError.Message.ShouldContain(missing);
     }
+
+    [Fact]
+    public async Task DisposeBeforeStop_MakesTheStopANoOp()
+    {
+        var warmUp = new ContractSchemaWarmUpService(
+            new ServiceCollection().BuildServiceProvider(),
+            NullLogger<ContractSchemaWarmUpService>.Instance);
+
+        // A test factory disposes its container before the host stops the hosted services it owned.
+        warmUp.Dispose();
+
+        await Should.NotThrowAsync(() => warmUp.StopAsync(TestContext.Current.CancellationToken));
+        await Should.NotThrowAsync(() => warmUp.StopAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task StopThenDispose_StopsAndDisposesTwiceWithoutThrowing()
+    {
+        var warmUp = new ContractSchemaWarmUpService(
+            new ServiceCollection().BuildServiceProvider(),
+            NullLogger<ContractSchemaWarmUpService>.Instance);
+
+        await Should.NotThrowAsync(() => warmUp.StopAsync(TestContext.Current.CancellationToken));
+        await Should.NotThrowAsync(() => warmUp.StopAsync(TestContext.Current.CancellationToken));
+        Should.NotThrow(warmUp.Dispose);
+        Should.NotThrow(warmUp.Dispose);
+        await Should.NotThrowAsync(() => warmUp.StopAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ConcurrentStopsAndDispose_NeverThrow()
+    {
+        for (var iteration = 0; iteration < 200; iteration++)
+        {
+            var warmUp = new ContractSchemaWarmUpService(
+                new ServiceCollection().BuildServiceProvider(),
+                NullLogger<ContractSchemaWarmUpService>.Instance);
+            using var go = new ManualResetEventSlim();
+
+            // The host stop and the container dispose race in both directions, so all three calls are held at one
+            // start line; every interleaving of cancel and dispose of the same source has to stay legal.
+            var stops = Enumerable.Range(0, 2)
+                .Select(_ => Task.Run(
+                    () =>
+                    {
+                        go.Wait(TestContext.Current.CancellationToken);
+                        return warmUp.StopAsync(TestContext.Current.CancellationToken);
+                    },
+                    TestContext.Current.CancellationToken))
+                .ToArray();
+            var dispose = Task.Run(
+                () =>
+                {
+                    go.Wait(TestContext.Current.CancellationToken);
+                    warmUp.Dispose();
+                },
+                TestContext.Current.CancellationToken);
+
+            go.Set();
+            await Should.NotThrowAsync(() => Task.WhenAll(stops.Append(dispose)));
+        }
+    }
 }
