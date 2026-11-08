@@ -35,7 +35,11 @@ public sealed class OutboxBacklogGaugeTests
     {
         var database = await _fixture.CreateDatabaseAsync();
         await SeedAsync(database, 3);
-        var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        var activity = new NpgsqlActivityCounter();
+        var builder = new NpgsqlDataSourceBuilder(
+            new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database)) { MaxPoolSize = 2 }.ConnectionString);
+        builder.UseLoggerFactory(activity);
+        await using var dataSource = builder.Build();
         var time = new FakeTimeProvider();
         var log = new RefreshFailureLog();
         using var dispatcher = NewDispatcher(dataSource, time, log);
@@ -50,11 +54,16 @@ public sealed class OutboxBacklogGaugeTests
         await stop.CancelAsync();
         await refresher;
 
-        // No refresher and no reachable database: a callback that touched the data
-        // source would throw (swallowed, so it would report nothing) instead of
-        // returning the cached value.
-        await dataSource.DisposeAsync();
-        collector.Collect().ShouldBe(new long[] { 3 });
+        // Against a live data source, a scrape must leave no trace in it: no
+        // connection open, no command.
+        var before = activity.Entries;
+        before.ShouldBeGreaterThan(0);
+        for (var i = 0; i < 3; i++)
+        {
+            collector.Collect().ShouldBe(new long[] { 3 });
+        }
+
+        activity.Entries.ShouldBe(before);
         log.Failures.ShouldBe(0);
     }
 
@@ -103,12 +112,16 @@ public sealed class OutboxBacklogGaugeTests
         await log.WaitForFailuresAsync(1, Token);
         collector.Collect().ShouldBe(new long[] { 5 });
 
-        // The refresher keeps failing, so the last value is never renewed; once it
-        // is older than the max age the gauge stops reporting it.
+        // The refresher keeps failing, so the last value is never renewed. At exactly
+        // the max age it is still reported; one tick later it is not.
         time.Advance(OutboxDispatcher.BacklogRefreshInterval);
         await log.WaitForFailuresAsync(2, Token);
+        collector.Collect().ShouldBe(new long[] { 5 });
         time.Advance(TimeSpan.FromSeconds(1));
         collector.Collect().ShouldBeEmpty();
+
+        // A persistent outage warns once; the repeats are demoted.
+        log.Warnings.ShouldBe(1);
 
         await stop.CancelAsync();
         await refresher;
@@ -199,12 +212,15 @@ public sealed class OutboxBacklogGaugeTests
         public void Dispose() => _listener.Dispose();
     }
 
-    /// <summary>Counts the refresh-failure warnings so a test can wait for a failed pass instead of sleeping.</summary>
+    /// <summary>Counts the refresh-failure log entries (any level) so a test can wait for a failed pass instead of sleeping.</summary>
     private sealed class RefreshFailureLog : ILogger<OutboxDispatcher>
     {
         private int _failures;
+        private int _warnings;
 
         internal int Failures => Volatile.Read(ref _failures);
+
+        internal int Warnings => Volatile.Read(ref _warnings);
 
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull => null;
@@ -213,10 +229,17 @@ public sealed class OutboxBacklogGaugeTests
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            if (logLevel == LogLevel.Warning && exception is not null)
+            if (exception is null)
             {
-                Interlocked.Increment(ref _failures);
+                return;
             }
+
+            if (logLevel == LogLevel.Warning)
+            {
+                Interlocked.Increment(ref _warnings);
+            }
+
+            Interlocked.Increment(ref _failures);
         }
 
         internal async Task WaitForFailuresAsync(int count, CancellationToken cancellationToken)
@@ -227,6 +250,35 @@ public sealed class OutboxBacklogGaugeTests
             {
                 await Task.Delay(25, timeout.Token);
             }
+        }
+    }
+
+    /// <summary>Counts every Npgsql log entry (connection open, command, ...), i.e. any database activity of a data source.</summary>
+    private sealed class NpgsqlActivityCounter : ILoggerFactory
+    {
+        private int _entries;
+
+        internal int Entries => Volatile.Read(ref _entries);
+
+        public void AddProvider(ILoggerProvider provider)
+        {
+        }
+
+        public ILogger CreateLogger(string categoryName) => new CountingLogger(this);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CountingLogger(NpgsqlActivityCounter owner) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state)
+                where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                Interlocked.Increment(ref owner._entries);
         }
     }
 }

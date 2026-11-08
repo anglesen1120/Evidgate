@@ -21,6 +21,9 @@ public sealed partial class OutboxDispatcher
 
     private volatile Backlog? _backlog;
 
+    /// <summary>Touched only by the single refresher loop; decides warn versus debug.</summary>
+    private bool _refreshFailing;
+
     /// <summary>
     /// Keeps the <c>outbox_undispatched</c> cache fresh until cancelled: counts once
     /// immediately, then every <see cref="BacklogRefreshInterval"/>. Independent of
@@ -60,6 +63,7 @@ public sealed partial class OutboxDispatcher
                 cancellationToken: cancellationToken)).ConfigureAwait(false);
 
             _backlog = new Backlog(count, _time.GetTimestamp());
+            _refreshFailing = false;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -67,7 +71,17 @@ public sealed partial class OutboxDispatcher
         }
         catch (Exception exception)
         {
-            LogUndispatchedCountFailed(exception);
+            // One warning on the transition, Debug while the outage persists: the
+            // refresher ticks every interval whether or not anything scrapes it.
+            if (_refreshFailing)
+            {
+                LogUndispatchedCountFailedAgain(exception);
+            }
+            else
+            {
+                LogUndispatchedCountFailed(exception);
+                _refreshFailing = true;
+            }
         }
     }
 
@@ -93,4 +107,10 @@ public sealed partial class OutboxDispatcher
         Level = LogLevel.Warning,
         Message = "outbox_undispatched count refresh failed; the gauge keeps the last value until it ages out")]
     private partial void LogUndispatchedCountFailed(Exception exception);
+
+    [LoggerMessage(
+        EventId = 2361,
+        Level = LogLevel.Debug,
+        Message = "outbox_undispatched count refresh still failing")]
+    private partial void LogUndispatchedCountFailedAgain(Exception exception);
 }
