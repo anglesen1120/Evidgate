@@ -309,7 +309,7 @@ internal sealed partial class ParseRawReportHandler
 
     /// <summary>The deferred probe with the run facts joined inside a lateral whose own filter is the probe, so a first attempt never reaches the run; no lock is taken.</summary>
     private const string DeferredRunSql = $"""
-        with deferred as ({DeferredProbeSql})
+        with deferred as (select {DeferredProbeSql})
         select d.deferred as "Deferred",
                f."RunState", f."ProjectState", f."LateWindowOpen", f."ProjectId"
           from deferred d
