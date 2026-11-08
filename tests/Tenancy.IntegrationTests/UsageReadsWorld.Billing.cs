@@ -406,4 +406,3 @@ internal sealed class LateLedgerRowWriter : IAsyncDisposable
         await _watcher.DisposeAsync();
     }
 }
-
