@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Security.Claims;
 using System.Text.Json;
 using Evidgate.Modules.Identity.Options;
 using Microsoft.Extensions.Options;
@@ -141,10 +140,26 @@ internal sealed class GitHubOidcValidator(IOptions<CiAuthOptions> options, IGitH
 
     private bool IsAllowedEvent(JsonWebToken jwt)
     {
-        // Claims keeps the JSON type: a number, boolean or array yields a non-string ValueType or several claims, never one string.
-        var matches = jwt.Claims.Where(c => c.Type == "event_name").Take(2).ToList();
+        // The claim set flattens a one-element array to a string and keeps only the last of duplicate properties, so the
+        // signed payload itself is inspected: exactly one event_name property whose JSON value is a string.
+        try
+        {
+            using var payload = JsonDocument.Parse(Base64UrlEncoder.DecodeBytes(jwt.EncodedPayload));
+            string? eventName = null;
+            var count = 0;
 
-        return matches is [{ ValueType: ClaimValueTypes.String, Value: { } eventName }] && _allowedEvents.Contains(eventName);
+            foreach (var property in payload.RootElement.EnumerateObject().Where(p => p.NameEquals("event_name")))
+            {
+                count++;
+                eventName = property.Value.ValueKind == JsonValueKind.String ? property.Value.GetString() : null;
+            }
+
+            return count == 1 && eventName is not null && _allowedEvents.Contains(eventName);
+        }
+        catch (Exception e) when (e is JsonException or FormatException or InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private static GitHubOidcClaims? Extract(JsonWebToken jwt)

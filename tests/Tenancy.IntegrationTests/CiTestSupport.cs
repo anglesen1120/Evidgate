@@ -100,7 +100,12 @@ internal sealed class TestJwks : IGitHubJwksProvider
             SigningCredentials = new SigningCredentials(key, options.Algorithm),
         };
 
-        return Handler.CreateToken(descriptor);
+        var token = Handler.CreateToken(descriptor);
+
+        // Re-signs a payload whose JSON the claim dictionary cannot express (duplicate property names).
+        return options.RewritePayload is null
+            ? token
+            : Handler.CreateToken(options.RewritePayload(Base64UrlEncoder.Decode(token.Split('.')[1])), descriptor.SigningCredentials);
     }
 
     internal sealed class TokenOptions
@@ -116,6 +121,8 @@ internal sealed class TestJwks : IGitHubJwksProvider
         public TimeSpan NotBeforeOffset { get; set; } = TimeSpan.FromSeconds(-5);
 
         public TimeSpan ExpiresOffset { get; set; } = TimeSpan.FromMinutes(5);
+
+        public Func<string, string>? RewritePayload { get; set; }
 
         private const string KeyId_ = TestJwks.KeyId;
     }

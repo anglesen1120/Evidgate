@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using Evidgate.Modules.Identity.Ci;
 using Evidgate.Modules.Identity.Options;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Shouldly;
@@ -193,6 +194,18 @@ public sealed class CiUnitTests
         result.Failed.ShouldBeTrue();
         result.FailureMessage.ShouldContain("EVIDGATE__CI__DENIEDEVENTNAMES");
         new CiAuthOptionsValidator().Validate(null, new CiAuthOptions { DeniedEventNames = string.Empty }).Failed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("EVIDGATE:Ci:DeniedEventNames", "schedule")]
+    [InlineData("EVIDGATE:Ci:DeniedEventNames", "")]
+    [InlineData("EVIDGATE:Ci:AllowedEventNames", " ")]
+    public void ConfigurationBinder_FeedsTheEventNameChecks_SoAnOperatorMistakeFailsBoot(string key, string value)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { [key] = value }).Build();
+        var options = configuration.GetSection("EVIDGATE:Ci").Get<CiAuthOptions>()!;
+
+        new CiAuthOptionsValidator().Validate(null, options).Failed.ShouldBeTrue();
     }
 
     // ------------------------------------------------------------ lifetime

@@ -291,24 +291,33 @@ public sealed class CiAuthTests : IAsyncLifetime
             .ErrorCode.ShouldBe("token_invalid", eventName);
     }
 
-    [Theory]
-    [InlineData(123)]
-    [InlineData(true)]
-    public async Task Exchange_NonStringEventName_IsRefused(object value)
+    [Fact]
+    public async Task Exchange_EventNameThatIsNotOneJsonString_IsRefused()
     {
         var (api, client, user, org, project) = await StartAsync();
         await using var _ = api;
         var challenge = (await CreateBindingAsync(client, user, org, project)).Body.GetProperty("binding_challenge").GetString()!;
+        const string Push = "\"event_name\":\"push\"";
+        var cases = new (string Name, Action<Dictionary<string, object>, TestJwks.TokenOptions> Tweak)[]
+        {
+            ("number", (c, _) => c["event_name"] = 123),
+            ("boolean", (c, _) => c["event_name"] = true),
+            ("one-element array", (c, _) => c["event_name"] = new[] { "push" }),
+            ("duplicate, denied first", (_, o) => o.RewritePayload = p => p.Replace(Push, "\"event_name\":\"workflow_run\"," + Push, StringComparison.Ordinal)),
+            ("duplicate, denied last", (_, o) => o.RewritePayload = p => p.Replace(Push, Push + ",\"event_name\":\"workflow_run\"", StringComparison.Ordinal)),
+        };
 
-        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = value), challenge))
-            .ErrorCode.ShouldBe("token_invalid");
+        foreach (var (name, tweak) in cases)
+        {
+            (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, o) => tweak(c, o)), challenge)).ErrorCode.ShouldBe("token_invalid", name);
+        }
     }
 
     [Fact]
     public async Task Exchange_ExplicitAllowedEventNamesOverride_ReplacesTheDefault()
     {
         _database = _dedicated!.Name;
-        var overrides = new Dictionary<string, string?>(StringComparer.Ordinal) { ["EVIDGATE:Ci:AllowedEventNames"] = "schedule, pull_request" };
+        var overrides = new Dictionary<string, string?>(StringComparer.Ordinal) { ["EVIDGATE:Ci:AllowedEventNames"] = "schedule, pull_request, true" };
         var api = TenancyApiFactory.Ci(_fixture.AppConnectionString(_database), overrides);
         await using var _ = api;
         var client = api.CreateClient();
@@ -322,6 +331,12 @@ public sealed class CiAuthTests : IAsyncLifetime
         (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "pull_request"), challenge))
             .Status.ShouldBe(HttpStatusCode.OK);
         (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "schedule"), challenge))
+            .Status.ShouldBe(HttpStatusCode.OK);
+
+        // A JSON boolean is refused even though its text form is on the list; only the JSON string "true" mints.
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = true), challenge))
+            .ErrorCode.ShouldBe("token_invalid");
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "true"), challenge))
             .Status.ShouldBe(HttpStatusCode.OK);
     }
 

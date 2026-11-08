@@ -1,6 +1,8 @@
+using System.Buffers;
 using System.Security.Cryptography;
 using System.Text;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
+using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Evidgate.Modules.Identity.Options;
 using Microsoft.Extensions.Options;
 
@@ -160,10 +162,11 @@ internal sealed class CiAuthOptionsValidator : IValidateOptions<CiAuthOptions>
         }
     }
 
-    private static bool IsEventToken(string name) =>
-        name.Length is > 0 and <= 64
-        && name[0] is >= 'a' and <= 'z'
-        && name.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '_');
+    private static readonly SearchValues<char> LowerAlpha = SearchValues.Create("abcdefghijklmnopqrstuvwxyz");
+
+    private static readonly SearchValues<char> LowerSnake = SearchValues.Create("abcdefghijklmnopqrstuvwxyz0123456789_");
+
+    private static bool IsEventToken(string name) => AsciiShape.IsMatch(name, 1, 64, LowerAlpha, LowerSnake);
 
     private static void Check(List<string> failures, string property, string? value)
     {
