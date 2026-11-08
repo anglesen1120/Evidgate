@@ -130,6 +130,11 @@ export class MembersStore {
    * into nothing — the row refresh still runs, because the change landed server-side either way.
    */
   private editAttempt = 0;
+  /**
+   * Bumped by every `remove` attempt and by `resetMutations`: a removal whose dialog was reset, or
+   * one a newer removal superseded, settles into nothing while its list reload still runs.
+   */
+  private removeAttempt = 0;
 
   /** The org's memberships, in server order, as many cursor pages as have been followed. */
   readonly members = this.membersSignal.asReadonly();
@@ -303,6 +308,9 @@ export class MembersStore {
    * is left exactly as it was because only a success reloads it — and only while the same org still
    * owns the state (a scope switch during the round trip skips the reload, see {@link invite}).
    *
+   * The state is published only while this attempt still owns it: a dialog that opened and reset
+   * the states, or a newer removal, keeps its own submitting state and its own answer.
+   *
    * @returns `true` when the server removed the membership and the list on screen is still this
    *   org's; `false` when it refused, when the rejection was not the server's answer at all (see
    *   {@link invite}), or when the scope switched during the round trip.
@@ -312,14 +320,19 @@ export class MembersStore {
     if (orgId === null) {
       return false;
     }
+    const attempt = ++this.removeAttempt;
     this.removeStateSignal.set(SUBMITTING);
     try {
       await this.data.remove(orgId, membershipId, intent);
     } catch (error) {
-      this.removeStateSignal.set({ phase: 'failed', error: mutationFailure(error) });
+      if (attempt === this.removeAttempt) {
+        this.removeStateSignal.set({ phase: 'failed', error: mutationFailure(error) });
+      }
       return false;
     }
-    this.removeStateSignal.set(SUBMITTED);
+    if (attempt === this.removeAttempt) {
+      this.removeStateSignal.set(SUBMITTED);
+    }
     if (this.orgId !== orgId) {
       return false;
     }
@@ -408,13 +421,14 @@ export class MembersStore {
    * this from its own `open()`, not from `close()`: the draft, the intents and the state it was
    * closed with stay readable until a new edit begins, and a reopening dialog always re-initialises
    * them, so a closed dialog never inherits a busy or failed state that belonged to the previous
-   * one. The edit attempt token moves too: a role change still on its way for the dialog that just
-   * closed settles into nothing. The rotate lock lives in the invite flow and is deliberately not
-   * released here: a closing dialog must not reopen the door to a second token from the same
-   * request, so only the work settling releases it.
+   * one. Every attempt token moves too — the edit and the removal — so a change or a removal still
+   * on its way for the dialog that just closed settles into nothing. The rotate lock lives in the
+   * invite flow and is deliberately not released here: a closing dialog must not reopen the door to
+   * a second token from the same request, so only the work settling releases it.
    */
   resetMutations(): void {
     this.editAttempt += 1;
+    this.removeAttempt += 1;
     this.inviteStateSignal.set(IDLE);
     this.resendStateSignal.set(IDLE);
     this.cancelStateSignal.set(IDLE);
