@@ -23,15 +23,17 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// <c>__Host-evidgate_session</c> cookie and nothing else. <see cref="ISessionRequestAuthenticator"/> resolves
 /// it in one statement and answers the lifecycle refusals (401 <c>unauthenticated</c> /
 /// <c>session_expired</c> / <c>session_revoked</c>, 403 <c>account_disabled</c>) verbatim, so these routes never
-/// turn a dead row into a generic 401. No route takes a user id: what the caller may list or revoke comes from
-/// the presented cookie, and the database resolves the acting user from the session proof itself.
+/// turn a dead row into a generic 401. The acting user is always the presented cookie, never a route value: the
+/// one route that names a second user (the administrative bulk revoke in the sibling part) names only the member
+/// whose sessions are ended, and the definer judges that against the caller's own membership.
 /// </para>
 /// <para>
 /// <b>The proof, never the cookie.</b> Every handler hands
 /// <see cref="SessionRequestOutcome.GetSessionProof"/> — the stored HMAC of the live cookie value — to
-/// <see cref="ISessionRoutesStore"/>, which passes it to the <c>SECURITY DEFINER</c> functions of migration
-/// 0048. The raw cookie never leaves the HTTP layer, no response carries it, its hash, the pepper or the
-/// pepper version, and nothing on this path logs or echoes any of them (D9).
+/// <see cref="ISessionRoutesStore"/>, which passes it to the <c>SECURITY DEFINER</c> functions of migrations
+/// 0048 and 0085 (the administrative bulk revoke's own). The raw cookie never leaves the HTTP layer, no
+/// response carries it, its hash, the pepper or the pepper version, and nothing on this path logs or echoes
+/// any of them (D9).
 /// </para>
 /// <para>
 /// <b>One 404, never a 403.</b> <c>DELETE /sessions/{s}</c> answers 204 for a row the caller owns, and for a
@@ -63,7 +65,7 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// </para>
 /// <para>
 /// <b>No store except the antiforgery pair.</b> The list carries the caller's own device metadata, so every
-/// answer sets <c>Cache-Control: no-store</c>; none of the four routes needs an <c>Idempotency-Key</c>
+/// answer sets <c>Cache-Control: no-store</c>; none of these routes needs an <c>Idempotency-Key</c>
 /// (revocation is naturally idempotent: revoking a revoked row changes nothing).
 /// </para>
 /// <para>
@@ -77,7 +79,7 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// <c>revoke-all</c> and every refusal write nothing: those are the account acting on its own sessions.
 /// </para>
 /// </remarks>
-internal static class SessionEndpoints
+internal static partial class SessionEndpoints
 {
     /// <summary>Every route's cache policy: a session answer is never reusable by a shared cache.</summary>
     private const string NoStore = "no-store";
@@ -98,7 +100,7 @@ internal static class SessionEndpoints
     private static readonly JsonSerializerOptions BodyOptions =
         new(JsonSerializerDefaults.Web) { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
-    /// <summary>Maps the four session routes onto the <c>/v1/auth</c> group and returns it.</summary>
+    /// <summary>Maps the session routes onto the <c>/v1/auth</c> group and returns it.</summary>
     /// <param name="group">The <c>/v1/auth</c> group <see cref="LoginEndpoints"/> built.</param>
     /// <returns>The same group, so one composition applies to every route on it.</returns>
     internal static RouteGroupBuilder Map(RouteGroupBuilder group)
@@ -122,6 +124,8 @@ internal static class SessionEndpoints
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status200OK)
             .WithSummary("Revoke every session of the signed-in account, keeping the current one unless told otherwise (02.3.2-T2)");
+
+        MapAdminRevoke(group);
 
         group.MapPost("/logout", LogoutAsync)
             .Produces(StatusCodes.Status204NoContent)
