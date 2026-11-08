@@ -14,6 +14,7 @@ import type { ApiTokenListResponse, ProjectDto } from '@evidgate/sdk';
 import { ApiTokensService } from '../../../core/data/api-tokens-data.service';
 import { SessionStore } from '../../../core/session/session.store';
 import { ApiTokensPage } from './api-tokens.page';
+import { ApiTokensStore } from './api-tokens.store';
 import { ROW, project } from './api-tokens.test-support';
 
 /** Where an organization switch lands; the page under test is left behind, as in the app. */
@@ -220,6 +221,48 @@ describe('ApiTokensPage URL writes across navigation', () => {
         // No click is behind it: the repair replaces the entry the user is on.
         replaceUrl: true,
       }),
+    );
+  });
+
+  it('keeps a retired cursor retired when a same-page navigation lands after the list restarted', async () => {
+    const world = createWorld([project('project-1')]);
+    const held = new HeldTransition();
+    const harness = await mountAt(
+      [
+        {
+          path: 'orgs/:orgId/settings/api-tokens',
+          component: ApiTokensPage,
+          canActivate: [held.guard],
+          runGuardsAndResolvers: 'always',
+        },
+      ],
+      world,
+    );
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate');
+    await harness.navigateByUrl('/orgs/org-1/settings/api-tokens?project=project-1&cursor=page-2');
+    await until(harness, () => offeredProjects().join() === 'project-1');
+    const store = harness.routeDebugElement?.injector.get(ApiTokensStore);
+    if (!store) throw new Error('The page did not mount');
+    expect(store.cursor()).toBe('page-2');
+
+    held.hold();
+    const landing = harness.navigateByUrl(
+      '/orgs/org-1/settings/api-tokens?project=project-1&cursor=page-2&ref=1',
+    );
+    await held.waitUntilHeld();
+    // A create finishing now sends the list back to page one while the transition is in flight.
+    store.reloadFirst();
+    expect(store.cursor()).toBeUndefined();
+    held.release();
+    await landing;
+
+    // The landed URL still names the retired cursor; the repair has to remove it, not restore it.
+    await until(harness, () => router.parseUrl(router.url).queryParams['cursor'] === undefined);
+    expect(store.cursor()).toBeUndefined();
+    expect(navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({ queryParams: { project: 'project-1', cursor: null } }),
     );
   });
 });
