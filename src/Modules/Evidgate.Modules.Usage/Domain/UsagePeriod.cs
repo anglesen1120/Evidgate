@@ -10,10 +10,19 @@ namespace Evidgate.Modules.Usage.Domain;
 internal static class UsagePeriod
 {
     /// <summary>True when <paramref name="period"/> is exactly <c>YYYY-MM</c> with a month in <c>01</c>..<c>12</c>.</summary>
+    /// <param name="period">The candidate period, or null.</param>
+    internal static bool IsWellFormed(string? period) =>
+        period is not null && IsWellFormed(period.AsSpan());
+
+    /// <summary>
+    /// True when <paramref name="period"/> is exactly <c>YYYY-MM</c> with a month in <c>01</c>..<c>12</c>. The span
+    /// form lets a caller cut a candidate month out of a longer text — the refusal message of the ledger's issued-period
+    /// trigger names one — without allocating the slice first.
+    /// </summary>
     /// <param name="period">The candidate period.</param>
-    internal static bool IsWellFormed(string? period)
+    internal static bool IsWellFormed(ReadOnlySpan<char> period)
     {
-        if (period is not { Length: 7 })
+        if (period.Length != 7)
         {
             return false;
         }

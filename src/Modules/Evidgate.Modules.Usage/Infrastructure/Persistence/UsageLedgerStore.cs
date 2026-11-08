@@ -12,7 +12,8 @@ namespace Evidgate.Modules.Usage.Infrastructure.Persistence;
 /// The ledger's write path (12.3.1-T1.4, plan §5/§8 P2): one <c>INSERT … SELECT FROM unnest(…)</c> statement over the
 /// caller's tenant transaction, with <c>ON CONFLICT (org_id, billing_key) DO NOTHING RETURNING billing_key</c>. One round
 /// trip inserts the whole batch; a separate project validation read prevents FK errors from aborting the caller's
-/// transaction. Column uniqueness is the dedupe arbiter, and the returned set distinguishes inserts from duplicates.
+/// transaction, and a second read refuses a period an issued statement froze before the insert runs. Column uniqueness is
+/// the dedupe arbiter, and the returned set distinguishes inserts from duplicates.
 /// <para>
 /// The statement runs on the module's EF write model (00 §5.5 C4/C5 — the Dapper path is read-only by construction), so it
 /// uses the connection and the transaction <see cref="ITenantDbContextFactory{TContext}"/> bound to the caller's scope and
@@ -63,6 +64,21 @@ internal sealed class UsageLedgerStore(
         on conflict (org_id, billing_key) do nothing
         returning billing_key
         """;
+
+    /// <summary>
+    /// Reads the periods of one batch that an issued statement already froze, in one statement inside the caller's
+    /// transaction. Row security answers the scope's org only, and the argument is the distinct set the batch names.
+    /// </summary>
+    private const string IssuedPeriodsSql = """
+        select distinct period from public.billing_statement
+        where org_id = @org_id and period = any(@periods)
+        """;
+
+    /// <summary>
+    /// The constraint the ledger's issued-period trigger raises: a <c>23514</c> under this name is the trigger's
+    /// refusal and nothing else, so no other check violation is read as one.
+    /// </summary>
+    private const string IssuedPeriodConstraint = "usage_ledger_entry_period_issued";
 
     /// <summary>
     /// Counts every duplicate billing-key attempt of one batch, in the same transaction as the ledger insert.
@@ -180,17 +196,29 @@ internal sealed class UsageLedgerStore(
     /// keys the batch reported as duplicates. The tally shares the caller's transaction, so a batch that rolls back
     /// leaves neither a ledger row nor an attempt — the reconciliation cannot report a duplicate that was never
     /// accepted. A batch with no duplicate writes nothing beyond its insert.
+    /// <para>
+    /// A period an issued statement froze takes no row, so the batch is refused whole before the insert runs: the
+    /// trigger refuses the same row, but its refusal aborts the caller's transaction, which a caller mid-work cannot
+    /// afford. A statement issued while this batch is in flight is the trigger's decision, and it reaches the caller as
+    /// this same refusal.
+    /// </para>
     /// </summary>
     /// <param name="orgId">The tenant of the open scope (never a value from the batch).</param>
     /// <param name="batch">The prepared batch to record.</param>
     /// <param name="cancellationToken">Cancellation.</param>
     /// <returns>The billing keys the insert statement inserted, for <c>UsageBatchOutcome.Merge</c>.</returns>
+    /// <exception cref="LedgerPeriodIssuedException">A period of the batch is already issued.</exception>
     internal async Task<IReadOnlyList<string>> RecordBatchAsync(
         Guid orgId,
         UsageBatch batch,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(batch);
+
+        if (await FirstIssuedPeriodAsync(orgId, batch.Rows, cancellationToken).ConfigureAwait(false) is { } issued)
+        {
+            throw new LedgerPeriodIssuedException(issued);
+        }
 
         var inserted = await InsertAsync(orgId, batch.Rows, cancellationToken).ConfigureAwait(false);
         var duplicates = batch.DuplicateBillingKeys(inserted.ToHashSet(StringComparer.Ordinal));
@@ -237,6 +265,9 @@ internal sealed class UsageLedgerStore(
     /// <param name="orgId">The tenant of the open scope (never a value from the batch).</param>
     /// <param name="rows">The rows to insert; empty writes nothing.</param>
     /// <param name="cancellationToken">Cancellation.</param>
+    /// <exception cref="LedgerPeriodIssuedException">
+    /// A period of <paramref name="rows"/> was issued after the caller's read and before this insert.
+    /// </exception>
     internal async Task<IReadOnlyList<string>> InsertAsync(
         Guid orgId,
         IReadOnlyList<PendingUsageEntry> rows,
@@ -291,15 +322,105 @@ internal sealed class UsageLedgerStore(
         command.Parameters.Add(new NpgsqlParameter("billing_keys", NpgsqlDbType.Array | NpgsqlDbType.Text) { Value = billingKeys });
         command.Parameters.Add(new NpgsqlParameter("occurred_at", NpgsqlDbType.Array | NpgsqlDbType.TimestampTz) { Value = occurredAt });
 
-        var inserted = new List<string>(rows.Count);
-        await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken)
-            .ConfigureAwait(false);
+        return await ExecuteInsertAsync(command, rows, cancellationToken).ConfigureAwait(false);
+    }
 
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+    /// <summary>
+    /// Runs the batch insert and answers the keys the statement inserted. Only the trigger's issued-period refusal is
+    /// read here: it means a statement was issued after the caller's read and before this insert, which is the same
+    /// refusal, decided by the database instead of by the read.
+    /// </summary>
+    /// <param name="command">The batch insert, on the caller's tenant transaction.</param>
+    /// <param name="rows">The rows it carries, in request order.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    /// <exception cref="LedgerPeriodIssuedException">A period of <paramref name="rows"/> was issued in the meantime.</exception>
+    private static async Task<List<string>> ExecuteInsertAsync(
+        NpgsqlCommand command,
+        IReadOnlyList<PendingUsageEntry> rows,
+        CancellationToken cancellationToken)
+    {
+        var inserted = new List<string>(rows.Count);
+        try
         {
-            inserted.Add(reader.GetString(0));
+            await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken)
+                .ConfigureAwait(false);
+
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                inserted.Add(reader.GetString(0));
+            }
+        }
+        catch (PostgresException exception) when (IsIssuedPeriodRefusal(exception))
+        {
+            throw new LedgerPeriodIssuedException(IssuedPeriodOf(exception, rows));
         }
 
         return inserted;
+    }
+
+    /// <summary>
+    /// The first period of <paramref name="rows"/>, in request order, that an issued statement already froze; null when
+    /// every period is still open. One read inside the caller's transaction, taken before the insert so its refusal
+    /// leaves that transaction usable. It cannot settle a race — a statement issued after this read is still unseen —
+    /// which is what the table's trigger exists for.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope (never a value from the batch).</param>
+    /// <param name="rows">The rows of the batch, in request order.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async Task<string?> FirstIssuedPeriodAsync(
+        Guid orgId,
+        IReadOnlyList<PendingUsageEntry> rows,
+        CancellationToken cancellationToken)
+    {
+        var periods = rows.Select(row => row.Period).Distinct(StringComparer.Ordinal).ToArray();
+        if (periods.Length == 0)
+        {
+            return null;
+        }
+
+        await using var context = contexts.Create();
+        await using var command = (NpgsqlCommand)context.Database.GetDbConnection().CreateCommand();
+        command.CommandText = IssuedPeriodsSql;
+        command.Transaction = (NpgsqlTransaction)scopes.Require().Transaction;
+        command.Parameters.Add(new NpgsqlParameter("org_id", NpgsqlDbType.Uuid) { Value = orgId });
+        command.Parameters.Add(new NpgsqlParameter("periods", NpgsqlDbType.Array | NpgsqlDbType.Text) { Value = periods });
+
+        var issued = new HashSet<string>(StringComparer.Ordinal);
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false))
+        {
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                issued.Add(reader.GetString(0));
+            }
+        }
+
+        return rows.Select(row => row.Period).FirstOrDefault(issued.Contains);
+    }
+
+    /// <summary>True for the ledger trigger's issued-period refusal and for no other check violation.</summary>
+    /// <param name="exception">The database error of the insert.</param>
+    private static bool IsIssuedPeriodRefusal(PostgresException exception) =>
+        exception.SqlState == PostgresErrorCodes.CheckViolation
+        && string.Equals(exception.ConstraintName, IssuedPeriodConstraint, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The period the refused row named: the trigger's message carries it because the refusal aborts the caller's
+    /// transaction, so nothing can be re-read to ask which period was refused. A message naming no period falls back
+    /// to the batch's first, the only period this side still knows.
+    /// </summary>
+    /// <param name="exception">The trigger's refusal.</param>
+    /// <param name="rows">The rows of the refused batch, in request order.</param>
+    private static string IssuedPeriodOf(PostgresException exception, IReadOnlyList<PendingUsageEntry> rows)
+    {
+        var message = exception.MessageText;
+        for (var start = 0; start + 7 <= message.Length; start++)
+        {
+            if (UsagePeriod.IsWellFormed(message.AsSpan(start, 7)))
+            {
+                return message.Substring(start, 7);
+            }
+        }
+
+        return rows[0].Period;
     }
 }

@@ -30,6 +30,7 @@ public sealed class UsageStatementIssueTests
     private const string CurrentPeriod = "2026-11";
     private const string Earlier = "2026-09";
     private const string Action = "usage.statement_issued";
+    private const string RefusedAction = "usage.statement_refused";
 
     private static readonly DateTimeOffset Now = new(2026, 11, 6, 9, 0, 0, TimeSpan.Zero);
 
@@ -235,38 +236,28 @@ public sealed class UsageStatementIssueTests
             .ShouldBe(first.Body.GetProperty("content_hash").GetString());
 
         (await world.StatementCountAsync(Period)).ShouldBe(1L);
-        (await world.AuditCountAsync(Action)).ShouldBe(1L, "a replay changed nothing, so it audits nothing");
+        (await world.AuditCountAsync(Action)).ShouldBe(1L, "only the first issue wrote a document");
     }
 
     [Fact]
-    public async Task Statement_LateCorrection_409AndTheStoredDocumentIsUntouched()
+    public async Task Statement_PeriodAlreadyIssuedWithAnotherDocument_409AndTheStoredDocumentIsUntouched()
     {
         await using var world = await StartAsync();
-        var priced = Ledger(world, "late:1", 1m, 5m, 20);
-        await world.SeedLedgerAsync(priced);
-        (await world.PostStatementAsync(Period, 5m, "USD")).Status.ShouldBe(HttpStatusCode.OK);
+        await world.SeedLedgerAsync(Ledger(world, "late:1", 1m, 5m, 20));
+        var foreign = new string('a', 64);
+        await world.SeedStatementAsync(Period, 2m, foreign);
         var issued = await world.StatementRowAsync(Period);
 
-        await world.SeedLedgerAsync(
-            Ledger(world, "late:2", -1m, -3m, 21) with
-            {
-                AdjustmentOf = priced.Id,
-                Reason = "the row was invoiced at the wrong price",
-            });
-
-        // The old total is now a plain mismatch: the period no longer recomputes to what the first issue billed.
-        var stale = await world.PostStatementAsync(Period, 5m, "USD");
-        stale.Status.ShouldBe(HttpStatusCode.UnprocessableEntity, stale.ErrorMessage);
-        Detail(stale).GetProperty("reason").GetString().ShouldBe("total_mismatch");
-
-        // The recomputed total passes every rule and then meets the document already issued for the period.
-        var answer = await world.PostStatementAsync(Period, 2m, "USD");
+        // The recompute passes every rule and then meets a document of the period it does not describe: another issue
+        // wrote the period first, and the org is billed on what that document froze.
+        var answer = await world.PostStatementAsync(Period, 5m, "USD");
 
         answer.Status.ShouldBe(HttpStatusCode.Conflict, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("statement_exists");
         (await world.StatementRowAsync(Period)).ShouldBe(issued, "the issued document is never rewritten");
         (await world.StatementCountAsync(Period)).ShouldBe(1L);
-        (await world.AuditCountAsync(Action)).ShouldBe(1L);
+        (await world.AuditCountAsync(Action)).ShouldBe(0L, "nothing was issued");
+        (await world.AuditCountAsync(RefusedAction)).ShouldBe(1L);
     }
 
     [Fact]

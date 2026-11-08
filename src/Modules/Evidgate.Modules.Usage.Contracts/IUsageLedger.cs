@@ -29,7 +29,7 @@ public interface IUsageLedger
     /// <see cref="UsageBatchResult.Duplicates"/> instead of writing a second row (ruling T43). The rows themselves are one
     /// <c>INSERT … SELECT FROM unnest(…)</c> statement with <c>ON CONFLICT (org_id, billing_key) DO NOTHING</c>
     /// (ruling T50, plan §8 P2) whatever the batch size, and the projects it names are read once before it, so a batch is
-    /// two statements — never one per entry. The rows are written in billing-key order, so two concurrent batches with
+    /// three statements — never one per entry. The rows are written in billing-key order, so two concurrent batches with
     /// overlapping keys lock in one order and cannot deadlock.
     /// <para>
     /// An entry that repeats an earlier entry's billing key inside the same request is reported under
@@ -38,7 +38,9 @@ public interface IUsageLedger
     /// Price and amount stay null until 12.3.1-T3 resolves prices (DECISIONS O5, ruling T60). Before the insert the
     /// distinct <see cref="UsageEntryInput.ProjectId"/> values are checked in one read inside the caller's transaction,
     /// so an unknown project — or one of another org, which row security hides — is a refused entry instead of a
-    /// foreign-key error that would abort the caller's transaction.
+    /// foreign-key error that would abort the caller's transaction. The batch's periods are read the same way, because a
+    /// period an issued statement froze takes no row: that refusal is a conflict, never a retryable error, and a
+    /// correction belongs to a period that is still open.
     /// </para>
     /// </summary>
     /// <param name="request">The entries to record; an empty batch writes nothing and answers two empty lists.</param>
@@ -54,7 +56,10 @@ public interface IUsageLedger
     /// offending entry, and nothing was written.
     /// </exception>
     /// <exception cref="InvalidOperationException">
-    /// No tenant transaction is open: the tenant-scope guard throws before any statement runs.
+    /// No tenant transaction is open: the tenant-scope guard throws before any statement runs. The same type is what the
+    /// implementation throws, carrying the period, when a period of the batch is already issued — an in-process emitter
+    /// that names a billed month fails loudly instead of writing, so its queue retries and then dead-letters the row
+    /// rather than the ledger silently accepting a row the statement does not describe.
     /// </exception>
     Task<UsageBatchResult> RecordAsync(RecordUsageBatchRequest request, CancellationToken cancellationToken);
 
