@@ -72,7 +72,7 @@ function createdRow(): MembershipView {
 export const CREATED: MembershipView = createdRow();
 /**
  * The plaintext link token a mint serves exactly once (`evgi_<prefix>_<secret>`). It is a test
- * literal only: the store must never keep it, which `members.store.secret-fields.spec.ts` proves.
+ * literal only: the store must never keep it, which `members.store.state.spec.ts` proves.
  */
 export const INVITE_TOKEN = 'evgi_4b7d2e91c6a0_9d3f1a5c8e2b7d4f6a1c3e5b8d0f2a4c';
 /** The token a rotate replaces it with. */
