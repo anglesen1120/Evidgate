@@ -55,7 +55,7 @@ public sealed class QuarantineQaTests
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
-        var (cases, maintainer, membership) = await SeedCasesAndMaintainerAsync(database, client, user, org, project);
+        var (cases, maintainer, membership) = await SeedCasesAndMaintainerAsync(database, org, project);
 
         return new World(api, client, database, user, org, project, cases, maintainer, membership);
     }
@@ -65,7 +65,7 @@ public sealed class QuarantineQaTests
     private static Action<HttpRequestHeaders> As(Guid user, Guid org) => TenancyApiFactory.Resolved(user: user, orgHeader: org);
 
     private async Task<(IReadOnlyList<Guid> Cases, Guid User, Guid Membership)> SeedCasesAndMaintainerAsync(
-        string database, HttpClient client, Guid admin, Guid org, Guid project)
+        string database, Guid org, Guid project)
     {
         var cases = new List<Guid>();
         var maintainer = Guid.CreateVersion7();
@@ -80,6 +80,17 @@ public sealed class QuarantineQaTests
             await scope.ExecuteAsync(
                 "insert into public.membership (id, org_id, user_id, invited_email, status) values (@id, @org_id, @user_id, @email, 'active')",
                 ("id", membership), ("org_id", org), ("user_id", maintainer), ("email", $"maintainer-{maintainer:N}@example.test"));
+            // The role row the membership route writes, seeded as the owner: the route refuses a role whose own
+            // permissions the caller does not hold, so the fixture cannot hand this one out through the API.
+            (await scope.ExecuteAsync(
+                """
+                insert into public.membership_role (id, org_id, membership_id, role_id)
+                select gen_random_uuid(), @org_id, @membership_id, r.id
+                  from public.role r
+                 where r.code = 'test_maintainer' and r.org_id is null
+                """,
+                ("org_id", org), ("membership_id", membership))).ShouldBe(
+                1, "the fixture seeded the role 'test_maintainer' once: an unknown role code seeds nothing");
             for (var i = 0; i < 3; i++)
             {
                 var caseId = Guid.CreateVersion7();
@@ -94,11 +105,6 @@ public sealed class QuarantineQaTests
 
             await scope.CommitAsync();
         }
-
-        var role = await _fixture.ScalarAsync<Guid>(database, "select id from public.role where code = 'test_maintainer' and org_id is null");
-        var granted = await client.SendAsync(
-            HttpMethod.Post, $"/v1/orgs/{org}/memberships/{membership}/roles", As(admin, org), new { role_id = role }, NewKey());
-        granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
 
         return (cases, maintainer, membership);
     }

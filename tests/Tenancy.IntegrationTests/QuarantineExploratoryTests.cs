@@ -66,6 +66,17 @@ public sealed class QuarantineExploratoryTests
             await scope.ExecuteAsync(
                 "insert into public.membership (id, org_id, user_id, invited_email, status) values (@id, @org_id, @user_id, @email, 'active')",
                 ("id", membership), ("org_id", org), ("user_id", maintainer), ("email", $"maintainer-{maintainer:N}@example.test"));
+            // The role row the membership route writes, seeded as the owner: the route refuses a role whose own
+            // permissions the caller does not hold, so the fixture cannot hand this one out through the API.
+            (await scope.ExecuteAsync(
+                """
+                insert into public.membership_role (id, org_id, membership_id, role_id)
+                select gen_random_uuid(), @org_id, @membership_id, r.id
+                  from public.role r
+                 where r.code = 'test_maintainer' and r.org_id is null
+                """,
+                ("org_id", org), ("membership_id", membership))).ShouldBe(
+                1, "the fixture seeded the role 'test_maintainer' once: an unknown role code seeds nothing");
             await scope.ExecuteAsync(
                 """
                 insert into public.test_case (id, org_id, project_id, annotation_id, name, framework, first_seen_commit)
@@ -74,15 +85,6 @@ public sealed class QuarantineExploratoryTests
                 ("id", caseId), ("org_id", org), ("project_id", project), ("annotation_id", Guid.CreateVersion7()), ("name", "case 0"));
             await scope.CommitAsync();
         }
-
-        var role = await _fixture.ScalarAsync<Guid>(database, "select id from public.role where code = 'test_maintainer' and org_id is null");
-        var granted = await client.SendAsync(
-            HttpMethod.Post,
-            $"/v1/orgs/{org}/memberships/{membership}/roles",
-            TenancyApiFactory.Resolved(user: user, orgHeader: org),
-            new { role_id = role },
-            NewKey());
-        granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
 
         return new World(api, client, database, user, org, project, caseId, maintainer, membership);
     }

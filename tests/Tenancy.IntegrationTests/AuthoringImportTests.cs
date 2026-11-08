@@ -666,9 +666,9 @@ public sealed class AuthoringImportTests
         return body;
     }
 
-    /// <summary>An active member of the org, optionally holding one built-in role, granted by the founder through the API.</summary>
+    /// <summary>An active member of the org, optionally holding one built-in role, seeded as the owner.</summary>
     /// <param name="world">The world.</param>
     /// <param name="roleCode">The role, or null for a member with no role at all.</param>
     private Task<Guid> AddMemberAsync(World world, string? roleCode) =>
-        RegistryApi.AddMemberAsync(_fixture, world.Client, world.Database, world.Org, world.As, roleCode);
+        RegistryApi.AddMemberAsync(_fixture, world.Database, world.Org, roleCode);
 }

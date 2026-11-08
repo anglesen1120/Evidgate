@@ -14,8 +14,9 @@ namespace Identity.IntegrationTests.Invites;
 /// D-S81-Q2 (the S78 hand-over precondition D-S78-M1): one mailbox addressed through a
 /// <c>+tag</c> or a Gmail dot/<c>googlemail.com</c> spelling must never reach the inviter's own
 /// seat. The rule has two halves and this suite pins both — the canonicalisation itself
-/// (<see cref="EmailAlias"/>), the refused bind at the invite's address, and the invite-create
-/// refusal that keeps the alias from being written in the first place.
+/// (<see cref="EmailAlias"/>), the refused bind at the invite's address, and the create-time
+/// role ceiling, which judges the role and not the address: the mailbox itself is only judged
+/// when the invite binds.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class AliasCeilingTests : BindTestBase
@@ -108,10 +109,10 @@ public sealed class AliasCeilingTests : BindTestBase
 
     /// <summary>
     /// The write side, through the real Api: a <c>tenant_admin</c> (who holds
-    /// <c>membership:write</c> but not <c>policy:write</c>) inviting an alias of their own
-    /// address with the <c>release_approver</c> role is the self-grant and is refused 403 —
-    /// exactly like an invite to the plain address — while the same role invited to a colleague
-    /// is accepted.
+    /// <c>membership:write</c> but not <c>policy:write</c>) inviting with the
+    /// <c>release_approver</c> role is refused 403 for an alias of their own address and for the
+    /// plain address alike — the create route judges the role, never the mailbox — while a role
+    /// the caller does hold is accepted for a colleague.
     /// </summary>
     [Fact]
     public async Task InviteToAnAliasOfTheCallersOwnAddressWithARoleTheCallerLacks_Is403()
@@ -120,6 +121,7 @@ public sealed class AliasCeilingTests : BindTestBase
         var callerUserId = await SeedUserAsync();
         await SeedMemberWithEmailAsync(org, "clerk@gmail.com", callerUserId, roleCode: "tenant_admin");
         var releaseApprover = await IdentityTestData.RoleIdAsync(Fixture, org, "release_approver", Token);
+        var heldRole = await IdentityTestData.RoleIdAsync(Fixture, org, "tenant_admin", Token);
 
         await using var factory = IdentityApiFactory.Start(
             Fixture,
@@ -127,13 +129,13 @@ public sealed class AliasCeilingTests : BindTestBase
         using var client = factory.CreateClient();
 
         var alias = await PostInviteAsync(client, org, "clerk+raise@gmail.com", releaseApprover, "alias-self-1");
-        alias.StatusCode.ShouldBe(HttpStatusCode.Forbidden, "an alias of the caller's own mailbox is the caller");
+        alias.StatusCode.ShouldBe(HttpStatusCode.Forbidden, "the role carries policy:write, which the caller does not hold");
 
         var plain = await PostInviteAsync(client, org, "clerk@gmail.com", releaseApprover, "alias-self-2");
-        plain.StatusCode.ShouldBe(HttpStatusCode.Forbidden, "the plain address is the same self-grant (unchanged behaviour)");
+        plain.StatusCode.ShouldBe(HttpStatusCode.Forbidden, "the plain address gets the same refusal: the rule is the role, not the mailbox");
 
-        var colleague = await PostInviteAsync(client, org, "colleague@gmail.com", releaseApprover, "alias-self-3");
-        colleague.StatusCode.ShouldBe(HttpStatusCode.Created, "the rule is about the caller's own mailbox, not a blanket refusal");
+        var colleague = await PostInviteAsync(client, org, "colleague@gmail.com", heldRole, "alias-self-3");
+        colleague.StatusCode.ShouldBe(HttpStatusCode.Created, "a role the caller holds is accepted for another address, so the refusals above are the role ceiling");
 
         (await CountPendingInvitesAsync(org)).ShouldBe(1, "only the colleague's invite was written");
     }

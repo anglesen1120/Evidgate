@@ -115,8 +115,7 @@ internal sealed partial class UsageReadsWorld
     /// <param name="url">The route.</param>
     internal async Task<ApiAnswer> GetAsMemberWithRoleAsync(PostgresTenancyFixture fixture, string roleCode, string url)
     {
-        var member = await RegistryApi.AddMemberAsync(
-            fixture, Client, Database.Name, Org, TenancyApiFactory.Resolved(user: User, orgHeader: Org), roleCode);
+        var member = await RegistryApi.AddMemberAsync(fixture, Database.Name, Org, roleCode);
         return await Client.SendAsync(HttpMethod.Get, url, TenancyApiFactory.Resolved(user: member, orgHeader: Org));
     }
 

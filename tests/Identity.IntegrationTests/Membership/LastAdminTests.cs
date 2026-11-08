@@ -350,7 +350,10 @@ public sealed class LastAdminTests : CatalogueTestBase
 
         foreach (var code in roleCodes)
         {
-            await Fixture.SeedAsync(
+            // An insert-select over a code the catalogue does not hold writes nothing and raises
+            // nothing, so the arrangement says so: a refusal test would otherwise pass for a
+            // member holding no role at all.
+            (await Fixture.SeedAsync(
                 """
                 insert into public.membership_role (id, org_id, membership_id, role_id)
                 select @id, @org_id, @membership_id, role.id from public.role
@@ -362,7 +365,7 @@ public sealed class LastAdminTests : CatalogueTestBase
                     ("membership_id", membershipId),
                     ("code", code),
                 ],
-                Token);
+                Token)).ShouldBe(1, $"the fixture seeded the role '{code}' once for user {userId:D}");
         }
 
         return (membershipId, userId);

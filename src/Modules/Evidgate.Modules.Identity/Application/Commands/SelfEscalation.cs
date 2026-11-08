@@ -2,7 +2,6 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Authorization;
-using Evidgate.Modules.Identity.Domain;
 using Evidgate.Modules.Identity.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,16 +21,14 @@ namespace Evidgate.Modules.Identity.Application.Commands;
 /// <para>
 /// The caller's set comes from <see cref="ICallerPermissionSet"/> — the same object and
 /// the same join the C2 gate evaluates — so the answer here and the answer on the next
-/// request cannot diverge. The set is resolved once per check, and only on the path that
-/// needs it (a grant to another member is not part of the rule; see the plans' [OPEN]
-/// on extending it).
+/// request cannot diverge. The set is resolved once per check.
 /// </para>
 /// <para>
-/// [DECISION] GrantRole and InviteMember apply the rule when the target is the caller's
-/// own membership (its <c>user_id</c>, or the address of the caller's own membership for
-/// an invite); CreateRole and UpdateRole apply it to every submitted code, because a
-/// custom role's permission set is not scoped to anyone until it is granted. Both
-/// feature plans record the decision and its rationale.
+/// [DECISION] Every route that hands out permissions applies the rule to every target:
+/// GrantRole and InviteMember whoever the member or address is, CreateRole and UpdateRole
+/// every submitted code. A second address the caller controls would otherwise carry a
+/// role the caller could not hold, which defeats the two-person waiver rule; admin
+/// delegation is not part of V1.
 /// </para>
 /// </remarks>
 internal static class SelfEscalation
@@ -82,9 +79,8 @@ internal static class SelfEscalation
 
     /// <summary>
     /// Every code the given roles grant, read through the write model under RLS: the
-    /// built-in grants (<c>org_id is null</c>) plus the caller's own org rows. Used only
-    /// on the self-grant path, where the role being handed over must be inspected before
-    /// it is written.
+    /// built-in grants (<c>org_id is null</c>) plus the caller's own org rows. The role
+    /// being handed over is inspected before it is written.
     /// </summary>
     internal static async Task<IReadOnlyList<string>> RoleCodesAsync(
         IdentityDbContext context,
@@ -106,64 +102,5 @@ internal static class SelfEscalation
             .Distinct()
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// The caller's own membership of the org, or null when they have none. Read under
-    /// RLS, so a membership of another org can never answer — the rule is about the
-    /// caller's own row in the tenant the request runs as.
-    /// </summary>
-    internal static Task<Membership?> CallerMembershipAsync(
-        IdentityDbContext context,
-        Guid orgId,
-        Guid callerUserId,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-
-        // `membership_org_user_key` (0011) makes this at most one row.
-        return context.Memberships
-            .SingleOrDefaultAsync(
-                membership => membership.OrgId == orgId && membership.UserId == callerUserId,
-                cancellationToken);
-    }
-
-    /// <summary>
-    /// True when a grant addressed to <paramref name="targetUserId"/> or
-    /// <paramref name="targetEmail"/> lands on the caller: the caller's own user id, or
-    /// the address of the caller's own membership (a pending row addressed to the caller
-    /// binds to them later). The one definition GrantRole and InviteMember share, so the
-    /// two routes cannot disagree on what "self" means. <c>invited_email</c> is stored
-    /// normalised (InviteEmail.Normalize and 0011's check), and both sides are compared in
-    /// their <see cref="EmailAlias.Canonical"/> form (D-S81-Q2): a <c>+tag</c> suffix or a
-    /// Gmail dot/`googlemail.com` spelling of the caller's own mailbox is the caller, so an
-    /// invite sent to that form is the same self-grant as one sent to the plain address.
-    /// </summary>
-    internal static async Task<bool> IsSelfTargetAsync(
-        IdentityDbContext context,
-        Guid orgId,
-        IRequestPrincipal? caller,
-        Guid? targetUserId,
-        string targetEmail,
-        CancellationToken cancellationToken)
-    {
-        if (caller?.UserId is not { } callerUserId)
-        {
-            return false;
-        }
-
-        if (targetUserId == callerUserId)
-        {
-            return true;
-        }
-
-        var ownMembership = await CallerMembershipAsync(context, orgId, callerUserId, cancellationToken)
-            .ConfigureAwait(false);
-
-        return ownMembership is not null
-            && string.Equals(
-                EmailAlias.Canonical(ownMembership.InvitedEmail),
-                EmailAlias.Canonical(targetEmail),
-                StringComparison.Ordinal);
     }
 }

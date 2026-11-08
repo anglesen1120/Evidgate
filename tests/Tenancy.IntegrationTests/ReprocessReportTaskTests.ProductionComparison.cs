@@ -46,16 +46,7 @@ public sealed partial class ReprocessReportTaskTests
 
         await using var registry = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(world.Database));
         using var client = registry.CreateClient();
-        var founder = await _fixture.ScalarAsync<Guid>(
-            world.Database,
-            $"select user_id from public.membership where org_id = '{world.Org:D}' order by created_at, id limit 1");
-        var viewer = await AddMemberAsync(
-            _fixture,
-            client,
-            world.Database,
-            world.Org,
-            TenancyApiFactory.Resolved(user: founder, orgHeader: world.Org),
-            "viewer");
+        var viewer = await AddMemberAsync(_fixture, world.Database, world.Org, "viewer");
         var caller = TenancyApiFactory.Resolved(user: viewer, orgHeader: world.Org);
 
         var source = await client.SendAsync(

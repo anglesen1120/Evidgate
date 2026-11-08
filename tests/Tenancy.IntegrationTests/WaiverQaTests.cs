@@ -77,7 +77,7 @@ public sealed class WaiverQaTests
     private static Task<ApiAnswer> ListAsync(World world, Guid project, string query = "", Action<HttpRequestHeaders>? caller = null) =>
         world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{project}/waivers{query}", caller ?? world.Admin);
 
-    /// <summary>An active member of the org holding the built-in role, seeded as the owner then granted through the API.</summary>
+    /// <summary>An active member of the org holding the built-in role, seeded as the owner (the route refuses a role the caller cannot hand out).</summary>
     private async Task<Guid> AddMemberAsync(World world, string roleCode)
     {
         var userId = Guid.CreateVersion7();
@@ -88,20 +88,13 @@ public sealed class WaiverQaTests
             $"""
             insert into public."user" (id, email) values ('{userId}', 'member-{userId:N}@example.test');
             insert into public.membership (id, org_id, user_id, invited_email, status)
-            values ('{membershipId}', '{world.Org}', '{userId}', 'member-{userId:N}@example.test', 'active')
+            values ('{membershipId}', '{world.Org}', '{userId}', 'member-{userId:N}@example.test', 'active');
+            insert into public.membership_role (id, org_id, membership_id, role_id)
+            select gen_random_uuid(), '{world.Org}', '{membershipId}', r.id
+              from public.role r
+             where r.code = '{roleCode}' and r.org_id is null;
             """);
-
-        var role = await _fixture.ScalarAsync<Guid>(
-            world.Database,
-            $"select id from public.role where code = '{roleCode}' and org_id is null");
-
-        var granted = await world.Client.SendAsync(
-            HttpMethod.Post,
-            $"/v1/orgs/{world.Org}/memberships/{membershipId}/roles",
-            world.Admin,
-            new { role_id = role },
-            NewKey());
-        granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
+        await AssertRoleSeededAsync(_fixture, world.Database, world.Org, userId, roleCode);
 
         return userId;
     }
