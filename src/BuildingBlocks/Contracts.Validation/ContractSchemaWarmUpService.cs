@@ -56,19 +56,9 @@ public sealed partial class ContractSchemaWarmUpService : IHostedService, IDispo
     /// <inheritdoc />
     public async Task StopAsync(CancellationToken cancellationToken)
     {
+        // Shutdown must not wait for the compile: it cannot be interrupted, it runs on a pool thread that does
+        // not keep the process alive, and the host's liveness contract is exit well inside its shutdown timeout.
         await _stopping.CancelAsync().ConfigureAwait(false);
-        if (_run is { } run)
-        {
-            try
-            {
-                // A compile already in flight cannot be interrupted; the host's shutdown deadline bounds the wait.
-                await run.WaitAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                // The deadline passed with the compile still running: leave it behind rather than fail shutdown.
-            }
-        }
     }
 
     /// <inheritdoc />

@@ -118,7 +118,7 @@ public sealed class ContractSchemaWarmUpTests
     }
 
     [Fact]
-    public async Task StoppingWhileTheSetCompiles_WaitsForIt_AndIsNotAFailure()
+    public async Task StoppingWhileTheSetCompiles_ReturnsAtOnce_AndTheCompileStillFinishes()
     {
         using var inFlight = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
@@ -135,39 +135,13 @@ public sealed class ContractSchemaWarmUpTests
 
         await warmUp.StartAsync(TestContext.Current.CancellationToken);
         inFlight.Wait(TestContext.Current.CancellationToken);
-        var stopping = warmUp.StopAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
-        stopping.IsCompleted.ShouldBeFalse();
-        release.Set();
-        await stopping;
 
-        warmUp.Completion.IsCompletedSuccessfully.ShouldBeTrue();
-    }
-
-    [Fact]
-    public async Task StoppingPastTheShutdownDeadline_LeavesTheCompileBehindWithoutThrowing()
-    {
-        using var inFlight = new ManualResetEventSlim();
-        using var release = new ManualResetEventSlim();
-        var services = new ServiceCollection();
-        services.AddSingleton(_ =>
-        {
-            inFlight.Set();
-            release.Wait(TestContext.Current.CancellationToken);
-            return ContractSchemaSet.Load(ContractPaths.ContractsDirectory);
-        });
-        var warmUp = new ContractSchemaWarmUpService(
-            services.BuildServiceProvider(),
-            NullLogger<ContractSchemaWarmUpService>.Instance);
-
-        await warmUp.StartAsync(TestContext.Current.CancellationToken);
-        inFlight.Wait(TestContext.Current.CancellationToken);
-        using var deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
-
-        await warmUp.StopAsync(deadline.Token);
-
+        await warmUp.StopAsync(TestContext.Current.CancellationToken);
+        warmUp.Completion.IsCompleted.ShouldBeFalse();
         release.Set();
         await warmUp.Completion;
+
+        warmUp.Completion.IsCompletedSuccessfully.ShouldBeTrue();
     }
 
     [Fact]
