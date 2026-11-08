@@ -23,11 +23,12 @@ import { ConnectStepRevealComponent } from '../../../shared/ui/reveal/connect-st
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { ApiTokensStore } from './api-tokens.store';
 import { API_TOKENS_WRITE_COPY } from './api-tokens-write.copy';
+import { API_TOKENS_COPY } from './api-tokens.copy';
 import { tokenPermissionChoices } from './api-token-permissions';
 import { ApiTokenWriteErrorComponent } from './api-token-write-error.component';
 import { retryReadyFor } from './api-token-retry';
 
-/** Reasons a 422 can give for the expiry field (00 §9.2 field paths). */
+/** Keep a refused expiry blocked until that field changes, even when other fields are edited. */
 const EXPIRY_REFUSALS: Record<string, true> = { past: true, out_of_range: true, required: true };
 
 /**
@@ -43,6 +44,31 @@ function refusesExpiry(failure: ApiError): boolean {
   return failure.details.some(
     (detail) => detail.path === 'expires_at' && EXPIRY_REFUSALS[detail.reason] === true,
   );
+}
+
+type ExpiryMaximum = { readonly instant: number } | { readonly lifetimeMs: number };
+
+/**
+ * The last instant `datetime-local` and `toISOString` can both spell, 9999-12-31T23:59:59.999Z.
+ * A later one is a valid `Date` but prints in the expanded six-digit year form, which the picker
+ * cannot read — and an unbounded lifetime ("36500000 days") lands beyond it.
+ */
+const LAST_SPELLABLE_INSTANT = 253_402_300_799_999;
+
+/**
+ * An absolute maximum is the server's own UTC instant. `Date.parse` also accepts local-time and
+ * partial forms ("Jan 1 2027", "2027-01-01"), so the shape is checked before it is believed.
+ */
+const ISO_UTC_INSTANT = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/;
+
+function parseExpiryMaximum(message: string): ExpiryMaximum | null {
+  const absolute = /\(maximum ([^)]+)\)/.exec(message)?.[1];
+  if (absolute !== undefined && ISO_UTC_INSTANT.test(absolute)) {
+    const instant = Date.parse(absolute);
+    if (Number.isFinite(instant)) return { instant };
+  }
+  const days = Number(/configured maximum lifetime of (\d+) days/.exec(message)?.[1]);
+  return Number.isSafeInteger(days) && days > 0 ? { lifetimeMs: days * 86_400_000 } : null;
 }
 
 @Component({
@@ -77,6 +103,11 @@ function refusesExpiry(failure: ApiError): boolean {
       >
         <header hlmDialogHeader>
           <h2 hlmDialogTitle>{{ revealing() ? copy.revealTitle : copy.create }}</h2>
+          @if (store.createTarget(); as target) {
+            <p hlmDialogDescription data-api-create-project class="wrap-anywhere">
+              {{ projectLabel }}: {{ target.projectName }}
+            </p>
+          }
         </header>
         @if (slot.current(); as entry) {
           <app-connect-step-reveal
@@ -92,6 +123,9 @@ function refusesExpiry(failure: ApiError): boolean {
           <form
             #form
             (submit)="submit($event, form)"
+            (focusin)="refreshClock()"
+            (pointerdown)="refreshClock()"
+            (keydown)="refreshClock()"
             class="grid min-w-0 gap-3"
             [attr.aria-busy]="store.creating()"
           >
@@ -118,7 +152,8 @@ function refusesExpiry(failure: ApiError): boolean {
               required
               [value]="expires()"
               [disabled]="locked()"
-              [attr.min]="minExpiry"
+              [attr.min]="minExpiry()"
+              [attr.max]="maxExpiry()"
               [attr.aria-invalid]="expiryInvalid() || expiryRefused() || !!store.createError()"
               [attr.aria-describedby]="
                 (expiryRefused()
@@ -195,6 +230,7 @@ export class ApiTokenCreateDialogComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly document = inject(DOCUMENT);
   protected readonly copy = API_TOKENS_WRITE_COPY;
+  protected readonly projectLabel = API_TOKENS_COPY.project;
   protected readonly opened = signal(true);
   protected readonly name = signal('');
   protected readonly expires = signal('');
@@ -204,13 +240,29 @@ export class ApiTokenCreateDialogComponent {
   protected readonly expiryRefusal = signal<string | null>(null);
   /** Set when a submit finds the expiry already past; cleared by the next edit of the field. */
   protected readonly elapsed = signal(false);
-  // The picker floor and the live check share the open instant so the field and its minimum agree;
-  // submit re-checks against the clock, since a dialog can stay open past the chosen expiry.
-  private readonly openedAtMs = Date.now();
-  protected readonly minExpiry = new Date(this.openedAtMs).toISOString().slice(0, 16);
+  // Refresh on interaction rather than polling while the dialog sits idle.
+  private readonly nowMs = signal(Date.now());
+  private readonly expiryMaximum = signal<ExpiryMaximum | null>(null);
+  protected readonly minExpiry = computed(() => new Date(this.nowMs()).toISOString().slice(0, 16));
+  private readonly maxExpiryAtMs = computed(() => {
+    const maximum = this.expiryMaximum();
+    if (maximum === null) return null;
+    const instant = 'instant' in maximum ? maximum.instant : this.nowMs() + maximum.lifetimeMs;
+    return instant <= LAST_SPELLABLE_INSTANT ? instant : null;
+  });
+  protected readonly maxExpiry = computed(() => {
+    const instant = this.maxExpiryAtMs();
+    return instant === null ? null : new Date(instant).toISOString().slice(0, 16);
+  });
   protected readonly expiryInvalid = computed(() => {
     const instant = expiryInstant(this.expires());
-    return instant === null || instant <= this.openedAtMs || this.elapsed();
+    const maximum = this.maxExpiryAtMs();
+    return (
+      instant === null ||
+      instant <= this.nowMs() ||
+      (maximum !== null && instant > maximum) ||
+      this.elapsed()
+    );
   });
   protected readonly choices = computed(() =>
     tokenPermissionChoices(this.session.permissions(), (code) => this.session.has(code)),
@@ -284,7 +336,11 @@ export class ApiTokenCreateDialogComponent {
     this.selected.set(selected);
     this.changed();
   }
+  protected refreshClock(): void {
+    this.nowMs.set(Date.now());
+  }
   private changed(): void {
+    this.refreshClock();
     this.intent = null;
     this.store.resetCreateError();
   }
@@ -323,8 +379,10 @@ export class ApiTokenCreateDialogComponent {
     }
     const failure = this.store.createError();
     if (!answer && failure && refusesExpiry(failure)) {
+      this.refreshClock();
       this.rejectedExpiry.set(this.expires());
       this.expiryRefusal.set(failure.message);
+      this.expiryMaximum.set(parseExpiryMaximum(failure.message));
     }
   }
   protected escape(event: Event): void {
