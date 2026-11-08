@@ -301,19 +301,29 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
     }
 
     /// <summary>One <c>ready</c> <c>raw_report</c> artifact whose final object the store really holds.</summary>
-    private async Task<Guid> SeedArtifactAsync(World world, byte[] body)
+    /// <param name="world">The world the report belongs to.</param>
+    /// <param name="body">The report's bytes.</param>
+    /// <param name="projectId">
+    /// The project the row names, or null for the run's own. The column is not a key of the run's, so a row may name
+    /// another project of the org and still be this run's raw report.
+    /// </param>
+    private async Task<Guid> SeedArtifactAsync(World world, byte[] body, Guid? projectId = null)
     {
-        var artifactId = await SeedArtifactRowAsync(world, body);
-        await _store.PutAsync(ObjectKeyFor(world, artifactId), body);
+        var artifactId = await SeedArtifactRowAsync(world, body, projectId);
+        await _store.PutAsync(ObjectKeyFor(world, artifactId, projectId), body);
 
         return artifactId;
     }
 
     /// <summary>The artifact row alone, for the test that needs a row whose object the store never received.</summary>
-    private async Task<Guid> SeedArtifactRowAsync(World world, byte[] body)
+    /// <param name="world">The world the report belongs to.</param>
+    /// <param name="body">The report's bytes.</param>
+    /// <param name="projectId">The project the row names, or null for the run's own.</param>
+    private async Task<Guid> SeedArtifactRowAsync(World world, byte[] body, Guid? projectId = null)
     {
+        var owner = projectId ?? world.Project;
         var artifactId = Guid.CreateVersion7();
-        var key = ObjectKeyFor(world, artifactId);
+        var key = ObjectKeyFor(world, artifactId, owner);
         var checksum = "sha256:" + Convert.ToHexStringLower(
             System.Security.Cryptography.SHA256.HashData(body));
 
@@ -321,7 +331,7 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
             world.Database,
             "insert into public.artifact (id, org_id, project_id, run_id, execution_key, attempt_no, kind, object_key, "
             + "media_type, checksum, sensitivity, scan_state, state, bytes, failure_code) values "
-            + $"('{artifactId:D}', '{world.Org:D}', '{world.Project:D}', '{world.RunId:D}', '{ExecutionKey}', 1, "
+            + $"('{artifactId:D}', '{world.Org:D}', '{owner:D}', '{world.RunId:D}', '{ExecutionKey}', 1, "
             + $"'{ArtifactKind.RawReport}', '{key}', '{XmlType}', '{checksum}', 'normal', 'pending', "
             + $"'{ArtifactState.Ready}', {body.LongLength.ToString(CultureInfo.InvariantCulture)}, null)");
 
@@ -402,8 +412,11 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
             $"select count(*) from public.{table} where org_id = '{world.Org:D}'");
 
     /// <summary>The final key the artifact row mints, so a test writes and the handler reads the same object.</summary>
-    private static string ObjectKeyFor(World world, Guid artifactId) =>
-        $"org/{world.Org:D}/project/{world.Project:D}/run/{world.RunId:D}/attempt/{ExecutionKey}/1/{artifactId:D}";
+    /// <param name="world">The world the report belongs to.</param>
+    /// <param name="artifactId">The artifact whose key is minted.</param>
+    /// <param name="projectId">The project the row names, or null for the run's own.</param>
+    private static string ObjectKeyFor(World world, Guid artifactId, Guid? projectId = null) =>
+        $"org/{world.Org:D}/project/{(projectId ?? world.Project):D}/run/{world.RunId:D}/attempt/{ExecutionKey}/1/{artifactId:D}";
 }
 
 /// <summary>

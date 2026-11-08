@@ -349,7 +349,7 @@ internal sealed partial class ParseArtifactTaskHandler(
     /// than the cap the artifact was admitted under (D-A9).
     /// </summary>
     /// <param name="context">This attempt's write model.</param>
-    /// <param name="artifact">The row whose kind and project select the policy.</param>
+    /// <param name="artifact">The row whose kind and run's project select the policy.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
     /// <returns>The effective cap in bytes.</returns>
     /// <exception cref="InvalidOperationException">
@@ -361,7 +361,7 @@ internal sealed partial class ParseArtifactTaskHandler(
         Artifact artifact,
         CancellationToken cancellationToken) =>
         (await ArtifactCapturePolicy
-            .ResolveAsync(context, artifact.ProjectId, artifact.Kind, cancellationToken)
+            .ResolveForRunAsync(context, artifact, cancellationToken)
             .ConfigureAwait(false))
         .MaxBytes;
 

@@ -133,7 +133,7 @@ internal sealed partial class ReprocessReportHandler
             new { org_id = orgId, run_id = request.RunId },
             cancellationToken).ConfigureAwait(false);
 
-        var cap = await ArtifactCapturePolicy.ResolveAsync(context, ready.ProjectId, ready.Kind, cancellationToken)
+        var cap = await ArtifactCapturePolicy.ResolveForRunAsync(context, ready, cancellationToken)
             .ConfigureAwait(false);
 
         return new Preparation(
