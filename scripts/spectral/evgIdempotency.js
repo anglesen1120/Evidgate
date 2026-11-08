@@ -40,6 +40,8 @@ var IDEMPOTENCY_EXEMPT = {
     'revocation is a row state: the first call sets revoked_at and every repeat answers the same 404 not_found on a dead row, so no key could change the answer (02.3.2-T2.1 §5)',
   'post /auth/sessions/revoke-all':
     'naturally idempotent: revoking an already revoked row changes nothing and the answer is the same 204 (02.3.2-T2.1 §5)',
+  'post /auth/users/{u}/sessions/revoke-all':
+    'naturally idempotent: a repeat finds no live row of the target, answers the same 204 and writes no second audit row (02.3.2 §5)',
   'post /auth/logout':
     'naturally idempotent: the session row is revoked once and replaying the old cookie is 401 session_revoked, so a key could not change the outcome (02.3.2-T2.1 §5, AC8)',
   'post /dev/session':

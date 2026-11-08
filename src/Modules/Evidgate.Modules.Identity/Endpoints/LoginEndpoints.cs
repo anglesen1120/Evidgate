@@ -146,9 +146,10 @@ public static class LoginEndpoints
         // exactly the pre-tenant composition of the protocol routes (envelope filter only, no tenant filter).
         LinkEndpoints.Map(group);
 
-        // 02.3.2-T2: session management and logout. The same group, so the four routes carry exactly the
-        // pre-tenant composition of the protocol routes (envelope filter only, no tenant filter): the caller is
-        // the session cookie, resolved by the authenticator, and never a route value.
+        // 02.3.2-T2: session management and logout, plus the administrative bulk revoke. The same group, so these
+        // routes carry exactly the pre-tenant composition of the protocol routes (envelope filter only, no tenant
+        // filter): the acting user is the session cookie, resolved by the authenticator, and never a route value -
+        // the bulk revoke's user segment names the member whose sessions end, not the caller.
         SessionEndpoints.Map(group);
 
         return group;

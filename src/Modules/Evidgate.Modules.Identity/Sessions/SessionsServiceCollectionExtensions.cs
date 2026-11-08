@@ -16,7 +16,7 @@ namespace Evidgate.Modules.Identity.Sessions;
 /// verification (<see cref="ISessionAuthentication"/>) and the two writes another module's transaction calls
 /// (<see cref="ISessionRevocation"/>, <see cref="ISessionPrivilegeChange"/>), all over the app-role
 /// <c>NpgsqlDataSource</c> and the owner-scoped <c>evidgate_resolve</c> functions of migrations 0042/0045;
-/// 02.3.2-T2.1 adds the four session routes and the cleanup batch (<see cref="ISessionRoutesStore"/>, 0048),
+/// 02.3.2-T2.1 adds the session routes and the cleanup batch (<see cref="ISessionRoutesStore"/>, 0048),
 /// whose cleanup runs on the <c>evidgate_worker_sched</c> connection instead.
 /// </summary>
 /// <remarks>
@@ -72,7 +72,7 @@ internal static class SessionsServiceCollectionExtensions
         services.TryAddSingleton<ISessionPrivilegeChange>(
             provider => provider.GetRequiredService<SessionRevocationStore>());
 
-        // 02.3.2-T2.1: the four session routes and the cleanup sweep. The route statements run as the
+        // 02.3.2-T2.1: the session routes and the cleanup sweep. The route statements run as the
         // app role; the cleanup batch runs as `evidgate_worker_sched`, because EXECUTE on
         // `evidgate.session_cleanup` is granted to the sweep role alone (TL T80, the
         // `CiTokenIssuePurge` posture). `WorkerSchedDataSource` is itself the fail-closed seam: without

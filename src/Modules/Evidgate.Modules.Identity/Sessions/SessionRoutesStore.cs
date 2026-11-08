@@ -42,9 +42,10 @@ internal sealed record SessionListItem(
 internal sealed record SessionCleanupResult(int Stamped, int Deleted);
 
 /// <summary>
-/// The persistence seam of the four session routes and the cleanup sweep (02.3.2-T2.1):
-/// list, logout, revoke one, revoke all but the current, and one bounded cleanup batch —
-/// all through the <c>evidgate_resolve</c> definers of migration 0048.
+/// The persistence seam of the session routes and the cleanup sweep (02.3.2-T2.1):
+/// list, logout, revoke one, revoke all but the current, the administrative revoke of one
+/// member's sessions, and one bounded cleanup batch — all through the <c>evidgate_resolve</c>
+/// definers of migrations 0048 and 0085.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -73,10 +74,10 @@ internal sealed record SessionCleanupResult(int Stamped, int Deleted);
 /// sign a healthy user out (D-S85-D2).
 /// </para>
 /// <para>
-/// <b>What rides along (F58).</b> <see cref="RevokeOneAsync"/> takes the call's request id and trace id so the
-/// definer can stamp the administrative row it writes with the same two correlation values the C# audit writer
-/// records (02.7.1). The store only passes them: the shape check lives in SQL, and the owner path stores none of
-/// it because it writes no row at all (F48, F55).
+/// <b>What rides along (F58).</b> <see cref="RevokeOneAsync"/> and <see cref="RevokeAllForUserAsAdminAsync"/> take
+/// the call's request id and trace id so the definer can stamp the administrative row it writes with the same two
+/// correlation values the C# audit writer records (02.7.1). The store only passes them: the shape check lives in
+/// SQL, and the self-service paths store none of it because they write no row at all (F48, F55).
 /// </para>
 /// <para>
 /// <b>Nothing is logged here.</b> The cookie value, the proof hash, the session id, the
@@ -128,6 +129,29 @@ internal interface ISessionRoutesStore
         string? traceId,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Revokes EVERY live session of another member of an org the caller administers, and answers how many
+    /// rows it ended.
+    /// </summary>
+    /// <param name="sessionProof">The HMAC of the live cookie value; empty when the request carried no cookie.</param>
+    /// <param name="targetUserId">The member whose sessions are ended.</param>
+    /// <param name="orgId">The org named by <c>X-Evidgate-Org</c>; the definer refuses a null one.</param>
+    /// <param name="requestId">The call's request id, stored on the admin's audit row when it is a safe token.</param>
+    /// <param name="traceId">The call's W3C trace id, stored on that row when it carries that shape.</param>
+    /// <param name="cancellationToken">Request abort.</param>
+    /// <returns>
+    /// <see cref="SessionRouteStatus.Done"/> with the revoked count (zero when the target had no live session),
+    /// <see cref="SessionRouteStatus.NotFound"/> for every case the caller may not act on, or
+    /// <see cref="SessionRouteStatus.Unauthenticated"/>.
+    /// </returns>
+    ValueTask<(SessionRouteStatus Status, int Revoked)> RevokeAllForUserAsAdminAsync(
+        byte[] sessionProof,
+        Guid targetUserId,
+        Guid? orgId,
+        string? requestId,
+        string? traceId,
+        CancellationToken cancellationToken);
+
     /// <summary>Revokes every live session of the caller, keeping the current one unless told otherwise.</summary>
     /// <param name="sessionProof">The HMAC of the live cookie value; empty when the request carried no cookie.</param>
     /// <param name="keepCurrent">True keeps the session the request was authenticated with.</param>
@@ -160,10 +184,10 @@ internal interface ISessionRoutesStore
 /// <see cref="IWorkerSchedDataSource"/>; the clock is the deployment's
 /// <see cref="TimeProvider"/>, so a test moves every deadline without waiting.
 /// </remarks>
-/// <param name="dataSource">The app-role data source the four route statements run on.</param>
+/// <param name="dataSource">The app-role data source the route statements run on.</param>
 /// <param name="sweep">The <c>evidgate_worker_sched</c> connection the cleanup batch runs on.</param>
 /// <param name="clock">The clock the statements' <c>p_now</c> comes from.</param>
-internal sealed class SessionRoutesStore(
+internal sealed partial class SessionRoutesStore(
     NpgsqlDataSource dataSource,
     IWorkerSchedDataSource sweep,
     TimeProvider clock) : ISessionRoutesStore

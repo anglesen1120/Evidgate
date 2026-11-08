@@ -17,11 +17,12 @@ namespace Isolation.Tests.Api;
 /// <remarks>
 /// The world seeds no <c>session</c> row (02.3.2 is not merged, see <see cref="IsolationWorld.NotYetBuildable"/>),
 /// so the session half of AC5 is carried by check 1: the only session-segment routes are the four caller-owned
-/// routes of 02.3.2-T2.1 on the allowlist above with their reasons, and any other route naming a session fails
-/// here. The member addresses deliberately collide between the two orgs (the same local text, 02 §7), so check 3
-/// scans for org-A addresses org B does not also own: org A's own pending invite
-/// (<c>invitee-a@example.test</c>, seeded by <see cref="IsolationWorld"/>) is the live org-A-only address, and
-/// the set is asserted non-empty so the branch cannot pass vacuously; its user-id half is strict.
+/// routes of 02.3.2-T2.1 and the admin all-sessions revoke, all on the allowlist above with their reasons, and
+/// any other route naming a session fails here. The member addresses deliberately collide between the two orgs
+/// (the same local text, 02 §7), so check 3 scans for org-A addresses org B does not also own: org A's own
+/// pending invite (<c>invitee-a@example.test</c>, seeded by <see cref="IsolationWorld"/>) is the live
+/// org-A-only address, and the set is asserted non-empty so the branch cannot pass vacuously; its user-id
+/// half is strict.
 /// </remarks>
 [Collection(ApiIsolationSuite.Name)]
 [Trait("Category", "Docker")]
@@ -35,11 +36,14 @@ public sealed class PlatformScopeTests(ApiIsolationFixture fixture)
         ["user", "users", "user-identity", "user-identities", "identity", "identities", "session", "sessions", "me"];
 
     /// <summary>
-    /// Served routes that legitimately carry a platform-scope segment, each a recorded decision. The four session
-    /// routes of 02.3.2-T2.1 are the caller's OWN rows only: the acting user is resolved inside the definer from
-    /// the presented cookie's HMAC, no route value or body ever names a user or a session of another account, and
-    /// the admin path of the revoke route needs an active <c>membership:write</c> in the org named by
-    /// <c>X-Evidgate-Org</c> (02 §4.2, 02.3.2 §5) — so they are self-service, not tenant scope.
+    /// Served routes that legitimately carry a platform-scope segment, each a recorded decision. The four
+    /// caller-owned session routes of 02.3.2-T2.1 are the caller's OWN rows only: the acting user is resolved
+    /// inside the definer from the presented cookie's HMAC, no route value or body ever names a user or a session
+    /// of another account, and the admin path of the revoke route needs an active <c>membership:write</c> in the
+    /// org named by <c>X-Evidgate-Org</c> (02 §4.2, 02.3.2 §5) — so they are self-service, not tenant scope.
+    /// The admin all-sessions revoke names a target user in its path, but that id is not a tenant selector: the
+    /// route resolves no tenant, and the definer judges the target's active membership in the header's org
+    /// against the caller's <c>membership:write</c>, answering one 404 for every refusal.
     /// The two profile routes are the same shape for the same reason: the session cookie alone identifies the
     /// account, so <c>/v1/me</c> takes no user id and one caller can never read or update another's row.
     /// </summary>
@@ -53,6 +57,8 @@ public sealed class PlatformScopeTests(ApiIsolationFixture fixture)
             "every live session of the caller only, the acting user resolved from the cookie",
         [new ApiRoute("POST", "/v1/auth/logout")] =
             "the one row the presented cookie proves",
+        [new ApiRoute("POST", "/v1/auth/users/{u}/sessions/revoke-all")] =
+            "every live session of one member of the header's org, under the caller's active membership:write there; every other target answers the same 404",
         [new ApiRoute("GET", "/v1/me")] =
             "the caller's own profile, resolved from the presented session cookie; no route or body user id can select another account",
         [new ApiRoute("PATCH", "/v1/me")] =

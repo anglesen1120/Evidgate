@@ -60,7 +60,7 @@ internal static class SessionCleanupSweeps
 /// A platform task with no tenant scope: <c>public.session</c> carries no <c>org_id</c> (the D12 exception), so
 /// there is nothing to scope. The batch itself runs on the <c>evidgate_worker_sched</c> connection the store
 /// holds (<see cref="IWorkerSchedDataSource"/>), because <c>EXECUTE</c> on the cleanup definer is granted to that
-/// role alone — the <c>CiTokenIssuePurge</c> posture (TL T80). The four route statements of the same store use the
+/// role alone — the <c>CiTokenIssuePurge</c> posture (TL T80). The route statements of the same store use the
 /// app-role data source; only this sweep needs the sweep credential.
 /// </para>
 /// <para>

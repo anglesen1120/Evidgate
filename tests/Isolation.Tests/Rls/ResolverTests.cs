@@ -55,6 +55,7 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate_resolve.session_revoke_current"] = ["status"],
         ["evidgate_resolve.session_revoke_one"] = ["status"],
         ["evidgate_resolve.session_revoke_others"] = ["status", "revoked_count"],
+        ["evidgate_resolve.session_revoke_all_admin"] = ["status", "revoked_count"],
         ["evidgate_resolve.login_link_identity"] = ["outcome", "moved_from_user_id"],
         ["evidgate_resolve.user_profile_read"] =
             ["status", "user_id", "email", "display_name", "preferred_locale", "version"],
@@ -89,6 +90,7 @@ public sealed class ResolverTests : HarnessTest
         "evidgate_resolve.session_revoke_current",
         "evidgate_resolve.session_revoke_one",
         "evidgate_resolve.session_revoke_others",
+        "evidgate_resolve.session_revoke_all_admin",
         "evidgate_resolve.login_link_identity",
         "evidgate_resolve.user_profile_read",
         "evidgate_resolve.user_profile_update",
