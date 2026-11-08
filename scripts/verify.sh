@@ -58,6 +58,7 @@ ALL_STAGES=(
   tsc-build
   tsc-spec
   vitest
+  e2e-a11y
   eslint
   prettier
   check-layout
@@ -237,6 +238,14 @@ run_stage() {
   vitest)
     stage "vitest"
     npm run test
+    ;;
+  e2e-a11y)
+    # The browser axe suite (WCAG 2.2 AA over every built flow, en and vi) on the
+    # fixtures build. The Vitest axe specs (`*.a11y.spec.ts`) need no stage of their
+    # own: the `vitest` stage's `ng test` already runs them. No retries and no
+    # ignore flag; chrome must be installed (`npx playwright install chrome`).
+    stage "e2e-a11y (browser axe suite, fixtures build)"
+    npm run test:e2e:a11y -w apps/web
     ;;
   eslint)
     stage "eslint"

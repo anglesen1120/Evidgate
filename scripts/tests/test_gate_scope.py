@@ -208,6 +208,12 @@ class StageSelection(unittest.TestCase):
         for name in ("tsc-build", "tsc-spec", "vitest", "eslint", "image-pins"):
             self.assertIn(name, stages)
 
+    def test_the_browser_a11y_stage_runs_in_no_dotnet_and_full_only(self):
+        for tier in ("no-dotnet", "full"):
+            self.assertIn("e2e-a11y", gate_scope.stages_for(tier))
+        for tier in ("docs", "review-infra"):
+            self.assertNotIn("e2e-a11y", gate_scope.stages_for(tier))
+
     def test_docs_is_the_formatter_plus_every_check_stage_but_the_review_one(self):
         stages = gate_scope.stages_for("docs")
         expected = [
