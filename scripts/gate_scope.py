@@ -57,6 +57,7 @@ CANONICAL_STAGES = (
     "tsc-build",
     "tsc-spec",
     "vitest",
+    "e2e-a11y",
     "eslint",
     "prettier",
     "check-layout",

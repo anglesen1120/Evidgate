@@ -383,14 +383,16 @@ jobs:
       - name: 'Build and check the service images — verify.sh stage'
         run: ./scripts/verify.sh --stage images
 
-  # Non-blocking until the web milestone owns the suite (01.7.1-T1.3, 09):
-  # apps/web has a Playwright spec, but the suite is still a scaffold.
+  # Blocking core-flow e2e (09.8.1-T3.3): the core suite on the fixtures build
+  # (retries only for tests tagged @infra, see playwright.core.config.ts) plus the
+  # browser axe stage, then the production smoke. Reports, traces and the JUnit
+  # file are uploaded whatever the outcome; they can hold fixture-tenant data, so
+  # they are kept short-lived like any sensitive evidence.
   e2e:
-    name: 'e2e (playwright, non-blocking until 09)'
+    name: 'e2e (playwright core flows, blocking)'
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    continue-on-error: true
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -404,22 +406,56 @@ jobs:
         run: npm ci --ignore-scripts
       - name: 'Build @evidgate/sdk (the web app imports its dist/)'
         run: npm run build -w packages/sdk
-      - name: 'Install Playwright browsers'
-        run: npx playwright install --with-deps chromium
-      - name: 'Playwright e2e — apps/web'
-        run: npm run e2e -w apps/web
-      - name: 'Upload the Playwright report on failure'
-        if: failure()
+      - name: 'Install Google Chrome for Playwright'
+        run: npx playwright install --with-deps chrome
+      - name: 'Browser axe suite — verify.sh stage'
+        run: ./scripts/verify.sh --stage e2e-a11y
+      # Every Playwright run empties its output directory, and the production
+      # smoke shares apps/web/test-results with the core suite, so each step's
+      # evidence is uploaded before the next step starts. The stored auth state
+      # (a session of the fixture tenant) is never uploaded.
+      - name: 'Upload the browser axe evidence'
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report
-          path: apps/web/playwright-report
-          retention-days: 14
+          name: playwright-a11y
+          path: |
+            apps/web/test-results
+            !apps/web/test-results/**/core-auth-state*.json
+          retention-days: 7
+      - name: 'Playwright core flows — apps/web fixtures build'
+        if: always()
+        run: npm run e2e:core -w apps/web
+      - name: 'Upload the core-flow reports, traces and JUnit'
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-core
+          path: |
+            apps/web/test-results
+            !apps/web/test-results/**/core-auth-state*.json
+          retention-days: 7
+      - name: 'Install Playwright browsers'
+        if: always()
+        run: npx playwright install --with-deps chromium
+      - name: 'Playwright production smoke — apps/web'
+        if: always()
+        run: npm run e2e -w apps/web
+      - name: 'Upload the production smoke report'
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-smoke
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+            !apps/web/test-results/**/core-auth-state*.json
+          retention-days: 7
 
   # 09.1.1-T4 hand-over (S68, STATUS "Shell e2e suite is not in CI"): the shell
   # suite runs against the FIXTURES build (apps/web/playwright.fixtures.config.ts),
   # which needs the dev-only fixture backend, so it cannot share the production
-  # e2e job above. Non-blocking for the same reason as that job. The config
+  # e2e job above. Non-blocking: its suite is still the wide shell regression, not the core gate. The config
   # launches `channel: 'chrome'`, so the runner installs Google Chrome, not the
   # bundled Chromium.
   e2e-fixtures:
