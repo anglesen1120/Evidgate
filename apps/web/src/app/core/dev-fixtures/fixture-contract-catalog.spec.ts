@@ -70,6 +70,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     const untouched = (body: object): Record<string, unknown> => {
       const members = { ...(body as Record<string, unknown>) };
       delete members['declared_producers'];
+      delete members['producers'];
       delete members['shard_count'];
       return members;
     };
@@ -89,11 +90,18 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
     expect(manyIds[49]).toBe('shard-50');
     expect(new Set(manyIds).size, 'the fifty slots are not distinct ids').toBe(50);
     expect(manyBody['shard_count']).toBe(50);
+    const manySlots: unknown = manyBody['producers'];
+    expect(Array.isArray(manySlots) ? manySlots.length : -1, 'one fact per slot').toBe(50);
     expect(untouched(manyBody)).toEqual(untouched(ready.body as object));
     expect(derived[2]?.document).toEqual({
       ...ready,
       variant: 'detail-no-producers',
-      body: { ...(ready.body as object), declared_producers: [], shard_count: 0 },
+      body: {
+        ...(ready.body as object),
+        declared_producers: [],
+        producers: [],
+        shard_count: 0,
+      },
     });
     for (const entry of derived.slice(3)) {
       const document = entry.document;
