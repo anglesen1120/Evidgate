@@ -38,7 +38,10 @@ internal sealed partial class OutboxDispatcherHostedService : BackgroundService
     }
 
     /// <inheritdoc />
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        Task.WhenAll(DispatchLoopAsync(stoppingToken), _dispatcher.RunBacklogRefreshAsync(stoppingToken));
+
+    private async Task DispatchLoopAsync(CancellationToken stoppingToken)
     {
         var reportedFailure = false;
 
