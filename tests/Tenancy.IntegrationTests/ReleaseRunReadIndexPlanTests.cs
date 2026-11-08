@@ -66,6 +66,7 @@ public sealed class ReleaseRunReadIndexPlanTests
             {
                 parameters.AddWithValue("run_id", targetRun);
                 parameters.AddWithValue("bound_release_limit", ReleaseSql.MaxBoundReleases);
+                parameters.AddWithValue("producer_slot_limit", ProducerSlotFactsSql.MaxProducerSlots);
             });
 
         // The cap is the Limit over the bindings subquery; locating it by the table it reads keeps the assertion on the
