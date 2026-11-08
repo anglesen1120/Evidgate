@@ -189,6 +189,71 @@ for mode in off on; do
     -e "PROBE_BASIC=$asset_basic" --entrypoint /bin/sh web -c "$asset_probe_script"
 done
 
+review_step 'gzip carries Vary, and /v1/ is no-store unless the Api sends a Cache-Control'
+# A compressed and a plain body share a URL, so a shared cache needs Vary. The Api
+# proxy sends the upstream Cache-Control unchanged (exactly one header) and
+# no-store when there is none, nginx's own 502 included. nginx runs from a copy of
+# the shipped configuration whose upstream is a one-shot nc listener in the same
+# container, so the real location block is what answers.
+# shellcheck disable=SC2016 # the container shell expands these, not this one
+api_probe_script='set -e
+mkdir -p /tmp/evidgate
+printf "auth_basic off;\n" > /tmp/evidgate/auth.conf
+printf "# auth off\n" > /tmp/evidgate/proxy-auth.conf
+grep -q "set \$evidgate_api http://api:8080;" /etc/nginx/nginx.conf || { echo "FAIL: the upstream line moved, so the probe cannot repoint it"; exit 1; }
+sed "s#http://api:8080#http://127.0.0.1:9000#" /etc/nginx/nginx.conf > /tmp/nginx-probe.conf
+nginx -c /tmp/nginx-probe.conf
+i=0
+while [ "$i" -lt 40 ]; do
+  if wget -qO- http://127.0.0.1:8080/nginx-health >/dev/null 2>&1; then break; fi
+  i=$((i + 1)); sleep 0.25
+done
+css=$(cd /usr/share/nginx/html && ls -S vi/*.css 2>/dev/null | head -n 1 || true)
+[ -n "$css" ] || { echo "FAIL: the vi bundle has no .css file to compress"; exit 1; }
+size=$(wc -c < "/usr/share/nginx/html/$css")
+[ "$size" -ge 1024 ] || { echo "FAIL: $css is $size bytes, below gzip_min_length, so it cannot show Vary"; exit 1; }
+for enc in "Accept-Encoding: gzip" "X-Probe: plain"; do
+  hdrs=$(printf "GET /%s HTTP/1.1\r\nHost: review.example.test\r\nConnection: close\r\n%s\r\n\r\n" "$css" "$enc" | timeout 5 nc 127.0.0.1 8080 | tr -d "\r" | sed "/^$/q")
+  printf "%s\n" "$hdrs" | grep -qix "Vary: Accept-Encoding" || { echo "FAIL: GET /$css [$enc] has no Vary: Accept-Encoding: $hdrs"; exit 1; }
+  case "$enc" in
+    *gzip) printf "%s\n" "$hdrs" | grep -qix "Content-Encoding: gzip" || { echo "FAIL: GET /$css was not gzip-encoded: $hdrs"; exit 1; } ;;
+  esac
+  echo "GET /$css [$enc] -> Vary: Accept-Encoding"
+done
+api() {
+  # api UPSTREAM_HEADER_LINE EXPECTED_STATUS EXPECTED_CACHE_CONTROL
+  if [ "$1" != none ]; then
+    ( printf "HTTP/1.1 200 OK\r\n%bContent-Length: 2\r\nConnection: close\r\n\r\nok" "$1" | nc -l -s 127.0.0.1 -p 9000 >/dev/null 2>&1 ) &
+    # Bound to IPv4 so it shows in /proc/net/tcp. Port 9000 is 0x2328; state 0A is LISTEN. Reading /proc does not connect,
+    # so the one-shot listener is not consumed by the readiness check.
+    w=0
+    until grep -q ":2328 .* 0A " /proc/net/tcp; do
+      w=$((w + 1)); [ "$w" -lt 50 ] || { echo "FAIL: the probe upstream never listened"; exit 1; }
+      sleep 0.1
+    done
+  fi
+  # The pause keeps nc from exiting on stdin EOF before the proxied answer
+  # arrives; a static file is served fast enough not to need it.
+  resp=$( { printf "GET /v1/probe HTTP/1.0\r\nHost: review.example.test\r\n\r\n"; sleep 1; } | timeout 5 nc 127.0.0.1 8080 | tr -d "\r")
+  status=$(printf "%s\n" "$resp" | sed -n "1s/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p")
+  cc=$(printf "%s\n" "$resp" | sed "/^$/q" | sed -n "s/^[Cc]ache-[Cc]ontrol: //p")
+  [ "$status" = "$2" ] && [ "$cc" = "$3" ] || { echo "FAIL: GET /v1/probe [upstream: $1] gave $status with Cache-Control [$cc], expected $2 with [$3] (one header, no duplicate)"; exit 1; }
+  echo "GET /v1/probe [upstream: $1] -> $status Cache-Control: $cc"
+}
+api "Cache-Control: private, max-age=60\r\n" 200 "private, max-age=60"
+api "X-Other: 1\r\n" 200 "no-store"
+api "Cache-Control: no-store\r\n" 200 "no-store"
+api "Cache-Control:\r\nCache-Control:\r\n" 200 "no-store"
+api none 502 "no-store"
+# nginx answers a stranger itself, before the Api is asked, and that 401 must
+# not be storable either.
+printf "auth_basic \"Evidgate review\";\nauth_basic_user_file /tmp/evidgate/htpasswd;\n" > /tmp/evidgate/auth.conf
+printf "reviewer:x\n" > /tmp/evidgate/htpasswd
+nginx -c /tmp/nginx-probe.conf -s reload
+sleep 1
+api none 401 "no-store"'
+compose run --rm --no-deps --entrypoint /bin/sh web -c "$api_probe_script"
+
 review_step 'both locale bundles exist'
 # shellcheck disable=SC2016 # $locale must reach the container unexpanded
 compose run --rm --no-deps --entrypoint /bin/sh web -c \
