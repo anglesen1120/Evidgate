@@ -318,7 +318,7 @@ start_tenancy_shards() {
 # left behind would keep loading the host after the gate gave up its turn.
 stop_parallel_tests() {
   local pid
-  for pid in ${PT_PIDS[@]+"${PT_PIDS[@]}"}; do kill "$pid" 2>/dev/null || true; done
+  for pid in ${PT_PIDS[@]+"${PT_PIDS[@]}"}; do [[ -z "$pid" ]] || kill "$pid" 2>/dev/null || true; done
   PT_PIDS=()
   [[ -z "$PT_LOGS" ]] || rm -rf "$PT_LOGS"
   PT_LOGS=
@@ -326,7 +326,7 @@ stop_parallel_tests() {
 
 run_parallel_tests() {
   local shards="${EVIDGATE_TENANCY_SHARDS:-3}" logs listing discovered classes project name
-  local total=0 failed=0 i
+  local total=0 failed=0 i saved_traps wait_pid
   PT_PIDS=() PT_NAMES=() PT_FILES=()
   if ! [[ "$shards" =~ ^[1-9][0-9]?$ ]] || [[ "$shards" -gt 16 ]]; then
     echo "verify: EVIDGATE_TENANCY_SHARDS must be an integer from 1 to 16, got '$shards'" >&2
@@ -344,6 +344,7 @@ run_parallel_tests() {
   fi
   logs="$(mktemp -d)"
   PT_LOGS="$logs"
+  saved_traps="$(trap -p EXIT INT TERM)"
   trap stop_parallel_tests EXIT
   trap 'exit 143' INT TERM
   start_tenancy_shards "$shards" "$logs" "$classes"
@@ -353,7 +354,9 @@ run_parallel_tests() {
     start_test_run "$name" "$logs/$name.log" --project "$project" --minimum-expected-tests 1
   done
   for i in "${!PT_PIDS[@]}"; do
-    if wait "${PT_PIDS[$i]}"; then
+    wait_pid="${PT_PIDS[$i]}"
+    PT_PIDS[$i]=""
+    if wait "$wait_pid"; then
       echo "== ${PT_NAMES[$i]}: passed ($(test_log_total "${PT_FILES[$i]}") tests)"
     else
       echo "== ${PT_NAMES[$i]}: FAILED (exit $?)"
@@ -371,6 +374,7 @@ run_parallel_tests() {
   fi
   stop_parallel_tests
   trap - EXIT INT TERM
+  eval "$saved_traps"
   return "$failed"
 }
 

@@ -60,7 +60,7 @@ class ParallelTests(unittest.TestCase):
             fake = bin_dir / "dotnet"
             fake.write_text(FAKE_DOTNET)
             fake.chmod(0o755)
-            script = f'set -euo pipefail; source "{GUARDS}"; run_parallel_tests'
+            script = f'set -euo pipefail; source "{GUARDS}"; {env.pop("PRELUDE", ":")}; run_parallel_tests; {env.pop("EPILOGUE", ":")}'
             return subprocess.run(
                 ["bash", "-c", script],
                 cwd=tmp,
@@ -99,6 +99,15 @@ class ParallelTests(unittest.TestCase):
             with self.subTest(value=value):
                 done = self.run_stage(EVIDGATE_TENANCY_SHARDS=value)
                 self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
+
+    def test_the_callers_exit_trap_survives_the_stage(self):
+        done = self.run_stage(
+            EVIDGATE_TENANCY_SHARDS="1",
+            PRELUDE="trap 'echo CALLER-TRAP-RAN' EXIT",
+            EPILOGUE="true",
+        )
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(done.stdout.count("CALLER-TRAP-RAN"), 1, done.stdout)
 
     def test_the_other_projects_must_run_a_test(self):
         done = self.run_stage(EVIDGATE_TENANCY_SHARDS="1", REQUIRE_MIN="1")
