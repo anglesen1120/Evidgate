@@ -2,7 +2,7 @@
 // suite revisions. `fixture-catalog-entries.ts` concatenates both halves, so the served order is
 // the original single list.
 
-import type { RunStateTransition } from '@evidgate/sdk';
+import type { RunProducerSlot, RunStateTransition } from '@evidgate/sdk';
 
 import runAttempts from '../../../../../../fixtures/web-api/run-attempts/input.json';
 import runAttemptsEmpty from '../../../../../../fixtures/web-api/run-attempts-empty/input.json';
@@ -59,13 +59,27 @@ const runDetailCanceled: FixtureDocument = {
 /**
  * The declared-producer states the corpus has no detail document for: an empty declaration, which
  * the producers section explains rather than reports as an error, and a full fifty-slot run, where
- * the table has to scroll inside its own wrapper. One member of the validated body is replaced.
+ * the table has to scroll inside its own wrapper. The slot facts follow the declaration, since the
+ * read serves both from the same rows.
  */
 const runDetailNoProducers: FixtureDocument = {
   ...runDetail,
   variant: 'detail-no-producers',
-  body: { ...runDetail.body, declared_producers: [], shard_count: 0 },
+  body: { ...runDetail.body, declared_producers: [], shard_count: 0, producers: [] },
 };
+
+/** One finalized slot per id, in shard order, each having sent exactly the events it declared. */
+const finalizedSlots = (producerIds: readonly string[]): readonly RunProducerSlot[] =>
+  producerIds.map((producerId) => ({
+    producer_id: producerId,
+    identity_state: 'bound',
+    finalize_status: 'finalized',
+    last_sequence: 1,
+    count: 1,
+    expected: 1,
+    stale_epoch_events: 0,
+    after_cancel_events: 0,
+  }));
 
 /** Fifty slot ids in shard-index order: the widest producer table the run screen has to lay out. */
 const MANY_PRODUCER_IDS: readonly string[] = Array.from(
@@ -76,7 +90,12 @@ const MANY_PRODUCER_IDS: readonly string[] = Array.from(
 const runDetailManyProducers: FixtureDocument = {
   ...runDetail,
   variant: 'detail-many-producers',
-  body: { ...runDetail.body, declared_producers: MANY_PRODUCER_IDS, shard_count: 50 },
+  body: {
+    ...runDetail.body,
+    declared_producers: MANY_PRODUCER_IDS,
+    producers: finalizedSlots(MANY_PRODUCER_IDS),
+    shard_count: 50,
+  },
 };
 
 const runDetailRelease: FixtureDocument = {

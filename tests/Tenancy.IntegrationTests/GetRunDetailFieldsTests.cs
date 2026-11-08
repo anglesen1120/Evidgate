@@ -122,7 +122,7 @@ public sealed partial class GetRunDetailFieldsTests
     /// <summary>
     /// F44: <c>declared_producers</c> follows <c>shard_index</c>, not the order the slots were written in and not the
     /// ids' own collation — so the pair is permuted to make the three orders disagree and the body still reports the
-    /// shard order.
+    /// shard order. <c>producers</c> is the same list with each slot's state, so it must follow that order too.
     /// </summary>
     [Fact]
     public async Task GetRun_DeclaredProducers_FollowShardIndex()
@@ -149,12 +149,16 @@ public sealed partial class GetRunDetailFieldsTests
         Producers(answer).ShouldBe(["shard-z", "shard-a"]);
         Producers(answer).ShouldBe(await _fixture.ColumnAsync<string>(
             world.Database, $"select producer_id from public.producer_slot {slots} order by shard_index"));
+
+        // The same order in the slot list, whose items carry the state `declared_producers` only names.
+        SlotFacts(answer).Select(item => item.GetProperty("producer_id").GetString()!).ShouldBe(Producers(answer));
     }
 
     /// <summary>
     /// F44 with 00 §5.4: a run the caller may not see is the one <c>404 not_found</c> — for an unknown id, for another
     /// tenant's run under RLS, and for a credential scoped to a sibling project, whose handler-level scope mismatch is
-    /// mapped to the same answer (never <c>403 project_scope_mismatch</c> and never a different message).
+    /// mapped to the same answer (never <c>403 project_scope_mismatch</c> and never a different message). A bound slot
+    /// is seeded with a probe token id, so the refusal must leak neither the slot list nor that id.
     /// </summary>
     [Fact]
     public async Task GetRun_NotFound_IsTheSameAnswerForUnknownCrossTenantAndSiblingProject()
@@ -163,6 +167,10 @@ public sealed partial class GetRunDetailFieldsTests
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
+        await _fixture.ExecuteAsync(world.Database, $"""
+            update public.producer_slot set bound_token_jti = '{SlotJti}'
+             where run_id = '{runId:D}' and producer_id = 'shard-1'
+            """);
 
         var unknown = await GetAsync(world, Guid.CreateVersion7());
         unknown.Status.ShouldBe(HttpStatusCode.NotFound);
@@ -196,6 +204,8 @@ public sealed partial class GetRunDetailFieldsTests
         siblingScope.Status.ShouldBe(HttpStatusCode.NotFound);
         siblingScope.ErrorCode.ShouldBe(unknown.ErrorCode);
         siblingScope.ErrorMessage.ShouldBe(unknown.ErrorMessage, "the scope mismatch must not become a second answer");
+        siblingScope.Body.TryGetProperty("producers", out _).ShouldBeFalse();
+        siblingScope.Body.GetRawText().ShouldNotContain(SlotJti, Case.Sensitive);
     }
 
     /// <summary>Creates one policy revision through <c>POST /v1/projects/{p}/policies</c> (07.1.1-T3); returns its id.</summary>

@@ -7,10 +7,10 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// locked (the pinned manifest, its suite and policy revisions, its environment revision and the producer slots it
 /// registered). The wire names are <c>run_id</c>, <c>state</c>, <c>current_evidence_revision_id</c>, <c>version</c>,
 /// <c>purpose</c>, <c>ref</c>, <c>unverified_ref</c>, <c>manifest_hash</c>, <c>suite_revision_id</c>,
-/// <c>policy_revision_id</c>, <c>environment</c>, <c>shard_count</c>, <c>declared_producers</c>, <c>releases</c>,
-/// <c>after_cancel_events</c> and <c>state_history</c> (the host's <c>SnakeCaseLower</c> policy). Another tenant's — or,
-/// for a project-scoped credential, another project's — run is <c>404 not_found</c>, the same code and body as an
-/// unknown id (00 §5.4).
+/// <c>policy_revision_id</c>, <c>environment</c>, <c>shard_count</c>, <c>declared_producers</c>, <c>producers</c>,
+/// <c>releases</c>, <c>after_cancel_events</c> and <c>state_history</c> (the host's <c>SnakeCaseLower</c> policy).
+/// Another tenant's — or, for a project-scoped credential, another project's — run is <c>404 not_found</c>, the same
+/// code and body as an unknown id (00 §5.4).
 /// <para>
 /// Every member is required and comes from a stored column: nothing here is a placeholder. Evidence
 /// <c>completeness</c>/<c>missing[]</c> are a later, separate read (09.3.1-T3 with 07.5.2), not part of this body.
@@ -57,6 +57,11 @@ namespace Evidgate.Modules.Orchestrator.Contracts;
 /// The run's producer slot ids in <c>shard_index</c> order, the values the manifest's shards declare
 /// (<c>shard-&lt;n&gt;</c>, written at run creation, 0029).
 /// </param>
+/// <param name="Producers">
+/// One item per <c>producer_slot</c> row of the run, in <c>shard_index</c> order — the same order as
+/// <see cref="DeclaredProducers"/>, whose ids this list repeats with the slot's recorded state. Empty for a run that
+/// registered no slot, never null; at most <c>256</c> items, the count the slot table's own check bounds.
+/// </param>
 /// <param name="Releases">
 /// The releases the run is bound to, one item per stored <c>release_run</c> row, ordered by that row's
 /// <c>created_at</c> then id. An unbound run carries an empty array — never null — and a release of another tenant,
@@ -86,9 +91,55 @@ public sealed record RunStateDto(
     RunEnvironmentRef Environment,
     int ShardCount,
     IReadOnlyList<string> DeclaredProducers,
+    IReadOnlyList<RunProducerSlot> Producers,
     IReadOnlyList<RunReleaseRef> Releases,
     int AfterCancelEvents,
     IReadOnlyList<RunStateTransition>? StateHistory);
+
+/// <summary>
+/// One producer slot of a run (<c>GET /v1/runs/{r}</c>): the slot's recorded state and what its producers actually
+/// sent. The wire names are <c>producer_id</c>, <c>identity_state</c>, <c>finalize_status</c>, <c>last_sequence</c>,
+/// <c>count</c>, <c>expected</c>, <c>stale_epoch_events</c> and <c>after_cancel_events</c>; all eight are required,
+/// and only <c>expected</c> is nullable. The binding itself is never served: <c>identity_state</c> says whether the
+/// slot holds a token identity, not the identity's value.
+/// <para>
+/// The two counts of late events are informational, like the run-level <c>after_cancel_events</c>: nothing derives
+/// completeness from them. <c>count</c> against <c>expected</c> is a mismatch only once the slot has finalized, and
+/// the reader reports both values as stored rather than a derived flag.
+/// </para>
+/// </summary>
+/// <param name="ProducerId">The slot's producer id, the one the manifest's shard declares (<c>producer_slot.producer_id</c>).</param>
+/// <param name="IdentityState">
+/// <c>bound</c> when the slot holds a token identity, <c>unbound</c> when it holds none. The bind writes the
+/// identity together with its CI run reference in one update, so those are the only two states the column can hold;
+/// the identity's value is never served.
+/// </param>
+/// <param name="FinalizeStatus">
+/// <c>open</c> until the slot finalizes, <c>finalized</c> once <c>closed_at</c> is set — the same write that stores
+/// the declared values, so a finalized slot always carries <see cref="Expected"/>.
+/// </param>
+/// <param name="LastSequence">The highest producer sequence the slot recorded (<c>producer_slot.last_sequence</c>).</param>
+/// <param name="Count">
+/// How many <c>event</c> rows the slot recorded, whatever their flags; zero for a slot that sent nothing yet.
+/// </param>
+/// <param name="Expected">
+/// The event count the producer declared when it finalized the slot (<c>producer_slot.declared_count</c>); null
+/// while the slot is open, because an open slot declares nothing.
+/// </param>
+/// <param name="StaleEpochEvents">How many of the slot's events arrived under a superseded epoch (<c>event.stale</c>).</param>
+/// <param name="AfterCancelEvents">
+/// How many of the slot's events arrived after the run was canceled (<c>event.after_cancel</c>); zero unless the run
+/// is canceled.
+/// </param>
+public sealed record RunProducerSlot(
+    string ProducerId,
+    string IdentityState,
+    string FinalizeStatus,
+    long LastSequence,
+    long Count,
+    long? Expected,
+    long StaleEpochEvents,
+    long AfterCancelEvents);
 
 /// <summary>
 /// One recorded transition of a run (<c>GET /v1/runs/{r}</c>): the state it left, the state it entered and when the
