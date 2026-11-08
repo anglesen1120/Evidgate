@@ -45,7 +45,7 @@ public sealed class QaS271WorkerGate(PostgresTasksFixture fixture)
         await notice.StartAsync(TestContext.Current.CancellationToken);
         var entry = logger.Entries.ShouldHaveSingleItem();
         entry.Level.ShouldBe(enabled ? LogLevel.Information : LogLevel.Warning);
-        entry.Id.ShouldBe(enabled ? 2472 : 2473);
+        entry.Id.ShouldBe(enabled ? 2475 : 2476);
         logger.Entries.Count(line => line.Level == LogLevel.Warning).ShouldBe(enabled ? 0 : 1);
         if (!enabled)
         {
@@ -89,7 +89,7 @@ public sealed class QaS271WorkerGate(PostgresTasksFixture fixture)
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
-            if (eventId.Id is 2472 or 2473)
+            if (eventId.Id is 2475 or 2476)
             {
                 entries.Enqueue((logLevel, eventId.Id, formatter(state, exception)));
             }

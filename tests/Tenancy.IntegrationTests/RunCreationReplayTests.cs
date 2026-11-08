@@ -62,7 +62,7 @@ public sealed class RunCreationReplayTests
     [Fact]
     public async Task CreateRun_ReplayGrant_InvalidOrExpired_422()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture);
         var before = await CountsAsync(world);
 
         // (a) A random grant id: there is no grant store until 08.4.3, so no id — random or not — can match.
@@ -96,7 +96,7 @@ public sealed class RunCreationReplayTests
     [Fact]
     public async Task CreateRun_ReplayWithRelease_422ReplayReleaseNotAllowed()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture);
         var before = await CountsAsync(world);
 
         // A replay names no release: the release code wins over the grant code (release present, even well formed).
@@ -120,7 +120,7 @@ public sealed class RunCreationReplayTests
     [Fact]
     public async Task CreateRun_PurposeInvalid_422()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture);
         var before = await CountsAsync(world);
 
         // purpose: not one of the two values.

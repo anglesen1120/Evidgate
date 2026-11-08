@@ -86,7 +86,7 @@ public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<Idempoten
     }
 
     [LoggerMessage(
-        EventId = 2320,
+        EventId = 2322,
         Level = LogLevel.Information,
         Message = "Audited sweep evidgate.purge_expired_idempotency as evidgate_worker_sched removed {Removed} expired records (batch limit {Limit})")]
     private partial void LogPurged(int removed, int limit);
@@ -174,7 +174,7 @@ public sealed partial class TaskSweepTaskHandler : ITaskHandler<TaskSweepPayload
     }
 
     [LoggerMessage(
-        EventId = 2321,
+        EventId = 2323,
         Level = LogLevel.Information,
         Message = "task.sweep removed {Removed} terminal task rows older than {Days} days")]
     private partial void LogSwept(int removed, int days);

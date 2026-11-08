@@ -112,7 +112,7 @@ public sealed class CreateRunIdentityQaTests
     [Fact]
     public async Task Qa_RefName_256CodePointsWithAstralRunes_IsRequestInvalid_AndWritesNothing()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture);
 
         var name = string.Concat(Enumerable.Repeat("\U0001F600", 256));
         var answer = await RunCreationTests.CreateRunAsync(world, BodyWithRef(world, $$"""{"kind":"branch","name":"{{name}}"}"""));
@@ -144,7 +144,7 @@ public sealed class CreateRunIdentityQaTests
     [InlineData("1e400")]
     public async Task Qa_PrNumber_OutOfRangeOrWrongJsonType_IsRequestInvalid_NotA500(string prNumber)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture);
 
         var answer = await RunCreationTests.CreateRunAsync(
             world, BodyWithRef(world, $$"""{"kind":"pull_request","pr_number":{{prNumber}}}"""));
@@ -162,7 +162,7 @@ public sealed class CreateRunIdentityQaTests
     [InlineData("""{"kind":"branch","name":"main","trigger_event":"push\u0000"}""")]
     public async Task Qa_NulOrLoneSurrogate_InsideRef_IsRequestInvalid_AndWritesNothing(string refJson)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture);
 
         var answer = await RunCreationTests.CreateRunAsync(world, BodyWithRef(world, refJson));
 

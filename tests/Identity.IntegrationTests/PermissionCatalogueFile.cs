@@ -43,6 +43,16 @@ public sealed class PermissionCatalogueFile
         PropertyNameCaseInsensitive = false,
     };
 
+    // xUnit builds one instance per test and every catalogue suite reads the same repository
+    // file, so it is parsed once per process. Still the repository's own file, read at first
+    // use — never a copy in the test output.
+    private static readonly Lazy<PermissionCatalogueFile> Shared = new(() =>
+    {
+        var path = Path.Combine(RepoRoot(), "contracts", "permissions.json");
+        return new PermissionCatalogueFile(
+            JsonSerializer.Deserialize<CatalogueDocument>(File.ReadAllText(path), Options)!);
+    });
+
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _holders;
 
     private PermissionCatalogueFile(CatalogueDocument document)
@@ -62,11 +72,7 @@ public sealed class PermissionCatalogueFile
     internal IReadOnlyList<string> Codes { get; }
 
     /// <summary>Loads the repository's catalogue.</summary>
-    internal static PermissionCatalogueFile Load()
-    {
-        var path = Path.Combine(RepoRoot(), "contracts", "permissions.json");
-        return new PermissionCatalogueFile(JsonSerializer.Deserialize<CatalogueDocument>(File.ReadAllText(path), Options)!);
-    }
+    internal static PermissionCatalogueFile Load() => Shared.Value;
 
     /// <summary>The permission codes of one role, ordinal order.</summary>
     internal IReadOnlyList<string> PermissionsOf(string roleCode) => _holders[roleCode];
