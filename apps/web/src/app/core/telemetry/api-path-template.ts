@@ -121,6 +121,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'tree',
   'upload-url',
   'usage',
+  'users',
   'versions',
   'waivers',
   'webhooks',

@@ -724,7 +724,9 @@ public static class IsolationRouteCases
         // inside the definer from its HMAC, so org B's member headers cannot select a tenant on any of the four
         // routes. With no session cookie the request authenticator answers 401 `unauthenticated` before the handler
         // infers a tenant, and the antiforgery middleware does not even apply without a session cookie
-        // (SessionXsrfPolicy.IsInScope requires one), so the three mutations reach the same 401 as the read.
+        // (SessionXsrfPolicy.IsInScope requires one), so the three mutations reach the same 401 as the read. The
+        // admin all-sessions revoke below is the same shape: the org comes from the header and the acting admin
+        // from the cookie, both judged inside the definer, and `{u}` is parsed only after authentication.
         Case("GET", "/v1/auth/sessions", (route, w) =>
         [
             new(route, "session list stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
@@ -762,6 +764,16 @@ public static class IsolationRouteCases
                 "logout stays pre-tenant: org B's member headers cannot select a tenant",
                 w,
                 new ProbeRequest(HttpMethod.Post, "/v1/auth/logout"),
+                StatusCodes.Status401Unauthorized,
+                UnauthenticatedCode)),
+        ]),
+        Case("POST", "/v1/auth/users/{u}/sessions/revoke-all", (route, w) =>
+        [
+            new(route, "admin revoke-all stays pre-tenant: org B's member headers cannot select a tenant", runner => runner.PreTenantAnswerAsync(
+                route,
+                "admin revoke-all stays pre-tenant: org B's member headers cannot select a tenant",
+                w,
+                new ProbeRequest(HttpMethod.Post, $"/v1/auth/users/{Guid.CreateVersion7()}/sessions/revoke-all"),
                 StatusCodes.Status401Unauthorized,
                 UnauthenticatedCode)),
         ]),
@@ -2901,7 +2913,8 @@ public sealed class RouteProbeRunner
 
     /// <summary>
     /// A pre-tenant route of 02.3.1-T2 / 02.3.2-T2 (<c>POST /v1/auth/invite-token</c>, the four
-    /// <c>/v1/auth/link</c> routes and the four <c>/v1/auth/sessions</c> + <c>/v1/auth/logout</c> routes): one exact
+    /// <c>/v1/auth/link</c> routes and the five <c>/v1/auth/sessions</c> + <c>/v1/auth/logout</c> routes,
+    /// the admin all-sessions revoke included): one exact
     /// answer for an anonymous caller and for org B's member headers, the same body shape, and no org-A id — the
     /// headers cannot select a tenant on a route that resolves none.
     /// </summary>

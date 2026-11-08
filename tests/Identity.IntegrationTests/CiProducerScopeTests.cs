@@ -84,6 +84,8 @@ public sealed class CiProducerScopeTests(DatabaseFixture fixture) : CatalogueTes
                 "x-permission is 'none' (logout revokes the caller's own session row, 02.3.2-T2: no catalogue permission exists for it)",
             [("POST", "/v1/auth/sessions/revoke-all")] =
                 "x-permission is 'none' (revoking the caller's own sessions, 02.3.2-T2: no catalogue permission exists for it)",
+            [("POST", "/v1/auth/users/{u}/sessions/revoke-all")] =
+                "x-permission is 'none' (an org admin ends every live session of one member; the membership:write it needs is checked inside the definer against the org the header names, so no catalogue permission reaches a service token)",
             [("POST", "/v1/ci/token")] =
                 "x-permission is 'none' (the pre-tenant credential exchange itself, 02.4.1)",
         };
