@@ -6,7 +6,7 @@
 //
 // A static list does not mutate after a write. Cancel's 204 can prove confirmation, dismissal and
 // focus recovery here, but not a changed server list. cancel-invite-dialog.component.spec.ts:91
-// pins the re-read; members.store.spec.ts:927 pins the reloaded row becoming revoked (audit history,
+// pins the re-read; the 'cancels with the caller’s intent and reloads the list' case of members.store.resend-cancel-remove.spec.ts pins the reloaded row becoming revoked (audit history,
 // not deletion). No fake optimistic removal makes a static corpus look stateful.
 //
 // Native showModal makes the background scope switcher inert while revealing. In addition, the

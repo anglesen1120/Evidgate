@@ -34,9 +34,10 @@
     "playwright.dev-login.config.ts",
     "playwright.core.config.ts",
     "e2e/**/*.ts",
-    // 09.1.1-T11.4 (AC9): the `style-tokens` rule spec and its Vitest config. The rule
-    // itself is plain CommonJS (`eslint-rules/*.js`) linted by ESLint, not type-checked.
-    "eslint-rules/**/*.spec.ts",
+    // 09.1.1-T11.4 (AC9): the `style-tokens` rule specs and their shared harness
+    // (`*.test-support.ts`), plus the Vitest config. The rule itself is plain CommonJS
+    // (`eslint-rules/*.js`) linted by ESLint, not type-checked.
+    "eslint-rules/**/*.ts",
     "eslint-rules/vitest.config.mts"
   ]
 }
