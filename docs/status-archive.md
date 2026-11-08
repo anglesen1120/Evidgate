@@ -230,3 +230,66 @@ Section 2 tables replaced (baseline 187 tasks / 191.75 d):
 Section 2 partial-parent paragraph replaced (old STATUS line 34):
 
 Seven partial parents in this table (01.7.1-T3, 01.8.1-T3, 10.2.1-T1, 09.1.1-T6, 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764), T2.2 is delivered by S146 (#302, fbb2fe91) and whose remainder is T2.3 and T2.4; and 09.8.1-T1, whose T1.1 + T1.2 landed in #284 and whose remainder is T1.3 + T1.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
+
+## STATUS replaced text (S299, 2026-11-08)
+
+Moved verbatim from STATUS.md §1 Resume here (lines 8, 9, 11, 12, 13, 14) and §2 (the intro line, the delivery scope table, the partial-parent paragraph, Done by area, Done by phase) and from the AGENTS.md Current state bullets when the counters were recounted after #393 (S299, through #612, `2a641af8`).
+
+- Develop: `fb7b8683` (#393, S186 close-out). Migrations `0001`–`0060` are contiguous; highest is `0060_identity_ingest_token_decision_read.sql` (#390), next free `0061`; 08.5.1-T1.1/T1.2 merged (#306), T1 stays partial (T1.3–T1.7 open). Closed owner-review rows live in `docs/phase-review-archive.md` (a row moves there verbatim in the commit that closes it).
+- Open PRs: lane PRs of S187/S188/S189 plus dependabot PRs (not lanes).
+- Lanes in flight (SESSION-CLAIMS 2026-11-02): S187 DEV-LOGIN, S188 REVIEW-DEPLOY, S189 STATUS-REFRESH (this refresh). S173-S186 are merged and closed out.
+- Fully landed on develop (S173-S186 wave merged through #393, `fb7b8683`): 201/660 tasks; 205.0/706.75 raw person-days; remaining 459 tasks / 501.75 d. Via merged PRs: 174 tasks / 180.0 d; the other 27 tasks / 25.0 d are direct commits on develop. Method: task ranges in merged PR bodies and plan Notes expanded against plan_graph task ids; a parent counts only when all its sub-rows landed. The S189 recount added 14 tasks / 13.25 d after #310: 01.2.1-T7 #311; 01.8.1-T3 #351+#358; 01.8.1-T4 #362+#366; 05.3.2-T6 #378; 07.2.1-T1+T2 #368; 07.2.2-T1 #374, T3+T4 #377; 07.5.2-T1 #390; 07.6.1-T2 #353+#365+#384+#392; 09.3.1-T3+T5 #387; 09.8.1-T1 #284+#325. Declared partial, no credit: 05.3.2-T3, 05.3.2-T4, 07.2.2-T2, 09.6.1-T6, 10.7.1-T1/T2.
+- Landed by phase (done tasks / raw d): G1 140 / 150.25; G2 49 / 43.5; G3 3 / 3.5; G4 9 / 7.75.
+- Plan totals: 660 tasks / 706.75 raw / 848.1 buffered person-days (`plan_graph.py` on `fb7b8683`: errors 0, 205 stories; 04.2.2-T3 manifest generator added in S186, M; the S93 canonical figures were 655 / 702.75 / 843.3). `check_features.py` still exits 1 (8 missing 13.x feature plans, 13.5.1 to 13.9.1; queue F37).
+
+Section 2 text (old STATUS lines 24-34):
+
+Counted by expanding task ranges in merged STATUS rows against plan_graph task ids; a parent task counts only when every defined sub-row has landed on develop; sizes XS .25 S .5 M 1 L 2 XL 3. detail: carried row 'STATUS §2 count log S112-S128' (S144 F61).
+
+| Delivery scope | Tasks | Raw person-days |
+|---|---|---|
+| Fully landed on develop | 201 | 205.0 |
+| Via merged PRs | 174 | 180.0 |
+| Direct commits on develop, no PR | 27 | 25.0 |
+| Remaining | 459 | 501.75 |
+| Plan total | 660 | 706.75 |
+
+Five partial parents in this table (01.7.1-T3, 10.2.1-T1, 09.1.1-T6, 10.7.1-T4 (T4.2 staging drill awaits staging), 09.3.1-T2, whose T2.1 is merged (#216, 1742764), T2.2 is delivered by S146 (#302, fbb2fe91) and whose remainder is T2.3 and T2.4) are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5, except 09.1.1-T6, whose remainder T6.2 waits on 02.3.1-T3. 01.8.1-T3 and 09.8.1-T1 were credited in the S189 recount on their sub-row done-whens, but their delivery rows (01.8.1 and 09.8.1 "partial"), their §5 rows (01.8.1-T3 including its T4.1 201-check wording, 09.3.1-T3, 09.8.1-T1) and the §5 08.5.1-T1 row still read as before and are not yet pruned (recorded gap). Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
+
+Done by area and Done by phase (old STATUS lines 38-53 and 57-63, the two data tables):
+
+| Group | Tasks | XS | S | M | L | XL | Person-days |
+|---|---|---|---|---|---|---|---|
+| 01 | 49 | 2 | 11 | 24 | 11 | 1 | 55.0 |
+| 02 | 29 | 0 | 8 | 18 | 3 | 0 | 28 |
+| 03 | 8 | 0 | 3 | 4 | 1 | 0 | 7.5 |
+| 04 | 22 | 0 | 7 | 12 | 3 | 0 | 21.5 |
+| 05 | 20 | 0 | 6 | 9 | 5 | 0 | 22 |
+| 06 | 12 | 0 | 4 | 8 | 0 | 0 | 10 |
+| 07 | 13 | 1 | 4 | 8 | 0 | 0 | 10.25 |
+| 08 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
+| 09 | 25 | 0 | 6 | 14 | 5 | 0 | 27 |
+| 10 | 5 | 0 | 2 | 2 | 1 | 0 | 5 |
+| 11 | 11 | 1 | 5 | 4 | 1 | 0 | 8.75 |
+| 12 | 1 | 0 | 0 | 0 | 1 | 0 | 2 |
+| 13 | 5 | 0 | 0 | 3 | 2 | 0 | 7 |
+| TOTAL | 201 | 4 | 56 | 107 | 33 | 1 | 205.0 |
+
+| Group | Tasks | XS | S | M | L | XL | Person-days |
+|---|---|---|---|---|---|---|---|
+| G1 | 140 | 3 | 33 | 76 | 27 | 1 | 150.25 |
+| G2 | 49 | 0 | 19 | 26 | 4 | 0 | 43.5 |
+| G3 | 3 | 0 | 1 | 1 | 1 | 0 | 3.5 |
+| G4 | 9 | 1 | 3 | 4 | 1 | 0 | 7.75 |
+| TOTAL | 201 | 4 | 56 | 107 | 33 | 1 | 205.0 |
+
+AGENTS.md Current state (old lines 7, 9-11, 13-16):
+
+**Current state (2026-11-02).** Stack decided in DECISIONS CR-D-1 (§4). Task-level execution state lives in `STATUS.md` (§1 snapshot, §2 done, §5 ready next) and `docs/status-carried.md` (blocked / carried items, formerly STATUS §6), not here.
+- Landed on `develop` (through #393, `fb7b8683`; recount S189 from the merged PRs after #310, method in STATUS §2 and §1 Resume): 201 of 660 planned tasks = 205.0 of 706.75 raw person-days (≈30 % of tasks, ≈29 % of effort); 459 tasks / 501.75 d remain.
+- Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 140 / 150.25 of 283.75 · G2 49 / 43.5 of 197 · G3 3 / 3.5 of 106.75 · G4 9 / 7.75 of 119.25.
+- Landed by area plan (tasks / planned): 01 49/55 · 02 29/49 · 03 8/40 · 04 22/54 · 05 20/54 · 06 12/36 · 07 13/42 · 08 1/69 · 09 25/72 · 10 5/54 · 11 11/51 · 12 1/30 · 13 5/54.
+- Delivered modules: catalog case/suite identity and revisions (03.1.1/03.1.3/03.2.1), runs manifest upload (05.1.1), the run reconciler with evidence revisions and the freeze seam (05.3.2-T1/T2/T5), evidence upload + safe parsing (06.1/06.3.1–06.3.2), policy revisions and waiver/quarantine lifecycles (07.1.1/07.3.1), the evaluator core and handler (07.2.1, 07.2.2-T1/T3/T4), the run decision route (07.5.2-T1) and the CLI `gate` command with spool (07.6.1-T2), sessions with list/revoke/revoke-all/logout and the cleanup sweep (02.3.2-T1/T2), and the Angular 22 web app with scaffold, app shell, shared state components and generated-SDK data layer (09.1.1-T1/T3/T4/T5/T7/T8/T9/T10/T12).
+- Migrations `0001`–`0060` are contiguous; highest is `0060_identity_ingest_token_decision_read.sql` (merged in #390), the migration lane is free and the next free number is `0061`.
+- Not yet started: plan 08 (safe healing/learning) has only 08.6.3-T1 (the healing kill switch) plus the partial 08.5.1-T1.1/T1.2 (gateway table, T1.3–T1.7 open, not counted); plan 12 (pilot/commercial) has only 12.3.1-T1 (the usage ledger).
+- Not yet inside started areas: 07 evaluator remainder (07.2.2-T2 matrix and fixtures, partial), waiver/quarantine effects + expiry (07.3.2), flaky detection (07.4), late evidence (07.5.1), release decision aggregation (07.5.3, 07.5.4), webhooks and CI delivery beyond the CLI gate (07.6.1-T1, 07.6.2, 07.6.3); 06 sensitivity/redaction/secret masking (06.2) and the isolated viewer (06.3.3–06.3.4); most web product screens; real `platform_operator` auth (02.8.1); human login (02.3.1-T3).
