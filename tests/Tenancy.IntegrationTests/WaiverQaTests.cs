@@ -94,6 +94,7 @@ public sealed class WaiverQaTests
               from public.role r
              where r.code = '{roleCode}' and r.org_id is null;
             """);
+        await AssertRoleSeededAsync(_fixture, world.Database, world.Org, userId, roleCode);
 
         return userId;
     }

@@ -151,6 +151,32 @@ internal static class RegistryApi
             {grant}
             """);
 
+        if (roleCode is not null)
+        {
+            await AssertRoleSeededAsync(fixture, database, org, user, roleCode);
+        }
+
         return user;
     }
+
+    /// <summary>
+    /// The one role row a member seed must have written. An <c>insert … select</c> over a role code the
+    /// catalogue does not hold writes zero rows and raises nothing, so the arrangement has to say so: a
+    /// refusal test would otherwise pass for a member holding no role at all.
+    /// </summary>
+    internal static async Task AssertRoleSeededAsync(
+        PostgresTenancyFixture fixture,
+        string database,
+        Guid org,
+        Guid user,
+        string roleCode) =>
+        (await fixture.ScalarAsync<long>(
+            database,
+            $"""
+            select count(*)
+              from public.membership_role mr
+              join public.membership m on m.id = mr.membership_id
+              join public.role r on r.id = mr.role_id
+             where mr.org_id = '{org}' and m.user_id = '{user}' and r.code = '{roleCode}'
+            """)).ShouldBe(1, $"the fixture seeded the role '{roleCode}' once for user {user:D}");
 }

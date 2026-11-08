@@ -53,9 +53,9 @@ internal sealed class GrantRoleCommandValidator : AbstractValidator<GrantRoleCom
 /// (<c>platform_operator</c>, <c>billing_operator</c>) and service
 /// (<c>ci_producer</c>, <c>agent</c>) catalogue rows, which belong to a staff account or
 /// a service token and never to a membership — is the same 409 <c>unknown_role</c>; and
-/// granting the caller's <b>own</b> membership a role that carries a permission the
-/// caller does not hold is 403 <c>forbidden</c> (a role is not a way around the role you
-/// hold, 00 §2).
+/// granting any membership — the caller's <b>own</b>, another member's or a pending
+/// invite — a role that carries a permission the caller does not hold is 403
+/// <c>forbidden</c> (a role is not a way around the role you hold, 00 §2).
 /// </para>
 /// </summary>
 [AuditedAction("membership.role_grant")]
@@ -110,10 +110,10 @@ internal sealed class GrantRoleCommandHandler(
 
         var caller = principals.Current;
 
-        // W7-SEC-02: a caller may grant any membership — its own, another member or a
-        // pending row — only what it already holds. Checked before the idempotency check on
-        // purpose — a refusal must not depend on whether the row happens to exist (a
-        // corrupt or filtered grant set would then decide it).
+        // A caller may grant any membership — its own, another member or a pending row —
+        // only what it already holds. Checked before the idempotency check on purpose — a
+        // refusal must not depend on whether the row happens to exist (a corrupt or
+        // filtered grant set would then decide it).
         var missing = await SelfEscalation.MissingAsync(
             permissions,
             orgId,

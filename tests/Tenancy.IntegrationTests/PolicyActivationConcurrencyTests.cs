@@ -103,14 +103,15 @@ public sealed class PolicyActivationConcurrencyTests
                 ("id", membership), ("org_id", org), ("user_id", maintainer), ("email", $"maintainer-{maintainer:N}@example.test"));
             // The role row the membership route writes, seeded as the owner: the route refuses a role whose own
             // permissions the caller does not hold, so the fixture cannot hand this one out through the API.
-            await scope.ExecuteAsync(
+            (await scope.ExecuteAsync(
                 """
                 insert into public.membership_role (id, org_id, membership_id, role_id)
                 select gen_random_uuid(), @org_id, @membership_id, r.id
                   from public.role r
                  where r.code = 'test_maintainer' and r.org_id is null
                 """,
-                ("org_id", org), ("membership_id", membership));
+                ("org_id", org), ("membership_id", membership))).ShouldBe(
+                1, "the fixture seeded the role 'test_maintainer' once: an unknown role code seeds nothing");
             await scope.ExecuteAsync(
                 """
                 insert into public.test_case (id, org_id, project_id, annotation_id, name, framework, first_seen_commit)

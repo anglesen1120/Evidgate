@@ -147,6 +147,7 @@ public sealed class HealingSwitchEndpointTests
                   from public.role r
                  where r.code = 'qa_engineer' and r.org_id is null;
                 """);
+            await AssertRoleSeededAsync(_fixture, database, org, triage, "qa_engineer");
 
             return new World(api, host, client, database, user, org, project, triage);
         });

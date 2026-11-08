@@ -100,6 +100,9 @@ internal sealed class CookieSessionHost : WebApplicationFactory<Program>
             insert into public.project (id, org_id, name, slug) values ('{project:D}', '{org:D}', 'Session', 'session-{project:N}');
             """).ConfigureAwait(false);
 
+        await RegistryApi.AssertRoleSeededAsync(fixture, database, org, KnownDevUser.UserId, "tenant_admin")
+            .ConfigureAwait(false);
+
         return (org, project);
     }
 

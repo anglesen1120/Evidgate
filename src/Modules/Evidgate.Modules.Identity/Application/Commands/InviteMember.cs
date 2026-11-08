@@ -161,8 +161,8 @@ internal sealed class InviteMemberCommandHandler(
 
         var caller = principals.Current;
 
-        // W7-SEC-02: an invite carries only what the caller already holds, whoever the
-        // address belongs to (a second mailbox the caller controls is the caller).
+        // An invite carries only what the caller already holds, whoever the address belongs
+        // to: a second mailbox the caller controls is still the caller.
         var missing = await SelfEscalation.MissingAsync(
             permissions,
             orgId,

@@ -49,8 +49,8 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     public async Task Grant_Role_Marks_Only_The_Changed_Users_Live_Session()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        // The caller must hold every permission of the role it hands out (W7-SEC-02 applies
-        // to every target), and `tenant_admin` alone lacks `release_approver`'s policy:write.
+        // The caller must hold every permission of the role it hands out, whatever the
+        // target, and `tenant_admin` alone lacks `release_approver`'s policy:write.
         var (_, adminUserId) = await SeedActiveMemberAsync(
             org,
             Unique.Email("admin"),
@@ -403,7 +403,10 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
 
         foreach (var code in roleCodes)
         {
-            await Fixture.SeedAsync(
+            // An insert-select over a code the catalogue does not hold writes nothing and raises
+            // nothing, so the arrangement says so: a refusal test would otherwise pass for a
+            // member holding no role at all.
+            (await Fixture.SeedAsync(
                 """
                 insert into public.membership_role (id, org_id, membership_id, role_id)
                 select @id, @org_id, @membership_id, role.id from public.role
@@ -415,7 +418,7 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
                     ("membership_id", membershipId),
                     ("code", code),
                 ],
-                Token);
+                Token)).ShouldBe(1, $"the fixture seeded the role '{code}' once for user {userId:D}");
         }
 
         return (membershipId, userId);
