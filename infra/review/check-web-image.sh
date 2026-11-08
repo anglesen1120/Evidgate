@@ -232,7 +232,9 @@ api() {
       sleep 0.1
     done
   fi
-  resp=$(printf "GET /v1/probe HTTP/1.0\r\nHost: review.example.test\r\n\r\n" | timeout 5 nc 127.0.0.1 8080 | tr -d "\r")
+  # The pause keeps nc from exiting on stdin EOF before the proxied answer
+  # arrives; a static file is served fast enough not to need it.
+  resp=$( { printf "GET /v1/probe HTTP/1.0\r\nHost: review.example.test\r\n\r\n"; sleep 1; } | timeout 5 nc 127.0.0.1 8080 | tr -d "\r")
   status=$(printf "%s\n" "$resp" | sed -n "1s/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p")
   cc=$(printf "%s\n" "$resp" | sed "/^$/q" | sed -n "s/^[Cc]ache-[Cc]ontrol: //p")
   [ "$status" = "$2" ] && [ "$cc" = "$3" ] || { echo "FAIL: GET /v1/probe [upstream: $1] gave $status with Cache-Control [$cc], expected $2 with [$3] (one header, no duplicate)"; exit 1; }
