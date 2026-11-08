@@ -16,6 +16,9 @@ import type { Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
 
 type Scope = { readonly org: string; readonly project: string };
+/** The project a create dialog was opened for, kept so a moved selection cannot relabel it. */
+export type ApiTokenCreateTarget = { readonly projectId: string; readonly projectName: string };
+type CreateOrigin = { readonly scope: Scope; readonly target: ApiTokenCreateTarget };
 export type ApiTokensPhase = 'loading' | 'empty' | 'success' | 'error' | 'forbidden';
 type WriteAttempt = {
   scope: Scope | null;
@@ -23,6 +26,10 @@ type WriteAttempt = {
   error: ApiError | null;
 };
 const idleAttempt = (): WriteAttempt => ({ scope: null, phase: 'idle', error: null });
+// A round trip org A -> B -> A builds a fresh scope object for the same list, so an answer that
+// belongs to A is still A's: name the list by its values, never by an object's identity.
+const sameScope = (left: Scope | null | undefined, right: Scope | null | undefined): boolean =>
+  left?.org === right?.org && left?.project === right?.project;
 
 // Explicit projection keeps a malformed list response's extra credential fields out of signals.
 function metadata(row: ApiTokenView): ApiTokenView {
@@ -40,15 +47,15 @@ function metadata(row: ApiTokenView): ApiTokenView {
 
 export const ApiTokensStore = signalStore(
   withState<{
-    createScope: Scope | null;
+    createOrigin: CreateOrigin | null;
     createAttempt: WriteAttempt;
     revokeAttempt: WriteAttempt;
   }>({
-    createScope: null,
+    createOrigin: null,
     createAttempt: idleAttempt(),
     revokeAttempt: idleAttempt(),
   }),
-  withProps(() => {
+  withProps((store) => {
     const session = inject(SessionStore);
     const data = inject(ApiTokensService);
     const route = inject(ActivatedRoute, { optional: true });
@@ -83,8 +90,9 @@ export const ApiTokensStore = signalStore(
           ? { org, project }
           : undefined;
       },
-      { equal: (a, b) => a?.org === b?.org && a?.project === b?.project },
+      { equal: sameScope },
     );
+    const createTarget = computed(() => store.createOrigin()?.target ?? null);
     const cursor = linkedSignal({
       source: () => ({
         scope: scope(),
@@ -104,7 +112,17 @@ export const ApiTokensStore = signalStore(
         return { items: page.items.map(metadata), next_cursor: page.next_cursor };
       },
     });
-    return { session, data, selectedProject, canRead, canWrite, scope, cursor, pageResource };
+    return {
+      session,
+      data,
+      selectedProject,
+      canRead,
+      canWrite,
+      scope,
+      createTarget,
+      cursor,
+      pageResource,
+    };
   }),
   withComputed((store) => ({
     rows: computed(() =>
@@ -120,17 +138,19 @@ export const ApiTokensStore = signalStore(
         ? !!store.pageResource.value().next_cursor
         : false,
     ),
-    // The response belongs to the open dialog, even if project selection or grants change.
-    createOpen: computed(() => store.createScope() !== null),
+    // The dialog belongs to the project it was opened on, even if the selection moves under it.
+    createOpen: computed(() => store.createOrigin() !== null),
     creating: computed(() => store.createAttempt().phase === 'submitting'),
     revoking: computed(() => store.revokeAttempt().phase === 'submitting'),
     // The failure belongs to the dialog's scope, so a selection that moves under an open dialog
     // cannot hide the server message from the person who submitted it.
     createError: computed(() =>
-      store.createAttempt().scope === store.createScope() ? store.createAttempt().error : null,
+      sameScope(store.createAttempt().scope, store.createOrigin()?.scope)
+        ? store.createAttempt().error
+        : null,
     ),
     revokeError: computed(() =>
-      store.revokeAttempt().scope === store.scope() ? store.revokeAttempt().error : null,
+      sameScope(store.revokeAttempt().scope, store.scope()) ? store.revokeAttempt().error : null,
     ),
     phase: computed<ApiTokensPhase>(() => {
       if (!store.canRead()) return 'forbidden';
@@ -167,12 +187,21 @@ export const ApiTokensStore = signalStore(
       if (store.cursor() === undefined) store.pageResource.reload();
       else store.cursor.set(undefined);
     },
+    // The dialog names the project it was opened for, so a moved selection leaves it truthful
+    // instead of closing it with the only copy of a minted secret.
     openCreate(): void {
       const scope = store.scope();
-      if (scope && store.canWrite()) patchState(store, { createScope: scope });
+      if (!scope || !store.canWrite()) return;
+      const name = store.session.projects().find((row) => row.id === scope.project)?.name;
+      patchState(store, {
+        createOrigin: {
+          scope,
+          target: { projectId: scope.project, projectName: name ?? scope.project },
+        },
+      });
     },
     closeCreate(): void {
-      patchState(store, { createScope: null });
+      patchState(store, { createOrigin: null });
     },
   })),
   withMethods((store) => ({
@@ -185,12 +214,12 @@ export const ApiTokensStore = signalStore(
     ): Promise<ApiTokenCreatedResponse | null> {
       // The dialog opened for one scope and owns the only copy of the secret it receives, so the
       // token is minted where the dialog was opened, not wherever the selection moved since.
-      const scope = store.createScope() ?? store.scope();
+      const scope = store.createOrigin()?.scope ?? store.scope();
       if (!scope || !store.canWrite() || store.creating() || store.revoking()) return null;
       patchState(store, { createAttempt: { scope, phase: 'submitting', error: null } });
       try {
         const answer = await store.data.create(scope.project, body, intent);
-        if (scope === store.scope()) store.reloadFirst();
+        if (sameScope(scope, store.scope())) store.reloadFirst();
         return answer;
       } catch (error) {
         if (!isApiRequestError(error)) throw error;
@@ -214,13 +243,13 @@ export const ApiTokensStore = signalStore(
       patchState(store, { revokeAttempt: { scope, phase: 'submitting', error: null } });
       try {
         await store.data.revoke(id, intent);
-        if (scope !== store.scope() || !store.canWrite()) return false;
+        if (!sameScope(scope, store.scope()) || !store.canWrite()) return false;
         // The DELETE is bodiless. Re-read metadata rather than inventing a response status.
         store.reloadFirst();
         return true;
       } catch (error) {
         if (!isApiRequestError(error)) throw error;
-        if (scope === store.scope()) {
+        if (sameScope(scope, store.scope())) {
           patchState(store, { revokeAttempt: { scope, phase: 'failed', error: error.error } });
           if (error.error.kind === 'not_found' || error.error.kind === 'conflict')
             store.reloadFirst();
