@@ -497,8 +497,7 @@ internal sealed class TenantRowFactory
 
         // raw_report_reprocess (0081) pins the release it will parse with, so a generated row must name one the
         // migration seeded: the catalogue is owner-written, so the factory cannot mint a pair. The harness reset
-        // truncates that seed like any other row, so a suite generating this table restores it first with
-        // BuiltInCatalogue.SeedReportParserAsync, from the same constants pinned here. Its natural key is a
+        // keeps that seed (RespawnCheckpoint), and the constants pinned here name it. Its natural key is a
         // plain unique (no partial index), so a corrupt row reusing the valid row's artifact needs a second artifact
         // of its own org for the same reason as raw_report's, and a source report of its own too.
         if (string.Equals(table, "public.raw_report_reprocess", StringComparison.Ordinal))

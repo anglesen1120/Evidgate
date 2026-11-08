@@ -99,6 +99,15 @@ public sealed class DenyPathTests(DatabaseFixture fixture) : TenantTest(fixture)
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
 
+        // Positive control: the same token without the foreign code is allowed, so the catalogue is present and
+        // the only thing the denial below can come from is the code the catalogue does not declare.
+        await using var allowedFactory = IdentityApiFactory.Start(
+            Fixture,
+            new IdentityHostSetup(org, Principal: RequestPrincipal.Service(projectScope: null, [Permissions.Role.Read])));
+        using var allowedClient = allowedFactory.CreateClient();
+        using var allowed = await allowedClient.GetAsync("/v1/permissions", Token);
+        allowed.StatusCode.ShouldBe(HttpStatusCode.OK);
+
         await using var factory = IdentityApiFactory.Start(
             Fixture,
             new IdentityHostSetup(

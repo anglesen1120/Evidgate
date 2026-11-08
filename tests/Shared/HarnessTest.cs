@@ -31,12 +31,9 @@ public abstract class HarnessTest : IAsyncLifetime
     /// a per-test database (and a per-test migration run).
     /// </summary>
     /// <remarks>
-    /// Virtual for the one suite shape that needs more than an empty database: a
-    /// suite that arranges a membership with a built-in role (or a custom role
-    /// carrying a catalogue permission) must restore the migration-seeded catalogue
-    /// after the reset, because Respawn's blanket truncate empties
-    /// <c>permission</c>/<c>role</c>/<c>role_permission</c> too. An overriding base
-    /// resets first, then re-applies the migration seed blocks.
+    /// The reset keeps the migration-seeded reference rows (permission catalogue, built-in
+    /// roles and grants, report parser, AI settings templates; see <see cref="RespawnCheckpoint"/>),
+    /// so a suite never restores them.
     /// </remarks>
     public virtual ValueTask InitializeAsync() => new(Fixture.ResetAsync(Token));
 
