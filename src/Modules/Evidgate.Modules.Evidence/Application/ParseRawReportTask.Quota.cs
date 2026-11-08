@@ -152,8 +152,8 @@ internal sealed partial class ParseRawReportHandler
     /// Only the probe's own reads are guarded: a transient database fault there defers the attempt and stamps nothing,
     /// because a read that failed decided nothing. A permanent fault — a permission denied, a schema that no longer
     /// matches — is a failed attempt, never a deferral that would retry a broken deployment until it dead-letters. The
-    /// deferred-report check itself is not guarded: it is one indexed read, and a fault there is the attempt's own
-    /// failure to report.
+    /// deferred-report check and the run facts are one unguarded read: it is two indexed lookups in one statement, and a
+    /// fault there is the attempt's own failure to report.
     /// </para>
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
@@ -165,14 +165,15 @@ internal sealed partial class ParseRawReportHandler
         ParseRawReportPayload payload,
         CancellationToken cancellationToken)
     {
-        if (!await IsDeferredAsync(orgId, payload.ArtifactId, cancellationToken).ConfigureAwait(false))
+        var facts = await ReadDeferredRunAsync(orgId, payload, cancellationToken).ConfigureAwait(false);
+        if (!facts.Deferred)
         {
             return null;
         }
 
         try
         {
-            return await ProbeQuotaAsync(orgId, payload, cancellationToken).ConfigureAwait(false);
+            return await ProbeQuotaAsync(payload, facts, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (IsProbeFault(exception, cancellationToken))
         {
@@ -193,16 +194,16 @@ internal sealed partial class ParseRawReportHandler
     /// event. The run facts are read once and answer both questions, so the counter this asks about is the one the
     /// write transaction will charge.
     /// </summary>
-    /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
-    /// <param name="cancellationToken">Cancels the reads and the advisory question.</param>
+    /// <param name="facts">What the one deferred-and-run read answered.</param>
+    /// <param name="cancellationToken">Cancels the advisory question.</param>
     /// <returns>The blocked outcome to defer, or null when the report continues to the fetch.</returns>
     private async Task<ParseRawReportOutcome?> ProbeQuotaAsync(
-        Guid orgId,
         ParseRawReportPayload payload,
+        DeferredRunFacts facts,
         CancellationToken cancellationToken)
     {
-        var run = await ReadRunGateAsync(orgId, payload.RunId, cancellationToken).ConfigureAwait(false);
+        var run = facts.Run;
         if (run is not null && !RunAdmissionPolicy.Decide(run.ProjectState, run.RunState, run.LateWindowOpen).Allowed)
         {
             // A closed run refuses this report whatever the counter says, so waiting for room would bury the terminal
@@ -271,16 +272,63 @@ internal sealed partial class ParseRawReportHandler
         exception is DbException { SqlState: { } state } ? state : "none";
 
     /// <summary>
-    /// The run's admission facts and its project, read unlocked: this answer only chooses between waiting and the
-    /// terminal refusal the write decides, and a run that cannot be read answers null so the attempt names its absence
-    /// the way it always did.
+    /// The deferred probe and the run's admission facts in one statement: the pre-check needs the run only for a report
+    /// the queue already deferred, so the run join is attached to the probe's answer and a first attempt still pays
+    /// the probe alone. The facts are read unlocked: this answer only chooses between waiting and the terminal refusal
+    /// the write decides, and a run that cannot be read leaves them null so the attempt names its absence the way it
+    /// always did.
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
-    /// <param name="runId">The run the report belongs to.</param>
+    /// <param name="payload">The run and the report artifact the probe key derives from.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
-    /// <returns>The run's facts, or null when the row is not readable.</returns>
-    private Task<RunGate?> ReadRunGateAsync(Guid orgId, Guid runId, CancellationToken cancellationToken) =>
-        db.QuerySingleOrDefaultAsync<RunGate>(RunFactsSql, new { org_id = orgId, run_id = runId }, cancellationToken);
+    /// <returns>Whether the report is deferred and, when it is, the run's facts.</returns>
+    private async Task<DeferredRunFacts> ReadDeferredRunAsync(
+        Guid orgId,
+        ParseRawReportPayload payload,
+        CancellationToken cancellationToken)
+    {
+        var row = await db
+            .QuerySingleOrDefaultAsync<DeferredRunRow>(
+                DeferredRunSql,
+                new
+                {
+                    org_id = orgId,
+                    run_id = payload.RunId,
+                    idempotency_key = ReportParseKey(payload.ArtifactId),
+                    last_error = TaskDeferredException.PersistedError,
+                },
+                cancellationToken)
+            .ConfigureAwait(false) ?? throw new InvalidOperationException("the deferred probe returned no row");
+
+        return new DeferredRunFacts(
+            row.Deferred,
+            row is { RunState: { } state, ProjectState: { } projectState, LateWindowOpen: { } late, ProjectId: { } projectId }
+                ? new RunGate(state, projectState, late, projectId)
+                : null);
+    }
+
+    /// <summary>The deferred probe with the run facts joined inside a lateral whose own filter is the probe, so a first attempt never reaches the run; no lock is taken.</summary>
+    private const string DeferredRunSql = $"""
+        with deferred as ({DeferredProbeSql})
+        select d.deferred as "Deferred",
+               f."RunState", f."ProjectState", f."LateWindowOpen", f."ProjectId"
+          from deferred d
+          left join lateral ({RunFactsSql}
+           and d.deferred) f on true
+        """;
+
+    /// <summary>The raw columns of <see cref="DeferredRunSql"/>; the run columns are null for a first attempt or an absent run.</summary>
+    private sealed record DeferredRunRow(
+        bool Deferred,
+        string? RunState,
+        string? ProjectState,
+        bool? LateWindowOpen,
+        Guid? ProjectId);
+
+    /// <summary>What the pre-check's one read answered.</summary>
+    /// <param name="Deferred">True when the queue already deferred this report.</param>
+    /// <param name="Run">The run's facts, or null when the report is not deferred or the run is not readable.</param>
+    private sealed record DeferredRunFacts(bool Deferred, RunGate? Run);
 
     /// <summary>
     /// The refusal stamp, written after the rolled-back transaction: a block's own stamp rolls back with the batch, so
@@ -387,9 +435,12 @@ internal sealed partial class ParseRawReportHandler
                 cancellationToken)
             .ConfigureAwait(false);
 
-    /// <summary>The probe both the pre-check and the skip line ask: one equivalent of the deferred-report pair.</summary>
-    private const string DeferredTaskSql = """
-        select exists (
+    /// <summary>The probe the skip line asks alone and the pre-check folds into <see cref="DeferredRunSql"/>.</summary>
+    private const string DeferredTaskSql = "select " + DeferredProbeSql;
+
+    /// <summary>The deferred-report probe as one boolean expression named <c>deferred</c>.</summary>
+    private const string DeferredProbeSql = """
+        exists (
             select 1
             from public.outbox as o
             join public.task as t
@@ -397,7 +448,7 @@ internal sealed partial class ParseRawReportHandler
              and t.org_id = o.org_id
             where o.org_id = @org_id
               and o.idempotency_key = @idempotency_key
-              and t.last_error = @last_error)
+              and t.last_error = @last_error) as deferred
         """;
 
     /// <summary>
