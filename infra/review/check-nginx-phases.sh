@@ -98,7 +98,33 @@ else
   grep -qE '^[[:space:]]*include /tmp/evidgate/proxy-auth\.conf;' <<<"$v1_active" ||
     note 'location /v1/ no longer includes the start script proxy-auth.conf, so
       the Authorization header can no longer be emptied when basic auth is on'
+  # One Cache-Control leaves: the upstream value is hidden and re-added from the
+  # map, which falls back to no-store. Without the hide a passed-through header
+  # would be sent twice; without `always` an Api error would carry none.
+  grep -qE '^[[:space:]]*proxy_hide_header Cache-Control;' <<<"$v1_active" ||
+    note 'location /v1/ must proxy_hide_header Cache-Control, or the upstream value
+      and the mapped one are both sent'
+  grep -qE '^[[:space:]]*add_header Cache-Control \$review_api_cache_control always;' <<<"$v1_active" ||
+    note 'location /v1/ must add_header Cache-Control $review_api_cache_control always,
+      or a response without an upstream Cache-Control is cacheable'
 fi
+
+# The map keeps an upstream value and defaults an absent one to no-store.
+apimap="$(awk '/^[[:space:]]*map \$upstream_http_cache_control \$review_api_cache_control[[:space:]]*\{/,/^[[:space:]]*\}/' "$CONF")"
+if [ -z "$apimap" ]; then
+  note 'map $upstream_http_cache_control $review_api_cache_control is missing'
+else
+  grep -qE '^[[:space:]]*default[[:space:]]+\$upstream_http_cache_control;' <<<"$apimap" ||
+    note 'the Api cache map must pass an upstream Cache-Control through by default'
+  grep -qE "^[[:space:]]*''[[:space:]]+'no-store';" <<<"$apimap" ||
+    note 'the Api cache map must turn an absent upstream Cache-Control into no-store'
+fi
+
+# A compressed and a plain body share a URL; without Vary a shared cache can serve
+# the wrong one.
+grep -qE '^[[:space:]]*gzip_vary on;' <<<"$directives" ||
+  note 'gzip is on without gzip_vary on: a shared cache can serve a gzip body to a
+    client that did not send Accept-Encoding'
 
 # A zero cap leaves only Kestrel's limit, and the Api's 413 then arrives after the
 # proxy has accepted a body it was supposed to refuse.
