@@ -114,7 +114,11 @@ public sealed partial class ContractSchemaWarmUpService : IHostedService, IDispo
                 _ = _services.GetRequiredService<ContractSchemaSet>();
             }
         }
-        catch (ObjectDisposedException) when (_stopping.IsCancellationRequested)
+        // The container marks itself disposed before it reaches this service's Dispose, so a warm-up queued in that
+        // window resolves from a dead provider before _stopping is cancelled: that is a stop, not a schema failure.
+        catch (ObjectDisposedException exception) when (
+            _stopping.IsCancellationRequested
+            || string.Equals(exception.ObjectName, nameof(IServiceProvider), StringComparison.Ordinal))
         {
             _completion.SetCanceled();
             return;
