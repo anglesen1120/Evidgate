@@ -1,4 +1,3 @@
-using System.Globalization;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
@@ -45,12 +44,14 @@ internal sealed record IssuedStatement(
 /// </summary>
 /// <remarks>
 /// The refusals come in one fixed order: the period's shape, the org's existence, whether the period has ended,
-/// then the worksheet's own rules. An unknown org is the same 404 every operator route answers, and no refusal
-/// writes a row or an audit entry.
+/// then the worksheet's own rules. An unknown org is the same 404 every operator route answers and the one answer
+/// that records nothing; every other refusal commits exactly one <see cref="RefusedAction"/> row and nothing else,
+/// and a replayed issue commits one <see cref="ReplayedAction"/> row.
 /// <para>
 /// The row is committed only after one more aggregate read of the period's ledger still describes the worksheet
 /// just written: a row that arrived between the worksheet's own reads and the insert is 409
-/// <see cref="LedgerChangedCode"/> and the scope is never committed, so the row and its audit entry roll back.
+/// <see cref="LedgerChangedCode"/>, and that statement's scope is discarded while a second, audit-only scope
+/// commits the refusal — the document rolls back and the refusal stays in the chain.
 /// </para>
 /// <para>
 /// Re-issuing the same period is idempotent only while the recompute still hashes to what was issued: the caller
@@ -59,7 +60,7 @@ internal sealed record IssuedStatement(
 /// silently billing a different number under the same id.
 /// </para>
 /// </remarks>
-internal sealed class StatementIssuer(
+internal sealed partial class StatementIssuer(
     ITenantScopeFactory scopes,
     ITenantDb db,
     IAuditTrail audit,
@@ -83,7 +84,7 @@ internal sealed class StatementIssuer(
 
     /// <summary>
     /// Validates the request, recomputes the period inside the org's scope, applies the issue rules and writes
-    /// the statement with its audit entry in the same transaction.
+    /// the statement with its audit entry in the same transaction, or the refusal with its own.
     /// </summary>
     /// <param name="orgId">The org the route names.</param>
     /// <param name="operatorId">The authenticated operator, the audit row's actor.</param>
@@ -101,13 +102,52 @@ internal sealed class StatementIssuer(
             ModuleName.Usage,
             nameof(StatementIssuer));
 
+        // One unit for the whole request: a refusal written after a rollback flushes this same buffer, so the caller
+        // sees exactly one audit row per attempt and a flush that throws fails the request.
+        using var unit = audit.BeginUnit();
+
         var validated = StatementIssueRules.ValidatePeriod(request.Period);
-        if (validated.Error is { } invalid)
+
+        return validated.Error is { } invalid
+            ? await RefuseUnreadablePeriodAsync(orgId, operatorId, invalid, cancellationToken).ConfigureAwait(false)
+            : await IssueAsync(orgId, operatorId, request, validated.Value, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The period did not parse, so nothing was recomputed. The org is still looked up: an answer is audited only
+    /// where it happened, and a bad period keeps answering its own 422 for an org the caller cannot see, so it is
+    /// never a way to learn which orgs exist.
+    /// </summary>
+    private async Task<Result<IssuedStatement>> RefuseUnreadablePeriodAsync(
+        Guid orgId,
+        Guid operatorId,
+        Error invalid,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = await scopes.BeginAsync(orgId, null, false, cancellationToken).ConfigureAwait(false);
+
+        if (await limits.ForOrganizationAsync(cancellationToken).ConfigureAwait(false) is null)
         {
             return Result.Failure<IssuedStatement>(invalid);
         }
 
-        using var unit = audit.BeginUnit();
+        // No period reaches the audit row: the value never passed the shape rule, so recording it would store
+        // request text.
+        return await RefuseAsync(orgId, operatorId, null, invalid, scope, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Issues one closed period of an org that exists: the closed-period rule, the worksheet's rules, then the
+    /// freeze. Every refusal from here on commits its audit row.
+    /// </summary>
+    private async Task<Result<IssuedStatement>> IssueAsync(
+        Guid orgId,
+        Guid operatorId,
+        IssueStatementRequest request,
+        string period,
+        CancellationToken cancellationToken)
+    {
         await using var scope = await scopes.BeginAsync(orgId, null, false, cancellationToken).ConfigureAwait(false);
 
         if (await limits.ForOrganizationAsync(cancellationToken).ConfigureAwait(false) is null)
@@ -116,18 +156,20 @@ internal sealed class StatementIssuer(
         }
 
         var now = time.GetUtcNow();
-        if (!StatementIssueRules.IsClosed(validated.Value, now))
+        if (!StatementIssueRules.IsClosed(period, now))
         {
-            return Result.Failure<IssuedStatement>(StatementIssueRules.PeriodOpen());
+            return await RefuseAsync(orgId, operatorId, period, StatementIssueRules.PeriodOpen(), scope,
+                cancellationToken).ConfigureAwait(false);
         }
 
         var worksheet = await worksheets
-            .BuildAsync(orgId, validated.Value, cancellationToken)
+            .BuildAsync(orgId, period, cancellationToken)
             .ConfigureAwait(false);
         var draft = StatementIssueRules.Evaluate(worksheet, request);
         if (draft.Error is { } refused)
         {
-            return Result.Failure<IssuedStatement>(refused);
+            return await RefuseAsync(orgId, operatorId, period, refused, scope, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         return await FreezeAsync(orgId, operatorId, worksheet, draft.Value, now, scope, cancellationToken)
@@ -135,9 +177,9 @@ internal sealed class StatementIssuer(
     }
 
     /// <summary>
-    /// Writes the draft, re-reads the period's ledger, and commits only a document the ledger still describes.
-    /// A period that moved between the worksheet's read and the insert is refused without a commit, so the row
-    /// and its audit entry roll back together and the caller can retry the issue.
+    /// Writes the draft, re-reads the period's ledger, and commits only a document the ledger still describes. A
+    /// period that moved between the worksheet's read and the insert is refused after its scope is discarded, so the
+    /// statement rolls back while the refusal is recorded.
     /// </summary>
     private async Task<Result<IssuedStatement>> FreezeAsync(
         Guid orgId,
@@ -151,21 +193,22 @@ internal sealed class StatementIssuer(
         var write = await PersistAsync(orgId, operatorId, draft, now, cancellationToken).ConfigureAwait(false);
         if (write.Error is { } conflict)
         {
-            return Result.Failure<IssuedStatement>(conflict);
+            // The insert wrote nothing, so the conflict is the whole outcome and only its audit row commits.
+            return await RefuseAsync(orgId, operatorId, draft.Period, conflict, scope, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         if (write.Value.Inserted && await LedgerMovedAsync(orgId, worksheet, cancellationToken).ConfigureAwait(false))
         {
-            return Result.Failure<IssuedStatement>(Error.Conflict(LedgerChangedCode,
-                "the period's ledger changed while the statement was being written, so nothing was issued"));
+            return await RefuseAfterRollbackAsync(orgId, operatorId, draft.Period,
+                Error.Conflict(LedgerChangedCode,
+                    "the period's ledger changed while the statement was being written, so nothing was issued"),
+                scope,
+                cancellationToken).ConfigureAwait(false);
         }
 
-        if (write.Value.Inserted)
-        {
-            DescribeAudit(operatorId, draft, write.Value.Statement.Id);
-            await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
-        }
-
+        DescribeIssue(operatorId, draft, write.Value);
+        await audit.FlushAsync(orgId, db, cancellationToken).ConfigureAwait(false);
         await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
 
         return Result.Success(write.Value.Statement);
@@ -238,22 +281,6 @@ internal sealed class StatementIssuer(
         row.ContentHash,
         row.IssuedAt,
         replayed);
-
-    /// <summary>
-    /// Records the period and how many rows the document froze, with the statement's own id as the object. No
-    /// amount reaches the audit chain: the statement row holds what was billed, the audit row says it was issued.
-    /// </summary>
-    private void DescribeAudit(Guid operatorId, StatementDraft draft, Guid statementId)
-    {
-        var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["period"] = draft.Period,
-            ["count"] = draft.LineCount.ToString(CultureInfo.InvariantCulture),
-        };
-
-        audit.Describe(new AuditObject(ObjectType, statementId.ToString("D"), Metadata: metadata));
-        audit.Record(Action, new AuditActor(AuditActorTypes.PlatformOperator, operatorId.ToString("D")));
-    }
 
     /// <summary>What <see cref="PersistAsync"/> settled: the statement to answer with, and whether this call wrote it.</summary>
     private sealed record StatementWrite(IssuedStatement Statement, bool Inserted);
