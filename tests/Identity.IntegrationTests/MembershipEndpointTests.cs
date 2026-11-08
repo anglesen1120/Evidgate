@@ -605,14 +605,13 @@ public sealed class MembershipEndpointTests : CatalogueTestBase
     }
 
     /// <summary>
-    /// W7-SEC-02, delegation stays: the rule refuses only a grant to the caller's own
-    /// membership, so a `tenant_admin` still appoints someone else as `release_approver`.
-    /// The feature plans record the stricter grantor-subset rule (may a grantor hand out
-    /// only what they hold, to anyone?) as an [OPEN] owner decision — it decides who may
-    /// appoint an approver — and this test pins the behaviour until that is decided.
+    /// The rule applies to every target, not only the caller's own membership: a
+    /// `tenant_admin` without `policy:write` may not appoint another member as
+    /// `release_approver`, or one admin could mint a second approver and defeat the
+    /// two-person waiver rule. 403 `forbidden`, no grant written.
     /// </summary>
     [Fact]
-    public async Task Tenant_Admin_May_Still_Grant_Release_Approver_To_Another_Member()
+    public async Task Tenant_Admin_Cannot_Grant_Release_Approver_To_Another_Member()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
         var (_, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
@@ -630,11 +629,82 @@ public sealed class MembershipEndpointTests : CatalogueTestBase
             $$"""{"role_id":"{{releaseApproverId}}"}""",
             "delegated-grant-1");
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await response.Content.ReadFromJsonAsync<JsonElement>(Token))
+            .GetProperty("error").GetProperty("code").GetString().ShouldBe("forbidden");
 
-        JsonSerializer.Deserialize<MembershipView>(await response.Content.ReadAsStringAsync(Token), Wire)!
+        (await ScalarAsync<long>(
+            "select count(*) from public.membership_role where membership_id = @id",
+            ("id", memberId))).ShouldBe(1, "only the seeded viewer grant exists");
+    }
+
+    /// <summary>
+    /// The invite half of the same rule: inviting another address with a role the caller
+    /// does not fully hold is 403 `forbidden` and creates no membership.
+    /// </summary>
+    [Fact]
+    public async Task Tenant_Admin_Cannot_Invite_Another_Address_As_Release_Approver()
+    {
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var (_, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
+        var releaseApproverId = await RoleIdAsync("release_approver");
+
+        await using var factory = IdentityApiFactory.Start(
+            Fixture,
+            new IdentityHostSetup(org, Principal: RequestPrincipal.Member(adminUserId)));
+        using var client = factory.CreateClient();
+
+        using var response = await PostAsync(
+            client,
+            $"/v1/orgs/{org}/memberships",
+            $$"""{"email":"second@example.com","roles":["{{releaseApproverId}}"]}""",
+            "other-invite-1");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await response.Content.ReadFromJsonAsync<JsonElement>(Token))
+            .GetProperty("error").GetProperty("code").GetString().ShouldBe("forbidden");
+
+        (await CountAsync("select count(*) from public.membership"))
+            .ShouldBe(1, "the refused invite wrote no membership");
+    }
+
+    /// <summary>
+    /// Positive control: a caller that holds every permission of the role (a
+    /// `tenant_admin` that is also a `release_approver`) may grant that role to another
+    /// member and invite another address with it.
+    /// </summary>
+    [Fact]
+    public async Task Caller_Holding_Every_Permission_Of_The_Role_May_Grant_And_Invite_It()
+    {
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var (_, callerUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin", "release_approver");
+        var (memberId, _) = await SeedActiveMemberAsync(org, "member@example.com", "viewer");
+        var releaseApproverId = await RoleIdAsync("release_approver");
+
+        await using var factory = IdentityApiFactory.Start(
+            Fixture,
+            new IdentityHostSetup(org, Principal: RequestPrincipal.Member(callerUserId)));
+        using var client = factory.CreateClient();
+
+        using var grant = await PostAsync(
+            client,
+            $"/v1/orgs/{org}/memberships/{memberId}/roles",
+            $$"""{"role_id":"{{releaseApproverId}}"}""",
+            "holder-grant-1");
+
+        grant.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        JsonSerializer.Deserialize<MembershipView>(await grant.Content.ReadAsStringAsync(Token), Wire)!
             .Roles.Select(role => role.Code).Order(StringComparer.Ordinal)
             .ShouldBe(["release_approver", "viewer"]);
+
+        using var invite = await PostAsync(
+            client,
+            $"/v1/orgs/{org}/memberships",
+            $$"""{"email":"second@example.com","roles":["{{releaseApproverId}}"]}""",
+            "holder-invite-1");
+
+        invite.StatusCode.ShouldBe(HttpStatusCode.Created);
     }
 
     /// <summary>

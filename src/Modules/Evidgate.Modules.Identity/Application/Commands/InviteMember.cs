@@ -161,27 +161,20 @@ internal sealed class InviteMemberCommandHandler(
 
         var caller = principals.Current;
 
-        // W7-SEC-02: an invite addressed to the caller's own membership is the same
-        // self-grant as their membership id, so it carries only what the caller already
-        // holds (SelfEscalation.IsSelfTargetAsync is the shared definition of "self").
-        if (roles.Count > 0
-            && await SelfEscalation
-                .IsSelfTargetAsync(context, orgId, caller, targetUserId: null, email, cancellationToken)
-                .ConfigureAwait(false))
-        {
-            var missing = await SelfEscalation.MissingAsync(
-                permissions,
-                orgId,
-                caller,
-                await SelfEscalation
-                    .RoleCodesAsync(context, [.. roles.Select(role => role.Id)], cancellationToken)
-                    .ConfigureAwait(false),
-                cancellationToken).ConfigureAwait(false);
+        // W7-SEC-02: an invite carries only what the caller already holds, whoever the
+        // address belongs to (a second mailbox the caller controls is the caller).
+        var missing = await SelfEscalation.MissingAsync(
+            permissions,
+            orgId,
+            caller,
+            await SelfEscalation
+                .RoleCodesAsync(context, [.. roles.Select(role => role.Id)], cancellationToken)
+                .ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
 
-            if (missing.Count > 0)
-            {
-                return Result.Failure<InviteIssuedView>(SelfEscalation.Refused);
-            }
+        if (missing.Count > 0)
+        {
+            return Result.Failure<InviteIssuedView>(SelfEscalation.Refused);
         }
 
         // `membership_org_user_key` spans every status, so a pending row for this address
