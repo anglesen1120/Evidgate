@@ -4,6 +4,7 @@ using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using static Evidgate.Modules.Evidence.Application.RawReportWorkerConstants;
 
 namespace Evidgate.Modules.Evidence.Application;
 

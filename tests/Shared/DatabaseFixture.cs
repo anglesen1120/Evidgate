@@ -79,7 +79,10 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// <summary>The shared fixture a dedicated copy belongs to, or null for the shared fixture itself.</summary>
     private readonly DatabaseFixture? _parent;
 
-    /// <summary>The migrated template dedicated copies are made from; built on first use.</summary>
+    /// <summary>
+    /// The migrated template dedicated copies are made from; built during the start, from the
+    /// database the Migrator brought to head, before any test writes a row.
+    /// </summary>
     private TemplateDatabase? _template;
 
     /// <summary>
@@ -240,6 +243,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
             .WithDatabase("evidgate")
             .WithUsername("postgres")
             .WithPassword("postgres")
+            // Dedicated copies open a second pool per class while the shared pools stay up; the
+            // image's default ceiling of 100 turns that into 53300 instead of the case under test.
+            .WithCommand("-c", "max_connections=200")
             .Build();
         using var timeout = new CancellationTokenSource(StartTimeout);
         var cancellationToken = timeout.Token;
@@ -288,6 +294,21 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 cancellationToken);
         }
 
+        // CREATE DATABASE … TEMPLATE refuses a source database that still has a session, and
+        // an idle pooled connection counts: the bootstrap above left some behind. TemplateDatabase
+        // also terminates whatever survives this, so a straggler costs a retry, not a failure.
+        NpgsqlConnection.ClearAllPools();
+
+        // Dedicated copies come from this template: a copy of the database just brought to head,
+        // taken before any test writes a row, so the assembly runs the migrations only once.
+        _template = new TemplateDatabase(
+            SuperuserConnectionString,
+            database => Build(DatabaseOwnerRole, _ownerPassword, database),
+            MigrationsPath,
+            [],
+            copyFrom: _database);
+        await _template.EnsureTemplateAsync().ConfigureAwait(false);
+
         ConfigureServices();
 
         // Respawn is set up once (it reads the FK graph then); resets only replay the
@@ -295,14 +316,6 @@ public sealed class DatabaseFixture : IAsyncLifetime
         _checkpoint = await RespawnCheckpoint.CreateAsync(
             Build(DatabaseOwnerRole, _ownerPassword, _database),
             cancellationToken).ConfigureAwait(false);
-
-        // Dedicated copies come from this template; it migrates itself on the first
-        // copy, so an assembly that never asks for one pays nothing for it.
-        _template = new TemplateDatabase(
-            SuperuserConnectionString,
-            database => Build(DatabaseOwnerRole, _ownerPassword, database),
-            MigrationsPath,
-            []);
     }
 
     /// <summary>

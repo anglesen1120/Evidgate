@@ -2,6 +2,7 @@ using System.Data.Common;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Evidence.Application;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
+using NSubstitute;
 using Shouldly;
 using Xunit;
 
@@ -140,7 +141,7 @@ public sealed class PytestJUnitMappingExplorationTests
     [InlineData("pytest-junitxml\n")]
     public async Task UnknownProducerKind_ReturnsAnUnsupportedResolution(string producerKind)
     {
-        var resolver = new ReportParserResolver(new NoRowsDb());
+        var resolver = new ReportParserResolver(new NoRowsDb(), ScopeOf(Guid.CreateVersion7()));
 
         var result = await resolver.ResolveAsync(producerKind, TestContext.Current.CancellationToken);
 
@@ -148,6 +149,15 @@ public sealed class PytestJUnitMappingExplorationTests
         result.UnsupportedReason.ShouldBe(ReportParserResolver.UnknownProducerKind);
         result.ParserId.ShouldBeNull();
         result.Version.ShouldBeNull();
+    }
+
+    private static ITenantScopeAccessor ScopeOf(Guid org)
+    {
+        var scope = Substitute.For<ITenantScope>();
+        scope.OrgId.Returns(org);
+        var accessor = Substitute.For<ITenantScopeAccessor>();
+        accessor.Require().Returns(scope);
+        return accessor;
     }
 
     // The resolver's row type is private, so a proxy cannot build the empty list it reads; this db has no rows.

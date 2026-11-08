@@ -125,9 +125,9 @@ internal sealed partial class UsageRollupTaskHandler(
         return orgs;
     }
 
-    [LoggerMessage(EventId = 2470, Level = LogLevel.Information, Message = "Recomputed usage roll-up rows for {Orgs} org(s)")]
+    [LoggerMessage(EventId = 2477, Level = LogLevel.Information, Message = "Recomputed usage roll-up rows for {Orgs} org(s)")]
     private partial void LogRecomputed(int orgs);
 
-    [LoggerMessage(EventId = 2471, Level = LogLevel.Warning, Message = "Usage roll-up failed for org {Org}")]
+    [LoggerMessage(EventId = 2478, Level = LogLevel.Warning, Message = "Usage roll-up failed for org {Org}")]
     private partial void LogOrgFailed(Guid org, Exception exception);
 }

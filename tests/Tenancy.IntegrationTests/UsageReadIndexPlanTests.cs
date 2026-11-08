@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Evidgate.Modules.Usage.Infrastructure.Persistence;
 using Npgsql;
 using NpgsqlTypes;
@@ -17,18 +18,20 @@ public sealed class UsageReadIndexPlanTests
 {
     private const string Period = "2026-11";
     private const int PageLimit = 11;
-    private const int PageOrgProjects = 5_000;
-    private const int VolumeOrgProjects = 20_000;
+    private const int PageOrgProjects = 40;
+    private const int VolumeOrgProjects = 120;
+    private const int ClosedPeriods = 12;
 
     private readonly PostgresTenancyFixture _fixture;
 
     public UsageReadIndexPlanTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
     /// <summary>
-    /// A database of its own, because the seed is a volume the planner reads as statistics: the page's org holds
-    /// <see cref="PageOrgProjects"/> projects with a counter and a roll-up in <see cref="Period"/>, twelve closed
-    /// periods behind them, and a second org of <see cref="VolumeOrgProjects"/> projects adds the period's other
-    /// rows. The three tables are <c>ANALYZE</c>d, so no planner switch stands in for the indexes.
+    /// A database of its own with a small seed: the page's org holds <see cref="PageOrgProjects"/> projects with a
+    /// counter and a roll-up in <see cref="Period"/>, <see cref="ClosedPeriods"/> closed periods sit behind them, and a
+    /// second org of <see cref="VolumeOrgProjects"/> projects adds the period's other rows. The tables are
+    /// <c>ANALYZE</c>d and the explain transaction prices sequential scans out, so a dropped index leaves no scan for
+    /// the planner to fall back on and the assertions below still fail.
     /// </summary>
     [Fact]
     public async Task Summary_OrgWidePage_UsesThePeriodAndProjectIndexes()
@@ -50,18 +53,24 @@ public sealed class UsageReadIndexPlanTests
             await set.ExecuteScalarAsync(TestContext.Current.CancellationToken);
         }
 
+        await using (var noSeqScan = new NpgsqlCommand("set local enable_seqscan = off", connection, transaction))
+        {
+            await noSeqScan.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+        }
+
         var firstPage = await ExplainAsync(connection, transaction, org, cursor: null);
         var cursorPage = await ExplainAsync(
             connection,
             transaction,
             org,
-            cursor: (new DateTimeOffset(2025, 1, 2, 12, 0, 0, TimeSpan.Zero), Guid.CreateVersion7()));
+            cursor: (new DateTimeOffset(2025, 1, 1, 0, 20, 30, TimeSpan.Zero), Guid.CreateVersion7()));
 
         var pages = new (string Label, string Json)[] { ("the first page", firstPage), ("the cursor page", cursorPage) };
 
         foreach (var (label, json) in pages)
         {
             var (_, indexNames, sequentialScans) = AuthoringTimelineTests.PlanNodes(json);
+            var conditions = IndexConditions(json);
 
             indexNames.ShouldContain(
                 "quota_counter_org_period_idx", $"{label} must read the period's counters through the period index");
@@ -70,11 +79,15 @@ public sealed class UsageReadIndexPlanTests
             sequentialScans.ShouldNotContain("quota_counter", $"{label} must not scan the counters");
             sequentialScans.ShouldNotContain("usage_rollup", $"{label} must not scan the roll-ups");
             sequentialScans.ShouldNotContain("project", $"{label} must not scan the projects");
+
+            AssertPinsTenant(conditions, "quota_counter_org_period_idx", org, label);
+            AssertPinsTenant(conditions, "usage_rollup_org_period_idx", org, label);
         }
 
         var (_, cursorIndexNames, _) = AuthoringTimelineTests.PlanNodes(cursorPage);
         cursorIndexNames.ShouldContain(
             "project_org_created_id_idx", "the cursor page must walk the projects in keyset order through the org index");
+        AssertPinsTenant(IndexConditions(cursorPage), "project_org_created_id_idx", org, "the cursor page");
     }
 
     /// <summary>
@@ -131,9 +144,9 @@ public sealed class UsageReadIndexPlanTests
     }
 
     /// <summary>
-    /// One counter and one roll-up per project in the period, twelve closed periods behind the page's org, and the
-    /// tenant-level rows of both orgs: a table whose period rows sit among many the statement must not read.
-    /// Split into per-period commands so each stays well under the driver's command timeout on a loaded host.
+    /// One counter and one roll-up per project in <see cref="Period"/> and in the <see cref="ClosedPeriods"/> months
+    /// behind it, plus the tenant-level rows of both orgs: a table whose period rows sit among many the statement must
+    /// not read. Everything is one set-based batch, so the volume needs no per-period round trip.
     /// </summary>
     private async Task SeedUsageAsync(string database, Guid org, Guid volumeOrg)
     {
@@ -141,33 +154,24 @@ public sealed class UsageReadIndexPlanTests
             database,
             $"""
             insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit)
-            select gen_random_uuid(), p.org_id, p.id, '{Period}', 'results', 3, 1000
-              from public.project p;
+            select gen_random_uuid(), p.org_id, p.id, periods.period, 'results', 3, 1000
+              from public.project as p
+             cross join (
+                select '{Period}'::text as period
+                union all
+                select to_char(date '2025-01-01' + months.n * interval '1 month', 'YYYY-MM')
+                  from generate_series(0, {ClosedPeriods - 1}) as months (n)
+             ) as periods;
             insert into public.usage_rollup
                 (id, org_id, project_id, period, metric, total_quantity, row_count, computed_at)
-            select gen_random_uuid(), p.org_id, p.id, '{Period}', 'results', 3, 1, now()
-              from public.project p;
-            """);
-        for (var month = 0; month < 12; month++)
-        {
-            await _fixture.ExecuteAsync(
-                database,
-                $"""
-                insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit)
-                select gen_random_uuid(), p.org_id, p.id,
-                       to_char(date '2025-01-01' + interval '{month} months', 'YYYY-MM'), 'results', 3, 1000
-                  from public.project p;
-                insert into public.usage_rollup
-                    (id, org_id, project_id, period, metric, total_quantity, row_count, computed_at)
-                select gen_random_uuid(), p.org_id, p.id,
-                       to_char(date '2025-01-01' + interval '{month} months', 'YYYY-MM'), 'results', 3, 1, now()
-                  from public.project p;
-                """);
-        }
-
-        await _fixture.ExecuteAsync(
-            database,
-            $"""
+            select gen_random_uuid(), p.org_id, p.id, periods.period, 'results', 3, 1, now()
+              from public.project as p
+             cross join (
+                select '{Period}'::text as period
+                union all
+                select to_char(date '2025-01-01' + months.n * interval '1 month', 'YYYY-MM')
+                  from generate_series(0, {ClosedPeriods - 1}) as months (n)
+             ) as periods;
             insert into public.quota_counter (id, org_id, project_id, period, metric, used, quota_limit)
             select gen_random_uuid(), o.id, null, '{Period}', metrics.metric, 0, 100000
               from (values ('{org:D}'::uuid), ('{volumeOrg:D}'::uuid)) o (id)
@@ -210,5 +214,60 @@ public sealed class UsageReadIndexPlanTests
         }
 
         return (string)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
+    }
+
+    /// <summary>
+    /// Every node that reads <paramref name="index"/> must carry the org the statement itself binds in its index
+    /// condition, so the index serves the tenant-pinned read and not a broader read narrowed afterwards by a filter or
+    /// by the row policy's own call.
+    /// </summary>
+    private static void AssertPinsTenant(
+        List<(string Index, string Condition)> conditions,
+        string index,
+        Guid org,
+        string label)
+    {
+        var used = conditions.Where(entry => entry.Index == index).ToList();
+
+        used.ShouldNotBeEmpty($"{label} must read through {index}");
+        used.Count(entry =>
+                entry.Condition.Contains($"{org:D}", StringComparison.OrdinalIgnoreCase)
+                || entry.Condition.Contains("org_id = $", StringComparison.Ordinal))
+            .ShouldBe(used.Count, $"{label} must pin the tenant in every {index} index condition");
+    }
+
+    /// <summary>Every index the plan reads, with the condition it applies, however the plan nests.</summary>
+    private static List<(string Index, string Condition)> IndexConditions(string json)
+    {
+        var conditions = new List<(string Index, string Condition)>();
+        var queue = new Queue<JsonElement>();
+
+        using var document = JsonDocument.Parse(json);
+
+        foreach (var root in document.RootElement.EnumerateArray())
+        {
+            queue.Enqueue(root.GetProperty("Plan"));
+        }
+
+        while (queue.Count > 0)
+        {
+            var node = queue.Dequeue();
+
+            if (node.TryGetProperty("Index Name", out var index)
+                && node.TryGetProperty("Index Cond", out var condition))
+            {
+                conditions.Add((index.GetString()!, condition.GetString()!));
+            }
+
+            if (node.TryGetProperty("Plans", out var children))
+            {
+                foreach (var child in children.EnumerateArray())
+                {
+                    queue.Enqueue(child);
+                }
+            }
+        }
+
+        return conditions;
     }
 }

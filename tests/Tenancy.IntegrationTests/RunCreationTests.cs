@@ -70,18 +70,15 @@ public sealed class RunCreationTests
         IReadOnlyDictionary<string, string?>? configuration = null,
         Action<IServiceCollection>? services = null)
     {
-        // A suite that counts the whole database passes its own dedicated database; the rest share one under a fresh org.
-        database ??= await fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database), configuration, services);
-        var client = api.CreateClient();
+        var started = await BeginAsync(fixture, slug, database, configuration, services);
+        var api = started.Api;
+        var client = started.Client;
+        var project = started.Project;
+        var admin = TenancyApiFactory.Resolved(user: started.User, orgHeader: started.Org);
 
         try
         {
-            var user = Guid.CreateVersion7();
-            var org = await CreateOrgAsync(client, user, Unique.Slug(slug));
-            var project = await CreateProjectAsync(client, user, org, "checkout");
-            var revisions = await ManifestTests.SeedCasesAsync(fixture, api, org, project, database, cases);
-            var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
+            var revisions = await ManifestTests.SeedCasesAsync(fixture, api, started.Org, project, started.Database, cases);
 
             var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
             suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
@@ -105,7 +102,7 @@ public sealed class RunCreationTests
             manifest["environment_revision_id"] = environment.Id("revision_id").ToString();
             var manifestId = await UploadAsync(client, admin, project, manifest);
 
-            return new World(api, client, database, user, org, project, revision.Id("suite_revision_id"), environment.Id("revision_id"), manifestId, revisions);
+            return new World(api, client, started.Database, started.User, started.Org, project, revision.Id("suite_revision_id"), environment.Id("revision_id"), manifestId, revisions);
         }
         catch
         {
@@ -115,6 +112,67 @@ public sealed class RunCreationTests
             await api.DisposeAsync();
             throw;
         }
+    }
+
+    /// <summary>The host, org, project and caller headers that every world starts with.</summary>
+    private sealed record Started(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project);
+
+    /// <summary>
+    /// The head every world shares: a host on that database, a fresh org, its project and the caller the requests
+    /// post as. A caller that fails here disposes the host it built before rethrowing.
+    /// </summary>
+    private static async Task<Started> BeginAsync(
+        PostgresTenancyFixture fixture,
+        string slug,
+        string? database,
+        IReadOnlyDictionary<string, string?>? configuration,
+        Action<IServiceCollection>? services)
+    {
+        // A suite that counts the whole database passes its own dedicated database; the rest share one under a fresh org.
+        database ??= await fixture.SharedDatabaseAsync();
+        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database), configuration, services);
+        var client = api.CreateClient();
+
+        try
+        {
+            var user = Guid.CreateVersion7();
+            var org = await CreateOrgAsync(client, user, Unique.Slug(slug));
+            var project = await CreateProjectAsync(client, user, org, "checkout");
+
+            return new Started(api, client, database, user, org, project);
+        }
+        catch
+        {
+            // Same rule as StartAsync: a head that never returns owns nothing.
+            client.Dispose();
+            await api.DisposeAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// A world cut down to what a <em>body-shape</em> refusal can observe: an org, a project and the headers that post
+    /// to it. Every shape check of <c>CreateRunCommand</c> returns before its first database read, so the cases, the
+    /// suite, the environment and the manifest such a request never looks at are not built here — four round trips to
+    /// the shared database fewer per refusal, and four fewer ways for a loaded host to time one of them out.
+    /// <see cref="World.ManifestId"/> is a placeholder for that reason: a request refused on its body never resolves it,
+    /// and a request that is not refused resolves it and fails loudly with 404 instead of passing quietly.
+    /// </summary>
+    internal static async Task<World> StartRefusalWorldAsync(PostgresTenancyFixture fixture, string slug = "acme")
+    {
+        var started = await BeginAsync(fixture, slug, database: null, configuration: null, services: null);
+
+        return new World(
+            started.Api,
+            started.Client,
+            started.Database,
+            started.User,
+            started.Org,
+            started.Project,
+            SuiteRevision: Guid.Empty,
+            EnvironmentRevision: Guid.Empty,
+            ManifestId: Guid.CreateVersion7(),
+            Cases: []);
     }
 
     internal static JsonObject Manifest(Guid suite, Guid[] cases, int variants, int shards) => ManifestUnitTests.Build(

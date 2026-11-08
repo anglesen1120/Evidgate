@@ -16,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Evidgate.Modules.Ingestion.Contracts;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using static Evidgate.Modules.Evidence.Application.RawReportWorkerConstants;
 
 namespace Evidgate.Modules.Evidence.Application;
 
@@ -199,24 +200,6 @@ internal sealed partial class ParseRawReportHandler(
     TimeProvider time,
     ILogger<ParseRawReportHandler> logger) : ITransactionlessTaskHandler<ParseRawReportPayload>
 {
-    /// <summary>The cap name a report over its byte budget carries in telemetry.</summary>
-    private const string ReportBytesCap = "report_bytes";
-
-    /// <summary>The cap name a report over its entry budget carries in telemetry.</summary>
-    private const string ReportCasesCap = "report_cases";
-
-    /// <summary>The media type the child is told the report carries.</summary>
-    private const string XmlMediaType = "application/xml";
-
-    /// <summary>
-    /// The binding the synthetic slot carries: no credential writes this producer, so the slot is bound to a value no
-    /// token can hold and a producer with the same id is refused rather than silently inheriting the report's shard.
-    /// </summary>
-    private const string SyntheticBinding = "synthetic:junit-report";
-
-    /// <summary>The most shards a run's manifest may declare (contracts/manifest shard_plan).</summary>
-    private const int MaxShardIndex = 256;
-
     /// <inheritdoc />
     public string TaskType => EvidenceTaskTypes.ReportParse;
 

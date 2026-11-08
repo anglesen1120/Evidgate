@@ -71,6 +71,18 @@ internal sealed class RoleMatrixFixture
     /// <summary>Grant provenance: the holder is derived (the plan is silent on it).</summary>
     private const string Inferred = "inferred";
 
+    // xUnit builds one instance per test, and each would re-read and re-validate the same
+    // fixture document, so it is loaded once per process: the fixture is immutable and its
+    // validation is pure.
+    private static readonly Lazy<RoleMatrixFixture> Shared = new(() =>
+    {
+        var fixture = FixtureLoader.Load(FixtureLoader.Fixtures("identity/role-permission-matrix"));
+        var document = JsonSerializer.Deserialize<RoleMatrixDocument>(fixture.InputText, Options)
+            ?? throw new InvalidOperationException("the role-permission-matrix fixture is not a JSON object");
+
+        return new RoleMatrixFixture(document);
+    });
+
     private readonly Dictionary<string, RoleMatrixRole> _roles;
     private readonly Dictionary<string, IReadOnlyList<string>> _holders;
 
@@ -218,14 +230,7 @@ internal sealed class RoleMatrixFixture
     public IReadOnlyList<(string Role, string Permission, string Source)> InferredGrants { get; }
 
     /// <summary>Loads the repository's role × permission matrix fixture.</summary>
-    public static RoleMatrixFixture Load()
-    {
-        var fixture = FixtureLoader.Load(FixtureLoader.Fixtures("identity/role-permission-matrix"));
-        var document = JsonSerializer.Deserialize<RoleMatrixDocument>(fixture.InputText, Options)
-            ?? throw new InvalidOperationException("the role-permission-matrix fixture is not a JSON object");
-
-        return new RoleMatrixFixture(document);
-    }
+    public static RoleMatrixFixture Load() => Shared.Value;
 
     /// <summary>The permission codes of one role, ordinal order.</summary>
     /// <exception cref="KeyNotFoundException">the fixture declares no such role.</exception>
