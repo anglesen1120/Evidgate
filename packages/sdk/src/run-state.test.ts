@@ -21,6 +21,16 @@ const probeSource = [
   "const historyServed: History = { state_history: [{ from_state: 'queued', to_state: 'running', occurred_at: '2026-11-07T09:00:00Z' }] };",
   "const historyUnrecorded: History = { state_history: [{ from_state: 'queued', to_state: 'running' }] };",
   "const historyUnlistedState: History = { state_history: [{ from_state: 'shelved', to_state: 'running', occurred_at: '2026-11-07T09:00:00Z' }] };",
+  '',
+  "type Producers = Pick<RunStateDto, 'producers'>;",
+  'const producersEmpty: Producers = { producers: [] };',
+  'const producersAbsent: Producers = {};',
+  'const producersUndefined: Producers = { producers: undefined };',
+  'const producersNull: Producers = { producers: null };',
+  "const producerFinalized: Producers = { producers: [{ producer_id: 'shard-1', identity_state: 'bound', finalize_status: 'finalized', last_sequence: 11, count: 11, expected: 11, stale_epoch_events: 0, after_cancel_events: 0 }] };",
+  "const producerOpen: Producers = { producers: [{ producer_id: 'shard-1', identity_state: 'unbound', finalize_status: 'open', last_sequence: 0, count: 0, expected: null, stale_epoch_events: 0, after_cancel_events: 0 }] };",
+  "const producerNoExpected: Producers = { producers: [{ producer_id: 'shard-1', identity_state: 'bound', finalize_status: 'finalized', last_sequence: 11, count: 11, stale_epoch_events: 0, after_cancel_events: 0 }] };",
+  "const producerUnlistedIdentity: Producers = { producers: [{ producer_id: 'shard-1', identity_state: 'linked', finalize_status: 'finalized', last_sequence: 11, count: 11, expected: 11, stale_epoch_events: 0, after_cancel_events: 0 }] };",
 ].join('\n');
 
 let errorLines: number[];
@@ -111,5 +121,39 @@ describe('RunStateDto state history member', () => {
 
   it('rejects a state outside the run vocabulary', () => {
     expect(errorLines).toContain(16);
+  });
+});
+
+describe('RunStateDto producers member', () => {
+  it('accepts an explicitly empty slot array', () => {
+    expect(errorLines).not.toContain(19);
+  });
+
+  it('rejects an absent producers member', () => {
+    expect(errorLines).toContain(20);
+  });
+
+  it('rejects an undefined producers member', () => {
+    expect(errorLines).toContain(21);
+  });
+
+  it('rejects null, unlike state_history: an empty array is the only "no slots" answer', () => {
+    expect(errorLines).toContain(22);
+  });
+
+  it('accepts a finalized slot with every required member', () => {
+    expect(errorLines).not.toContain(23);
+  });
+
+  it('accepts a null expected while the slot is open', () => {
+    expect(errorLines).not.toContain(24);
+  });
+
+  it('rejects a slot without its declared count', () => {
+    expect(errorLines).toContain(25);
+  });
+
+  it('rejects an identity state outside the closed pair', () => {
+    expect(errorLines).toContain(26);
   });
 });

@@ -34,6 +34,28 @@
     },
     "shard_count": 2,
     "declared_producers": ["shard-1", "shard-2"],
+    "producers": [
+      {
+        "producer_id": "shard-1",
+        "identity_state": "bound",
+        "finalize_status": "finalized",
+        "last_sequence": 11,
+        "count": 11,
+        "expected": 11,
+        "stale_epoch_events": 0,
+        "after_cancel_events": 0
+      },
+      {
+        "producer_id": "shard-2",
+        "identity_state": "bound",
+        "finalize_status": "finalized",
+        "last_sequence": 9,
+        "count": 9,
+        "expected": 9,
+        "stale_epoch_events": 0,
+        "after_cancel_events": 0
+      }
+    ],
     "releases": [],
     "after_cancel_events": 0,
     "state_history": null
