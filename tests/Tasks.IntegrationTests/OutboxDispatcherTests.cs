@@ -245,26 +245,24 @@ public sealed class OutboxDispatcherTests
 
     /// <summary>
     /// 01.5.1-T3.2 (01.5.1 §7, 00 §11 SLI): the dispatcher publishes
-    /// <c>outbox_undispatched</c> as its backlog depth and
     /// <c>task_dispatch_lag_seconds</c> once per dispatched row. Asserted through a
     /// <see cref="MeterListener"/> over the application meter — the surface the OTel
     /// pipeline subscribes to — with one row deliberately aged so the lag is a real
-    /// wait rather than a rounding artefact.
+    /// wait rather than a rounding artefact. The backlog gauge has its own suite
+    /// (<see cref="OutboxBacklogGaugeTests"/>).
     /// </summary>
     [Fact]
-    public async Task Dispatcher_EmitsUndispatchedGaugeAndDispatchLagHistogram()
+    public async Task Dispatcher_EmitsDispatchLagHistogram()
     {
         var database = await _fixture.CreateDatabaseAsync();
         var lags = new ConcurrentQueue<double>();
-        var undispatched = new ConcurrentQueue<long>();
 
         using var listener = new MeterListener
         {
             InstrumentPublished = (instrument, publisher) =>
             {
                 if (instrument.Meter.Name == OutboxDispatchMetrics.MeterName
-                    && (instrument.Name == OutboxDispatchMetrics.DispatchLagHistogramName
-                        || instrument.Name == OutboxDispatchMetrics.UndispatchedGaugeName))
+                    && instrument.Name == OutboxDispatchMetrics.DispatchLagHistogramName)
                 {
                     publisher.EnableMeasurementEvents(instrument);
                 }
@@ -278,13 +276,6 @@ public sealed class OutboxDispatcherTests
                 lags.Enqueue(measurement);
             }
         });
-        listener.SetMeasurementEventCallback<long>((instrument, measurement, tags, state) =>
-        {
-            if (instrument.Name == OutboxDispatchMetrics.UndispatchedGaugeName)
-            {
-                undispatched.Enqueue(measurement);
-            }
-        });
         listener.Start();
 
         await using var host = DispatcherHost.Start(_fixture, database);
@@ -292,25 +283,16 @@ public sealed class OutboxDispatcherTests
 
         // The dispatcher owns the instruments, and it is created on first
         // resolution — a listener only sees instruments that already exist when it
-        // collects, so resolving it (once) is what puts the gauge on the meter.
+        // starts or when they are published, so resolving it puts them on the meter.
         var dispatcher = host.Dispatcher;
-
-        // An observable gauge publishes only when it is collected.
-        listener.RecordObservableInstruments();
-        var beforeDispatch = undispatched.ToArray();
-        beforeDispatch.ShouldBe(new long[] { 2 });
 
         var batch = await dispatcher.DispatchBatchAsync(Token);
         batch.Claimed.ShouldBe(2);
 
-        listener.RecordObservableInstruments();
         var measured = lags.ToArray();
         measured.Length.ShouldBe(2);
         measured.ShouldContain(value => value >= 2.5 && value < 60);
         measured.ShouldAllBe(value => value >= 0 && value < 60);
-
-        var afterDispatch = undispatched.ToArray();
-        afterDispatch.ShouldBe(new long[] { 2, 0 });
     }
 
     /// <summary>

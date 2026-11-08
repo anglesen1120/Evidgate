@@ -51,6 +51,7 @@ public sealed partial class OutboxDispatcher : IDisposable
     private readonly ObservableGauge<long> _undispatched;
     private readonly string[] _routeTaskTypes;
     private readonly string[] _routeQueues;
+    private readonly TimeProvider _time;
     private volatile bool _disposed;
 
     /// <summary>Creates the dispatcher over the registered app-role data source.</summary>
@@ -58,11 +59,23 @@ public sealed partial class OutboxDispatcher : IDisposable
         NpgsqlDataSource dataSource,
         IOptions<TasksOptions> options,
         ILogger<OutboxDispatcher> logger)
+        : this(dataSource, options, logger, TimeProvider.System)
+    {
+    }
+
+    /// <summary>Creates the dispatcher with an explicit clock (the backlog cache's age is measured on it).</summary>
+    public OutboxDispatcher(
+        NpgsqlDataSource dataSource,
+        IOptions<TasksOptions> options,
+        ILogger<OutboxDispatcher> logger,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(dataSource);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
+        _time = timeProvider;
         _dataSource = dataSource;
         _options = options.Value;
         _logger = logger;
@@ -174,54 +187,4 @@ public sealed partial class OutboxDispatcher : IDisposable
         _meter.Dispose();
         GC.SuppressFinalize(this);
     }
-
-    /// <summary>
-    /// The <c>outbox_undispatched</c> gauge callback: a short count over
-    /// <c>outbox_undispatched_idx</c>. A failed collection yields no measurement
-    /// instead of propagating — a metrics observer must never become a load that
-    /// takes the worker down with it.
-    /// </summary>
-    /// <remarks>
-    /// The callback is synchronous because this framework's
-    /// <see cref="Meter.CreateObservableGauge{T}(string, Func{IEnumerable{Measurement{T}}}, string?, string?)"/>
-    /// has no async form (System.Diagnostics.Metrics in .NET 10 offers only
-    /// delegate-based callbacks): the gauge is collected on the metrics export
-    /// interval, the count is one index-only scan on a pooled connection, and the
-    /// command timeout bounds the worst case. Caching a value from the dispatch loop
-    /// instead would report a stale backlog exactly when it matters — while nothing
-    /// is dispatching.
-    /// </remarks>
-    private IEnumerable<Measurement<long>> ObserveUndispatched()
-    {
-        if (_disposed)
-        {
-            return [];
-        }
-
-        try
-        {
-            using var connection = _dataSource.OpenConnection();
-            // Bounded twice: the SQL caps the index walk at UndispatchedGaugeCap
-            // rows, and a 5 s command timeout (the ReadinessProbe precedent)
-            // keeps a stalled collection from parking the export thread on
-            // Npgsql's 30 s default.
-            var count = connection.ExecuteScalar<long>(new CommandDefinition(
-                OutboxDispatchSql.CountUndispatched,
-                new { gauge_cap = OutboxDispatchSql.UndispatchedGaugeCap },
-                commandTimeout: 5));
-
-            return [new Measurement<long>(count)];
-        }
-        catch (Exception exception)
-        {
-            LogUndispatchedCountFailed(exception);
-            return [];
-        }
-    }
-
-    [LoggerMessage(
-        EventId = 2360,
-        Level = LogLevel.Warning,
-        Message = "outbox_undispatched gauge collection failed; the metric reports nothing this pass")]
-    private partial void LogUndispatchedCountFailed(Exception exception);
 }
