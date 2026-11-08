@@ -45,15 +45,20 @@ internal sealed class GetRunQueryHandler(
     /// <c>is_fork</c>, <c>unverified_ref</c>), and the release inputs F44 pins to the same body: the manifest's
     /// <c>manifest_hash</c> through <c>run.manifest_id</c>, the run's own <c>suite_revision_id</c> and
     /// <c>policy_revision_id</c>, the environment revision it locked (<c>environment_revision</c> +
-    /// <c>environment</c> through <c>run.environment_revision_id</c>), and the one <c>producer_slot</c> aggregate the
-    /// run registered — its count and its ids in <c>shard_index</c> order, both in the same statement, so the detail
+    /// <c>environment</c> through <c>run.environment_revision_id</c>), and one <c>producer_slot</c> aggregate of the
+    /// run — its count and its ids in <c>shard_index</c> order, both in the same statement, so the detail
     /// read is never N+1 and its producer order never depends on the heap order the slots happen to have. The same
     /// statement counts the run's late events. Only a canceled run can hold one (admission flags a write as
-    /// <c>after_cancel</c> solely against a canceled run, and that state is terminal), so every other state skips the
-    /// heap scan the flag column would otherwise cost on each read. The state history is selected here too, as two
-    /// correlated subqueries of this one statement: a history read by a statement of its own could see a cancel commit
-    /// after the run row was read, and serve the old state beside a history that ends canceled. The release bindings are
-    /// selected the same way, bounded by <see cref="ReleaseSql.MaxBoundReleases"/>.
+    /// <c>after_cancel</c> solely against a canceled run, and that state is terminal), so that run-level count skips the
+    /// heap scan the flag column would otherwise cost on every state that is not canceled. The state history is
+    /// selected here too, as two correlated subqueries of this one statement: a history read by a statement of its own
+    /// could see a cancel commit after the run row was read, and serve the old state beside a history that ends canceled.
+    /// The release bindings are selected the same way, bounded by <see cref="ReleaseSql.MaxBoundReleases"/>.
+    /// Each slot's recorded state and its event counts are one more column of the same statement
+    /// (<see cref="ProducerSlotFactsSql.SlotFactsColumn"/>), bounded by <see cref="ProducerSlotFactsSql.MaxProducerSlots"/>
+    /// and read in the same <c>shard_index</c> order, at the price of one grouped pass over the run's events whichever
+    /// state the run is in — the slot counts are not gated on <c>canceled</c> the way the run-level one above is, so the
+    /// detail costs one statement however many shards the run registers, and never one query per slot.
     /// <para>
     /// <c>org_id</c> is left to RLS (the row is readable only inside the caller's tenant scope, and the policy is
     /// <c>FORCE</c>d, 0031), so an unknown id and another tenant's id take the same branch. Every join is on the
@@ -71,6 +76,7 @@ internal sealed class GetRunQueryHandler(
                er.id as environment_revision_id, er.environment_id, e.environment_key, er.revision_no, er.revision_hash,
                coalesce(slots.shard_count, 0) as shard_count,
                coalesce(slots.declared_producers, '{}') as declared_producers,
+               {{ProducerSlotFactsSql.SlotFactsColumn}},
                case when r.state = 'canceled'
                     then (select count(*)::integer
                             from public.event ev
@@ -98,7 +104,12 @@ internal sealed class GetRunQueryHandler(
 
         var row = await db.QuerySingleOrDefaultAsync<RunStateRow>(
                 RunStateById,
-                new { run_id = query.RunId, bound_release_limit = ReleaseSql.MaxBoundReleases },
+                new
+                {
+                    run_id = query.RunId,
+                    bound_release_limit = ReleaseSql.MaxBoundReleases,
+                    producer_slot_limit = ProducerSlotFactsSql.MaxProducerSlots,
+                },
                 cancellationToken)
             .ConfigureAwait(false);
         if (row is null || OrchestratorScope.Project(row.ProjectId, principals, tenant) is not null)
@@ -107,6 +118,7 @@ internal sealed class GetRunQueryHandler(
         }
 
         var releases = BoundReleasesFromRow(row.BoundReleases);
+        var producers = ProducersFromRow(row.ProducerSlots);
         var stateHistory = RunStateHistoryReader.FromRow(row.StateHistoryKnown, row.StateHistory);
 
         return Result.Success(new RunStateDto(
@@ -135,6 +147,7 @@ internal sealed class GetRunQueryHandler(
                 row.RevisionHash),
             row.ShardCount,
             [.. row.DeclaredProducers],
+            producers,
             releases,
             row.AfterCancelEvents,
             stateHistory));
@@ -154,6 +167,28 @@ internal sealed class GetRunQueryHandler(
         }
 
         return releases;
+    }
+
+    /// <summary>The slot facts column of <see cref="RunStateById"/>: one item per stored slot, already ordered and bounded.</summary>
+    private static List<RunProducerSlot> ProducersFromRow(string slots)
+    {
+        var producers = new List<RunProducerSlot>();
+        using var document = JsonDocument.Parse(slots);
+        foreach (var item in document.RootElement.EnumerateArray())
+        {
+            var expected = item.GetProperty("expected");
+            producers.Add(new RunProducerSlot(
+                item.GetProperty("producer_id").GetString()!,
+                item.GetProperty("identity_state").GetString()!,
+                item.GetProperty("finalize_status").GetString()!,
+                item.GetProperty("last_sequence").GetInt64(),
+                item.GetProperty("count").GetInt64(),
+                expected.ValueKind == JsonValueKind.Null ? null : expected.GetInt64(),
+                item.GetProperty("stale_epoch_events").GetInt64(),
+                item.GetProperty("after_cancel_events").GetInt64()));
+        }
+
+        return producers;
     }
 
     /// <summary>
@@ -214,6 +249,9 @@ internal sealed class GetRunQueryHandler(
         public int ShardCount { get; set; }
 
         public string[] DeclaredProducers { get; set; } = [];
+
+        /// <summary>The slot facts column of <see cref="ProducerSlotFactsSql.SlotFactsColumn"/>.</summary>
+        public string ProducerSlots { get; set; } = "[]";
 
         public int AfterCancelEvents { get; set; }
 

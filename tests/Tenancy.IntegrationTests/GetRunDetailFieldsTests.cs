@@ -122,7 +122,7 @@ public sealed partial class GetRunDetailFieldsTests
     /// <summary>
     /// F44: <c>declared_producers</c> follows <c>shard_index</c>, not the order the slots were written in and not the
     /// ids' own collation — so the pair is permuted to make the three orders disagree and the body still reports the
-    /// shard order.
+    /// shard order. <c>producers</c> is the same list with each slot's state, so it must follow that order too.
     /// </summary>
     [Fact]
     public async Task GetRun_DeclaredProducers_FollowShardIndex()
@@ -149,6 +149,9 @@ public sealed partial class GetRunDetailFieldsTests
         Producers(answer).ShouldBe(["shard-z", "shard-a"]);
         Producers(answer).ShouldBe(await _fixture.ColumnAsync<string>(
             world.Database, $"select producer_id from public.producer_slot {slots} order by shard_index"));
+
+        // The same order in the slot list, whose items carry the state `declared_producers` only names.
+        SlotFacts(answer).Select(item => item.GetProperty("producer_id").GetString()!).ShouldBe(Producers(answer));
     }
 
     /// <summary>
