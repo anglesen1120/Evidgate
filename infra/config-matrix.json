@@ -403,6 +403,26 @@
       "note": "comma-separated GitHub event_name values accepted at the exchange; every other event is refused (fail closed). Default push,workflow_dispatch,schedule,release,merge_group. Entries are lowercase GitHub event tokens compared ordinally and case-exact; an empty list, an invalid entry, workflow_run and pull_request_target fail boot. The event_name claim is required and must be a JSON string. The retired EVIDGATE__CI__DENIEDEVENTNAMES fails boot when still set."
     },
     {
+      "key": "EVIDGATE__CI__DENIEDEVENTNAMES",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "retired: the deny list was replaced by EVIDGATE__CI__ALLOWEDEVENTNAMES and any value set here fails boot with a named message, because silently ignoring it would leave an operator believing the old list still applies. Leave unset."
+    },
+    {
       "key": "EVIDGATE__CI__EXCHANGEWINDOWSECONDS",
       "scope": "runtime",
       "consumers": ["api", "migrator", "worker"],
