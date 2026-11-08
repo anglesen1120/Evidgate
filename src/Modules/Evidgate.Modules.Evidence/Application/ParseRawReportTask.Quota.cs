@@ -152,8 +152,8 @@ internal sealed partial class ParseRawReportHandler
     /// Only the probe's own reads are guarded: a transient database fault there defers the attempt and stamps nothing,
     /// because a read that failed decided nothing. A permanent fault — a permission denied, a schema that no longer
     /// matches — is a failed attempt, never a deferral that would retry a broken deployment until it dead-letters. The
-    /// deferred-report check itself is not guarded: it is one indexed read, and a fault there is the attempt's own
-    /// failure to report.
+    /// deferred-report check and the run facts are one unguarded read: it is two indexed lookups in one statement, and a
+    /// fault there is the attempt's own failure to report.
     /// </para>
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
@@ -165,14 +165,15 @@ internal sealed partial class ParseRawReportHandler
         ParseRawReportPayload payload,
         CancellationToken cancellationToken)
     {
-        if (!await IsDeferredAsync(orgId, payload.ArtifactId, cancellationToken).ConfigureAwait(false))
+        var facts = await ReadDeferredRunAsync(orgId, payload, cancellationToken).ConfigureAwait(false);
+        if (!facts.Deferred)
         {
             return null;
         }
 
         try
         {
-            return await ProbeQuotaAsync(orgId, payload, cancellationToken).ConfigureAwait(false);
+            return await ProbeQuotaAsync(payload, facts, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (IsProbeFault(exception, cancellationToken))
         {
@@ -193,27 +194,26 @@ internal sealed partial class ParseRawReportHandler
     /// event. The run facts are read once and answer both questions, so the counter this asks about is the one the
     /// write transaction will charge.
     /// </summary>
-    /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="payload">The run, artifact and producer kind.</param>
-    /// <param name="cancellationToken">Cancels the reads and the advisory question.</param>
+    /// <param name="facts">What the one deferred-and-run read answered.</param>
+    /// <param name="cancellationToken">Cancels the advisory question.</param>
     /// <returns>The blocked outcome to defer, or null when the report continues to the fetch.</returns>
     private async Task<ParseRawReportOutcome?> ProbeQuotaAsync(
-        Guid orgId,
         ParseRawReportPayload payload,
+        DeferredRunFacts facts,
         CancellationToken cancellationToken)
     {
-        var run = await ReadRunGateAsync(orgId, payload.RunId, cancellationToken).ConfigureAwait(false);
-        if (run is not null && !RunAdmissionPolicy.Decide(run.ProjectState, run.RunState, run.LateWindowOpen).Allowed)
-        {
-            // A closed run refuses this report whatever the counter says, so waiting for room would bury the terminal
-            // refusal and the loss it names: the attempt goes on and the write transaction answers it as before.
-            return null;
-        }
-
-        if (run is not { } admitted)
+        if (facts.Run is not { } admitted)
         {
             // The run could not be read, so neither an admission nor a counter owner exists yet: the write transaction
             // names the absence the way it always did instead of this read guessing at a project.
+            return null;
+        }
+
+        if (!RunAdmissionPolicy.Decide(admitted.ProjectState, admitted.RunState, admitted.LateWindowOpen).Allowed)
+        {
+            // A closed run refuses this report whatever the counter says, so waiting for room would bury the terminal
+            // refusal and the loss it names: the attempt goes on and the write transaction answers it as before.
             return null;
         }
 
@@ -269,18 +269,6 @@ internal sealed partial class ParseRawReportHandler
     /// <returns>The SQLSTATE, or <c>none</c> for a fault that is not a database fault.</returns>
     private static string SqlState(Exception exception) =>
         exception is DbException { SqlState: { } state } ? state : "none";
-
-    /// <summary>
-    /// The run's admission facts and its project, read unlocked: this answer only chooses between waiting and the
-    /// terminal refusal the write decides, and a run that cannot be read answers null so the attempt names its absence
-    /// the way it always did.
-    /// </summary>
-    /// <param name="orgId">The tenant the claimed task row names.</param>
-    /// <param name="runId">The run the report belongs to.</param>
-    /// <param name="cancellationToken">Cancels the read.</param>
-    /// <returns>The run's facts, or null when the row is not readable.</returns>
-    private Task<RunGate?> ReadRunGateAsync(Guid orgId, Guid runId, CancellationToken cancellationToken) =>
-        db.QuerySingleOrDefaultAsync<RunGate>(RunFactsSql, new { org_id = orgId, run_id = runId }, cancellationToken);
 
     /// <summary>
     /// The refusal stamp, written after the rolled-back transaction: a block's own stamp rolls back with the batch, so
@@ -361,73 +349,6 @@ internal sealed partial class ParseRawReportHandler
 
         return jittered < floor ? floor : jittered;
     }
-
-    /// <summary>The telemetry kind of a deferred report a closed run then skipped: a loss the plain refusal word hides.</summary>
-    private const string BlockedThenClosed = "quota_blocked_then_closed";
-
-    /// <summary>
-    /// Whether this report's task row carries a deferral, the only sign the queue has already waited for this report:
-    /// the row's idempotency key is derived from the outbox row (<c>'outbox:' || outbox.id</c>), so the probe joins
-    /// the two on that derivation and both sides are unique-index lookups.
-    /// </summary>
-    /// <param name="orgId">The tenant the claimed task row names.</param>
-    /// <param name="artifactId">The report artifact the key derives from.</param>
-    /// <param name="cancellationToken">Cancels the probe.</param>
-    /// <returns>True when the task row's last error is the deferral's own fixed text.</returns>
-    private async Task<bool> IsDeferredAsync(Guid orgId, Guid artifactId, CancellationToken cancellationToken) =>
-        await db
-            .QuerySingleOrDefaultAsync<bool>(
-                DeferredTaskSql,
-                new
-                {
-                    org_id = orgId,
-                    idempotency_key = ReportParseKey(artifactId),
-                    last_error = TaskDeferredException.PersistedError,
-                },
-                cancellationToken)
-            .ConfigureAwait(false);
-
-    /// <summary>The probe both the pre-check and the skip line ask: one equivalent of the deferred-report pair.</summary>
-    private const string DeferredTaskSql = """
-        select exists (
-            select 1
-            from public.outbox as o
-            join public.task as t
-              on t.idempotency_key = 'outbox:' || o.id::text
-             and t.org_id = o.org_id
-            where o.org_id = @org_id
-              and o.idempotency_key = @idempotency_key
-              and t.last_error = @last_error)
-        """;
-
-    /// <summary>
-    /// Logs a terminal admission refusal on the refusal path only, naming a loss the plain code word hides: a report
-    /// the queue had deferred and the run closed before its retry.
-    /// </summary>
-    /// <param name="orgId">The tenant the claimed task row names.</param>
-    /// <param name="artifactId">The report artifact, the only id the line names.</param>
-    /// <param name="reason">The admission's own code word, which the outcome record keeps.</param>
-    /// <param name="cancellationToken">Cancels the probe.</param>
-    private async Task LogAdmissionSkipAsync(
-        Guid orgId,
-        Guid artifactId,
-        string reason,
-        CancellationToken cancellationToken)
-    {
-        if (!await IsDeferredAsync(orgId, artifactId, cancellationToken).ConfigureAwait(false))
-        {
-            LogSkipped(logger, artifactId, reason);
-
-            return;
-        }
-
-        EvidgateTelemetry.RecordIngestQuotaDenied(BlockedThenClosed);
-        LogBlockedThenClosed(logger, artifactId, BlockedThenClosed, reason);
-    }
-
-    /// <summary>The idempotency key the upload enqueues this report's task with, the row the probe looks for.</summary>
-    private static string ReportParseKey(Guid artifactId) =>
-        $"evidence:artifact:{artifactId:D}:{EvidenceTaskTypes.ReportParse}";
 
     /// <summary>The gate's wait as whole seconds for the refusal line; zero when it named none.</summary>
     private static int RetrySeconds(TimeSpan? retryAfter) =>
