@@ -393,7 +393,8 @@ run_stage() {
     # the scope line a full tier prints; the gate's own refusals
     # (test_verify_refusal.py): a script or its sourced guard helper that hands
     # dotnet the ignore flag, and a trait stage whose assemblies do not cover the
-    # trait, both fail; and the clean-build smoke's temp path
+    # trait, both fail; the sharded test stage (test_verify_shards.py): a failing
+    # shard or a count short of discovery fails it; and the clean-build smoke's temp path
     # (test_smoke_mktemp.py).
     # Bytecode is off so the run leaves no .pyc in the tracked test tree; the
     # files are named rather than discovered, because `unittest` with nothing to
@@ -403,7 +404,8 @@ run_stage() {
       PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
       scripts/tests/test_gate_scope.py scripts/tests/test_gate_scope_reasons.py \
       scripts/tests/test_verify_scope.py \
-      scripts/tests/test_verify_refusal.py scripts/tests/test_smoke_mktemp.py
+      scripts/tests/test_verify_refusal.py scripts/tests/test_verify_shards.py \
+      scripts/tests/test_smoke_mktemp.py
     ;;
   image-pins)
     # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three
