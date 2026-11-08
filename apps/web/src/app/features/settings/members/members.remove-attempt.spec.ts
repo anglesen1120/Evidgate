@@ -1,8 +1,9 @@
-// Why this file exists: a removal's published state is owned by its attempt, not by the org alone.
-// The cancel (and resend) dialogs reset every mutation state when they open, so a removal that is
-// still on the wire can answer after a NEWER removal started — its answer must not clear that
-// attempt's submitting state, and a reset removal must settle into nothing while still reloading
-// the list, because the removal landed server-side either way.
+// Why this file exists: a removal's published state belongs to its attempt and to the org on
+// screen. The cancel (and resend) dialogs reset every mutation state when they open, so a removal
+// that is still on the wire can answer after a NEWER removal started — its answer must not clear
+// that attempt's submitting state, and a reset removal must settle into nothing while still
+// reloading the list, because the removal landed server-side either way. A removal that answers
+// after the scope switched belongs to an org nobody shows: it publishes nothing.
 
 import { TestBed } from '@angular/core/testing';
 import type {
@@ -126,6 +127,27 @@ describe('MembersStore removal attempt ownership', () => {
     expect(stillSubmitting).toBe('submitting');
     expect(store.removeState().phase).toBe('done');
     expect(data.removals).toEqual(['m-1', 'm-2']);
+  });
+
+  it('drops a removal answer that lands after the scope switched to another org', async () => {
+    await store.load(ORG);
+    data.manual = true;
+    const removal = store.remove('m-1', createIntent());
+
+    await store.load(OTHER);
+    const phaseWhileAIsStillOut = store.removeState().phase;
+
+    data.fail(0, lastAdmin());
+    await expect(removal).resolves.toBe(false);
+    // Org A's refusal is not org B's news: it publishes nothing and leaves no state behind.
+    expect(store.removeState()).toEqual({ phase: 'idle', error: null });
+    // Nor is org B busy with org A's removal, so its invite and edit dialogs open.
+    expect(phaseWhileAIsStillOut).toBe('idle');
+
+    // The scope's own removal still publishes: the state is idle, not stuck.
+    data.manual = false;
+    await expect(store.remove('m-2', createIntent())).resolves.toBe(true);
+    expect(store.removeState().phase).toBe('done');
   });
 
   it('settles a removal whose dialog was reset into idle, and still reloads the list', async () => {

@@ -131,8 +131,9 @@ export class MembersStore {
    */
   private editAttempt = 0;
   /**
-   * Bumped by every `remove` attempt and by `resetMutations`: a removal whose dialog was reset, or
-   * one a newer removal superseded, settles into nothing while its list reload still runs.
+   * Bumped by every `remove` attempt, by `resetMutations`, and by a `load` that switches org: a
+   * removal whose dialog was reset, one a newer removal superseded, or one the scope left settles
+   * into nothing while its list reload still runs.
    */
   private removeAttempt = 0;
 
@@ -204,6 +205,12 @@ export class MembersStore {
    */
   async load(orgId: string): Promise<void> {
     const generation = ++this.generation;
+    // Another org owns the mutation states now: an answer from the previous one is not this page's
+    // news, and its submitting state would keep this page's invite and edit dialogs closed.
+    if (this.orgId !== null && this.orgId !== orgId) {
+      this.removeAttempt += 1;
+      this.removeStateSignal.set(IDLE);
+    }
     this.orgId = orgId;
     this.phaseSignal.set('loading');
     this.loadErrorSignal.set(null);
