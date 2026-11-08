@@ -2,7 +2,7 @@ import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { InteractivityChecker } from '@angular/cdk/a11y';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { vi } from 'vitest';
 import type {
   ApiTokenCreatedResponse,
@@ -77,7 +77,10 @@ export function mount(
   } = {},
 ) {
   const permissions = signal(new Set(['api_token:read', 'api_token:write', 'run:read']));
-  const org = signal({ id: 'org-1' });
+  // The org the URL names above the page; a spec that moves the session to another org is a
+  // foreign scope, which is exactly what the URL guard has to notice.
+  const activatedOrg = 'org-1';
+  const org = signal({ id: activatedOrg });
   const projects = signal<ProjectDto[]>([...(options.projects ?? [project('project-1')])]);
   const currentProject = signal(projects()[0]);
   const query = new BehaviorSubject(convertToParamMap(options.query ?? {}));
@@ -122,8 +125,15 @@ export function mount(
     providers: [
       provideZonelessChangeDetection(),
       provideRouter([]),
-      // The page and its store read the URL through one stub so a spec can seed a deep link.
-      { provide: ActivatedRoute, useValue: { queryParamMap: query } },
+      // The page and its store read the URL through one stub so a spec can seed a deep link; the
+      // param chain carries the org the URL above the page names.
+      {
+        provide: ActivatedRoute,
+        useValue: {
+          queryParamMap: query,
+          pathFromRoot: [{ paramMap: of(convertToParamMap({ orgId: activatedOrg })) }],
+        },
+      },
       { provide: SessionStore, useValue: session },
       { provide: ApiTokensService, useValue: { list, create, revoke } },
     ],

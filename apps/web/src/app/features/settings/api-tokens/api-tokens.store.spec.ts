@@ -1,6 +1,8 @@
 import { isSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { getState } from '@ngrx/signals';
+import { ApiRequestError } from '../../../core/http/api-error';
+import { createIntent } from '../../../core/http/intent';
 import { mount, refusal, ROW, deferred, project } from './api-tokens.test-support';
 
 describe('ApiTokensStore', () => {
@@ -149,5 +151,47 @@ describe('ApiTokensStore', () => {
     // The URL still names project-1's page; applying it to project-2 would page the wrong list.
     expect(h.store.cursor()).toBeUndefined();
     expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal));
+  });
+
+  it('names the project a create dialog was opened for after the selection moves', async () => {
+    const h = mount(undefined, { projects: [project('project-1'), project('project-2', 'Other')] });
+    await h.settle();
+    expect(h.store.createTarget()).toBeNull();
+    h.store.openCreate();
+    expect(h.store.createTarget()).toEqual({ projectId: 'project-1', projectName: 'Storefront' });
+    h.projects.set([project('project-2', 'Other')]);
+    await h.settle();
+    // The dialog keeps the project it names instead of closing with an unrevealed secret.
+    expect(h.store.createOpen()).toBe(true);
+    expect(h.store.createTarget()).toEqual({ projectId: 'project-1', projectName: 'Storefront' });
+    h.store.closeCreate();
+    expect(h.store.createTarget()).toBeNull();
+  });
+
+  it('keeps a create refusal for the dialog it was submitted from after the selection moves', async () => {
+    const h = mount(undefined, { projects: [project('project-1'), project('project-2', 'Other')] });
+    await h.settle();
+    h.store.openCreate();
+    await h.settle();
+    const failure = new ApiRequestError({
+      kind: 'validation',
+      status: 422,
+      code: 'invalid_expiry',
+      message: 'Expiry must be in the future.',
+      requestId: 'create-race',
+      retryable: false,
+      retryAfterSeconds: null,
+      details: [{ path: 'expires_at', reason: 'past' }],
+    });
+    h.create.mockRejectedValueOnce(failure);
+    await expect(
+      h.store.create(
+        { name: 'Reader', expires_at: '2020-01-01T00:00:00Z', permissions: ['run:read'] },
+        createIntent(),
+      ),
+    ).resolves.toBeNull();
+    h.projects.set([project('project-2', 'Other')]);
+    await h.settle();
+    expect(h.store.createError()).toEqual(failure.error);
   });
 });
