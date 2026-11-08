@@ -66,13 +66,71 @@ public sealed class ContractSchemaWarmUpTests
 
         await warmUp.StartAsync(TestContext.Current.CancellationToken);
         inFlight.Wait(TestContext.Current.CancellationToken);
-        var request = Task.Run(() => provider.GetRequiredService<ContractSchemaSet>(), TestContext.Current.CancellationToken);
+        using var requestStarted = new ManualResetEventSlim();
+        var request = Task.Run(
+            () =>
+            {
+                requestStarted.Set();
+                return provider.GetRequiredService<ContractSchemaSet>();
+            },
+            TestContext.Current.CancellationToken);
+        requestStarted.Wait(TestContext.Current.CancellationToken);
+        await Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken);
+        request.IsCompleted.ShouldBeFalse("the request must still be waiting on the warm-up's singleton lock");
         release.Set();
         var fromRequest = await request;
         await warmUp.Completion;
 
         loads.ShouldBe(1);
         provider.GetRequiredService<ContractSchemaSet>().ShouldBeSameAs(fromRequest);
+    }
+
+    [Fact]
+    public async Task StartingTwice_SchedulesOneWarmUp()
+    {
+        var loads = 0;
+        var services = new ServiceCollection();
+        services.AddSingleton(_ =>
+        {
+            Interlocked.Increment(ref loads);
+            return ContractSchemaSet.Load(ContractPaths.ContractsDirectory);
+        });
+        var warmUp = new ContractSchemaWarmUpService(
+            services.BuildServiceProvider(),
+            NullLogger<ContractSchemaWarmUpService>.Instance);
+
+        await warmUp.StartAsync(TestContext.Current.CancellationToken);
+        await warmUp.StartAsync(TestContext.Current.CancellationToken);
+        await warmUp.Completion;
+
+        loads.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task StoppingWhileTheSetCompiles_WaitsForIt_AndIsNotAFailure()
+    {
+        using var inFlight = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var services = new ServiceCollection();
+        services.AddSingleton(_ =>
+        {
+            inFlight.Set();
+            release.Wait(TestContext.Current.CancellationToken);
+            return ContractSchemaSet.Load(ContractPaths.ContractsDirectory);
+        });
+        var warmUp = new ContractSchemaWarmUpService(
+            services.BuildServiceProvider(),
+            NullLogger<ContractSchemaWarmUpService>.Instance);
+
+        await warmUp.StartAsync(TestContext.Current.CancellationToken);
+        inFlight.Wait(TestContext.Current.CancellationToken);
+        var stopping = warmUp.StopAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
+        stopping.IsCompleted.ShouldBeFalse();
+        release.Set();
+        await stopping;
+
+        warmUp.Completion.IsCompletedSuccessfully.ShouldBeTrue();
     }
 
     [Fact]

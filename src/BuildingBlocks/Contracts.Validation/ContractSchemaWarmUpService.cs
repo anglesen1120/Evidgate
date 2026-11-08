@@ -6,21 +6,27 @@ namespace Evidgate.BuildingBlocks.Contracts.Validation;
 
 /// <summary>
 /// Builds the <see cref="ContractSchemaSet"/> singleton in the background once the host starts, so the first
-/// body-validating request never pays the Roslyn compile of every schema (about 55 s for the first load of a
+/// body-validating request never pays the Roslyn compile of every schema (tens of seconds for the first load of a
 /// process) inside an open database transaction.
 /// <para>
 /// It resolves the singleton through the container instead of calling <see cref="ContractSchemaSet.Load"/>:
 /// the lazy registration stays the only place that locates the contracts directory, and a request that
 /// arrives while the warm-up runs waits on the container's singleton lock instead of compiling a second
-/// copy. A failure is logged and kept in <see cref="Completion"/>; nothing is cached, so the request path
-/// fails with the same exception it always did.
+/// copy. A failure is logged and kept in <see cref="Completion"/>; the container caches no failed singleton,
+/// so the request path retries and throws the exception it always did.
 /// </para>
 /// </summary>
-public sealed partial class ContractSchemaWarmUpService : IHostedService
+public sealed partial class ContractSchemaWarmUpService : IHostedService, IDisposable
 {
+    // Hosts that start together in one process (test factories) would otherwise miss the validator's
+    // process-wide cache at the same time and each compile every schema.
+    private static readonly Lock ColdLoad = new();
+
     private readonly IServiceProvider _services;
     private readonly ILogger<ContractSchemaWarmUpService> _logger;
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly CancellationTokenSource _stopping = new();
+    private Task? _run;
 
     /// <summary>Creates the service over the container that owns the schema set.</summary>
     public ContractSchemaWarmUpService(IServiceProvider services, ILogger<ContractSchemaWarmUpService> logger)
@@ -32,7 +38,7 @@ public sealed partial class ContractSchemaWarmUpService : IHostedService
         _logger = logger;
     }
 
-    /// <summary>Completes when the schema set is built; faults with the load exception when it is not.</summary>
+    /// <summary>Completes when the schema set is built, faults with the load exception when it is not, and is cancelled when the host stops first.</summary>
 #pragma warning disable VSTHRD003 // The source is this service's own completion source, not a task started elsewhere.
     public Task Completion => _completion.Task;
 #pragma warning restore VSTHRD003
@@ -42,19 +48,44 @@ public sealed partial class ContractSchemaWarmUpService : IHostedService
     {
         // Task.Run keeps the compile off the startup thread: the host must start serving its health
         // endpoints while the compiler runs.
-        _ = Task.Run(WarmUp, CancellationToken.None);
+        _run ??= Task.Run(WarmUp, CancellationToken.None);
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        await _stopping.CancelAsync().ConfigureAwait(false);
+        if (_run is { } run)
+        {
+            // A compile already in flight cannot be interrupted; the host's shutdown deadline bounds the wait.
+            await run.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <inheritdoc />
+    public void Dispose() => _stopping.Dispose();
 
     private void WarmUp()
     {
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
-            _ = _services.GetRequiredService<ContractSchemaSet>();
+            lock (ColdLoad)
+            {
+                if (_stopping.IsCancellationRequested)
+                {
+                    _completion.SetCanceled();
+                    return;
+                }
+
+                _ = _services.GetRequiredService<ContractSchemaSet>();
+            }
+        }
+        catch (ObjectDisposedException) when (_stopping.IsCancellationRequested)
+        {
+            _completion.SetCanceled();
+            return;
         }
         catch (Exception exception)
         {
@@ -77,6 +108,6 @@ public sealed partial class ContractSchemaWarmUpService : IHostedService
     [LoggerMessage(
         EventId = 1221,
         Level = LogLevel.Error,
-        Message = "Contract schema set failed to build at startup; body-validating requests will fail until it does")]
+        Message = "Contract schema set failed to build at startup; body-validating requests retry the load and fail while it does")]
     private partial void LogFailed(Exception exception);
 }
