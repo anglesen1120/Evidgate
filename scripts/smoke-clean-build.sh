@@ -67,6 +67,9 @@ fi
 # one worker against 5-7 GB at `auto` (measured), and the 15 GB LAN host shares memory with
 # other gate runs, so `auto` was OOM-killed (exit 137) inside this container.
 export EVIDGATE_ESLINT_CONCURRENCY=1
+# The container's node default heap is 2 GB (observed: V8 "heap out of memory", exit 134, at
+# one worker); the single worker needs about 3.4 GB RSS, so give V8 4 GB.
+export NODE_OPTIONS="--max-old-space-size=4096"
 # AC6 (01.2.1): the clean clone also passes the full local gate. verify.sh
 # itself does tsc -b via the root tsconfig and never runs npm ci, so it runs
 # after npm ci here. The tar copy has no .git; check-layout.sh needs
