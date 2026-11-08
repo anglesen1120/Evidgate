@@ -116,8 +116,11 @@ if [ -z "$apimap" ]; then
 else
   grep -qE '^[[:space:]]*default[[:space:]]+\$upstream_http_cache_control;' <<<"$apimap" ||
     note 'the Api cache map must pass an upstream Cache-Control through by default'
+  grep -qE "^[[:space:]]*''[[:space:]]+'no-store';" <<<"$apimap" ||
+    note 'the Api cache map must turn an absent upstream Cache-Control into no-store
+      (nginx skips regex keys for an empty value, so the literal key is required)'
   grep -qE "^[[:space:]]*'~\^\[\\\\s,\]\*\\$'[[:space:]]+'no-store';" <<<"$apimap" ||
-    note 'the Api cache map must turn an absent upstream Cache-Control into no-store'
+    note 'the Api cache map must turn repeated empty upstream Cache-Control fields into no-store'
 fi
 
 # A compressed and a plain body share a URL; without Vary a shared cache can serve

@@ -223,8 +223,8 @@ done
 api() {
   # api UPSTREAM_HEADER_LINE EXPECTED_STATUS EXPECTED_CACHE_CONTROL
   if [ "$1" != none ]; then
-    ( printf "HTTP/1.1 200 OK\r\n%bContent-Length: 2\r\nConnection: close\r\n\r\nok" "$1" | nc -l -p 9000 >/dev/null 2>&1 ) &
-    # Port 9000 is 0x2328; state 0A is LISTEN. Reading /proc does not connect,
+    ( printf "HTTP/1.1 200 OK\r\n%bContent-Length: 2\r\nConnection: close\r\n\r\nok" "$1" | nc -l -s 127.0.0.1 -p 9000 >/dev/null 2>&1 ) &
+    # Bound to IPv4 so it shows in /proc/net/tcp. Port 9000 is 0x2328; state 0A is LISTEN. Reading /proc does not connect,
     # so the one-shot listener is not consumed by the readiness check.
     w=0
     until grep -q ":2328 .* 0A " /proc/net/tcp; do
