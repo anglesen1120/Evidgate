@@ -3,6 +3,7 @@ using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.EntityFrameworkCore;
+using static Evidgate.Modules.Evidence.Application.RawReportWorkerConstants;
 
 namespace Evidgate.Modules.Evidence.Application;
 
@@ -14,18 +15,6 @@ namespace Evidgate.Modules.Evidence.Application;
 /// </summary>
 internal sealed partial class ReprocessReportHandler
 {
-    /// <summary>
-    /// The binding every synthetic slot carries. The column is a token id; this word cannot be one, so a synthetic shard
-    /// is recognisable as holding no CI producer and no credential.
-    /// </summary>
-    private const string SyntheticBinding = "synthetic:junit-report";
-
-    /// <summary>
-    /// The highest shard index the column admits. A run at the cap cannot take another synthetic shard, and retrying
-    /// cannot free one.
-    /// </summary>
-    private const int MaxShardIndex = 256;
-
     /// <summary>
     /// The run's state, its project's state and its late window, read under the run's own lock (the same admission facts
     /// the parse path reads, plus the lock the synthetic slot's shard index needs).

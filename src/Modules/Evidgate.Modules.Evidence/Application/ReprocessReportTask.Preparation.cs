@@ -44,6 +44,7 @@ internal sealed partial class ReprocessReportHandler
           from public.report_parser
          where parser_id = @parser_id
            and version = @parser_version
+           and (org_id is null or org_id = @org_id)
         """;
 
     /// <summary>Everything an attempt needs, resolved before the object is fetched.</summary>
@@ -126,7 +127,7 @@ internal sealed partial class ReprocessReportHandler
             return Stopped(artifactStopped!);
         }
 
-        var mapper = await ResolveMapperAsync(request, cancellationToken).ConfigureAwait(false);
+        var mapper = await ResolveMapperAsync(request, orgId, cancellationToken).ConfigureAwait(false);
         var planned = await db.QueryAsync<PlannedExecutionHint>(
             PlannedExecutionIndex.SelectSql,
             new { org_id = orgId, run_id = request.RunId },
@@ -196,11 +197,11 @@ internal sealed partial class ReprocessReportHandler
     /// <param name="request">The request whose pinned pair the registry and the mapper collection are asked for.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
     /// <returns>The mapper of that pair.</returns>
-    private async Task<IJUnitMapper> ResolveMapperAsync(RequestRow request, CancellationToken cancellationToken)
+    private async Task<IJUnitMapper> ResolveMapperAsync(RequestRow request, Guid orgId, CancellationToken cancellationToken)
     {
         var registered = await db.ScalarAsync<int?>(
             RegistrySql,
-            new { parser_id = request.ParserId, parser_version = request.ParserVersion },
+            new { parser_id = request.ParserId, parser_version = request.ParserVersion, org_id = orgId },
             cancellationToken).ConfigureAwait(false);
         if (registered is null)
         {

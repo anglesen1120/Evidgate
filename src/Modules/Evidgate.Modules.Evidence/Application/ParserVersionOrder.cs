@@ -44,12 +44,23 @@ internal static class ParserVersionOrder
             return null;
         }
 
-        var length = Math.Max(leftSegments.Length, rightSegments.Length);
+        return CompareSegments(leftSegments, rightSegments);
+    }
+
+    /// <summary>
+    /// The same order over versions already split by <see cref="TryParse"/>, so a caller ranking many releases parses
+    /// each label once instead of once per comparison.
+    /// </summary>
+    /// <param name="left">The segments of one version.</param>
+    /// <param name="right">The segments of the version to order it against.</param>
+    internal static int CompareSegments(IReadOnlyList<BigInteger> left, IReadOnlyList<BigInteger> right)
+    {
+        var length = Math.Max(left.Count, right.Count);
 
         for (var index = 0; index < length; index++)
         {
-            var leftSegment = index < leftSegments.Length ? leftSegments[index] : BigInteger.Zero;
-            var rightSegment = index < rightSegments.Length ? rightSegments[index] : BigInteger.Zero;
+            var leftSegment = index < left.Count ? left[index] : BigInteger.Zero;
+            var rightSegment = index < right.Count ? right[index] : BigInteger.Zero;
 
             if (leftSegment != rightSegment)
             {
@@ -71,7 +82,7 @@ internal static class ParserVersionOrder
     /// Splits a version into its numeric segments. A null, empty, blank or segment-less version, an empty segment
     /// (<c>1..2</c>) and any non-digit character make the whole version unorderable, so nothing is compared.
     /// </summary>
-    private static bool TryParse(string? version, out BigInteger[] segments)
+    internal static bool TryParse(string? version, out BigInteger[] segments)
     {
         segments = [];
 
