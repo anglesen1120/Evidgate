@@ -10,6 +10,10 @@
 -- caller retries, so no wrong row is ever committed. Trigger installation takes table DDL locks,
 -- bounded by lock_timeout; only future inserts are guarded.
 --
+-- The statement probe needs a fresh snapshot after the lock, which only READ COMMITTED gives: a
+-- REPEATABLE READ or SERIALIZABLE writer whose snapshot predates an issue would not see the statement
+-- and could still insert. The ledger trigger therefore refuses any other isolation level outright.
+--
 -- SECURITY INVOKER is sufficient: both tables' app policies match the inserted tenant, and the
 -- owner's permissive policies expose its statement rows even under FORCE RLS. Other application
 -- roles cannot insert these rows. Trigger functions need no direct EXECUTE grant.
@@ -22,6 +26,12 @@ create or replace function evidgate.usage_ledger_entry_period_issued_guard() ret
   set search_path = ''
   as $$
   begin
+    if pg_catalog.current_setting('transaction_isolation') <> 'read committed' then
+      raise exception 'ledger rows are written under READ COMMITTED only, not %',
+        pg_catalog.current_setting('transaction_isolation')
+        using errcode = '25000';
+    end if;
+
     perform pg_catalog.pg_advisory_xact_lock_shared(
       pg_catalog.hashtextextended(new.org_id::text || ':' || new.period, 0));
 
