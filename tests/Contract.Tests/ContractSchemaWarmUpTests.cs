@@ -13,6 +13,10 @@ namespace Contract.Tests;
 /// </summary>
 public sealed class ContractSchemaWarmUpTests
 {
+    private volatile Thread? _requestThread;
+
+    private static bool IsParked(Thread? thread) => thread is not null && thread.ThreadState.HasFlag(ThreadState.WaitSleepJoin);
+
     [Fact]
     public async Task StartingTheApiHost_BuildsTheSchemaSetWithoutAnyRequest()
     {
@@ -66,27 +70,24 @@ public sealed class ContractSchemaWarmUpTests
 
         await warmUp.StartAsync(TestContext.Current.CancellationToken);
         inFlight.Wait(TestContext.Current.CancellationToken);
-        using var requestStarted = new ManualResetEventSlim();
-        Thread? requestThread = null;
         var request = Task.Run(
             () =>
             {
-                requestThread = Thread.CurrentThread;
-                requestStarted.Set();
+                _requestThread = Thread.CurrentThread;
                 return provider.GetRequiredService<ContractSchemaSet>();
             },
             TestContext.Current.CancellationToken);
-        requestStarted.Wait(TestContext.Current.CancellationToken);
 
         // The request thread is parked on the singleton lock only once it has entered the resolve while the
-        // warm-up still holds it, so wait for that state instead of sleeping.
+        // warm-up still holds it, so wait for that state instead of sleeping. The thread reference is published
+        // through a volatile field, not an event, so no wake-up primitive can park the thread being sampled.
         var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (!requestThread!.ThreadState.HasFlag(ThreadState.WaitSleepJoin) && DateTime.UtcNow < deadline)
+        while (!IsParked(_requestThread) && DateTime.UtcNow < deadline)
         {
             await Task.Delay(TimeSpan.FromMilliseconds(10), TestContext.Current.CancellationToken);
         }
 
-        requestThread.ThreadState.HasFlag(ThreadState.WaitSleepJoin).ShouldBeTrue();
+        IsParked(_requestThread).ShouldBeTrue();
         request.IsCompleted.ShouldBeFalse();
         release.Set();
         var fromRequest = await request;
@@ -190,6 +191,61 @@ public sealed class ContractSchemaWarmUpTests
         Should.NotThrow(warmUp.Dispose);
         Should.NotThrow(warmUp.Dispose);
         await Should.NotThrowAsync(() => warmUp.StopAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task AProviderDisposedBeforeTheWarmUpResolves_CancelsTheCompletion_AndLogsNothingAtError()
+    {
+        var provider = new ServiceCollection().AddSingleton(_ => ContractSchemaSet.Load(ContractPaths.ContractsDirectory))
+            .BuildServiceProvider();
+        var logger = new RecordingLogger();
+        var warmUp = new ContractSchemaWarmUpService(provider, logger);
+
+        // The container flips its own disposed flag before it reaches the hosted service's Dispose.
+        await provider.DisposeAsync();
+        await warmUp.StartAsync(TestContext.Current.CancellationToken);
+
+#pragma warning disable VSTHRD003 // The completion source belongs to the service under test.
+        await Should.ThrowAsync<OperationCanceledException>(() => warmUp.Completion);
+#pragma warning restore VSTHRD003
+        warmUp.Completion.IsCanceled.ShouldBeTrue();
+        logger.Levels.ShouldNotContain(Microsoft.Extensions.Logging.LogLevel.Error);
+    }
+
+    [Fact]
+    public async Task ARealLoadFailure_StillFaultsTheCompletion_AndLogsAtError()
+    {
+        var provider = new ServiceCollection().AddSingleton<ContractSchemaSet>(
+            _ => throw new InvalidOperationException("schema broken")).BuildServiceProvider();
+        var logger = new RecordingLogger();
+        var warmUp = new ContractSchemaWarmUpService(provider, logger);
+
+        await warmUp.StartAsync(TestContext.Current.CancellationToken);
+
+#pragma warning disable VSTHRD003 // The completion source belongs to the service under test.
+        var error = await Should.ThrowAsync<InvalidOperationException>(() => warmUp.Completion);
+#pragma warning restore VSTHRD003
+        error.Message.ShouldBe("schema broken");
+        logger.Levels.ShouldContain(Microsoft.Extensions.Logging.LogLevel.Error);
+    }
+
+    private sealed class RecordingLogger : Microsoft.Extensions.Logging.ILogger<ContractSchemaWarmUpService>
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<Microsoft.Extensions.Logging.LogLevel> _levels = new();
+
+        public IReadOnlyCollection<Microsoft.Extensions.Logging.LogLevel> Levels => _levels;
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel,
+            Microsoft.Extensions.Logging.EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter) => _levels.Enqueue(logLevel);
     }
 
     [Fact]
