@@ -92,7 +92,7 @@ public sealed partial class EvidenceRawReportQuotaTests
     }
 
     [Fact]
-    public async Task A_First_Attempt_Never_Reaches_The_Run_Join_Of_The_Probe()
+    public async Task A_First_Attempt_Asks_The_Probe_In_One_Statement_And_Is_Never_Peeked()
     {
         var gate = new ReportPreCheckGate();
         var world = await StartAsync(services => ReplaceQuotaGate(services, inner => gate.Wrap(inner)));
@@ -101,11 +101,15 @@ public sealed partial class EvidenceRawReportQuotaTests
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 0m, limit: 10m);
+        world.Host.Statements.Clear();
 
         var outcome = await ParseAsync(world, artifactId);
 
         outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
         gate.Peeks.ShouldBe(0);
+        world.Host.Statements.Snapshot()
+            .Count(statement => statement.Contains("public.outbox as o", StringComparison.Ordinal))
+            .ShouldBe(1, "the probe is one round trip even when the attempt was never deferred");
     }
 
     private Task SeedRawReportCapAsync(World world, Guid projectId, long maxBytes) =>
