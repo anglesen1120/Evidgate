@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject, linkedSignal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  linkedSignal,
+  untracked,
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmInput } from '@evidgate/ui/input';
@@ -142,6 +151,7 @@ export class ApiTokensPage {
   protected readonly store = inject(ApiTokensStore);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly query = toSignal(this.route.queryParamMap);
   protected readonly copy = API_TOKENS_COPY;
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() => {
     const phase = this.store.phase();
@@ -149,21 +159,34 @@ export class ApiTokensPage {
   });
   protected readonly retryReady = retryReadyFor(this.store.loadError);
   protected readonly writeCopy = API_TOKENS_WRITE_COPY;
-  protected readonly revokeSelection = linkedSignal<unknown, ApiTokenView | null>({
-    source: () => ({ scope: this.store.scope(), writable: this.store.canWrite() }),
-    computation: () => null,
+  // A revoke confirmation names a row of one project's list, so a scope that moves closes it
+  // instead of offering that row against another project.
+  protected readonly revokeSelection = linkedSignal<ApiTokenView | null>(() => {
+    this.store.scope();
+    this.store.canWrite();
+    return null;
   });
   protected readonly revoked = linkedSignal(() => {
     this.store.scope();
     return false;
   });
+  /** The first URL write would restate what the store already read from the URL. */
+  private urlWritten = false;
+
+  constructor() {
+    // The URL carries the project with its cursor. A create, a dismissed ambiguous create or a
+    // revoke conflict sends the list back to page one, so the URL has to drop the cursor too;
+    // otherwise a reload restores a page whose row has gone.
+    effect(() => {
+      const project = this.store.selectedProject();
+      const cursor = this.store.cursor() ?? null;
+      untracked(() => this.syncQuery(project, cursor));
+    });
+  }
 
   protected selectProject(event: Event): void {
     const target = event.target;
-    if (target instanceof HTMLSelectElement) {
-      this.store.selectProject(target.value);
-      this.syncQuery();
-    }
+    if (target instanceof HTMLSelectElement) this.store.selectProject(target.value);
   }
 
   protected reload(): void {
@@ -172,30 +195,34 @@ export class ApiTokensPage {
 
   protected next(): void {
     this.store.next();
-    this.syncQuery();
   }
 
   protected first(): void {
     this.store.setCursor(undefined);
-    this.syncQuery();
   }
 
   protected onRevoked(): void {
     this.revoked.set(true);
-    this.syncQuery();
   }
 
   /**
    * The project is written with the cursor: a cursor alone names a page of an unknown list, so a
    * shared or restored URL would page through another project's tokens.
    */
-  private syncQuery(): void {
+  private syncQuery(project: string | null, cursor: string | null): void {
+    if (!this.urlWritten) {
+      this.urlWritten = true;
+      return;
+    }
+    const current = this.query();
+    if (
+      (current?.get('project') ?? null) === project &&
+      (current?.get('cursor') ?? null) === cursor
+    )
+      return;
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: {
-        project: this.store.selectedProject(),
-        cursor: this.store.cursor() ?? null,
-      },
+      queryParams: { project, cursor },
       queryParamsHandling: 'merge',
     });
   }

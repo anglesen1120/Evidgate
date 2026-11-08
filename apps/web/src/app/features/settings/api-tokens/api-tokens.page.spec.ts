@@ -1,6 +1,14 @@
 import { TestBed } from '@angular/core/testing';
-import { mount, refusal, ROW, deferred, project } from './api-tokens.test-support';
-import type { ApiTokenListResponse } from '@evidgate/sdk';
+import type { ApiTokenListResponse, CreateApiTokenRequest } from '@evidgate/sdk';
+import { ApiRequestError } from '../../../core/http/api-error';
+import { createIntent } from '../../../core/http/intent';
+import { CREATED, mount, refusal, ROW, deferred, project } from './api-tokens.test-support';
+
+const BODY: CreateApiTokenRequest = {
+  name: 'Reader',
+  expires_at: '2027-01-01T00:00:00Z',
+  permissions: ['run:read'],
+};
 
 describe('ApiTokensPage states', () => {
   afterEach(() => TestBed.resetTestingModule());
@@ -92,4 +100,106 @@ describe('ApiTokensPage states', () => {
       expect.objectContaining({ queryParams: { project: 'project-1', cursor: 'next-page' } }),
     );
   });
+
+  it('never rewrites the URL the store has just read its list from', async () => {
+    const h = mount(undefined, { query: { project: 'project-1' } });
+    await h.settle();
+    expect(h.navigate).not.toHaveBeenCalled();
+  });
+
+  it('closes a revoke confirmation when the project selection moves under it', async () => {
+    const h = mount(undefined, {
+      projects: [project('project-1'), project('project-2', 'Other')],
+    });
+    await h.settle();
+    const trigger = h.root.querySelector<HTMLButtonElement>('[data-api-revoke]');
+    if (!trigger) throw new Error('Missing revoke action');
+    trigger.click();
+    await h.settle();
+    expect(h.root.querySelector('app-api-token-revoke-dialog')).not.toBeNull();
+    h.projects.set([project('project-2', 'Other')]);
+    await h.settle();
+    expect(h.root.querySelector('app-api-token-revoke-dialog')).toBeNull();
+  });
+
+  it('keeps a revoke confirmation open when the same list is rebuilt with equal values', async () => {
+    const h = mount();
+    await h.settle();
+    const trigger = h.root.querySelector<HTMLButtonElement>('[data-api-revoke]');
+    if (!trigger) throw new Error('Missing revoke action');
+    trigger.click();
+    await h.settle();
+    h.projects.set([project('project-1')]);
+    await h.settle();
+    expect(h.root.querySelector('app-api-token-revoke-dialog')).not.toBeNull();
+  });
+
+  it('drops the URL cursor when a create sends the list back to its first page', async () => {
+    const h = mount();
+    h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'next-page' });
+    await h.settle();
+    openNextPage(h.root);
+    await h.settle();
+    expect(h.navigate).toHaveBeenLastCalledWith(
+      [],
+      expect.objectContaining({ queryParams: { project: 'project-1', cursor: 'next-page' } }),
+    );
+    h.list.mockResolvedValue({ items: [{ ...ROW, id: 'created-row' }], next_cursor: null });
+    await expect(h.store.create(BODY, createIntent())).resolves.toEqual(CREATED);
+    await h.settle();
+    expect(h.navigate).toHaveBeenLastCalledWith(
+      [],
+      expect.objectContaining({ queryParams: { project: 'project-1', cursor: null } }),
+    );
+  });
+
+  it('drops the URL cursor when an ambiguous create re-reads the list for inspection', async () => {
+    const h = mount();
+    h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'next-page' });
+    await h.settle();
+    openNextPage(h.root);
+    await h.settle();
+    h.list.mockResolvedValue({ items: [ROW], next_cursor: null });
+    // The create dialog's "check token list" action runs this before it closes.
+    h.store.reloadFirst();
+    await h.settle();
+    expect(h.navigate).toHaveBeenLastCalledWith(
+      [],
+      expect.objectContaining({ queryParams: { project: 'project-1', cursor: null } }),
+    );
+    expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
+  });
+
+  it('drops the URL cursor when a revoke conflict re-reads the first page', async () => {
+    const h = mount();
+    h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'next-page' });
+    await h.settle();
+    openNextPage(h.root);
+    await h.settle();
+    h.revoke.mockRejectedValueOnce(
+      new ApiRequestError({
+        kind: 'conflict',
+        status: 409,
+        code: 'already_revoked',
+        message: 'This token is already revoked.',
+        requestId: 'revocation-race',
+        retryable: false,
+        retryAfterSeconds: null,
+        details: [{ path: 'id', reason: 'already_revoked' }],
+      }),
+    );
+    h.list.mockResolvedValue({ items: [{ ...ROW, status: 'revoked' }], next_cursor: null });
+    await expect(h.store.revoke(ROW.id, createIntent())).resolves.toBe(false);
+    await h.settle();
+    expect(h.navigate).toHaveBeenLastCalledWith(
+      [],
+      expect.objectContaining({ queryParams: { project: 'project-1', cursor: null } }),
+    );
+  });
 });
+
+function openNextPage(root: HTMLElement): void {
+  const next = root.querySelector<HTMLButtonElement>('[data-api-next]');
+  if (!next) throw new Error('Missing next-page control');
+  next.click();
+}

@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { getState } from '@ngrx/signals';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { createIntent } from '../../../core/http/intent';
-import { CREATED, mount, ROW, deferred } from './api-tokens.test-support';
+import { CREATED, mount, project, ROW, deferred } from './api-tokens.test-support';
 
 const BODY = { name: 'Reader', permissions: ['run:read'], expires_at: '2027-01-01T00:00:00Z' };
 
@@ -154,4 +154,74 @@ describe('API token mutations without credential state', () => {
       expect(h.store.rows()[0]?.status).toBe('revoked');
     },
   );
+
+  it('re-reads the first page of a create that returns to the project it was minted for', async () => {
+    const h = mount(undefined, { projects: [project('project-1'), project('project-2', 'Other')] });
+    await h.settle();
+    const pending = deferred<typeof CREATED>();
+    h.create.mockReturnValueOnce(pending.promise);
+    const request = h.store.create(BODY, createIntent());
+    h.store.selectProject('project-2');
+    await h.settle();
+    h.store.selectProject('project-1');
+    await h.settle();
+    // Only the mutation's own refresh reads the first page again; the round trip's reads already
+    // happened above.
+    const readsFirstPage = () =>
+      h.list.mock.calls.filter(([target, cursor]) => target === 'project-1' && !cursor).length;
+    const before = readsFirstPage();
+    h.list.mockResolvedValue({ items: [{ ...ROW, id: 'created-row' }], next_cursor: null });
+    pending.resolve(CREATED);
+    await expect(request).resolves.toEqual(CREATED);
+    await h.settle();
+    // A round trip builds a fresh scope object for the same list; the answer still belongs to it.
+    expect(readsFirstPage()).toBe(before + 1);
+    expect(h.store.rows().map((row) => row.id)).toEqual(['created-row']);
+  });
+
+  it('keeps a revoke answer for the project it was sent for across a project round trip', async () => {
+    const h = mount(undefined, { projects: [project('project-1'), project('project-2', 'Other')] });
+    await h.settle();
+    const pending = deferred<void>();
+    h.revoke.mockReturnValueOnce(pending.promise);
+    const request = h.store.revoke(ROW.id, createIntent());
+    h.store.selectProject('project-2');
+    await h.settle();
+    h.store.selectProject('project-1');
+    await h.settle();
+    const readsFirstPage = () =>
+      h.list.mock.calls.filter(([target, cursor]) => target === 'project-1' && !cursor).length;
+    const before = readsFirstPage();
+    h.list.mockResolvedValue({ items: [{ ...ROW, status: 'revoked' }], next_cursor: null });
+    pending.resolve();
+    await expect(request).resolves.toBe(true);
+    await h.settle();
+    expect(readsFirstPage()).toBe(before + 1);
+    expect(h.store.rows()[0]?.status).toBe('revoked');
+  });
+
+  it('keeps a revoke refusal visible after a project round trip', async () => {
+    const h = mount(undefined, { projects: [project('project-1'), project('project-2', 'Other')] });
+    await h.settle();
+    const pending = deferred<void>();
+    h.revoke.mockReturnValueOnce(pending.promise);
+    const request = h.store.revoke(ROW.id, createIntent());
+    h.store.selectProject('project-2');
+    await h.settle();
+    h.store.selectProject('project-1');
+    await h.settle();
+    const error = {
+      kind: 'conflict' as const,
+      status: 409,
+      code: 'already_revoked',
+      message: 'This token is already revoked.',
+      requestId: 'revocation-race',
+      retryable: false,
+      retryAfterSeconds: null,
+      details: [{ path: 'id', reason: 'already_revoked' }],
+    };
+    pending.reject(new ApiRequestError(error));
+    await expect(request).resolves.toBe(false);
+    expect(h.store.revokeError()).toEqual(error);
+  });
 });
