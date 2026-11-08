@@ -99,16 +99,18 @@ export const ApiTokensStore = signalStore(
         project: query?.()?.get('project'),
         cursor: query?.()?.get('cursor') ?? undefined,
       }),
-      // A URL that still names the cursor it named before is the page's own readback of a value
-      // the store has since retired (a create or revoke restarted the list), not a new request.
+      // A URL that still names the cursor it named before is the page's own readback of a page the
+      // store has since retired (a create or revoke restarted the list), not a new request. A page
+      // the user moved to is not that: its navigation never landed, so the landing keeps the URL.
       computation: (source, previous): string | undefined => {
         if (source.project !== source.scope?.project) return undefined;
-        const unchanged =
+        const staleRetirement =
           previous !== undefined &&
+          previous.value === undefined &&
           previous.source.cursor === source.cursor &&
           previous.source.project === source.project &&
           sameScope(previous.source.scope, source.scope);
-        return unchanged ? previous.value : source.cursor;
+        return staleRetirement ? undefined : source.cursor;
       },
     });
     const pageResource = resource({

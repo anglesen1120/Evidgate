@@ -1310,7 +1310,9 @@ describe('MembersStore (09.7.1-T2)', () => {
       expect(data.removals.map((entry) => entry.orgId)).toEqual(['o-1']);
       expect(data.membershipOrgs).toEqual(['o-1', 'o-2']);
       expect(store.members()).toEqual(EMPTY_PAGE.items);
-      expect(store.removeState()).toEqual({ phase: 'done', error: null });
+      // o-1's removal is not o-2's news: the switch invalidated that attempt, so it publishes
+      // nothing and leaves no state for the dialogs o-2's page opens.
+      expect(store.removeState()).toEqual({ phase: 'idle', error: null });
     });
 
     it('skips the rotate refresh but still answers the token when the scope switched', async () => {
