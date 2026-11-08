@@ -67,6 +67,7 @@ test('refuses to start when a locale index.html is a link out of the bundle', as
   }
 });
 
+// 09.1.1-T10 (AC7): the policy paths that need a document this suite writes itself — two
 // placeholders, a HEAD answer, a `connect-src` extension — run on their own server over a
 // throwaway dist, so they never depend on the production bundle's own content.
 test('replaces every placeholder of a document with the nonce of its own header', async ({

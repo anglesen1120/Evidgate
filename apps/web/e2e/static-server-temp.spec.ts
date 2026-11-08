@@ -115,5 +115,3 @@ test('answers 405 with the allowed methods for a write request', async ({ reques
   expect(response.status()).toBe(405);
   expect(response.headers()['allow']).toBe('GET, HEAD');
 });
-
-// 09.1.1-T10 (AC7): the policy paths that need a document this suite writes itself — two

@@ -173,7 +173,7 @@ the literal a state factory or updater returns (`withState(() => ({ token: '' })
 `patchState(store, (s) => ({ ...s, token: '' }))`, a block body's top-level `return`, and a
 `signal({ … })` wrapping it — never an argument of `signalStore` itself or a payload inside
 another closure), a member of an `interface`/`type` named `…State`/`…Store` or of `withState<{…}>`,
-a field, private field, accessor, getter or constructor parameter property of a `…Store` class, a
+a field, private field, accessor, getter or constructor parameter property of a `…Store`, `…Flow` or `…Track` class, a
 member read in a template — the constant inline `template:` string **and** the `.html` file a
 constant, relative `templateUrl:` names, which the rule resolves against the component's own
 directory and reads with `node:fs` (never fetched, never over 256 KiB) — such as

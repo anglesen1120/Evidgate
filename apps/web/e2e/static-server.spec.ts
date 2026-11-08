@@ -79,6 +79,7 @@ test('rejects a traversal path instead of reading outside dist/browser', async (
 // Policy that `scripts/csp.mjs` builds out of `scripts/app-origin-csp.json`, and the nonce of an
 // HTML answer's header is the one written into that answer's body. These requests go to the real
 // dist through the `webServer` Playwright started: the policy is the one the deployed edge sends,
+// and the localized documents are what Angular actually bootstraps.
 
 /** The app root carrying this nonce: the build emits `ngcspnonce` (lower case), the source `ngCspNonce`. */
 function rootNonceAttribute(nonce: string): RegExp {
