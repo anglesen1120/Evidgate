@@ -11,7 +11,7 @@
 // origin the app calls; only the spelling differs.
 
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
-import { HttpClient, type HttpRequest } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import {
   HttpTestingController,
   provideHttpClientTesting,
@@ -29,12 +29,15 @@ import {
 } from '@evidgate/sdk';
 import { firstValueFrom } from 'rxjs';
 
+import { EXACT_MATCH_PROFILE, takeRequestWith } from '../../shared/testing/http-data.testing';
 import { isApiRequestError, type ApiError } from './api-error';
 import { provideApi } from './api-client';
 import { ApiGateway, type SdkResult } from './api-gateway';
 import { API_BASE_PATH } from './api-origin';
 import { DEFAULT_REQUEST_TIMEOUT_MS } from './http-client-fetch';
 import { createIntent, intentHeaders, type Intent } from './intent';
+
+const takeRequest = takeRequestWith(EXACT_MATCH_PROFILE);
 
 const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
 const RUNS_URL = `${API_BASE_URL}/projects/p-1/runs`;
@@ -84,25 +87,6 @@ function createRunWithIntent(client: Client, intent: Intent) {
     body: { manifest_id: 'mf-1' },
     headers: intentHeaders(intent),
   });
-}
-
-/**
- * The SDK -> adapter -> `HttpClient` pipeline is asynchronous, so a request is registered a few
- * microtasks after the call starts. `expectOne` throws when nothing matches yet, so this drains
- * the queue first and then matches — the request is still `verify()`-checked like any other.
- */
-async function takeRequest(
-  httpMock: HttpTestingController,
-  match: string | ((request: HttpRequest<unknown>) => boolean),
-): Promise<TestRequest> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const [request] = httpMock.match(match);
-    if (request !== undefined) {
-      return request;
-    }
-    await Promise.resolve();
-  }
-  throw new Error('no HTTP request reached HttpTestingController');
 }
 
 /** Resolves with whatever a call that must not succeed rejected with. */

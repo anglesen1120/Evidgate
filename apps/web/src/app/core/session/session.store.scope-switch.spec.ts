@@ -1,7 +1,7 @@
+import { apiError } from '../../shared/testing/http-data.testing';
 import type { SessionStore } from './session.store';
 import type { TenantStore } from './tenant.store';
 import {
-  apiError,
   ORG_ONE,
   ORG_TWO,
   PROJECT_P1,

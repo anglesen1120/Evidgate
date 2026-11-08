@@ -7,12 +7,7 @@
 // one `ng test` runs on) refuses the relative `/v1` the browser resolves for us.
 
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
-import type { HttpRequest } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-  type TestRequest,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { RunCreated, RunPage, RunStateDto } from '@evidgate/sdk';
@@ -21,8 +16,14 @@ import { isApiRequestError } from '../http/api-error';
 import { provideApi } from '../http/api-client';
 import { API_BASE_PATH } from '../http/api-origin';
 import { createIntent } from '../http/intent';
+import {
+  EXACT_MATCH_PROFILE,
+  JSON_HEADERS,
+  takeRequestWith,
+} from '../../shared/testing/http-data.testing';
 import { RunsDataService } from './runs-data.service';
 
+const takeRequest = takeRequestWith(EXACT_MATCH_PROFILE);
 const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
 const RUNS_URL = `${API_BASE_URL}/projects/p-1/runs`;
 const RUN_PAGE: RunPage = { items: [], next_cursor: null };
@@ -42,34 +43,7 @@ const RUN_STATE = {
   unverified_ref: false,
 };
 
-/**
- * The served media type: the adapter reads bodies as text (`responseType: 'text'`) and `flush`
- * adds no content type of its own, while the SDK picks its parser from the response
- * `Content-Type` (`parseAs: 'auto'`), so a flush without this header reaches the SDK as an
- * unparsed stream — exactly what a server that omitted the header would do.
- */
-const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
-
 const RUN_CREATED: RunCreated = { run_id: 'run-1', state: 'queued', unverified_ref: false };
-
-/**
- * The SDK -> adapter -> `HttpClient` pipeline is asynchronous, so a request is registered a few
- * microtasks after the call starts. `expectOne` throws when nothing matches yet, so this drains
- * the queue first and then matches — the request is still `verify()`-checked like any other.
- */
-async function takeRequest(
-  httpMock: HttpTestingController,
-  match: string | ((request: HttpRequest<unknown>) => boolean),
-): Promise<TestRequest> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const [request] = httpMock.match(match);
-    if (request !== undefined) {
-      return request;
-    }
-    await Promise.resolve();
-  }
-  throw new Error('no HTTP request reached HttpTestingController');
-}
 
 describe('RunsDataService (09.1.1-T3.1)', () => {
   let httpMock: HttpTestingController;

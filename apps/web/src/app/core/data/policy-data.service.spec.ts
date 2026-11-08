@@ -17,7 +17,6 @@
 // The base URL is the absolute form of the same-origin API path because Node's `Request` (the one
 // `ng test` runs on) refuses the relative `/v1` the browser resolves for us.
 
-import type { HttpRequest } from '@angular/common/http';
 import {
   HttpTestingController,
   provideHttpClientTesting,
@@ -35,6 +34,7 @@ import type {
 import { isApiRequestError } from '../http/api-error';
 import { provideApi } from '../http/api-client';
 import { API_BASE_PATH } from '../http/api-origin';
+import { JSON_HEADERS, takeRequest } from '../../shared/testing/http-data.testing';
 import { PolicyDataService } from './policy-data.service';
 
 const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
@@ -44,9 +44,6 @@ const LIST_URL = `${API_BASE_URL}/policies/${REVISION_ID}/revisions`;
 const PUBLISH_URL = `${API_BASE_URL}/projects/p-1/policies`;
 const ACTIVATION_URL = `${API_BASE_URL}/projects/p-1/policy-activation`;
 const HEAD_URL = `${API_BASE_URL}/projects/p-1/policies/head`;
-
-/** The served media type: the adapter reads bodies as text and `flush` does not derive it. */
-const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
 /** A stored revision, as `GET /v1/policies/{id}` answers it: the body included. */
 const REVISION: PolicyRevisionDto = {
@@ -95,27 +92,6 @@ const STALE = {
     ],
   },
 };
-
-/**
- * The SDK -> adapter -> `HttpClient` pipeline is asynchronous, so a request is registered after the
- * call starts — and after a page is flushed the next one waits on the blob parse, which is a
- * macrotask in jsdom, so yielding only microtasks stalls the second read.
- */
-async function takeRequest(
-  httpMock: HttpTestingController,
-  match: string | ((request: HttpRequest<unknown>) => boolean),
-): Promise<TestRequest> {
-  const matches = (candidate: HttpRequest<unknown>): boolean =>
-    typeof match === 'string' ? candidate.url.startsWith(match) : match(candidate);
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const [request] = httpMock.match(matches);
-    if (request !== undefined) {
-      return request;
-    }
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  }
-  throw new Error('no HTTP request reached HttpTestingController');
-}
 
 /** Answers one request with a body, so the SDK's parser sees the served media type. */
 function flushPage(request: TestRequest, body: unknown, status = 200, etag?: string): void {

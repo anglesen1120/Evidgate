@@ -5,16 +5,21 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import type { RunStateDto } from '@evidgate/sdk';
 
 import { isApiRequestError } from '../http/api-error';
+import {
+  EXACT_MATCH_PROFILE,
+  JSON_HEADERS,
+  takeRequestWith,
+} from '../../shared/testing/http-data.testing';
 import { OnboardingDataService } from './onboarding-data.service';
 import {
   API_BASE_URL,
-  JSON_HEADERS,
   NO_RUNS,
   RUN_STATE,
   rejectionOf,
   setupOnboardingDataService,
-  takeRequest,
 } from './onboarding-data.service.test-support';
+
+const takeRequest = takeRequestWith(EXACT_MATCH_PROFILE);
 
 describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
   let httpMock: HttpTestingController;

@@ -5,12 +5,16 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import type { CiBindingCreatedResponse, IngestTokenCreatedResponse } from '@evidgate/sdk';
 
 import { isApiRequestError } from '../http/api-error';
+import {
+  EXACT_MATCH_PROFILE,
+  JSON_HEADERS,
+  takeRequestWith,
+} from '../../shared/testing/http-data.testing';
 import { OnboardingDataService } from './onboarding-data.service';
 import {
   API_BASE_URL,
   BINDING_BODY,
   BINDING_CREATED,
-  JSON_HEADERS,
   NO_BINDINGS,
   NO_TOKENS,
   TOKEN_BODY,
@@ -18,8 +22,9 @@ import {
   TOKEN_VIEW,
   rejectionOf,
   setupOnboardingDataService,
-  takeRequest,
 } from './onboarding-data.service.test-support';
+
+const takeRequest = takeRequestWith(EXACT_MATCH_PROFILE);
 
 describe('OnboardingDataService (09.2.1-T1.1/T1.2)', () => {
   let httpMock: HttpTestingController;

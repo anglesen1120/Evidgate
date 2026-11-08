@@ -7,12 +7,7 @@
 // body.
 
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
-import type { HttpRequest } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-  type TestRequest,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { UsageSummaryDto } from '@evidgate/sdk';
@@ -22,13 +17,11 @@ import { provideApi } from '../http/api-client';
 import { API_BASE_PATH } from '../http/api-origin';
 import { ApiGateway } from '../http/api-gateway';
 import { QuotaExceededRelay } from '../http/quota-exceeded-relay';
+import { JSON_HEADERS, takeRequest } from '../../shared/testing/http-data.testing';
 import { QuotaDataService } from './quota-data.service';
 
 const API_BASE_URL = `${location.origin}${API_BASE_PATH}`;
 const SUMMARY_URL = `${API_BASE_URL}/orgs/o-1/usage/summary`;
-
-/** The served media type: the adapter reads bodies as text and `flush` does not derive it. */
-const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
 const SUMMARY: UsageSummaryDto = {
   period: '2026-11',
@@ -58,23 +51,6 @@ const QUOTA_EXCEEDED = {
     retryable: true,
   },
 };
-
-/** The SDK -> adapter -> `HttpClient` pipeline is asynchronous, so the request appears later. */
-async function takeRequest(
-  httpMock: HttpTestingController,
-  match: string | ((request: HttpRequest<unknown>) => boolean),
-): Promise<TestRequest> {
-  const matches = (candidate: HttpRequest<unknown>): boolean =>
-    typeof match === 'string' ? candidate.url.startsWith(match) : match(candidate);
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    const [request] = httpMock.match(matches);
-    if (request !== undefined) {
-      return request;
-    }
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  }
-  throw new Error('no HTTP request reached HttpTestingController');
-}
 
 /** The rejection one promise settles with, so a refusal can be inspected instead of thrown. */
 async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {
