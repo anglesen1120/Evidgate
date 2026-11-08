@@ -40,6 +40,7 @@ internal sealed record RecordUsageBatch(
 /// cannot name another org, and RLS would refuse it anyway (00 §5.4, ruling T2). A batch whose every key is already on
 /// file changed nothing, so it describes no audit object and suppresses its row — the same no-op rule 13.1.1's import
 /// and 04.1.1's ingest use. A batch that inserted rows audits under the first inserted row's id with the row count.
+/// A batch naming a period an issued statement froze answers a conflict and writes nothing: that month is billed.
 /// </para>
 /// </summary>
 [AuditedAction("usage.record_batch")]
@@ -49,6 +50,12 @@ internal sealed class RecordUsageBatchHandler(
     ITenantScopeAccessor scopes,
     IAuditTrail audit) : ICommandHandler<RecordUsageBatch, Result<UsageBatchResult>>
 {
+    /// <summary>
+    /// The conflict code of a batch that names a period an issued statement froze: nothing about the request is
+    /// malformed, the billed month is simply closed, so a correction belongs to a later period.
+    /// </summary>
+    internal const string PeriodIssuedCode = "period_issued";
+
     /// <summary>Runs the batch.</summary>
     /// <param name="command">The command.</param>
     /// <param name="cancellationToken">Cancellation.</param>
@@ -91,9 +98,20 @@ internal sealed class RecordUsageBatchHandler(
 
         // (d) One statement for the batch (plan §8 P2); the returning set is the inserted half of the answer. The
         // duplicate keys of the same call are counted in this transaction, so a refusal never leaves a tally behind.
-        var inserted = await store
-            .RecordBatchAsync(orgId, batch, cancellationToken)
-            .ConfigureAwait(false);
+        // A period an issued statement froze is refused here as a conflict, before the insert aborts the transaction.
+        IReadOnlyList<string> inserted;
+        try
+        {
+            inserted = await store
+                .RecordBatchAsync(orgId, batch, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (LedgerPeriodIssuedException refused)
+        {
+            // A failed Result writes no audit row: the stage records only a command that succeeds.
+            return Result.Failure<UsageBatchResult>(Error.Conflict(PeriodIssuedCode, refused.Message));
+        }
+
         var result = UsageBatchOutcome.Merge(batch, inserted);
 
         // (e) Audit: the rows this call wrote, or nothing at all when every key was already on file.

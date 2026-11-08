@@ -169,8 +169,8 @@ internal static class UsageOperatorEndpoints
     /// <c>{period, total_amount, currency}</c> answered with the stored statement and whether this call replayed one.
     /// The submitted total is checked against the server's recompute, never trusted; a re-issue whose recompute
     /// still hashes to the issued document replays it, and one whose recompute moved is 409 <c>statement_exists</c>.
-    /// A period whose ledger moves between the worksheet read and the freeze is 409 <c>ledger_changed</c> and
-    /// writes nothing.
+    /// A period whose ledger moves between the worksheet read and the freeze is 409 <c>ledger_changed</c>: the
+    /// statement rolls back and only the refusal's audit row is kept.
     /// <para>
     /// Like the raise, the body is read <em>inside</em> the handler after the gate admitted the caller, so a refused
     /// caller never learns from a 400 whether its body was malformed.
