@@ -135,7 +135,7 @@ public sealed partial class ReportComparisonTests
         var run = await SeedRunAsync(world);
         var report = await SeedReportAsync(world, run, events: [new EventSeed(1, "member-case", "passed")]);
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("comparison-sibling"));
-        var viewer = await AddMemberAsync(_fixture, world.Client, world.Database, world.Org, world.Admin, "viewer");
+        var viewer = await AddMemberAsync(_fixture, world.Database, world.Org, "viewer");
         var caller = TenancyApiFactory.Resolved(user: viewer, orgHeader: world.Org);
         await using var matchingHost = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database), world.Org, world.Project, RequestPrincipal.Member(viewer));

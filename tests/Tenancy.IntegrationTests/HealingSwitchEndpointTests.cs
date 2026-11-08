@@ -92,7 +92,7 @@ public sealed class HealingSwitchEndpointTests
 
     /// <summary>
     /// One host over a fresh database with an org, a project, and an active <c>qa_engineer</c> member (the
-    /// <c>healing:triage</c> holder) granted through the real role route. <paramref name="applyEnabled"/> turns the V1
+    /// <c>healing:triage</c> holder) seeded with the role row. <paramref name="applyEnabled"/> turns the V1
     /// clamp on through the deployment configuration (<c>EVIDGATE:Healing:Apply</c>), and
     /// <paramref name="permittingOperator"/> replaces the fail-closed operator gate so the system row can be written
     /// through the real operator route — both are host-composition changes, never product substitutions.
@@ -130,39 +130,25 @@ public sealed class HealingSwitchEndpointTests
             var project = await CreateProjectAsync(client, user, org, "checkout");
 
             // The read side's caller: an active member holding `qa_engineer` (the only built-in role with
-            // `healing:triage`). 0044's `membership_user_fk` needs the account row first, and `tenant_admin` may grant a
-            // role to another member (the self-escalation rule binds self-grants only).
+            // `healing:triage`). 0044's `membership_user_fk` needs the account row first, and the role row is
+            // seeded as the owner because the membership route refuses a role whose own permissions the caller
+            // does not hold.
             var triage = Guid.CreateVersion7();
             var membership = Guid.CreateVersion7();
             var email = $"qa-{triage:N}@example.test";
             await _fixture.ExecuteAsync(
-                database, $"insert into public.\"user\" (id, email) values ('{triage:D}', '{email}')");
-            await _fixture.ExecuteAsync(
                 database,
-                $"insert into public.membership (id, org_id, user_id, invited_email, status) values ('{membership:D}', '{org:D}', '{triage:D}', '{email}', 'active')");
+                $"""
+                insert into public."user" (id, email) values ('{triage:D}', '{email}');
+                insert into public.membership (id, org_id, user_id, invited_email, status)
+                values ('{membership:D}', '{org:D}', '{triage:D}', '{email}', 'active');
+                insert into public.membership_role (id, org_id, membership_id, role_id)
+                select gen_random_uuid(), '{org:D}', '{membership:D}', r.id
+                  from public.role r
+                 where r.code = 'qa_engineer' and r.org_id is null;
+                """);
 
-            var world = new World(api, host, client, database, user, org, project, triage);
-            try
-            {
-                var role = await _fixture.ScalarAsync<Guid>(
-                    database, "select id from public.role where code = 'qa_engineer' and org_id is null");
-                var granted = await SendAsync(
-                    world,
-                    HttpMethod.Post,
-                    $"/v1/orgs/{org:D}/memberships/{membership:D}/roles",
-                    $$"""{"role_id":"{{role:D}}"}""",
-                    NewKey());
-                granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
-
-                return world;
-            }
-            catch
-            {
-                // The world already owns the host graph and the database: a failed grant drops both before the
-                // error escapes, so the next test does not inherit them.
-                await world.DisposeAsync();
-                throw;
-            }
+            return new World(api, host, client, database, user, org, project, triage);
         });
 
     /// <summary>

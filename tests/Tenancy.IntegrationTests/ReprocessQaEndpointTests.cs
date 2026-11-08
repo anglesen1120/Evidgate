@@ -141,8 +141,7 @@ public sealed class ReprocessQaEndpointTests(PostgresTenancyFixture fixture)
     public async Task Reprocess_ActiveMemberWithoutRunCreate_ReturnsForbidden()
     {
         await using var world = await StartAsync();
-        var member = await AddMemberAsync(
-            fixture, world.Client, world.Database, world.Org, world.Admin, roleCode: null);
+        var member = await AddMemberAsync(fixture, world.Database, world.Org, roleCode: null);
 
         var denied = await PostAsync(world, world.Report,
             caller: TenancyApiFactory.Resolved(user: member, orgHeader: world.Org));

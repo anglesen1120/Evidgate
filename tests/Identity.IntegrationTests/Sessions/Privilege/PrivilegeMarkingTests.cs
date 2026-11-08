@@ -49,7 +49,13 @@ public sealed class PrivilegeMarkingTests : CatalogueTestBase
     public async Task Grant_Role_Marks_Only_The_Changed_Users_Live_Session()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
-        var (_, adminUserId) = await SeedActiveMemberAsync(org, Unique.Email("admin"), "tenant_admin");
+        // The caller must hold every permission of the role it hands out (W7-SEC-02 applies
+        // to every target), and `tenant_admin` alone lacks `release_approver`'s policy:write.
+        var (_, adminUserId) = await SeedActiveMemberAsync(
+            org,
+            Unique.Email("admin"),
+            "tenant_admin",
+            "release_approver");
         var (memberId, memberUserId) = await SeedActiveMemberAsync(org, Unique.Email("member"), "viewer");
         var releaseApproverId = await RoleIdAsync("release_approver");
         var matrix = await SeedSessionMatrixAsync(memberUserId);

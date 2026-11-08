@@ -128,7 +128,7 @@ public sealed class ApiTokenBoundaryTests(PostgresTenancyFixture fixture) : IAsy
         await using var _ = api;
         using var __ = client;
         var seeded = await SeedTokenAsync(user, org, project);
-        var member = await AddMemberAsync(fixture, client, Database, org, Admin(user, org), roleCode: null);
+        var member = await AddMemberAsync(fixture, Database, org, roleCode: null);
         var denied = await client.SendAsync(HttpMethod.Get, $"/v1/projects/{project}/api-tokens", Admin(member, org));
         denied.Status.ShouldBe(HttpStatusCode.Forbidden);
         denied.ErrorCode.ShouldBe("forbidden");

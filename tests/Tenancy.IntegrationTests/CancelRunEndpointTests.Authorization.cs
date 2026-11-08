@@ -21,8 +21,8 @@ public sealed partial class CancelRunEndpointTests
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
-        var viewerId = await AddMemberAsync(_fixture, world.Client, world.Database, world.Org, world.Admin, "viewer");
-        var qaId = await AddMemberAsync(_fixture, world.Client, world.Database, world.Org, world.Admin, "qa_engineer");
+        var viewerId = await AddMemberAsync(_fixture, world.Database, world.Org, "viewer");
+        var qaId = await AddMemberAsync(_fixture, world.Database, world.Org, "qa_engineer");
         var viewer = TenancyApiFactory.Resolved(user: viewerId, orgHeader: world.Org);
         var qa = TenancyApiFactory.Resolved(user: qaId, orgHeader: world.Org);
 

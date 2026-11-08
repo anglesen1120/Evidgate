@@ -54,7 +54,7 @@ public sealed class QuarantineTests
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
-        var (cases, maintainer, membership) = await SeedCasesAndMaintainerAsync(database, client, user, org, project);
+        var (cases, maintainer, membership) = await SeedCasesAndMaintainerAsync(database, org, project);
 
         return new World(api, client, database, user, org, project, cases, maintainer, membership);
     }
@@ -65,7 +65,7 @@ public sealed class QuarantineTests
 
     /// <summary>Three catalog cases and an active <c>test_maintainer</c> membership (the only role holding <c>quarantine:write</c>, D1).</summary>
     private async Task<(IReadOnlyList<Guid> Cases, Guid User, Guid Membership)> SeedCasesAndMaintainerAsync(
-        string database, HttpClient client, Guid admin, Guid org, Guid project)
+        string database, Guid org, Guid project)
     {
         var cases = new List<Guid>();
         var maintainer = Guid.CreateVersion7();
@@ -80,6 +80,16 @@ public sealed class QuarantineTests
             await scope.ExecuteAsync(
                 "insert into public.membership (id, org_id, user_id, invited_email, status) values (@id, @org_id, @user_id, @email, 'active')",
                 ("id", membership), ("org_id", org), ("user_id", maintainer), ("email", $"maintainer-{maintainer:N}@example.test"));
+            // The role row the membership route writes, seeded as the owner: the route refuses a role whose own
+            // permissions the caller does not hold, so the fixture cannot hand this one out through the API.
+            await scope.ExecuteAsync(
+                """
+                insert into public.membership_role (id, org_id, membership_id, role_id)
+                select gen_random_uuid(), @org_id, @membership_id, r.id
+                  from public.role r
+                 where r.code = 'test_maintainer' and r.org_id is null
+                """,
+                ("org_id", org), ("membership_id", membership));
             for (var i = 0; i < 3; i++)
             {
                 var caseId = Guid.CreateVersion7();
@@ -94,11 +104,6 @@ public sealed class QuarantineTests
 
             await scope.CommitAsync();
         }
-
-        var role = await _fixture.ScalarAsync<Guid>(database, "select id from public.role where code = 'test_maintainer' and org_id is null");
-        var granted = await client.SendAsync(
-            HttpMethod.Post, $"/v1/orgs/{org}/memberships/{membership}/roles", As(admin, org), new { role_id = role }, NewKey());
-        granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
 
         return (cases, maintainer, membership);
     }
@@ -127,11 +132,11 @@ public sealed class QuarantineTests
     private static Task<ApiAnswer> ListAsync(World world, Guid project, string query = "", Action<HttpRequestHeaders>? caller = null) =>
         world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{project}/quarantine{query}", caller ?? world.AsMaintainer);
 
-    /// <summary>An active member of the org holding the built-in role, seeded as the owner then granted through the API.</summary>
-    private Task<Guid> AddMemberAsync(World world, string roleCode) => AddMemberAsync(world, world.Org, world.Admin, roleCode);
+    /// <summary>An active member of the org holding the built-in role, seeded as the owner (the route refuses a role the caller cannot hand out).</summary>
+    private Task<Guid> AddMemberAsync(World world, string roleCode) => AddMemberAsync(world, world.Org, roleCode);
 
-    /// <summary>An active member of <paramref name="org"/> holding the built-in role, granted by <paramref name="admin"/>.</summary>
-    private async Task<Guid> AddMemberAsync(World world, Guid org, Action<HttpRequestHeaders> admin, string roleCode)
+    /// <summary>An active member of <paramref name="org"/> holding the built-in role, seeded as the owner.</summary>
+    private async Task<Guid> AddMemberAsync(World world, Guid org, string roleCode)
     {
         var userId = Guid.CreateVersion7();
         var membershipId = Guid.CreateVersion7();
@@ -141,13 +146,12 @@ public sealed class QuarantineTests
             $"""
             insert into public."user" (id, email) values ('{userId}', 'member-{userId:N}@example.test');
             insert into public.membership (id, org_id, user_id, invited_email, status)
-            values ('{membershipId}', '{org}', '{userId}', 'member-{userId:N}@example.test', 'active')
+            values ('{membershipId}', '{org}', '{userId}', 'member-{userId:N}@example.test', 'active');
+            insert into public.membership_role (id, org_id, membership_id, role_id)
+            select gen_random_uuid(), '{org}', '{membershipId}', r.id
+              from public.role r
+             where r.code = '{roleCode}' and r.org_id is null;
             """);
-
-        var role = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.role where code = '{roleCode}' and org_id is null");
-        var granted = await world.Client.SendAsync(
-            HttpMethod.Post, $"/v1/orgs/{org}/memberships/{membershipId}/roles", admin, new { role_id = role }, NewKey());
-        granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
 
         return userId;
     }
@@ -404,7 +408,7 @@ public sealed class QuarantineTests
         // claim is the 404 that follows the permission gate. The org founder holds tenant_admin + release_approver
         // (OrganizationFounder), neither of which carries quarantine:write (test_maintainer only, D1), so the rival
         // is a test_maintainer of org B.
-        var rivalMaintainer = await AddMemberAsync(world, otherOrg, As(otherUser, otherOrg), "test_maintainer");
+        var rivalMaintainer = await AddMemberAsync(world, otherOrg, "test_maintainer");
         var rival = As(rivalMaintainer, otherOrg);
 
         var cross = await RemoveAsync(world, id, rival);

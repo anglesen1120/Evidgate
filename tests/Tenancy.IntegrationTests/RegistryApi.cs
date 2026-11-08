@@ -118,41 +118,38 @@ internal static class RegistryApi
     internal static string NewKey() => Guid.NewGuid().ToString("N");
 
     /// <summary>
-    /// An active member of <paramref name="org"/> holding one built-in role (or none), seeded with the migration
-    /// role and granted by <paramref name="granter"/> through the membership route; returns the member's user id.
+    /// An active member of <paramref name="org"/> holding one built-in role (or none); returns the member's user id.
+    /// The role row is seeded as the owner rather than granted through the membership route, because the route
+    /// refuses a role whose own permissions the caller does not hold (the self-escalation rule) and a test's
+    /// fixture must not depend on a caller that could hand out the role in production.
     /// </summary>
     internal static async Task<Guid> AddMemberAsync(
         PostgresTenancyFixture fixture,
-        HttpClient client,
         string database,
         Guid org,
-        Action<HttpRequestHeaders> granter,
         string? roleCode)
     {
         var user = Guid.CreateVersion7();
-        var membership = Guid.CreateVersion7();
+        var email = $"member-{user:N}@example.test";
+
+        var grant = roleCode is null
+            ? string.Empty
+            : $"""
+              insert into public.membership_role (id, org_id, membership_id, role_id)
+              select gen_random_uuid(), '{org}', m.id, r.id
+                from public.membership m, public.role r
+               where m.org_id = '{org}' and m.user_id = '{user}'
+                 and r.code = '{roleCode}' and r.org_id is null;
+              """;
 
         await fixture.ExecuteAsync(
             database,
             $"""
-            insert into public."user" (id, email) values ('{user}', 'member-{user:N}@example.test');
+            insert into public."user" (id, email) values ('{user}', '{email}');
             insert into public.membership (id, org_id, user_id, invited_email, status)
-            values ('{membership}', '{org}', '{user}', 'member-{user:N}@example.test', 'active')
+            values (gen_random_uuid(), '{org}', '{user}', '{email}', 'active');
+            {grant}
             """);
-
-        if (roleCode is not null)
-        {
-            var role = await fixture.ScalarAsync<Guid>(
-                database, $"select id from public.role where code = '{roleCode}' and org_id is null");
-            var granted = await client.SendAsync(
-                HttpMethod.Post,
-                $"/v1/orgs/{org}/memberships/{membership}/roles",
-                granter,
-                new { role_id = role },
-                NewKey());
-
-            granted.Status.ShouldBe(HttpStatusCode.OK, granted.ErrorMessage);
-        }
 
         return user;
     }

@@ -377,10 +377,10 @@ internal static class AiSettingsCalls
             world.Database,
             $"select id from public.membership where org_id = '{world.Org}' and user_id = '{user}'");
 
-    /// <summary>An active member of the org holding one built-in role, granted by the founder through the API.</summary>
+    /// <summary>An active member of the org holding one built-in role, seeded as the owner.</summary>
     /// <param name="fixture">The fixture.</param>
     /// <param name="world">The org.</param>
     /// <param name="roleCode">The built-in role code, or null for a member with no role.</param>
     internal static Task<Guid> AddMemberAsync(PostgresTenancyFixture fixture, World world, string? roleCode) =>
-        RegistryApi.AddMemberAsync(fixture, world.Client, world.Database, world.Org, world.As, roleCode);
+        RegistryApi.AddMemberAsync(fixture, world.Database, world.Org, roleCode);
 }

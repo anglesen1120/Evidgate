@@ -230,8 +230,7 @@ public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture)
     {
         await using var world = await RunCreationTests.StartAsync(fixture);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
-        var member = await AddMemberAsync(
-            fixture, world.Client, world.Database, world.Org, world.Admin, roleCode: null);
+        var member = await AddMemberAsync(fixture, world.Database, world.Org, roleCode: null);
         var before = await SnapshotAsync(world, runId);
 
         var denied = await CancelRunTestData.CancelAsync(

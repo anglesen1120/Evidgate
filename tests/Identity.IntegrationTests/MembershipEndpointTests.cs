@@ -581,9 +581,9 @@ public sealed class MembershipEndpointTests : CatalogueTestBase
         var (adminMembershipId, adminUserId) = await SeedActiveMemberAsync(org, "admin@example.com", "tenant_admin");
         var releaseApproverId = await RoleIdAsync("release_approver");
 
-        // The module's real evaluator over the real membership: the escalation rule is
-        // about the caller's own rows, so a fixed "grant everything" stand-in would prove
-        // nothing (this is the shape BuiltinRoleTests uses for its real-admin cases).
+        // The module's real evaluator over the real membership: the subset rule compares the
+        // caller's own resolution, so a fixed "grant everything" stand-in would decide the case
+        // itself (this is the shape BuiltinRoleTests uses for its real-admin cases).
         await using var factory = IdentityApiFactory.Start(
             Fixture,
             new IdentityHostSetup(org, Principal: RequestPrincipal.Member(adminUserId)));
@@ -709,9 +709,9 @@ public sealed class MembershipEndpointTests : CatalogueTestBase
 
     /// <summary>
     /// W7-SEC-02, the invite half: an invite addressed to the caller's own membership is
-    /// the same self-grant — the address is the only handle a membership row has before
-    /// the login binds it to a user. Same rule, same 403 `forbidden`, no membership
-    /// created.
+    /// refused like any other address when the role carries a permission the caller does not
+    /// hold — the rule fires on the role, whoever the address belongs to. 403 `forbidden`, no
+    /// membership created.
     /// </summary>
     [Fact]
     public async Task Inviting_The_Callers_Own_Address_To_A_Role_They_Do_Not_Hold_Is_403()
@@ -742,8 +742,8 @@ public sealed class MembershipEndpointTests : CatalogueTestBase
     /// <summary>
     /// W7-SEC-02, the two-step form of the invite half: an invite to the caller's own
     /// address with no roles passes (it grants nothing), but a later grant onto that
-    /// pending row is still a self-grant — the row binds to the caller — so it is the same
-    /// 403 `forbidden` and no grant is written.
+    /// pending row is refused like a grant onto any other target — the caller does not hold
+    /// the role's permissions — so it is the same 403 `forbidden` and no grant is written.
     /// </summary>
     [Fact]
     public async Task Granting_A_Role_To_A_Pending_Invite_For_The_Callers_Own_Address_Is_403()

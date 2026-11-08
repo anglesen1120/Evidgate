@@ -68,7 +68,7 @@ public sealed partial class CancelRunEndpointTests
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var run = await CancelRunTestData.RunInStateAsync(_fixture, world, "running");
-        var viewer = await AddMemberAsync(_fixture, world.Client, world.Database, world.Org, world.Admin, "viewer");
+        var viewer = await AddMemberAsync(_fixture, world.Database, world.Org, "viewer");
         (await CancelRunTestData.CancelAsync(world, run,
             TenancyApiFactory.Resolved(user: viewer, orgHeader: world.Org))).Status.ShouldBe(HttpStatusCode.Forbidden);
         var foreignUser = Guid.CreateVersion7();
