@@ -213,14 +213,14 @@ describe('RunListTableComponent', () => {
   });
 
   it('gives the table keyboard stops with different names in each mode', async () => {
-    const { fixture, root } = await render(Array.from({ length: 200 }, (_, index) => run(index)));
+    const { fixture, root } = await render([run(0)]);
     // The plain list scrolls in its wrapper, so the wrapper is the table's only stop.
     expect(root.querySelector('.table-scroll')?.getAttribute('tabindex')).toBe('0');
     expect(root.querySelectorAll('[tabindex="0"]')).toHaveLength(1);
 
     fixture.componentRef.setInput(
       'rows',
-      Array.from({ length: 250 }, (_, index) => run(index)),
+      Array.from({ length: 201 }, (_, index) => run(index)),
     );
     await fixture.whenStable();
     // Two stops, because the wrapper holds the horizontal overflow and the viewport the vertical

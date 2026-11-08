@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { ESLint } from 'eslint';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 /** One lint message, reduced to what this spec asserts. */
 interface Finding {
@@ -47,6 +47,17 @@ const COMPONENT_STYLE_PATH = 'apps/web/src/app/example.component.css';
 const COMPONENT_SOURCE_PATH = 'apps/web/src/app/app.ts';
 
 const eslint = new ESLint({ cwd: REPO_ROOT });
+
+// The first lintText per config block builds the flat config, the rule bodies and the typed
+// program for a component source (seconds under load). Pay that once in a hook, which has its
+// own timeout, so no single case is charged for a cold start.
+beforeAll(async () => {
+  await eslint.lintText('.warm {\n  color: #fff;\n}\n', { filePath: COMPONENT_STYLE_PATH });
+  await eslint.lintText(
+    "import { Component } from '@angular/core';\n@Component({ selector: 'a', template: '', styles: [`:host { color: #fff; }`] })\nexport class A {}\n",
+    { filePath: COMPONENT_SOURCE_PATH },
+  );
+});
 
 /**
  * Lints `code` as if it were the file at `filePath`, through the repository config, and keeps
