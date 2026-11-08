@@ -43,7 +43,7 @@ const baseURL = `http://127.0.0.1:${PORT}`;
 const FIXTURES_ROOT = resolve(__dirname, 'dist/fixtures/browser');
 
 export default defineConfig({
-  // Only the shell suite: `e2e/static-server.spec.ts` and `e2e/smoke.spec.ts` belong to the
+  // Only the shell suite: `e2e/static-server*.spec.ts` and `e2e/smoke.spec.ts` belong to the
   // production gate, and `*.spec.ts` under this directory is the whole of this one.
   testDir: './e2e/shell',
   testMatch: '**/*.spec.ts',

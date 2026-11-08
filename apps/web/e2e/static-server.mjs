@@ -15,7 +15,7 @@
 //     is an ordinary SPA path: it resolves against the bundle root and falls back to the
 //     DEFAULT locale's index.html, because the root deliberately holds no page of its own.
 // A dist whose root itself holds index.html (a build without `localize`, and every temporary
-// dist in `e2e/static-server.spec.ts`) is served as the single layout it is, with no redirect.
+// dist in `e2e/static-server*.spec.ts`) is served as the single layout it is, with no redirect.
 //
 // 09.1.1-T10 (AC7, ADR-0008 rule 4): every response this server writes carries its own
 // `content-security-policy` header, built by `scripts/csp.mjs` out of
@@ -40,7 +40,7 @@
 // another origin; it is validated once at start, so a wildcard or a path fails the server
 // loudly instead of weakening every response.
 //
-// The behaviours that carry real logic have their own specs in `e2e/static-server.spec.ts`:
+// The behaviours that carry real logic have their own specs in `e2e/static-server*.spec.ts`:
 //   - SPA fallback: an extension-less client route such as `/runs/<id>` is answered with
 //     `index.html` (200). Any final path segment carrying an extension is an asset request,
 //     whether this file knows the type or not, and a missing asset is answered 404 — a broken
@@ -68,7 +68,7 @@ import {
 
 /**
  * The directory to serve. Playwright's `webServer` never sets `EVIDGATE_WEB_E2E_ROOT`, so the
- * gate always serves `../dist/browser`; only `e2e/static-server.spec.ts` sets it, pointing the
+ * gate always serves `../dist/browser`; only `e2e/static-server*.spec.ts` sets it, pointing the
  * server at a temporary dist to exercise the failure modes (an unreadable file, a symlink out
  * of the bundle) that must never exist in a real build.
  */

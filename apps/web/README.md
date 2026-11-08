@@ -173,7 +173,7 @@ the literal a state factory or updater returns (`withState(() => ({ token: '' })
 `patchState(store, (s) => ({ ...s, token: '' }))`, a block body's top-level `return`, and a
 `signal({ … })` wrapping it — never an argument of `signalStore` itself or a payload inside
 another closure), a member of an `interface`/`type` named `…State`/`…Store` or of `withState<{…}>`,
-a field, private field, accessor, getter or constructor parameter property of a `…Store` class, a
+a field, private field, accessor, getter or constructor parameter property of a `…Store`, `…Flow` or `…Track` class, a
 member read in a template — the constant inline `template:` string **and** the `.html` file a
 constant, relative `templateUrl:` names, which the rule resolves against the component's own
 directory and reads with `node:fs` (never fetched, never over 256 KiB) — such as
@@ -194,7 +194,7 @@ stays masked. A loop variable named like a value (`*ngFor="let token of tokens"`
 it is DECLARED and still reported where the body READS it (`{{ token }}`), so rename the variable.
 It finally reports a one-time RESULT type held in state (`secretCarryingType`):
 `IssuedInvite`, `RotationResult`, `IngestTokenCreatedResponse`, `InviteIssuedView` and
-`CiBindingCreatedResponse` in a `/Store$/` class field, accessor or constructor parameter property
+`CiBindingCreatedResponse` in a `/(Store|Flow|Track)$/` class field, accessor or constructor parameter property
 (at any depth, so `Signal<IssuedInvite | null>` is caught), in a `signal`/`computed`/`withState`
 type argument, or in a `…State`/`…Store` member — while a method that RETURNS one
 (`async rotate(): Promise<RotationResult | null>` in `secrets.store.ts`, `invite()` in
@@ -217,7 +217,7 @@ deliberate — lint is defence in depth, not the only defence:
   direct subscript of a member access (`store['token']`) is unmasked — a run-time key
   (`row[key]`, `store[this.field]`) still has no name in the source to match;
 - the RESULT-type check covers exactly three positions plus an ANNOTATED field: a
-  `signal`/`computed`/`withState` type argument, a `…State`/`…Store` member and a `/Store$/` class
+  `signal`/`computed`/`withState` type argument, a `…State`/`…Store` member and a `/(Store|Flow|Track)$/` class
   field, accessor or constructor parameter property. `signal(x as IssuedInvite)`,
   `linkedSignal(...)`, `model(...)`, a `BehaviorSubject` or `resource` field without the result type
   in its annotation, and an unannotated field (`readonly last = make()`) are not seen;
@@ -652,7 +652,7 @@ Specs: `e2e/smoke.spec.ts` (AC2 — the built bundle bootstraps at `/`, which re
 and renders `<html lang="vi">`, and at `/en/` which renders `lang="en"`: page title ending in `Evidgate`,
 the app shell (`app-root app-shell`) with a non-empty page heading — the production bundle has no
 fixture backend, so the bootstrap reads fail and the shell shows its `/unavailable` page — and no
-page or console errors during load), `e2e/static-server.spec.ts` (locale routing, SPA fallback,
+page or console errors during load), `e2e/static-server*.spec.ts` (locale routing, SPA fallback,
 and the traversal, symlink and bad-request guards of the server itself), and
 `e2e/telemetry.spec.ts` (09.1.1-T9.2 — the production bundle's telemetry emission, the CSP pairing
 and the privacy opt-out, each case served by a server it starts itself; see
