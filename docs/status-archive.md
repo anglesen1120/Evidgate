@@ -299,3 +299,31 @@ AGENTS.md Current state (old lines 7, 9-11, 13-16):
 Moved verbatim from STATUS.md §1 Resume here (line 18, the Pilot-0 bullet), replaced by a sentence checked against `plans/features/SOLO-PATH.md` Notes S187/S188 and merges #395, #401 and #403 at `2718c29f`.
 
 - Pilot-0 (SOLO-PATH §2): criteria a-d met live in #392 (run A PASS gate 0, run B FAIL gate 1); (e) web against the live API is open (needs human login 02.3.1; S187 DEV-LOGIN in flight); review deployment is S188.
+
+## STATUS replaced text (S317, 2026-11-08)
+
+Moved verbatim from STATUS.md §1 Resume here (lines 8, 9, 11, 12, 13, 14), §2 (updated line 3, the intro line 24, the delivery scope rows, the 09.3.1-T6 and 09.8.1-T3 partial rows, the Done by area rows 02 and TOTAL, the Done by phase rows G1 and TOTAL) and from the AGENTS.md Current state bullets (landed counts, phase and area counts) when the counters were recounted after #648.
+
+Updated 2026-11-02. Source of truth for tasks: `plans/01`–`13` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
+- Develop: `2a641af8` (#612, S294 close-out; recount base). Migrations `0001`–`0084` are contiguous; highest is `0084_read_order_compatible_indexes.sql`, next free `0085`; 08.5.1-T1.1/T1.2 merged (#306), T1 stays partial (T1.3–T1.7 open). Closed owner-review rows live in `docs/phase-review-archive.md` (a row moves there verbatim in the commit that closes it).
+- Open PRs: lane PRs of S296/S298/S299 plus dependabot PRs (not lanes).
+- Lanes in flight (2026-11-08): S296 HARNESS-SPEED, S298 GATE-PERF, S299 STATUS-RECOUNT (this recount); earlier lanes are merged and closed out.
+- Fully landed on develop (recount S299 through #612, `2a641af8`): 235/660 tasks (≈35.6 %); 236.5/706.75 raw person-days (≈33.5 %); remaining 425 tasks / 470.25 d. Via merged PRs: 208 tasks / 211.5 d; the other 27 tasks / 25.0 d are direct commits on develop. Method (unchanged from S189): task ranges in merged PR bodies, close-out rows and plan Notes expanded against plan_graph task ids; a parent counts only when all its sub-rows landed. The S299 recount added 33 tasks / 31.0 d after #393 (ids in §2); the S189 base of 201 / 205.0 is unchanged. 31 parents are partial and carry no credit (§2).
+- Landed by phase (done tasks / raw d): G1 151 / 158.75; G2 67 / 61.5; G3 5 / 4.5; G4 12 / 11.75.
+- Plan totals: 660 tasks / 706.75 raw / 848.1 buffered person-days (`plan_graph.py` on `2a641af8`: errors 0, 205 stories; 04.2.2-T3 manifest generator added in S186, M; the S93 canonical figures were 655 / 702.75 / 843.3). `check_features.py` still exits 1 (8 missing 13.x feature plans, 13.5.1 to 13.9.1; queue F37).
+Counted by expanding task ranges in merged PR bodies, close-out rows and plan Notes against plan_graph task ids (S299 recount through #612, `2a641af8`, method unchanged from S189); a parent task counts only when every defined sub-row has landed on develop; sizes XS .25 S .5 M 1 L 2 XL 3. detail: carried rows 'STATUS §2 count log S112-S128' (S144 F61) and 'STATUS §2 count log S299'.
+| Fully landed on develop | 235 | 236.5 |
+| Via merged PRs | 208 | 211.5 |
+| Direct commits on develop, no PR | 27 | 25.0 |
+| Remaining | 425 | 470.25 |
+| Plan total | 660 | 706.75 |
+| 09.3.1-T6 | T6.1, T6.2 | #568 |
+| 09.8.1-T3 | T3.2, T3.3, T3.4 | #561 |
+| 02 | 32 | 0 | 10 | 19 | 3 | 0 | 30 |
+| TOTAL | 235 | 4 | 69 | 124 | 37 | 1 | 236.5 |
+| G1 | 151 | 3 | 40 | 79 | 28 | 1 | 158.75 |
+| TOTAL | 235 | 4 | 69 | 124 | 37 | 1 | 236.5 |
+- Landed on `develop` (through #617, `1a06941c`; recount S299 from the merged PRs after #393 with the S189 method, STATUS §2 and §1 Resume): 235 of 660 planned tasks = 236.5 of 706.75 raw person-days (≈35.6 % of tasks, ≈33.5 % of effort); 425 tasks / 470.25 d remain. 31 parent tasks are partial and carry no credit (list in STATUS §2).
+- Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 151 / 158.75 of 283.75 · G2 67 / 61.5 of 197 · G3 5 / 4.5 of 106.75 · G4 12 / 11.75 of 119.25.
+- Landed by area plan (tasks / planned): 01 49/55 · 02 32/49 · 03 10/40 · 04 29/54 · 05 25/54 · 06 15/36 · 07 13/42 · 08 1/69 · 09 31/72 · 10 5/54 · 11 13/51 · 12 5/30 · 13 7/54.
+- Delivered modules (S173-S298 additions after the S189 list): catalog case/suite identity and revisions (03.1.1/03.1.3/03.2.1, taxonomy 03.1.4-T1, fixture revisions 03.3.1-T1), runs manifest upload (05.1.1), the run reconciler with evidence revisions and the freeze seam (05.3.2-T1/T2/T5), run cancel (05.4.1-T1–T3) and release tables with digest binding (05.6.1-T1/T2), evidence upload + safe parsing (06.1/06.3.1–06.3.2), artifact sensitivity (06.2.1-T1), async secret scan (06.2.3-T1), retention policy (06.4.1-T1), the pytest/JUnit report path (04.4.1-T1/T3–T6), policy revisions and waiver/quarantine lifecycles (07.1.1/07.3.1), the evaluator core and handler (07.2.1, 07.2.2-T1/T3/T4), the run decision route (07.5.2-T1) and the CLI `gate` command with spool (07.6.1-T2), the usage ledger, price table, roll-up, quota gate and summary read (12.3.1-T1/T3–T6, 04.8.1-T1, 04.1.2-T1), sessions with list/revoke/revoke-all/logout and the cleanup sweep (02.3.2-T1/T2), member removal guard (02.1.2-T3), project API tokens (02.4.4-T1), and the Angular 22 web app with scaffold, app shell, shared state components, generated-SDK data layer, run detail timeline (09.3.1-T2), quota and retention settings (09.7.1-T5/T11), API tokens screen (09.7.2-T1) and a11y/i18n QA (09.8.1-T2/T4).
