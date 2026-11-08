@@ -32,7 +32,7 @@ namespace Tenancy.IntegrationTests;
 /// project of another org is invisible to the pre-check instead of being insertable.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class UsageRecordBatchTests
+public sealed partial class UsageRecordBatchTests
 {
     private const string Period = "2026-10";
 
