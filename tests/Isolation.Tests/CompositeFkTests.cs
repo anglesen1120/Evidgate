@@ -131,10 +131,6 @@ public sealed class CompositeFkTests : HarnessTest
             "raw_report_reprocess_parser_fk is excluded from the corruption matrix on the strength of "
             + "raw_report_reprocess_parser_visible");
 
-        // The harness reset truncated the migration-seeded report_parser catalogue, and the rows this matrix
-        // generates for raw_report_reprocess name that built-in release (TenantRowFactory): restore it first.
-        await BuiltInCatalogue.SeedReportParserAsync(Fixture, Token);
-
         var attempts = 0;
         var structural = new List<string>();
         var rejected = new List<string>();
