@@ -112,13 +112,12 @@ public sealed class SessionRevokeAllAdminLockTests : SessionRevokeAllAdminTestBa
         await ExecuteAsync(holder, held, "select evidgate.session_user_lock(@user)", ("user", member));
 
         await using var adminConnection = new NpgsqlConnection(Fixture.OwnerConnectionString);
-        await adminConnection.OpenAsync(Token);
         await using var bareConnection = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await adminConnection.OpenAsync(Token);
         await bareConnection.OpenAsync(Token);
 
         Task<(string Status, int Revoked)> adminCall;
         Task<int> bareCall;
-
         if (string.Equals(first, "admin", StringComparison.Ordinal))
         {
             adminCall = Task.Run(() => AdminRevokeAllSqlAsync(adminConnection, null, proof, member, org, now), Token);
@@ -156,8 +155,8 @@ public sealed class SessionRevokeAllAdminLockTests : SessionRevokeAllAdminTestBa
     /// <summary>
     /// The administrative bulk call and the single administrative revoke of a row of the SAME target, started in
     /// either order: the first writer parks on the org's chain lock, the second on the row the first has already
-    /// stamped, and after the chain lock is released both finish — no deadlock (<c>40P01</c>), because the row
-    /// locks of both sit behind the chain lock, never in front of it.
+    /// stamped, and after the chain lock is released both finish — no deadlock (<c>40P01</c>), because both
+    /// take their session-row locks BEFORE the chain lock, so no writer waits for a row while holding the chain.
     /// </summary>
     /// <param name="first">The writer started first; the other starts once the first is queued.</param>
     [Theory]
