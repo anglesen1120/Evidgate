@@ -67,12 +67,14 @@ internal sealed partial class UsageQuotaWorld : IAsyncDisposable
     /// <param name="fixture">The assembly fixture (one container, one template).</param>
     /// <param name="gate">Which operator gate the host composes.</param>
     /// <param name="configuration">Extra configuration, e.g. the quota switch a test turns off.</param>
+    /// <param name="database">A private database for a test that reads table-wide state; the shared one when null.</param>
     internal static async Task<UsageQuotaWorld> StartAsync(
         PostgresTenancyFixture fixture,
         OperatorGateMode gate = OperatorGateMode.Denied,
-        IReadOnlyDictionary<string, string?>? configuration = null)
+        IReadOnlyDictionary<string, string?>? configuration = null,
+        string? database = null)
     {
-        var database = await fixture.SharedDatabaseAsync();
+        database ??= await fixture.SharedDatabaseAsync();
         var connectionString = fixture.AppConnectionString(database);
 
         Action<IServiceCollection>? services = gate switch
