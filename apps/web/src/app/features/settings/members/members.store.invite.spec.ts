@@ -101,8 +101,9 @@ describe('MembersStore (09.7.1-T2)', () => {
 
     it('answers inviteToken: null for a non-string served token', async () => {
       await store.load('o-1');
-      // F2: a broken adapter that echoes a number must not reach the reveal as `42`.
-      data.issued = { ...CREATED, invite_token: 42 as unknown as string };
+      // F2: a broken adapter that echoes a number must not reach the reveal as `42`. The SDK type
+      // is the server's promise, so the value is written past it on purpose.
+      Reflect.set(data, 'issued', { ...CREATED, invite_token: 42 });
 
       const invited = await store.invite('newhire@acme.test', [], createIntent());
 

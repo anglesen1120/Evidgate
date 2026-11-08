@@ -57,7 +57,8 @@ describe('MembersStore (09.7.1-T2)', () => {
 
     it('answers absence for a non-string rotated token as well', async () => {
       await store.load('o-1');
-      data.resendToken = 7 as unknown as string;
+      // The SDK type is the server's promise, so a non-string token is written past it on purpose.
+      Reflect.set(data, 'resendToken', 7);
 
       const rotated = await store.resend(PENDING.id, createIntent());
 

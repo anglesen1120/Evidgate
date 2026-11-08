@@ -1,5 +1,5 @@
-// 09.7.1-T2 (plan 09.7.1 §2 AC2, §4 D5, §5 members row, §6 Membership/Invite rows, §8 S3,
-// §10 T2.1/T2.2; COORDINATOR-DECISION S73 option B): the Members and roles store.
+// The harness the members store specs share — the served fixture corpus and the fake data service
+// that answers from it — so each spec mounts the same substrate and asserts on the store alone.
 //
 // The answers come from the real fixture corpus (`fixtures/web-api/memberships-list`,
 // `memberships-list-empty`, `roles-list`, `permissions-list`, `membership-create-ok`,
@@ -30,9 +30,7 @@ import type {
   InviteMemberRequest,
   MembershipListResponse,
   MembershipView,
-  PermissionListResponse,
   PermissionView,
-  RoleListResponse,
   RoleView,
 } from '@evidgate/sdk';
 
@@ -49,16 +47,42 @@ import membershipRemoveLastAdmin from '../../../../../../../fixtures/web-api/mem
 import permissionsList from '../../../../../../../fixtures/web-api/permissions-list/input.json';
 import rolesList from '../../../../../../../fixtures/web-api/roles-list/input.json';
 
+/**
+ * A corpus literal's membership state as the SDK union: an imported JSON string widens to `string`,
+ * so the state is checked against the wire's own values here rather than asserted into the type.
+ */
+function membershipState(value: string): MembershipView['status'] {
+  switch (value) {
+    case 'pending':
+    case 'active':
+    case 'removed':
+    case 'revoked':
+    case 'expired':
+      return value;
+    default:
+      throw new Error(`fixtures/web-api serves an unknown membership status "${value}"`);
+  }
+}
+
 /** The served page of §5: five memberships, one per lifecycle state the tab renders. */
-export const PAGE = membershipsList.body as unknown as MembershipListResponse;
+export const PAGE: MembershipListResponse = {
+  items: membershipsList.body.items.map((row) => ({
+    ...row,
+    status: membershipState(row.status),
+  })),
+  next_cursor: membershipsList.body.next_cursor,
+};
 /** The same operation's `empty` variant: a fresh org. */
-export const EMPTY_PAGE = membershipsEmpty.body as unknown as MembershipListResponse;
+export const EMPTY_PAGE: MembershipListResponse = membershipsEmpty.body;
 /** Every role the caller can see, in server order — the matrix's columns. */
-export const ROLES = (rolesList.body as unknown as RoleListResponse).items;
+export const ROLES: readonly RoleView[] = rolesList.body.items;
 /** The live catalogue's first page: sixteen rows, two of them `sensitive`. */
-const CATALOGUE = (permissionsList.body as unknown as PermissionListResponse).items;
+const CATALOGUE: readonly PermissionView[] = permissionsList.body.items;
 /** The fixture's create response as served: the row plus the one-time plaintext. */
-const SERVED_CREATE = membershipCreateOk.body as unknown as InviteIssuedView;
+const SERVED_CREATE: InviteIssuedView = {
+  ...membershipCreateOk.body,
+  status: membershipState(membershipCreateOk.body.status),
+};
 /**
  * A pending invite, as `POST /v1/orgs/{o}/memberships` answers one — WITHOUT the served
  * `invite_token`: the fixture carries it, a row that can reach a store signal must not. The
@@ -78,9 +102,9 @@ export const INVITE_TOKEN = 'evgi_4b7d2e91c6a0_9d3f1a5c8e2b7d4f6a1c3e5b8d0f2a4c'
 /** The token a rotate replaces it with. */
 export const ROTATED_TOKEN = 'evgi_c0a1f3d5e7b9_2f4a6c8e0b1d3f5a7c9e1b3d5f7a9c0b';
 /** AC2's refusal: the server's own message and code. */
-export const LAST_ADMIN = membershipRemoveLastAdmin.body as unknown as ErrorEnvelope;
+export const LAST_ADMIN: ErrorEnvelope = membershipRemoveLastAdmin.body;
 /** A second invite while one is pending. */
-export const INVITE_EXISTS = membershipCreateInviteExists.body as unknown as ErrorEnvelope;
+export const INVITE_EXISTS: ErrorEnvelope = membershipCreateInviteExists.body;
 /**
  * The 409 of the invite lifecycle (02, AC6): the row is no longer `pending`, so there is nothing
  * to rotate and nothing to cancel — the same code on both routes.
