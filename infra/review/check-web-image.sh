@@ -208,12 +208,12 @@ while [ "$i" -lt 40 ]; do
   if wget -qO- http://127.0.0.1:8080/nginx-health >/dev/null 2>&1; then break; fi
   i=$((i + 1)); sleep 0.25
 done
-css=$(cd /usr/share/nginx/html && ls vi/*.css | head -n 1)
+css=$(cd /usr/share/nginx/html && ls -S vi/*.css 2>/dev/null | head -n 1 || true)
 [ -n "$css" ] || { echo "FAIL: the vi bundle has no .css file to compress"; exit 1; }
 size=$(wc -c < "/usr/share/nginx/html/$css")
 [ "$size" -ge 1024 ] || { echo "FAIL: $css is $size bytes, below gzip_min_length, so it cannot show Vary"; exit 1; }
 for enc in "Accept-Encoding: gzip" "X-Probe: plain"; do
-  hdrs=$(printf "GET /%s HTTP/1.0\r\nHost: review.example.test\r\n%s\r\n\r\n" "$css" "$enc" | timeout 5 nc 127.0.0.1 8080 | tr -d "\r" | sed "/^$/q")
+  hdrs=$(printf "GET /%s HTTP/1.1\r\nHost: review.example.test\r\nConnection: close\r\n%s\r\n\r\n" "$css" "$enc" | timeout 5 nc 127.0.0.1 8080 | tr -d "\r" | sed "/^$/q")
   printf "%s\n" "$hdrs" | grep -qix "Vary: Accept-Encoding" || { echo "FAIL: GET /$css [$enc] has no Vary: Accept-Encoding: $hdrs"; exit 1; }
   case "$enc" in
     *gzip) printf "%s\n" "$hdrs" | grep -qix "Content-Encoding: gzip" || { echo "FAIL: GET /$css was not gzip-encoded: $hdrs"; exit 1; } ;;
@@ -223,8 +223,14 @@ done
 api() {
   # api UPSTREAM_HEADER_LINE EXPECTED_STATUS EXPECTED_CACHE_CONTROL
   if [ "$1" != none ]; then
-    ( printf "HTTP/1.1 200 OK\r\n${1}Content-Length: 2\r\nConnection: close\r\n\r\nok" | nc -l -p 9000 >/dev/null 2>&1 ) &
-    sleep 0.5
+    ( printf "HTTP/1.1 200 OK\r\n%bContent-Length: 2\r\nConnection: close\r\n\r\nok" "$1" | nc -l -p 9000 >/dev/null 2>&1 ) &
+    # Port 9000 is 0x2328; state 0A is LISTEN. Reading /proc does not connect,
+    # so the one-shot listener is not consumed by the readiness check.
+    w=0
+    until grep -q ":2328 .* 0A " /proc/net/tcp; do
+      w=$((w + 1)); [ "$w" -lt 50 ] || { echo "FAIL: the probe upstream never listened"; exit 1; }
+      sleep 0.1
+    done
   fi
   resp=$(printf "GET /v1/probe HTTP/1.0\r\nHost: review.example.test\r\n\r\n" | timeout 5 nc 127.0.0.1 8080 | tr -d "\r")
   status=$(printf "%s\n" "$resp" | sed -n "1s/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p")
@@ -234,7 +240,16 @@ api() {
 }
 api "Cache-Control: private, max-age=60\r\n" 200 "private, max-age=60"
 api "X-Other: 1\r\n" 200 "no-store"
-api none 502 "no-store"'
+api "Cache-Control: no-store\r\n" 200 "no-store"
+api "Cache-Control:\r\nCache-Control:\r\n" 200 "no-store"
+api none 502 "no-store"
+# nginx answers a stranger itself, before the Api is asked, and that 401 must
+# not be storable either.
+printf "auth_basic \"Evidgate review\";\nauth_basic_user_file /tmp/evidgate/htpasswd;\n" > /tmp/evidgate/auth.conf
+printf "reviewer:x\n" > /tmp/evidgate/htpasswd
+nginx -c /tmp/nginx-probe.conf -s reload
+sleep 1
+api none 401 "no-store"'
 compose run --rm --no-deps --entrypoint /bin/sh web -c "$api_probe_script"
 
 review_step 'both locale bundles exist'

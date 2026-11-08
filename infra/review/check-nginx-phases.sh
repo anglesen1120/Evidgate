@@ -116,7 +116,7 @@ if [ -z "$apimap" ]; then
 else
   grep -qE '^[[:space:]]*default[[:space:]]+\$upstream_http_cache_control;' <<<"$apimap" ||
     note 'the Api cache map must pass an upstream Cache-Control through by default'
-  grep -qE "^[[:space:]]*''[[:space:]]+'no-store';" <<<"$apimap" ||
+  grep -qE "^[[:space:]]*'~\^\[\\\\s,\]\*\\$'[[:space:]]+'no-store';" <<<"$apimap" ||
     note 'the Api cache map must turn an absent upstream Cache-Control into no-store'
 fi
 
