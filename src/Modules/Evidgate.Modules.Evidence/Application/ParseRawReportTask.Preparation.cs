@@ -176,19 +176,9 @@ internal sealed partial class ParseRawReportHandler
         IJUnitMapper mapper,
         CancellationToken cancellationToken)
     {
-        // The cap is the run's project's, the project the write transaction charges and the pre-check asks about: the
-        // artifact row carries its own project column that nothing ties to the run's, so it is never the source here.
-        // The artifact's composite run key makes the run exist, so an absent one is a broken database, not an outcome.
-        var runProjectId = await db
-            .QuerySingleOrDefaultAsync<Guid?>(
-                RunProjectSql,
-                new { org_id = orgId, run_id = payload.RunId },
-                cancellationToken)
-            .ConfigureAwait(false)
-            ?? throw new InvalidOperationException("the artifact's run is missing although its composite key requires it");
-
+        // The cap is the run's project's, the project the write transaction charges and the pre-check asks about.
         var maxBytes = (await ArtifactCapturePolicy
-                .ResolveAsync(context, runProjectId, artifact.Kind, cancellationToken)
+                .ResolveForRunAsync(context, artifact, cancellationToken)
                 .ConfigureAwait(false))
             .MaxBytes;
 
@@ -209,14 +199,6 @@ internal sealed partial class ParseRawReportHandler
                 PlannedExecutionIndex.Build(hints)),
             null);
     }
-
-    /// <summary>The run's project, the one id the cap, the quota question and the write's charge all share.</summary>
-    private const string RunProjectSql = """
-        select project_id
-          from public.run
-         where org_id = @org_id
-           and id = @run_id
-        """;
 
     /// <summary>
     /// The artifact checks of the read scope: this tenant's, of the raw-report kind and this run's. A row whose object
