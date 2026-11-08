@@ -160,11 +160,13 @@ otherwise the envelope filter's default `60` (00 §9.2).
   write a second identity; the store itself converges on `already_linked`
   (02.3.1-T2 Q4, AC6).
 - `DELETE /v1/auth/sessions/{s}`, `POST /v1/auth/sessions/revoke-all`,
-  `POST /v1/auth/logout`, `DELETE /v1/api-tokens/{t}` — revocation is a row state: the first call sets
+  `POST /v1/auth/users/{u}/sessions/revoke-all`, `POST /v1/auth/logout`,
+  `DELETE /v1/api-tokens/{t}` — revocation is a row state: the first call sets
   `revoked_at`, a repeat of the delete answers the same `404 not_found` on the
-  dead row (the API token's answers the same `204`), a repeat of `revoke-all` the same `204`, and a replay of a logged-out
-  cookie is `401 session_revoked` — so a key could change nothing the second time
-  (02.3.2-T2.1 §5, AC4/AC8).
+  dead row (the API token's answers the same `204`), a repeat of either
+  `revoke-all` the same `204` — and no second audit row, because nothing was
+  revoked — and a replay of a logged-out cookie is `401 session_revoked` — so a
+  key could change nothing the second time (02.3.2-T2.1 §5, AC4/AC8; 02.3.2-T3).
 - `PATCH /v1/me` — the body sets one column (`preferred_locale`) to one of two
   values, so a replay would write the same state, and the `If-Match` version makes
   a retry that re-sends the already-applied version answer `412

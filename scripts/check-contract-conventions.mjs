@@ -53,6 +53,10 @@ const EXPECTED = [
   ['/auth/sessions/{s}', 'delete', 'none', 'v1'],
   ['/auth/sessions/revoke-all', 'post', 'none', 'v1'],
   ['/auth/logout', 'post', 'none', 'v1'],
+  // The admin all-sessions revoke: the same pre-tenant browser form, and the `membership:write` the caller
+  // must hold is checked inside the definer against the org the header names, never as a route permission —
+  // a route permission would answer a different status for a caller outside the org.
+  ['/auth/users/{u}/sessions/revoke-all', 'post', 'none', 'v1'],
   // The account's own profile (02.3.1-T3, 02 §5): the same pre-tenant browser form as the session surface —
   // the caller is the session the cookie proves, resolved inside the definer, so no catalogue permission is
   // carried and no route value or body member names a user.
@@ -296,11 +300,12 @@ const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // the invite staging writes only a short-lived cookie (no resource), and the link surface is
 // driven by one staged-link cookie that one confirmation spends, so a replay cannot write twice; the session
 // routes of 02.3.2-T2 = revocation is a row state (`revoked_at` set once) and every answer is the same on a
-// repeat, so a key could change nothing the second time; the own-profile write of 02.3.1-T3 = the body sets one
-// column to one of two values, so a replay would write the same state, and the `If-Match` version makes the
-// retry that re-sends the already-applied version answer 412 instead of applying twice; the retention upsert =
-// a PUT that writes the same two windows for the same body, so a replay cannot create a second row or a
-// different answer.
+// repeat, so a key could change nothing the second time — the admin all-sessions revoke is the same shape:
+// a repeat finds no live row, answers the same 204 and writes no second audit row; the
+// own-profile write of 02.3.1-T3 = the body sets one column to one of two values, so a replay would write the
+// same state, and the `If-Match` version makes the retry that re-sends the already-applied version answer 412
+// instead of applying twice; the retention upsert = a PUT that writes the same two windows for the same body,
+// so a replay cannot create a second row or a different answer.
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
   'post /projects/{p}/ci-bindings',
@@ -321,6 +326,7 @@ const IDEM_EXEMPT = new Set([
   'delete /api-tokens/{t}',
   'delete /auth/sessions/{s}',
   'post /auth/sessions/revoke-all',
+  'post /auth/users/{u}/sessions/revoke-all',
   'post /auth/logout',
   'post /dev/session',
   'patch /me',

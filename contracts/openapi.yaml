@@ -1159,6 +1159,57 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /auth/users/{u}/sessions/revoke-all:
+    post:
+      operationId: revokeUserSessions
+      tags: [identity]
+      summary: Revoke every live session of one member of an org as its admin (02.3.2-T3)
+      description: >-
+        Pre-tenant, session-cookie only (`x-permission: none`, `x-auth: user_session`), with the antiforgery
+        pair required (403 `csrf_failed`) and no request body and no `Idempotency-Key` (revocation is a row
+        state; see `contracts/README.md`). The acting admin is resolved inside the definer from the presented
+        cookie's HMAC (`evidgate_resolve.session_revoke_all_admin`), never from a parameter, and the org comes
+        only from `X-Evidgate-Org`: the caller must hold an ACTIVE `membership:write` in that org (a built-in
+        role or an org custom role, the same join the single admin revoke uses) and `{u}` must hold an ACTIVE
+        membership in the SAME org. Every refusal — `{u}` not a uuid, the header absent or not a uuid, an
+        unknown user, no permission, a foreign org, a target with no active membership there, or `{u}` being
+        the caller's own id (that caller uses the self route) — answers the SAME 404 `not_found` object the
+        single revoke answers for an unknown session, so the route is not an oracle for another org's users.
+        Only after the request was authenticated does the handler parse `{u}`, so neither an anonymous caller
+        nor a malformed value reaches an undocumented 400. The call revokes every live row of `{u}` (not
+        revoked, and past neither deadline) and writes exactly one `auth.session_revoke_admin` audit row in
+        the definer's own transaction when at least one row was revoked; a target with no live session still
+        answers 204 and writes no audit row, because nothing changed. A 503 `unavailable` means the definer
+        aborted — no session pepper, a database fault, or the audit row failing to write in the same
+        transaction, including a lock timeout — so the revoke rolled back, no session was revoked and the
+        retry is safe. Every response carries `Cache-Control: no-store`.
+      x-permission: none
+      x-auth: user_session
+      x-version: v1
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/XsrfToken'
+        - $ref: '#/components/parameters/AdminRevokeOrgHeader'
+      responses:
+        '204':
+          description: >-
+            Every live session of `{u}` is revoked, or `{u}` had none (the call is idempotent and writes no
+            audit row in that case). The admin's own session is untouched.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/manifests:
     post:
       operationId: createManifest
@@ -8483,6 +8534,18 @@ components:
       schema:
         type: string
         format: uuid
+    UserId:
+      name: u
+      in: path
+      required: true
+      description: >-
+        The `user.id` whose live sessions an org admin ends (02.3.2-T3). Every value that cannot be acted on —
+        not a uuid, an unknown account, an account with no active membership in the org named by
+        `X-Evidgate-Org`, or the caller's own id — answers the same 404 `not_found` the single revoke answers
+        for an unknown session, after the request was authenticated; the route never answers the binding 400.
+      schema:
+        type: string
+        format: uuid
     OrgHeader:
       name: X-Evidgate-Org
       in: header
@@ -8493,6 +8556,18 @@ components:
         `membership:write` AND the target session's user an active membership in the same org, otherwise the
         answer is the same 404 an unknown id gets. The org is never taken from the path or the body of a
         pre-tenant route.
+      schema:
+        type: string
+        format: uuid
+    AdminRevokeOrgHeader:
+      name: X-Evidgate-Org
+      in: header
+      required: false
+      description: >-
+        Names the org in which the caller must hold an active `membership:write` for the all-sessions revoke of
+        another account (02.3.2-T3). It is optional in the schema so that a missing or malformed value reaches
+        the handler and answers the same 404 `not_found` every other refusal gets, never the binding 400; the
+        org is never taken from the path or the body of a pre-tenant route.
       schema:
         type: string
         format: uuid

@@ -3484,9 +3484,19 @@ export type ProviderPath = 'google' | 'github';
 export type SessionId = string;
 
 /**
+ * The `user.id` whose live sessions an org admin ends (02.3.2-T3). Every value that cannot be acted on — not a uuid, an unknown account, an account with no active membership in the org named by `X-Evidgate-Org`, or the caller's own id — answers the same 404 `not_found` the single revoke answers for an unknown session, after the request was authenticated; the route never answers the binding 400.
+ */
+export type UserId = string;
+
+/**
  * Names the org in which the caller claims `membership:write` (02.3.2-T2.1). Absent, only the session's owner may be revoked; present, the caller must hold an active membership in this org with `membership:write` AND the target session's user an active membership in the same org, otherwise the answer is the same 404 an unknown id gets. The org is never taken from the path or the body of a pre-tenant route.
  */
 export type OrgHeader = string;
+
+/**
+ * Names the org in which the caller must hold an active `membership:write` for the all-sessions revoke of another account (02.3.2-T3). It is optional in the schema so that a missing or malformed value reaches the handler and answers the same 404 `not_found` every other refusal gets, never the binding 400; the org is never taken from the path or the body of a pre-tenant route.
+ */
+export type AdminRevokeOrgHeader = string;
 
 /**
  * The project whose switch override applies (08.6.3-T1). Absent answers the org-level resolution; present, the project must be inside the credential's and the request's scope (403 `project_scope_mismatch`) and exist in the caller's org (404 otherwise, also for another tenant's project).
@@ -4558,6 +4568,58 @@ export type LogoutResponses = {
 };
 
 export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
+
+export type RevokeUserSessionsData = {
+    body?: never;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+        /**
+         * Names the org in which the caller must hold an active `membership:write` for the all-sessions revoke of another account (02.3.2-T3). It is optional in the schema so that a missing or malformed value reaches the handler and answers the same 404 `not_found` every other refusal gets, never the binding 400; the org is never taken from the path or the body of a pre-tenant route.
+         */
+        'X-Evidgate-Org'?: string;
+    };
+    path: {
+        /**
+         * The `user.id` whose live sessions an org admin ends (02.3.2-T3). Every value that cannot be acted on — not a uuid, an unknown account, an account with no active membership in the org named by `X-Evidgate-Org`, or the caller's own id — answers the same 404 `not_found` the single revoke answers for an unknown session, after the request was authenticated; the route never answers the binding 400.
+         */
+        u: string;
+    };
+    query?: never;
+    url: '/auth/users/{u}/sessions/revoke-all';
+};
+
+export type RevokeUserSessionsErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type RevokeUserSessionsError = RevokeUserSessionsErrors[keyof RevokeUserSessionsErrors];
+
+export type RevokeUserSessionsResponses = {
+    /**
+     * Every live session of `{u}` is revoked, or `{u}` had none (the call is idempotent and writes no audit row in that case). The admin's own session is untouched.
+     */
+    204: void;
+};
+
+export type RevokeUserSessionsResponse = RevokeUserSessionsResponses[keyof RevokeUserSessionsResponses];
 
 export type CreateManifestData = {
     body: ManifestV1;
