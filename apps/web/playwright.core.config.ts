@@ -15,17 +15,23 @@ import { resolve } from 'node:path';
 import { defineConfig } from '@playwright/test';
 
 import { AUTH_STATE } from './e2e/core/auth-state';
+import { E2E_PORT_MAX, E2E_PORT_MIN, INFRA_TAG } from './e2e/infra-tag';
 
-// Ephemeral port: lanes share one machine, and Playwright evaluates this file in the runner and in
-// every worker, so the first evaluation pins the port in the environment.
+// Port below the OS ephemeral range (see e2e/infra-tag.ts): lanes share one machine, and
+// Playwright evaluates this file in the runner and in every worker, so the first evaluation pins
+// the port in the environment.
 const PORT_ENV = 'EVIDGATE_WEB_FIXTURES_E2E_PORT';
 const presetPort = Number.parseInt(process.env[PORT_ENV] ?? '', 10);
 const PORT =
-  Number.isInteger(presetPort) && presetPort > 0 ? presetPort : randomInt(40_000, 60_000);
+  Number.isInteger(presetPort) && presetPort > 0
+    ? presetPort
+    : randomInt(E2E_PORT_MIN, E2E_PORT_MAX);
 process.env[PORT_ENV] = String(PORT);
 
-// The whole token: `@infrastructure` or `@infra-x` must not earn retries.
-const INFRA_TAG = /@infra(?![\w-])/;
+// CI runs `a11y.spec.ts` in its own stage (`verify.sh --stage e2e-a11y`); the core step sets this
+// so the same spec does not run twice. Unset locally: `npm run e2e:core` runs every spec.
+const skipA11y = process.env['EVIDGATE_E2E_CORE_SKIP_A11Y'] === '1';
+const testIgnore = skipA11y ? ['**/a11y.spec.ts'] : [];
 
 const baseURL = `http://127.0.0.1:${PORT}`;
 // Everything a run writes is keyed on the shard, so shards started together on one machine never
@@ -38,6 +44,7 @@ const junitFile = `test-results/e2e-core-junit${suffix}.xml`;
 
 export default defineConfig({
   testDir: './e2e/core',
+  testIgnore,
   forbidOnly: Boolean(process.env['CI']),
   // No blanket retries: a product assertion that passes on a second try must not turn green.
   // Only a test titled with the `@infra` tag (browser or runner flake, never a product assertion)

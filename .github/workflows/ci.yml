@@ -406,8 +406,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: 'Build @evidgate/sdk (the web app imports its dist/)'
         run: npm run build -w packages/sdk
-      - name: 'Install Google Chrome for Playwright'
-        run: npx playwright install --with-deps chrome
+      - name: 'Install Playwright browsers (Chrome: core and axe, Chromium: production smoke)'
+        run: npx playwright install --with-deps chrome chromium
       - name: 'Browser axe suite — verify.sh stage'
         run: ./scripts/verify.sh --stage e2e-a11y
       # Every Playwright run empties its output directory, and the production
@@ -426,6 +426,9 @@ jobs:
       - name: 'Playwright core flows — apps/web fixtures build'
         if: always()
         run: npm run e2e:core -w apps/web
+        env:
+          # The axe spec already ran in the stage above.
+          EVIDGATE_E2E_CORE_SKIP_A11Y: '1'
       - name: 'Upload the core-flow reports, traces and JUnit'
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -435,9 +438,6 @@ jobs:
             apps/web/test-results
             !apps/web/test-results/**/core-auth-state*.json
           retention-days: 7
-      - name: 'Install Playwright browsers'
-        if: always()
-        run: npx playwright install --with-deps chromium
       - name: 'Playwright production smoke — apps/web'
         if: always()
         run: npm run e2e -w apps/web

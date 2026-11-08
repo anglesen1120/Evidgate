@@ -93,9 +93,8 @@ internal sealed partial class ParseRawReportHandler
             return new Preparation(null, null) { Blocked = blocked };
         }
 
-        return new Preparation(
-            await ResolveFetchAsync(context, orgId, artifact, payload, resolution, mapper, cancellationToken).ConfigureAwait(false),
-            null);
+        return await ResolveFetchAsync(context, orgId, artifact, payload, resolution, mapper, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -168,7 +167,7 @@ internal sealed partial class ParseRawReportHandler
     /// <param name="mapper">The loaded mapper that pair names.</param>
     /// <param name="cancellationToken">Cancels the reads.</param>
     /// <returns>The bytes to fetch and the plan the mapping is built against.</returns>
-    private async Task<Prepared> ResolveFetchAsync(
+    private async Task<Preparation> ResolveFetchAsync(
         EvidenceDbContext context,
         Guid orgId,
         Artifact artifact,
@@ -177,8 +176,19 @@ internal sealed partial class ParseRawReportHandler
         IJUnitMapper mapper,
         CancellationToken cancellationToken)
     {
+        // The cap is the run's project's, the project the write transaction charges and the pre-check asks about: the
+        // artifact row carries its own project column that nothing ties to the run's, so it is never the source here.
+        // The artifact's composite run key makes the run exist, so an absent one is a broken database, not an outcome.
+        var runProjectId = await db
+            .QuerySingleOrDefaultAsync<Guid?>(
+                RunProjectSql,
+                new { org_id = orgId, run_id = payload.RunId },
+                cancellationToken)
+            .ConfigureAwait(false)
+            ?? throw new InvalidOperationException("the artifact's run is missing although its composite key requires it");
+
         var maxBytes = (await ArtifactCapturePolicy
-                .ResolveAsync(context, artifact.ProjectId, artifact.Kind, cancellationToken)
+                .ResolveAsync(context, runProjectId, artifact.Kind, cancellationToken)
                 .ConfigureAwait(false))
             .MaxBytes;
 
@@ -189,14 +199,24 @@ internal sealed partial class ParseRawReportHandler
                 cancellationToken)
             .ConfigureAwait(false);
 
-        return new Prepared(
-            artifact.ObjectKey,
-            Math.Min(maxBytes, ParsingLimits.MaxReportBytes),
-            resolution.ParserId!,
-            resolution.Version!,
-            mapper,
-            PlannedExecutionIndex.Build(hints));
+        return new Preparation(
+            new Prepared(
+                artifact.ObjectKey,
+                Math.Min(maxBytes, ParsingLimits.MaxReportBytes),
+                resolution.ParserId!,
+                resolution.Version!,
+                mapper,
+                PlannedExecutionIndex.Build(hints)),
+            null);
     }
+
+    /// <summary>The run's project, the one id the cap, the quota question and the write's charge all share.</summary>
+    private const string RunProjectSql = """
+        select project_id
+          from public.run
+         where org_id = @org_id
+           and id = @run_id
+        """;
 
     /// <summary>
     /// The artifact checks of the read scope: this tenant's, of the raw-report kind and this run's. A row whose object

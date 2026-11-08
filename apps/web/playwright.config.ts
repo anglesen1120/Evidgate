@@ -7,17 +7,22 @@
 import { randomInt } from 'node:crypto';
 import { defineConfig } from '@playwright/test';
 
-// The webServer port is EPHEMERAL on purpose: lanes run this suite concurrently on one
-// machine, so a fixed port (4173 before, 4200/8080/8765 elsewhere) lets one lane's server
-// answer another lane's run. Playwright evaluates this file more than once (the runner, then
-// every worker process) and the port must not change between those evaluations, so the first
-// evaluation picks a high port and stores it in `process.env`; each forked worker inherits
-// that environment, and `e2e/static-server.mjs` reads the same variable instead of a
-// hard-coded default. `EVIDGATE_WEB_E2E_PORT` may be preset to pin a port deliberately.
+import { E2E_PORT_MAX, E2E_PORT_MIN, INFRA_TAG } from './e2e/infra-tag';
+
+// The webServer port is picked per run, below the OS ephemeral range (see e2e/infra-tag.ts):
+// lanes run this suite concurrently on one machine, so a fixed port (4173 before, 4200/8080/8765
+// elsewhere) lets one lane's server answer another lane's run, and a port inside the ephemeral
+// range can be held by a Docker or SSH forward. Playwright evaluates this file more than once (the
+// runner, then every worker process) and the port must not change between those evaluations, so
+// the first evaluation stores it in `process.env`; each forked worker inherits that environment,
+// and `e2e/static-server.mjs` reads the same variable instead of a hard-coded default.
+// `EVIDGATE_WEB_E2E_PORT` may be preset to pin a port deliberately.
 const PORT_ENV = 'EVIDGATE_WEB_E2E_PORT';
 const presetPort = Number.parseInt(process.env[PORT_ENV] ?? '', 10);
 const PORT =
-  Number.isInteger(presetPort) && presetPort > 0 ? presetPort : randomInt(40_000, 60_000);
+  Number.isInteger(presetPort) && presetPort > 0
+    ? presetPort
+    : randomInt(E2E_PORT_MIN, E2E_PORT_MAX);
 process.env[PORT_ENV] = String(PORT);
 
 const baseURL = `http://127.0.0.1:${PORT}`;
@@ -35,7 +40,9 @@ export default defineConfig({
   // Playwright, and that `exclude` of the `test` target in angular.json keeps them apart.
   testMatch: '**/*.spec.ts',
   forbidOnly: Boolean(process.env['CI']),
-  retries: process.env['CI'] ? 2 : 0,
+  // No blanket retries: a product assertion that passes on a second try must not turn green. Only
+  // a test titled with `@infra` (browser or runner flake) is retried, by `chromium-infra`.
+  retries: 0,
   reporter: [
     ['list'],
     ['html', { open: 'never' }],
@@ -47,7 +54,15 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { browserName: 'chromium' } }],
+  projects: [
+    { name: 'chromium', grepInvert: INFRA_TAG, use: { browserName: 'chromium' } },
+    {
+      name: 'chromium-infra',
+      grep: INFRA_TAG,
+      retries: process.env['CI'] ? 2 : 0,
+      use: { browserName: 'chromium' },
+    },
+  ],
   webServer: {
     // No port argument and no build step here: the server reads `EVIDGATE_WEB_E2E_PORT`
     // above, refuses to start without a port, and exits with a "run npm run build -w

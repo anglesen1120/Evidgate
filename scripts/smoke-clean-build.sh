@@ -39,24 +39,37 @@ cat > "$INNER_SCRIPT" <<'INNER'
 #!/usr/bin/env bash
 set -euo pipefail
 set -x
-arch="$(uname -m)"
-case "$arch" in
-  x86_64)  node_arch=x64 ;;
-  aarch64) node_arch=arm64 ;;
-  *) echo "unsupported arch $arch" >&2; exit 1 ;;
-esac
-tarball="node-v${NODE_VERSION}-linux-${node_arch}.tar.gz"
-cd /tmp
-curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/${tarball}" -o "$tarball"
-curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" -o SHASUMS256.txt
-grep " ${tarball}\$" SHASUMS256.txt | sha256sum -c -
-tar -xzf "$tarball" -C /tmp/node --strip-components=1
 export PATH=/tmp/node/bin:$PATH
 cd /src
-node -v && npm -v && dotnet --version
-dotnet restore --locked-mode
-dotnet build -c Release Evidgate.slnx
-npm ci
+if [ "${1:-}" = prepare ]; then
+  arch="$(uname -m)"
+  case "$arch" in
+    x86_64)  node_arch=x64 ;;
+    aarch64) node_arch=arm64 ;;
+    *) echo "unsupported arch $arch" >&2; exit 1 ;;
+  esac
+  tarball="node-v${NODE_VERSION}-linux-${node_arch}.tar.gz"
+  cd /tmp
+  curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/${tarball}" -o "$tarball"
+  curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" -o SHASUMS256.txt
+  grep " ${tarball}\$" SHASUMS256.txt | sha256sum -c -
+  tar -xzf "$tarball" -C /tmp/node --strip-components=1
+  cd /src
+  node -v && npm -v && dotnet --version
+  dotnet restore --locked-mode
+  dotnet build -c Release Evidgate.slnx
+  npm ci
+  # The container entry installs Chrome as root after this phase, then runs `verify`.
+  exit 0
+fi
+# `verify` phase.
+# One eslint worker: the lint is the same, but its typed-lint programs cost about 3.4 GB at
+# one worker against 5-7 GB at `auto` (measured), and the 15 GB LAN host shares memory with
+# other gate runs, so `auto` was OOM-killed (exit 137) inside this container.
+export EVIDGATE_ESLINT_CONCURRENCY=1
+# The container's node default heap is 2 GB (observed: V8 "heap out of memory", exit 134, at
+# one worker); the single worker needs about 3.4 GB RSS, so give V8 4 GB.
+export NODE_OPTIONS="--max-old-space-size=4096"
 # AC6 (01.2.1): the clean clone also passes the full local gate. verify.sh
 # itself does tsc -b via the root tsconfig and never runs npm ci, so it runs
 # after npm ci here. The tar copy has no .git; check-layout.sh needs
@@ -94,10 +107,23 @@ docker run --rm \
     apt-get update -qq && apt-get install -y -qq --no-install-recommends python3
     mkdir -p /tmp/home /tmp/nuget/packages /tmp/npm-cache /tmp/node
     chown -R "$HOST_UID:$HOST_GID" /tmp/home /tmp/nuget /tmp/npm-cache /tmp/node
+    as_host() {
+      setpriv --reuid "$HOST_UID" --regid "$HOST_GID" --clear-groups \
+        env HOME=/tmp/home DOTNET_CLI_HOME=/tmp/home \
+            NUGET_PACKAGES=/tmp/nuget/packages NPM_CONFIG_CACHE=/tmp/npm-cache \
+        "$@"
+    }
+    as_host bash /tmp/smoke-inner.sh prepare
+    # The e2e-a11y stage drives Google Chrome (channel chrome), which the SDK image lacks. CI
+    # installs it with this same command; --with-deps needs root, so it runs between the two
+    # host-uid phases, with the repo-pinned Playwright from the npm ci above. Google ships stable
+    # Chrome for Linux x86_64 only, so on an aarch64 Docker host this step fails loudly (the
+    # a11y stage could not run there either); run the smoke on an x86_64 host.
+    (cd /src/apps/web && PATH=/tmp/node/bin:$PATH npx playwright install --with-deps chrome)
     exec setpriv --reuid "$HOST_UID" --regid "$HOST_GID" --clear-groups \
       env HOME=/tmp/home DOTNET_CLI_HOME=/tmp/home \
           NUGET_PACKAGES=/tmp/nuget/packages NPM_CONFIG_CACHE=/tmp/npm-cache \
-      bash /tmp/smoke-inner.sh
+      bash /tmp/smoke-inner.sh verify
   '
 
 echo "smoke-clean-build: clean-clone build passed (AC1)"
