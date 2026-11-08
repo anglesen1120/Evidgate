@@ -37,4 +37,31 @@ describe('RetentionStore write attempt ownership', () => {
     h.http.verify();
     expect(stillSaving).toBe(true);
   });
+
+  it('accepts the answer of the only write for a project after another project saved and the selection returned', async () => {
+    const h = mountRetention();
+    await h.load();
+    const first = h.store.save({ artifact_days: 30, metadata_days: 90 });
+    const firstPut = await h.take('PUT');
+    h.org.set({ id: 'o-2' });
+    h.projects.set([{ id: 'p-2', name: 'Second org project', org_id: 'o-2' }]);
+    flush(await h.take('GET', 'p-2'));
+    await h.settle();
+    const other = h.store.save({ artifact_days: 40, metadata_days: 100 });
+    const otherPut = await h.take('PUT', 'p-2');
+    h.org.set({ id: 'o-1' });
+    h.projects.set([{ id: 'p-1', name: 'First org project', org_id: 'o-1' }]);
+    flush(await h.take('GET'));
+    await vi.waitFor(() => {
+      TestBed.tick();
+      expect(h.store.loading()).toBe(false);
+    });
+    flush(firstPut, { artifact_days: 30, metadata_days: 90 });
+    expect(await first).toBe(true);
+    expect(h.store.policy()).toEqual({ artifact_days: 30, metadata_days: 90 });
+    flush(otherPut, { artifact_days: 40, metadata_days: 100 });
+    await other;
+    await h.settle();
+    h.http.verify();
+  });
 });
