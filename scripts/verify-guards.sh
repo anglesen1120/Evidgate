@@ -355,7 +355,6 @@ run_parallel_tests() {
   done
   for i in "${!PT_PIDS[@]}"; do
     wait_pid="${PT_PIDS[$i]}"
-    PT_PIDS[$i]=""
     if wait "$wait_pid"; then
       echo "== ${PT_NAMES[$i]}: passed ($(test_log_total "${PT_FILES[$i]}") tests)"
     else
@@ -363,6 +362,8 @@ run_parallel_tests() {
       failed=1
       cat "${PT_FILES[$i]}"
     fi
+    # Cleared only once reaped: an interrupt during the wait must still kill it.
+    PT_PIDS[$i]=""
     if [[ "${PT_NAMES[$i]}" == tenancy-* ]]; then
       total=$((total + $(test_log_total "${PT_FILES[$i]}")))
     fi

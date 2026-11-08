@@ -25,6 +25,7 @@ FAKE_DOTNET = textwrap.dedent("""\
       for c in "${classes[@]}"; do echo "  $c.First"; echo "  $c.Second(value: 1.5)"; done
       exit 0
     fi
+    if [[ -n "${FAKE_HANG_PIDS:-}" ]]; then echo $$ >>"$FAKE_HANG_PIDS"; exec sleep 60; fi
     ran=0 rc=0 picked=()
     if [[ " $* " == *" --filter-class "* ]]; then
       args=("$@"); take=0
@@ -99,6 +100,54 @@ class ParallelTests(unittest.TestCase):
             with self.subTest(value=value):
                 done = self.run_stage(EVIDGATE_TENANCY_SHARDS=value)
                 self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
+
+    def test_a_term_during_the_wait_leaves_no_run_behind(self):
+        import signal
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            for project in ("Tenancy.IntegrationTests", "Other.Tests"):
+                (tmp_path / "tests" / project).mkdir(parents=True)
+                (tmp_path / "tests" / project / f"{project}.csproj").write_text("")
+            bin_dir = tmp_path / "bin"
+            bin_dir.mkdir()
+            fake = bin_dir / "dotnet"
+            fake.write_text(FAKE_DOTNET)
+            fake.chmod(0o755)
+            pids = tmp_path / "pids"
+            gate = subprocess.Popen(
+                ["bash", "-c", f'set -euo pipefail; source "{GUARDS}"; run_parallel_tests'],
+                cwd=tmp,
+                env={
+                    **os.environ,
+                    "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                    "EVIDGATE_TENANCY_SHARDS": "1",
+                    "FAKE_HANG_PIDS": str(pids),
+                },
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            started = []
+            try:
+                for _ in range(100):
+                    started = pids.read_text().split() if pids.exists() else []
+                    if len(started) == 2:
+                        break
+                    time.sleep(0.1)
+                self.assertEqual(len(started), 2, "both runs must be started and blocked in wait")
+                gate.send_signal(signal.SIGTERM)
+                self.assertEqual(gate.wait(timeout=20), 143)
+                time.sleep(0.3)
+                for pid in map(int, started):
+                    with self.assertRaises(ProcessLookupError, msg=f"run {pid} survived the gate"):
+                        os.kill(pid, 0)
+            finally:
+                for pid in map(int, started):
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
 
     def test_the_callers_exit_trap_survives_the_stage(self):
         done = self.run_stage(
