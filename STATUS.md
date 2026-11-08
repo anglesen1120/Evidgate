@@ -9,8 +9,8 @@ Updated 2026-11-02. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Open PRs: lane PRs of S296/S298/S299 plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a lane whose diff `python3 scripts/gate_scope.py` classifies `docs` or `no-dotnet` runs phase 1 (that tier's stages) + `npm run e2e -w apps/web` when `apps/web` changed, and never takes the Docker gate lock; a `full` tier needs phase 2 and the lock (`.omp/coordinator/PROJECT.md §Gate`).
 - Lanes in flight (2026-11-08): S296 HARNESS-SPEED, S298 GATE-PERF, S299 STATUS-RECOUNT (this recount); earlier lanes are merged and closed out.
-- Fully landed on develop (recount S299 through #612, `2a641af8`): 234/660 tasks (≈35.5 %); 236.0/706.75 raw person-days (≈33.4 %); remaining 426 tasks / 470.75 d. Via merged PRs: 207 tasks / 211.0 d; the other 27 tasks / 25.0 d are direct commits on develop. Method (unchanged from S189): task ranges in merged PR bodies, close-out rows and plan Notes expanded against plan_graph task ids; a parent counts only when all its sub-rows landed. The S299 recount added 33 tasks / 31.0 d after #393 (ids in §2); the S189 base of 201 / 205.0 is unchanged. 31 parents are partial and carry no credit (§2).
-- Landed by phase (done tasks / raw d): G1 150 / 158.25; G2 67 / 61.5; G3 5 / 4.5; G4 12 / 11.75.
+- Fully landed on develop (recount S299 through #612, `2a641af8`): 235/660 tasks (≈35.6 %); 236.5/706.75 raw person-days (≈33.5 %); remaining 425 tasks / 470.25 d. Via merged PRs: 208 tasks / 211.5 d; the other 27 tasks / 25.0 d are direct commits on develop. Method (unchanged from S189): task ranges in merged PR bodies, close-out rows and plan Notes expanded against plan_graph task ids; a parent counts only when all its sub-rows landed. The S299 recount added 33 tasks / 31.0 d after #393 (ids in §2); the S189 base of 201 / 205.0 is unchanged. 31 parents are partial and carry no credit (§2).
+- Landed by phase (done tasks / raw d): G1 151 / 158.75; G2 67 / 61.5; G3 5 / 4.5; G4 12 / 11.75.
 - Plan totals: 660 tasks / 706.75 raw / 848.1 buffered person-days (`plan_graph.py` on `2a641af8`: errors 0, 205 stories; 04.2.2-T3 manifest generator added in S186, M; the S93 canonical figures were 655 / 702.75 / 843.3). `check_features.py` still exits 1 (8 missing 13.x feature plans, 13.5.1 to 13.9.1; queue F37).
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
@@ -25,10 +25,10 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 234 | 236.0 |
-| Via merged PRs | 207 | 211.0 |
+| Fully landed on develop | 235 | 236.5 |
+| Via merged PRs | 208 | 211.5 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 426 | 470.75 |
+| Remaining | 425 | 470.25 |
 | Plan total | 660 | 706.75 |
 
 The S299 recount adds 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none removed). Newly credited parents:
@@ -95,20 +95,20 @@ The 31 partial parents above are excluded from done counts and dependency satisf
 | 08 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
 | 09 | 31 | 0 | 9 | 16 | 6 | 0 | 32.5 |
 | 10 | 5 | 0 | 2 | 2 | 1 | 0 | 5 |
-| 11 | 12 | 1 | 5 | 5 | 1 | 0 | 9.75 |
+| 11 | 13 | 1 | 6 | 5 | 1 | 0 | 10.25 |
 | 12 | 5 | 0 | 1 | 2 | 2 | 0 | 6.5 |
 | 13 | 7 | 0 | 1 | 4 | 2 | 0 | 8.5 |
-| TOTAL | 234 | 4 | 68 | 124 | 37 | 1 | 236.0 |
+| TOTAL | 235 | 4 | 69 | 124 | 37 | 1 | 236.5 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 150 | 3 | 39 | 79 | 28 | 1 | 158.25 |
+| G1 | 151 | 3 | 40 | 79 | 28 | 1 | 158.75 |
 | G2 | 67 | 0 | 23 | 38 | 6 | 0 | 61.5 |
 | G3 | 5 | 0 | 3 | 1 | 1 | 0 | 4.5 |
 | G4 | 12 | 1 | 3 | 6 | 2 | 0 | 11.75 |
-| TOTAL | 234 | 4 | 68 | 124 | 37 | 1 | 236.0 |
+| TOTAL | 235 | 4 | 69 | 124 | 37 | 1 | 236.5 |
 
 ### Landed task groups
 
@@ -234,7 +234,7 @@ The 31 partial parents above are excluded from done counts and dependency satisf
 | 09.2.1 | 09.2.1-T5.1 + T5.2 (09.2.1-T5) | merged (#218, 9a0051f; #272, 5c69ba9a); 09.2.1-T5 complete, M, G2, counted in the S129 close-out | Onboarding step 5 `features/onboarding/steps/enable-collection.page.*`: read-only constant default advisory policy (`default-policy.ts`, T62 24 h late window, validated against the createPolicyRevision schema), `policy:write` gate with disabled confirm + "ask your release approver", confirm = createPolicyRevision then activatePolicyRevision (mode advisory, one Idempotency-Key per confirm intent), terminal panel from the response, fixtures `policy-activation-*`, e2e `onboarding-enable-collection.spec.ts`. detail: carried row '09.2.1-T5 onboarding step 5 detail' (S144 F61).|
 | 11.1.1 | 11.1.1-T3, 11.1.1-T4 | merged (#224, aa42d7a) | ASVS 5.0.0 L2 level statement and a 17-chapter mapping with 39 published gap rows — 34 L2 gaps plus five traceability observations that ASVS 5.0.0 does not require at L2 (`docs/security/asvs-l2-mapping.md`), plus the V1 security-event baseline: five types with severity, detection point and consumer per row (`docs/security/security-event-baseline.md`). Closes area plan open question 1 (D-S107-Q1); counts bumped in the close-out, and every gap is carried by a §6 row titled "ASVS L2 gaps: …" or by the §6 row "Security-event baseline contradictions and gaps (11.1.1-T4)". |
 | 10.7.1 | 10.7.1-T4.1 + T4.2 written half: key rotation runbook | merged (#222, 1adcc47) | `docs/runbooks/key-rotation.md` covers all six key classes (ingest tokens, CI OIDC trust, JWT signing key, webhook secrets, database credentials, provider keys via the 10.1.1-T2 `ISecretProvider`) plus the operator rotation path and its authorisation, and the T4.2 written half (§3: a new `pepper_vN` signs new tokens while old versions verify until their last token, with the session three-step overlap and the invite pepper that has none). Docs-only, tier T0. detail: carried row '10.7.1-T4 key rotation runbook detail' (S144 F61).|
-| 11.2.1 | 11.2.1-T3 (T3.1 + T3.2) | merged (#225, f4c7de8) | `docs/security/ingest-token-review.md`: shipped ingest/CI token design reviewed against code at 96e0f17 (scope, TTL, OIDC claim validation, revocation, replay, T5 storage, single return, pepper custody and rotation, 17-row abuse table, five new gaps T3-G1..G5). Docs-only, tier T0. Whole task: counts +1 task / +1.0 d (M); nothing else in §5 was unblocked (04.9.1-T2, 08.4.3-T2, 11.2.1-T4 and 11.2.1-T5 wait on 11.2.1-T6/T4, 05.9.2-T1 on all of 11.2.1). |
+| 11.2.1 | 11.2.1-T3 (T3.1 + T3.2) | merged (#225, f4c7de8) | `docs/security/ingest-token-review.md`: shipped ingest/CI token design reviewed against code at 96e0f17 (scope, TTL, OIDC claim validation, revocation, replay, T5 storage, single return, pepper custody and rotation, 17-row abuse table, five new gaps T3-G1..G5). Docs-only, tier T0. Whole task: counts +1 task / +1.0 d (M); nothing else in §5 was unblocked (04.9.1-T2, 08.4.3-T2, 11.2.1-T4 and 11.2.1-T5 wait on 11.2.1-T6/T4, 05.9.2-T1 on all of 11.2.1). **11.2.1-T7 (T7.1) landed by S301** (PR number and merge sha added at close-out): `docs/security/resolver-review.md` reviews all 32 live `SECURITY DEFINER` functions at dc261514 (search_path, return shape, EXECUTE, audit, abuse matrix) and files 14 `[OPEN]` gaps (§6; carried rows appended at close-out). Docs-only, tier T0; counts +1 task / +0.5 d (S), 234 -> 235 tasks, 236.0 -> 236.5 d. |
 | 06.4.6 | 06.4.6-T1 (T1.1 + T1.2) | merged (#234, 7bad46a) | `docs/adr/0009-event-table-partitioning.md` (proposed, owner confirmation pending): option C, monthly partitions by `run_created_at`, widened dedupe key, `DEFAULT` partition + plain `DETACH` with `lock_timeout` ≤ 5 s (D-S113-Q1; PostgreSQL 18 forbids `DETACH CONCURRENTLY` with a default partition), retention table, 90-day cap proposal; CR proposals logged `[OPEN]` as OI-06-17. Docs-only, tier T0. Whole task: counts +1 task / +0.5 d (S); 06.4.6-T2 and T3 remain. |
 | 05.5.2 | 05.5.2-T1 (T1.1 + T1.2) | merged (#236, 148bc06) | CI re-run contract change (docs only, tier T0, proposed, owner confirmation pending): 00 §8.1 gains `rerun_scope = ci_attempt` and the attempt rule (triple identity, new run per higher attempt with parent = highest stored lower attempt, `stale_attempt`, partial-attempt label), §9.4 binds the whole triple; 00 §15 row, plan 05 FR-05-7/§4/producer-binding line, DECISIONS §6 F10–F13 (GitHub facts ✅, one ⚠️ kept), OI-05-05 reworded, OI-05-16 added. No claim, wire field, code or contract file changed. |
 | 05.3.2 | 05.3.2-T5 (T5.1 + T5.2) | merged (#239, `64318718`) | `migrations/0049_orchestration_evidence_revision.sql`: append-only `evidence_revision` (app role SELECT + INSERT, FORCE RLS, closed `missing[]` codes incl. `setup_error`, gap-free `revision_no` trigger), `evidence_revision_run_idx`, composite pointer FK `run_current_evidence_revision_fk`, `update (current_evidence_revision_id)` grant and `run_evidence_pointer_guard` (latest revision of the same run only, never cleared by the app role (the owner erasure sweep may)). `GetRun` unchanged. D-S115-Q1 (proposed): lock order run row first, then insert, then pointer. |
