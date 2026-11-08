@@ -18,6 +18,12 @@ type RetentionScope = {
   readonly project: string;
   readonly writable: boolean;
 };
+// An A -> B -> A project round trip builds a fresh scope object for the same list, so a write
+// answer is matched by the list it names, never by an object's identity.
+const sameScope = (
+  left: RetentionScope | null | undefined,
+  right: RetentionScope | null | undefined,
+): boolean => left?.org === right?.org && left?.project === right?.project;
 type WriteState = {
   readonly scope: RetentionScope | null;
   readonly phase: 'idle' | 'saving' | 'saved' | 'error';
@@ -73,14 +79,16 @@ export const RetentionStore = signalStore(
     ),
     loading: computed(() => store.policyResource.isLoading()),
     saving: computed(
-      () => store.write().scope === store.scope() && store.write().phase === 'saving',
+      () => sameScope(store.write().scope, store.scope()) && store.write().phase === 'saving',
     ),
-    saved: computed(() => store.write().scope === store.scope() && store.write().phase === 'saved'),
+    saved: computed(
+      () => sameScope(store.write().scope, store.scope()) && store.write().phase === 'saved',
+    ),
     writeFailed: computed(
-      () => store.write().scope === store.scope() && store.write().phase === 'error',
+      () => sameScope(store.write().scope, store.scope()) && store.write().phase === 'error',
     ),
     writeError: computed(() =>
-      store.write().scope === store.scope() ? store.write().error : null,
+      sameScope(store.write().scope, store.scope()) ? store.write().error : null,
     ),
     readError: computed(() => {
       const error = store.policyResource.error();
@@ -102,7 +110,7 @@ export const RetentionStore = signalStore(
       patchState(store, { write: { scope, phase: 'saving', error: null } });
       try {
         const answer = await store.data.save(scope.project, body);
-        if (scope !== store.scope()) return false;
+        if (!sameScope(scope, store.scope())) return false;
         store.policyResource.set(answer);
         patchState(store, { write: { scope, phase: 'saved', error: null } });
         return true;
@@ -110,7 +118,7 @@ export const RetentionStore = signalStore(
         // A programming error is a defect, not a server refusal: surface it instead of reporting a
         // write failure the retry copy would invite the user to repeat.
         if (!isApiRequestError(error)) throw error;
-        if (scope === store.scope()) {
+        if (sameScope(scope, store.scope())) {
           patchState(store, {
             write: {
               scope,
@@ -123,7 +131,7 @@ export const RetentionStore = signalStore(
       } finally {
         // Every path out of this attempt must stop it claiming to still be saving, including a
         // rethrown error and a write whose scope moved on while it was in flight.
-        if (store.write().scope === scope && store.write().phase === 'saving')
+        if (sameScope(store.write().scope, scope) && store.write().phase === 'saving')
           patchState(store, { write: { scope, phase: 'idle', error: null } });
       }
     },
