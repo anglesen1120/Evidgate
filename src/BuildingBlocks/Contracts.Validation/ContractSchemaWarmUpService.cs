@@ -27,6 +27,7 @@ public sealed partial class ContractSchemaWarmUpService : IHostedService, IDispo
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly CancellationTokenSource _stopping = new();
     private Task? _run;
+    private int _disposed;
 
     /// <summary>Creates the service over the container that owns the schema set.</summary>
     public ContractSchemaWarmUpService(IServiceProvider services, ILogger<ContractSchemaWarmUpService> logger)
@@ -58,13 +59,29 @@ public sealed partial class ContractSchemaWarmUpService : IHostedService, IDispo
         await _stopping.CancelAsync().ConfigureAwait(false);
         if (_run is { } run)
         {
-            // A compile already in flight cannot be interrupted; the host's shutdown deadline bounds the wait.
-            await run.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                // A compile already in flight cannot be interrupted; the host's shutdown deadline bounds the wait.
+                await run.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The deadline passed with the compile still running: leave it behind rather than fail shutdown.
+            }
         }
     }
 
     /// <inheritdoc />
-    public void Dispose() => _stopping.Dispose();
+    public void Dispose()
+    {
+        // A host that is disposed without StopAsync (failed start) must not leave the queued warm-up
+        // resolving from a dead container and reporting that as a schema failure. The container may dispose twice.
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        {
+            _stopping.Cancel();
+            _stopping.Dispose();
+        }
+    }
 
     private void WarmUp()
     {

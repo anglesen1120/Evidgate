@@ -67,16 +67,27 @@ public sealed class ContractSchemaWarmUpTests
         await warmUp.StartAsync(TestContext.Current.CancellationToken);
         inFlight.Wait(TestContext.Current.CancellationToken);
         using var requestStarted = new ManualResetEventSlim();
+        Thread? requestThread = null;
         var request = Task.Run(
             () =>
             {
+                requestThread = Thread.CurrentThread;
                 requestStarted.Set();
                 return provider.GetRequiredService<ContractSchemaSet>();
             },
             TestContext.Current.CancellationToken);
         requestStarted.Wait(TestContext.Current.CancellationToken);
-        await Task.Delay(TimeSpan.FromMilliseconds(200), TestContext.Current.CancellationToken);
-        request.IsCompleted.ShouldBeFalse("the request must still be waiting on the warm-up's singleton lock");
+
+        // The request thread is parked on the singleton lock only once it has entered the resolve while the
+        // warm-up still holds it, so wait for that state instead of sleeping.
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (!requestThread!.ThreadState.HasFlag(ThreadState.WaitSleepJoin) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(10), TestContext.Current.CancellationToken);
+        }
+
+        requestThread.ThreadState.HasFlag(ThreadState.WaitSleepJoin).ShouldBeTrue();
+        request.IsCompleted.ShouldBeFalse();
         release.Set();
         var fromRequest = await request;
         await warmUp.Completion;
@@ -131,6 +142,32 @@ public sealed class ContractSchemaWarmUpTests
         await stopping;
 
         warmUp.Completion.IsCompletedSuccessfully.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task StoppingPastTheShutdownDeadline_LeavesTheCompileBehindWithoutThrowing()
+    {
+        using var inFlight = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var services = new ServiceCollection();
+        services.AddSingleton(_ =>
+        {
+            inFlight.Set();
+            release.Wait(TestContext.Current.CancellationToken);
+            return ContractSchemaSet.Load(ContractPaths.ContractsDirectory);
+        });
+        var warmUp = new ContractSchemaWarmUpService(
+            services.BuildServiceProvider(),
+            NullLogger<ContractSchemaWarmUpService>.Instance);
+
+        await warmUp.StartAsync(TestContext.Current.CancellationToken);
+        inFlight.Wait(TestContext.Current.CancellationToken);
+        using var deadline = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        await warmUp.StopAsync(deadline.Token);
+
+        release.Set();
+        await warmUp.Completion;
     }
 
     [Fact]
