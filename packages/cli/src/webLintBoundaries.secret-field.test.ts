@@ -263,6 +263,18 @@ describe('apps/web lint boundaries (09.1.1 AC3, plan §8 T47 W1)', () => {
       expect(lint(secretFixture('passing-extended.ts.txt'), SETTINGS_SECRETS_FILE)).toEqual([]);
     });
 
+    // A class a store delegates to (`MembersInviteFlow`, `SecretsRotationTrack`) holds state the
+    // same way, so the store-class selector covers the `Flow` and `Track` suffixes and nothing
+    // that merely resembles them (`Workflow`).
+    it('reports a secret-shaped field of a Flow or Track class split out of a store', () => {
+      expect(ruleIds(secretFixture('failing-split-classes.ts.txt'), SETTINGS_SECRETS_FILE)).toEqual(
+        [SECRET_FIELD, SECRET_FIELD, SECRET_FIELD],
+      );
+      expect(lint(secretFixture('passing-split-classes.ts.txt'), SETTINGS_SECRETS_FILE)).toEqual(
+        [],
+      );
+    });
+
     // A secret word behind a value word is the value itself, wherever it stands in the name:
     // position is not what decides it, the word behind it is. A secret word followed by anything
     // else is metadata (`rawTokenMaterial`, `nextTokenRefreshAt` — see the README blind spots).

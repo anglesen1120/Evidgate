@@ -1,0 +1,17 @@
+// The metadata-only fields of the same split classes, and a name that merely ends in a word
+// resembling the suffixes (`Workflow`, `Backtrack`), stay legal.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains.
+import { signal } from '@angular/core';
+
+export class InviteFlow {
+  readonly tokenPrefix = signal('');
+}
+
+export class RotationTrack {
+  readonly rotationState = signal('idle');
+}
+
+export class Workflow {
+  readonly token = signal('');
+}
