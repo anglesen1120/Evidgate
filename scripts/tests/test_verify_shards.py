@@ -39,6 +39,9 @@ FAKE_DOTNET = textwrap.dedent("""\
       done
     else
       ran=3
+      if [[ -n "${REQUIRE_MIN:-}" && " $* " != *" --minimum-expected-tests 1 "* ]]; then
+        echo "failed: no minimum expected test count"; rc=2
+      fi
     fi
     echo "  total: $ran"
     exit $rc
@@ -57,7 +60,7 @@ class ParallelTests(unittest.TestCase):
             fake = bin_dir / "dotnet"
             fake.write_text(FAKE_DOTNET)
             fake.chmod(0o755)
-            script = f'source "{GUARDS}"; run_parallel_tests'
+            script = f'set -euo pipefail; source "{GUARDS}"; run_parallel_tests'
             return subprocess.run(
                 ["bash", "-c", script],
                 cwd=tmp,
@@ -92,8 +95,14 @@ class ParallelTests(unittest.TestCase):
         self.assertIn("found no test", done.stderr)
 
     def test_a_bad_shard_count_is_refused(self):
-        done = self.run_stage(EVIDGATE_TENANCY_SHARDS="0")
-        self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
+        for value in ("0", "17", "9223372036854775807", "2\n"):
+            with self.subTest(value=value):
+                done = self.run_stage(EVIDGATE_TENANCY_SHARDS=value)
+                self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
+
+    def test_the_other_projects_must_run_a_test(self):
+        done = self.run_stage(EVIDGATE_TENANCY_SHARDS="1", REQUIRE_MIN="1")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
 
 if __name__ == "__main__":

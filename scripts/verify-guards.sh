@@ -285,7 +285,7 @@ test_log_total() {
 }
 
 # Background runs of this stage: parallel arrays of pid, name and log file.
-PT_PIDS=() PT_NAMES=() PT_FILES=()
+PT_PIDS=() PT_NAMES=() PT_FILES=() PT_LOGS=
 
 # `start_test_run <name> <log> <dotnet test args...>`: one background run.
 start_test_run() {
@@ -313,12 +313,23 @@ start_tenancy_shards() {
   done
 }
 
+# Stops the runs still going and drops the logs (they hold container credentials).
+# Called on every exit path of run_parallel_tests, including an interrupt: a run
+# left behind would keep loading the host after the gate gave up its turn.
+stop_parallel_tests() {
+  local pid
+  for pid in ${PT_PIDS[@]+"${PT_PIDS[@]}"}; do kill "$pid" 2>/dev/null || true; done
+  PT_PIDS=()
+  [[ -z "$PT_LOGS" ]] || rm -rf "$PT_LOGS"
+  PT_LOGS=
+}
+
 run_parallel_tests() {
   local shards="${EVIDGATE_TENANCY_SHARDS:-3}" logs listing discovered classes project name
   local total=0 failed=0 i
   PT_PIDS=() PT_NAMES=() PT_FILES=()
-  if ! [[ "$shards" =~ ^[1-9][0-9]*$ ]]; then
-    echo "verify: EVIDGATE_TENANCY_SHARDS must be a positive integer, got '$shards'" >&2
+  if ! [[ "$shards" =~ ^[1-9][0-9]?$ ]] || [[ "$shards" -gt 16 ]]; then
+    echo "verify: EVIDGATE_TENANCY_SHARDS must be an integer from 1 to 16, got '$shards'" >&2
     return 2
   fi
   listing="$(dotnet test --no-build -c Release --project "$TENANCY_PROJECT" --list-tests 2>&1)" || {
@@ -332,11 +343,14 @@ run_parallel_tests() {
     return 1
   fi
   logs="$(mktemp -d)"
+  PT_LOGS="$logs"
+  trap stop_parallel_tests EXIT
+  trap 'exit 143' INT TERM
   start_tenancy_shards "$shards" "$logs" "$classes"
   for project in tests/*/*.csproj; do
     [[ "$project" == "$TENANCY_PROJECT"/* ]] && continue
     name="$(basename "$(dirname "$project")")"
-    start_test_run "$name" "$logs/$name.log" --project "$project"
+    start_test_run "$name" "$logs/$name.log" --project "$project" --minimum-expected-tests 1
   done
   for i in "${!PT_PIDS[@]}"; do
     if wait "${PT_PIDS[$i]}"; then
@@ -355,7 +369,8 @@ run_parallel_tests() {
     echo "verify: the tenancy shards ran $total tests but discovery found $discovered" >&2
     failed=1
   fi
-  rm -rf "$logs"
+  stop_parallel_tests
+  trap - EXIT INT TERM
   return "$failed"
 }
 
