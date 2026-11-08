@@ -168,6 +168,7 @@ Notes on the rows that are easy to misread:
 - **Row 44** is emitted code with no live caller: `billing:write` is held only by the staff role `billing_operator` (`contracts/permissions.json` roles) and staff principals are denied by `PermissionEvaluator.cs:63`, so no actor can currently reach the handler.
 - **Row 63** is the only dynamic *object* kind (`RestoreAudit.ObjectTypeOf`); the action string itself is constant, like every other row except the four sites listed in §2.2.
 - Rows 29–31 are the only actions an unauthenticated-shaped flow produces: each row is written per active org the user belongs to, in its own tenant scope (`IdentityAuditWriter.cs:73-94`).
+- **`idempotency.purge`** is audited, but not in this catalogue: it is platform work with no org, so its row goes to `public.platform_sweep_audit` through the `evidgate.record_sweep_audit` definer (0088; §4) with `actor = 'evidgate_worker_sched'`, the action string, the rows removed, the batch limit and whether the time budget stopped the drain. It is append-only by trigger and `evidgate_app` holds nothing on it.
 
 ## 4. Planned, not emitted yet
 
@@ -182,7 +183,7 @@ These are named by a plan or a register entry and have no emitter on develop `4d
 | `dsr.opened`, `dsr.identity_verified`, `dsr.executed`, `dsr.closed` | Plan string only; no DSR table yet | 11.9.2-T1.2 |
 | Support-grant request/approve/revoke, and operator reads under a grant | No handler or operator principal exists (`IRequestPrincipal.cs:145-146`), so no row can be written | 02.8.1-T1.2, verified by 11.5.1-T2.1 |
 | Denied lookup rows | The AC that asks for one `audit_log` row on a cross-tenant read is recorded as not audited; the recommendation is a `security_event` row in a separate write instead | OI-02-31 ([open items 01](../../plans/open-items/01-core-identity.md)); 11.5.1 |
-| `idempotency.purge` and other sweep calls | The plan asks for an audited call; today only an Information log line is written, and the handler's own remark records that deviation, so no `system` row exists for any scheduled task (`src/BuildingBlocks/Persistence/Tasks/SweepTaskHandlers.cs:17-20`) | 01.5.1-T6.2 |
+| `idempotency.purge` and other sweep calls | `idempotency.purge` no longer relies on a log line: every fire writes one platform-scope row to `public.platform_sweep_audit` through the `evidgate.record_sweep_audit` definer (`migrations/0088_platform_sweep_audit.sql`, `src/BuildingBlocks/Persistence/Tasks/IdempotencyPurgeTaskHandler.cs:147-164`), not `audit_log`, whose `org_id` is NOT NULL and per-org chained (0015) while this purge spans tenants. The other scheduled sweeps still write only an Information log line | 01.5.1-T6.2 |
 | `before_hash` values | Column, record member and DTO exist; no emitter computes a "before" object hash | No task owns populating it today `[OPEN]` |
 | Keyed chain (`chain_key_id`, HMAC) | The chain hash is unkeyed today; the keyed variant is the 11.5.2 ADR | 11.5.2-T1.2 (ADR), 11.5.2-T2.3 (key wiring) |
 
