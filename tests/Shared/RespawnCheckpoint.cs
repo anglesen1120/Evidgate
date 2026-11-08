@@ -21,6 +21,12 @@ namespace Evidgate.Testing;
 /// the owner is exactly the role a deployment runs the sweeps as (TL T80).
 /// </para>
 /// <para>
+/// Migration-seeded reference data survives the reset (<see cref="SeedOnlyTables"/> are never truncated;
+/// <see cref="SeedAndTenantTables"/> are truncated with their tenant rows and the built-in rows, those with a
+/// NULL <c>org_id</c>, are put back in the same statement), so a reset database is the freshly migrated one minus
+/// every tenant row and a test that names a built-in role or permission never meets an empty catalogue.
+/// </para>
+/// <para>
 /// The table list is read once, when the harness starts, from the catalog of the
 /// schemas passed in — so a table created later in the same run is not covered.
 /// <c>Respawn_LeavesNoRowInAnyApplicationTable</c> is the outcome check for that
@@ -29,12 +35,26 @@ namespace Evidgate.Testing;
 /// </summary>
 public sealed class RespawnCheckpoint
 {
-    private readonly string _truncate;
-    private readonly string _connectionString;
+    /// <summary>Tables a migration seeds and no tenant writes: left alone by the reset.</summary>
+    public static IReadOnlyList<string> SeedOnlyTables { get; } = ["public.permission", "public.ai_settings_template"];
 
-    private RespawnCheckpoint(string truncate, string connectionString)
+    /// <summary>
+    /// Tables that hold migration-seeded built-in rows (NULL <c>org_id</c>) next to tenant rows. Parents first: the
+    /// restore inserts in this order.
+    /// </summary>
+    public static IReadOnlyList<string> SeedAndTenantTables { get; } =
+        ["public.role", "public.role_permission", "public.report_parser"];
+
+    private readonly string _truncate;
+    private readonly string _restore;
+    private readonly string _connectionString;
+    private readonly string[] _snapshots;
+
+    private RespawnCheckpoint(string truncate, string restore, string[] snapshots, string connectionString)
     {
         _truncate = truncate;
+        _restore = restore;
+        _snapshots = snapshots;
         _connectionString = connectionString;
     }
 
@@ -66,9 +86,11 @@ public sealed class RespawnCheckpoint
                   from pg_catalog.pg_tables
                  where schemaname = any(@schemas)
                    and not (schemaname = 'public' and tablename = 'schema_migration')
+                   and not (schemaname || '.' || tablename = any(@seed_only))
                  order by schemaname, tablename
                 """;
             command.Parameters.AddWithValue("schemas", schemas.ToArray());
+            command.Parameters.AddWithValue("seed_only", SeedOnlyTables.ToArray());
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -81,17 +103,60 @@ public sealed class RespawnCheckpoint
             throw new InvalidOperationException("the harness database has no application table to reset");
         }
 
-        return new RespawnCheckpoint($"truncate table {string.Join(", ", tables)} cascade", ownerConnectionString);
+        var snapshots = await SnapshotBuiltInRowsAsync(connection, cancellationToken).ConfigureAwait(false);
+
+        var restore = string.Concat(SeedAndTenantTables.Select((table, i) =>
+            $"; insert into {table} select * from jsonb_populate_recordset(null::{table}, @s{i}::jsonb)"));
+
+        return new RespawnCheckpoint(
+            $"truncate table {string.Join(", ", tables)} cascade",
+            restore,
+            snapshots,
+            ownerConnectionString);
     }
 
-    /// <summary>Empties every application table, leaving the migration journal alone.</summary>
+    /// <summary>
+    /// Empties every tenant row, leaving the migration journal and the migration-seeded reference rows alone.
+    /// One command, so the truncate and the restore of the built-in rows commit together.
+    /// </summary>
     public async Task ResetAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText = _truncate;
+        command.CommandText = _truncate + _restore;
+        for (var i = 0; i < _snapshots.Length; i++)
+        {
+            command.Parameters.AddWithValue($"s{i}", NpgsqlTypes.NpgsqlDbType.Text, _snapshots[i]);
+        }
+
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The built-in rows (NULL <c>org_id</c>) of <see cref="SeedAndTenantTables"/> as one JSON array per table, read
+    /// while the database is freshly migrated. An empty table fails the start: the migrations seed every one.
+    /// </summary>
+    private static async Task<string[]> SnapshotBuiltInRowsAsync(
+        NpgsqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var snapshots = new string[SeedAndTenantTables.Count];
+        for (var i = 0; i < snapshots.Length; i++)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                $"select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb)::text from {SeedAndTenantTables[i]} t where t.org_id is null";
+            snapshots[i] = (string)(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
+
+            if (snapshots[i] == "[]")
+            {
+                throw new InvalidOperationException(
+                    $"the built-in rows of {SeedAndTenantTables[i]} are missing at harness start: the migrations seed them");
+            }
+        }
+
+        return snapshots;
     }
 
     /// <summary>

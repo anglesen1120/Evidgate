@@ -1,8 +1,10 @@
 using System.Net;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
+using Evidgate.Modules.Identity.Authorization;
 using Evidgate.Testing;
 using Shouldly;
 using Xunit;
@@ -98,6 +100,18 @@ public sealed class DenyPathTests(DatabaseFixture fixture) : TenantTest(fixture)
     public async Task Service_Token_Claim_Outside_The_Catalogue_Is_403_Forbidden()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+
+        // Isolate the reason: GET /v1/permissions needs role:read, which no service token may hold, so that route
+        // refuses any service token. The verdict is therefore pinned on the evaluator with a permission a service
+        // may hold: the same claim is granted alone and refused only because of the extra, unknown claim.
+        var evaluator = new PermissionEvaluator(Fixture.Db);
+        var context = new RequestTenantContext(org, null);
+        var wellFormed = RequestPrincipal.Service(projectScope: null, [Permissions.Run.Create]);
+        var poisoned = RequestPrincipal.Service(projectScope: null, [Permissions.Run.Create, "not_a:catalogue_code"]);
+
+        (await evaluator.EvaluateAsync(Permissions.Run.Create, wellFormed, context, Token)).IsGranted.ShouldBeTrue();
+        (await evaluator.EvaluateAsync(Permissions.Run.Create, poisoned, context, Token))
+            .DenyCode.ShouldBe(ApiErrorCode.Forbidden);
 
         await using var factory = IdentityApiFactory.Start(
             Fixture,

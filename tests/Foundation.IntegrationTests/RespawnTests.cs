@@ -106,4 +106,39 @@ public sealed class RespawnTests : TenantTest
         (await Fixture.JournalHeadAsync(Token)).ShouldBe(headBefore);
         (await Fixture.JournalCountAsync(Token)).ShouldBe(countBefore);
     }
+
+    /// <summary>
+    /// The positive control of the reset: the migration-seeded catalogue is present on a fresh copy, a tenant
+    /// role next to it is swept, and the catalogue rows are exactly the same after the reset. A reset that
+    /// truncated the catalogue again would fail here instead of letting a "denied" assertion pass against nothing.
+    /// </summary>
+    [Fact]
+    public async Task Respawn_KeepsTheMigrationSeededCatalogue()
+    {
+        var before = await Fixture.ReferenceRowDigestsAsync(Token);
+
+        foreach (var table in RespawnCheckpoint.SeedOnlyTables.Concat(RespawnCheckpoint.SeedAndTenantTables))
+        {
+            before[table].ShouldNotStartWith("0:");
+        }
+
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        await Fixture.SeedAsync(
+            "insert into public.role (id, org_id, code, name, is_builtin, kind) values (@id, @org_id, 'night_shift', 'Night shift', false, 'member')",
+            [("id", Guid.CreateVersion7()), ("org_id", org)],
+            Token);
+
+        await Fixture.ResetAsync(Token);
+
+        (await Fixture.ReferenceRowDigestsAsync(Token)).ShouldBe(before);
+        (await Fixture.NonEmptyApplicationTablesAsync(Token)).ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// A table a migration seeds must be listed in the checkpoint (seed-only or seed-and-tenant): on a freshly
+    /// migrated copy, nothing outside those lists may hold a row, or the reset would silently empty it.
+    /// </summary>
+    [Fact]
+    public async Task FreshlyMigratedDatabase_HoldsRowsOnlyInTheListedReferenceTables() =>
+        (await Fixture.NonEmptyApplicationTablesAsync(Token)).ShouldBeEmpty();
 }

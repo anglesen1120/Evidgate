@@ -27,11 +27,10 @@ namespace Isolation.Tests;
 /// probe into a "current transaction is aborted" failure instead of the refusal under test.
 /// </para>
 /// <para>
-/// The built-in rows themselves are migration-owned reference data (02 §8), and the harness's
-/// blanket reset empties them like any other table, so the suite re-applies the seed block of
-/// <c>migrations/0010_identity_permission_catalogue.sql</c> first — the same step, from the same
-/// source, as the 02.2.1 catalogue suites (<c>CatalogueTestBase</c>). The rows are never
-/// hand-written here.
+/// The built-in rows themselves are migration-owned reference data (02 §8), and the harness reset
+/// keeps them (<see cref="RespawnCheckpoint"/>), so the suite probes the rows the migrations seeded.
+/// Only the two surfaces no migration seeds (the system switch, the platform price) get a fixture
+/// row here.
 /// </para>
 /// <para>
 /// Two holes the built-in-only probes cannot reach are covered explicitly. CR1: <c>role</c> and
@@ -47,15 +46,6 @@ namespace Isolation.Tests;
 [Trait("Category", "Docker")]
 public sealed class CatalogueTests : HarnessTest
 {
-    /// <summary>The migration that owns the catalogue tables and their seed (02.2.1-T1.2).</summary>
-    private const string CatalogueMigration = "0010_identity_permission_catalogue.sql";
-
-    /// <summary>Start of the migration's seed block (one <c>do</c> statement).</summary>
-    private const string SeedStart = "do $seed$";
-
-    /// <summary>End of the migration's seed block, including the statement terminator.</summary>
-    private const string SeedEnd = "$seed$;";
-
     private static readonly Guid OrgA = Guid.Parse("11111111-1111-7111-8111-111111111111");
     private static readonly Guid OrgB = Guid.Parse("22222222-2222-7222-8222-222222222222");
 
@@ -65,8 +55,6 @@ public sealed class CatalogueTests : HarnessTest
     /// <summary>The fixed id of the fixture platform price row this suite seeds for the 0073 surface.</summary>
     private static readonly Guid UsagePriceRowId = Guid.Parse("44444444-4444-7444-8444-444444444444");
 
-    /// <summary>The fixed id of the built-in pytest parser this suite seeds for the 0075 surface.</summary>
-    private static readonly Guid ReportParserRowId = Guid.Parse("55555555-5555-7555-8555-555555555555");
 
     /// <summary>
     /// The catalogue surfaces AC5 names, with the clause that selects their built-in rows and the
@@ -105,9 +93,7 @@ public sealed class CatalogueTests : HarnessTest
     [Fact]
     public async Task ReadableByEveryOrg_NotWritableByApp()
     {
-        // The harness reset (HarnessTest.InitializeAsync) truncated the catalogue tables with
-        // everything else; restore the migration's own built-in rows before probing them.
-        await SeedCatalogueAsync();
+        await SeedFixtureRowsAsync();
 
         await using var connection = await Fixture.AppDataSource.OpenConnectionAsync(Token);
         var exceptions = RlsExceptionList.Read();
@@ -201,7 +187,7 @@ public sealed class CatalogueTests : HarnessTest
     [Fact]
     public async Task CustomRoleRows_AreOrgScoped()
     {
-        await SeedCatalogueAsync();
+        await SeedFixtureRowsAsync();
         var (roleId, grantId) = await SeedOrgBCustomRoleAsync();
 
         var failures = new List<string>();
@@ -313,41 +299,18 @@ public sealed class CatalogueTests : HarnessTest
     }
 
     /// <summary>
-    /// Re-applies the seed block of <c>migrations/0010_identity_permission_catalogue.sql</c> as
-    /// <c>evidgate_owner</c> — the same step, read from the same source, as the 02.2.1 catalogue
-    /// suites (<c>tests/Identity.IntegrationTests/CatalogueTestBase.cs</c>). The rows are never
-    /// hand-written here, so the suite asserts against the very bytes the database is seeded from.
+    /// Creates the built-in rows no migration seeds, as <c>evidgate_owner</c> (the app role cannot write
+    /// them): the system healing switch and a fixture platform price. The catalogue tables, built-in roles
+    /// and the pytest parser are the migrations' own rows and survive the reset.
     /// <para>
-    /// Why it is needed: <see cref="DatabaseFixture.ResetAsync"/> is Respawn's blanket
-    /// <c>truncate … cascade</c> over every application table, which empties <c>permission</c>,
-    /// <c>role</c> and <c>role_permission</c> exactly like any other table. Those rows are
-    /// migration-owned reference data (built-ins are never deleted, 02 §8), not test fixtures.
-    /// </para>
-    /// <para>
-    /// Why it commits instead of running inside the rolled-back probe transaction: every probe
-    /// below opens its own <see cref="TenantScope"/> — a separate connection and transaction
-    /// (00 §5.5 C3) — so an uncommitted seed would be invisible to them. The block is the
-    /// migration's own idempotent seed, and every test of <see cref="HarnessSuite"/> resets the
-    /// database before it runs, so the committed rows never reach another suite.
+    /// It commits instead of running inside the rolled-back probe transaction: every probe below opens its own
+    /// <see cref="TenantScope"/> — a separate connection and transaction (00 §5.5 C3) — so an uncommitted seed
+    /// would be invisible to them. Every test of <see cref="HarnessSuite"/> resets the database before it
+    /// runs, so the committed rows never reach another suite.
     /// </para>
     /// </summary>
-    private async Task SeedCatalogueAsync()
+    private async Task SeedFixtureRowsAsync()
     {
-        var path = Path.Combine(DatabaseFixture.MigrationsPath, CatalogueMigration);
-        var migration = await File.ReadAllTextAsync(path, Token);
-
-        var start = migration.IndexOf(SeedStart, StringComparison.Ordinal);
-        var end = migration.IndexOf(SeedEnd, StringComparison.Ordinal);
-
-        if (start < 0 || end < start)
-        {
-            throw new InvalidOperationException(
-                $"'{CatalogueMigration}' no longer carries its seed block ('{SeedStart}' … '{SeedEnd}'): "
-                + "this suite re-applies it and must fail loudly when it moves.");
-        }
-
-        await Fixture.SeedAsync(migration[start..(end + SeedEnd.Length)], [], Token);
-
         // 08.6.3 (0052) seeds no row: a database with no switch row resolves to the `shadow` posture,
         // so the built-in row this suite probes is created by the operator's own write path (the
         // tenant-less system row, which the app role cannot write directly), once, as the owner seam.
@@ -369,17 +332,6 @@ public sealed class CatalogueTests : HarnessTest
             on conflict do nothing
             """,
             [("id", UsagePriceRowId)],
-            Token);
-
-        // 04.4.1 (0075) seeds the built-in pytest parser in the migration itself. This suite re-seeds it with a fixed
-        // id so the probe targets a known row regardless of that seed block's exact values.
-        await Fixture.SeedAsync(
-            """
-            insert into public.report_parser (id, org_id, parser_id, version, producer_kind, schema_version, notes)
-            values (@id, null, 'junit-pytest', '1.0.0', 'pytest-junitxml', 1, 'catalogue probe')
-            on conflict do nothing
-            """,
-            [("id", ReportParserRowId)],
             Token);
     }
 

@@ -122,10 +122,6 @@ public sealed class RlsIsolationTests : HarnessTest
         var scan = await DiscoverAsync();
         await AssertAppRoleAsync();
 
-        // The reset truncated the migration-seeded report_parser catalogue, so the rows this case generates for
-        // raw_report_reprocess (TenantRowFactory pins its built-in release) need it back first.
-        await BuiltInCatalogue.SeedReportParserAsync(Fixture, Token);
-
         var failures = new List<string>();
         var checkedTables = new List<string>();
 
@@ -231,9 +227,6 @@ public sealed class RlsIsolationTests : HarnessTest
     {
         var scan = await DiscoverAsync();
         await AssertAppRoleAsync();
-
-        // See Guc_Unset_ZeroRows: the reset truncates the report_parser seed the raw_report_reprocess row names.
-        await BuiltInCatalogue.SeedReportParserAsync(Fixture, Token);
 
         var failures = new List<string>();
         var checkedTables = new List<string>();
