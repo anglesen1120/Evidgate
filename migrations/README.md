@@ -161,7 +161,8 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   `(org_id, run_id, evidence_revision, policy_revision_id, evaluator_version, mode)`, at most one `live` row
   per frozen evidence revision), its closed token CHECKs, the composite tenant keys to `run` and
   `policy_revision`, the immutability trigger and SELECT/INSERT-only app grant (notes at the end of this
-  file); the next free number is `0060`; a gap means two branches invented the same sequence and neither history can be trusted.
+  file); the next free number is one above the highest file in this folder (`ls migrations/*.sql`), and this README does not
+  track it; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
   writes no journal row.
