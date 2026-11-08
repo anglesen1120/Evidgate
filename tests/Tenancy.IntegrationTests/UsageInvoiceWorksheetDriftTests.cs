@@ -13,9 +13,10 @@ namespace Tenancy.IntegrationTests;
 /// silently moving the total the org was billed.
 /// </summary>
 /// <remarks>
-/// The world runs on one fixed instant (2026-11-06), so <see cref="Period"/> has ended and can be issued while a row
-/// still lands in it: the write-side freeze of a period is not assumed here, because it is exactly what this read
-/// has to survive. Every assertion about the stored statement reads the table as the owner.
+/// The world runs on one fixed instant (2026-11-06), so <see cref="Period"/> has ended and can be issued. A row that
+/// reached the period afterwards is seeded with the ledger's issued-period guard lifted, because such a row can only
+/// predate that guard: this read still has to report it instead of hiding it. Every assertion about the stored
+/// statement reads the table as the owner.
 /// </remarks>
 [Trait("Category", "Docker")]
 public sealed class UsageInvoiceWorksheetDriftTests
@@ -81,7 +82,17 @@ public sealed class UsageInvoiceWorksheetDriftTests
         var issuedHash = issued.Body.GetProperty("content_hash").GetString();
         var stored = await world.StatementRowAsync(Period);
 
-        await world.SeedLedgerAsync(Ledger(world, "late:2", 1m, 3m, 21));
+        // The row represents usage that reached the period before the write-side guard existed, so the guard is lifted
+        // for the seed and restored after it: the read must still report the period as drifted.
+        await world.DisableIssuedPeriodGuardAsync();
+        try
+        {
+            await world.SeedLedgerAsync(Ledger(world, "late:2", 1m, 3m, 21));
+        }
+        finally
+        {
+            await world.EnableIssuedPeriodGuardAsync();
+        }
 
         var answer = await world.GetAsync(world.WorksheetUrl($"period={Period}"));
 
@@ -124,7 +135,17 @@ public sealed class UsageInvoiceWorksheetDriftTests
         issued.Status.ShouldBe(HttpStatusCode.OK, issued.ErrorMessage);
         var issuedHash = issued.Body.GetProperty("content_hash").GetString();
 
-        await world.SeedLedgerAsync(Adjustment(world, "late-adjustment:2", original.Id, -1m, -2m, 21));
+        // A correction that reached the period before the write-side guard existed, seeded with the guard lifted: the
+        // read still has to report it as drift rather than as the period's current total.
+        await world.DisableIssuedPeriodGuardAsync();
+        try
+        {
+            await world.SeedLedgerAsync(Adjustment(world, "late-adjustment:2", original.Id, -1m, -2m, 21));
+        }
+        finally
+        {
+            await world.EnableIssuedPeriodGuardAsync();
+        }
 
         var answer = await world.GetAsync(world.WorksheetUrl($"period={Period}"));
 

@@ -14,14 +14,15 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 /// <remarks>
 /// The world runs on one fixed instant (2026-11-06), so <see cref="Period"/> has ended. The late row is written by a
-/// trigger on the statement insert, which is the only way to place a ledger row inside the window deterministically:
-/// the row is real, it is written in the statement's own transaction, and it rolls back with the refused issue.
+/// second, deliberately uncommitted transaction that holds the period's advisory lock: the statement insert queues
+/// behind it, and the commit is what lets the freeze's re-read see the moved period.
 /// </remarks>
 [Trait("Category", "Docker")]
 public sealed class UsageStatementFreezeTests(PostgresTenancyFixture fixture)
 {
     private const string Period = "2026-10";
     private const string Action = "usage.statement_issued";
+    private const string RefusedAction = "usage.statement_refused";
     private const int LongestReason = 2_000;
 
     private static readonly DateTimeOffset Now = new(2026, 11, 6, 9, 0, 0, TimeSpan.Zero);
@@ -46,6 +47,7 @@ public sealed class UsageStatementFreezeTests(PostgresTenancyFixture fixture)
         Detail(answer).GetProperty("reason").GetString().ShouldBe("worksheet_too_large");
         (await world.StatementCountAsync(Period)).ShouldBe(0L);
         (await world.AuditCountAsync(Action)).ShouldBe(0L);
+        (await world.AuditCountAsync(RefusedAction)).ShouldBe(1L, "a refused period still leaves its one row");
     }
 
     [Fact]
@@ -69,24 +71,32 @@ public sealed class UsageStatementFreezeTests(PostgresTenancyFixture fixture)
     }
 
     [Fact]
-    public async Task Statement_LedgerRowArrivingBeforeTheFreeze_409AndNothingIsWritten()
+    public async Task Statement_LedgerRowCommittingDuringTheFreeze_409RollsTheStatementBack()
     {
         await using var world = await StartAsync();
+        var cancellationToken = TestContext.Current.CancellationToken;
         await world.SeedLedgerAsync(Ledger(world, "moved:1", 1m, 5m, 20));
-        await world.InstallLateLedgerRowTriggerAsync();
 
-        var answer = await world.PostStatementAsync(Period, 5m, "USD");
+        // A producer's uncommitted row holds the period's shared advisory lock, so the statement's own insert queues
+        // behind it: the row lands after the worksheet read by construction rather than by timing.
+        await using var late = await world.BeginLateLedgerRowAsync(Period, 5m);
+        var issue = world.PostStatementAsync(Period, 5m, "USD");
+        await late.WaitForStatementAsync(cancellationToken);
+        await late.CommitAsync(cancellationToken);
+
+        var answer = await issue;
 
         answer.Status.ShouldBe(HttpStatusCode.Conflict, answer.ErrorMessage);
         answer.ErrorCode.ShouldBe("ledger_changed");
-        (await world.StatementCountAsync(Period)).ShouldBe(0L, "the scope is never committed");
-        (await world.AuditCountAsync(Action)).ShouldBe(0L);
-        (await world.LedgerRowCountAsync(Period)).ShouldBe(1L,
-            "the late row was written in the statement's own transaction, so it rolls back with it");
+        (await world.StatementCountAsync(Period)).ShouldBe(0L, "the statement's scope is discarded");
+        (await world.AuditCountAsync(Action)).ShouldBe(0L, "no statement was issued");
+        (await world.AuditCountAsync(RefusedAction)).ShouldBe(1L,
+            "the refusal is what the request leaves behind");
+        (await world.LedgerRowCountAsync(Period)).ShouldBe(2L,
+            "the late row committed in its own transaction, so it stays");
 
-        // The period itself is sound: with nothing else writing to it, the same issue is accepted.
-        await world.RemoveLateLedgerRowTriggerAsync();
-        var issued = await world.PostStatementAsync(Period, 5m, "USD");
+        // The period itself is sound: the same issue, submitted for the total the period now recomputes to, is taken.
+        var issued = await world.PostStatementAsync(Period, 10m, "USD");
         issued.Status.ShouldBe(HttpStatusCode.OK, issued.ErrorMessage);
         (await world.StatementCountAsync(Period)).ShouldBe(1L);
     }

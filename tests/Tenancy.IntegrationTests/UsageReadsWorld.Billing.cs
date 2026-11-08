@@ -182,55 +182,74 @@ internal sealed partial class UsageReadsWorld
     }
 
     /// <summary>
-    /// Installs a trigger that writes one more priced ledger row of the statement's period inside the transaction
-    /// that inserts the statement: the row a producer commits after the worksheet was read but before it is frozen.
-    /// The row copies an existing usage row of the period, so the aggregate it changes is deterministic.
+    /// Writes a statement row as the owner: the document an earlier issue of the period left, with a content hash the
+    /// test chooses so a re-issue can be made to disagree with it.
     /// </summary>
-    internal async Task InstallLateLedgerRowTriggerAsync()
+    /// <param name="period">The period the statement bills.</param>
+    /// <param name="total">The frozen total.</param>
+    /// <param name="contentHash">The frozen document address, 64 lowercase hex characters.</param>
+    internal async Task SeedStatementAsync(string period, decimal total, string contentHash)
     {
         await using var connection = await OpenOwnerAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            create or replace function public.test_late_ledger_row() returns trigger
-            language plpgsql
-            as $function$
-            begin
-                insert into public.usage_ledger_entry
-                    (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at,
-                     amount, currency)
-                select gen_random_uuid(), NEW.org_id, l.project_id, l.metric, l.quantity, l.unit, NEW.period,
-                       'late-ledger-row:' || NEW.id, now(), l.amount, l.currency
-                  from public.usage_ledger_entry l
-                 where l.org_id = NEW.org_id
-                   and l.period = NEW.period
-                   and l.adjustment_of is null
-                 limit 1;
-                return NEW;
-            end
-            $function$;
-
-            drop trigger if exists test_late_ledger_row on public.billing_statement;
-            create trigger test_late_ledger_row after insert on public.billing_statement
-              for each row execute function public.test_late_ledger_row();
+            insert into public.billing_statement
+                (id, org_id, period, kind, total_amount, currency, line_count, content_hash, worksheet_json,
+                 issued_by, issued_at)
+            values (gen_random_uuid(), @org_id, @period, 'invoice', @total, 'USD', 1, @content_hash,
+                    '{"period":"issued"}'::jsonb, @issued_by, now())
             """;
+        command.Parameters.Add(new NpgsqlParameter("org_id", Org));
+        command.Parameters.Add(new NpgsqlParameter("period", period));
+        command.Parameters.Add(new NpgsqlParameter("total", total));
+        command.Parameters.Add(new NpgsqlParameter("content_hash", contentHash));
+        command.Parameters.Add(new NpgsqlParameter("issued_by", OperatorId));
 
-        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken).ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
-    /// <summary>Removes the late-row trigger and its function, leaving the period as it was.</summary>
-    internal async Task RemoveLateLedgerRowTriggerAsync()
+    /// <summary>
+    /// Lifts the ledger's issued-period guard for the caller. A row that reached a period before the guard existed is
+    /// the only way to represent a ledger that moved after it was billed, which the worksheet read must still report.
+    /// </summary>
+    internal async Task DisableIssuedPeriodGuardAsync()
     {
         await using var connection = await OpenOwnerAsync();
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            drop trigger if exists test_late_ledger_row on public.billing_statement;
-            drop function if exists public.test_late_ledger_row();
+            set lock_timeout = '10s';
+            alter table public.usage_ledger_entry disable trigger usage_ledger_entry_period_issued;
             """;
 
-        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken).ConfigureAwait(false);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
+
+    /// <summary>Restores the guard, so a later write to an issued period is refused again.</summary>
+    internal async Task EnableIssuedPeriodGuardAsync()
+    {
+        await using var connection = await OpenOwnerAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            set lock_timeout = '10s';
+            alter table public.usage_ledger_entry enable trigger usage_ledger_entry_period_issued;
+            """;
+
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Starts a producer transaction that has written one more priced row of <paramref name="period"/> and has not
+    /// committed it: the row a freeze of that period must not bill.
+    /// </summary>
+    /// <param name="period">The period the row belongs to.</param>
+    /// <param name="amount">The amount it bills.</param>
+    internal async Task<LateLedgerRowWriter> BeginLateLedgerRowAsync(string period, decimal amount) =>
+        await LateLedgerRowWriter
+            .StartAsync(await OpenOwnerAsync(), await OpenOwnerAsync(), Org, Project, period, amount)
+            .ConfigureAwait(false);
 
     /// <summary>How many statements this world's org holds for one period.</summary>
     /// <param name="period">The period.</param>
@@ -287,5 +306,103 @@ internal sealed partial class UsageReadsWorld
         var value = await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
 
         return value is DBNull or null ? null : (decimal)value;
+    }
+}
+
+/// <summary>
+/// A producer's open transaction holding one more priced row of a period: the row a statement of that period must not
+/// bill. Its insert took the period's shared advisory lock, so a statement insert queues behind it — which is what
+/// places the row between the worksheet read and the freeze without a sleep or a trigger.
+/// </summary>
+internal sealed class LateLedgerRowWriter : IAsyncDisposable
+{
+    /// <summary>How long a statement insert may take to queue behind the row before the test calls the race off.</summary>
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+
+    private readonly NpgsqlConnection _writer;
+    private readonly NpgsqlConnection _watcher;
+    private readonly NpgsqlTransaction _transaction;
+
+    private LateLedgerRowWriter(NpgsqlConnection writer, NpgsqlConnection watcher, NpgsqlTransaction transaction)
+    {
+        _writer = writer;
+        _watcher = watcher;
+        _transaction = transaction;
+    }
+
+    /// <summary>Writes the row inside a transaction of its own and returns that transaction still open.</summary>
+    /// <param name="writer">The producer's connection; this writer owns it from here.</param>
+    /// <param name="watcher">The connection that reads <c>pg_locks</c> while the statement waits.</param>
+    /// <param name="org">The row's tenant.</param>
+    /// <param name="project">The row's project.</param>
+    /// <param name="period">The period the row belongs to.</param>
+    /// <param name="amount">The amount it bills.</param>
+    internal static async Task<LateLedgerRowWriter> StartAsync(
+        NpgsqlConnection writer,
+        NpgsqlConnection watcher,
+        Guid org,
+        Guid project,
+        string period,
+        decimal amount)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var transaction = await writer.BeginTransactionAsync(cancellationToken);
+
+        await using var command = writer.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            insert into public.usage_ledger_entry
+                (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at, amount, currency)
+            values (gen_random_uuid(), @org_id, @project_id, 'results', 1, 'results', @period, 'late-ledger-row',
+                    now(), @amount, 'USD')
+            """;
+        command.Parameters.Add(new NpgsqlParameter("org_id", org));
+        command.Parameters.Add(new NpgsqlParameter("project_id", project));
+        command.Parameters.Add(new NpgsqlParameter("period", period));
+        command.Parameters.Add(new NpgsqlParameter("amount", amount));
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        return new LateLedgerRowWriter(writer, watcher, transaction);
+    }
+
+    /// <summary>Waits until a transaction of this database is queued behind the period's advisory lock.</summary>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal async Task WaitForStatementAsync(CancellationToken cancellationToken)
+    {
+        var deadline = DateTimeOffset.UtcNow + Patience;
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            await using var command = _watcher.CreateCommand();
+            command.CommandText =
+                """
+                select count(*) from pg_locks
+                 where locktype = 'advisory' and objsubid = 1 and not granted
+                   and database = (select oid from pg_database where datname = current_database())
+                """;
+
+            if ((long)(await command.ExecuteScalarAsync(cancellationToken))! > 0)
+            {
+                return;
+            }
+
+            await Task.Delay(50, cancellationToken);
+        }
+
+        throw new TimeoutException("no statement insert queued behind the period's advisory lock in time");
+    }
+
+    /// <summary>Commits the row: the freeze's own re-read then sees a period its worksheet does not describe.</summary>
+    /// <param name="cancellationToken">Cancellation.</param>
+    internal Task CommitAsync(CancellationToken cancellationToken) => _transaction.CommitAsync(cancellationToken);
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        await _transaction.DisposeAsync();
+        await _writer.DisposeAsync();
+        await _watcher.DisposeAsync();
     }
 }

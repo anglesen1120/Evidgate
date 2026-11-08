@@ -23,6 +23,11 @@ internal sealed class UsageContracts(
     ITenantScopeAccessor scopes) : IUsageLedger
 {
     /// <inheritdoc />
+    /// <remarks>
+    /// A period an issued statement froze is not translated into a result here: the module's typed refusal propagates,
+    /// so an emitter that names a billed month fails loudly mid-work and its own queue retries and dead-letters the row
+    /// rather than the ledger accepting a row the issued document does not describe.
+    /// </remarks>
     public async Task<UsageBatchResult> RecordAsync(
         RecordUsageBatchRequest request,
         CancellationToken cancellationToken)
