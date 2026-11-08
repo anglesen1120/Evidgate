@@ -160,7 +160,6 @@ export class ApiTokensPage {
   protected readonly store = inject(ApiTokensStore);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
-  private readonly query = toSignal(this.route.queryParamMap);
   /**
    * The organization the URL names above this page. The org id sits on an ancestor route of this
    * tab, so it is read from the whole chain instead of this leaf's own parameters.
@@ -293,7 +292,7 @@ export class ApiTokensPage {
   private syncQuery(project: string | null, cursor: string | null): void {
     const intent = this.historyIntent;
     this.historyIntent = null;
-    const current = this.query();
+    const current = this.store.query?.();
     if (
       (current?.get('project') ?? null) === project &&
       (current?.get('cursor') ?? null) === cursor

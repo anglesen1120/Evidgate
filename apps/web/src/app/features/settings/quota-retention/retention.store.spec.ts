@@ -61,6 +61,28 @@ describe('RetentionStore', () => {
     expect(h.store.saved()).toBe(false);
   });
 
+  it('keeps the write answer for a project the selection left and came back to', async () => {
+    const h = mountRetention();
+    await h.load();
+    const saving = h.store.save({ artifact_days: 30, metadata_days: 90 });
+    const put = await h.take('PUT');
+    h.store.selectedProject.set('p-2');
+    flush(await h.take('GET', 'p-2'), { artifact_days: 10, metadata_days: 50 });
+    await h.settle();
+    h.store.selectProject('p-1');
+    flush(await h.take('GET', 'p-1'));
+    // The write for this project is in flight again, so only the read is awaited.
+    await vi.waitFor(() => {
+      TestBed.tick();
+      expect(h.store.loading()).toBe(false);
+    });
+    flush(put, { artifact_days: 30, metadata_days: 90 });
+    expect(await saving).toBe(true);
+    await h.settle();
+    expect(h.store.saved()).toBe(true);
+    expect(h.store.policy()).toEqual({ artifact_days: 30, metadata_days: 90 });
+  });
+
   it('drops values on read-permission revocation and does not reuse the previous policy', async () => {
     const h = mountRetention();
     await h.load();

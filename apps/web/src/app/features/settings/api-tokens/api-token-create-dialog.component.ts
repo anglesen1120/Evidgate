@@ -61,8 +61,22 @@ const LAST_SPELLABLE_INSTANT = 253_402_300_799_999;
  */
 const ISO_UTC_INSTANT = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/;
 
+// Server text is untrusted: scanning with indexOf stays linear where a `[^)]+` regex rescans to the
+// end from every "(maximum " when the closing bracket never comes.
+function absoluteMaximum(message: string): string | undefined {
+  const opener = '(maximum ';
+  for (let from = message.indexOf(opener); from >= 0;) {
+    const start = from + opener.length;
+    const end = message.indexOf(')', start);
+    if (end < 0) return undefined;
+    if (end > start) return message.slice(start, end);
+    from = message.indexOf(opener, start);
+  }
+  return undefined;
+}
+
 function parseExpiryMaximum(message: string): ExpiryMaximum | null {
-  const absolute = /\(maximum ([^)]+)\)/.exec(message)?.[1];
+  const absolute = absoluteMaximum(message);
   if (absolute !== undefined && ISO_UTC_INSTANT.test(absolute)) {
     const instant = Date.parse(absolute);
     if (Number.isFinite(instant)) return { instant };
