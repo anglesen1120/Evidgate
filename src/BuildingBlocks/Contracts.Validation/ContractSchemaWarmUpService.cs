@@ -26,8 +26,11 @@ public sealed partial class ContractSchemaWarmUpService : IHostedService, IDispo
     private readonly ILogger<ContractSchemaWarmUpService> _logger;
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly CancellationTokenSource _stopping = new();
+    // the host and the container it owns stop this service in either order, so the cancel and the dispose of
+    // _stopping have to be one step: a CTS disposed under a concurrent cancel throws ObjectDisposedException.
+    private readonly Lock _lifecycle = new();
     private Task? _run;
-    private int _disposed;
+    private bool _disposed;
 
     /// <summary>Creates the service over the container that owns the schema set.</summary>
     public ContractSchemaWarmUpService(IServiceProvider services, ILogger<ContractSchemaWarmUpService> logger)
@@ -58,16 +61,38 @@ public sealed partial class ContractSchemaWarmUpService : IHostedService, IDispo
     {
         // Shutdown must not wait for the compile: it cannot be interrupted, it runs on a pool thread that does
         // not keep the process alive, and the host's liveness contract is exit well inside its shutdown timeout.
-        await _stopping.CancelAsync().ConfigureAwait(false);
+        // Stop after Dispose is a no-op: a host disposing its container first then stopping the service is
+        // normal for WebApplicationFactory, and it must not surface ObjectDisposedException from the disposed CTS.
+        Task cancellation;
+        lock (_lifecycle)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            // Nothing can register on this private source, so the cancel runs to completion before the lock is
+            // released and Dispose, which takes the same lock, never disposes under an in-flight cancel.
+            cancellation = _stopping.CancelAsync();
+        }
+
+        await cancellation.ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
         // A host that is disposed without StopAsync (failed start) must not leave the queued warm-up
-        // resolving from a dead container and reporting that as a schema failure. The container may dispose twice.
-        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+        // resolving from a dead container and reporting that as a schema failure. The container may dispose twice,
+        // and StopAsync may run before, after or beside this call.
+        lock (_lifecycle)
         {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
             _stopping.Cancel();
             _stopping.Dispose();
         }
