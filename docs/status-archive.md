@@ -293,3 +293,9 @@ AGENTS.md Current state (old lines 7, 9-11, 13-16):
 - Migrations `0001`–`0060` are contiguous; highest is `0060_identity_ingest_token_decision_read.sql` (merged in #390), the migration lane is free and the next free number is `0061`.
 - Not yet started: plan 08 (safe healing/learning) has only 08.6.3-T1 (the healing kill switch) plus the partial 08.5.1-T1.1/T1.2 (gateway table, T1.3–T1.7 open, not counted); plan 12 (pilot/commercial) has only 12.3.1-T1 (the usage ledger).
 - Not yet inside started areas: 07 evaluator remainder (07.2.2-T2 matrix and fixtures, partial), waiver/quarantine effects + expiry (07.3.2), flaky detection (07.4), late evidence (07.5.1), release decision aggregation (07.5.3, 07.5.4), webhooks and CI delivery beyond the CLI gate (07.6.1-T1, 07.6.2, 07.6.3); 06 sensitivity/redaction/secret masking (06.2) and the isolated viewer (06.3.3–06.3.4); most web product screens; real `platform_operator` auth (02.8.1); human login (02.3.1-T3).
+
+## STATUS replaced text (S305, 2026-11-08)
+
+Moved verbatim from STATUS.md §1 Resume here (line 18, the Pilot-0 bullet), replaced by a sentence checked against `plans/features/SOLO-PATH.md` Notes S187/S188 and merges #395, #401 and #403 at `2718c29f`.
+
+- Pilot-0 (SOLO-PATH §2): criteria a-d met live in #392 (run A PASS gate 0, run B FAIL gate 1); (e) web against the live API is open (needs human login 02.3.1; S187 DEV-LOGIN in flight); review deployment is S188.
