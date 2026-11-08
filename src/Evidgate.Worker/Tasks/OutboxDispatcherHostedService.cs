@@ -91,7 +91,7 @@ internal sealed partial class OutboxDispatcherHostedService : BackgroundService
     }
 
     [LoggerMessage(
-        EventId = 2350,
+        EventId = 2353,
         Level = LogLevel.Debug,
         Message = "Dispatched {Claimed} outbox rows into {Enqueued} task rows")]
     private partial void LogDispatched(int claimed, int enqueued);

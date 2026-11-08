@@ -130,7 +130,7 @@ and the two metered paths run in different hosts: the event route gates in the A
 the Worker. A host cannot see the other's value, so a mismatch silently gates one path and lets the other
 commit unmetered against the counter. Set the value **once, from the same shared configuration source, for the
 Api and the Worker** and change both in one deploy. Every host logs the effective value at start: Information
-(event 2472, `Quota gate is enabled on this host`) when the gate is on, and a Warning (event 2473, `Quota gate is
+(event 2475, `Quota gate is enabled on this host`) when the gate is on, and a Warning (event 2476, `Quota gate is
 disabled on this host`) when it is off. A host that starts with the gate off writes only that Warning and never the
 Information line, so grep both hosts' start logs for `Quota gate` after any change and expect one line per host.
 There is no cross-host check; an operator who switches the gate off on purpose does it on both.

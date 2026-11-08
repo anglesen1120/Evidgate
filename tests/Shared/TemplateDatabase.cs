@@ -19,23 +19,30 @@ namespace Evidgate.Testing;
 
 /// <summary>
 /// One migrated database per fixture instance that every test database is copied
-/// from: the real migrations run once, and per-test creation becomes a PostgreSQL
+/// from: the real migrations run once — or, when the caller names a database it already
+/// brought to head, not at all — and per-test creation becomes a PostgreSQL
 /// <c>create database … template</c> instead of another full migration run.
 /// </summary>
 /// <remarks>
 /// PostgreSQL refuses to copy a template that has open connections, so every
 /// connection this type opens is unpooled. The copy gate serializes concurrent
-/// copies from the same template, which would otherwise fail transiently with 55006.
+/// copies from the same template, which would otherwise fail transiently with 55006;
+/// a copy from a caller-supplied source also terminates that source's stragglers and
+/// retries a bounded number of times, because a pool shutting down hands one back late.
 /// </remarks>
 internal sealed partial class TemplateDatabase : IDisposable
 {
     private const string OwnerRole = "evidgate_owner";
     private const string MaintenanceDatabase = "postgres";
 
+    // A copy still refused after this many attempts is a real failure, not a straggler.
+    private const int CopyAttempts = 5;
+
     private readonly Func<string, string> _superuserConnectionString;
     private readonly Func<string, string> _ownerConnectionString;
     private readonly string _migrationsPath;
     private readonly IReadOnlyList<string> _templateStatements;
+    private readonly string? _copyFrom;
     private readonly SemaphoreSlim _copyGate = new(1, 1);
     private readonly object _templateLock = new();
     private Task<string>? _template;
@@ -47,21 +54,32 @@ internal sealed partial class TemplateDatabase : IDisposable
     /// <param name="ownerConnectionString">Migration-role connection string for the named database.</param>
     /// <param name="migrationsPath">Directory of the real migration files.</param>
     /// <param name="templateStatements">Role statements run once, after migrations, on the template.</param>
+    /// <param name="copyFrom">
+    /// A database the caller already brought to head, copied instead of running the migrations a
+    /// second time. Remaining source sessions are terminated before copying.
+    /// </param>
     internal TemplateDatabase(
         Func<string, string> superuserConnectionString,
         Func<string, string> ownerConnectionString,
         string migrationsPath,
-        IReadOnlyList<string> templateStatements)
+        IReadOnlyList<string> templateStatements,
+        string? copyFrom = null)
     {
         ArgumentNullException.ThrowIfNull(superuserConnectionString);
         ArgumentNullException.ThrowIfNull(ownerConnectionString);
         ArgumentException.ThrowIfNullOrWhiteSpace(migrationsPath);
         ArgumentNullException.ThrowIfNull(templateStatements);
 
+        if (copyFrom is not null)
+        {
+            EnsureGeneratedName(copyFrom, nameof(copyFrom));
+        }
+
         _superuserConnectionString = superuserConnectionString;
         _ownerConnectionString = ownerConnectionString;
         _migrationsPath = migrationsPath;
         _templateStatements = templateStatements;
+        _copyFrom = copyFrom;
     }
 
     /// <summary>Releases the copy gate; call after the fixture has stopped creating databases.</summary>
@@ -136,15 +154,20 @@ internal sealed partial class TemplateDatabase : IDisposable
     /// <summary>Refuses any name that is not the generated shape, before SQL is built from it.</summary>
     private static void EnsureGeneratedName(string database, string parameterName)
     {
-        if (!GeneratedName().IsMatch(database))
+        if (database.Length > 63
+            || !GeneratedName().IsMatch(database)
+            || string.Equals(database, "postgres", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(database, "template0", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(database, "template1", StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
-                $"'{database}' is not a generated database name: letters, digits and '_' only.",
+                $"'{database}' is not a generated database name: at most 63 ASCII letters, digits or '_', excluding reserved databases.",
                 parameterName);
         }
     }
 
-    private Task<string> EnsureTemplateAsync()
+    /// <summary>Builds the template once per instance; concurrent callers share the one build.</summary>
+    internal Task<string> EnsureTemplateAsync()
     {
         Task<string> build;
         lock (_templateLock)
@@ -165,24 +188,32 @@ internal sealed partial class TemplateDatabase : IDisposable
     {
         try
         {
-            await ExecuteSuperuserAsync(
-                MaintenanceDatabase,
-                $"create database \"{_templateName}\" owner {OwnerRole}").ConfigureAwait(false);
-
-            var outcome = MigratorRunner.Run(
-                new MigratorOptions
-                {
-                    ConnectionString = Unpooled(_ownerConnectionString(_templateName)),
-                    MigrationsPath = _migrationsPath,
-                },
-                MigrationCommand.Apply,
-                new StringWriter(CultureInfo.InvariantCulture));
-
-            if (outcome.ExitCode != MigratorExitCodes.Success)
+            if (_copyFrom is { } source)
             {
-                throw new InvalidOperationException(
-                    $"the suite could not reach head on '{_templateName}' (exit {outcome.ExitCode}): "
-                    + string.Join(" | ", outcome.Messages));
+                // Reuse the migrated source instead of running the migrations a second time.
+                await CopyTemplateAsync(source).ConfigureAwait(false);
+            }
+            else
+            {
+                await ExecuteSuperuserAsync(
+                    MaintenanceDatabase,
+                    $"create database \"{_templateName}\" owner {OwnerRole}").ConfigureAwait(false);
+
+                var outcome = MigratorRunner.Run(
+                    new MigratorOptions
+                    {
+                        ConnectionString = Unpooled(_ownerConnectionString(_templateName)),
+                        MigrationsPath = _migrationsPath,
+                    },
+                    MigrationCommand.Apply,
+                    new StringWriter(CultureInfo.InvariantCulture));
+
+                if (outcome.ExitCode != MigratorExitCodes.Success)
+                {
+                    throw new InvalidOperationException(
+                        $"the suite could not reach head on '{_templateName}' (exit {outcome.ExitCode}): "
+                        + string.Join(" | ", outcome.Messages));
+                }
             }
 
             foreach (var statement in _templateStatements)
@@ -204,6 +235,29 @@ internal sealed partial class TemplateDatabase : IDisposable
             // it may exist with or without the is_template flag.
             await DropTemplateDatabaseAsync().ConfigureAwait(false);
             throw;
+        }
+    }
+
+    private async Task CopyTemplateAsync(string source)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await ExecuteSuperuserAsync(
+                    MaintenanceDatabase,
+                    $"select pg_terminate_backend(pid) from pg_stat_activity where datname = '{source}' and pid <> pg_backend_pid()").ConfigureAwait(false);
+                await ExecuteSuperuserAsync(
+                    MaintenanceDatabase,
+                    $"create database \"{_templateName}\" owner {OwnerRole} template \"{source}\"").ConfigureAwait(false);
+                return;
+            }
+            catch (PostgresException exception) when (
+                exception.SqlState == PostgresErrorCodes.ObjectInUse && attempt < CopyAttempts)
+            {
+                // Pool shutdown can leave source backends exiting after termination was requested.
+                await Task.Delay(TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
+            }
         }
     }
 
@@ -238,6 +292,10 @@ internal sealed partial class TemplateDatabase : IDisposable
         await command.ExecuteNonQueryAsync().ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The same connection string with pooling off: a template copy refuses a source database
+    /// that still has a session, and a pooled connection outlives the close that ends its block.
+    /// </summary>
     private static string Unpooled(string connectionString) =>
         new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString;
 }

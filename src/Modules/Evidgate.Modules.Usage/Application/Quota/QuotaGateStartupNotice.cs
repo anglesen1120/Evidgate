@@ -51,14 +51,14 @@ internal sealed partial class QuotaGateStartupNotice : IHostedService
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     [LoggerMessage(
-        EventId = 2472,
+        EventId = 2475,
         Level = LogLevel.Information,
         Message = "Quota gate is enabled on this host (Usage QuotaGate Enabled=true): metered work reserves "
             + "its counter before it commits")]
     private partial void LogEnabled();
 
     [LoggerMessage(
-        EventId = 2473,
+        EventId = 2476,
         Level = LogLevel.Warning,
         Message = "Quota gate is disabled on this host (Usage QuotaGate Enabled=false): this process "
             + "admits metered work without a counter. The Api runs the ingest path and the Worker the report path, and "
