@@ -2,6 +2,7 @@ using Evidgate.Api.Endpoints;
 using Evidgate.Api.Json;
 using Evidgate.Api.Middleware;
 using Evidgate.Api.Tenancy;
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Observability.Correlation;
 using Evidgate.BuildingBlocks.Persistence;
@@ -148,6 +149,8 @@ public static partial class ApiHost
         // 12.3.1-T1.3: the usage module — the ledger write path (12.3.1-T1.4) and the IUsageLedger
         // surface the metering callers resolve; the operator route arrives with 12.3.1-T2.4.
         builder.Services.AddUsageModule();
+        // The API validates request bodies against the contract schemas; compile them at start, not in the first request.
+        builder.Services.AddEvidgateContractSchemaWarmUp();
 
         // 00 §5.5 edge: snake_case JSON through the source-generated context;
         // reflection stays enabled as a fallback for framework types.

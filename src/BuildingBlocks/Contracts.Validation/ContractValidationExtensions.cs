@@ -111,6 +111,21 @@ public static class ContractValidationServiceExtensions
     }
 
     /// <summary>
+    /// Builds the <see cref="ContractSchemaSet"/> in the background when the host starts
+    /// (<see cref="ContractSchemaWarmUpService"/>), for hosts that serve body-validating routes. The set
+    /// itself still comes from the lazy registration, which the modules add.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    public static IServiceCollection AddEvidgateContractSchemaWarmUp(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.TryAddEvidgateContractValidation();
+        services.AddSingleton<ContractSchemaWarmUpService>();
+        services.AddHostedService(provider => provider.GetRequiredService<ContractSchemaWarmUpService>());
+        return services;
+    }
+
+    /// <summary>
     /// Locates the repository's <c>contracts/</c> directory relative to the
     /// host environment. The content root is <em>not</em> assumed to be the
     /// repository root (it is the project directory under <c>dotnet watch</c>
