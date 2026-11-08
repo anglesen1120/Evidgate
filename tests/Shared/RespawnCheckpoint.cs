@@ -103,21 +103,7 @@ public sealed class RespawnCheckpoint
             throw new InvalidOperationException("the harness database has no application table to reset");
         }
 
-        var snapshots = new string[SeedAndTenantTables.Count];
-        for (var i = 0; i < snapshots.Length; i++)
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                $"select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb)::text from {SeedAndTenantTables[i]} t where t.org_id is null";
-            snapshots[i] = (string)(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
-        }
-
-        if (snapshots.Any(snapshot => snapshot == "[]"))
-        {
-            throw new InvalidOperationException(
-                "a built-in reference table is empty at harness start: the migrations seed every one of "
-                + string.Join(", ", SeedAndTenantTables));
-        }
+        var snapshots = await SnapshotBuiltInRowsAsync(connection, cancellationToken).ConfigureAwait(false);
 
         var restore = string.Concat(SeedAndTenantTables.Select((table, i) =>
             $"; insert into {table} select * from jsonb_populate_recordset(null::{table}, @s{i}::jsonb)"));
@@ -145,6 +131,32 @@ public sealed class RespawnCheckpoint
         }
 
         await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The built-in rows (NULL <c>org_id</c>) of <see cref="SeedAndTenantTables"/> as one JSON array per table, read
+    /// while the database is freshly migrated. An empty table fails the start: the migrations seed every one.
+    /// </summary>
+    private static async Task<string[]> SnapshotBuiltInRowsAsync(
+        NpgsqlConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var snapshots = new string[SeedAndTenantTables.Count];
+        for (var i = 0; i < snapshots.Length; i++)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                $"select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb)::text from {SeedAndTenantTables[i]} t where t.org_id is null";
+            snapshots[i] = (string)(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false))!;
+
+            if (snapshots[i] == "[]")
+            {
+                throw new InvalidOperationException(
+                    $"the built-in rows of {SeedAndTenantTables[i]} are missing at harness start: the migrations seed them");
+            }
+        }
+
+        return snapshots;
     }
 
     /// <summary>

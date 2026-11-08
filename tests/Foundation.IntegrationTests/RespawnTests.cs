@@ -115,11 +115,11 @@ public sealed class RespawnTests : TenantTest
     [Fact]
     public async Task Respawn_KeepsTheMigrationSeededCatalogue()
     {
-        var before = await Fixture.ReferenceRowCountsAsync(Token);
+        var before = await Fixture.ReferenceRowDigestsAsync(Token);
 
         foreach (var table in RespawnCheckpoint.SeedOnlyTables.Concat(RespawnCheckpoint.SeedAndTenantTables))
         {
-            before[table].ShouldBeGreaterThan(0L, table);
+            before[table].ShouldNotStartWith("0:");
         }
 
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
@@ -130,7 +130,7 @@ public sealed class RespawnTests : TenantTest
 
         await Fixture.ResetAsync(Token);
 
-        (await Fixture.ReferenceRowCountsAsync(Token)).ShouldBe(before);
+        (await Fixture.ReferenceRowDigestsAsync(Token)).ShouldBe(before);
         (await Fixture.NonEmptyApplicationTablesAsync(Token)).ShouldBeEmpty();
     }
 

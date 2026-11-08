@@ -399,7 +399,7 @@ internal sealed class TenantRowFactory
 
             // The release pair of a reprocess request is pinned to a seeded catalogue row below: the app role
             // cannot write report_parser, so the factory must not try to mint a parent for it. That seed is the
-            // migration's, which the harness reset removes — the suite restores it before generating the table.
+            // migration's, which the harness reset keeps (RespawnCheckpoint).
             if (string.Equals(table, "public.raw_report_reprocess", StringComparison.Ordinal)
                 && string.Equals(foreignKey.PrincipalTable, "public.report_parser", StringComparison.Ordinal))
             {

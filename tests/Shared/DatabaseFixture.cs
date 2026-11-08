@@ -655,15 +655,15 @@ public sealed class DatabaseFixture : IAsyncLifetime
             .ConfigureAwait(false);
 
     /// <summary>
-    /// The row count of every migration-seeded reference table (<see cref="RespawnCheckpoint.SeedOnlyTables"/> whole,
+    /// The row count and a digest of the content of every migration-seeded reference table (<see cref="RespawnCheckpoint.SeedOnlyTables"/> whole,
     /// <see cref="RespawnCheckpoint.SeedAndTenantTables"/> only their built-in rows), read through the superuser
     /// connection. The names are the checkpoint's constants, never caller input.
     /// </summary>
-    public async Task<IReadOnlyDictionary<string, long>> ReferenceRowCountsAsync(
+    public async Task<IReadOnlyDictionary<string, string>> ReferenceRowDigestsAsync(
         CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenSuperuserAsync(_database, cancellationToken);
-        var counts = new Dictionary<string, long>(StringComparer.Ordinal);
+        var counts = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var table in RespawnCheckpoint.SeedOnlyTables.Concat(RespawnCheckpoint.SeedAndTenantTables))
         {
@@ -671,8 +671,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 ? " where org_id is null"
                 : string.Empty;
             await using var count = connection.CreateCommand();
-            count.CommandText = $"select count(*) from {table}{builtIn}";
-            counts[table] = (long)(await count.ExecuteScalarAsync(cancellationToken))!;
+            count.CommandText =
+                $"select count(*) || ':' || coalesce(md5(string_agg(to_jsonb(t)::text, ',' order by to_jsonb(t)::text)), '') from {table} t{builtIn}";
+            counts[table] = (string)(await count.ExecuteScalarAsync(cancellationToken))!;
         }
 
         return counts;
