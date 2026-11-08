@@ -44,7 +44,9 @@ web server builds the fixtures bundle itself (`npm run build:core:e2e`); specs r
 - `scripts/verify.sh --stage e2e-a11y` runs `e2e/core/a11y.spec.ts` (about 35 s on the fixtures build); the
   Vitest axe specs (`*.a11y.spec.ts`) already run inside the `vitest` stage's `ng test`. Both stages
   run in the `no-dotnet` and `full` tiers.
-- The CI `e2e` job is blocking: that stage, then `npm run e2e:core`, then the production smoke; the
-  report, traces and JUnit are uploaded as the `playwright-core` artifact (7 days).
+- The CI `e2e` job is blocking: that stage, then `npm run e2e:core`, then the production smoke; each
+  step's report, traces and JUnit are uploaded right after it (`playwright-a11y`, `playwright-core`,
+  `playwright-smoke`, 7 days, never the stored auth state) because every Playwright run empties
+  `test-results`. The a11y spec therefore runs twice in CI (stage, then the core suite): accepted.
 - Retries: none, except for a test whose title carries `@infra` (browser or runner flake), which the
   `core-infra` project retries twice. A product assertion is never tagged.

@@ -24,7 +24,8 @@ const PORT =
   Number.isInteger(presetPort) && presetPort > 0 ? presetPort : randomInt(40_000, 60_000);
 process.env[PORT_ENV] = String(PORT);
 
-const INFRA_TAG = /@infra/;
+// The whole token: `@infrastructure` or `@infra-x` must not earn retries.
+const INFRA_TAG = /@infra(?![\w-])/;
 
 const baseURL = `http://127.0.0.1:${PORT}`;
 // Everything a run writes is keyed on the shard, so shards started together on one machine never

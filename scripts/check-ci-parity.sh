@@ -92,7 +92,7 @@ ALLOWED_RAW=(
   'npm run e2e -w apps/web'
   'npm run e2e:core -w apps/web'
   # Playwright shell suite on the fixtures build (09.1.1-T4 hand-over): not a
-  # verify.sh stage, non-blocking like the production e2e job.
+  # verify.sh stage, non-blocking (the wide shell regression, not the core gate).
   'npm run e2e:fixtures -w apps/web'
   # The one workspace the e2e jobs need compiled before `ng build`
   # (`@evidgate/sdk` resolves to its `dist/`). The tsc-build stage may appear
