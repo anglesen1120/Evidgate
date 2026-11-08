@@ -84,6 +84,9 @@ module.exports = tseslint.config(
       // file, so it needs its own entry: the emitting app project does not include `e2e/`, and the
       // block below types the directory against `apps/web/tsconfig.spec.json`.
       'apps/web/e2e/**/*.ts',
+      // The lint-rule specs and their harness are typed against the same spec project, which
+      // this block's project service cannot open.
+      'apps/web/eslint-rules/**/*.ts',
     ],
     extends: [tseslint.configs.recommendedTypeChecked, ...angularTsRecommended],
     // 09.1.1-T11.4 (AC9): a component style may live inline in `styles: [...]` instead of a
@@ -319,6 +322,10 @@ module.exports = tseslint.config(
       // 09.1.1-T4.4: and the suite's own non-spec module (`e2e/shell/support.ts`), which the
       // emitting app project does not include.
       'apps/web/e2e/**/*.ts',
+      // The lint-rule specs' shared harness (`*.test-support.ts`) is not a spec file either,
+      // so it needs its own entry: `apps/web/tsconfig.spec.json` includes it and the emitting
+      // app project does not.
+      'apps/web/eslint-rules/**/*.ts',
       // The fixture modules a package's specs share are not spec files either, so they need
       // their own entry: each package's tsconfig.spec.json includes them and its emitting
       // tsconfig.json excludes them.
