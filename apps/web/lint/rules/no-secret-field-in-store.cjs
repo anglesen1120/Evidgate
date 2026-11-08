@@ -56,7 +56,7 @@
 //      `/(State|Store)$/` (`interface SecretsState { password: string }`), and a member of the
 //      type-argument literal of `withState<{ ... }>(...)`;
 //   3. a class field, private field, accessor field, getter or constructor parameter property of
-//      a class whose name matches `/Store$/` (`readonly token = signal('')`, `#token = signal('')`,
+//      a class whose name matches `/(Store|Flow|Track)$/` (`readonly token = signal('')`, `#token = signal('')`,
 //      `constructor(private token: string)`, `get signingSecret()`);
 //   4. an inline `template:` string of a component: a member read whose property is
 //      secret-shaped — `{{ store.token() }}`, `{{ row.secret }}`, `[value]="x.signing_secret"`,
@@ -95,7 +95,7 @@
 //   7. a secret-carrying RESULT type held in state (`secretCarryingType`): `IssuedInvite`,
 //      `RotationResult`, `IngestTokenCreatedResponse`, `InviteIssuedView` and
 //      `CiBindingCreatedResponse` are the shapes a route answers with a ONE-TIME value, so a
-//      field, accessor or constructor parameter property of a `/Store$/` class typed with one is
+//      field, accessor or constructor parameter property of a `/(Store|Flow|Track)$/` class typed with one is
 //      reported at any depth (`Signal<IssuedInvite | null>`, `readonly last: RotationResult`), as
 //      is a `signal<...>()`/`computed<...>()`/`withState<...>()` type argument of one in a
 //      Settings file and a member type of an `interface`/`type` named `…State|…Store`. A method
@@ -104,7 +104,7 @@
 //      parameter, a local variable and the declaration of the type itself stay legal, and
 //      `secrets.store.ts`/`members.store.ts` lint clean.
 //
-// A top-level `const token = signal('')` outside a `/Store$/` class is NOT reported: a local
+// A top-level `const token = signal('')` outside a `/(Store|Flow|Track)$/` class is NOT reported: a local
 // variable is not store state, and reporting every signal would make the rule unusable.
 //
 // Blind spots (a lint rule is defence in depth, not the only defence):
@@ -126,7 +126,7 @@
 //     `@placeholder`, `@loading` and `@error` block carries no header and is not scanned at all;
 //   - a result type reached through a type alias (`type Issued = IssuedInvite`) or a generic
 //     parameter is caught only where the NAME itself is written, and a component class field
-//     typed with one is not reported (only a `/Store$/` class, a `signal`/`computed`/`withState`
+//     typed with one is not reported (only a `/(Store|Flow|Track)$/` class, a `signal`/`computed`/`withState`
 //     generic and a `…State|…Store` member are). The TYPE coverage is exactly those three
 //     positions plus an ANNOTATED field: `signal(x as IssuedInvite)`, `linkedSignal(...)`,
 //     `model(...)`, a `BehaviorSubject`/`resource` held in a field without the result type in its
@@ -147,7 +147,7 @@
 //     through a `return` inside a block other than the factory's own body (`if (x) return {...}`)
 //     is not walked: only a concise body and a top-level `return` are;
 //   - a `signal({ token: '' })` at field level (`readonly state = signal({ token: '' })` in a
-//     `/Store$/` class) is checked as a field NAME only (`state`, which is neutral); the literal
+//     `/(Store|Flow|Track)$/` class) is checked as a field NAME only (`state`, which is neutral); the literal
 //     inside it is walked only when a state call hands it over, directly or through a factory.
 //
 // Two reviewed exemptions, both checked against the path segments below the last
@@ -272,8 +272,11 @@ const PRESENCE_WORDS = new Set(['has', 'is', 'no', 'any', 'requires', 'allowed',
 /** A state declaration: the interface/type alias that describes a store's state. */
 const STATE_DECLARATION = /(State|Store)$/;
 
-/** A SignalStore class: its fields are the state a template can read. */
-const STORE_CLASS = /Store$/;
+/**
+ * A SignalStore class, or a `*Flow`/`*Track` class a store delegates to: its fields are the state a
+ * template can read.
+ */
+const STORE_CLASS = /(Store|Flow|Track)$/;
 
 /**
  * The calls whose own argument is a state literal (`STATE_LITERAL_CALLS`): their literal is the
@@ -1180,7 +1183,7 @@ module.exports = {
 
     /**
      * Reports every secret-carrying result type inside a type annotation (position 7): a field,
-     * accessor or constructor parameter property of a `/Store$/` class, a `signal`/`computed`/
+     * accessor or constructor parameter property of a `/(Store|Flow|Track)$/` class, a `signal`/`computed`/
      * `withState` type argument and a `…State|…Store` member all reach one. A method return type
      * never does — that is the sanctioned position for a one-time value.
      */

@@ -28,8 +28,8 @@
 // 3. **The server's failure is the server's.** A typed `ApiError` reaches `loadError` (or
 //    `pagingError`) verbatim: no client-side mapping, no invented message. A rejection that is not
 //    the server's answer — an adapter cancellation, a bug — becomes the fixed
-//    `UNRESOLVED_FAILURE` of the Members store (`features/settings/members/members.store.ts`
-//    §header 5): `unexpected`, `status: 0`, no text taken from the thrown value, so the tab is
+//    `UNRESOLVED_FAILURE` of the Members store (`features/settings/members/members.state.ts`):
+//    `unexpected`, `status: 0`, no text taken from the thrown value, so the tab is
 //    never left loading forever and a thrown value's message (which may carry request data) is
 //    never surfaced. `loadMore` re-throws it instead, because a paging bug is not a row-level
 //    refusal an operator can dismiss.

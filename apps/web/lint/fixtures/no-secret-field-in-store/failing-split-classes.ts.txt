@@ -1,0 +1,14 @@
+// Classes a store delegates to (`*Flow`, `*Track`) hold Settings state exactly like the store
+// that composes them, so `evidgate/no-secret-field-in-store` reports a secret-shaped field there.
+//
+// A `.ts.txt` file for the reason failing.ts.txt explains.
+import { signal } from '@angular/core';
+
+export class InviteFlow {
+  readonly token = signal('');
+}
+
+export class RotationTrack {
+  readonly #secret = signal('');
+  constructor(private readonly password: string) {}
+}
