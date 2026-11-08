@@ -27,7 +27,7 @@ VERIFY = ROOT / "scripts" / "verify.sh"
 FLAG = U8_FLAG.pattern.replace("\\b", "")
 
 # The real `test` stage invocation, which a fixture puts the flag back onto.
-INVOCATION = "    dotnet test --no-build -c Release --solution Evidgate.slnx\n"
+INVOCATION = '        dotnet test --no-build -c Release --project "$test_project"'
 
 # $1 the script to source, $2 the tree to stand in, $3 the trait to run.
 TRAIT_DRIVER = textwrap.dedent("""\
@@ -105,7 +105,7 @@ class SourceFlag(unittest.TestCase):
     def test_a_stage_that_hands_on_the_flag_fails_the_script(self):
         text = VERIFY.read_text()
         self.assertIn(INVOCATION, text)
-        self.write_copy(text.replace(INVOCATION, INVOCATION.rstrip("\n") + f" {FLAG} 8\n"))
+        self.write_copy(text.replace(INVOCATION, INVOCATION + f" {FLAG} 8"))
         done = self.invoke(self.script, "--list-stages")
         self.assert_refused(done)
         self.assertIn(FLAG, done.stderr)
@@ -113,7 +113,7 @@ class SourceFlag(unittest.TestCase):
     def test_a_flag_on_a_continued_line_is_the_same_command(self):
         text = VERIFY.read_text()
         self.assertIn(INVOCATION, text)
-        self.write_copy(text.replace(INVOCATION, INVOCATION.rstrip("\n") + f" \\\n      {FLAG} 8\n"))
+        self.write_copy(text.replace(INVOCATION, INVOCATION + f" \\\n      {FLAG} 8"))
         self.assert_refused(self.invoke(self.script, "--list-stages"))
 
     def test_a_flag_the_environment_carries_is_refused(self):
