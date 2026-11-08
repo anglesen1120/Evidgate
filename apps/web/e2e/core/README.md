@@ -38,3 +38,13 @@ EVIDGATE_E2E_CORE_SHARD=2 npx playwright test -c playwright.core.config.ts --sha
 The env var keeps each shard's JUnit file apart (`test-results/e2e-core-junit-<shard>.xml`); `setup`
 runs first in every shard and stores the seeded tenant's auth state, so specs start signed in. The
 web server builds the fixtures bundle itself (`npm run build:core:e2e`); specs run in `en` and `vi`.
+
+## Gate and CI
+
+- `scripts/verify.sh --stage e2e-a11y` runs `e2e/core/a11y.spec.ts` (about 35 s on the fixtures build); the
+  Vitest axe specs (`*.a11y.spec.ts`) already run inside the `vitest` stage's `ng test`. Both stages
+  run in the `no-dotnet` and `full` tiers.
+- The CI `e2e` job is blocking: that stage, then `npm run e2e:core`, then the production smoke; the
+  report, traces and JUnit are uploaded as the `playwright-core` artifact (7 days).
+- Retries: none, except for a test whose title carries `@infra` (browser or runner flake), which the
+  `core-infra` project retries twice. A product assertion is never tagged.

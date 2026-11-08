@@ -24,6 +24,8 @@ const PORT =
   Number.isInteger(presetPort) && presetPort > 0 ? presetPort : randomInt(40_000, 60_000);
 process.env[PORT_ENV] = String(PORT);
 
+const INFRA_TAG = /@infra/;
+
 const baseURL = `http://127.0.0.1:${PORT}`;
 // Everything a run writes is keyed on the shard, so shards started together on one machine never
 // delete each other's bundle, traces or stored state.
@@ -37,6 +39,8 @@ export default defineConfig({
   testDir: './e2e/core',
   forbidOnly: Boolean(process.env['CI']),
   // No blanket retries: a product assertion that passes on a second try must not turn green.
+  // Only a test titled with the `@infra` tag (browser or runner flake, never a product assertion)
+  // is retried, by the `core-infra` project below.
   retries: 0,
   timeout: 60_000,
   // Own artefact directory: Playwright empties it at the start of every run, and the JUnit and
@@ -61,6 +65,19 @@ export default defineConfig({
     {
       name: 'core',
       testMatch: '**/*.spec.ts',
+      grepInvert: INFRA_TAG,
+      dependencies: ['setup'],
+      use: {
+        browserName: 'chromium',
+        channel: 'chrome',
+        storageState: AUTH_STATE,
+      },
+    },
+    {
+      name: 'core-infra',
+      testMatch: '**/*.spec.ts',
+      grep: INFRA_TAG,
+      retries: 2,
       dependencies: ['setup'],
       use: {
         browserName: 'chromium',

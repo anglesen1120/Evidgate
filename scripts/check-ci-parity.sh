@@ -86,8 +86,11 @@ ALLOWED_RAW=(
   # Web build: activates when apps/web gains a build script (09.1.1). Deliberately
   # the --workspaces variant — `npm run build` at the root is the tsc-build stage.
   'npm run build --workspaces --if-present'
-  # Playwright e2e: not a verify.sh stage (non-blocking until 09, T1.3).
+  # Playwright production smoke, plus the core-flow suite: CI-only because the
+  # job needs the shard/JUnit/artifact flow of the config; its a11y spec is the
+  # verify.sh e2e-a11y stage. Blocking e2e job (09.8.1-T3.3).
   'npm run e2e -w apps/web'
+  'npm run e2e:core -w apps/web'
   # Playwright shell suite on the fixtures build (09.1.1-T4 hand-over): not a
   # verify.sh stage, non-blocking like the production e2e job.
   'npm run e2e:fixtures -w apps/web'
