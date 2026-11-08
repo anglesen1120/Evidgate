@@ -1,9 +1,23 @@
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  type WritableSignal,
+} from '@angular/core';
 import { InteractivityChecker } from '@angular/cdk/a11y';
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
+import {
+  ActivatedRoute,
+  Router,
+  convertToParamMap,
+  provideRouter,
+  type CanActivateFn,
+  type Routes,
+} from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { BehaviorSubject, of } from 'rxjs';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import type {
   ApiTokenCreatedResponse,
   ApiTokenListResponse,
@@ -175,6 +189,146 @@ export function mount(
     endSession,
     settle,
   };
+}
+
+/** Where an organization switch lands; the page under test is left behind, as in the app. */
+@Component({
+  selector: 'app-spec-org-home',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: '',
+})
+export class OrgHomeStub {}
+
+/** The `SessionStore` surface the page and its store read, as signals a case can move. */
+export interface SessionFixture {
+  readonly currentOrg: WritableSignal<{ id: string } | null>;
+  readonly projects: WritableSignal<readonly ProjectDto[]>;
+  readonly currentProject: WritableSignal<ProjectDto | undefined>;
+  readonly permissions: WritableSignal<ReadonlySet<string>>;
+  readonly has: (code: string) => boolean;
+  readonly bootstrap: () => Promise<void>;
+  readonly onSessionEnd: () => () => void;
+}
+
+/** One real-router mount: the session signals plus the data seam the store reads. */
+export interface RouterWorld {
+  readonly org: WritableSignal<{ id: string } | null>;
+  readonly listed: WritableSignal<readonly ProjectDto[]>;
+  readonly currentProject: WritableSignal<ProjectDto | undefined>;
+  readonly session: SessionFixture;
+  readonly list: () => Promise<ApiTokenListResponse>;
+}
+
+/** A list with one page; the answer of a case that does not care about paging. */
+const firstPageOnly = (): Promise<ApiTokenListResponse> =>
+  Promise.resolve({ items: [ROW], next_cursor: null });
+
+export function createWorld(
+  projects: readonly ProjectDto[],
+  answer: () => Promise<ApiTokenListResponse> = firstPageOnly,
+): RouterWorld {
+  const org = signal<{ id: string } | null>({ id: 'org-1' });
+  const listed = signal<readonly ProjectDto[]>([...projects]);
+  const currentProject = signal<ProjectDto | undefined>(projects[0]);
+  const permissions = signal<ReadonlySet<string>>(
+    new Set(['api_token:read', 'api_token:write', 'run:read']),
+  );
+  const list = vi.fn(answer);
+  const session: SessionFixture = {
+    currentOrg: org,
+    projects: listed,
+    currentProject,
+    permissions,
+    has: (code: string) => permissions().has(code),
+    bootstrap: () => Promise.resolve(undefined),
+    onSessionEnd: () => () => undefined,
+  };
+  return { org, listed, currentProject, session, list };
+}
+
+/**
+ * A guard that holds one navigation open, so a case can render the window between the scope being
+ * replaced and the new route activating. `onEnter` runs inside the guard, in that window.
+ */
+export class HeldTransition {
+  onEnter: (() => void) | null = null;
+  private pending: (() => void) | null = null;
+  private arrived: (() => void) | null = null;
+  private readonly reached = new Promise<void>((resolve) => (this.arrived = resolve));
+  private holding = false;
+
+  hold(): void {
+    this.holding = true;
+  }
+
+  waitUntilHeld(): Promise<void> {
+    return this.reached;
+  }
+
+  release(): void {
+    this.pending?.();
+  }
+
+  readonly guard: CanActivateFn = () => {
+    if (!this.holding) return true;
+    this.holding = false;
+    this.onEnter?.();
+    this.arrived?.();
+    return new Promise<boolean>((resolve) => {
+      this.pending = () => resolve(true);
+    });
+  };
+}
+
+export async function mountAt(routes: Routes, world: RouterWorld): Promise<RouterTestingHarness> {
+  TestBed.configureTestingModule({
+    providers: [
+      provideRouter(routes),
+      { provide: SessionStore, useValue: world.session },
+      {
+        provide: ApiTokensService,
+        useValue: { list: world.list, create: vi.fn(), revoke: vi.fn() },
+      },
+    ],
+  });
+  vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
+  return RouterTestingHarness.create();
+}
+
+/**
+ * Renders until `done()` holds. A fixed number of ticks would race the router: the page's write is
+ * a navigation of its own, and its effect only runs on a change-detection pass after it commits.
+ */
+export async function until(harness: RouterTestingHarness, done: () => boolean): Promise<void> {
+  for (let round = 0; round < 20 && !done(); round += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    harness.detectChanges();
+  }
+  expect(done()).toBe(true);
+}
+
+/**
+ * Waits for the page's renders to stop moving the URL. A case that asserts a write did *not*
+ * happen has no positive event to await, so it waits for quiescence: two passes on one URL.
+ */
+export async function settleRouter(harness: RouterTestingHarness): Promise<void> {
+  const router = TestBed.inject(Router);
+  let seen = '';
+  let stable = 0;
+  for (let round = 0; round < 20 && stable < 2; round += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    harness.detectChanges();
+    stable = router.url === seen ? stable + 1 : 0;
+    seen = router.url;
+  }
+}
+
+/** The project ids the picker offers, in render order; empty while the page renders no picker. */
+export function offeredProjects(): readonly string[] {
+  return Array.from(
+    document.querySelectorAll<HTMLOptionElement>('#api-tokens-project option'),
+    (option) => option.value,
+  );
 }
 
 /** `Promise.withResolvers` is ES2024; this project compiles against the ES2022 lib. */
