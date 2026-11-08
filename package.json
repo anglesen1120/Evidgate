@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "tsc -b tsconfig.json && npm run build -w apps/web",
-    "lint": "eslint . --max-warnings 0 --concurrency auto",
+    "lint": "eslint . --max-warnings 0 --concurrency ${EVIDGATE_ESLINT_CONCURRENCY:-auto}",
     "test": "npm run test --workspaces --if-present",
     "e2e": "npm run e2e --workspaces --if-present",
     "codegen": "openapi-ts -f openapi-ts.config.mjs",

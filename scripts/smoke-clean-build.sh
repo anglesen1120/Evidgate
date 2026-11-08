@@ -63,6 +63,10 @@ if [ "${1:-}" = prepare ]; then
   exit 0
 fi
 # `verify` phase.
+# One eslint worker: the lint is the same, but its typed-lint programs cost about 3.4 GB at
+# one worker against 5-7 GB at `auto` (measured), and the 15 GB LAN host shares memory with
+# other gate runs, so `auto` was OOM-killed (exit 137) inside this container.
+export EVIDGATE_ESLINT_CONCURRENCY=1
 # AC6 (01.2.1): the clean clone also passes the full local gate. verify.sh
 # itself does tsc -b via the root tsconfig and never runs npm ci, so it runs
 # after npm ci here. The tar copy has no .git; check-layout.sh needs
