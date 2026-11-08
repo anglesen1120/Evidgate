@@ -1179,10 +1179,14 @@ paths:
         nor a malformed value reaches an undocumented 400. The call revokes every live row of `{u}` (not
         revoked, and past neither deadline) and writes exactly one `auth.session_revoke_admin` audit row in
         the definer's own transaction when at least one row was revoked; a target with no live session still
-        answers 204 and writes no audit row, because nothing changed. A 503 `unavailable` means the definer
-        aborted — no session pepper, a database fault, or the audit row failing to write in the same
-        transaction, including a lock timeout — so the revoke rolled back, no session was revoked and the
-        retry is safe. Every response carries `Cache-Control: no-store`.
+        answers 204 and writes no audit row, because nothing changed. A 503 `unavailable` means the call did not
+        complete: either the session could not be judged (an outage, or no session pepper in the deployment), or
+        the definer aborted on a database fault — the audit row refused, a lock timeout, a deadlock — which
+        rolls the whole call back, so no session was revoked and nothing was recorded. A transport failure
+        after the commit is different: the revoke may have landed while the response was lost, so the outcome
+        is unknown to the client. A retry is safe in both cases because the route is idempotent: a call that
+        finds no live session answers 204 and writes no second audit row. Every response carries
+        `Cache-Control: no-store`.
       x-permission: none
       x-auth: user_session
       x-version: v1

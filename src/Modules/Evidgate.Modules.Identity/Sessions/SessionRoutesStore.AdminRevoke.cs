@@ -5,8 +5,8 @@ namespace Evidgate.Modules.Identity.Sessions;
 
 /// <summary>
 /// The administrative bulk revoke, split out of <see cref="SessionRoutesStore"/> so neither file carries two
-/// responsibilities (U7). Everything it shares with the owner routes — the data source, the clock, the proof
-/// parameter and the status strings — comes from the primary part.
+/// responsibilities: the admin route keeps its own statement and refusals. Everything it shares with the owner
+/// routes — the data source, the clock, the proof parameter and the status strings — comes from the primary part.
 /// </summary>
 internal sealed partial class SessionRoutesStore
 {

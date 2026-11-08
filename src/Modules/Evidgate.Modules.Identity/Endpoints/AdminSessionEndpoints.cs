@@ -39,9 +39,12 @@ internal static partial class SessionEndpoints
     /// </para>
     /// <para>
     /// A call that ends at least one session writes one <c>auth.session_revoke_admin</c> row in the definer's own
-    /// transaction; the revoke and its record commit or roll back together, so a fault here means the target's
-    /// sessions are still live and the call is safe to retry. Zero live sessions is a 204 and records nothing.
-    /// The call's request id and trace id ride along from the same two sources the C# audit writer reads.
+    /// transaction, so a fault inside that transaction — a refused audit insert, a lock timeout, a deadlock —
+    /// rolls the whole call back: nothing was ended and nothing was recorded, and a retry is safe. A failure
+    /// after the commit is a different case: a lost response leaves the outcome unknown, and the retry is safe
+    /// there only because the route is idempotent — a call that finds no live session answers 204 and writes no
+    /// second row. Zero live sessions is a 204 and records nothing. The call's request id and trace id ride
+    /// along from the same two sources the C# audit writer reads.
     /// </para>
     /// </remarks>
     /// <param name="context">The request.</param>
@@ -93,8 +96,9 @@ internal static partial class SessionEndpoints
         }
         catch (NpgsqlException) when (!cancellationToken.IsCancellationRequested)
         {
-            // The definer aborted (lock timeout, deadlock, the audit row's refusal) and rolled the revocation
-            // back: nothing was ended and nothing was recorded, so a retry is safe.
+            // Either the definer aborted (lock timeout, deadlock, the audit row's refusal) and rolled the whole
+            // call back, or the connection died after the commit and the outcome is unknown. A retry is safe in
+            // both cases only because the route is idempotent: a call that finds no live session answers 204.
             return Result.Failure(SessionErrors.Unavailable);
         }
 

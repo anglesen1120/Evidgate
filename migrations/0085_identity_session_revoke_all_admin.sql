@@ -92,8 +92,8 @@ declare
   v_id uuid;
   v_canonical text;
 begin
-  -- The server clock is the ceiling: `p_now` may look back, never ahead (0048's rule), and a NULL value
-  -- matches no live session, so it can revoke nothing.
+  -- The server clock is the ceiling: `p_now` may look back, never ahead (0048's rule). `least` ignores a NULL,
+  -- so a NULL means the clock, never "nothing live"; the app role is the only caller and always passes one.
   v_now := least(p_now, clock_timestamp());
 
   -- Untrusted input, validated before anything else (CorrelationNames.IsSafeRequestId): an unacceptable
