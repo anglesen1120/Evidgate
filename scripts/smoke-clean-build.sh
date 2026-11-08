@@ -109,7 +109,9 @@ docker run --rm \
     as_host bash /tmp/smoke-inner.sh prepare
     # The e2e-a11y stage drives Google Chrome (channel chrome), which the SDK image lacks. CI
     # installs it with this same command; --with-deps needs root, so it runs between the two
-    # host-uid phases, with the repo-pinned Playwright from the npm ci above.
+    # host-uid phases, with the repo-pinned Playwright from the npm ci above. Google ships stable
+    # Chrome for Linux x86_64 only, so on an aarch64 Docker host this step fails loudly (the
+    # a11y stage could not run there either); run the smoke on an x86_64 host.
     (cd /src/apps/web && PATH=/tmp/node/bin:$PATH npx playwright install --with-deps chrome)
     exec setpriv --reuid "$HOST_UID" --regid "$HOST_GID" --clear-groups \
       env HOME=/tmp/home DOTNET_CLI_HOME=/tmp/home \
