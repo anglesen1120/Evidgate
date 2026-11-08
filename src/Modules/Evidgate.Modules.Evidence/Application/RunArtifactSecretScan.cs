@@ -168,7 +168,7 @@ internal sealed partial class RunArtifactSecretScanHandler(
         }
 
         var settings = await ArtifactCapturePolicy
-            .ResolveAsync(context, artifact.ProjectId, artifact.Kind, cancellationToken)
+            .ResolveForRunAsync(context, artifact, cancellationToken)
             .ConfigureAwait(false);
 
         return (artifact, settings);

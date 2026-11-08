@@ -21,6 +21,37 @@ internal sealed record ArtifactCaptureSettings(long MaxBytes, bool RejectOnSecre
 /// </summary>
 internal static class ArtifactCapturePolicy
 {
+    /// <summary>
+    /// Resolves the effective policy of an artifact in its run's project, the project the write transaction charges
+    /// and the pre-check asks about. The artifact row carries its own project column that nothing ties to the run's,
+    /// so it is never the source of a cap.
+    /// </summary>
+    /// <param name="context">This attempt's write model, inside its caller's tenant scope.</param>
+    /// <param name="artifact">The artifact whose run names the project.</param>
+    /// <param name="cancellationToken">Cancels the reads.</param>
+    /// <returns>The effective cap and the run project's rejection switch.</returns>
+    /// <exception cref="InvalidOperationException">The run is missing, or the kind has no effective policy.</exception>
+    public static async Task<ArtifactCaptureSettings> ResolveForRunAsync(
+        EvidenceDbContext context,
+        Artifact artifact,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(artifact);
+
+        // The artifact's composite run key makes the run exist, so an absent one is a broken database, not an outcome.
+        var runProjects = await context.Database
+            .SqlQuery<Guid>($"select project_id as \"Value\" from public.run where org_id = {artifact.OrgId} and id = {artifact.RunId}")
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (runProjects.Count != 1)
+        {
+            throw new InvalidOperationException("the artifact's run is missing although its composite key requires it");
+        }
+
+        return await ResolveAsync(context, runProjects[0], artifact.Kind, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>Resolves the effective policy of one artifact's kind in one project.</summary>
     /// <param name="context">This attempt's write model, inside its caller's tenant scope.</param>
     /// <param name="projectId">The project the artifact belongs to.</param>
