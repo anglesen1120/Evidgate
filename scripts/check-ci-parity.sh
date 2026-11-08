@@ -101,7 +101,7 @@ ALLOWED_RAW=(
   'npm run build -w packages/sdk'
   # Runner browser installs, not repo commands (the fixtures config launches
   # `channel: chrome`).
-  'npx playwright install --with-deps chromium'
+  'npx playwright install --with-deps chrome chromium'
   'npx playwright install --with-deps chrome'
 )
 

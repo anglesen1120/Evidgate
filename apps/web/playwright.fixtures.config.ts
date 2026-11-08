@@ -27,14 +27,19 @@ import { randomInt } from 'node:crypto';
 import { resolve } from 'node:path';
 import { defineConfig } from '@playwright/test';
 
-// Ephemeral port, for the same reason the production config picks one: lanes run on one machine
-// concurrently, so a fixed port (4173/4200/8080/8765) would let one lane's server answer another
-// lane's run. Playwright evaluates this file once per process, so the first evaluation pins the
-// port in the environment and the forked workers and `e2e/static-server.mjs` read the same value.
+import { E2E_PORT_MAX, E2E_PORT_MIN } from './e2e/infra-tag';
+
+// Port below the OS ephemeral range, for the same reason the production config picks a
+// per-run one: lanes run on one machine concurrently, so a fixed port (4173/4200/8080/8765)
+// would let one lane's server answer another lane's run. Playwright evaluates this file once per
+// process, so the first evaluation pins the port in the environment and the forked workers and
+// `e2e/static-server.mjs` read the same value.
 const PORT_ENV = 'EVIDGATE_WEB_FIXTURES_E2E_PORT';
 const presetPort = Number.parseInt(process.env[PORT_ENV] ?? '', 10);
 const PORT =
-  Number.isInteger(presetPort) && presetPort > 0 ? presetPort : randomInt(40_000, 60_000);
+  Number.isInteger(presetPort) && presetPort > 0
+    ? presetPort
+    : randomInt(E2E_PORT_MIN, E2E_PORT_MAX);
 process.env[PORT_ENV] = String(PORT);
 
 const baseURL = `http://127.0.0.1:${PORT}`;
