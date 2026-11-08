@@ -120,12 +120,12 @@ export type RunReleaseRef = {
 };
 
 /**
- * One producer slot of a run (`producer_slot`, 0029/0035) with the counts of its stored `event` rows. The binding columns behind `identity_state` are never served, only the state they imply.
+ * One producer slot of a run (`producer_slot`, 0029/0035) with the counts of its stored `event` rows. The binding behind `identity_state` is never served, only the state it implies.
  */
 export type RunProducerSlot = {
     producer_id: string;
     /**
-     * `bound` once either binding column is set (`bound_token_jti` or `bound_ci_run_ref`; the writer grants update on each separately), `unbound` while both are null.
+     * `bound` once the slot holds a token identity, `unbound` while it holds none. The bind that sets the identity also stores the slot's CI run reference in the same write, so those are the only two states; the identity's value is never served.
      */
     identity_state: 'unbound' | 'bound';
     /**

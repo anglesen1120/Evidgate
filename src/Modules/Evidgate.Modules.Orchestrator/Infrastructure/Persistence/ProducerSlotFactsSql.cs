@@ -22,7 +22,9 @@ internal static class ProducerSlotFactsSql
     /// subquery per slot, so the statement count stays flat in the number of shards; the left join keeps a slot that
     /// recorded no event at all with counts of zero instead of dropping it. A slot that is neither bound nor finalized
     /// reports <c>unbound</c>/<c>open</c>, and <c>expected</c> is null until the slot closes and declares its count.
-    /// A count that disagrees with <c>expected</c> is served as stored: the mismatch is the client's to derive.
+    /// <c>bound</c> keys on the token identity alone: the bind writes it together with the CI run reference in one
+    /// update, and the registry rebinds only a slot whose token identity is null, so a reference without one cannot
+    /// exist. A count that disagrees with <c>expected</c> is served as stored: the mismatch is the client's to derive.
     /// </summary>
     internal const string SlotFactsColumn = """
         (select coalesce(
@@ -38,8 +40,7 @@ internal static class ProducerSlotFactsSql
                         order by s.shard_index),
                     '[]'::jsonb)::text
            from (select p.producer_id, p.shard_index, p.last_sequence, p.declared_count,
-                        case when p.bound_token_jti is not null or p.bound_ci_run_ref is not null
-                             then 'bound' else 'unbound' end as identity_state,
+                        case when p.bound_token_jti is not null then 'bound' else 'unbound' end as identity_state,
                         case when p.closed_at is not null then 'finalized' else 'open' end as finalize_status,
                         coalesce(e.event_count, 0) as event_count,
                         coalesce(e.stale_events, 0) as stale_events,

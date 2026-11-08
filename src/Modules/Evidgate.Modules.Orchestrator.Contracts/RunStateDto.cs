@@ -99,9 +99,9 @@ public sealed record RunStateDto(
 /// <summary>
 /// One producer slot of a run (<c>GET /v1/runs/{r}</c>): the slot's recorded state and what its producers actually
 /// sent. The wire names are <c>producer_id</c>, <c>identity_state</c>, <c>finalize_status</c>, <c>last_sequence</c>,
-/// <c>count</c>, <c>expected</c>, <c>stale_epoch_events</c> and <c>after_cancel_events</c>, and every one but
-/// <c>expected</c> is required. The binding itself is never served: <c>identity_state</c> says whether the slot holds
-/// a token or a CI run reference, not either value.
+/// <c>count</c>, <c>expected</c>, <c>stale_epoch_events</c> and <c>after_cancel_events</c>; all eight are required,
+/// and only <c>expected</c> is nullable. The binding itself is never served: <c>identity_state</c> says whether the
+/// slot holds a token identity, not the identity's value.
 /// <para>
 /// The two counts of late events are informational, like the run-level <c>after_cancel_events</c>: nothing derives
 /// completeness from them. <c>count</c> against <c>expected</c> is a mismatch only once the slot has finalized, and
@@ -110,8 +110,9 @@ public sealed record RunStateDto(
 /// </summary>
 /// <param name="ProducerId">The slot's producer id, the one the manifest's shard declares (<c>producer_slot.producer_id</c>).</param>
 /// <param name="IdentityState">
-/// <c>bound</c> when the slot holds a bound token id or a bound CI run reference, <c>unbound</c> when it holds
-/// neither. The two binding writers set their columns separately, so a slot with only one of them is still bound.
+/// <c>bound</c> when the slot holds a token identity, <c>unbound</c> when it holds none. The bind writes the
+/// identity together with its CI run reference in one update, so those are the only two states the column can hold;
+/// the identity's value is never served.
 /// </param>
 /// <param name="FinalizeStatus">
 /// <c>open</c> until the slot finalizes, <c>finalized</c> once <c>closed_at</c> is set — the same write that stores

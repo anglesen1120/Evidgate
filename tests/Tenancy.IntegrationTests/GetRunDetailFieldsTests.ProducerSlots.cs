@@ -92,11 +92,11 @@ public sealed partial class GetRunDetailFieldsTests
     }
 
     /// <summary>
-    /// Either binding column makes a slot <c>bound</c> — the two writers grant their column separately — and neither
-    /// binding value is served, only the state derived from them.
+    /// A slot whose token identity and CI run reference were written by the one bind reports <c>bound</c>, a slot
+    /// with neither reports <c>unbound</c>, and neither binding value is served — only the state derived from them.
     /// </summary>
     [Fact]
-    public async Task GetRun_ProducerSlots_EitherBindingIsBoundAndTheBindingIsNeverServed()
+    public async Task GetRun_ProducerSlots_TokenIdentityBoundsAndTheBindingIsNeverServed()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var manifest = RunCreationTests.Manifest(world.SuiteRevision, world.Cases, variants: 3, shards: 3);
@@ -106,12 +106,8 @@ public sealed partial class GetRunDetailFieldsTests
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
         await _fixture.ExecuteAsync(world.Database, $"""
-            update public.producer_slot set bound_token_jti = '{SlotJti}'
+            update public.producer_slot set bound_token_jti = '{SlotJti}', bound_ci_run_ref = '{SlotCiRunRef}'
              where run_id = '{runId:D}' and producer_id = 'shard-1'
-            """);
-        await _fixture.ExecuteAsync(world.Database, $"""
-            update public.producer_slot set bound_ci_run_ref = '{SlotCiRunRef}'
-             where run_id = '{runId:D}' and producer_id = 'shard-2'
             """);
 
         var answer = await GetAsync(world, runId);
@@ -120,7 +116,7 @@ public sealed partial class GetRunDetailFieldsTests
         SlotFacts(answer).Select(item => item.GetProperty("producer_id").GetString()!)
             .ShouldBe(["shard-1", "shard-2", "shard-3"]);
         SlotFacts(answer).Select(item => item.GetProperty("identity_state").GetString()!)
-            .ShouldBe(["bound", "bound", "unbound"]);
+            .ShouldBe(["bound", "unbound", "unbound"]);
         answer.Body.GetRawText().ShouldNotContain(SlotJti, Case.Sensitive);
         answer.Body.GetRawText().ShouldNotContain(SlotCiRunRef, Case.Sensitive);
     }

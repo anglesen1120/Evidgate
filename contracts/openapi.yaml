@@ -1468,12 +1468,13 @@ paths:
         `run.environment_revision_id`), and `shard_count` plus
         `declared_producers` (the run's `producer_slot` rows in `shard_index`
         order, `shard-<n>`) and `producers`, one item per slot in the same
-        order: its `identity_state` (`bound` once either binding column is set,
-        `unbound` while both are null — the binding values themselves are never
-        served) and `finalize_status`, `last_sequence`, the stored `count` next
-        to the declared `expected` (`null` while the slot is open), and the
-        slot's own `stale_epoch_events` / `after_cancel_events`. A `count`
-        below `expected` is the slot's missing events, derived by the client.
+        order: its `identity_state` (`bound` once the slot holds a token
+        identity, `unbound` while it holds none — the identity's value is
+        never served) and `finalize_status`, `last_sequence`, the stored
+        `count` next to the declared `expected` (`null` while the slot is
+        open), and the slot's own `stale_epoch_events` /
+        `after_cancel_events`. A `count` below `expected` is the slot's
+        missing events, derived by the client.
         Evidence `completeness`/`missing[]` are a later,
         separate read (09.3.1-T3 with 07.5.2). Another tenant's run —
         or, for a project-scoped credential, another project's — is 404, the same
@@ -9860,8 +9861,8 @@ components:
       type: object
       description: >-
         One producer slot of a run (`producer_slot`, 0029/0035) with the counts of its stored
-        `event` rows. The binding columns behind `identity_state` are never served, only the state
-        they imply.
+        `event` rows. The binding behind `identity_state` is never served, only the state
+        it implies.
       additionalProperties: false
       required:
         [
@@ -9884,8 +9885,9 @@ components:
           type: string
           enum: [unbound, bound]
           description: >-
-            `bound` once either binding column is set (`bound_token_jti` or `bound_ci_run_ref`;
-            the writer grants update on each separately), `unbound` while both are null.
+            `bound` once the slot holds a token identity, `unbound` while it holds none. The bind that sets the
+            identity also stores the slot's CI run reference in the same write, so those are the only two states; the
+            identity's value is never served.
         finalize_status:
           type: string
           enum: [open, finalized]

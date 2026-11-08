@@ -157,7 +157,8 @@ public sealed partial class GetRunDetailFieldsTests
     /// <summary>
     /// F44 with 00 §5.4: a run the caller may not see is the one <c>404 not_found</c> — for an unknown id, for another
     /// tenant's run under RLS, and for a credential scoped to a sibling project, whose handler-level scope mismatch is
-    /// mapped to the same answer (never <c>403 project_scope_mismatch</c> and never a different message).
+    /// mapped to the same answer (never <c>403 project_scope_mismatch</c> and never a different message). A bound slot
+    /// is seeded with a probe token id, so the refusal must leak neither the slot list nor that id.
     /// </summary>
     [Fact]
     public async Task GetRun_NotFound_IsTheSameAnswerForUnknownCrossTenantAndSiblingProject()
@@ -166,6 +167,10 @@ public sealed partial class GetRunDetailFieldsTests
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
+        await _fixture.ExecuteAsync(world.Database, $"""
+            update public.producer_slot set bound_token_jti = '{SlotJti}'
+             where run_id = '{runId:D}' and producer_id = 'shard-1'
+            """);
 
         var unknown = await GetAsync(world, Guid.CreateVersion7());
         unknown.Status.ShouldBe(HttpStatusCode.NotFound);
@@ -199,6 +204,8 @@ public sealed partial class GetRunDetailFieldsTests
         siblingScope.Status.ShouldBe(HttpStatusCode.NotFound);
         siblingScope.ErrorCode.ShouldBe(unknown.ErrorCode);
         siblingScope.ErrorMessage.ShouldBe(unknown.ErrorMessage, "the scope mismatch must not become a second answer");
+        siblingScope.Body.TryGetProperty("producers", out _).ShouldBeFalse();
+        siblingScope.Body.GetRawText().ShouldNotContain(SlotJti, Case.Sensitive);
     }
 
     /// <summary>Creates one policy revision through <c>POST /v1/projects/{p}/policies</c> (07.1.1-T3); returns its id.</summary>
