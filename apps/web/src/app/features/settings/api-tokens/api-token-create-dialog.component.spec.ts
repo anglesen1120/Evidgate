@@ -15,6 +15,27 @@ describe('API token creation dialog', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps the original project labelled after scope changes and in the token reveal', async () => {
+    const h = mount();
+    await h.settle();
+    await openCreate(h);
+    const projectLabel = () => control('[data-api-create-project]').textContent?.trim();
+    expect(projectLabel()).toBe('Project: Storefront');
+    await fillCreate(h);
+    const pending = deferred<typeof CREATED>();
+    h.create.mockReturnValueOnce(pending.promise);
+    submitCreate();
+    h.projects.set([project('project-2', 'Other project')]);
+    await h.settle();
+    expect(h.store.selectedProject()).toBe('project-2');
+    expect(projectLabel()).toBe('Project: Storefront');
+    expect(projectLabel()).not.toContain('Other project');
+    pending.resolve(CREATED);
+    await h.settle();
+    expect(control<HTMLInputElement>('[data-testid="reveal-value"]').value).toBe(CREATED.token);
+    expect(projectLabel()).toBe('Project: Storefront');
+  });
+
   it('requires name, expiry and a permission; submits UTC and reveals only the create answer', async () => {
     const h = mount();
     await h.settle();
@@ -82,6 +103,57 @@ describe('API token creation dialog', () => {
       expect(document.querySelector('[data-testid="reveal-value"]')).toBeNull();
     },
   );
+
+  it.each([
+    'Expiry refused (maximum not-a-date).',
+    'Expiry refused (maximum 2027-13-01T00:00:00Z).',
+    'expires_at is beyond the configured maximum lifetime of 0 days',
+    'expires_at is beyond the configured maximum lifetime of 999999999 days',
+  ])('leaves the picker uncapped for an unusable server maximum: %s', async (message) => {
+    const h = mount();
+    await h.settle();
+    await openCreate(h);
+    await fillCreate(h);
+    h.create.mockRejectedValueOnce(
+      writeFailure({ message, details: [{ path: 'expires_at', reason: 'out_of_range' }] }),
+    );
+    submitCreate();
+    await h.settle();
+    expect(control<HTMLInputElement>('#api-create-expiry').hasAttribute('max')).toBe(false);
+    expect(control('[data-api-expiry-refusal]').textContent?.trim()).toBe(message);
+  });
+
+  it('uses the server lifetime in days as a rolling picker maximum', async () => {
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-06T12:00:00Z') });
+    try {
+      const h = mount();
+      await h.settle();
+      await openCreate(h);
+      await fillCreate(h);
+      h.create.mockRejectedValueOnce(
+        writeFailure({
+          message: 'expires_at is beyond the configured maximum lifetime of 17 days',
+          details: [{ path: 'expires_at', reason: 'out_of_range' }],
+        }),
+      );
+      submitCreate();
+      await h.settle();
+      const expiry = control<HTMLInputElement>('#api-create-expiry');
+      expect(expiry.max).toBe('2026-11-23T12:00');
+      vi.setSystemTime(new Date('2026-11-06T13:00:00Z'));
+      expiry.dispatchEvent(new Event('focusin', { bubbles: true }));
+      await h.settle();
+      expect(expiry.min).toBe('2026-11-06T13:00');
+      expect(expiry.max).toBe('2026-11-23T13:00');
+      expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
+      expiry.value = '2026-11-07T00:00';
+      expiry.dispatchEvent(new Event('input', { bubbles: true }));
+      await h.settle();
+      expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 
   it.each([
     ['forbidden', 403, 'permission_escalation'],
@@ -220,7 +292,7 @@ describe('API token creation dialog', () => {
   });
 
   it('shows the server expiry refusal beside the field and keeps submit disabled until the expiry changes', async () => {
-    const message = 'expires_at must be at most 90 days from now (maximum 2026-02-04T00:00:00Z).';
+    const message = 'expires_at must be at most 90 days from now (maximum 2026-12-31T23:59:00Z).';
     const h = mount();
     await h.settle();
     await openCreate(h);
@@ -233,6 +305,7 @@ describe('API token creation dialog', () => {
     );
     submitCreate();
     await h.settle();
+    expect(control<HTMLInputElement>('#api-create-expiry').max).toBe('2026-12-31T23:59');
     // The server's sentence, maximum included, is rendered verbatim next to the expiry field.
     expect(control('[data-api-expiry-refusal]').textContent?.trim()).toBe(message);
     expect(control('#api-create-expiry').getAttribute('aria-describedby')).toContain(
@@ -252,7 +325,20 @@ describe('API token creation dialog', () => {
     submitCreate();
     await h.settle();
     expect(h.create).toHaveBeenCalledTimes(1);
+    const permission = control<HTMLButtonElement>('button[id="api-permission-run:read"]');
+    permission.click();
+    await h.settle();
+    permission.click();
+    await h.settle();
+    expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
+    expect(control('[data-api-expiry-refusal]').textContent?.trim()).toBe(message);
+    expect(control<HTMLInputElement>('#api-create-expiry').max).toBe('2026-12-31T23:59');
     const expiry = control<HTMLInputElement>('#api-create-expiry');
+    expiry.value = '2027-01-02T00:00';
+    expiry.dispatchEvent(new Event('input', { bubbles: true }));
+    await h.settle();
+    expect(document.querySelector('[data-api-expiry-refusal]')).toBeNull();
+    expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
     expiry.value = '2026-12-01T00:00';
     expiry.dispatchEvent(new Event('input', { bubbles: true }));
     await h.settle();
@@ -262,6 +348,38 @@ describe('API token creation dialog', () => {
     await h.settle();
     expect(h.create).toHaveBeenCalledTimes(2);
   });
+
+  it.each(['focusin', 'pointerdown', 'keydown', 'input'])(
+    'refreshes the picker floor and live expiry check on %s after the clock advances',
+    async (interaction) => {
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-06T12:00:00Z') });
+      try {
+        const h = mount();
+        await h.settle();
+        await openCreate(h);
+        await fillCreate(h);
+        const expiry = control<HTMLInputElement>('#api-create-expiry');
+        expiry.value = '2026-11-06T12:30';
+        expiry.dispatchEvent(new Event('input', { bubbles: true }));
+        await h.settle();
+        expect(expiry.min).toBe('2026-11-06T12:00');
+        expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(false);
+        vi.setSystemTime(new Date('2026-11-06T12:30:00Z'));
+        expiry.dispatchEvent(new Event(interaction, { bubbles: true }));
+        await h.settle();
+        expect(expiry.min).toBe('2026-11-06T12:30');
+        expect(expiry.getAttribute('aria-invalid')).toBe('true');
+        expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(true);
+        expect(h.create).not.toHaveBeenCalled();
+        expiry.value = '2026-11-06T14:00';
+        expiry.dispatchEvent(new Event('input', { bubbles: true }));
+        await h.settle();
+        expect(control<HTMLButtonElement>('[data-api-create-submit]').disabled).toBe(false);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it('refuses at submit an expiry the clock passed while the dialog stayed open', async () => {
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-06T12:00:00Z') });
