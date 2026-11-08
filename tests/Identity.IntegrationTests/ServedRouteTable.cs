@@ -698,15 +698,17 @@ internal static class RouteRequests
         Add("DELETE", "/v1/auth/link/pending", _ => new(HttpMethod.Delete, "/v1/auth/link/pending"));
         Add("POST", "/v1/auth/link/confirm", _ => new(HttpMethod.Post, "/v1/auth/link/confirm"));
 
-        // ---- Session management and logout (02.3.2-T2: pre-tenant, x-permission 'none') ---------------------
-        // 'none' keeps all four out of the viewer and ci_producer matrices, so the builders only have to be
-        // shape-valid: the list and the two bodiless mutations carry no body, and the single revoke addresses a
-        // fresh id (the route answers not_found for an unknown, foreign or other-org row — never a body).
+        // ---- Session management and logout (02.3.2: pre-tenant, x-permission 'none') -------------------------
+        // 'none' keeps all five out of the viewer and ci_producer matrices, so the builders only have to be
+        // shape-valid: the list and the four bodiless mutations carry no body, and the two revokes address a
+        // fresh id (both answer not_found for an unknown, foreign or other-org row — never a body).
         Add("GET", "/v1/auth/sessions", _ => new(HttpMethod.Get, "/v1/auth/sessions"));
         Add("DELETE", "/v1/auth/sessions/{s}", _ =>
             new(HttpMethod.Delete, $"/v1/auth/sessions/{Guid.CreateVersion7()}"));
         Add("POST", "/v1/auth/sessions/revoke-all", _ =>
             new(HttpMethod.Post, "/v1/auth/sessions/revoke-all"));
+        Add("POST", "/v1/auth/users/{u}/sessions/revoke-all", _ =>
+            new(HttpMethod.Post, $"/v1/auth/users/{Guid.CreateVersion7()}/sessions/revoke-all"));
         Add("POST", "/v1/auth/logout", _ => new(HttpMethod.Post, "/v1/auth/logout"));
 
         // ---- The account's own profile (02.3.1-T3: pre-tenant, x-permission 'none') --------------------------
