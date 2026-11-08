@@ -260,7 +260,6 @@ public sealed class CiAuthTests : IAsyncLifetime
     [Theory]
     [InlineData("push")]
     [InlineData("workflow_dispatch")]
-    [InlineData("pull_request")]
     [InlineData("merge_group")]
     [InlineData("schedule")]
     [InlineData("release")]
@@ -274,26 +273,42 @@ public sealed class CiAuthTests : IAsyncLifetime
             .Status.ShouldBe(HttpStatusCode.OK, eventName);
     }
 
-    /// <summary>
-    /// Comparison is ordinal and case-exact (GitHub sends lowercase), so a differently cased <c>Workflow_Run</c> is not in the
-    /// deny list and still mints. Pinned so a change to the comparer is a conscious one; the F50 allowlist follow-up closes it.
-    /// </summary>
-    [Fact]
-    public async Task Exchange_EventNameComparison_IsOrdinalAndCaseExact()
+    /// <summary>The allowlist fails closed: an unlisted event, and any differently cased spelling, is refused.</summary>
+    [Theory]
+    [InlineData("pull_request")]
+    [InlineData("issue_comment")]
+    [InlineData("Workflow_Run")]
+    [InlineData("WORKFLOW_RUN")]
+    [InlineData("PUSH")]
+    [InlineData("Push")]
+    public async Task Exchange_UnlistedOrDifferentlyCasedEvent_IsRefused(string eventName)
     {
         var (api, client, user, org, project) = await StartAsync();
         await using var _ = api;
         var challenge = (await CreateBindingAsync(client, user, org, project)).Body.GetProperty("binding_challenge").GetString()!;
 
-        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "Workflow_Run"), challenge))
-            .Status.ShouldBe(HttpStatusCode.OK);
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = eventName), challenge))
+            .ErrorCode.ShouldBe("token_invalid", eventName);
+    }
+
+    [Theory]
+    [InlineData(123)]
+    [InlineData(true)]
+    public async Task Exchange_NonStringEventName_IsRefused(object value)
+    {
+        var (api, client, user, org, project) = await StartAsync();
+        await using var _ = api;
+        var challenge = (await CreateBindingAsync(client, user, org, project)).Body.GetProperty("binding_challenge").GetString()!;
+
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = value), challenge))
+            .ErrorCode.ShouldBe("token_invalid");
     }
 
     [Fact]
-    public async Task Exchange_ExplicitDeniedEventNamesOverride_ReplacesTheDefault()
+    public async Task Exchange_ExplicitAllowedEventNamesOverride_ReplacesTheDefault()
     {
         _database = _dedicated!.Name;
-        var overrides = new Dictionary<string, string?>(StringComparer.Ordinal) { ["EVIDGATE:Ci:DeniedEventNames"] = "schedule" };
+        var overrides = new Dictionary<string, string?>(StringComparer.Ordinal) { ["EVIDGATE:Ci:AllowedEventNames"] = "schedule, pull_request" };
         var api = TenancyApiFactory.Ci(_fixture.AppConnectionString(_database), overrides);
         await using var _ = api;
         var client = api.CreateClient();
@@ -302,9 +317,11 @@ public sealed class CiAuthTests : IAsyncLifetime
         var project = await CreateProjectAsync(client, user, org, "checkout");
         var challenge = (await CreateBindingAsync(client, user, org, project)).Body.GetProperty("binding_challenge").GetString()!;
 
-        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "schedule"), challenge))
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "push"), challenge))
             .ErrorCode.ShouldBe("token_invalid");
-        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "workflow_run"), challenge))
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "pull_request"), challenge))
+            .Status.ShouldBe(HttpStatusCode.OK);
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (c, _) => c["event_name"] = "schedule"), challenge))
             .Status.ShouldBe(HttpStatusCode.OK);
     }
 

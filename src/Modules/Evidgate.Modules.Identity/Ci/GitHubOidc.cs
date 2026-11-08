@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Claims;
 using System.Text.Json;
 using Evidgate.Modules.Identity.Options;
 using Microsoft.Extensions.Options;
@@ -56,8 +57,7 @@ internal sealed class GitHubOidcValidator(IOptions<CiAuthOptions> options, IGitH
 
     private readonly CiAuthOptions _options = options.Value;
 
-    private readonly HashSet<string> _denied = new(
-        options.Value.DeniedEventNames.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.Ordinal);
+    private readonly HashSet<string> _allowedEvents = new(CiAuthOptionsValidator.SplitEventNames(options.Value.AllowedEventNames), StringComparer.Ordinal);
 
     /// <summary>Validates <paramref name="token"/>.</summary>
     /// <param name="token">The compact JWT from the <c>Authorization: Bearer</c> header.</param>
@@ -130,14 +130,21 @@ internal sealed class GitHubOidcValidator(IOptions<CiAuthOptions> options, IGitH
             return OidcResult.Fail(OidcFailure.Invalid);
         }
 
-        // event_name is required (a token without it cannot skip the deny check) and is compared ordinally, as GitHub sends it.
-        if (!Text(jwt, "event_name", out var eventName)
-            || _denied.Contains(eventName))
+        // Fail closed: event_name must be one JSON string that is exactly (ordinal, case-sensitive) on the allowlist.
+        if (!IsAllowedEvent(jwt))
         {
             return OidcResult.Fail(OidcFailure.Invalid);
         }
 
         return Extract(jwt) is { } claims ? OidcResult.Ok(claims) : OidcResult.Fail(OidcFailure.Invalid);
+    }
+
+    private bool IsAllowedEvent(JsonWebToken jwt)
+    {
+        // Claims keeps the JSON type: a number, boolean or array yields a non-string ValueType or several claims, never one string.
+        var matches = jwt.Claims.Where(c => c.Type == "event_name").Take(2).ToList();
+
+        return matches is [{ ValueType: ClaimValueTypes.String, Value: { } eventName }] && _allowedEvents.Contains(eventName);
     }
 
     private static GitHubOidcClaims? Extract(JsonWebToken jwt)

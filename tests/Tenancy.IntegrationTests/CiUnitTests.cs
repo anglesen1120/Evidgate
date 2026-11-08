@@ -170,6 +170,31 @@ public sealed class CiUnitTests
         validator.Validate(null, plain).Failed.ShouldBeTrue();
     }
 
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("  ,, ", false)]
+    [InlineData("push", true)]
+    [InlineData("push, merge_group", true)]
+    [InlineData("Push", false)]
+    [InlineData("push;release", false)]
+    [InlineData("1push", false)]
+    [InlineData("workflow_run", false)]
+    [InlineData("pull_request_target", false)]
+    public void OptionsValidator_AllowedEventNames_RefusesEmptyInvalidAndForbiddenEntries(string value, bool valid)
+    {
+        new CiAuthOptionsValidator().Validate(null, new CiAuthOptions { AllowedEventNames = value }).Succeeded.ShouldBe(valid, value);
+    }
+
+    [Fact]
+    public void OptionsValidator_LeftoverDeniedEventNames_FailsBootWithANamedMessage()
+    {
+        var result = new CiAuthOptionsValidator().Validate(null, new CiAuthOptions { DeniedEventNames = "schedule" });
+
+        result.Failed.ShouldBeTrue();
+        result.FailureMessage.ShouldContain("EVIDGATE__CI__DENIEDEVENTNAMES");
+        new CiAuthOptionsValidator().Validate(null, new CiAuthOptions { DeniedEventNames = string.Empty }).Failed.ShouldBeTrue();
+    }
+
     // ------------------------------------------------------------ lifetime
 
     [Theory]
