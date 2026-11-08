@@ -123,6 +123,43 @@ describe('API token creation dialog', () => {
     expect(control('[data-api-expiry-refusal]').textContent?.trim()).toBe(message);
   });
 
+  it.each(['Expiry refused (maximum 5 days).', 'Expiry refused (maximum 2027-01-01).'])(
+    'does not read a leniently parsable value as an absolute maximum: %s',
+    async (message) => {
+      // `Date.parse` takes "5 days" nowhere but takes a bare date, and neither is an instant the
+      // server wrote; only its ISO-8601 UTC spelling is a maximum the picker may cap to.
+      const h = mount();
+      await h.settle();
+      await openCreate(h);
+      await fillCreate(h);
+      h.create.mockRejectedValueOnce(
+        writeFailure({ message, details: [{ path: 'expires_at', reason: 'out_of_range' }] }),
+      );
+      submitCreate();
+      await h.settle();
+      expect(control<HTMLInputElement>('#api-create-expiry').hasAttribute('max')).toBe(false);
+      expect(control('[data-api-expiry-refusal]').textContent?.trim()).toBe(message);
+    },
+  );
+
+  it('leaves the picker uncapped for a lifetime that runs past the year 9999', async () => {
+    // 36500000 days is a valid instant ~100000 years out, but `datetime-local` and `toISOString`
+    // stop at 9999, so a cap built from it would be a malformed attribute no picker can read.
+    const message = 'expires_at is beyond the configured maximum lifetime of 36500000 days';
+    const h = mount();
+    await h.settle();
+    await openCreate(h);
+    await fillCreate(h);
+    h.create.mockRejectedValueOnce(
+      writeFailure({ message, details: [{ path: 'expires_at', reason: 'out_of_range' }] }),
+    );
+    submitCreate();
+    await h.settle();
+    const expiry = control<HTMLInputElement>('#api-create-expiry');
+    expect(expiry.hasAttribute('max')).toBe(false);
+    expect(control('[data-api-expiry-refusal]').textContent?.trim()).toBe(message);
+  });
+
   it('uses the server lifetime in days as a rolling picker maximum', async () => {
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-11-06T12:00:00Z') });
     try {

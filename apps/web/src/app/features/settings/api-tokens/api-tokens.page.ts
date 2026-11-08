@@ -8,7 +8,16 @@ import {
   untracked,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
+import {
+  ActivatedRoute,
+  NavigationCancel,
+  NavigationEnd,
+  NavigationError,
+  NavigationSkipped,
+  NavigationStart,
+  Router,
+} from '@angular/router';
+import { combineLatest, filter, map } from 'rxjs';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
@@ -152,6 +161,44 @@ export class ApiTokensPage {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly query = toSignal(this.route.queryParamMap);
+  /**
+   * The organization the URL names above this page. The org id sits on an ancestor route of this
+   * tab, so it is read from the whole chain instead of this leaf's own parameters.
+   */
+  private readonly activatedOrg = toSignal(
+    combineLatest(this.route.pathFromRoot.map((link) => link.paramMap)).pipe(
+      map((params) => params.find((param) => param.has('orgId'))?.get('orgId') ?? null),
+    ),
+    { initialValue: null },
+  );
+  /**
+   * `true` from `NavigationStart` to the event that settles it. A transition in flight owns the
+   * URL: it has not activated its routes yet, so a write made now resolves against the route it is
+   * leaving, and the router would abandon the transition to follow that write.
+   */
+  private readonly transitionInFlight = toSignal(
+    this.router.events.pipe(
+      filter(
+        (event) =>
+          event instanceof NavigationStart ||
+          event instanceof NavigationEnd ||
+          event instanceof NavigationCancel ||
+          event instanceof NavigationError ||
+          event instanceof NavigationSkipped,
+      ),
+      map((event) => event instanceof NavigationStart),
+    ),
+    { initialValue: false },
+  );
+  /**
+   * The store resolved an organization the URL above this page does not name. Writing now would
+   * put that scope's project into the page this one is leaving.
+   */
+  private readonly foreignScope = computed(() => {
+    const activated = this.activatedOrg();
+    const resolved = this.store.session.currentOrg()?.id ?? null;
+    return activated !== null && resolved !== activated;
+  });
   protected readonly copy = API_TOKENS_COPY;
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() => {
     const phase = this.store.phase();
@@ -170,8 +217,14 @@ export class ApiTokensPage {
     this.store.scope();
     return false;
   });
-  /** The first URL write would restate what the store already read from the URL. */
+  /** The first render restates what the store already read from the URL, so it owes no write. */
   private urlWritten = false;
+  /**
+   * The click a URL write answers. A project pick or a page move is a place the user can return
+   * to, so it gets its own history entry; everything else (a retired cursor, a scope that resolved
+   * late) repairs the entry the user is already on instead of stacking another one.
+   */
+  private historyIntent: 'project' | 'page' | null = null;
 
   constructor() {
     // The URL carries the project with its cursor. A create, a dismissed ambiguous create or a
@@ -180,13 +233,34 @@ export class ApiTokensPage {
     effect(() => {
       const project = this.store.selectedProject();
       const cursor = this.store.cursor() ?? null;
-      untracked(() => this.syncQuery(project, cursor));
+      // Both facts are tracked, so the write happens by itself once the transition lands and the
+      // two organizations agree again.
+      const held = this.transitionInFlight() || this.foreignScope();
+      untracked(() => {
+        // Counted on every run, held or not: a first run held back by a transition must not spend
+        // the one write the page owes a scope that resolved after it opened.
+        const firstRun = !this.urlWritten;
+        this.urlWritten = true;
+        if (held) {
+          // A click whose transition was overtaken keeps no claim on the next write.
+          this.historyIntent = null;
+          return;
+        }
+        if (firstRun) return;
+        this.syncQuery(project, cursor);
+      });
     });
   }
 
   protected selectProject(event: Event): void {
     const target = event.target;
-    if (target instanceof HTMLSelectElement) this.store.selectProject(target.value);
+    if (!(target instanceof HTMLSelectElement)) return;
+    const before = this.store.selectedProject();
+    this.historyIntent = 'project';
+    this.store.selectProject(target.value);
+    // The store refuses an id its list does not hold and ignores the project already selected; a
+    // click that changes nothing lends no claim to a write that comes later.
+    if (this.store.selectedProject() === before) this.historyIntent = null;
   }
 
   protected reload(): void {
@@ -194,11 +268,18 @@ export class ApiTokensPage {
   }
 
   protected next(): void {
+    const before = this.store.cursor();
+    this.historyIntent = 'page';
     this.store.next();
+    // On the last page `next()` moves nothing, so a click the store ignored claims nothing either.
+    if (this.store.cursor() === before) this.historyIntent = null;
   }
 
   protected first(): void {
+    const before = this.store.cursor();
+    this.historyIntent = 'page';
     this.store.setCursor(undefined);
+    if (this.store.cursor() === before) this.historyIntent = null;
   }
 
   protected onRevoked(): void {
@@ -210,10 +291,8 @@ export class ApiTokensPage {
    * shared or restored URL would page through another project's tokens.
    */
   private syncQuery(project: string | null, cursor: string | null): void {
-    if (!this.urlWritten) {
-      this.urlWritten = true;
-      return;
-    }
+    const intent = this.historyIntent;
+    this.historyIntent = null;
     const current = this.query();
     if (
       (current?.get('project') ?? null) === project &&
@@ -224,6 +303,9 @@ export class ApiTokensPage {
       relativeTo: this.route,
       queryParams: { project, cursor },
       queryParamsHandling: 'merge',
+      // Only a click is a destination of its own; a write with no click behind it corrects the
+      // entry the user is already on, so Back does not walk through the page's own repairs.
+      replaceUrl: intent === null,
     });
   }
 }

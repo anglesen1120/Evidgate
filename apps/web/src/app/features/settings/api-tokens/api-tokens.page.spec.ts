@@ -82,6 +82,8 @@ describe('ApiTokensPage states', () => {
       expect.objectContaining({
         queryParams: { project: 'project-2', cursor: null },
         queryParamsHandling: 'merge',
+        // A pick the user made is a place to go back to, so it earns its own history entry.
+        replaceUrl: false,
       }),
     );
     expect(h.list).toHaveBeenLastCalledWith('project-2', undefined, expect.any(AbortSignal));
@@ -97,13 +99,82 @@ describe('ApiTokensPage states', () => {
     await h.settle();
     expect(h.navigate).toHaveBeenCalledWith(
       [],
-      expect.objectContaining({ queryParams: { project: 'project-1', cursor: 'next-page' } }),
+      expect.objectContaining({
+        queryParams: { project: 'project-1', cursor: 'next-page' },
+        replaceUrl: false,
+      }),
+    );
+  });
+
+  it('returns to the first page as a click of its own, keeping a history entry', async () => {
+    const h = mount(undefined, { query: { project: 'project-1', cursor: 'page-2' } });
+    await h.settle();
+    expect(h.list).toHaveBeenLastCalledWith('project-1', 'page-2', expect.any(AbortSignal));
+    const first = h.root.querySelector<HTMLButtonElement>('[data-api-first]');
+    if (!first) throw new Error('Missing first-page control');
+    first.click();
+    await h.settle();
+    expect(h.navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: { project: 'project-1', cursor: null },
+        replaceUrl: false,
+      }),
     );
   });
 
   it('never rewrites the URL the store has just read its list from', async () => {
     const h = mount(undefined, { query: { project: 'project-1' } });
     await h.settle();
+    expect(h.navigate).not.toHaveBeenCalled();
+  });
+
+  it('keeps the next repair in place after a project pick that changed nothing', async () => {
+    const h = mount(undefined, {
+      projects: [project('project-1'), project('project-2', 'Other')],
+      query: { project: 'project-1', cursor: 'page-2' },
+    });
+    await h.settle();
+    const select = h.root.querySelector<HTMLSelectElement>('#api-tokens-project');
+    if (!select) throw new Error('Missing project picker');
+    select.value = 'project-1';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    await h.settle();
+    expect(h.navigate).not.toHaveBeenCalled();
+    h.store.reloadFirst();
+    await h.settle();
+    // The ignored pick was no destination, so the cursor repair still replaces the entry.
+    expect(h.navigate).toHaveBeenLastCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: { project: 'project-1', cursor: null },
+        replaceUrl: true,
+      }),
+    );
+  });
+
+  it('corrects the URL in place when the scope resolves after the page opened', async () => {
+    const h = mount(undefined, { projects: [] });
+    await h.settle();
+    expect(h.navigate).not.toHaveBeenCalled();
+    h.projects.set([project('project-1')]);
+    await h.settle();
+    // Nobody clicked: the late-resolved project is written as a repair of the current entry.
+    expect(h.navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({
+        queryParams: { project: 'project-1', cursor: null },
+        replaceUrl: true,
+      }),
+    );
+  });
+
+  it('writes nothing while the session has resolved another organization than the URL names', async () => {
+    const h = mount();
+    await h.settle();
+    h.org.set({ id: 'org-2' });
+    await h.settle();
+    // The URL still names the org this page is activated for, so its project deliberately stays.
     expect(h.navigate).not.toHaveBeenCalled();
   });
 
@@ -149,7 +220,11 @@ describe('ApiTokensPage states', () => {
     await h.settle();
     expect(h.navigate).toHaveBeenLastCalledWith(
       [],
-      expect.objectContaining({ queryParams: { project: 'project-1', cursor: null } }),
+      expect.objectContaining({
+        queryParams: { project: 'project-1', cursor: null },
+        // Nothing was clicked: the page repairs the entry the user is on instead of adding one.
+        replaceUrl: true,
+      }),
     );
   });
 
@@ -165,7 +240,10 @@ describe('ApiTokensPage states', () => {
     await h.settle();
     expect(h.navigate).toHaveBeenLastCalledWith(
       [],
-      expect.objectContaining({ queryParams: { project: 'project-1', cursor: null } }),
+      expect.objectContaining({
+        queryParams: { project: 'project-1', cursor: null },
+        replaceUrl: true,
+      }),
     );
     expect(h.list).toHaveBeenLastCalledWith('project-1', undefined, expect.any(AbortSignal));
   });
@@ -193,7 +271,10 @@ describe('ApiTokensPage states', () => {
     await h.settle();
     expect(h.navigate).toHaveBeenLastCalledWith(
       [],
-      expect.objectContaining({ queryParams: { project: 'project-1', cursor: null } }),
+      expect.objectContaining({
+        queryParams: { project: 'project-1', cursor: null },
+        replaceUrl: true,
+      }),
     );
   });
 });

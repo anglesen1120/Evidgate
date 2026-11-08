@@ -48,11 +48,24 @@ function refusesExpiry(failure: ApiError): boolean {
 
 type ExpiryMaximum = { readonly instant: number } | { readonly lifetimeMs: number };
 
+/**
+ * The last instant `datetime-local` and `toISOString` can both spell, 9999-12-31T23:59:59.999Z.
+ * A later one is a valid `Date` but prints in the expanded six-digit year form, which the picker
+ * cannot read — and an unbounded lifetime ("36500000 days") lands beyond it.
+ */
+const LAST_SPELLABLE_INSTANT = 253_402_300_799_999;
+
+/**
+ * An absolute maximum is the server's own UTC instant. `Date.parse` also accepts local-time and
+ * partial forms ("Jan 1 2027", "2027-01-01"), so the shape is checked before it is believed.
+ */
+const ISO_UTC_INSTANT = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/;
+
 function parseExpiryMaximum(message: string): ExpiryMaximum | null {
   const absolute = /\(maximum ([^)]+)\)/.exec(message)?.[1];
-  if (absolute !== undefined) {
+  if (absolute !== undefined && ISO_UTC_INSTANT.test(absolute)) {
     const instant = Date.parse(absolute);
-    return Number.isFinite(instant) ? { instant } : null;
+    if (Number.isFinite(instant)) return { instant };
   }
   const days = Number(/configured maximum lifetime of (\d+) days/.exec(message)?.[1]);
   return Number.isSafeInteger(days) && days > 0 ? { lifetimeMs: days * 86_400_000 } : null;
@@ -235,7 +248,7 @@ export class ApiTokenCreateDialogComponent {
     const maximum = this.expiryMaximum();
     if (maximum === null) return null;
     const instant = 'instant' in maximum ? maximum.instant : this.nowMs() + maximum.lifetimeMs;
-    return Number.isFinite(new Date(instant).getTime()) ? instant : null;
+    return instant <= LAST_SPELLABLE_INSTANT ? instant : null;
   });
   protected readonly maxExpiry = computed(() => {
     const instant = this.maxExpiryAtMs();
