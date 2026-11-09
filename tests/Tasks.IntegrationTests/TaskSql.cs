@@ -42,6 +42,18 @@ internal static class TaskSql
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync(TestContext.Current.CancellationToken);
 
+        return await ScalarAsync<T>(connection, sql, parameters);
+    }
+
+    /// <summary>
+    /// Reads one value on a connection the test already opened, for the bootstrap roles whose
+    /// connection string the fixture keeps private (the superuser assertion path).
+    /// </summary>
+    internal static async Task<T?> ScalarAsync<T>(
+        NpgsqlConnection connection,
+        string sql,
+        params (string Name, object? Value)[] parameters)
+    {
         await using var command = Command(connection, sql, parameters);
         var value = await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
 

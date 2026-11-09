@@ -40,15 +40,31 @@ public static class EvidgateSweeps
     /// deletes <c>limit least(greatest(p_limit, 0), 10000)</c> (0007). A drain loop
     /// has to work in the function's units — a payload asking for more than this
     /// would read a capped batch as "the backlog is drained" and stop, and a
-    /// non-positive one would ask for zero rows and spin the whole batch budget
+    /// non-positive one would ask for zero rows and spin the whole time budget
     /// deleting nothing.
     /// </summary>
     public const int PurgeMaxBatchSize = 10_000;
 
     /// <summary>
-    /// Batches one purge fire may drain before it stops and logs the remainder; the
-    /// next fire continues. Bounded on purpose: a fire must not run longer than the
-    /// lease it holds.
+    /// How long one idempotency purge fire may keep draining. It replaces a fixed
+    /// batch ceiling that could stop a large backlog while the fire's lease still had
+    /// headroom: elapsed time is what the lease actually bounds. The next fire
+    /// continues from where this one stopped, and the audit row records that the
+    /// budget ended the drain.
+    /// <para>
+    /// It must stay below the task lease window: the consumer cancels a handler at
+    /// <c>VisibilityTimeoutSeconds</c> (default 300 s) minus a margin of
+    /// <c>min(5 s, lease / 10)</c>, so 4 minutes leaves the whole margin spare. A
+    /// budget at or above that window would let the lease expire mid-drain and a
+    /// second worker reclaim the row while this fire is still deleting.
+    /// </para>
+    /// </summary>
+    public static readonly TimeSpan PurgeTimeBudget = TimeSpan.FromMinutes(4);
+
+    /// <summary>
+    /// Batches one authoring-change purge fire may drain before it stops and logs the
+    /// remainder; the next fire continues. Only the authoring sweep still uses it:
+    /// the idempotency purge drains against <see cref="PurgeTimeBudget"/> instead.
     /// </summary>
     public const int PurgeMaxBatchesPerFire = 50;
 

@@ -117,6 +117,7 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate.usage_price_insert_global"] = "0073_usage_price.sql:185",
         ["evidgate.usage_ledger_org_ids"] = "0076_usage_rollup_job.sql:126",
         ["evidgate.orchestration_run_state_event_append"] = "0082_orchestration_run_state_event.sql:120",
+        ["evidgate.record_sweep_audit"] = "0088_platform_sweep_audit.sql:138",
     };
 
     /// <summary>
