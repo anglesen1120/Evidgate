@@ -27,6 +27,7 @@ export type RunStateVariant =
   | 'canceled'
   | 'many-producers'
   | 'no-producers'
+  | 'slot-states'
   | 'release'
   | 'releases'
   | 'release-refused'
