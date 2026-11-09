@@ -41,6 +41,6 @@ evg_load_env || evg_warn "$EVG_ENV_FILE not found — using the compose defaults
 evg_stop_hosts
 
 evg_info "stopping the compose services (volumes kept)"
-evg_compose down
+evg_compose_all down
 
-evg_info "dev stack stopped — volumes pg-data and s3-data kept (up.sh --reset deletes them)"
+evg_info "dev stack stopped — volumes pg-data, s3-data and the observability volumes kept (up.sh --reset deletes them)"

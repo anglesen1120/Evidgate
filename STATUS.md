@@ -68,7 +68,7 @@ The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none 
 | 10.1.1-T3 | T3.3, T3.4 | #558 |
 | 10.1.2-T1 | T1.1 | #516 |
 | 10.2.1-T1 | T1.4 | #12 |
-| 10.3.2-T1 | T1.2 | #465 |
+| 10.3.2-T1 | none (T1.2 landed by S348, #713, 1c021d7b; credit at the next recount) | #465, #713 |
 | 10.7.1-T1 | T1.2 | #341 |
 | 10.7.1-T2 | T2.2 | #341 |
 | 10.7.1-T4 | T4.2 | #222 |
@@ -292,7 +292,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 01.1.1-T4 | XS | .NET 12 LTS / TypeScript 7 upgrade trigger | yes | no | no | n/a | no — V3 gate: .NET 12 not GA and `@angular/build` / `typescript-eslint` peer ranges still exclude TS 7 |
 | 01.7.1-T3 | S (rem T3.1) | Partial: T3.2 shipped (`f34d01b` created CODEOWNERS, PR template and CONTRIBUTING together; `6a679d8` and `4cd9789` only revised the template/CONTRIBUTING later); T3.1 branch-protection apply is owner-blocked (403 on the free private plan). | no | no | no | n/a | no — owner-blocked: branch-protection writes return 403 on the free private repo (STATUS §6 row "Branch-protection API") |
 | 10.1.1-T4 | M | Isolated artifact-viewer origin | yes | no | no | n/a | no — needs a distinct registrable domain + DNS record + TLS certificate (registrar/DNS action) |
-| 10.3.2-T1 | S | ADR: observability backend for M1 with retention and cost limits, plus the compose profile; unblocks 10.3.1-T2 (T1 merged in #203); partial: T1.1 landed (ADR-0012 proposed, #465, 9e81d0ec), T1.2 compose profile open (handed over, plan 10.3.2 §12 Notes) | yes | no | no | n/a | yes |
+| 10.3.2-T1 | S | ADR: observability backend for M1 with retention and cost limits, plus the compose profile; unblocks 10.3.1-T2 (T1 merged in #203); T1.1 landed (ADR-0012, #465, 9e81d0ec), T1.2 LANDED by S348 (#713, 1c021d7b, no migration): opt-in compose profile `observability` (collector, Prometheus, VictoriaLogs, VictoriaTraces), `scripts/dev/up.sh --observability`, `observability-smoke.sh`; both subrows landed, so the parent is complete and credited by the next recount; open items are carried rows titled `(S348)` | yes | no | no | n/a | no — landed |
 | 10.8.1-T2 | L | Hands-on spike on two candidates | yes | no | no | T2.1-T2.2 (candidate A) ; T2.3-T2.4 (candidate B) | no — needs two managed-provider accounts/credentials to provision and measure |
 | 11.9.2-T2 | S | Reconcile the audit chain with deletion; LANDED by S147 (#304, a36bccf5; counted in the section 2 totals, its Landed task groups row is added at a later close-out because an insert shifts STATUS.md:N cites): T2.1 written rule, T2.2 audit payload schema plus an erasure-then-verify test | yes | no | no | n/a | yes |
 
