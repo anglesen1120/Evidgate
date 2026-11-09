@@ -37,6 +37,21 @@ public sealed class DefinerExecuteScopeTests
             OwnerOnly
         },
         {
+            "evidgate.session_admin_holds_write(uuid, uuid)",
+            "select evidgate.session_admin_holds_write(gen_random_uuid(), gen_random_uuid())",
+            OwnerOnly
+        },
+        {
+            "evidgate.session_admin_rank(uuid, uuid)",
+            "select evidgate.session_admin_rank(gen_random_uuid(), gen_random_uuid())",
+            OwnerOnly
+        },
+        {
+            "evidgate.session_admin_may_revoke_all(uuid, uuid, uuid)",
+            "select evidgate.session_admin_may_revoke_all(gen_random_uuid(), gen_random_uuid(), gen_random_uuid())",
+            OwnerOnly
+        },
+        {
             "evidgate.session_revoke_audit_append(uuid, uuid, text, text, jsonb, text, text)",
             "select evidgate.session_revoke_audit_append(gen_random_uuid(), gen_random_uuid(), 'user', 'x', '{}'::jsonb, null, null)",
             OwnerOnly

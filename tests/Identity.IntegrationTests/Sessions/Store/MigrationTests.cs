@@ -589,15 +589,27 @@ public sealed class MigrationTests : SessionHardeningTestBase
     /// <summary>0051, the file this case re-applies; it is the correlation-id half of F58.</summary>
     private const string MigrationFile = "0051_identity_session_revoke_audit_ids.sql";
 
-    /// <summary>0090, which re-points the revoke definers at the shared helpers; the head state of the function.</summary>
-    private const string HelperMigrationFile = "0090_identity_session_revoke_helpers.sql";
+    /// <summary>
+    /// 0090 re-points the revoke definers at the shared helpers; 0091 then re-states the revoke-all definer and the
+    /// helper it asks. Together they are the head state of these functions.
+    /// </summary>
+    private static readonly string[] HelperMigrationFiles =
+    [
+        "0090_identity_session_revoke_helpers.sql",
+        "0091_identity_session_revoke_all_hierarchy.sql",
+    ];
 
-    /// <summary>Re-applies 0090 so a case that re-stated an older body leaves the database at head.</summary>
-    private async Task ApplyHelperMigrationAsync() =>
-        await Fixture.SeedAsync(
-            await File.ReadAllTextAsync(Path.Combine(DatabaseFixture.MigrationsPath, HelperMigrationFile), Token),
-            [],
-            Token);
+    /// <summary>Re-applies 0090 and 0091 so a case that re-stated an older body leaves the database at head.</summary>
+    private async Task ApplyHelperMigrationAsync()
+    {
+        foreach (var file in HelperMigrationFiles)
+        {
+            await Fixture.SeedAsync(
+                await File.ReadAllTextAsync(Path.Combine(DatabaseFixture.MigrationsPath, file), Token),
+                [],
+                Token);
+        }
+    }
 
     /// <summary>The migration 0051 supersedes for this one function: the body a database at 0050 runs.</summary>
     private const string PredecessorMigrationFile = "0050_identity_session_revoke_audit.sql";
