@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using Evidgate.Modules.Identity.Ci;
 using Evidgate.Modules.Identity.Options;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Shouldly;
@@ -168,6 +169,43 @@ public sealed class CiUnitTests
         validator.Validate(null, foreign).Failed.ShouldBeTrue();
         var plain = new CiAuthOptions { GithubJwksUri = "http://token.actions.githubusercontent.com/.well-known/jwks" };
         validator.Validate(null, plain).Failed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("  ,, ", false)]
+    [InlineData("push", true)]
+    [InlineData("push, merge_group", true)]
+    [InlineData("Push", false)]
+    [InlineData("push;release", false)]
+    [InlineData("1push", false)]
+    [InlineData("workflow_run", false)]
+    [InlineData("pull_request_target", false)]
+    public void OptionsValidator_AllowedEventNames_RefusesEmptyInvalidAndForbiddenEntries(string value, bool valid)
+    {
+        new CiAuthOptionsValidator().Validate(null, new CiAuthOptions { AllowedEventNames = value }).Succeeded.ShouldBe(valid, value);
+    }
+
+    [Fact]
+    public void OptionsValidator_LeftoverDeniedEventNames_FailsBootWithANamedMessage()
+    {
+        var result = new CiAuthOptionsValidator().Validate(null, new CiAuthOptions { DeniedEventNames = "schedule" });
+
+        result.Failed.ShouldBeTrue();
+        result.FailureMessage.ShouldContain("EVIDGATE__CI__DENIEDEVENTNAMES");
+        new CiAuthOptionsValidator().Validate(null, new CiAuthOptions { DeniedEventNames = string.Empty }).Failed.ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData("EVIDGATE:Ci:DeniedEventNames", "schedule")]
+    [InlineData("EVIDGATE:Ci:DeniedEventNames", "")]
+    [InlineData("EVIDGATE:Ci:AllowedEventNames", " ")]
+    public void ConfigurationBinder_FeedsTheEventNameChecks_SoAnOperatorMistakeFailsBoot(string key, string value)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { [key] = value }).Build();
+        var options = configuration.GetSection("EVIDGATE:Ci").Get<CiAuthOptions>()!;
+
+        new CiAuthOptionsValidator().Validate(null, options).Failed.ShouldBeTrue();
     }
 
     // ------------------------------------------------------------ lifetime

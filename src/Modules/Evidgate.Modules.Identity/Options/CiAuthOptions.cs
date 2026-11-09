@@ -64,13 +64,18 @@ internal sealed class CiAuthOptions
     public int MaxSkewSeconds { get; init; } = 60;
 
     /// <summary>
-    /// Comma-separated GitHub <c>event_name</c> values refused at the exchange. <c>pull_request_target</c> and <c>workflow_run</c>
-    /// run in the base repository's context (a <c>workflow_run</c> of the allowed workflow on the default branch passes the ref and
-    /// workflow allowlists) while they may be driven by untrusted fork code, so their tokens must not mint evidence credentials.
-    /// An explicit value replaces this default: removing <c>workflow_run</c> from an override re-opens the risk. The claim itself
-    /// is required; comparison is ordinal and case-exact.
+    /// Comma-separated GitHub <c>event_name</c> values accepted at the exchange; every other event is refused, so the check fails
+    /// closed. <c>pull_request_target</c> and <c>workflow_run</c> run in the base repository's context while they may be driven by
+    /// untrusted fork code, so they are never listed and the boot validator refuses them. The claim is required and must be a JSON
+    /// string; comparison is ordinal and case-exact, as GitHub sends lowercase names.
     /// </summary>
-    public string DeniedEventNames { get; init; } = "pull_request_target,workflow_run";
+    public string AllowedEventNames { get; init; } = "push,workflow_dispatch,schedule,release,merge_group";
+
+    /// <summary>
+    /// Bound only so the boot validator can refuse a leftover <c>EVIDGATE__CI__DENIEDEVENTNAMES</c>: the deny list was replaced by
+    /// <see cref="AllowedEventNames"/>, and silently ignoring the old variable would leave an operator believing it still applies.
+    /// </summary>
+    public string? DeniedEventNames { get; init; }
 
     /// <summary>Exchange attempts allowed per key within <see cref="ExchangeWindowSeconds"/> (AC8).</summary>
     [Range(1, 10000)]
