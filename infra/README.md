@@ -21,6 +21,17 @@ cannot drift:
 - `postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722`
 - `chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882`
 
+The opt-in compose profile `observability` (ADR-0012: collector, Prometheus,
+VictoriaLogs, VictoriaTraces; `scripts/dev/up.sh --observability`) pins its four images by
+index digest too (all carry linux/amd64 and linux/arm64), keeps its config in
+`observability/otel-collector.yaml` (passed through `EVIDGATE_OTEL_COLLECTOR_CONFIG`, no
+bind mount) and is described in `docs/runbooks/telemetry.md` §5:
+
+- `otel/opentelemetry-collector-contrib:0.164.0@sha256:340c9ca6a36617084c6661bdc4f0fe92b7cda5a805d61673ec8db375fddc522b`
+- `prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2`
+- `victoriametrics/victoria-logs:v1.53.0@sha256:251121fa882af99b95ba0c230a4a2f412ea602d2698c64a96c58dc9842bb755d`
+- `victoriametrics/victoria-traces:v0.12.1@sha256:609abddf298c9642496045296f30a3968b5a4b79b678373e2e7ef29c844f5578`
+
 ### Why no host path is bind-mounted here
 
 `compose.dev.yml` mounts only named volumes, and the SeaweedFS identity file

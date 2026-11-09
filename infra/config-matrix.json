@@ -2554,6 +2554,126 @@
       "note": "dev-stack only: the whole SeaweedFS identity file, exported by scripts/dev/up.sh from infra/seaweedfs/s3-config.json and written inside the container (a host bind mount is unusable under colima/virtiofs; infra/README.md records the evidence). Secret because it carries the access/secret key pair."
     },
     {
+      "key": "EVIDGATE_OBS_LOGS_PORT",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only, profile `observability`: loopback port of the VictoriaLogs query UI and OTLP ingestion (default 9428). Unset keeps the default; up.sh refuses a value that is not digits."
+    },
+    {
+      "key": "EVIDGATE_OBS_OTLP_GRPC_PORT",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only, profile `observability`: loopback port of the collector's OTLP/gRPC receiver (default 4317); `up.sh --observability` points EVIDGATE__TELEMETRY__OTLPENDPOINT at it when that key is not already set."
+    },
+    {
+      "key": "EVIDGATE_OBS_OTLP_HTTP_PORT",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only, profile `observability`: loopback port of the collector's OTLP/HTTP receiver (default 4318)."
+    },
+    {
+      "key": "EVIDGATE_OBS_PROMETHEUS_PORT",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only, profile `observability`: loopback port of Prometheus, its query UI and OTLP metrics receiver (default 9090)."
+    },
+    {
+      "key": "EVIDGATE_OBS_TRACES_PORT",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only, profile `observability`: loopback port of VictoriaTraces, its query UI, Jaeger API and OTLP ingestion (default 10428)."
+    },
+    {
+      "key": "EVIDGATE_OTEL_COLLECTOR_CONFIG",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "repo-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only, profile `observability`: the whole collector configuration, exported by scripts/dev/up.sh from infra/observability/otel-collector.yaml and read by the container as `--config=env:` (a host bind mount is unusable under colima/virtiofs). Holds no secret."
+    },
+    {
       "key": "EVIDGATE_WORKER_SCHED_PASSWORD",
       "scope": "dev-stack",
       "consumers": ["dev-stack"],
