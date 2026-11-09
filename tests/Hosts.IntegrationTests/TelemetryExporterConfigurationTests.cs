@@ -136,7 +136,7 @@ public sealed partial class TelemetryExporterConfigurationTests
 
     /// <summary>The source-generated log call of this suite (CA1848: no format strings at the call site).</summary>
     [LoggerMessage(Level = LogLevel.Information, Message = "otlp exporter probe")]
-    private static partial void ProbeRecord(this ILogger logger);
+    private static partial void ProbeRecord(ILogger logger);
 
     /// <summary>One measurement per signal, so each provider has something to export.</summary>
     private static void EmitAllSignals(IHost host)
@@ -148,10 +148,9 @@ public sealed partial class TelemetryExporterConfigurationTests
 
         EvidgateTelemetry.RecordSessionRevoked(1);
 
-        host.Services
+        ProbeRecord(host.Services
             .GetRequiredService<ILoggerFactory>()
-            .CreateLogger("Hosts.IntegrationTests.ExporterProbe")
-            .ProbeRecord();
+            .CreateLogger("Hosts.IntegrationTests.ExporterProbe"));
     }
 
     /// <summary>

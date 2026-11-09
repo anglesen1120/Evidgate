@@ -103,6 +103,73 @@ public sealed class CollectorConfigRedactionTests
     }
 
     [Fact]
+    public void Every_Attribute_Context_Masks_Secret_Shaped_Attribute_Values()
+    {
+        var root = ReadConfig();
+        var pipelines = Pipelines(root);
+
+        foreach (var (signal, contexts) in Contexts)
+        {
+            var definitions = RedactionProcessors(root, pipelines, signal);
+
+            foreach (var context in contexts)
+            {
+                // Key deletion alone leaves a credential inside a value under a harmless key, so every
+                // map the contract names needs a value mask of its own.
+                var statements = definitions
+                    .SelectMany(definition => ContextStatements(definition, signal, context))
+                    .ToArray();
+
+                Assert.True(
+                    statements.Any(MasksAttributeValues),
+                    $"{signal} redaction masks no string attribute value in the '{context}' attribute map");
+            }
+        }
+    }
+
+    [Fact]
+    public void The_Log_Body_Map_Loses_Secret_Shaped_Keys()
+    {
+        var root = ReadConfig();
+        var statements = RedactionStatements(root, Pipelines(root), "logs");
+
+        // A structured body carries attributes of its own: masking only a string body would ship them.
+        Assert.True(
+            statements.Any(DeletesBodyMapKeys),
+            "the logs pipeline has no statement that structurally deletes secret-shaped keys from a "
+                + "structured log body");
+    }
+
+    [Fact]
+    public void The_Redaction_Processor_Propagates_Statement_Errors()
+    {
+        var processors = Required(Mapping(ReadConfig(), "processors"), "processors");
+        var definition = Required(
+            Mapping(processors, "transform/redaction"),
+            "processors.transform/redaction");
+
+        // Ignoring a statement error ships the record unmasked; propagate drops the payload instead,
+        // so a pattern this configuration cannot evaluate can never be the reason a secret passes.
+        Assert.Equal("propagate", Scalar(Child(definition, "error_mode")) ?? string.Empty);
+    }
+
+    [Fact]
+    public void Receivers_Cap_The_Message_And_Body_They_Accept()
+    {
+        var receivers = Required(Mapping(ReadConfig(), "receivers"), "receivers");
+        var protocols = Required(
+            Mapping(Required(Mapping(receivers, "otlp"), "receivers.otlp"), "protocols"),
+            "receivers.otlp.protocols");
+        var grpc = Required(Mapping(protocols, "grpc"), "receivers.otlp.protocols.grpc");
+        var http = Required(Mapping(protocols, "http"), "receivers.otlp.protocols.http");
+
+        // A payload is decoded before any processor can refuse it, so the receiver cap, not the memory
+        // limiter, is what bounds one request.
+        Assert.Equal("1", Scalar(Child(grpc, "max_recv_msg_size_mib")) ?? string.Empty);
+        Assert.Equal("1048576", Scalar(Child(http, "max_request_body_size")) ?? string.Empty);
+    }
+
+    [Fact]
     public void Every_Receiver_Endpoint_Listens_On_All_Interfaces()
     {
         var receivers = Required(Mapping(ReadConfig(), "receivers"), "receivers");
@@ -171,6 +238,18 @@ public sealed class CollectorConfigRedactionTests
         "pepper",
         "__host-",
         "__secure-",
+        "private",
+        "access",
+        "account",
+        "signing",
+        "encryption",
+        "signature",
+        "session",
+        "sid",
+        "jwt",
+        "bearer",
+        "connection",
+        "dsn",
     ];
 
     /// <summary>
@@ -250,6 +329,25 @@ public sealed class CollectorConfigRedactionTests
         && statement.Contains("***", StringComparison.Ordinal)
         && !statement.Contains("where false", StringComparison.Ordinal)
         && SecretKeyWords.Any(word => statement.Contains(word, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// A statement that masks string values in place. The pattern itself is not inspected: a mask that
+    /// matches nothing reads the same here, which is why the collector ingest-and-readback owns that.
+    /// </summary>
+    private static bool MasksAttributeValues(string statement) =>
+        statement.Contains("replace_all_patterns(attributes, \"value\",", StringComparison.Ordinal)
+        && statement.Contains("***", StringComparison.Ordinal)
+        && !statement.Contains("where false", StringComparison.Ordinal);
+
+    /// <summary>
+    /// A deletion from the log body <em>map</em>, guarded so a string body cannot be the statement that
+    /// errors: the two body shapes need one statement each.
+    /// </summary>
+    private static bool DeletesBodyMapKeys(string statement) =>
+        statement.Contains("delete_matching_keys(body,", StringComparison.Ordinal)
+        && statement.Contains("where IsMap(body)", StringComparison.Ordinal)
+        && !statement.Contains("where false", StringComparison.Ordinal)
+        && SecretKeyWords.All(word => statement.Contains(word, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Every scalar value below <paramref name="node"/>: mapping keys are names, not content.</summary>
     private static IEnumerable<string> Scalars(YamlNode node)

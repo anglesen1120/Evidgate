@@ -149,11 +149,11 @@ The list (`SecretRedactor`):
 **Known limits, by construction.** This is a shape-aware scrubber, not a value oracle: a bare secret
 with no name beside it (a token pasted as an entire exception message) is not detectable here. The
 contract stays 00 §5.5 C8 — code never puts a secret in a message. The collector is the third layer
-where it runs (§5: it deletes credential-named attribute keys outright and masks assignment-shaped
-text in a log body), and the dev profile is the only place it runs today, so a shape that leaks has
-to be fixed here, not there. If you find a shape that leaks, add it to `SecretRedactor` with a
-negative test in `tests/Hosts.IntegrationTests` rather than to a collector rule, so it holds for
-every deployment.
+where it runs (§5: it deletes credential-named attribute keys outright and masks secret-shaped
+attribute values and log bodies), and the dev profile is the only place it runs today, so a shape
+that leaks has to be fixed here, not there. If you find a shape that leaks, add it to `SecretRedactor`
+with a negative test in `tests/Hosts.IntegrationTests` rather than to a collector rule, so it holds
+for every deployment.
 
 ## 4. Keys, in one place
 
@@ -171,12 +171,13 @@ every deployment.
 `scripts/dev/up.sh --observability` starts four more containers next to PostgreSQL and
 SeaweedFS and points the Api and Worker at the collector
 (`EVIDGATE__TELEMETRY__OTLPENDPOINT=http://127.0.0.1:4317`, unless `.env.dev` already
-sets it). Without the flag the dev stack is unchanged and exports nowhere.
+sets it). Without the flag export stays disabled unless an endpoint is configured: an
+endpoint `.env.dev` sets still applies without `--observability`.
 `scripts/dev/down.sh` stops them; `up.sh --reset` also deletes their volumes.
 
 | Service | Signal | Loopback port (override) | Retention | Ceiling | Memory |
 |---|---|---|---|---|---|
-| `otel-collector` | OTLP in, `memory_limiter` + `transform/redaction` + `batch`, three `otlphttp` exporters out | 4317 gRPC, 4318 HTTP (`EVIDGATE_OBS_OTLP_GRPC_PORT`, `EVIDGATE_OBS_OTLP_HTTP_PORT`) | none (stateless) | `memory_limiter` 60 MiB (RSS runs above the limiter value, so it sits well under the cgroup) | 128m |
+| `otel-collector` | OTLP in, `memory_limiter` + `transform/redaction` + `batch`, three `otlphttp` exporters out | 4317 gRPC, 4318 HTTP (`EVIDGATE_OBS_OTLP_GRPC_PORT`, `EVIDGATE_OBS_OTLP_HTTP_PORT`) | none (stateless) | `memory_limiter` soft 45 MiB, hard 60 MiB (RSS runs ~50 MiB above it) | 128m |
 | `victoriatraces` | traces | 10428 (`EVIDGATE_OBS_TRACES_PORT`) | 7 d | 2 GiB | 256m |
 | `victorialogs` | logs | 9428 (`EVIDGATE_OBS_LOGS_PORT`) | 30 d | 3 GiB | 256m |
 | `prometheus` | metrics | 9090 (`EVIDGATE_OBS_PROMETHEUS_PORT`) | 90 d | 2 GiB | 256m |
@@ -194,28 +195,61 @@ changing a backend means editing the exporters in `infra/observability/otel-coll
 Every pipeline runs the same three processors in this order: `memory_limiter` →
 `transform/redaction` → `batch`.
 
-- **`memory_limiter` first**, at 60 MiB with a 15 MiB spike allowance: past it the collector
-  refuses data instead of buffering without bound (the refusals are its own
-  `otelcol_processor_refused_*` counters), so the process stays under the container's 128 MiB
-  `mem_limit`. A refusal costs a signal; nothing downstream is asked to hold it.
-- **`transform/redaction` second** (10.3.1-T2.2): the third redaction layer. It **deletes** every
-  attribute whose key names a credential — `authorization`, `cookie`/`set-cookie`, `token`,
-  `secret`, `password`/`passwd`/`pwd`, `api_key`/`apikey`, `credential`, `pepper`, and any
-  `__Host-`/`__Secure-` cookie name — on resource, scope, span, span-event, datapoint and log
-  record attributes, because a masked key would still say that a value existed. It **masks to
-  `***`** the shapes the app cannot see once a record has left the process: `password=…` /
-  `token: …`-style assignments in a log body or in a log attribute string (quoted values
-  included), and an `authorization`/`cookie` header pair, which is masked to the end of its line
-  so a `Bearer` token with spaces or a multi-cookie list cannot survive past its first word. It
-  is the stock `transform` (OTTL) processor, not the alpha `redaction` one: that one masks a
-  matched key with `****` and cannot delete it, so the key name would still ship.
-- **`batch` last**, at 512 items to wake a batch, at most 1024 items per request and 5 s for a
-  quiet signal, so a masked record is what the batch and the queues ever hold.
+- **The receivers cap what they read**: one gRPC message is at most 1 MiB
+  (`max_recv_msg_size_mib: 1`) and one HTTP request body at most 1 MiB
+  (`max_request_body_size: 1048576`). A payload is decoded before any processor can
+  refuse it, so this cap, not the limiter, bounds a single request.
+- **`memory_limiter` first**, at `limit_mib: 60` with `spike_limit_mib: 15`, so the soft
+  limit is 60 − 15 = **45 MiB** and 60 MiB is the hard one. At 45 MiB the collector
+  refuses data (its `otelcol_processor_refused_*` counters) instead of buffering without
+  bound; past 60 MiB it also forces a GC. The limit counts pipeline data only, so total
+  RSS runs about 50 MiB above it (Go runtime, exporter buffers), and `GOMEMLIMIT=96MiB`
+  puts the Go heap under the container's 128 MiB `mem_limit` so the limiter acts before
+  the cgroup does.
+- **`transform/redaction` second** (10.3.1-T2.2): the third redaction layer, with
+  `error_mode: propagate`, so a statement that errors drops that payload instead of
+  shipping it unredacted. It **deletes** every attribute whose key names a credential —
+  `authorization`, `cookie`/`set-cookie`, `token`, `secret`, `password`/`passwd`/`pwd`,
+  `api_key`/`apikey`, `credential`, `pepper`, `__Host-`/`__Secure-` cookie names,
+  `private`/`access`/`account`/`signing`/`encryption`/`sharedaccess` keys, `signature`,
+  `session`, a `sid` segment, `jwt`, `bearer`, `connection_string`, `dsn` — on resource,
+  scope, span, span-event, datapoint and log record attributes, because a masked key would
+  still say that a value existed. It **masks string values to `***`** in every one of
+  those contexts and in the log body, for the shapes the app cannot see once a record has
+  left the process:
+  - a `key=value` / `key: value` assignment — quoted, `%3D`/`%3A` percent-encoded, or
+    unquoted to the end of the line, the next `;` or the next `&` — including the
+    `EVIDGATE__X__SECRET_VALUE=…` identifier spelling;
+  - a JSON pair, plain or backslash-escaped (`"password":"…"`, `\"password\":\"…\"`);
+  - an XML element named for a secret (`<password>…</password>`);
+  - an `authorization`/`cookie` header pair, to the end of its line;
+  - a URL query parameter with a secret-named key (`?access_token=…&sig=…`) and a URL
+    userinfo password (`scheme://user:…@host`);
+  - a bare `Bearer`/`Basic` token.
+  It is the stock `transform` (OTTL) processor, not the alpha `redaction` one: that one
+  masks a matched key with `****` and cannot delete it, so the key name would still ship.
+- **`batch` last**, at 512 items to wake a batch, at most 1024 items per request and 5 s
+  for a quiet signal, so a masked record is what the batch and the queues ever hold.
 
-Each `otlphttp` exporter retries with backoff for at most 5 minutes and then drops the batch, and
-keeps a queue bounded in items (5000, four consumers, overflow rejected and counted in
-`otelcol_exporter_enqueue_failed_*`). A store outage therefore costs at most one queue and one
-batch per exporter: memory cannot creep past the limiter because it cannot creep past the queues.
+Each `otlphttp` exporter retries with backoff for at most 5 minutes and then drops the
+batch, and keeps a queue bounded in items (5000, four consumers) with
+`block_on_overflow: false`: a full queue drops the newest item, counted in
+`otelcol_exporter_enqueue_failed_*`, while the 5000 items already queued stay. The queues
+are bounded in items rather than in bytes, so the memory limiter, not the queue, is what
+bounds memory.
+
+Accepted limits — deliberate, recorded so a review does not re-open them:
+
+- over-deletion: a key that merely contains a secret word (`token_count`) is deleted, and
+  an unquoted assignment masks to the end of its line, so a following `k=v` there is
+  masked too;
+- span links and exemplar attributes are not scrubbed, and a structured log body loses
+  only its top-level secret-named keys: a nested map keeps its keys;
+- the stores accept OTLP writes directly on their loopback ports with no credential, so a
+  local process can bypass the collector; the collector is a redaction layer, not an
+  enforcement point;
+- the store UIs answer cross-origin reads, which this profile accepts because every port
+  is loopback-only and no store has a credential to commit.
 
 This profile, its collector and these processors are the dev stack (ADR-0012). Staging and
 production still supply their own endpoint through `EVIDGATE__TELEMETRY__OTLPENDPOINT`, and
@@ -230,7 +264,8 @@ retention above, and that one span, one metric point and one log record sent to 
 collector are queryable.
 
 Not covered yet (open items, see the 10.3.2 hand-over): the memory limits above are
-sized, not measured under load; the collector's own drop counters (`otelcol_*`) are not
-scraped; the smoke reads the retention settings back and proves ingest and query, but
-does not wait for expiry or for a store to hit its size ceiling; the stores share the
-default compose network with PostgreSQL and SeaweedFS.
+sized, not measured — neither the limiter ceiling nor RSS with full queues has been
+measured under load; the collector's own drop counters (`otelcol_*`) are not scraped; the
+smoke reads the retention settings back and proves ingest and query, but does not wait for
+expiry or for a store to hit its size ceiling; the stores share the default compose
+network with PostgreSQL and SeaweedFS.

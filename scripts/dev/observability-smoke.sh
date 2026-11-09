@@ -4,10 +4,15 @@
 # every published port is loopback-only, the retention flags are in force, and one
 # trace, one metric and one log record sent to the collector are queryable in the
 # three stores, the real Evidgate.Api reaches the same three stores through the
-# collector, and a canary sent through the receiver never reaches a store.
+# collector, and canaries of every secret shape the collector must strip never
+# reach a store.
 # Needs docker, curl, python3 and dotnet (the Api is built and booted on a free
 # port, with no database); touches no host port you use, no .env.dev and no
 # volume of the dev stack.
+# A warm run takes about 3-8 min: the Api build and the 5 s batch flush dominate.
+# A `curl -i -H 'Origin: https://x.invalid'` CORS probe of the receiver is not part
+# of this run; the config assertions below cover the receiver's shape, and a
+# browser-origin check of it belongs to its own test.
 #
 # usage: scripts/dev/observability-smoke.sh [--project NAME]
 set -euo pipefail
@@ -26,7 +31,7 @@ while [ "$#" -gt 0 ]; do
       shift 2
       ;;
     -h | --help)
-      sed -n '2,12p' "$0"
+      sed -n '2,17p' "$0"
       exit 0
       ;;
     *)
@@ -59,6 +64,16 @@ EVIDGATE_OBS_TRACES_PORT="$(free_port)"
 # Bound every request: a service that accepts TCP but never answers must not hang the poll.
 curl() { command curl --max-time 10 "$@"; }
 compose() { docker compose -p "$project" -f "$COMPOSE_FILE" "$@"; }
+# Bound a slow command where GNU `timeout` exists; a stock macOS has none.
+with_deadline() { # seconds, command...
+  local seconds=$1
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$seconds" "$@"
+  else
+    "$@"
+  fi
+}
 
 # Compose validation: without the profile the stack is exactly the two stateful
 # services; with it the four observability services join them.
@@ -73,6 +88,7 @@ ok "profile adds: otel-collector prometheus victorialogs victoriatraces"
 
 api_pid=""
 api_log=""
+dotnet_used=""
 cleanup() {
   # Only the Api this run started: never a process the caller owns.
   if [ -n "$api_pid" ] && kill -0 "$api_pid" 2>/dev/null; then
@@ -82,6 +98,12 @@ cleanup() {
       sleep 0.1
     done
     kill -9 "$api_pid" 2>/dev/null || true
+  fi
+  # A Roslyn or MSBuild server survives the build and can hold a descriptor this
+  # script inherited for hours, so nothing is left running that could keep the
+  # caller's gate lock open.
+  if [ -n "$dotnet_used" ]; then
+    with_deadline 60 dotnet build-server shutdown >/dev/null 2>&1 || true
   fi
   if [ -n "$api_log" ]; then rm -f "$api_log"; fi
   compose --profile observability down -v >/dev/null 2>&1 || true
@@ -198,8 +220,13 @@ api_port="$(free_port)"
 api_log="${TMPDIR:-/tmp}/evidgate-obs-smoke-$run_id.api.log"
 
 command -v dotnet >/dev/null 2>&1 || fail "dotnet is not on PATH (needed to build and start the Api)"
-dotnet build "$api_project/Evidgate.Api.csproj" -c Debug --nologo -v quiet >"$api_log" 2>&1 \
-  || fail "the Api did not build; tail of $api_log:
+# A Roslyn or MSBuild node started by this build outlives it and inherits this
+# script's open descriptors, a gate lock among them, so the build starts none: no
+# shared compiler, no reusable node, no persistent build server.
+dotnet_used=1
+with_deadline 900 dotnet build "$api_project/Evidgate.Api.csproj" -c Debug --nologo -v quiet \
+  -p:UseSharedCompilation=false -nodeReuse:false --disable-build-servers >"$api_log" 2>&1 \
+  || fail "the Api did not build, or hit the 900 s deadline; tail of $api_log:
 $(tail -n 20 "$api_log")"
 [ -f "$api_dll" ] || fail "the Api build produced no $api_dll"
 
@@ -212,6 +239,8 @@ done
 
 (
   cd "$(dirname "$api_dll")" || exit 1
+  # 9>&- keeps a descriptor inherited from the caller (a gate lock) out of this
+  # long-lived process, which would otherwise hold it after the run ends.
   exec env \
     ASPNETCORE_URLS="http://127.0.0.1:$api_port" \
     ASPNETCORE_ENVIRONMENT=Production \
@@ -224,7 +253,7 @@ done
     EVIDGATE__TELEMETRY__SERVICEVERSION="obs-smoke-$run_id" \
     EVIDGATE__TELEMETRY__SAMPLERATIO=1 \
     OTEL_METRIC_EXPORT_INTERVAL=2000 \
-    dotnet Evidgate.Api.dll
+    dotnet Evidgate.Api.dll 9>&-
 ) >>"$api_log" 2>&1 &
 api_pid=$!
 
@@ -266,52 +295,169 @@ await_hit_for 90 "api meter metric" "$prom/api/v1/query" \
 await_hit_for 90 "api resource version" "$prom/api/v1/query" \
   --data-urlencode "query=target_info{job=\"evidgate-api\",service_version=\"obs-smoke-$run_id\"}" "obs-smoke-$run_id"
 
-# Collector redaction: the contract puts the secret shapes at the collector, not
-# in each application. A key that names a secret is deleted, a secret-shaped
-# assignment is masked to ***, and all of it happens before the batch processor.
-# The canaries are random per run and are never a real credential.
-canary_authorization="$(python3 -c 'import secrets; print(secrets.token_hex(12))')"
-canary_cookie="$(python3 -c 'import secrets; print(secrets.token_hex(12))')"
-canary_password="$(python3 -c 'import secrets; print(secrets.token_hex(12))')"
-canary_token="$(python3 -c 'import secrets; print(secrets.token_hex(12))')"
-canary_session="$(python3 -c 'import secrets; print(secrets.token_hex(12))')"
+# Collector redaction: the contract puts the secret shapes at the collector, not in
+# each application. A key that names a credential is deleted in every context, and a
+# secret-shaped value is masked to *** wherever it appears: a log body, a string
+# attribute of a log, span, span event, datapoint or resource, and the value of a
+# structured log body. Every canary is random per run and never a real credential.
+canary_names=(authorization cookie token password session pct json json2 xml env
+  bearer tail map metric_key metric_value resource_key url signing event)
+i=0
+while read -r value; do
+  printf -v "canary_${canary_names[$i]}" '%s' "$value"
+  i=$((i + 1))
+done < <(python3 -c "import secrets; print('\n'.join(secrets.token_hex(12) for _ in range(${#canary_names[@]})))")
+[ "$i" -eq "${#canary_names[@]}" ] || fail "generated $i canaries for ${#canary_names[@]} names"
 redaction_id="redactionprobe$run_id"
+map_marker="mapbody$run_id"
 redaction_trace_id="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
 # Fresh timestamps: the Api build above can take minutes, and the earlier probes'
-# stamp should not decide whether these two are inside the store's window.
+# stamp should not decide whether these records are inside the store's window.
 redaction_now_ns="$(python3 -c 'import time; print(time.time_ns())')"
 redaction_end_ns=$((redaction_now_ns + 1000000))
+redaction_resource="{\"attributes\":[{\"key\":\"service.name\",\"value\":{\"stringValue\":\"evg-smoke-redaction-$run_id\"}},{\"key\":\"x-api-key\",\"value\":{\"stringValue\":\"$canary_resource_key\"}}]}"
 
-post logs "{\"resourceLogs\":[{\"resource\":$resource,\"scopeLogs\":[{\"logRecords\":[{\"timeUnixNano\":\"$redaction_now_ns\",\"severityText\":\"INFO\",\"body\":{\"stringValue\":\"$redaction_id password=$canary_password\"},\"attributes\":[{\"key\":\"authorization\",\"value\":{\"stringValue\":\"Bearer $canary_authorization\"}},{\"key\":\"cookie\",\"value\":{\"stringValue\":\"sid=$canary_cookie\"}},{\"key\":\"note\",\"value\":{\"stringValue\":\"token: $canary_token\"}}]}]}]}]}"
-post traces "{\"resourceSpans\":[{\"resource\":$resource,\"scopeSpans\":[{\"spans\":[{\"traceId\":\"$redaction_trace_id\",\"spanId\":\"00f067aa0ba902b8\",\"name\":\"$redaction_id\",\"kind\":1,\"startTimeUnixNano\":\"$redaction_now_ns\",\"endTimeUnixNano\":\"$redaction_end_ns\",\"attributes\":[{\"key\":\"__Host-session\",\"value\":{\"stringValue\":\"$canary_session\"}}]}]}]}]}"
+# One body carries every assignment shape the collector must mask plus a header
+# pair. The value after TAIL is a different random string, so a mask that runs past
+# its own line into the next one fails instead of passing as an absence.
+redaction_log_payload="$(python3 - \
+  "$resource" "$redaction_now_ns" "$redaction_id" "$canary_password" "$canary_pct" \
+  "$canary_json" "$canary_json2" "$canary_xml" "$canary_env" "$canary_bearer" \
+  "$canary_tail" "$canary_authorization" "$canary_cookie" "$canary_token" <<'PY'
+import json, sys
+resource = json.loads(sys.argv[1])
+stamp, marker, plain, pct, esc, esc2, xml, env, bearer, tail, auth, cookie, token = sys.argv[2:]
+body = "\n".join([
+    f"{marker} password={plain}",
+    f"password%3D{pct}",
+    '{\\"password\\":\\"' + esc + '\\"}',
+    '{\\\\"password\\\\":\\\\"' + esc2 + '\\\\"}',
+    f"<password>{xml}</password>",
+    f"EVIDGATE__X__SECRET_VALUE={env}",
+    f"Authorization: Bearer {bearer}",
+    f"TAIL{tail}",
+])
+print(json.dumps({"resourceLogs": [{"resource": resource, "scopeLogs": [{"logRecords": [{
+    "timeUnixNano": stamp,
+    "severityText": "INFO",
+    "body": {"stringValue": body},
+    "attributes": [
+        {"key": "authorization", "value": {"stringValue": "Bearer " + auth}},
+        {"key": "cookie", "value": {"stringValue": "sid=" + cookie}},
+        {"key": "note", "value": {"stringValue": "token: " + token}},
+    ],
+}]}]}]}))
+PY
+)"
+[ -n "$redaction_log_payload" ] || fail "could not assemble the log payload"
+post logs "$redaction_log_payload"
+# A structured body: the key that names a credential must be gone from the map, and
+# the marker beside it proves the record arrived.
+post logs "{\"resourceLogs\":[{\"resource\":$resource,\"scopeLogs\":[{\"logRecords\":[{\"timeUnixNano\":\"$redaction_now_ns\",\"severityText\":\"INFO\",\"body\":{\"kvlistValue\":{\"values\":[{\"key\":\"marker\",\"value\":{\"stringValue\":\"$map_marker\"}},{\"key\":\"password\",\"value\":{\"stringValue\":\"$canary_map\"}}]}}}]}]}]}"
+# Span attributes and a span event: a query parameter, a credential-named key and a
+# token inside a string value.
+post traces "{\"resourceSpans\":[{\"resource\":$redaction_resource,\"scopeSpans\":[{\"spans\":[{\"traceId\":\"$redaction_trace_id\",\"spanId\":\"00f067aa0ba902b8\",\"name\":\"$redaction_id\",\"kind\":1,\"startTimeUnixNano\":\"$redaction_now_ns\",\"endTimeUnixNano\":\"$redaction_end_ns\",\"attributes\":[{\"key\":\"__Host-session\",\"value\":{\"stringValue\":\"$canary_session\"}},{\"key\":\"url.full\",\"value\":{\"stringValue\":\"https://h.example/p?access_token=$canary_url&ok=1\"}},{\"key\":\"EVIDGATE__X__SIGNING_KEY\",\"value\":{\"stringValue\":\"$canary_signing\"}}],\"events\":[{\"timeUnixNano\":\"$redaction_now_ns\",\"name\":\"note\",\"attributes\":[{\"key\":\"note\",\"value\":{\"stringValue\":\"token: $canary_event\"}}]}]}]}]}]}"
+# A datapoint with a credential-named key, a secret-shaped value and a benign
+# attribute, on a resource that also carries a credential-named key.
+post metrics "{\"resourceMetrics\":[{\"resource\":$redaction_resource,\"scopeMetrics\":[{\"metrics\":[{\"name\":\"evidgate_smoke_redaction\",\"gauge\":{\"dataPoints\":[{\"asDouble\":1,\"timeUnixNano\":\"$redaction_now_ns\",\"attributes\":[{\"key\":\"run\",\"value\":{\"stringValue\":\"$run_id\"}},{\"key\":\"authorization\",\"value\":{\"stringValue\":\"Bearer $canary_metric_key\"}},{\"key\":\"note\",\"value\":{\"stringValue\":\"password=$canary_metric_value\"}}]}]}}]}]}]}"
 
 # Positive first: absence only means something once the record is queryable, so a
 # slow flush cannot pass for a redacted value.
 await_hit "redaction log record" "$logs/select/logsql/query" --data-urlencode "query=_msg:$redaction_id" "$redaction_id"
 record="$(curl -fsS -G --data-urlencode "query=_msg:$redaction_id" "$logs/select/logsql/query")"
+
+# Masked, not dropped: each shape below has one masked form, so a rule that loses
+# the rest of the line cannot pass for a rule that masks only the value. The TAIL
+# value is separate, so a mask that runs past its own line is caught here.
 case "$record" in
-  *"password=***"*) ok "the log body's password assignment is masked" ;;
-  *) fail "the collector did not mask the log body's password assignment: $record" ;;
+  *"password=***"*) ok "the plain password assignment is masked" ;;
+  *) fail "the collector did not mask the plain password assignment: $record" ;;
+esac
+case "$record" in
+  *"password%3D***"*) ok "the percent-encoded password assignment is masked" ;;
+  *) fail "the collector did not mask the percent-encoded password assignment: $record" ;;
+esac
+case "$record" in
+  *"TAIL$canary_tail"*) ok "the header mask stops at the end of its own line" ;;
+  *) fail "the header mask ran past its line and hid the next one: $record" ;;
 esac
 
 # `*:` searches every field, so a value that survived in any attribute is found;
-# a bare word would only ever look at the body.
-assert_absent_from_logs() { # what, logsql query
+# a bare word would only ever look at the body. The query matches whole words, so
+# each call also substring-checks the fetched record: a canary embedded in a longer
+# word (a percent-encoded pair, for one) cannot pass on tokenisation alone.
+assert_absent_from_logs() { # what, logsql query, fetched record, needle
   local hits
   hits="$(curl -fsS -G --data-urlencode "query=$2" "$logs/select/logsql/query")" \
     || fail "the log store did not answer the query for $1"
   [ -z "$hits" ] || fail "$1 reached the log store: $hits"
+  case "$3" in
+    *"$4"*) fail "$1 reached the fetched record: $3" ;;
+  esac
   ok "$1 is absent from the log store"
 }
-assert_absent_from_logs "the authorization attribute" "*:$canary_authorization"
-assert_absent_from_logs "the cookie attribute" "*:$canary_cookie"
-assert_absent_from_logs "the token assignment in an attribute value" "*:$canary_token"
-assert_absent_from_logs "the password assignment in the log body" "*:$canary_password"
+assert_absent_from_logs "the authorization attribute" "*:$canary_authorization" "$record" "$canary_authorization"
+assert_absent_from_logs "the cookie attribute" "*:$canary_cookie" "$record" "$canary_cookie"
+assert_absent_from_logs "the token assignment in an attribute value" "*:$canary_token" "$record" "$canary_token"
+assert_absent_from_logs "the password assignment in the log body" "*:$canary_password" "$record" "$canary_password"
+assert_absent_from_logs "the percent-encoded password assignment" "*:$canary_pct" "$record" "$canary_pct"
+assert_absent_from_logs "the escaped-JSON password assignment" "*:$canary_json" "$record" "$canary_json"
+assert_absent_from_logs "the twice-escaped JSON password assignment" "*:$canary_json2" "$record" "$canary_json2"
+assert_absent_from_logs "the XML password element" "*:$canary_xml" "$record" "$canary_xml"
+assert_absent_from_logs "the env-style secret assignment" "*:$canary_env" "$record" "$canary_env"
+assert_absent_from_logs "the standalone bearer token" "*:$canary_bearer" "$record" "$canary_bearer"
 
+# The structured body's deleted key is checked on its own record, whose marker is
+# the positive control for the absence check.
+await_hit "structured log body" "$logs/select/logsql/query" --data-urlencode "query=*:$map_marker" "$map_marker"
+map_record="$(curl -fsS -G --data-urlencode "query=*:$map_marker" "$logs/select/logsql/query")"
+assert_absent_from_logs "the password key of a structured body" "*:$canary_map" "$map_record" "$canary_map"
+
+# One stored document at a time; each fetch below follows its own positive control.
+assert_absent_in() { # what, document, needle
+  case "$2" in
+    *"$3"*) fail "$1 reached the store: $3" ;;
+  esac
+  ok "$1 is absent from the stored record"
+}
+assert_key_absent() { # what, document, key name
+  case "$2" in
+    *"\"$3\""*) fail "$1 was not deleted from the stored label set: $3" ;;
+  esac
+  ok "$1 is deleted from the stored label set"
+}
 await_hit "redaction span" "$traces/select/jaeger/api/traces/$redaction_trace_id" "$redaction_id"
 redaction_trace="$(curl -fsS "$traces/select/jaeger/api/traces/$redaction_trace_id")"
+assert_absent_in "the __Host-session attribute" "$redaction_trace" "$canary_session"
+assert_absent_in "the url.full access token" "$redaction_trace" "$canary_url"
+assert_absent_in "the EVIDGATE__X__SIGNING_KEY attribute" "$redaction_trace" "$canary_signing"
+assert_key_absent "the EVIDGATE__X__SIGNING_KEY name" "$redaction_trace" "EVIDGATE__X__SIGNING_KEY"
+assert_absent_in "the span event token" "$redaction_trace" "$canary_event"
+assert_absent_in "the x-api-key resource value" "$redaction_trace" "$canary_resource_key"
 case "$redaction_trace" in
-  *"$canary_session"*) fail "the __Host-session attribute reached the trace store: $redaction_trace" ;;
+  *"ok=1"*) ok "the url.full mask keeps the query beside the token" ;;
+  *) fail "the url.full mask dropped the query beside the token: $redaction_trace" ;;
 esac
-ok "the __Host-session attribute is absent from the trace store"
+
+# Prometheus turns a datapoint attribute into a label and resource attributes into
+# target_info, so both contexts are read back from its own API.
+await_hit_for 90 "redaction metric" "$prom/api/v1/query" \
+  --data-urlencode "query=evidgate_smoke_redaction{run=\"$run_id\"}" "evidgate_smoke_redaction"
+metric_series="$(curl -fsS -G --data-urlencode "match[]=evidgate_smoke_redaction{run=\"$run_id\"}" "$prom/api/v1/series")"
+case "$metric_series" in
+  *"\"run\":\"$run_id\""*) ok "the benign run attribute survives as a label" ;;
+  *) fail "the metric lost its benign run attribute: $metric_series" ;;
+esac
+case "$metric_series" in
+  *"password=***"*) ok "the datapoint's note value is masked" ;;
+  *) fail "the datapoint's note value is not masked: $metric_series" ;;
+esac
+assert_absent_in "the datapoint's authorization value" "$metric_series" "$canary_metric_key"
+assert_absent_in "the datapoint's note value" "$metric_series" "$canary_metric_value"
+assert_key_absent "the datapoint's authorization key" "$metric_series" "authorization"
+await_hit_for 90 "redaction resource" "$prom/api/v1/query" \
+  --data-urlencode "query=target_info{job=\"evg-smoke-redaction-$run_id\"}" "evg-smoke-redaction-$run_id"
+resource_series="$(curl -fsS -G --data-urlencode "match[]=target_info{job=\"evg-smoke-redaction-$run_id\"}" "$prom/api/v1/series")"
+assert_key_absent "the x_api_key resource label" "$resource_series" "x_api_key"
+assert_absent_in "the x-api-key resource value" "$resource_series" "$canary_resource_key"
 echo "observability-smoke: PASS"
