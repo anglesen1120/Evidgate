@@ -56,8 +56,7 @@ internal sealed class GitHubOidcValidator(IOptions<CiAuthOptions> options, IGitH
 
     private readonly CiAuthOptions _options = options.Value;
 
-    private readonly HashSet<string> _denied = new(
-        options.Value.DeniedEventNames.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.Ordinal);
+    private readonly HashSet<string> _allowedEvents = new(CiAuthOptionsValidator.SplitEventNames(options.Value.AllowedEventNames), StringComparer.Ordinal);
 
     /// <summary>Validates <paramref name="token"/>.</summary>
     /// <param name="token">The compact JWT from the <c>Authorization: Bearer</c> header.</param>
@@ -130,14 +129,37 @@ internal sealed class GitHubOidcValidator(IOptions<CiAuthOptions> options, IGitH
             return OidcResult.Fail(OidcFailure.Invalid);
         }
 
-        // event_name is required (a token without it cannot skip the deny check) and is compared ordinally, as GitHub sends it.
-        if (!Text(jwt, "event_name", out var eventName)
-            || _denied.Contains(eventName))
+        // Fail closed: event_name must be one JSON string that is exactly (ordinal, case-sensitive) on the allowlist.
+        if (!IsAllowedEvent(jwt))
         {
             return OidcResult.Fail(OidcFailure.Invalid);
         }
 
         return Extract(jwt) is { } claims ? OidcResult.Ok(claims) : OidcResult.Fail(OidcFailure.Invalid);
+    }
+
+    private bool IsAllowedEvent(JsonWebToken jwt)
+    {
+        // The claim set flattens a one-element array to a string and keeps only the last of duplicate properties, so the
+        // signed payload itself is inspected: exactly one event_name property whose JSON value is a string.
+        try
+        {
+            using var payload = JsonDocument.Parse(Base64UrlEncoder.DecodeBytes(jwt.EncodedPayload));
+            string? eventName = null;
+            var count = 0;
+
+            foreach (var property in payload.RootElement.EnumerateObject().Where(p => p.NameEquals("event_name")))
+            {
+                count++;
+                eventName = property.Value.ValueKind == JsonValueKind.String ? property.Value.GetString() : null;
+            }
+
+            return count == 1 && eventName is not null && _allowedEvents.Contains(eventName);
+        }
+        catch (Exception e) when (e is JsonException or FormatException or InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private static GitHubOidcClaims? Extract(JsonWebToken jwt)
