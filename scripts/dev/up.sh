@@ -39,6 +39,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 . "$SCRIPT_DIR/lib.sh"
 # shellcheck source=scripts/env/lib-bucket.sh
 . "$SCRIPT_DIR/../env/lib-bucket.sh"
+# shellcheck source=scripts/dev/observability.sh
+. "$SCRIPT_DIR/observability.sh"
 
 # The bucket requests run inside the SeaweedFS container with its own curl, so no
 # host S3 client is required and they target the gateway's own port rather than
@@ -392,24 +394,8 @@ export EVIDGATE__WORKER__HEALTHADDRESS
 export EVIDGATE_DB_PORT EVIDGATE_S3_PORT EVIDGATE_WEB_PORT
 export EVIDGATE_S3_ENDPOINT EVIDGATE_S3_BUCKET
 
-# The profile is opt-in: without --observability nothing below applies and the
-# Api and Worker keep exporting nowhere unless .env.dev sets an endpoint.
 if [ "$observability" = true ]; then
-  : "${EVIDGATE_OBS_OTLP_GRPC_PORT:=4317}"
-  : "${EVIDGATE_OBS_OTLP_HTTP_PORT:=4318}"
-  : "${EVIDGATE_OBS_PROMETHEUS_PORT:=9090}"
-  : "${EVIDGATE_OBS_LOGS_PORT:=9428}"
-  : "${EVIDGATE_OBS_TRACES_PORT:=10428}"
-  for obs_port in EVIDGATE_OBS_OTLP_GRPC_PORT EVIDGATE_OBS_OTLP_HTTP_PORT \
-    EVIDGATE_OBS_PROMETHEUS_PORT EVIDGATE_OBS_LOGS_PORT EVIDGATE_OBS_TRACES_PORT; do
-    evg_require_port "$obs_port" "${!obs_port}"
-  done
-  EVIDGATE_OTEL_COLLECTOR_CONFIG="$(<"$EVG_ROOT/infra/observability/otel-collector.yaml")"
-  : "${EVIDGATE__TELEMETRY__OTLPENDPOINT:=http://127.0.0.1:${EVIDGATE_OBS_OTLP_GRPC_PORT}}"
-  export COMPOSE_PROFILES=observability
-  export EVIDGATE_OTEL_COLLECTOR_CONFIG EVIDGATE__TELEMETRY__OTLPENDPOINT
-  export EVIDGATE_OBS_OTLP_GRPC_PORT EVIDGATE_OBS_OTLP_HTTP_PORT
-  export EVIDGATE_OBS_PROMETHEUS_PORT EVIDGATE_OBS_LOGS_PORT EVIDGATE_OBS_TRACES_PORT
+  evg_obs_configure
 fi
 
 if [ "$reset" = true ]; then
@@ -419,25 +405,7 @@ if [ "$reset" = true ]; then
 fi
 
 if [ "$observability" = true ]; then
-  # A taken port under colima silently drops the publish, so the app would ship
-  # telemetry to a foreign listener while the stack reports ready.
-  for pair in "otel-collector:$EVIDGATE_OBS_OTLP_GRPC_PORT:EVIDGATE_OBS_OTLP_GRPC_PORT" \
-    "otel-collector:$EVIDGATE_OBS_OTLP_HTTP_PORT:EVIDGATE_OBS_OTLP_HTTP_PORT" \
-    "prometheus:$EVIDGATE_OBS_PROMETHEUS_PORT:EVIDGATE_OBS_PROMETHEUS_PORT" \
-    "victorialogs:$EVIDGATE_OBS_LOGS_PORT:EVIDGATE_OBS_LOGS_PORT" \
-    "victoriatraces:$EVIDGATE_OBS_TRACES_PORT:EVIDGATE_OBS_TRACES_PORT"; do
-    IFS=: read -r obs_svc obs_num obs_var <<<"$pair"
-    if port_conflict "$obs_svc" "$obs_num"; then
-      die "port $obs_num on 127.0.0.1 is already in use, so $obs_svc cannot be published there.
-     Set $obs_var in .env.dev or stop the process holding the port."
-    fi
-  done
-  # Running hosts keep the environment they started with: restart them so they
-  # pick up the collector endpoint.
-  if evg_host_is_running api || evg_host_is_running worker; then
-    info "restarting the Api and Worker so they export to the collector"
-    evg_stop_hosts
-  fi
+  evg_obs_preflight
 else
   # An inherited profile would start services whose config this path never loads.
   unset COMPOSE_PROFILES
