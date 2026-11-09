@@ -1,0 +1,298 @@
+# Orphan artifact runbook
+
+Status: **10.7.1-T3.1 written (document half only); T3.2 delivery-notification half and the T3.1 staging drill are NOT done, so AC4 is open.**
+
+The drill half of T3.1 — an artifact row made to diverge from its object on staging by a second person, who then repairs it one way with this document and the other with the delivery-notification half (`plans/features/10-operations/10.7.1-operable-by-a-second-person.md:112`) — has **not** been performed. `[OPEN]` (T3.1 drill half; AC4 `...10.7.1-operable-by-a-second-person.md:25`, AC1 `:22`).
+
+Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · ⚠️ unverified · `[INFERENCE]` · `[DECISION]` · `[OPEN]`. Every table, column, state, route, task type and config key below is cited to this worktree's `develop` (`0196af73`), and the full mapping is the [evidence table](#14-evidence-table) in §14.
+
+## 1. Scope, audience and rules
+
+**Purpose.** Recognise an artifact whose row and whose stored bytes have diverged, decide what it is, and act only through a path this build supports. 00 §8.4 defines the artifact state machine and the rule this runbook enforces — "an object that exists without `ready` is never treated as evidence" (`plans/00-overview.md:273-275`) — and 10.7.1 names the retention-sweep/orphan-reconcile trigger and the `pending_upload` TTL check as the operational surface to document (`plans/features/10-operations/10.7.1-operable-by-a-second-person.md:49`).
+
+**Audience.** A second on-call operator who did not write 06.1.2/06.2.3, holding a member session with `artifact:read` for triage, `artifact:write` for the one repair below (`CompleteArtifactUpload.cs:151`), and `project:write` only if a retention setting must move (`SetRetentionPolicy.cs:38`).
+
+**In scope.** The six states of `artifact.state` (`src/Modules/Evidgate.Modules.Evidence/Domain/Artifact.cs:126-161`, CHECK `migrations/0028_evidence_artifact.sql:73`): a row in `pending_upload`/`uploaded` that will never be completed, a `ready` row whose object cannot be proven present, a `scan_state = 'pending'` that no worker will decide (`migrations/0028_evidence_artifact.sql:72`), a `pending_delete` row that nothing deletes, and storage bytes with no row.
+
+**Out of scope.** What a run's verdict should be (`docs/runbooks/stuck-run.md`), generic task triage and replay (`docs/runbooks/dead-letter.md`), breach handling for bytes that were served (`docs/runbooks/breach.md`), and the healing switch (`docs/runbooks/kill-switch.md`).
+
+**Prerequisites.**
+
+- A checkout of the release tag the incident is about; every cite is a line in that tree.
+- The org id, and the artifact id (`GET /v1/artifacts/{a}` — metadata read, `artifact:read`, `GetArtifactMetadata.cs:30`).
+- A database session **as `evidgate_app`** for the read-only queries in §4. As `evidgate_operator` you read **zero** artifact rows: the operator holds a `SELECT` grant on `public.artifact` (`migrations/0028_evidence_artifact.sql:129`) but has no policy on the table, and the migration says so (`:112-115`). That posture is deliberate (`:31-32`).
+- Object-storage read access only if you must confirm a key by hand; the bucket is `EVIDGATE:Object:Bucket` (`src/BuildingBlocks/ObjectStorage/ObjectStorageOptions.cs:20`, `:29`), and its endpoint/region are the same section (`:23`, `:26`).
+
+**Rules.**
+
+1. **Never `UPDATE`/`DELETE` an artifact row by hand.** The app role cannot delete one at all (`migrations/0028_evidence_artifact.sql:128`), and its `UPDATE` is column-scoped to the lifecycle columns (`:127`). A hand write skips the state machine (`Artifact.cs:126-161`), the scan guard (`migrations/0066_evidence_masking_event.sql:92-121`) and the audit row.
+2. **Never delete a stored object by hand.** No route deletes a final key, and the only shipped delete is the staging delete of one artifact (`ArtifactStagingDeleteTask.cs:53`). The platform's own description of the failure mode says a failed commit leaves "the final object for the orphan sweeper (06.4.3)" (`plans/00-overview.md:358`) — and that sweeper does not exist (§2), so no supported way to delete such an object, or to record that it was deleted, is available.
+3. **`complete` is the only repair an operator can invoke**, and it is safe to call twice: a stored outcome answers unchanged (`ArtifactCompletionVerifier.cs:215-223`; handler replay `CompleteArtifactUpload.cs:123-135`). The only other writers of a lifecycle state are background tasks (§3), not operator surfaces.
+4. **Record what you did**: the artifact id, the `X-Request-Id` the response echoes (`src/BuildingBlocks/Observability/Correlation/CorrelationNames.cs:47`), and the audit filter you used in §11. A completion is audited; a stale row left alone is not.
+5. **A row that is not `ready` is not evidence.** Never cite, screenshot or export its bytes as a result, whatever state you find it in — the download route itself refuses every non-`ready` row (`IssueArtifactDownloadUrl.cs:137-141`).
+
+## 2. What "orphan" means here, and what actually ships
+
+00 §8.4 states the transitions and the one rule that governs every case here (`plans/00-overview.md:273-275`); 10.7.1 lists the retention-sweep/orphan-reconcile trigger as the runbook's subject (`plans/features/10-operations/10.7.1-operable-by-a-second-person.md:49`). That trigger is **planned**: 06.4.3 designs the `sweep.scan`/`sweep.org` tasks (`plans/features/06-evidence-artifacts/06.4.3-orphan-sweeper.md:51-54`, `:68-71`), and the code ships neither of them (table below). This runbook therefore separates the two vocabularies and never mixes them:
+
+| Capability | Shipped? | Evidence |
+|---|---|---|
+| Artifact mint, presigned `PUT`, `complete` with HEAD + checksum + copy + re-HEAD | ✅ | `EvidenceEndpoints.cs:42-46`; `ArtifactCompletionVerifier.cs:143-315` |
+| `artifact_secret_scan`, `artifact_staging_delete`, `artifact_parse`, `raw_report_parse` task types | ✅ | `CompleteArtifactUpload.cs:29-49`, enqueued `:332-364` |
+| `pending/` staging bytes removed after 24 h by the bucket lifecycle | ✅ | `infra/README.md:63-80`, rule verified `:94-96` |
+| Retention policy stored per project | ✅ (setting only) | `migrations/0062_evidence_retention_policy.sql:43-60`; `RetentionEndpoints.cs:32-36` |
+| Any artifact retention/deletion job (`pending_delete` → `deleted`) | ❌ | not composed: only two schedules exist, `EvidgateSweeps.cs:99-116` |
+| Orphan-object sweep (`sweep.scan`/`sweep.org`), bucket listing | ❌ | `IObjectStorage` has no list operation (`src/BuildingBlocks/ObjectStorage/IObjectStorage.cs:18-129`) |
+| Stale-upload rejection (`upload_expired`) | ❌ | the literal appears nowhere under `src/` or `contracts/`; `complete` has no expiry branch (`ArtifactCompletionVerifier.cs:231-234`) |
+| `evidgate_sweep_orphans_repaired_total`, `…_open`, `…_pending_delete_backlog` | ❌ | planned only: metric list `plans/features/06-evidence-artifacts/06.4.3-orphan-sweeper.md:70`; alert ACs `06.4.5-deletion-verification.md:25-26` |
+
+Two shipped comments already assume the unshipped job and must not be read as evidence that it exists: `ArtifactSecretRejected` says "the deletion job removes its object" (`Artifact.cs:203-207`) and the freeze read describes "the retention job (06.4.2)" (`migrations/0028_evidence_artifact.sql:88-92`). The row is moved to `pending_delete` and nothing takes it further (`RunArtifactSecretScan.cs:232-235`).
+
+## 3. The shipped lifecycle, and its four holes
+
+`pending_upload` is the only mint state (`Artifact.cs:128-129`). `complete` is the only writer of `ready`, and the writer of the `rejected` a never-verified upload earns (`ArtifactCompletionVerifier.cs:215-223`; `CompleteArtifactUpload.cs:227-228`). A second writer moves an artifact that **is** `ready`: the `artifact_parse` task rejects it when its stored bytes stop being parseable, through the same `MarkRejected` transition (`ParseArtifactTask.cs:301`; `Artifact.cs:302-307`). The secret scan is the only writer of `scan_state` (`RunArtifactSecretScan.cs:230-235`) and the only shipped caller that moves `ready → pending_delete` (`:234`, `Artifact.cs:359-373`).
+
+| Hole | Why it exists | What you see |
+|---|---|---|
+| `uploaded` is never written | no code path writes it, and `complete` accepts it (`ArtifactCompletionVerifier.cs:318-321`) | a row that jumps `pending_upload → ready`, or stays `pending_upload` forever |
+| `rejected` is terminal, and it is reached from two directions | a rejection is a committed 200 carrying the reason (`Artifact.cs:310-315`), and the parse task writes the same state on a `ready` row (`ParseArtifactTask.cs:301`); no `upload_expired` code exists | `pending_upload` rows past 24 h, `ready` rows rejected by a parse, and rejected rows kept forever — the only bound on staging bytes is the bucket lifecycle (`infra/README.md:63-80`) |
+| `ready` is not terminal | the secret scan moves `ready → pending_delete` when the project rejects a secret (`RunArtifactSecretScan.cs:232-235`) and the parse rejects a `ready` row whose bytes no longer parse (`ParseArtifactTask.cs:301`) | a `ready` row that later became `pending_delete`/`rejected`; its object is not deleted by anything (below) |
+| `expires_at` is never set | the column exists (`migrations/0028_evidence_artifact.sql:61`) and only travels through the domain copy (`Artifact.cs:275`, `:294`); no writer assigns it | `expires_at is null` on every row, so a retention-by-expiry job would have no input |
+
+## 4. Detection (all statements read-only)
+
+Set the guard first, then one tenant at a time — the tenant GUC is `evidgate.org_id` (`migrations/0002_foundation_evidgate_schema.sql:30-33`), and `public.artifact` is `FORCE` RLS with a policy per org (`migrations/0028_evidence_artifact.sql:103-110`). The session recipe is [`dead-letter.md` §3.1](dead-letter.md#31-roles-rls-grants-and-the-read-only-guard) (`set session characteristics as transaction read only;` at `docs/runbooks/dead-letter.md:57-62`, tenant block `:66-76`).
+
+```sql
+-- role: evidgate_app, triage session; then per org:
+begin transaction read only;
+select set_config('evidgate.org_id', '<org uuid>', true);
+```
+
+Q1 — rows that are not `ready`, newest first. Every row it returns is one that 00 §8.4's rule forbids treating as evidence (`plans/00-overview.md:273-275`), and it is the artifact-side read an operator needs before any action:
+
+```sql
+select a.id, a.project_id, a.run_id, a.kind, a.state, a.scan_state,
+       a.failure_code, a.created_at, a.updated_at, a.version
+  from public.artifact a
+ where a.state <> 'ready'
+ order by a.created_at desc
+ limit 100;
+```
+
+`state` and `scan_state` are the closed lists at `migrations/0028_evidence_artifact.sql:72-73`; the partial index `artifact_run_idx` covers the `state <> 'deleted'` shape (`:91`).
+
+Q2 — the anti-join an operator actually cares about: rows that never became evidence and are old enough to be past every shipped window:
+
+```sql
+select a.state, count(*) as rows, min(a.created_at) as oldest
+  from public.artifact a
+ where a.state in ('pending_upload', 'uploaded', 'rejected', 'pending_delete')
+ group by a.state;
+```
+
+Q3 — rows whose masking scan was never decided (`scan_state` default is `pending`, `migrations/0028_evidence_artifact.sql:59`):
+
+```sql
+select a.id, a.created_at, a.scan_state, a.sensitivity
+  from public.artifact a
+ where a.state = 'ready' and a.scan_state = 'pending'
+ order by a.created_at
+ limit 100;
+```
+
+This is not cosmetic: `scan_state <> 'clean'` makes the effective sensitivity `sensitive` and gates the bytes (`src/Modules/Evidgate.Modules.Evidence/Application/Artifacts/ArtifactReadModel.cs:30-33`, `:47-51`).
+
+Q4 — the task row behind one artifact, whatever its state. The completion writes one outbox row per artifact and task type with the key `evidence:artifact:<id>:<type>` (`CompleteArtifactUpload.cs:336-361`), and `public.task` carries that key plus its state (`migrations/0008_platform_task_queue.sql:100`, `:103-108`). Nothing indexes `payload`, so scope by key prefix and accept a scan of the ≤ 30 days of rows that exist (retention `EvidgateSweeps.cs:119`):
+
+```sql
+select t.id, t.task_type, t.state, t.attempts, t.max_attempts, t.last_error, t.created_at, t.updated_at
+  from public.task t
+ where t.idempotency_key like 'evidence:artifact:<artifact uuid>:%'
+ order by t.created_at;
+```
+
+Read the id in the result with [`dead-letter.md` §3.2 Q5](dead-letter.md#32-the-statements) if it is `dead_letter` (`docs/runbooks/dead-letter.md:134-143`).
+
+Q5 — the retention setting that would govern the row, if a deletion job existed:
+
+```sql
+select r.artifact_days, r.metadata_days, r.version, r.updated_at
+  from public.retention_policy r
+ where r.org_id = '<org uuid>'
+   and r.project_id = '<project uuid>';
+```
+
+No row means the platform defaults are served, not stored (`migrations/0062_evidence_retention_policy.sql:1-8`): artifact 14 days, metadata 90 by default, both retunable by `EVIDGATE__RETENTION__*` (`src/Modules/Evidgate.Modules.Evidence/Application/Retention/RetentionLimits.cs:20`, `:28`, `:36`, `:40`, `:44`).
+
+Q6 — whether a capture policy would reject a secret-bearing artifact at all (the `reject_on_secret` switch, `migrations/0028_evidence_artifact.sql:140`). Prefer the read route (`GET /v1/projects/{p}/artifact-kind-policy`, `project:read`, `ArtifactKindPolicyEndpoints.cs:32`, `GetCaptureOptions.cs:23`); the SQL is:
+
+```sql
+select kp.kind, kp.capture_enabled, kp.reject_on_secret, kp.default_sensitivity, kp.max_bytes
+  from public.artifact_kind_policy kp
+ where kp.org_id = '<org uuid>' and kp.project_id = '<project uuid>'
+ order by kp.kind;
+```
+
+Q7 — the audit rows that exist for this row (§11):
+
+```sql
+select al.id, al.created_at, al.action, al.actor_type, al.object_type, al.object_id
+  from public.audit_log al
+ where al.object_type = 'artifact'
+   and al.object_id = '<artifact uuid>'
+ order by al.created_at;
+```
+
+`action` is filterable through the API as well (`GET /v1/orgs/{o}/audit?action=…`, `audit:read`, `ListAudit.cs:19-34`; route `AuditEndpoints.cs:42`).
+
+## 5. Scenario A — a `pending_upload` row that will never be completed
+
+**Detect.** Q1/Q2 with `state = 'pending_upload'` and `created_at` older than 24 h; the staging object has then most likely been collected by the bucket lifecycle (`infra/README.md:63-80`, `:94-96`).
+
+**Diagnose.** Read the row (`GET /v1/artifacts/{a}`) and its tasks (Q4). One `evidence:artifact:<id>:secret_scan` key existing means the row was already `ready` once and later moved; **no** such key means the producer never completed it. There is no "expired" marker to find: nothing writes one, and `complete` has no expiry branch (`ArtifactCompletionVerifier.cs:231-234`). Logs do not help here — the completion path emits no log line at all (`grep` finds no `LoggerMessage` in `CompleteArtifactUpload.cs` or `ArtifactCompletionVerifier.cs`).
+
+**Act.** Re-issue `complete` once, as the same kind of principal:
+
+```console
+POST $API/v1/artifacts/$ARTIFACT/complete
+Idempotency-Key: <new key>
+X-Evidgate-Org: $ORG
+```
+
+Rules that decide the outcome: only `pending_upload`/`uploaded` are completable (`ArtifactCompletionVerifier.cs:318-321`); the staging key is derived, never read from the row (`:258-259`); a missing staging object falls through to the final key, and a missing final key is a **committed** 200 — the handler returns `Result.Success(ArtifactCompletionVerdict.Reject(ArtifactFailureCode.ObjectMissing))` (`:306-311`), and a rejection is "a committed 200, never an error response" (`Domain/Artifact.cs:164-167`); a stored outcome replays unchanged (`:215-223`). A service principal is bound to the artifact's run and gets the same 404 as an unknown id when the CI reference differs (`:196-209`).
+
+**Verify.** `GET /v1/artifacts/{a}` shows `state` `ready` (object found and re-verified at the final key, `:283-300`) or `rejected` + `object_missing`; the audit chain gained one `artifact.complete` row (§11). A second identical call must answer the identical body (AC5 shape, `CompleteArtifactUpload.cs:123-127`).
+
+**Rollback.** None exists and none is needed: `rejected` is terminal (`Artifact.cs:310-315`), and `ready` is not reversible either — the operator surface has no transition back to `pending_upload`, and the row can only move on (`ready → pending_delete` from a secret rejection, `ready → rejected` from a parse verdict, §3). Record it, do not try to reverse it; a producer that needs a new attempt mints a new artifact.
+
+## 6. Scenario B — a `ready` row whose object you cannot prove present
+
+**Detect.** A consumer reports a storage 404 on a presigned `GET` for a row whose state is `ready`. **Nothing in this build checks object presence for a `ready` row**: `complete` returns the stored outcome before any storage call (`ArtifactCompletionVerifier.cs:215-218`), and the download route presigns without a HEAD (`IssueArtifactDownloadUrl.cs:137-141` presigns whatever the gate returned).
+
+**Diagnose.** Q4 shows whether `evidence:artifact:<id>:staging_delete` ran (it did, by design, at completion) and nothing else deletes final keys — no route, no handler. So the default reading of a 404 on a `ready` row is **storage-side loss or a bucket/misconfiguration**, not a lifecycle event. [INFERENCE] — no shipped query distinguishes the two.
+
+**Act.** Do **not** re-`complete` to "refresh" it, and do not delete or rewrite the row: there is no shipped verdict for "ready but absent" (`object_missing` is only produced *before* `ready`, `ArtifactCompletionVerifier.cs:304-311`). Hand off with the artifact id, `object_key`, the consumer's timestamp and request id, and the bucket verified by `scripts/env/bootstrap-bucket.sh <env> verify` (`infra/README.md:82-103`). The reconciling sweep is `[OPEN]` with receiver **06.4.3-T1** (`plans/features/06-evidence-artifacts/06.4.3-orphan-sweeper.md:60`, `:24-26`).
+
+**Verify / rollback.** Nothing was changed, so there is nothing to verify or roll back. The alert that would have caught it earlier is planned, not emitted: `[OPEN]` **06.4.5-T2** (`evidgate_sweep_orphans_open`, `plans/features/06-evidence-artifacts/06.4.5-deletion-verification.md:26`).
+
+## 7. Scenario C — a `scan_state = 'pending'` that no worker will decide
+
+**Detect.** Q3, plus Q4 filtered to `artifact_secret_scan` (`CompleteArtifactUpload.cs:32`). A `dead_letter` row there is the cause; a `queued` row that never moves means no worker consumes the type.
+
+**Diagnose.** The handler declines work in three named ways and logs each: `absent` (row gone), `already_scanned`, `not_ready` — event **2450** with the reason (`RunArtifactSecretScan.cs:146-168`, `:326-330`), and event **2451** when it decides (`:331-334`). A replayed attempt that finds the row decided writes nothing (`:203-211`, `:265-288`). The task is type `artifact_secret_scan` on the default queue (`TasksOptions.cs:74-81`).
+
+**Act.** There is **no operator path to a scan today**: the only replay route is the dead-letter one, and its gate denies every real caller until 02.x authentication lands (`docs/runbooks/dead-letter.md:158-173`, `OperatorGate.cs:30-33`). So: keep the row, escalate with the task id and `last_error`, and expect the artifact to stay `pending` — which correctly keeps its bytes gated for anyone without `artifact:read_sensitive` (`ArtifactReadModel.cs:30-33`, `:47-51`). If the project's Q6 shows `reject_on_secret = true`, a later decision moves the row to `pending_delete` with `failure_code = 'secret_rejected'` (`Artifact.cs:203-207`; `RunArtifactSecretScan.cs:232-235`).
+
+**Verify.** `scan_state` moves to `clean`/`flagged` (`migrations/0066_evidence_masking_event.sql:31-35`) and a decided state never changes again (trigger `:92-121`), so a second decision is impossible — this is the one state you can neither redo nor undo.
+
+**Audit.** No audit row exists for a scan. Masking findings are events, not audit: `public.masking_event`, one row per artifact and class, `action` `flagged`/`rejected` (`migrations/0066_evidence_masking_event.sql:45-61`).
+
+## 8. Scenario D — a `pending_delete` row that nothing deletes
+
+**Detect.** Q1/Q2 with `state = 'pending_delete'`, always with `failure_code = 'secret_rejected'` today: the domain transition has exactly one shipped caller, the secret scan that the project's `reject_on_secret` armed (`RunArtifactSecretScan.cs:232-235`); the domain doc names the planned retention sweep as its other intended caller (`Artifact.cs:359-362`), which does not exist (§9). Its bytes are still in the bucket: no shipped handler deletes a final key.
+
+**Diagnose.** Q4 will show no deletion task, because **none exists** — the only evidence task types are the four in §2, so a missing task row is the expected result, not the anomaly. A reader of the same row gets 409, whatever permission it holds (`IssueArtifactDownloadUrl.cs:123-128`), so the bytes are not servable meanwhile.
+
+**Act.** Do not hand-delete the object and do not hand-update the row. Both are unsupported and unaudited; the app role cannot delete the row anyway (`migrations/0028_evidence_artifact.sql:125-130`). Escalate as `[OPEN]` with receiver **06.4.2-T1** (delete + verify job) and cite the exact counts from Q2. Retention settings (`PUT /v1/projects/{p}/retention`, `project:write`, `RetentionEndpoints.cs:36`) change what a future job will do; they delete nothing today, and `expires_at` is null on every row (§3), so even a retention job built on expiry would select nothing.
+
+**Verify / rollback.** Nothing changed. Record the row ids; they are the input the 06.4.x job will need.
+
+## 9. Scenario E — "the retention sweep failed"
+
+**Detect.** It cannot fail, because it does not run. Confirm from the schedule registry rather than from absence of logs: `EvidgateSweeps` defines exactly two schedules (`EvidgateSweeps.cs:99-116`, types `:20-29`), both of which act on queue/idempotency rows — `task.sweep` deletes terminal `public.task` rows after 30 days (`EvidgateSweeps.cs:119`; `SweepTaskHandlers.cs:26-38`) and `idempotency.purge` deletes expired idempotency records. No scheduled task touches `artifact` or object storage.
+
+**Diagnose.** If a project's `artifact_days` is set (Q5) and nobody sees deletion, the correct answer is "not implemented", not "misconfigured". A zero-row Q1 with old `ready` rows is exactly that state.
+
+**Act.** Record it as `[OPEN]` **06.4.2-T1** and **06.4.3-T1**; do not emulate the job with ad-hoc `DELETE`s. Evidence must not be destroyed by hand: the audit chain and the run's verdict reference the row, and the app role's grants exist to make this impossible (`migrations/0028_evidence_artifact.sql:125-130`).
+
+**Verify.** None; nothing ran.
+
+## 10. Scenario F — objects with no row (the unobservable direction)
+
+**Detect.** Not possible with shipped tooling. The seam has `PresignPut`/`PresignGet`, `HeadAsync`, `ReadPrefixAsync` (a ranged GET of one object), `GetAsync`, `CopyAsync` and `DeleteAsync` — **no bucket listing** (`src/BuildingBlocks/ObjectStorage/IObjectStorage.cs:18-129`). Listing is exactly what 06.4.3 needs — `IObjectStore.ListObjects` by prefix, `pending/<org>/` and `org/<org>/`, paginated at 1000 keys (`plans/features/06-evidence-artifacts/06.4.3-orphan-sweeper.md:68-71`) — and it is not built.
+
+**Diagnose.** Two leftovers are known by design: (1) a rejected or uncompleted upload's staging object, collected by the 24 h lifecycle (`infra/README.md:63-80`), which needs no action; (2) a final-key object written by a copy whose commit failed — `complete` re-verifies at the final key and rejects on mismatch, but a crash between copy and commit leaves the object (`ArtifactCompletionVerifier.cs:281-300`). The next `complete` of that artifact adopts it (`:304-315`), so it is only orphaned if no completion follows.
+
+**Act.** None available. Mark `[OPEN]` **06.4.3-T1** (sweep, grace ≥ 48 h, audited object delete). Never "clean up" a prefix by hand: no shipped audit row can record it, and a wrong prefix deletes evidence.
+
+**Verify / rollback.** None; nothing was done.
+
+## 11. Audit, and what is not recorded
+
+| Action you take | Audit row | Evidence |
+|---|---|---|
+| `POST /v1/artifacts/{a}/complete` (any committed outcome, `ready` or `rejected`) | `artifact.complete`, object `artifact`/`<id>` | `[AuditedAction("artifact.complete")]` `CompleteArtifactUpload.cs:150`; taxonomy row `docs/security/audit-taxonomy.md:105` |
+| Mint / upload-url | `artifact.mint` | `CreateArtifactRecord.cs:84`; `RequestArtifactUploadUrl.cs:122`; taxonomy `:104` |
+| `PUT /v1/projects/{p}/retention` | `project.retention.set` | `SetRetentionPolicy.cs:37` — **not** listed in `docs/security/audit-taxonomy.md`, whose table carries `artifact.mint`/`artifact.complete` only (`:104-105`) `[OPEN]` (taxonomy update) |
+| A refused sensitive download | `artifact.download_denied`, metadata `outcome=sensitive_forbidden`, `run_id` | `IssueArtifactDownloadUrl.cs:52`, `:150-174`; also absent from the taxonomy table `[OPEN]` |
+| Staging delete task | none — the task row is the record | `ArtifactStagingDeleteTask.cs:21-23` |
+| Secret scan decision | none (events instead, §7) | `RunArtifactSecretScan.cs:213-235` |
+| Any orphan repair by a sweep | none — the sweeps do not exist | `[OPEN]` **06.4.3-T2** (`artifact.swept_orphan`, `06.4.3-orphan-sweeper.md:24-26` AC2/AC5) |
+
+Read the trail either through the API (`GET /v1/orgs/{o}/audit?action=artifact.complete`, `audit:read`) or Q7. The audit row is written by the pipeline for the committed command — "the pipeline writes no audit entry for a failing command and rolls the tenant transaction back" (`IssueArtifactDownloadUrl.cs:145-148`) — so a `complete` that returns 4xx writes none.
+
+## 12. Known gaps (each with its receiver)
+
+| Gap | Consequence for this runbook | Receiver |
+|---|---|---|
+| No orphan sweep, no bucket listing, no audited object delete | scenario F is unobservable; scenario B cannot be confirmed | **06.4.3-T1/T2** |
+| No stale-upload rejection, no `upload_expired` code, no upload-window setting | `pending_upload` rows are only ever closed by a human calling `complete` (§5) | **06.4.3-T1** |
+| No artifact retention/deletion job; `expires_at` never written | `pending_delete` never becomes `deleted`; retention is a stored promise only | **06.4.2-T1** |
+| Operator routes deny every caller (`DenyAllOperatorGate`) | a dead-lettered `artifact_secret_scan`/`artifact_staging_delete` cannot be replayed over HTTP | **02.x** (operator authentication), as recorded in `docs/runbooks/dead-letter.md:173` |
+| No artifact-storage metrics; the only queue metrics are two untagged counters | no alert distinguishes "upload never completed" from "queue busy" | **06.4.5-T2**; metric names `TaskQueueMetrics.cs:27`, `:41` |
+| No artifact-side alert rule is present in this tree, and no reconciler exists behind one | nothing pages for an upload that never completed or a row whose object is gone; the queue counters are the only shipped signal | **06.4.5-T2** (rules are planned: `plans/features/06-evidence-artifacts/06.4.5-deletion-verification.md:25-26`) |
+| Audit taxonomy lacks `artifact.download_denied` and `project.retention.set` | §11 cites code, not the taxonomy | taxonomy owner, `[OPEN]` |
+| No staging drill (AC4) | the document is grounded, the drill is not run | **10.7.1-T3.1 drill half** |
+
+## 13. Related runbooks
+
+- [`dead-letter.md`](dead-letter.md) — classification, Q5 by task id, and the replay route that is denied today.
+- [`stuck-run.md`](stuck-run.md) — the run-side half: what "stuck" means and when a run may be reconciled.
+- [`telemetry.md`](telemetry.md) — resource attributes, sampling and the app-side redaction list, including what is not shipped.
+- [`environments.md`](environments.md) — which host and bucket an operator is looking at.
+- [`breach.md`](breach.md) — when bytes may have been served that should not have been.
+
+## 14. Evidence table
+
+| # | Claim | Cite |
+|---|---|---|
+| 1 | Six artifact states, their CHECK, and `pending_upload` as the only mint state | `migrations/0028_evidence_artifact.sql:73`; `Artifact.cs:126-161` |
+| 2 | `scan_state` closed list, default `pending` | `migrations/0028_evidence_artifact.sql:59`, `:72` |
+| 3 | `expires_at` exists; no writer assigns it | `migrations/0028_evidence_artifact.sql:61`; `Artifact.cs:275`, `:294` |
+| 4 | `public.artifact` is FORCE RLS, per-org policy, no operator policy | `migrations/0028_evidence_artifact.sql:103-115` |
+| 5 | App role: no DELETE, column-scoped UPDATE; operator has SELECT only | `migrations/0028_evidence_artifact.sql:125-130` |
+| 6 | Tenant GUC helper | `migrations/0002_foundation_evidgate_schema.sql:30-33` |
+| 7 | Artifact routes: upload-url, complete, metadata, download-url | `src/Modules/Evidgate.Modules.Evidence/Endpoints/EvidenceEndpoints.cs:42-58` |
+| 8 | `complete` requires `artifact:write` and is audited | `CompleteArtifactUpload.cs:150-151` |
+| 9 | Completable states are `pending_upload`/`uploaded` only; no expiry branch | `ArtifactCompletionVerifier.cs:231-234`, `:318-321` |
+| 10 | Stored outcome replays unchanged; project-deleting guard | `ArtifactCompletionVerifier.cs:215-228` |
+| 11 | Staging HEAD → checksum/size → copy → re-HEAD; missing object is a committed 200 rejection | `ArtifactCompletionVerifier.cs:258-315` |
+| 12 | CI-run binding for a service principal | `ArtifactCompletionVerifier.cs:196-209` |
+| 13 | Completion enqueues scan + staging delete (+ parse for `raw_report`) | `CompleteArtifactUpload.cs:332-364` |
+| 13a | `complete` writes both outcomes: `MarkReady` or `MarkRejected` | `CompleteArtifactUpload.cs:227-228` |
+| 13b | `rejected` is also written from `ready` by the parse task (same `MarkRejected`) | `ParseArtifactTask.cs:301`; `Artifact.cs:302-315` |
+| 13c | `ready → pending_delete` exists and refuses every other source state | `Artifact.cs:359-373`; caller `RunArtifactSecretScan.cs:232-235` |
+| 14 | The four evidence task types | `CompleteArtifactUpload.cs:29-49` |
+| 15 | Only two schedules exist; 30-day terminal retention | `EvidgateSweeps.cs:99-116`, `:119`; delete SQL `SweepTaskHandlers.cs:26-38` |
+| 16 | Secret-scan declines, decisions, log events 2450/2451 | `RunArtifactSecretScan.cs:146-168`, `:203-211`, `:230-235`, `:320-334` |
+| 17 | Scan guard: decided state cannot change | `migrations/0066_evidence_masking_event.sql:31-35`, `:92-121` |
+| 18 | `masking_event` shape and action values | `migrations/0066_evidence_masking_event.sql:45-61` |
+| 19 | Effective sensitivity gates bytes when scan is not clean | `ArtifactReadModel.cs:30-33`, `:47-51` |
+| 20 | Download gate: 409 for `pending_delete`/`deleted`, 409 for non-`ready` | `IssueArtifactDownloadUrl.cs:123-141` |
+| 21 | Retention policy table and upsert key; app cannot DELETE | `migrations/0062_evidence_retention_policy.sql:43-60` |
+| 22 | Retention route permissions and defaults | `RetentionEndpoints.cs:32-36`; `RetentionLimits.cs:20-44` |
+| 23 | Kind policy carries `reject_on_secret`; read route | `migrations/0028_evidence_artifact.sql:140`; `ArtifactKindPolicyEndpoints.cs:32` |
+| 24 | Object storage options and bucket key | `ObjectStorageOptions.cs:20-35` |
+| 25 | No bucket listing in the storage seam | `IObjectStorage.cs:18-129` |
+| 26 | 24 h `pending/` lifecycle, verified by bootstrap `verify` | `infra/README.md:63-80`, `:94-96` |
+| 27 | Task columns and state vocabulary; `idempotency_key` | `migrations/0008_platform_task_queue.sql:94-129` |
+| 28 | Dead-letter log events 2306/2320, lease event 2350 | `TaskConsumer.Logging.cs:67-71`; `LoggingTaskAlertSink.cs:42-52`; `TaskClaimer.cs:287-291` |
+| 29 | Operator replay exists but denies every caller today | `docs/runbooks/dead-letter.md:158-173` |
+| 30 | Only two queue metrics, untagged | `TaskQueueMetrics.cs:27`, `:41` |
+| 31 | No artifact-side alert rule ships in this tree; the only queue counters are untagged | `TaskQueueMetrics.cs:27`, `:41` (no artifact rule file under `observability/`) |
+| 32 | 00 §8.4 defines the state machine and the "never evidence" rule (single paragraph, no reconciler) | `plans/00-overview.md:273-275`; `plans/features/10-operations/10.7.1-operable-by-a-second-person.md:49` |
+| 33 | Sweeper design (states, grace, tasks, metrics) is planned | `plans/features/06-evidence-artifacts/06.4.3-orphan-sweeper.md:51-54`, `:58-62`, `:68-71` |
+| 34 | Orphan/backlog alert rules are planned | `plans/features/06-evidence-artifacts/06.4.5-deletion-verification.md:25-26`, `:31` |
+| 35 | Audit taxonomy rows for `artifact.mint`/`artifact.complete` only | `docs/security/audit-taxonomy.md:104-105` |
+| 36 | Task file this runbook satisfies; drill open | `plans/features/10-operations/10.7.1-operable-by-a-second-person.md:112`, `:25`, `:86` |
