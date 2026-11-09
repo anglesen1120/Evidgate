@@ -42,8 +42,15 @@ public sealed class DefinerExecuteScopeTests
             database,
             "select case when a.grantee = 0 then 'public' else a.grantee::regrole::text end "
             + "from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a "
-            + $"where p.oid = '{signature}'::regprocedure and a.privilege_type = 'EXECUTE' and not a.is_grantable order by 1");
+            + $"where p.oid = '{signature}'::regprocedure and a.privilege_type = 'EXECUTE' order by 1");
         grantees.Order(StringComparer.Ordinal).ShouldBe(new[] { "evidgate_owner", intended }.Order(StringComparer.Ordinal), signature);
+
+        // No grantee may pass EXECUTE on: a grant option widens the list without changing who is named above.
+        (await _fixture.ScalarAsync<long>(
+            database,
+            "select count(*) from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a "
+            + $"where p.oid = '{signature}'::regprocedure and a.privilege_type = 'EXECUTE' and a.is_grantable"))
+            .ShouldBe(0, $"{signature} must carry no grant option");
 
         foreach (var role in Roles)
         {
