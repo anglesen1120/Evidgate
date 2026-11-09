@@ -107,8 +107,12 @@ public sealed class EvidenceCreateArtifactRecordQaTests
         _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.artifact where org_id = '{world.Org:D}'");
 
     /// <summary>One committed run row for <paramref name="org"/> (0031's composite key needs it on every write).</summary>
-    private async Task<Guid> CreateRunAsync(World world, Guid org) =>
-        await RunRowSeeder.SeedRunAsync(_fixture, world.Database, org);
+    private async Task<Guid> CreateRunAsync(World world, Guid org)
+    {
+        var runId = await RunRowSeeder.SeedRunAsync(_fixture, world.Database, org);
+        await RunRowSeeder.PlanExecutionAsync(_fixture, world.Database, org, runId, ExecutionKey);
+        return runId;
+    }
 
     private Task<string> ColumnAsync(World world, Guid artifactId, string column) =>
         _fixture.ScalarAsync<string>(world.Database, $"select {column} from public.artifact where id = '{artifactId}'");

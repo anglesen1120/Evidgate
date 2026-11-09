@@ -99,8 +99,12 @@ public sealed class EvidenceCreateArtifactRecordTests
         await _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.artifact where org_id = '{world.Org}'");
 
     /// <summary>One committed run row for <paramref name="world"/>'s org, so 0031's composite key is satisfied.</summary>
-    private async Task<Guid> CreateRunAsync(World world) =>
-        await RunRowSeeder.SeedRunAsync(_fixture, world.Database, world.Org);
+    private async Task<Guid> CreateRunAsync(World world)
+    {
+        var runId = await RunRowSeeder.SeedRunAsync(_fixture, world.Database, world.Org);
+        await RunRowSeeder.PlanExecutionAsync(_fixture, world.Database, world.Org, runId, ExecutionKey);
+        return runId;
+    }
 
     // ------------------------------------------------------------------ AC1: the client key is refused
 
@@ -270,5 +274,21 @@ public sealed class EvidenceCreateArtifactRecordTests
         // The same run still mints for its own project.
         (await MintAsync(world, runId)).IsSuccess.ShouldBeTrue();
         (await RowsAsync(world)).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Mint_ForAnUnplannedExecutionKey_IsRefusedAndWritesNoRow()
+    {
+        await using var world = await StartAsync();
+        var runId = await CreateRunAsync(world);
+
+        var result = await MintAsync(world, runId, executionKey: new string('d', 64));
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(ApiErrorCode.UnknownExecutionKey);
+        (await RowsAsync(world)).ShouldBe(0);
+
+        // The planned key on the same run still mints, so the refusal above is the key and not the seed.
+        (await MintAsync(world, runId)).IsSuccess.ShouldBeTrue();
     }
 }
