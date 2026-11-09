@@ -211,13 +211,17 @@ public sealed class LastAdminTests : CatalogueTestBase
             {
                 raced.Count(response => response.StatusCode == HttpStatusCode.NoContent).ShouldBe(
                     1, round + ": exactly one mutation may win the guard's row lock");
-                raced.Count(response => response.StatusCode == HttpStatusCode.Conflict).ShouldBe(
-                    1, round + ": the loser must be refused, not silently dropped");
 
-                var refused = raced.Single(response => response.StatusCode == HttpStatusCode.Conflict);
-                (await refused.Content.ReadFromJsonAsync<JsonElement>(Token))
-                    .GetProperty("error").GetProperty("code").GetString()
-                    .ShouldBe("last_admin", round);
+                var refused = raced.Single(response => response.StatusCode != HttpStatusCode.NoContent);
+                (refused.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.Forbidden).ShouldBeTrue(
+                    round + ": the loser must be refused, not silently dropped");
+
+                // The loser is refused by the last-admin guard (409) when its own admin row is still the
+                // target, and by the second rank comparison (403) when the winner's commit removed the
+                // caller's own admin row first. Either refusal keeps the org's admin.
+                var code = (await refused.Content.ReadFromJsonAsync<JsonElement>(Token))
+                    .GetProperty("error").GetProperty("code").GetString();
+                (code is "last_admin" or "forbidden").ShouldBeTrue(round + ": refused as last_admin or forbidden, got " + code);
 
                 (await ActiveAdminCountAsync(org)).ShouldBe(
                     1, round + ": the org keeps at least one active tenant_admin (AC4)");
