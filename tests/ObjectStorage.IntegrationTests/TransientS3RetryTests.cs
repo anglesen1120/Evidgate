@@ -75,6 +75,7 @@ public sealed class TransientS3RetryTests
 
     [Theory]
     [InlineData(HttpStatusCode.BadRequest)]
+    [InlineData(HttpStatusCode.Unauthorized)]
     [InlineData(HttpStatusCode.Forbidden)]
     [InlineData(HttpStatusCode.NotFound)]
     public async Task A4xxAnswer_IsRethrownAtOnce_WithoutRetry(HttpStatusCode status)
@@ -93,8 +94,74 @@ public sealed class TransientS3RetryTests
         failure.StatusCode.ShouldBe(status);
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    public async Task AStatusBearingTransportFailure_In4xx_IsRethrownAtOnce(HttpStatusCode status)
+    {
+        var calls = 0;
+
+        await Should.ThrowAsync<HttpRequestException>(() => TransientS3Retry.RunAsync(
+            _ =>
+            {
+                calls++;
+                return Task.FromException(new HttpRequestException("answer", null, status));
+            },
+            Fast));
+
+        calls.ShouldBe(1);
+    }
+
     [Fact]
-    public async Task ACancelledCaller_IsNotRetriedAway()
+    public async Task AStatusBearingTransportFailure_In5xx_IsRetried()
+    {
+        var calls = 0;
+
+        await TransientS3Retry.RunAsync(
+            _ =>
+            {
+                calls++;
+                return calls == 1
+                    ? Task.FromException(new HttpRequestException("answer", null, HttpStatusCode.ServiceUnavailable))
+                    : Task.CompletedTask;
+            },
+            Fast);
+
+        calls.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task ASpentBudget_StopsBeforeTheCap_WithoutSleepingPastIt()
+    {
+        var options = Fast with { Budget = TimeSpan.FromMilliseconds(300), Delay = TimeSpan.FromSeconds(30), MaxDelay = TimeSpan.FromSeconds(30), MaxAttempts = 100 };
+        var started = DateTime.UtcNow;
+
+        var failure = await Should.ThrowAsync<InvalidOperationException>(() => TransientS3Retry.RunAsync(
+            _ => Task.FromException(Answer(HttpStatusCode.InternalServerError)),
+            options));
+
+        (DateTime.UtcNow - started).ShouldBeLessThan(TimeSpan.FromSeconds(5));
+        failure.InnerException.ShouldBeOfType<AmazonS3Exception>();
+    }
+
+    [Fact]
+    public async Task AZeroBudget_RunsNoAttempt()
+    {
+        var calls = 0;
+
+        await Should.ThrowAsync<InvalidOperationException>(() => TransientS3Retry.RunAsync(
+            _ =>
+            {
+                calls++;
+                return Task.CompletedTask;
+            },
+            Fast with { Budget = TimeSpan.Zero }));
+
+        calls.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task AStepCancellation_ThatIsNotTheAttemptTimeout_IsNotRetriedAway()
     {
         var calls = 0;
 

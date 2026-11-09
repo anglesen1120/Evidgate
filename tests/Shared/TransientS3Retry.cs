@@ -86,8 +86,14 @@ public static class TransientS3Retry
                 lastError = exception;
             }
 
-            await Task.Delay(delay);
-            delay = delay + delay > options.MaxDelay ? options.MaxDelay : delay + delay;
+            // No pause after the last allowed attempt, and never past the budget.
+            var pause = TimeSpan.FromTicks(Math.Min(delay.Ticks, (deadline - DateTime.UtcNow).Ticks));
+            if (attemptNumber < options.MaxAttempts && pause > TimeSpan.Zero)
+            {
+                await Task.Delay(pause);
+            }
+
+            delay = TimeSpan.FromTicks(Math.Min(delay.Ticks, options.MaxDelay.Ticks / 2) * 2);
         }
     }
 
@@ -104,6 +110,8 @@ public static class TransientS3Retry
             OperationCanceledException => attemptTimedOut,
             AmazonServiceException service => service.StatusCode == HttpStatusCode.RequestTimeout
                 || (int)service.StatusCode >= 500,
+            // A status-bearing HttpRequestException follows the same 408/5xx rule as an S3 answer.
+            HttpRequestException { StatusCode: { } status } => status == HttpStatusCode.RequestTimeout || (int)status >= 500,
             HttpRequestException or IOException or WebException => true,
             _ => false,
         };
