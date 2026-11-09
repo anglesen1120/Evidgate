@@ -4,7 +4,7 @@ Legend: ✅ verified with link · ⚠️ unverified · `[INFERENCE]` · `[DECISI
 
 ## Status
 
-Accepted (2026-11-09, by the coordinator on the owner's delegation; the owner may override)
+accepted (2026-11-09, by the coordinator on the owner's delegation; the owner may override)
 
 ## Date
 
