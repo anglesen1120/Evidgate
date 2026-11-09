@@ -288,7 +288,7 @@ is written by the tenant-scope primitive, never from request input.
   (`tests/Shared/RespawnCheckpoint.cs` truncates every table it finds and seeds
   nothing here, which is correct for an append-only audit table).
 - There is exactly one writer: `evidgate.record_sweep_audit`, a `SECURITY
-  DEFINER` function owned by the migration role with a pinned empty
+DEFINER` function owned by the migration role with a pinned empty
   `search_path`. It stamps `actor = 'evidgate_worker_sched'` itself and returns
   the new row's id; `evidgate_worker_sched` holds EXECUTE on it and no table
   privilege, `evidgate_app` holds nothing and has no policy, and
@@ -302,8 +302,9 @@ is written by the tenant-scope primitive, never from request input.
   its own transaction) and the audit row is written after the loop ends, so a
   hard process kill between a committed batch and that write leaves the removed
   rows unaudited — no in-process path can write that row. Failure and
-  cancellation inside the handler are covered: the recovery write records what
-  the fire had already removed, on a fresh connection within 5 seconds.
+  cancellation inside the handler are covered on a best-effort basis: the recovery
+  write records what the fire had already removed, on a fresh connection within
+  5 seconds, and is only logged if that write itself fails.
 - Rollback is recorded in the file header. Dropping the table loses the sweep
   history only; no tenant row references it.
 
