@@ -210,9 +210,18 @@ export const ApiTokensStore = signalStore(
         }
       }
     },
-    // The navigation a Next started has landed, failed or been overtaken: the URL leads again.
+    // The navigation a Next started has landed, failed or been overtaken: the URL leads again. A
+    // Next that never reached the URL (a guard refused it) hands the page back to the cursor the
+    // URL still names, so nothing is left to write and the page does not re-ask for the refused one.
     settleMove(): void {
+      const held = store.move.held;
       store.move.held = undefined;
+      if (held === undefined || store.cursor() !== held) return;
+      // A cursor names a page of one project's list: a URL that names another project (the user
+      // switched while the refused Next was open) owes this scope no cursor.
+      const url = store.query?.();
+      const sameProject = (url?.get('project') ?? null) === (store.scope()?.project ?? null);
+      store.cursor.set(sameProject ? (url?.get('cursor') ?? undefined) : undefined);
     },
     reload(): void {
       store.pageResource.reload();
