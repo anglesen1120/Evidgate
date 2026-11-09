@@ -1,17 +1,17 @@
 # Evidgate — delivery status
 
-Updated 2026-11-08. Source of truth for tasks: `plans/01`–`13` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
+Updated 2026-11-09. Source of truth for tasks: `plans/01`–`13` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
 
 ## 1. Snapshot
 
 ### Resume here
-- Develop: `f317114b` (#648, S312 close-out; recount base). Migrations `0001`–`0087` are contiguous; highest is `0087_usage_ledger_issued_period_guard.sql`, next free `0088`; 08.5.1-T1.1/T1.2 merged (#306), T1 stays partial (T1.3–T1.7 open). Closed owner-review rows live in `docs/phase-review-archive.md` (a row moves there verbatim in the commit that closes it).
-- Open PRs: lane PRs of S315/S316/S317 plus dependabot PRs (not lanes).
+- Develop: `d000cdb9` (#688, S335 close-out; recount base). Migrations `0001`–`0089` are contiguous; highest is `0089_identity_ci_token_purge_acl.sql`, next free `0090` (reserved by the open S336); 08.5.1-T1.1/T1.2 merged (#306), T1 stays partial (T1.3–T1.7 open). Closed owner-review rows live in `docs/phase-review-archive.md` (a row moves there verbatim in the commit that closes it).
+- Open PRs: lane PRs of S334/S336/S337 plus dependabot PRs (not lanes).
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a lane whose diff `python3 scripts/gate_scope.py` classifies `docs` or `no-dotnet` runs phase 1 (that tier's stages) + `npm run e2e -w apps/web` when `apps/web` changed, and never takes the Docker gate lock; a `full` tier needs phase 2 and the lock (`.omp/coordinator/PROJECT.md §Gate`).
-- Lanes in flight (2026-11-08): S315 TESTHOST-STALL, S316 CAPTURE-CAP-RUN, S317 STATUS-RECOUNT (this recount); earlier lanes are merged and closed out.
-- Fully landed on develop (recount S317 through #648, `f317114b`): 236/660 tasks (≈35.8 %); 237.0/706.75 raw person-days (≈33.5 %); remaining 424 tasks / 469.75 d. Via merged PRs: 209 tasks / 212.0 d; the other 27 tasks / 25.0 d are direct commits on develop. Method (unchanged from S189): task ranges in merged PR bodies, close-out rows and plan Notes expanded against plan_graph task ids; a parent counts only when all its sub-rows landed. The S317 recount adds 1 task / 0.5 d after the S299 recount of #612 (02.3.2-T3, #628; 11.2.1-T7 of #617 was already in the S299 figure; every other PR #613–#648 is hardening, tests, gate or docs without a task credit); the S189 base of 201 / 205.0 is unchanged. 31 parents are partial and carry no credit (§2).
+- Lanes in flight (2026-11-09): S334 PURGE-LEASE-GUARD, S336 SESSION-REVOKE-HELPER, S337 STATUS-RECOUNT (this recount); earlier lanes are merged and closed out.
+- Fully landed on develop (recount S337 through #688, `d000cdb9`): 236/660 tasks (≈35.8 %); 237.0/706.75 raw person-days (≈33.5 %); remaining 424 tasks / 469.75 d. Via merged PRs: 209 tasks / 212.0 d; the other 27 tasks / 25.0 d are direct commits on develop. Method (unchanged from S189): task ranges in merged PR bodies, close-out rows and plan Notes expanded against plan_graph task ids; a parent counts only when all its sub-rows landed. The S317 recount added 1 task / 0.5 d after the S299 recount of #612 (02.3.2-T3, #628; 11.2.1-T7 of #617 was already in the S299 figure). The S337 recount adds 0 tasks / 0 d after it: the feature PRs #650–#687 (S315–S335 lanes) are hardening, tests, gate, perf and docs without a task credit, and the only plan task they name is 09.5.2-T3.1 (#684), which leaves its parent 09.5.2-T3 partial (T3.2 open); the S189 base of 201 / 205.0 is unchanged. 32 parents are partial and carry no credit (§2). The S337 count-log carried row is appended at close-out; the recount script output is in the PR body.
 - Landed by phase (done tasks / raw d): G1 152 / 159.25; G2 67 / 61.5; G3 5 / 4.5; G4 12 / 11.75.
-- Plan totals: 660 tasks / 706.75 raw / 848.1 buffered person-days (`plan_graph.py` on `f317114b`: errors 0, 205 stories; 04.2.2-T3 manifest generator added in S186, M; the S93 canonical figures were 655 / 702.75 / 843.3). `check_features.py` still exits 1 (8 missing 13.x feature plans, 13.5.1 to 13.9.1; queue F37).
+- Plan totals: 660 tasks / 706.75 raw / 848.1 buffered person-days (`plan_graph.py` on `d000cdb9`: errors 0, 205 stories; 04.2.2-T3 manifest generator added in S186, M; the S93 canonical figures were 655 / 702.75 / 843.3). `check_features.py` still exits 1 (8 missing 13.x feature plans, 13.5.1 to 13.9.1; queue F37).
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
 - Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
 - Next picks: the lane order is in `.omp/coordinator/prompts/held/README.md`; the web-only lane is on G2 (§5). The owner priority override of 2026-10-29 is closed for P0: CR-01…CR-06 are `fixed` in `plans/features/REVIEW-2026-10-29.md` (#312, #313, #314, #322); P1 rows (CR-07…CR-11) precede the task named in their *Must precede* cell, by State cell.
@@ -21,7 +21,7 @@ Updated 2026-11-08. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 
 ## 2. Done
 
-Counted by expanding task ranges in merged PR bodies, close-out rows and plan Notes against plan_graph task ids (S317 recount through #648, `f317114b`, method unchanged from S189; the S299 recount covered #612); a parent task counts only when every defined sub-row has landed on develop; sizes XS .25 S .5 M 1 L 2 XL 3. detail: carried rows 'STATUS §2 count log S112-S128' (S144 F61), 'STATUS §2 count log S299' and 'STATUS §2 count log S317'.
+Counted by expanding task ranges in merged PR bodies, close-out rows and plan Notes against plan_graph task ids (S337 recount through #688, `d000cdb9`, method unchanged from S189; the S317 recount covered #648 and the S299 recount #612); a parent task counts only when every defined sub-row has landed on develop; sizes XS .25 S .5 M 1 L 2 XL 3. detail: carried rows 'STATUS §2 count log S112-S128' (S144 F61), 'STATUS §2 count log S299' and 'STATUS §2 count log S317'.
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
@@ -31,7 +31,7 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 | Remaining | 424 | 469.75 |
 | Plan total | 660 | 706.75 |
 
-The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none removed); 11.2.1-T7 (#617) made it 235 / 236.5, and the S317 recount adds 02.3.2-T3 (G1, S, #628, one sub-row T3.1; Area 02 below) for 236 / 237.0. Parents credited by the S299 recount:
+The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none removed); 11.2.1-T7 (#617) made it 235 / 236.5, and the S317 recount adds 02.3.2-T3 (G1, S, #628, one sub-row T3.1; Area 02 below) for 236 / 237.0; the S337 recount adds none (no task landed in full after #648). Parents credited by the S299 recount:
 
 | Area | New tasks credited by the S299 recount (last landing PRs) |
 |---|---|
@@ -79,7 +79,7 @@ The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none 
 | 12.4.1-T3 | T3.2 | #551 |
 | 13.2.1-T1 | T1.2 | #435 |
 
-The 31 partial parents above are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5. This table replaces the S189 partial list: 01.8.1-T3 and 09.8.1-T1 stay credited from the S189 recount on their sub-row done-whens (their delivery rows and §5 rows were not pruned then, recorded gap), 09.3.1-T2 is now credited (T2.3 #572, T2.4 #583), and 09.1.1-T6 still waits on its T6.2. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
+The 31 partial parents above plus 09.5.2-T3 (T3.2 open; T3.1 landed in #684) make 32; they are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5. 09.5.2-T3 has no row in the table above because a row insert would shift every STATUS.md:N cite below. This table replaces the S189 partial list: 01.8.1-T3 and 09.8.1-T1 stay credited from the S189 recount on their sub-row done-whens (their delivery rows and §5 rows were not pruned then, recorded gap), 09.3.1-T2 is now credited (T2.3 #572, T2.4 #583), and 09.1.1-T6 still waits on its T6.2. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
 
 ### Done by area
 
