@@ -217,7 +217,11 @@ export const ApiTokensStore = signalStore(
       const held = store.move.held;
       store.move.held = undefined;
       if (held === undefined || store.cursor() !== held) return;
-      store.cursor.set(store.query?.()?.get('cursor') ?? undefined);
+      // A cursor names a page of one project's list: a URL that names another project (the user
+      // switched while the refused Next was open) owes this scope no cursor.
+      const url = store.query?.();
+      const sameProject = (url?.get('project') ?? null) === (store.scope()?.project ?? null);
+      store.cursor.set(sameProject ? (url?.get('cursor') ?? undefined) : undefined);
     },
     reload(): void {
       store.pageResource.reload();
