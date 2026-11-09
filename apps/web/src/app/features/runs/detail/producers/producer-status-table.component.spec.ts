@@ -96,13 +96,28 @@ describe('ProducerStatusTableComponent', () => {
     expect(marker?.querySelector('[aria-hidden="true"]')?.textContent).toBe('≠');
   });
 
-  it.each([
-    { count: null, expected: 12 },
-    { count: 12, expected: null },
-  ])('does not compare a partially unavailable count: %j', async (counts) => {
-    const { root } = await render([{ ...FINALIZED, ...counts }]);
-    expect(root.querySelector('[data-fact="count"][data-unavailable]')).not.toBeNull();
+  it('does not compare or fabricate a count when the count is absent', async () => {
+    const { root } = await render([{ ...FINALIZED, count: null, expected: 12 }]);
+    const cell = root.querySelector('[data-fact="count"]');
+    expect(cell?.hasAttribute('data-unavailable')).toBe(true);
+    expect(cell?.textContent).toContain('Status unavailable');
     expect(root.querySelector('[data-count-mismatch]')).toBeNull();
+  });
+
+  it('shows the served count of an open slot with an accessible label and no mismatch', async () => {
+    const { root } = await render([{ ...FINALIZED, count: 3, expected: null }]);
+    const cell = root.querySelector('[data-fact="count"]');
+    expect(cell?.hasAttribute('data-unavailable')).toBe(false);
+    expect(cell?.textContent?.replace(/\s+/g, ' ').trim()).toBe('3(expected not set)');
+    expect(cell?.getAttribute('aria-label')).toBe('3 served, expected count not set yet');
+    expect(root.querySelector('[data-count-mismatch]')).toBeNull();
+  });
+
+  it('keeps the existing count / expected format and no label when expected is set', async () => {
+    const { root } = await render([FINALIZED]);
+    const cell = root.querySelector('[data-fact="count"]');
+    expect(cell?.textContent).toContain('12 / 12');
+    expect(cell?.hasAttribute('aria-label')).toBe(false);
   });
 
   it('renders zero counts and sequences as served values', async () => {

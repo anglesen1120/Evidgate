@@ -82,6 +82,7 @@ export class ProducerStatusTableComponent {
     finalize: $localize`:@@runs.detail.producers.finalize:Finalize status`,
     lastSequence: $localize`:@@runs.detail.producers.last-sequence:Last sequence`,
     count: $localize`:@@runs.detail.producers.count:Count / expected`,
+    openSlot: $localize`:@@runs.detail.producers.open-slot:(expected not set)`,
     mismatch: $localize`:@@runs.detail.producers.mismatch:Count does not match expected`,
     events: $localize`:@@runs.detail.producers.events:Informational events`,
     noEvents: $localize`:@@runs.detail.producers.no-events:No informational events`,
@@ -93,6 +94,10 @@ export class ProducerStatusTableComponent {
 
   protected movePage(delta: number): void {
     this.pageIndex.update((page) => Math.max(0, Math.min(page + delta, this.pageCount() - 1)));
+  }
+
+  protected openCountLabel(count: number): string {
+    return $localize`:@@runs.detail.producers.open-count:${count}:count: served, expected count not set yet`;
   }
 
   protected staleEpochLabel(count: number): string {

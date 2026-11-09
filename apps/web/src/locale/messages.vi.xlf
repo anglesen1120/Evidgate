@@ -2812,6 +2812,8 @@
       <trans-unit id="runs.detail.producers.finalize" datatype="html"><source>Finalize status</source><target>Trạng thái chốt dữ liệu</target></trans-unit>
       <trans-unit id="runs.detail.producers.last-sequence" datatype="html"><source>Last sequence</source><target>Số thứ tự cuối cùng</target></trans-unit>
       <trans-unit id="runs.detail.producers.count" datatype="html"><source>Count / expected</source><target>Số lượng / dự kiến</target></trans-unit>
+      <trans-unit id="runs.detail.producers.open-slot" datatype="html"><source>(expected not set)</source><target>(chưa đặt số dự kiến)</target></trans-unit>
+      <trans-unit id="runs.detail.producers.open-count" datatype="html"><source><x id="count" equiv-text="count"/> served, expected count not set yet</source><target><x id="count"/> đã nhận, chưa đặt số dự kiến</target></trans-unit>
       <trans-unit id="runs.detail.producers.mismatch" datatype="html"><source>Count does not match expected</source><target>Số lượng không khớp dự kiến</target></trans-unit>
       <trans-unit id="runs.detail.producers.events" datatype="html"><source>Informational events</source><target>Sự kiện chỉ mang tính thông tin</target></trans-unit>
       <trans-unit id="runs.detail.producers.no-events" datatype="html"><source>No informational events</source><target>Không có sự kiện chỉ mang tính thông tin</target></trans-unit>

@@ -104,11 +104,20 @@
                 <td
                   hlmTd
                   [attr.data-fact]="'count'"
-                  [attr.data-unavailable]="
-                    slot.count === null || slot.expected === null ? '' : null
+                  [attr.data-unavailable]="slot.count === null ? '' : null"
+                  [attr.data-open-slot]="slot.count !== null && slot.expected === null ? '' : null"
+                  [attr.aria-label]="
+                    slot.count !== null && slot.expected === null
+                      ? openCountLabel(slot.count)
+                      : null
                   "
                 >
-                  @if (slot.count !== null && slot.expected !== null) {
+                  @if (slot.count !== null && slot.expected === null) {
+                    <span class="font-mono">{{ slot.count }}</span>
+                    <span class="text-muted-foreground" aria-hidden="true">{{
+                      copy.openSlot
+                    }}</span>
+                  } @else if (slot.count !== null && slot.expected !== null) {
                     <span class="font-mono">{{ slot.count }} / {{ slot.expected }}</span>
                     @if (slot.count !== slot.expected) {
                       <span
