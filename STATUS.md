@@ -361,7 +361,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 10.7.1-T1 | M | Dead-letter runbook; partial: T1.1 landed by S161 (#341, 44f2bef2; `docs/runbooks/dead-letter.md`), T1.2 non-author staging drill, alert links and T3-T6 runbooks open | no | no | no (docs/runbooks) | n/a | no |
 | 13.7.1-T1 | M | [OPEN] no feature plan exists yet (STATUS §6 row "Feature plans missing for planned stories"); dependency-ready only, not buildable as written | no | no | no | n/a | no |
 
-### G3: 6 tasks / 9 d (backend lane 4 / 6 d = 3 code + 1 web writing `.github/`, web-only 2 / 3 d, docs-only 0 / 0 d) Newly ready after S124: 09.5.2-T3 (M, web-only; its only dependency 08.6.3-T1 landed), counted in this header; its row is added when the lane picks it up (a row insert would shift every STATUS.md:N cite below).
+### G3: 6 tasks / 9 d (backend lane 4 / 6 d = 3 code + 1 web writing `.github/`, web-only 2 / 3 d, docs-only 0 / 0 d) Newly ready after S124: 09.5.2-T3 (M, web-only; its only dependency 08.6.3-T1 landed), counted in this header; its row is still not added, and neither is its §2 partial-table row (a row insert would shift every STATUS.md:N cite below). S333: 09.5.2-T3.1 landed (#684, web-only: healing availability page with per-scope switch controls); T3.2 remains, so T3 stays partial and carries no credit; the switch page lives in `features/availability`, so T3.2 must reconcile it with the `features/healing-review` root in plan 09.
 
 #### G3 backend lane
 

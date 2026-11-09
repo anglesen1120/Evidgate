@@ -208,6 +208,11 @@ public sealed class ResolverTests
                      "evidgate_resolve.member_organizations(uuid, integer)",
                      "evidgate_resolve.resolve_ci_binding(text, bigint, bytea[])",
                      "evidgate_resolve.resolve_ingest_token(text)",
+                     "evidgate_resolve.login_upsert_identity(text, text, text, text, uuid, uuid)",
+                     "evidgate_resolve.invite_by_secret(text)",
+                     "evidgate_resolve.invite_autobind_candidates(text)",
+                     "evidgate_resolve.user_profile_read(bytea[], timestamptz)",
+                     "evidgate_resolve.user_profile_update(bytea[], text, integer, timestamptz)",
                  })
         {
             (await _fixture.ScalarAsync<bool>(database, $"select has_function_privilege('evidgate_app', '{signature}', 'execute')"))
