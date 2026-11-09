@@ -71,8 +71,10 @@ ok "profile adds: otel-collector prometheus victorialogs victoriatraces"
 cleanup() { compose --profile observability down -v >/dev/null 2>&1 || true; }
 # The cleanup runs `down -v`: refuse a project that already owns containers or volumes
 # (the dev stack, for one), so only what this run created is ever deleted.
-[ -z "$(compose --profile observability ps -aq)" ] \
-  && [ -z "$(docker volume ls -q --filter "label=com.docker.compose.project=$project")" ] \
+existing="$(compose --profile observability ps -aq)" || fail "cannot list containers of project '$project'"
+volumes="$(docker volume ls -q --filter "label=com.docker.compose.project=$project")" \
+  || fail "cannot list volumes of project '$project'"
+[ -z "$existing$volumes" ] \
   || fail "compose project '$project' already has containers or volumes; pick a fresh --project name"
 trap cleanup EXIT
 
