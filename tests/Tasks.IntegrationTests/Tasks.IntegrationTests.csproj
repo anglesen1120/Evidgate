@@ -19,6 +19,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Compile Include="..\Shared\PurgeLeaseGuardTestExtensions.cs" Link="PurgeLeaseGuardTestExtensions.cs" />
     <Compile Include="..\Shared\TemplateDatabase.cs" Link="TemplateDatabase.cs" />
   </ItemGroup>
 </Project>

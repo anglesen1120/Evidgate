@@ -336,6 +336,48 @@ describe('HealingSwitchStore', () => {
     expect(h.store.attempts.latest.size).toBe(0);
   });
 
+  it('reports a 413 as a payload failure with no re-read', async () => {
+    const h = mountHealingSwitch({ answer: SETTABLE });
+    await h.settle();
+    h.data.writeFailure = refusal('payload_too_large', 413, 'request body too large');
+    expect(await h.store.save('tenant', 'disabled', 'Region outage')).toBe(false);
+    await h.settle();
+
+    expect(h.store.writeError('tenant')?.kind).toBe('payload_too_large');
+    expect(h.store.writeError('tenant')?.status).toBe(413);
+    expect(h.data.reads).toHaveLength(1);
+    expect(h.store.saving()).toBeNull();
+  });
+
+  it('refuses a reason over the serialized byte cap without issuing a PUT', async () => {
+    const h = mountHealingSwitch({ answer: SETTABLE });
+    await h.settle();
+    // 1013 four-byte emoji are inside the 2000 code-point limit but over 4096 serialized bytes.
+    expect(await h.store.save('tenant', 'disabled', '🙂'.repeat(1013))).toBe(false);
+    expect(h.data.writes).toEqual([]);
+    expect(h.store.saved()).toBeNull();
+  });
+
+  it('sends the trimmed reason it validated, not the raw input', async () => {
+    const h = mountHealingSwitch({ answer: SETTABLE });
+    await h.settle();
+
+    expect(await h.store.save('tenant', 'disabled', '  Region outage  ')).toBe(true);
+    expect(h.data.writes[0]?.body).toEqual({
+      scope: 'tenant',
+      mode: 'disabled',
+      reason: 'Region outage',
+    });
+
+    // Whitespace padding cannot smuggle an over-cap body past the guard: the bytes checked and
+    // the bytes sent are the same trimmed string.
+    expect(await h.store.save('tenant', 'disabled', 'a'.repeat(5000) + '   ')).toBe(false);
+    expect(await h.store.save('tenant', 'disabled', '   ')).toBe(true);
+    expect(h.data.writes).toHaveLength(2);
+    expect(h.data.writes[1]?.body).toEqual({ scope: 'tenant', mode: 'disabled' });
+    await h.settle();
+  });
+
   it('reports no saved claim and no write error before a write', async () => {
     const h = mountHealingSwitch({ answer: SETTABLE, codes: [TRIAGE, CONFIGURE] });
     await h.settle();

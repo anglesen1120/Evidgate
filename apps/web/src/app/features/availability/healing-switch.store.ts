@@ -18,6 +18,7 @@ import { HealingSwitchDataService } from '../../core/data/healing-switch-data.se
 import { isApiRequestError, type ApiError } from '../../core/http/api-error';
 import { createIntent, type Intent } from '../../core/http/intent';
 import { SessionStore } from '../../core/session/session.store';
+import { reasonExceedsLimit } from './reason-limit';
 
 /** The scopes a switch row can name; `system` is read-only for a tenant. */
 export type SwitchScope = 'system' | 'tenant' | 'project';
@@ -177,6 +178,11 @@ export const HealingSwitchStore = signalStore(
       const resolution = store.resolution();
       if (scope === undefined || resolution === null || !store.canConfigure()) return false;
       if (store.saving() !== null || blocker(resolution, target) !== null) return false;
+      // The size limit is measured on the wire value, so normalise once here: the guard, the
+      // intent signature and the body must all see the same trimmed reason.
+      const trimmed = reason === null ? '' : reason.trim();
+      const wire = trimmed === '' ? null : trimmed;
+      if (wire !== null && reasonExceedsLimit(wire, target, scope.project)) return false;
 
       const attempt = ++store.attempts.next;
       const key = `${scope.org}\u0000${scope.project}\u0000${target}`;
@@ -186,7 +192,7 @@ export const HealingSwitchStore = signalStore(
 
       // The same user action retries with its original key after a transport failure, because the
       // server may have applied the request nobody saw answered; any other outcome starts fresh.
-      const signature = `${mode}\u0000${reason ?? ''}`;
+      const signature = `${mode}\u0000${wire ?? ''}`;
       const pending = store.intents.get(key);
       const intent =
         pending !== undefined && pending.signature === signature ? pending.intent : createIntent();
@@ -194,7 +200,7 @@ export const HealingSwitchStore = signalStore(
 
       patchState(store, { write: { scope, target, phase: 'saving', error: null, attempt } });
       try {
-        await store.data.set(bodyFor(scope, target, mode, reason), intent);
+        await store.data.set(bodyFor(scope, target, mode, wire), intent);
         store.intents.delete(key);
         if (!owned()) return false;
         patchState(store, { write: { scope, target, phase: 'saved', error: null, attempt } });

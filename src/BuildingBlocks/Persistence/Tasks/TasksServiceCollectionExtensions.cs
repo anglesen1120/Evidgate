@@ -4,6 +4,7 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 
@@ -129,6 +130,8 @@ public static class TasksServiceCollectionExtensions
                 options => !string.IsNullOrWhiteSpace(options.DispatchDefaultQueue) && options.DispatchDefaultQueue.Length <= 64,
                 "EVIDGATE__TASKS__DISPATCHDEFAULTQUEUE must be a non-empty queue name of at most 64 characters")
             .ValidateOnStart();
+
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<TasksOptions>, PurgeLeaseGuardValidator>());
 
         return services;
     }

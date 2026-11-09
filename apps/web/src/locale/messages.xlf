@@ -3088,6 +3088,10 @@
       <trans-unit id="healingswitch.dependency-llm" datatype="html"><source>Model endpoint</source></trans-unit>
       <trans-unit id="healingswitch.dependency-knowledge" datatype="html"><source>Knowledge store</source></trans-unit>
       <trans-unit id="healingswitch.not-observed" datatype="html"><source>Not observed</source></trans-unit>
+      <trans-unit id="healingswitch.health-healthy" datatype="html"><source>Healthy</source></trans-unit>
+      <trans-unit id="healingswitch.health-degraded" datatype="html"><source>Degraded</source></trans-unit>
+      <trans-unit id="healingswitch.health-unavailable" datatype="html"><source>Unavailable</source></trans-unit>
+      <trans-unit id="healingswitch.health-unrecognised" datatype="html"><source>Unrecognised value:</source></trans-unit>
       <trans-unit id="healingswitch.health-hint" datatype="html"><source>Not observed means no health probe has reported yet. It is not a healthy signal.</source></trans-unit>
       <trans-unit id="healingswitch.scope-system" datatype="html"><source>System scope</source></trans-unit>
       <trans-unit id="healingswitch.scope-tenant" datatype="html"><source>Tenant scope</source></trans-unit>
@@ -3107,8 +3111,9 @@
       <trans-unit id="healingswitch.not-provided" datatype="html"><source>—</source></trans-unit>
       <trans-unit id="healingswitch.no-row" datatype="html"><source>No switch is stored at this scope.</source></trans-unit>
       <trans-unit id="healingswitch.reason-label" datatype="html"><source>Reason (optional)</source></trans-unit>
-      <trans-unit id="healingswitch.reason-hint" datatype="html"><source>Up to 2000 characters. The reason is stored with the change.</source></trans-unit>
-      <trans-unit id="healingswitch.reason-too-long" datatype="html"><source>The reason is longer than 2000 characters. Shorten it to save.</source></trans-unit>
+      <trans-unit id="healingswitch.reason-hint" datatype="html"><source>Up to 2000 characters, and no more than 4 KB once sent. The reason is stored with the change.</source></trans-unit>
+      <trans-unit id="healingswitch.reason-too-long" datatype="html"><source>The reason is too long. Keep it within 2000 characters and 4 KB once sent.</source></trans-unit>
+      <trans-unit id="healingswitch.reason-too-large" datatype="html"><source>The reason is too large to send. Shorten it.</source></trans-unit>
       <trans-unit id="healingswitch.mode-hint" datatype="html"><source>The most restrictive scope wins. Choose one of the three modes.</source></trans-unit>
       <trans-unit id="healingswitch.save" datatype="html"><source>Save switch</source></trans-unit>
       <trans-unit id="healingswitch.saving" datatype="html"><source>Saving…</source></trans-unit>

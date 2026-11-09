@@ -1,3 +1,4 @@
+using Evidgate.Testing;
 // The ingest-side usage emitter end to end: the real ingest route writes the metering outbox row in its own commit, the
 // real dispatcher turns it into a task row, and the real consumer runs the metering handler against a real PostgreSQL and
 // the real usage ledger. Resend, replay, retry, dead-letter, a task claimed for another org and two distinct batches are
@@ -62,7 +63,7 @@ public sealed class IngestUsageMeterTests
             configuration: settings,
             services: collection =>
             {
-                collection.AddEvidgateTasks(configuration);
+                collection.AddEvidgateTasks(configuration).WithoutPurgeLeaseGuard();
                 services?.Invoke(collection);
             });
     }

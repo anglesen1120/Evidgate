@@ -3,7 +3,11 @@ import { HlmButton } from '@evidgate/ui/button';
 
 import { SessionStore } from '../../core/session/session.store';
 import { NotFoundPatternComponent } from '../../shared/ui/states/not-found-pattern.component';
-import { HEALING_SWITCH_COPY, modeLabel as healingModeLabel } from './healing-switch.copy';
+import {
+  HEALING_SWITCH_COPY,
+  healthLabel,
+  modeLabel as healingModeLabel,
+} from './healing-switch.copy';
 import { HealingSwitchStore, type SettableMode, type SwitchScope } from './healing-switch.store';
 import { SwitchScopeControl } from './switch-scope-control.component';
 
@@ -33,6 +37,11 @@ export class HealingSwitchPage {
 
   protected canRead(): boolean {
     return this.session.has('healing:triage');
+  }
+
+  /** The label for one observation, or null when the value is unknown and must speak for itself. */
+  protected healthText(value: string | null): string | null {
+    return value === null ? this.copy.notObserved : healthLabel(value);
   }
 
   protected deciderCopy(scope: SwitchScope | null): string {

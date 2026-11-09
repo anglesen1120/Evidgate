@@ -56,13 +56,35 @@
       <div class="flex flex-wrap justify-between gap-2">
         <dt>{{ copy.dependencyLlm }}</dt>
         <dd class="m-0 font-semibold" [attr.data-healing-health]="'llm'">
-          {{ resolution.dependency_health.llm ?? copy.notObserved }}
+          @let llmHealth = resolution.dependency_health.llm;
+          @if (healthText(llmHealth); as llmText) {
+            {{ llmText }}
+          } @else {
+            <span
+              class="inline-flex flex-wrap items-baseline gap-1 font-normal"
+              data-healing-health-unrecognised
+            >
+              <span class="text-muted-foreground">{{ copy.healthUnrecognised }}</span>
+              <span class="min-w-0 wrap-anywhere" data-healing-health-value>{{ llmHealth }}</span>
+            </span>
+          }
         </dd>
       </div>
       <div class="flex flex-wrap justify-between gap-2">
         <dt>{{ copy.dependencyKnowledge }}</dt>
         <dd class="m-0 font-semibold" [attr.data-healing-health]="'knowledge-store'">
-          {{ resolution.dependency_health.knowledge_store ?? copy.notObserved }}
+          @let storeHealth = resolution.dependency_health.knowledge_store;
+          @if (healthText(storeHealth); as storeText) {
+            {{ storeText }}
+          } @else {
+            <span
+              class="inline-flex flex-wrap items-baseline gap-1 font-normal"
+              data-healing-health-unrecognised
+            >
+              <span class="text-muted-foreground">{{ copy.healthUnrecognised }}</span>
+              <span class="min-w-0 wrap-anywhere" data-healing-health-value>{{ storeHealth }}</span>
+            </span>
+          }
         </dd>
       </div>
     </dl>

@@ -3268,6 +3268,10 @@
       <trans-unit id="healingswitch.dependency-llm" datatype="html"><source>Model endpoint</source><target>Điểm cuối mô hình</target></trans-unit>
       <trans-unit id="healingswitch.dependency-knowledge" datatype="html"><source>Knowledge store</source><target>Kho tri thức</target></trans-unit>
       <trans-unit id="healingswitch.not-observed" datatype="html"><source>Not observed</source><target>Chưa quan sát</target></trans-unit>
+      <trans-unit id="healingswitch.health-healthy" datatype="html"><source>Healthy</source><target>Tốt</target></trans-unit>
+      <trans-unit id="healingswitch.health-degraded" datatype="html"><source>Degraded</source><target>Suy giảm</target></trans-unit>
+      <trans-unit id="healingswitch.health-unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="healingswitch.health-unrecognised" datatype="html"><source>Unrecognised value:</source><target>Giá trị không nhận diện được:</target></trans-unit>
       <trans-unit id="healingswitch.health-hint" datatype="html"><source>Not observed means no health probe has reported yet. It is not a healthy signal.</source><target>Chưa quan sát nghĩa là chưa có phép dò sức khỏe nào báo về. Đây không phải tín hiệu khỏe mạnh.</target></trans-unit>
       <trans-unit id="healingswitch.scope-system" datatype="html"><source>System scope</source><target>Phạm vi hệ thống</target></trans-unit>
       <trans-unit id="healingswitch.scope-tenant" datatype="html"><source>Tenant scope</source><target>Phạm vi tổ chức</target></trans-unit>
@@ -3287,8 +3291,9 @@
       <trans-unit id="healingswitch.not-provided" datatype="html"><source>—</source><target>—</target></trans-unit>
       <trans-unit id="healingswitch.no-row" datatype="html"><source>No switch is stored at this scope.</source><target>Không có công tắc nào được lưu tại phạm vi này.</target></trans-unit>
       <trans-unit id="healingswitch.reason-label" datatype="html"><source>Reason (optional)</source><target>Lý do (không bắt buộc)</target></trans-unit>
-      <trans-unit id="healingswitch.reason-hint" datatype="html"><source>Up to 2000 characters. The reason is stored with the change.</source><target>Tối đa 2000 ký tự. Lý do được lưu cùng thay đổi.</target></trans-unit>
-      <trans-unit id="healingswitch.reason-too-long" datatype="html"><source>The reason is longer than 2000 characters. Shorten it to save.</source><target>Lý do dài hơn 2000 ký tự. Hãy rút ngắn để lưu.</target></trans-unit>
+      <trans-unit id="healingswitch.reason-hint" datatype="html"><source>Up to 2000 characters, and no more than 4 KB once sent. The reason is stored with the change.</source><target>Tối đa 2000 ký tự và không quá 4 KB khi gửi. Lý do được lưu cùng thay đổi.</target></trans-unit>
+      <trans-unit id="healingswitch.reason-too-long" datatype="html"><source>The reason is too long. Keep it within 2000 characters and 4 KB once sent.</source><target>Lý do quá dài. Hãy giữ trong 2000 ký tự và không quá 4 KB khi gửi.</target></trans-unit>
+      <trans-unit id="healingswitch.reason-too-large" datatype="html"><source>The reason is too large to send. Shorten it.</source><target>Lý do quá lớn để gửi. Hãy rút ngắn.</target></trans-unit>
       <trans-unit id="healingswitch.mode-hint" datatype="html"><source>The most restrictive scope wins. Choose one of the three modes.</source><target>Phạm vi hạn chế nhất sẽ thắng. Chọn một trong ba chế độ.</target></trans-unit>
       <trans-unit id="healingswitch.save" datatype="html"><source>Save switch</source><target>Lưu công tắc</target></trans-unit>
       <trans-unit id="healingswitch.saving" datatype="html"><source>Saving…</source><target>Đang lưu…</target></trans-unit>
