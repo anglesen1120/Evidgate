@@ -10,7 +10,7 @@
 # EVIDGATE_S3_PORT or EVIDGATE_WEB_PORT, because a publish onto a taken port
 # silently does not apply and the migrations would run against that other server.
 #
-# usage: scripts/dev/up.sh [--reset] [--with-token]
+# usage: scripts/dev/up.sh [--reset] [--with-token] [--observability]
 #
 #   --reset       stop the host processes and delete the named volumes pg-data and
 #                 s3-data before starting again (AC4). Without it, data survives
@@ -52,7 +52,7 @@ usage() {
   cat <<'USAGE'
 Evidgate local dev stack (01.8.1).
 
-usage: scripts/dev/up.sh [--reset] [--with-token]
+usage: scripts/dev/up.sh [--reset] [--with-token] [--observability]
 
 Brings up PostgreSQL 18 + SeaweedFS (compose, digest-pinned images), applies the
 migrations as evidgate_owner, configures the dev bucket, then starts the Api and
@@ -63,7 +63,13 @@ It refuses before compose starts when another process already holds one of the
 published ports (EVIDGATE_DB_PORT, EVIDGATE_S3_PORT) or EVIDGATE_WEB_PORT, and when
 one of the three is not digits only; see docs/dev-setup.md, Troubleshooting.
 
-  --reset       stop the host processes and delete the pg-data/s3-data volumes first
+  --reset       stop the host processes and delete the pg-data/s3-data volumes (and the
+                observability volumes) first
+  --observability
+                also start the compose profile `observability` (collector, Prometheus,
+                VictoriaLogs, VictoriaTraces; loopback ports, retention per ADR-0012) and
+                point the Api and Worker at the collector. Off by default; run
+                scripts/dev/observability-smoke.sh to prove it on a throwaway project.
   --with-token  also mint the dev ingest token and the sample policy revision
                 (seed-dev --with-token). A minted token is printed here once and
                 never to a log or .env.dev, and a rerun that finds a live token
@@ -339,10 +345,12 @@ wait_for_ready() {
 
 reset=false
 with_token=false
+observability=false
 for arg in "$@"; do
   case "$arg" in
     --reset) reset=true ;;
     --with-token) with_token=true ;;
+    --observability) observability=true ;;
     -h | --help)
       usage
       exit 0
@@ -384,15 +392,39 @@ export EVIDGATE__WORKER__HEALTHADDRESS
 export EVIDGATE_DB_PORT EVIDGATE_S3_PORT EVIDGATE_WEB_PORT
 export EVIDGATE_S3_ENDPOINT EVIDGATE_S3_BUCKET
 
+# The profile is opt-in: without --observability nothing below applies and the
+# Api and Worker keep exporting nowhere unless .env.dev sets an endpoint.
+if [ "$observability" = true ]; then
+  : "${EVIDGATE_OBS_OTLP_GRPC_PORT:=4317}"
+  : "${EVIDGATE_OBS_OTLP_HTTP_PORT:=4318}"
+  : "${EVIDGATE_OBS_PROMETHEUS_PORT:=9090}"
+  : "${EVIDGATE_OBS_LOGS_PORT:=9428}"
+  : "${EVIDGATE_OBS_TRACES_PORT:=10428}"
+  for obs_port in EVIDGATE_OBS_OTLP_GRPC_PORT EVIDGATE_OBS_OTLP_HTTP_PORT \
+    EVIDGATE_OBS_PROMETHEUS_PORT EVIDGATE_OBS_LOGS_PORT EVIDGATE_OBS_TRACES_PORT; do
+    evg_require_port "$obs_port" "${!obs_port}"
+  done
+  EVIDGATE_OTEL_COLLECTOR_CONFIG="$(<"$EVG_ROOT/infra/observability/otel-collector.yaml")"
+  : "${EVIDGATE__TELEMETRY__OTLPENDPOINT:=http://127.0.0.1:${EVIDGATE_OBS_OTLP_GRPC_PORT}}"
+  export COMPOSE_PROFILES=observability
+  export EVIDGATE_OTEL_COLLECTOR_CONFIG EVIDGATE__TELEMETRY__OTLPENDPOINT
+  export EVIDGATE_OBS_OTLP_GRPC_PORT EVIDGATE_OBS_OTLP_HTTP_PORT
+  export EVIDGATE_OBS_PROMETHEUS_PORT EVIDGATE_OBS_LOGS_PORT EVIDGATE_OBS_TRACES_PORT
+fi
+
 if [ "$reset" = true ]; then
   info "--reset: stopping the host processes and deleting the pg-data/s3-data volumes"
   evg_stop_hosts
-  evg_compose down -v
+  evg_compose_all down -v
 fi
 
 preflight_ports
 
-info "starting PostgreSQL 18 and SeaweedFS (docker compose up -d --wait)"
+if [ "$observability" = true ]; then
+  info "starting PostgreSQL 18, SeaweedFS and the observability profile (docker compose up -d --wait)"
+else
+  info "starting PostgreSQL 18 and SeaweedFS (docker compose up -d --wait)"
+fi
 evg_compose up -d --wait
 
 # 01.4.1-T2.3: the superuser bootstrap, migrations as evidgate_owner and the
@@ -444,6 +476,16 @@ cat <<EOF
   logs   scripts/dev/logs.sh        stop   scripts/dev/down.sh
   reset  scripts/dev/up.sh --reset  (deletes the pg-data/s3-data volumes)
 EOF
+
+if [ "$observability" = true ]; then
+  cat <<EOF
+
+  OTLP collector      grpc 127.0.0.1:${EVIDGATE_OBS_OTLP_GRPC_PORT}  http 127.0.0.1:${EVIDGATE_OBS_OTLP_HTTP_PORT}  (Api and Worker export here)
+  Prometheus          http://127.0.0.1:${EVIDGATE_OBS_PROMETHEUS_PORT}/   (metrics)
+  VictoriaLogs        http://127.0.0.1:${EVIDGATE_OBS_LOGS_PORT}/select/vmui/   (logs)
+  VictoriaTraces      http://127.0.0.1:${EVIDGATE_OBS_TRACES_PORT}/select/vmui/   (traces)
+EOF
+fi
 
 if [ "$with_token" = true ]; then
   if [ "${EVIDGATE_DB_INIT_SEED:-1}" = "0" ]; then

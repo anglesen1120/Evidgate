@@ -73,6 +73,10 @@ evg_run_scrubbed() {
 
 evg_compose() { docker compose -f "$EVG_COMPOSE_FILE" "$@"; }
 
+# Stop/teardown must see the observability containers and volumes too: compose
+# ignores a service whose profile is not selected, so `down` would leave them up.
+evg_compose_all() { COMPOSE_PROFILES=observability evg_compose "$@"; }
+
 # True when up.sh started the host and it is still alive.
 evg_host_is_running() {
   local pid
