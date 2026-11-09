@@ -110,9 +110,9 @@ else
 fi
 
 # The map keeps an upstream value, defaults an absent one to no-store and turns a
-# public/s-maxage value on a credentialed request into no-store. Comments are
+# public/s-maxage value on a credentialed request into no-store. Comments (whole-line and inline) are
 # dropped first, so a disabled rule does not satisfy the pin.
-apimap="$(awk '/^[[:space:]]*map "\$review_api_credentialed:\$upstream_http_cache_control" \$review_api_cache_control[[:space:]]*\{/,/^[[:space:]]*\}/' "$CONF" | grep -vE '^[[:space:]]*#' || true)"
+apimap="$(awk '/^[[:space:]]*map "\$review_api_credentialed:\$upstream_http_cache_control" \$review_api_cache_control[[:space:]]*\{/,/^[[:space:]]*\}/' "$CONF" | sed -E 's/(^|[[:space:]])#.*$//' || true)"
 if [ -z "$apimap" ]; then
   note 'map "$review_api_credentialed:$upstream_http_cache_control" $review_api_cache_control is missing'
 else
@@ -125,7 +125,7 @@ else
     note 'the Api cache map must turn public or s-maxage on a credentialed request into no-store,
       or a shared cache can keep a per-user response'
 fi
-credmap="$(awk '/^[[:space:]]*map "\$http_authorization:\$http_cookie" \$review_api_credentialed[[:space:]]*\{/,/^[[:space:]]*\}/' "$CONF" | grep -vE '^[[:space:]]*#' || true)"
+credmap="$(awk '/^[[:space:]]*map "\$http_authorization:\$http_cookie" \$review_api_credentialed[[:space:]]*\{/,/^[[:space:]]*\}/' "$CONF" | sed -E 's/(^|[[:space:]])#.*$//' || true)"
 if [ -z "$credmap" ]; then
   note 'map "$http_authorization:$http_cookie" $review_api_credentialed is missing'
 else
