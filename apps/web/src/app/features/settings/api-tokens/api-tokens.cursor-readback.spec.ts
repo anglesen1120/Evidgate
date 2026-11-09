@@ -109,4 +109,44 @@ describe('ApiTokensPage cursor readback', () => {
       }),
     );
   });
+
+  it('leaves the URL and the store on the page the user is on when a guard refuses Next', async () => {
+    const world = createWorld([project('project-1')], withNextPage);
+    const list = vi.mocked(world.list);
+    const held = new HeldTransition();
+    const harness = await mountAt(
+      [
+        {
+          path: PAGE_ROUTE,
+          component: ApiTokensPage,
+          canActivate: [held.guard],
+          runGuardsAndResolvers: 'always',
+        },
+      ],
+      world,
+    );
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate');
+    await harness.navigateByUrl(`${PAGE_URL}?project=project-1&cursor=page-2`);
+    await until(harness, () => document.querySelector('[data-api-next]') !== null);
+    const store = harness.routeDebugElement?.injector.get(ApiTokensStore);
+    if (!store) throw new Error('The page did not mount');
+    const url = router.url;
+
+    held.hold();
+    clickNext();
+    await held.waitUntilHeld();
+    expect(store.cursor()).toBe('page-3');
+    held.release(false);
+    await settleRouter(harness);
+    await until(harness, () => store.cursor() === 'page-2');
+    const reads = list.mock.calls.length;
+    await settleRouter(harness);
+
+    expect(router.url).toBe(url);
+    // One write: the click's own navigation, which the guard refused. The page does not repeat it.
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(list.mock.calls.length).toBe(reads);
+    expect(store.rows()).toHaveLength(1);
+  });
 });
