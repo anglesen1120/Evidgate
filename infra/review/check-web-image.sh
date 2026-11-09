@@ -247,11 +247,15 @@ api "Cache-Control:\r\nCache-Control:\r\n" 200 "no-store"
 # A credentialed response never keeps a shared-cache directive; an anonymous
 # one and every other upstream value pass verbatim.
 api "Cache-Control: public, max-age=60\r\n" 200 "public, max-age=60"
-api "Cache-Control: public, max-age=60\r\n" 200 "private" "Authorization: Bearer probe\r\n"
-api "Cache-Control: max-age=60, s-maxage=120\r\n" 200 "private" "Cookie: a=b; __Host-evidgate_session=probe\r\n"
-api "Cache-Control: PUBLIC\r\n" 200 "private" "Authorization: Bearer probe\r\n"
+api "Cache-Control: public, max-age=60\r\n" 200 "no-store" "Authorization: Bearer probe\r\n"
+api "Cache-Control: max-age=60, s-maxage=120\r\n" 200 "no-store" "Cookie: a=b; __Host-evidgate_session=probe\r\n"
+api "Cache-Control: public, s-maxage=120\r\n" 200 "no-store" "Cookie: __host-evidgate_session=probe\r\n"
+api "Cache-Control: PUBLIC\r\n" 200 "no-store" "Authorization: Bearer probe\r\n"
 api "Cache-Control: private, max-age=60\r\n" 200 "private, max-age=60" "Authorization: Bearer probe\r\n"
+api "Cache-Control: private, x-public=1\r\n" 200 "private, x-public=1" "Authorization: Bearer probe\r\n"
 api "Cache-Control: public, max-age=60\r\n" 200 "public, max-age=60" "Cookie: other=1\r\n"
+api "Cache-Control: public, max-age=60\r\n" 200 "public, max-age=60" "Cookie: other=prefix:__Host-evidgate_session=probe\r\n"
+api "Cache-Control: public, max-age=60\r\n" 200 "public, max-age=60" "Cookie: x__Host-evidgate_session=probe\r\n"
 api none 502 "no-store"
 # nginx answers a stranger itself, before the Api is asked, and that 401 must
 # not be storable either.

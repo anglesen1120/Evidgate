@@ -110,28 +110,30 @@ else
 fi
 
 # The map keeps an upstream value, defaults an absent one to no-store and turns a
-# public/s-maxage value on a credentialed request into private.
-apimap="$(awk '/^[[:space:]]*map "\$review_api_credentialed:\$upstream_http_cache_control" \$review_api_cache_control[[:space:]]*\{/,/^[[:space:]]*\}/' "$CONF")"
+# public/s-maxage value on a credentialed request into no-store. Comments are
+# dropped first, so a disabled rule does not satisfy the pin.
+apimap="$(awk '/^[[:space:]]*map "\$review_api_credentialed:\$upstream_http_cache_control" \$review_api_cache_control[[:space:]]*\{/,/^[[:space:]]*\}/' "$CONF" | grep -vE '^[[:space:]]*#' || true)"
 if [ -z "$apimap" ]; then
   note 'map "$review_api_credentialed:$upstream_http_cache_control" $review_api_cache_control is missing'
 else
   grep -qE '^[[:space:]]*default[[:space:]]+\$upstream_http_cache_control;' <<<"$apimap" ||
     note 'the Api cache map must pass an upstream Cache-Control through by default'
-  grep -qE "^[[:space:]]*'~\^\[01\]:\[\\\\s,\]\*\\$'[[:space:]]+'no-store';" <<<"$apimap" ||
+  grep -qF "'~^[01]:[\\s,]*\$' 'no-store';" <<<"$apimap" ||
     note 'the Api cache map must turn an absent or empty upstream Cache-Control into no-store
       (the key carries the credential flag, so a regex key is what matches an empty value)'
-  grep -qE "^[[:space:]]*'~\*\^1:\.\*\\\\b\(\?:public\|s-maxage\)\\\\b'[[:space:]]+'private';" <<<"$apimap" ||
-    note 'the Api cache map must turn public or s-maxage on a credentialed request into private,
+  grep -qF "'~*^1:(?:.*[\\s,])?(?:public|s-maxage)(?:[\\s,=;]|\$)' 'no-store';" <<<"$apimap" ||
+    note 'the Api cache map must turn public or s-maxage on a credentialed request into no-store,
       or a shared cache can keep a per-user response'
 fi
-credmap="$(awk '/^[[:space:]]*map "\$http_authorization:\$http_cookie" \$review_api_credentialed[[:space:]]*\{/,/^[[:space:]]*\}/' "$CONF")"
+credmap="$(awk '/^[[:space:]]*map "\$http_authorization:\$http_cookie" \$review_api_credentialed[[:space:]]*\{/,/^[[:space:]]*\}/' "$CONF" | grep -vE '^[[:space:]]*#' || true)"
 if [ -z "$credmap" ]; then
   note 'map "$http_authorization:$http_cookie" $review_api_credentialed is missing'
 else
-  grep -qE "^[[:space:]]*'~\^\[\^:\]'[[:space:]]+1;" <<<"$credmap" ||
+  grep -qF "'~^[^:]' 1;" <<<"$credmap" ||
     note 'the credential map must treat any Authorization header as credentialed'
-  grep -qF "__Host-evidgate_session=' 1;" <<<"$credmap" ||
-    note 'the credential map must treat the __Host-evidgate_session cookie as credentialed'
+  grep -qF "'~*^[^:]*:(?:.*;\\s*)?__Host-evidgate_session=' 1;" <<<"$credmap" ||
+    note 'the credential map must treat the __Host-evidgate_session cookie as credentialed,
+      case-insensitively and only at a cookie boundary'
 fi
 
 # A compressed and a plain body share a URL; without Vary a shared cache can serve
