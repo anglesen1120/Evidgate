@@ -1,7 +1,5 @@
-// The producers section on the real page: the page reads only `declared_producers` and `shard_count`,
-// so a row names one slot id and every other fact is the shared unavailable state. The run read now
-// serves `producers` too, but wiring those facts into the table is a later change.
-// The empty and fifty-slot runs are derived catalog rows, because the corpus holds neither.
+// The producers section on the real page: one row per declared slot, with the facts the run read
+// serves for it. The empty and fifty-slot runs are derived catalog rows, because the corpus holds neither.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import readyFixture from '../../../../fixtures/web-api/run-detail/input.json';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
@@ -10,8 +8,10 @@ import { runDetailPath, type RunStateVariant } from './run-detail.support';
 
 /** The two slots the unmodified `run-detail` document declares, in shard-index order. */
 const DECLARED: readonly string[] = readyFixture.body.declared_producers;
-/** The unserved fact cells of a row: identity, finalize, last sequence and the count pair. */
+/** The fact cells of a row: identity, finalize, last sequence and the count pair. */
 const FACTS = ['identity', 'finalize', 'last-sequence', 'count'] as const;
+const text = async (cell: Locator): Promise<string> =>
+  ((await cell.textContent()) ?? '').replace(/\s+/g, ' ').trim();
 
 /** The producers section of one run, once the run read has landed. */
 async function producersOf(
@@ -56,7 +56,7 @@ async function tableWrapperOverflows(producers: Locator): Promise<boolean> {
 }
 
 for (const locale of LOCALES) {
-  test(`names one row per declared producer and guesses no other fact (${locale})`, async ({
+  test(`names one row per declared producer with its served facts (${locale})`, async ({
     page,
   }) => {
     const producers = await producersOf(page, 'ready', locale);
@@ -67,16 +67,47 @@ for (const locale of LOCALES) {
     for (const slot of DECLARED) {
       const row = producers.locator(`tr[data-producer-slot="${slot}"]`);
       await expect(row.locator('td[data-fact]')).toHaveCount(FACTS.length);
-      // The read serves no identity, finalize, sequence or count fact, so every cell says so.
-      await expect(row.locator('td[data-fact][data-unavailable]')).toHaveCount(FACTS.length);
+      await expect(row.locator('td[data-fact][data-unavailable]')).toHaveCount(0);
       await expect(
         page.locator(`tr[data-producer-slot="${slot}"] #producer-${slot}`),
         'the row carries no anchor of its own',
       ).toHaveCount(1);
     }
-    // No stale-epoch or after-cancel badge: neither count is served, so neither may be claimed.
+    const served = readyFixture.body.producers[0];
+    if (served === undefined) throw new Error('the run-detail fixture serves no producer');
+    const first = producers.locator(`tr[data-producer-slot="${served.producer_id}"]`);
+    expect(await text(first.locator('td[data-fact="last-sequence"]'))).toBe(
+      String(served.last_sequence),
+    );
+    expect(await text(first.locator('td[data-fact="count"]'))).toBe(
+      `${served.count} / ${served.expected}`,
+    );
     await expect(producers.locator('[data-badge]')).toHaveCount(0);
     await expectNoA11yViolations(page, 'run detail, producers section');
+  });
+
+  test(`shows a finalized, a count-mismatched and a stale-epoch slot (${locale})`, async ({
+    page,
+  }) => {
+    const producers = await producersOf(page, 'slot-states', locale);
+    expect(await slotIds(producers)).toEqual(['shard-1', 'shard-2', 'shard-3']);
+    const row = (slot: string) => producers.locator(`tr[data-producer-slot="${slot}"]`);
+
+    expect(await text(row('shard-1').locator('td[data-fact="count"]'))).toBe('1 / 1');
+    await expect(row('shard-1').locator('[data-count-mismatch], [data-badge]')).toHaveCount(0);
+
+    expect(await text(row('shard-2').locator('td[data-fact="count"]'))).toContain('7 / 9');
+    await expect(row('shard-2').locator('[data-count-mismatch]')).toBeVisible();
+    await expect(row('shard-2').locator('[data-badge]')).toHaveCount(0);
+
+    expect(await text(row('shard-3').locator('td[data-fact="count"]'))).toBe('5 / 5');
+    await expect(row('shard-3').locator('[data-badge="stale-epoch"]')).toBeVisible();
+    await expect(row('shard-3').locator('[data-count-mismatch]')).toHaveCount(0);
+
+    await expect(producers.locator('td[data-fact][data-unavailable]')).toHaveCount(0);
+    // The badge and the mismatch are informational: no completeness or decision claim appears.
+    await expect(producers.locator('[data-completeness]')).toHaveCount(0);
+    await expectNoA11yViolations(page, 'run detail, producer slot states');
   });
 
   test(`explains a run with no declared producer instead of reporting a failure (${locale})`, async ({
