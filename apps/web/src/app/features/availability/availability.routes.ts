@@ -8,7 +8,7 @@
 
 import type { Routes } from '@angular/router';
 
-import { RouteStubPage } from '../../shell/stub/route-stub.page';
+import { HealingSwitchPage } from './healing-switch.page';
 
-/** Everything mounted under a `availability` segment: the shell placeholder until its feature story. */
-export const routes: Routes = [{ path: '', pathMatch: 'full', component: RouteStubPage }];
+/** Everything mounted under an `availability` segment: the healing switch of the project. */
+export const routes: Routes = [{ path: '', pathMatch: 'full', component: HealingSwitchPage }];
