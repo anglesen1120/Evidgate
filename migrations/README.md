@@ -989,3 +989,11 @@ through the real runner against a throwaway PostgreSQL 18 container.
   table fails the migration for a retry instead of stalling writes, and `if not exists` / `create or replace`
   / `drop … if exists` make a re-run a no-op. No down migration: dropping the table would delete every stored
   verdict, which no rollback restores.
+
+## Notes on the CI token purge ACL (`0089`)
+
+- `0019` rewrote `evidgate.purge_expired_ci_token_issue` with `create or replace` and no `revoke`/`grant`, so the
+  worker-only EXECUTE it runs under is still the one `0017` set. `0089` restates it (PUBLIC and every runtime role
+  revoked, then EXECUTE to `evidgate_worker_sched`) and changes no function body. It is a no-op on a database that
+  already carries the `0017` grant. The other function `0019` touches, `ingest_token_keep_version_on_touch`,
+  restates its own ACL, so nothing else needed restating.
