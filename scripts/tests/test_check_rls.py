@@ -227,6 +227,17 @@ class DefinerRules(unittest.TestCase):
         findings = run(GOOD_DEFINER.replace("insert into public.audit_log (k) values (p_key);", ""))
         self.assertEqual(rules(findings), {"definer_audit"})
 
+    def test_the_session_revoke_audit_helper_call_is_the_audit_row(self):
+        call = "perform evidgate.session_revoke_audit_append(p_org_id, v_actor, 'user', 'x', '{}'::jsonb, null, null);"
+        sql = GOOD_DEFINER.replace("insert into public.audit_log (k) values (p_key);", call)
+        self.assertEqual(run(sql), [])
+
+    def test_only_that_exact_helper_counts_as_the_audit_row(self):
+        for name in ("evidgate.session_revoke_audit_append_other", "evidgate.session_revoke_audit", "evidgate.audit_append"):
+            call = f"perform {name}(p_org_id);"
+            sql = GOOD_DEFINER.replace("insert into public.audit_log (k) values (p_key);", call)
+            self.assertEqual(rules(run(sql)), {"definer_audit"}, name)
+
     def test_documented_deferral_excuses_the_audit_row(self):
         sql = "-- lint: audit-deferred 02.7.1-T2.2 evidgate_resolve.lookup\n" + GOOD_DEFINER.replace(
             "insert into public.audit_log (k) values (p_key);", ""
