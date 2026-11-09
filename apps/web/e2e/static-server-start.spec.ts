@@ -214,7 +214,10 @@ test('retries on a new port when the picked one was taken before the child bound
 test('gives up after a bounded number of taken ports and leaves no temp dir', async () => {
   const taken = await occupyPort();
   let picks = 0;
-  const before = new Set(readTempDirs());
+  // A private TMPDIR for this process only, so another worker's temp dirs never count as a leak.
+  const privateTmp = mkdtempSync(join(tmpdir(), 'evidgate-web-e2e-scratch-'));
+  const previousTmp = process.env['TMPDIR'];
+  process.env['TMPDIR'] = privateTmp;
   try {
     await expect(
       startDist('<!doctype html><html><body></body></html>', {}, () => {
@@ -223,14 +226,21 @@ test('gives up after a bounded number of taken ports and leaves no temp dir', as
       }),
     ).rejects.toThrow('EADDRINUSE');
     expect(picks).toBe(MAX_PORT_ATTEMPTS);
-    expect(readTempDirs().filter((dir) => !before.has(dir))).toEqual([]);
+    expect(readdirSync(privateTmp)).toEqual([]);
   } finally {
+    if (previousTmp === undefined) {
+      delete process.env['TMPDIR'];
+    } else {
+      process.env['TMPDIR'] = previousTmp;
+    }
+    rmSync(privateTmp, { recursive: true, force: true });
     await taken.close();
   }
 });
 
 test('stops the server and drops its temp dir when a step after the start throws', async () => {
-  let started: { tempDir: string; child: { exitCode: number | null; pid?: number } } | undefined;
+  let started:
+    { tempDir: string; child: { exitCode: number | null; signalCode: string | null } } | undefined;
   await expect(
     startTempServer((server) => {
       started = server;
@@ -241,9 +251,6 @@ test('stops the server and drops its temp dir when a step after the start throws
     throw new Error('the populate step never ran');
   }
   expect(existsSync(started.tempDir)).toBe(false);
-  expect(() => process.kill(started?.child.pid ?? 0, 0)).toThrow();
+  const child = started.child;
+  await expect.poll(() => child.exitCode !== null || child.signalCode !== null).toBe(true);
 });
-
-function readTempDirs(): string[] {
-  return readdirSync(tmpdir()).filter((name) => name.startsWith('evidgate-web-e2e-'));
-}

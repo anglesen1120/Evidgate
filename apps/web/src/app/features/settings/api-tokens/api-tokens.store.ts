@@ -94,7 +94,8 @@ export const ApiTokensStore = signalStore(
     );
     const createTarget = computed(() => store.createOrigin()?.target ?? null);
     // The page the user's Next asked for while its navigation is still in flight. Plain state, not
-    // a signal: only a URL emission re-runs the computation below, and that is when it is read.
+    // a signal: only a URL emission re-runs the computation below, and that is when it is read and
+    // cleared. Any navigation that ends hands the page back to the URL, so the hold is short-lived.
     const move: { held: string | undefined } = { held: undefined };
     const cursor = linkedSignal({
       source: () => ({

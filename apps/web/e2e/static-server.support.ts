@@ -97,7 +97,8 @@ function waitUntilServing(child: ChildProcessWithoutNullStreams): Promise<void> 
       clearTimeout(timer);
       rejectServing(error);
     });
-    child.once('exit', (code) => {
+    // `close`, not `exit`: only after the pipes drain is the EADDRINUSE line in `stderr`.
+    child.once('close', (code) => {
       clearTimeout(timer);
       rejectServing(new Error(`static-server.mjs exited (${String(code)}): ${stderr}`));
     });
