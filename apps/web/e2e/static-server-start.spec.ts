@@ -1,11 +1,21 @@
 import { expect, test } from '@playwright/test';
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
   CONNECT_SRC_ENV,
+  MAX_PORT_ATTEMPTS,
   ROOT_ENV,
   SERVER_FILE,
   expectPolicy,
@@ -15,6 +25,7 @@ import {
   rawRequest,
   runToExit,
   startDist,
+  startTempServer,
   stopTempServer,
 } from './static-server.support';
 
@@ -161,4 +172,85 @@ test('appends a validated EVIDGATE_WEB_CONNECT_SRC origin to connect-src', async
   } finally {
     await stopTempServer(server);
   }
+});
+
+/** Hold a port the way a parallel worker that won the race would. */
+async function occupyPort(): Promise<{ port: number; close: () => Promise<void> }> {
+  const holder = createServer();
+  const port = await new Promise<number>((resolvePort) => {
+    holder.listen(0, '127.0.0.1', () => {
+      const address = holder.address();
+      resolvePort(typeof address === 'object' && address !== null ? address.port : 0);
+    });
+  });
+  return { port, close: () => new Promise<void>((done) => holder.close(() => done())) };
+}
+
+test('retries on a new port when the picked one was taken before the child bound it', async ({
+  request,
+}) => {
+  const taken = await occupyPort();
+  const picked: number[] = [];
+  const pickPort = async (): Promise<number> => {
+    const port = picked.length === 0 ? taken.port : await freePort();
+    picked.push(port);
+    return port;
+  };
+  let server;
+  try {
+    server = await startDist('<!doctype html><html><body></body></html>', {}, pickPort);
+    expect(picked).toHaveLength(2);
+    expect(server.port).toBe(picked[1]);
+    expect(server.port).not.toBe(taken.port);
+    expect((await request.get(server.url)).ok()).toBe(true);
+  } finally {
+    if (server !== undefined) {
+      await stopTempServer(server);
+    }
+    await taken.close();
+  }
+});
+
+test('gives up after a bounded number of taken ports and leaves no temp dir', async () => {
+  const taken = await occupyPort();
+  let picks = 0;
+  // A private TMPDIR for this process only, so another worker's temp dirs never count as a leak.
+  const privateTmp = mkdtempSync(join(tmpdir(), 'evidgate-web-e2e-scratch-'));
+  const previousTmp = process.env['TMPDIR'];
+  process.env['TMPDIR'] = privateTmp;
+  try {
+    await expect(
+      startDist('<!doctype html><html><body></body></html>', {}, () => {
+        picks += 1;
+        return Promise.resolve(taken.port);
+      }),
+    ).rejects.toThrow('EADDRINUSE');
+    expect(picks).toBe(MAX_PORT_ATTEMPTS);
+    expect(readdirSync(privateTmp)).toEqual([]);
+  } finally {
+    if (previousTmp === undefined) {
+      delete process.env['TMPDIR'];
+    } else {
+      process.env['TMPDIR'] = previousTmp;
+    }
+    rmSync(privateTmp, { recursive: true, force: true });
+    await taken.close();
+  }
+});
+
+test('stops the server and drops its temp dir when a step after the start throws', async () => {
+  let started:
+    { tempDir: string; child: { exitCode: number | null; signalCode: string | null } } | undefined;
+  await expect(
+    startTempServer((server) => {
+      started = server;
+      throw new Error('fixture step failed');
+    }),
+  ).rejects.toThrow('fixture step failed');
+  if (started === undefined) {
+    throw new Error('the populate step never ran');
+  }
+  expect(existsSync(started.tempDir)).toBe(false);
+  const child = started.child;
+  await expect.poll(() => child.exitCode !== null || child.signalCode !== null).toBe(true);
 });

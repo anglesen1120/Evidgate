@@ -7,7 +7,7 @@ import {
   linkedSignal,
   untracked,
 } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
   ActivatedRoute,
   NavigationCancel,
@@ -226,6 +226,20 @@ export class ApiTokensPage {
   private historyIntent: 'project' | 'page' | null = null;
 
   constructor() {
+    // Whatever ends a navigation hands the page back to the URL; a Next held until now kept its
+    // cursor against a re-emission of the entry it was leaving.
+    this.router.events
+      .pipe(
+        filter(
+          (event) =>
+            event instanceof NavigationEnd ||
+            event instanceof NavigationCancel ||
+            event instanceof NavigationError ||
+            event instanceof NavigationSkipped,
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe(() => this.store.settleMove());
     // The URL carries the project with its cursor. A create, a dismissed ambiguous create or a
     // revoke conflict sends the list back to page one, so the URL has to drop the cursor too;
     // otherwise a reload restores a page whose row has gone.
