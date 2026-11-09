@@ -162,18 +162,17 @@ public sealed class UsageBillingStatementSchemaTests
                 .ShouldBe(expected, $"{role} {privilege} on {Table}");
         }
 
-        // The owner keeps the repair path, and the shared trigger still owns the concurrency token.
+        // The owner is refused too (the issued-period guard binds every role), and the refusal changes nothing.
         await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database), org))
         {
-            (await owner.ExecuteAsync($"update public.billing_statement set total_amount = 11 where id = '{id}'"))
-                .ShouldBe(1);
-            await owner.CommitAsync();
+            (await owner.CaptureErrorAsync($"update public.billing_statement set total_amount = 11 where id = '{id}'"))
+                .SqlState.ShouldBe("23514");
         }
 
         (await _fixture.ScalarAsync<long>(
             database,
-            $"select count(*) from public.billing_statement where id = '{id}' and total_amount = 11 and version = 2"))
-            .ShouldBe(1, "the owner path updates the row and the shared trigger increments version");
+            $"select count(*) from public.billing_statement where id = '{id}' and total_amount = 10.50 and version = 1"))
+            .ShouldBe(1, "the owner's refused update leaves the document unchanged");
     }
 
     // ------------------------------------------------------------------ (c) one statement per period

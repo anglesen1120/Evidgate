@@ -1029,3 +1029,10 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - Deploy: any order, one transaction. Rollback: re-state the `0090` bodies of `session_revoke_all_admin` and
   `session_admin_may_revoke`, then drop the three new helpers.
 - Residual, accepted pending an owner decision: sessions are per user, so an administrator of any org the target belongs to at a lower rank can still end the target's sessions in every org; `RemoveMember`, `UpdateMembership` and `RevokeRole` carry no rank guard either.
+
+## Notes on the issued-period mutation guard (`0092`)
+
+- `0087` refused INSERTs into an issued billing period; `0092` refuses UPDATE and DELETE too, for every role, the owner included, with plain row triggers (`usage_ledger_entry_issued_mutation`, `billing_statement_issued_mutation`), not grants or policies. A statement row exists only once its period is issued, so every statement UPDATE/DELETE is refused; a ledger row is refused when its (org_id, period) has a statement, or when an UPDATE moves it into such a period. SQLSTATE `23514`, constraint label = trigger name.
+- No code path mutates either table (the app role holds no UPDATE/DELETE grant; issue and re-issue only insert and read). Existing rows in issued periods are not backfilled. Owner-run repairs of an issued period now need the trigger disabled for the transaction by the operator.
+- The ledger guard takes the `0087` shared advisory lock on the old and the new period key and refuses non-READ COMMITTED writers, like the insert guard.
+- Deploy: any order, one transaction. Rollback: drop the two triggers, then the two `evidgate.*_issued_mutation_guard` functions.
