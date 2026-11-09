@@ -16,8 +16,8 @@ processors:
   # own `otelcol_processor_refused_*` metrics) instead of growing past mem_limit.
   memory_limiter:
     check_interval: 1s
-    limit_mib: 90
-    spike_limit_mib: 20
+    limit_mib: 60
+    spike_limit_mib: 15
   batch: {}
 
 exporters:

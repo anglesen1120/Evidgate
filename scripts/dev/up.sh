@@ -413,11 +413,35 @@ if [ "$observability" = true ]; then
 fi
 
 if [ "$reset" = true ]; then
-  info "--reset: stopping the host processes and deleting the pg-data/s3-data volumes"
+  info "--reset: stopping the host processes and deleting the pg-data/s3-data and observability volumes"
   evg_stop_hosts
   evg_compose_all down -v
 fi
 
+if [ "$observability" = true ]; then
+  # A taken port under colima silently drops the publish, so the app would ship
+  # telemetry to a foreign listener while the stack reports ready.
+  for pair in "otel-collector:$EVIDGATE_OBS_OTLP_GRPC_PORT:EVIDGATE_OBS_OTLP_GRPC_PORT" \
+    "otel-collector:$EVIDGATE_OBS_OTLP_HTTP_PORT:EVIDGATE_OBS_OTLP_HTTP_PORT" \
+    "prometheus:$EVIDGATE_OBS_PROMETHEUS_PORT:EVIDGATE_OBS_PROMETHEUS_PORT" \
+    "victorialogs:$EVIDGATE_OBS_LOGS_PORT:EVIDGATE_OBS_LOGS_PORT" \
+    "victoriatraces:$EVIDGATE_OBS_TRACES_PORT:EVIDGATE_OBS_TRACES_PORT"; do
+    IFS=: read -r obs_svc obs_num obs_var <<<"$pair"
+    if port_conflict "$obs_svc" "$obs_num"; then
+      die "port $obs_num on 127.0.0.1 is already in use, so $obs_svc cannot be published there.
+     Set $obs_var in .env.dev or stop the process holding the port."
+    fi
+  done
+  # Running hosts keep the environment they started with: restart them so they
+  # pick up the collector endpoint.
+  if evg_host_is_running api || evg_host_is_running worker; then
+    info "restarting the Api and Worker so they export to the collector"
+    evg_stop_hosts
+  fi
+else
+  # An inherited profile would start services whose config this path never loads.
+  unset COMPOSE_PROFILES
+fi
 preflight_ports
 
 if [ "$observability" = true ]; then

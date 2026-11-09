@@ -95,7 +95,6 @@ services:
   otel-collector:
     profiles: [observability]
     image: otel/opentelemetry-collector-contrib:0.164.0@sha256:340c9ca6a36617084c6661bdc4f0fe92b7cda5a805d61673ec8db375fddc522b
-    container_name: evidgate-dev-otel-collector
     restart: unless-stopped
     mem_limit: 128m
     environment:
@@ -114,7 +113,6 @@ services:
   prometheus:
     profiles: [observability]
     image: prom/prometheus:v3.15.1@sha256:fa3302279710be2f21a8301ec17a8b4f2301fd829bd113839b3b6b02b6f191a2
-    container_name: evidgate-dev-prometheus
     restart: unless-stopped
     mem_limit: 256m
     # Retention comes from the config file: the command-line retention flags are
@@ -140,7 +138,6 @@ services:
   victorialogs:
     profiles: [observability]
     image: victoriametrics/victoria-logs:v1.53.0@sha256:251121fa882af99b95ba0c230a4a2f412ea602d2698c64a96c58dc9842bb755d
-    container_name: evidgate-dev-victorialogs
     restart: unless-stopped
     mem_limit: 256m
     command:
@@ -158,7 +155,6 @@ services:
   victoriatraces:
     profiles: [observability]
     image: victoriametrics/victoria-traces:v0.12.1@sha256:609abddf298c9642496045296f30a3968b5a4b79b678373e2e7ef29c844f5578
-    container_name: evidgate-dev-victoriatraces
     restart: unless-stopped
     mem_limit: 256m
     command:

@@ -14,6 +14,7 @@ ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 COMPOSE_FILE="$ROOT/infra/compose.dev.yml"
 COLLECTOR_CONFIG_FILE="$ROOT/infra/observability/otel-collector.yaml"
 project="evidgate-obs-smoke"
+unset COMPOSE_PROFILES
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -52,6 +53,8 @@ EVIDGATE_OBS_PROMETHEUS_PORT="$(free_port)"
 EVIDGATE_OBS_LOGS_PORT="$(free_port)"
 EVIDGATE_OBS_TRACES_PORT="$(free_port)"
 
+# Bound every request: a service that accepts TCP but never answers must not hang the poll.
+curl() { command curl --max-time 10 "$@"; }
 compose() { docker compose -p "$project" -f "$COMPOSE_FILE" "$@"; }
 
 # Compose validation: without the profile the stack is exactly the two stateful
@@ -66,6 +69,11 @@ profile_services="$(compose --profile observability config --services | sort | t
 ok "profile adds: otel-collector prometheus victorialogs victoriatraces"
 
 cleanup() { compose --profile observability down -v >/dev/null 2>&1 || true; }
+# The cleanup runs `down -v`: refuse a project that already owns containers or volumes
+# (the dev stack, for one), so only what this run created is ever deleted.
+[ -z "$(compose --profile observability ps -aq)" ] \
+  && [ -z "$(docker volume ls -q --filter "label=com.docker.compose.project=$project")" ] \
+  || fail "compose project '$project' already has containers or volumes; pick a fresh --project name"
 trap cleanup EXIT
 
 compose --profile observability up -d --wait --quiet-pull \

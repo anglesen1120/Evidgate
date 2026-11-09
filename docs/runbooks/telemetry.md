@@ -174,7 +174,7 @@ sets it). Without the flag the dev stack is unchanged and exports nowhere.
 
 | Service | Signal | Loopback port (override) | Retention | Ceiling | Memory |
 |---|---|---|---|---|---|
-| `otel-collector` | OTLP in, three `otlphttp` exporters out | 4317 gRPC, 4318 HTTP (`EVIDGATE_OBS_OTLP_GRPC_PORT`, `EVIDGATE_OBS_OTLP_HTTP_PORT`) | none (stateless) | `memory_limiter` 90 MiB | 128m |
+| `otel-collector` | OTLP in, three `otlphttp` exporters out | 4317 gRPC, 4318 HTTP (`EVIDGATE_OBS_OTLP_GRPC_PORT`, `EVIDGATE_OBS_OTLP_HTTP_PORT`) | none (stateless) | `memory_limiter` 60 MiB (RSS runs above the limiter value, so it sits well under the cgroup) | 128m |
 | `victoriatraces` | traces | 10428 (`EVIDGATE_OBS_TRACES_PORT`) | 7 d | 2 GiB | 256m |
 | `victorialogs` | logs | 9428 (`EVIDGATE_OBS_LOGS_PORT`) | 30 d | 3 GiB | 256m |
 | `prometheus` | metrics | 9090 (`EVIDGATE_OBS_PROMETHEUS_PORT`) | 90 d | 2 GiB | 256m |
@@ -195,3 +195,9 @@ the end): `scripts/dev/observability-smoke.sh`. It checks that the default stack
 `postgres seaweedfs`, that every published port is loopback, that each store reports the
 retention above, and that one span, one metric point and one log record sent to the
 collector are queryable.
+
+Not covered yet (open items, see the 10.3.2 hand-over): the memory limits above are
+sized, not measured under load; the collector's own drop counters (`otelcol_*`) are not
+scraped; the smoke reads the retention settings back and proves ingest and query, but
+does not wait for expiry or for a store to hit its size ceiling; the stores share the
+default compose network with PostgreSQL and SeaweedFS.
