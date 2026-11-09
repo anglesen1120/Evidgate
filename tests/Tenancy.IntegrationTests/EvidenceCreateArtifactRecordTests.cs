@@ -271,15 +271,4 @@ public sealed class EvidenceCreateArtifactRecordTests
         (await MintAsync(world, runId)).IsSuccess.ShouldBeTrue();
         (await RowsAsync(world)).ShouldBe(1);
     }
-
-    [Fact]
-    public async Task Mint_ForAnUnknownRun_IsRefusedWithRunNotFound()
-    {
-        await using var world = await StartAsync();
-
-        var result = await MintAsync(world, Guid.CreateVersion7());
-
-        result.Error!.Code.ShouldBe(EvidenceErrors.RunNotFound.Code);
-        (await RowsAsync(world)).ShouldBe(0);
-    }
 }

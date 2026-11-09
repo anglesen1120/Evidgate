@@ -57,7 +57,7 @@ internal static class EvidenceErrors
     /// <summary>
     /// 409, internal only (no route mints without the run scope check): the artifact's project is not the run's
     /// project. The code is local to this module and is not in the wire catalogue; a route that ever exposes the
-    /// mint must add it there.
+    /// mint must add it there and answer 404 <c>RunNotFound</c> instead, so a sibling project's run id is no oracle.
     /// </summary>
     internal const string ArtifactRunProjectMismatchCode = "artifact_run_project_mismatch";
 

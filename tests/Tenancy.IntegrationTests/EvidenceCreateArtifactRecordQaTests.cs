@@ -273,20 +273,14 @@ public sealed class EvidenceCreateArtifactRecordQaTests
     // ------------------------------------------------------------------ run id: 0031's composite key enforces existence
 
     [Fact]
-    public async Task RunId_OfAnUnknownRun_IsRefusedByTheRunFk()
+    public async Task RunId_OfAnUnknownRun_IsRefusedAsNotFoundBeforeTheWrite()
     {
         await using var world = await StartAsync();
 
-        // 0031's artifact_run_fk is a plain (non-deferrable) composite key, so an unknown run is refused at the
-        // write itself. The handler does not translate it — HTTP mapping is 06.1.2's — so the database failure
-        // surfaces as the EF write exception.
-        var failure = await Should.ThrowAsync<DbUpdateException>(
-            () => MintAsync(world, Command(runId: Guid.CreateVersion7())));
+        var result = await MintAsync(world, Command(runId: Guid.CreateVersion7()));
 
-        var postgres = failure.InnerException.ShouldBeOfType<PostgresException>();
-        postgres.SqlState.ShouldBe("23503");
-        postgres.ConstraintName.ShouldBe("artifact_run_fk");
-
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(EvidenceErrors.RunNotFound.Code);
         (await RowsAsync(world)).ShouldBe(0);
     }
 

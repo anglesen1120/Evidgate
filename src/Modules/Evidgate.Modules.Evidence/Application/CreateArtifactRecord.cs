@@ -171,8 +171,9 @@ internal sealed class ArtifactMinter(
     /// <see cref="EvidenceErrors.RunNotFound"/> / <see cref="EvidenceErrors.ArtifactRunProjectMismatch"/>.
     /// <paramref name="sensitivity"/> lets a caller that already read the kind policy (06.1.2's upload-url
     /// handler) pass its <c>default_sensitivity</c> in, so the row is not read twice; when it is null the policy is
-    /// read here. <paramref name="knownRun"/> lets a caller that already read the run pass the lookup in, so the run
-    /// is not read twice; its project is still compared here.
+    /// read here. <paramref name="knownRun"/> must be the <c>FindAsync</c> answer for this same run id and
+    /// execution key; it lets a caller that already read the run skip a second read, and its project is still
+    /// compared here.
     /// </summary>
     public async ValueTask<Result<ArtifactRecord>> MintAsync(
         Guid orgId,
@@ -190,14 +191,9 @@ internal sealed class ArtifactMinter(
     {
         var run = knownRun
             ?? await runs.FindAsync(runId, executionKey, cancellationToken).ConfigureAwait(false);
-        if (run is null)
+        if (RunRefusal(run, projectId) is { } refusal)
         {
-            return Result.Failure<ArtifactRecord>(EvidenceErrors.RunNotFound);
-        }
-
-        if (run.ProjectId != projectId)
-        {
-            return Result.Failure<ArtifactRecord>(EvidenceErrors.ArtifactRunProjectMismatch);
+            return Result.Failure<ArtifactRecord>(refusal);
         }
 
         await using var context = contexts.Create();
@@ -236,4 +232,9 @@ internal sealed class ArtifactMinter(
 
         return Result.Success(new ArtifactRecord(artifactId, objectKey, ArtifactState.PendingUpload));
     }
+
+    private static Error? RunRefusal(RunPlanLookup? run, Guid projectId) =>
+        run is null ? EvidenceErrors.RunNotFound
+        : run.ProjectId != projectId ? EvidenceErrors.ArtifactRunProjectMismatch
+        : null;
 }
