@@ -124,18 +124,24 @@ export async function runToExit(
   return { code, stderr };
 }
 
+/** How many ports a start tries before it gives up on a port that is taken again and again. */
+export const MAX_PORT_ATTEMPTS = 5;
+
 /**
  * Start `static-server.mjs` over a throwaway dist whose single-layout index.html is `indexHtml`.
  * `env` adds variables to the child's environment — the policy tests set
  * `EVIDGATE_WEB_CONNECT_SRC` this way — and a value there wins over the inherited one.
  *
- * A start that fails (no "serving" line, an early exit) kills the child and drops the temp dir
+ * The port is released before the child binds it, so a parallel worker can take it in between:
+ * a child that reports EADDRINUSE is retried on a new port, at most `MAX_PORT_ATTEMPTS` times.
+ * Any other failure (no "serving" line, an early exit) kills the child and drops the temp dir
  * before rethrowing: the caller only gets a `TempServer` it can stop, so a failed start would
  * otherwise leave a process and a directory behind for the rest of the run.
  */
 export async function startDist(
   indexHtml: string,
   env: Record<string, string> = {},
+  pickPort: () => Promise<number> = freePort,
 ): Promise<TempServer> {
   const tempDir = mkdtempSync(join(tmpdir(), 'evidgate-web-e2e-'));
   let child: ChildProcessWithoutNullStreams | undefined;
@@ -144,15 +150,25 @@ export async function startDist(
     mkdirSync(distDir, { recursive: true });
     writeFileSync(join(distDir, 'index.html'), indexHtml);
 
-    const port = await freePort();
-    // `EVIDGATE_WEB_E2E_ROOT` points the server at the temporary dist; the port goes as the
-    // first argument, which wins over the `EVIDGATE_WEB_E2E_PORT` value the config set for the
-    // suite's own server and that this child inherits.
-    child = spawn(process.execPath, [SERVER_FILE, String(port)], {
-      env: { ...process.env, [ROOT_ENV]: distDir, ...env },
-    });
-    await waitUntilServing(child);
-    return { url: `http://127.0.0.1:${port}`, port, child, tempDir };
+    for (let attempt = 1; ; attempt += 1) {
+      const port = await pickPort();
+      // `EVIDGATE_WEB_E2E_ROOT` points the server at the temporary dist; the port goes as the
+      // first argument, which wins over the `EVIDGATE_WEB_E2E_PORT` value the config set for the
+      // suite's own server and that this child inherits.
+      child = spawn(process.execPath, [SERVER_FILE, String(port)], {
+        env: { ...process.env, [ROOT_ENV]: distDir, ...env },
+      });
+      try {
+        await waitUntilServing(child);
+        return { url: `http://127.0.0.1:${port}`, port, child, tempDir };
+      } catch (error) {
+        const taken = error instanceof Error && error.message.includes('EADDRINUSE');
+        if (!taken || attempt >= MAX_PORT_ATTEMPTS) {
+          throw error;
+        }
+        child.kill('SIGKILL');
+      }
+    }
   } catch (error) {
     // SIGKILL, not SIGTERM: a child that never reached its listen callback has no handler yet,
     // and a failed start must not wait out a grace period it will not use.
@@ -178,10 +194,26 @@ export async function stopTempServer(server: TempServer): Promise<void> {
   rmSync(tempDir, { recursive: true, force: true });
 }
 
-async function startTempServer(): Promise<TempServer> {
+/**
+ * The shared server with its fixtures. A step after the start that throws stops the server
+ * again: `afterAll` only sees a server that was assigned, so it could not clean up this one.
+ */
+export async function startTempServer(
+  populate: (server: TempServer) => void = populateTempDist,
+): Promise<TempServer> {
   // No placeholder in this document on purpose: it proves an HTML answer without one is served
   // as it is, and the assertions below can keep naming `<app-root></app-root>`.
   const server = await startDist('<!doctype html><html><body><app-root></app-root></body></html>');
+  try {
+    populate(server);
+    return server;
+  } catch (error) {
+    await stopTempServer(server);
+    throw error;
+  }
+}
+
+function populateTempDist(server: TempServer): void {
   const distDir = join(server.tempDir, 'dist', 'browser');
   // Stat-able but not readable: the read stream fails, the server must answer 500.
   writeFileSync(join(distDir, 'locked.txt'), 'never served');
@@ -199,7 +231,6 @@ async function startTempServer(): Promise<TempServer> {
   const outsideFile = join(server.tempDir, 'outside-the-bundle.txt');
   writeFileSync(outsideFile, 'outside the bundle');
   symlinkSync(outsideFile, join(distDir, 'escape.txt'));
-  return server;
 }
 
 export function getTempServer(): TempServer {
