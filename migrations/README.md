@@ -997,3 +997,21 @@ through the real runner against a throwaway PostgreSQL 18 container.
   revoked, then EXECUTE to `evidgate_worker_sched`) and changes no function body. It is a no-op on a database that
   already carries the `0017` grant. The other function `0019` touches, `ingest_token_keep_version_on_touch`,
   restates its own ACL, so nothing else needed restating.
+
+## Notes on the session revoke helpers (`0090`)
+
+- `0085` `session_revoke_all_admin` had copied the `membership:write` join and the audit-chain append of `0051`
+  `session_revoke_one`. `0090` moves both into two `evidgate` helpers, `session_admin_may_revoke(actor, org,
+target)` and `session_revoke_audit_append(org, actor, object_type, object_id, metadata, request_id, trace_id)`,
+  and re-creates both definers (same signatures, `security definer`, pinned `search_path`, `lock_timeout`) so they
+  call them. Results, error codes, audit payloads and entry hashes are unchanged.
+- The helpers are invoker-rights functions like `session_user_lock` (`0065`): EXECUTE is revoked from PUBLIC,
+  `evidgate_app`, `evidgate_operator` and `evidgate_worker_sched`, so only the owner-run definers reach them (a
+  tenant-facing role must never be able to append a chain row for any org). `DefinerExecuteScopeTests` pins the
+  exact grantee list.
+- Behaviour fix: `session_revoke_all_admin` now proves the caller and the target again after it holds the
+  target's user lock, so a removal that commits during the lock wait refuses the call (`not_found`, nothing
+  revoked or recorded). This narrows the window to the statements after the check; it does not make the check
+  and the update one atomic step.
+- Deploy: any order; the helpers and the definers change in one transaction. Rollback: re-state the `0051` and
+  `0085` bodies with `create or replace`, then drop the two helpers.
