@@ -41,30 +41,42 @@ public sealed class SecretScanConsumerTests(PostgresTenancyFixture fixture, Seaw
             await scope.CommitAsync(Token);
         }
         (await ArtifactValueAsync<string>(world, artifact, "scan_state")).ShouldBe("pending");
-        // The outbox is shared with sibling classes: one batch takes the oldest 200 rows or finds ours locked by a
-        // neighbour's dispatcher, so dispatch until our own row has produced its task instead of reading it once.
-        var task = await DispatchedTaskAsync(world, outbox);
-        var queue = await TaskValueAsync<string>(world, task, "queue");
-        (await world.Host.Services.GetRequiredService<TaskConsumer>().PollOnceAsync(queue, Token)).ShouldBeGreaterThan(0);
+        // Outbox and queue are shared with sibling classes: a dispatch batch takes the oldest 200 rows (or skips ours
+        // while a neighbour's dispatcher holds it) and a claim takes the oldest 50 due tasks, so dispatch and consume
+        // until our own task is done instead of reading each step once.
+        var task = await DispatchAndConsumeAsync(world, outbox);
         (await TaskValueAsync<string>(world, task, "state")).ShouldBe("done");
         (await ArtifactValueAsync<string>(world, artifact, "scan_state")).ShouldBe("flagged");
     }
 
-    private async Task<Guid> DispatchedTaskAsync(World world, Guid outbox)
+    private async Task<Guid> DispatchAndConsumeAsync(World world, Guid outbox)
     {
         var dispatcher = world.Host.Services.GetRequiredService<OutboxDispatcher>();
-        var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (true)
+        var consumer = world.Host.Services.GetRequiredService<TaskConsumer>();
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        budget.CancelAfter(TimeSpan.FromSeconds(30));
+        try
         {
-            await dispatcher.DispatchBatchAsync(Token);
-            var task = await fixture.ScalarAsync<Guid?>(world.Database,
-                $"select id from public.task where idempotency_key='outbox:{outbox:D}'");
-            if (task is { } found)
+            while (true)
             {
-                return found;
+                await dispatcher.DispatchBatchAsync(budget.Token);
+                var task = await fixture.ScalarAsync<Guid?>(world.Database,
+                    $"select id from public.task where idempotency_key='outbox:{outbox:D}'");
+                if (task is { } found)
+                {
+                    var queue = await TaskValueAsync<string>(world, found, "queue");
+                    await consumer.PollOnceAsync(queue, budget.Token);
+                    if (await TaskValueAsync<string>(world, found, "state") == "done")
+                    {
+                        return found;
+                    }
+                }
+                await Task.Delay(100, budget.Token);
             }
-            (DateTime.UtcNow < deadline).ShouldBeTrue($"outbox row {outbox:D} was never dispatched into a task");
-            await Task.Delay(100, Token);
+        }
+        catch (OperationCanceledException) when (!Token.IsCancellationRequested)
+        {
+            throw new TimeoutException($"outbox row {outbox:D} did not become a done task within 30 s");
         }
     }
 
