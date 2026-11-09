@@ -4,7 +4,7 @@ Legend: ✅ verified with link · ⚠️ unverified · `[INFERENCE]` · `[DECISI
 
 ## Status
 
-proposed
+accepted (2026-11-09, by the coordinator on the owner's delegation; the owner may override)
 
 ## Date
 
@@ -56,7 +56,7 @@ Constraints: the backend must run on the dev Mac through `infra/compose.dev.yml`
 
 - Unblocks 10.3.1-T2 (collector deployment) once the compose profile exists; the application is unchanged (AC2).
 - Three data directories and four containers in a new compose profile; the review host cannot run them beside the full stack (decision 5).
-- No Grafana: operators use the built-in query UIs until a dashboard decision. Owner decision needed: accept this ADR, and later a dashboard layer.
+- No Grafana: operators use the built-in query UIs until a dashboard decision. Owner decision still needed: a dashboard layer (this ADR is accepted).
 - VictoriaTraces is a v0.x product ✅; the revisit trigger covers it.
 - Hand-over: 10.3.2-T1.2 (compose profile, pinned image digests, volumes, retention flags, `infra/config-matrix.json` keys, ADR-0002 image provenance if the matrix requires it) is not part of this change because `infra/**` puts a diff in the `full` gate tier and the Docker gate lock is held by another lane. It is recorded in the 10.3.2 plan Notes for the next backend lane.
 - No migration, no contract change, no application code.
@@ -74,7 +74,7 @@ Prior art (official documentation read, 2026-11-05):
 - ⚠️ Not measured: memory and disk use of any candidate on the dev Mac or the t4g.medium; the ceilings and `mem_limit` values above are `[INFERENCE]` until T1.2 measures them.
 - ⚠️ Not verified: arm64 images for each pinned version (required for the t4g.medium); T1.2 confirms the manifest lists.
 
-Open questions for the owner: accept the ADR; the dashboard layer; whether SigNoz's `ee/` terms are acceptable (not needed for this decision).
+Open questions for the owner: the dashboard layer; whether SigNoz's `ee/` terms are acceptable (not needed for this decision). Acceptance of the ADR was given on 2026-11-09 (see DECISIONS §8.3).
 
 ## Revisit trigger
 
