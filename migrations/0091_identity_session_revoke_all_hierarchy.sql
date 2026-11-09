@@ -13,7 +13,8 @@
 -- RANK: the platform has no role-ordering table, so the order lives in ONE function,
 -- `evidgate.session_admin_rank(p_org_id, p_user_id)`: 2 = holds the built-in `tenant_admin` role, 1 = holds
 -- `membership:write` through some other role (a custom administrator), 0 = anything else. It is computed from
--- the ACTING org's grants only: a `tenant_admin` of another org is rank 0 here. The `membership:write` join
+-- the ACTING org's grants only: a `tenant_admin` of another org is rank 0 here. Rank is derived from the
+-- role and its permission at call time, never stored in a column or table. The `membership:write` join
 -- that 0090 kept inside `session_admin_may_revoke` moves into `session_admin_holds_write` so both callers share
 -- one copy; `session_admin_may_revoke` keeps its signature and answers exactly as before (the single-session
 -- admin revoke, `session_revoke_one`, still uses it unchanged: the hierarchy is for revoke-all only).
