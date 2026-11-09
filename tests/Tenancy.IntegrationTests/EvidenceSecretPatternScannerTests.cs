@@ -370,10 +370,11 @@ public sealed class EvidenceSecretPatternScannerTests
     /// <summary>
     /// A cancelled attempt stops instead of finishing the object, including the worst shape for the bearer arm: one
     /// unbroken token run from the first byte to the last. The pass has to reach its own cancellation check inside that
-    /// run instead of walking the run to its end first. The proof is the offsets the pass reports, never elapsed time:
-    /// the token is cancelled at the first interval checkpoint, that checkpoint must lie within one interval of the
-    /// start, and the pass must report nothing after it. The shape also matches one credential, which the positive
-    /// control on a prefix of the same bytes confirms.
+    /// run instead of walking the run to its end first. Where the pass stops is proven by the offsets it reports, not by
+    /// elapsed time: the token is cancelled at the first interval checkpoint, which must lie within one interval of the
+    /// start, with nothing reported after it. Offsets cannot see the bearer lookahead, which is capped inside the arm; an
+    /// unbounded walk of the 256 MiB run would be about 64 times the reference cost, so a deliberately coarse bound
+    /// (16 times the best of three reference scans, never under 100 ms) catches it without a tight timing ratio.
     /// </summary>
     [Fact]
     public async Task Scan_Honours_Cancellation_During_A_Large_Pass()
@@ -385,10 +386,20 @@ public sealed class EvidenceSecretPatternScannerTests
         "Bearer "u8.CopyTo(content);
         content.AsSpan(7).Fill((byte)'Q');
 
-        Scan(content.AsSpan(0, interval).ToArray()).ShouldHaveSingleItem().PatternClass.ShouldBe(SecretPatternClass.GenericBearerToken);
+        var reference = TimeSpan.MaxValue;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var prefix = content.AsSpan(0, interval).ToArray();
+            var referenceWatch = System.Diagnostics.Stopwatch.GetTimestamp();
+            Scan(prefix).ShouldHaveSingleItem().PatternClass.ShouldBe(SecretPatternClass.GenericBearerToken);
+            var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(referenceWatch);
+            reference = elapsed < reference ? elapsed : reference;
+        }
 
         using var cancellation = new CancellationTokenSource();
         var offsets = new List<int>();
+        var start = 0L;
+        var walked = TimeSpan.Zero;
 
         // The checkpoint runs on the scan thread; the token is armed from inside it, so no scheduler delay is involved.
         var pass = Task.Run(
@@ -398,10 +409,14 @@ public sealed class EvidenceSecretPatternScannerTests
                 offset =>
                 {
                     offsets.Add(offset);
-                    if (offset != 0)
+                    if (offset == 0)
                     {
-                        Arm(cancellation);
+                        start = System.Diagnostics.Stopwatch.GetTimestamp();
+                        return;
                     }
+
+                    walked = System.Diagnostics.Stopwatch.GetElapsedTime(start);
+                    Arm(cancellation);
                 })),
             Token);
 
@@ -411,6 +426,8 @@ public sealed class EvidenceSecretPatternScannerTests
         offsets[0].ShouldBe(0);
         offsets[1].ShouldBeGreaterThanOrEqualTo(interval);
         offsets[1].ShouldBeLessThan(interval * 2, "the first check must come one interval into the token run, not at its end");
+        var bound = reference * 16 > TimeSpan.FromMilliseconds(100) ? reference * 16 : TimeSpan.FromMilliseconds(100);
+        walked.ShouldBeLessThan(bound, "the walk to the first check must cost one interval, not the whole token run");
     }
 
     /// <summary>
