@@ -1028,3 +1028,4 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - The audit row stays in the acting org's chain only. The three helpers are owner-only (`DefinerExecuteScopeTests`).
 - Deploy: any order, one transaction. Rollback: re-state the `0090` bodies of `session_revoke_all_admin` and
   `session_admin_may_revoke`, then drop the three new helpers.
+- Residual, accepted pending an owner decision: sessions are per user, so an administrator of any org the target belongs to at a lower rank can still end the target's sessions in every org; `RemoveMember`, `UpdateMembership` and `RevokeRole` carry no rank guard either.

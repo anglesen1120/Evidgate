@@ -23,6 +23,10 @@
 -- revoke-all definer asks it twice, as 0090 did: before and again after the target's user lock is held, so a
 -- role change that committed during the lock wait is seen. Every refusal is the same `not_found`.
 --
+-- RESIDUAL: sessions are per user, not per org, so the call ends the target's sessions everywhere. An
+-- administrator of an org the target merely belongs to as a lower rank can still end them; the rank is read
+-- from the acting org only. Accepted for now and recorded as an owner decision.
+--
 -- AUDIT: unchanged. The one `auth.session_revoke_admin` row stays in the ACTING org's chain, written in the
 -- revoke's transaction; it is not copied into any other org of the target.
 --

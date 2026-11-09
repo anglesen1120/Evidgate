@@ -111,6 +111,51 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
     }
 
     /// <summary>
+    /// A custom role of the org that merely carries the code <c>tenant_admin</c> is not the built-in owner role:
+    /// it ranks as a custom administrator, so it can neither end a real owner's sessions nor be mistaken for one.
+    /// </summary>
+    [Fact]
+    public async Task A_Custom_Role_Named_Tenant_Admin_Does_Not_Reach_The_Owner_Rank()
+    {
+        using var host = SessionTestHost.Start(Fixture);
+        using var client = host.CreateSessionClient();
+        var member = await host.SignInMemberAsync(client);
+        var owner = await host.SignInMemberInOrgAsync(client, member.OrgId, "tenant_admin");
+        var impostor = await SignInCustomAdminAsync(host, client, member.OrgId, roleCode: "tenant_admin");
+
+        await AssertRefusedAsync(host, client, impostor, owner);
+    }
+
+    /// <summary>
+    /// A <c>membership_role</c> row that points at ANOTHER org's custom administrator role grants nothing here
+    /// (the table has no foreign key on the role, so only the query scopes it): the caller ranks 0 and is refused.
+    /// </summary>
+    [Fact]
+    public async Task A_Foreign_Orgs_Custom_Role_Grants_No_Rank()
+    {
+        using var host = SessionTestHost.Start(Fixture);
+        using var client = host.CreateSessionClient();
+        var member = await host.SignInMemberAsync(client);
+        var foreignOrg = await host.SeedOrganizationAsync();
+        var foreignAdmin = await SignInCustomAdminAsync(host, client, foreignOrg);
+        var roleId = (Guid)(await host.ScalarAsync(
+            "select mr.role_id from public.membership_role mr join public.membership m on m.id = mr.membership_id "
+            + "where m.org_id = @org and m.user_id = @user",
+            [("org", foreignOrg), ("user", foreignAdmin.UserId)])).ShouldNotBeNull();
+
+        var caller = await host.SignInMemberInOrgAsync(client, member.OrgId, roleCode: null);
+        await host.ArrangeAsync(
+            "insert into public.membership_role (id, org_id, membership_id, role_id) "
+            + "select @id, @org, m.id, @role from public.membership m where m.org_id = @org and m.user_id = @user",
+            ("id", Guid.CreateVersion7()),
+            ("org", member.OrgId),
+            ("role", roleId),
+            ("user", caller.UserId));
+
+        await AssertRefusedAsync(host, client, caller, member);
+    }
+
+    /// <summary>
     /// Mutation proof: with the rank function neutralised (every user ranks the same) the very call the first
     /// refusal case asserts succeeds, so the refusal is the rank check's and nothing else's.
     /// </summary>
@@ -132,7 +177,11 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
         await AssertRevokedAsync(host, client, admin, owner);
     }
 
-    private static async Task<SignedInMember> SignInCustomAdminAsync(SessionTestHost host, HttpClient client, Guid orgId)
+    private static async Task<SignedInMember> SignInCustomAdminAsync(
+        SessionTestHost host,
+        HttpClient client,
+        Guid orgId,
+        string? roleCode = null)
     {
         var signedIn = await host.SignInMemberInOrgAsync(client, orgId, roleCode: null);
         var roleId = Guid.CreateVersion7();
@@ -142,7 +191,7 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
             + "values (@id, @org, @code, 'Member administrator', false, 'member')",
             ("id", roleId),
             ("org", orgId),
-            ("code", "member_admin_" + roleId.ToString("N")));
+            ("code", roleCode ?? "member_admin_" + roleId.ToString("N")));
         await host.ArrangeAsync(
             "insert into public.role_permission (id, org_id, role_id, permission_code) "
             + "values (@id, @org, @role, 'membership:write')",
