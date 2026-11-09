@@ -210,9 +210,14 @@ export const ApiTokensStore = signalStore(
         }
       }
     },
-    // The navigation a Next started has landed, failed or been overtaken: the URL leads again.
+    // The navigation a Next started has landed, failed or been overtaken: the URL leads again. A
+    // Next that never reached the URL (a guard refused it) hands the page back to the cursor the
+    // URL still names, so nothing is left to write and the page does not re-ask for the refused one.
     settleMove(): void {
+      const held = store.move.held;
       store.move.held = undefined;
+      if (held === undefined || store.cursor() !== held) return;
+      store.cursor.set(store.query?.()?.get('cursor') ?? undefined);
     },
     reload(): void {
       store.pageResource.reload();
