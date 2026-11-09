@@ -46,6 +46,12 @@ public static class EvidgateSweeps
     public const int PurgeMaxBatchSize = 10_000;
 
     /// <summary>
+    /// Headroom the lease must keep over <see cref="PurgeTimeBudget"/>: the consumer cancels a handler
+    /// at the lease less <c>min(5 s, lease / 10)</c>, so 5 s is the widest margin it takes.
+    /// </summary>
+    public static readonly TimeSpan PurgeLeaseMargin = TimeSpan.FromSeconds(5);
+
+    /// <summary>
     /// How long one idempotency purge fire may keep draining. It replaces a fixed
     /// batch ceiling that could stop a large backlog while the fire's lease still had
     /// headroom: elapsed time is what the lease actually bounds. The next fire
@@ -54,9 +60,10 @@ public static class EvidgateSweeps
     /// <para>
     /// It must stay below the task lease window: the consumer cancels a handler at
     /// <c>VisibilityTimeoutSeconds</c> (default 300 s) minus a margin of
-    /// <c>min(5 s, lease / 10)</c>, so 4 minutes leaves the whole margin spare. A
-    /// budget at or above that window would let the lease expire mid-drain and a
-    /// second worker reclaim the row while this fire is still deleting.
+    /// <c>min(5 s, lease / 10)</c>. A budget at or above that window would let the
+    /// lease expire mid-drain and a second worker reclaim the row while this fire is
+    /// still deleting, so the options validator refuses a lease that is not greater
+    /// than the budget plus <see cref="PurgeLeaseMargin"/>.
     /// </para>
     /// </summary>
     public static readonly TimeSpan PurgeTimeBudget = TimeSpan.FromMinutes(4);

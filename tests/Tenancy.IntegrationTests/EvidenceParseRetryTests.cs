@@ -1,3 +1,4 @@
+using Evidgate.Testing;
 // 06.3.6-T1.4 on the queue half of AC8 ("parsed once"): the parse task through the real outbox hop, the real task
 // queue, a real PostgreSQL and a real SeaweedFS container. The runner is replaced by a fake that models one attempt
 // cancelled mid-parse, so the test drives the production consumer, lease and guard code without spawning a child.
@@ -95,7 +96,7 @@ public sealed class EvidenceParseRetryTests(PostgresTenancyFixture fixture, Seaw
                 // Worker's), so the test registers the mechanism here over the host's own app-role data source — the
                 // composition ReconcileRunTests and IngestTraceCorrelationTests use. It also binds the options set
                 // above (one second of visibility and backoff), so the redelivery below is the queue's own path.
-                services.AddEvidgateTasks(configuration);
+                services.AddEvidgateTasks(configuration).WithoutPurgeLeaseGuard();
 
                 // The extension registers the handler and its queue route, so the consumer can claim the row at all;
                 // the fake replaces the runner it registered (the last registration wins) so the attempt can be
