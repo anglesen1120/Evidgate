@@ -39,6 +39,15 @@ describe('reasonExceedsLimit', () => {
     expect(reasonExceedsLimit(overCap, 'tenant', PROJECT_ID)).toBe(true);
   });
 
+  it('refuses the body one byte past the cap', () => {
+    const atCap = '🙂'.repeat(1012);
+    const oneByteOver = `${atCap}a`;
+
+    expect([...oneByteOver].length).toBeLessThanOrEqual(REASON_CODE_POINT_LIMIT);
+    expect(bodyBytes(oneByteOver, 'tenant')).toBe(REQUEST_BODY_BYTE_LIMIT + 1);
+    expect(reasonExceedsLimit(oneByteOver, 'tenant', PROJECT_ID)).toBe(true);
+  });
+
   it('counts the project envelope, so the project boundary is two emoji lower', () => {
     expect(reasonExceedsLimit('🙂'.repeat(998), 'project', PROJECT_ID)).toBe(false);
     expect(reasonExceedsLimit('🙂'.repeat(999), 'project', PROJECT_ID)).toBe(true);
