@@ -2,8 +2,8 @@
 
 Authority: [10.3.1-T1.3 and T1.4](../../plans/features/10-operations/10.3.1-telemetry-and-alerting.md)
 (§10), the S3 redaction rule of [`../../plans/00-overview.md`](../../plans/00-overview.md) §5.7, and
-the operational-SLI rows of §11. The collector itself — receivers, redaction processor, retention,
-exposure — is 10.3.1-T2 and is **not** described here. This page is what an operator changes on the
+the operational-SLI rows of §11. The collector itself — receivers, processors, retention and
+exposure — is 10.3.1-T2 and is described in §5; §1–§4 are what an operator changes on the
 application side, and what the application guarantees before the collector sees a byte.
 
 Both hosts boot the pipeline through one call, `AddEvidgateTelemetry` in
@@ -148,10 +148,12 @@ The list (`SecretRedactor`):
 
 **Known limits, by construction.** This is a shape-aware scrubber, not a value oracle: a bare secret
 with no name beside it (a token pasted as an entire exception message) is not detectable here. The
-contract stays 00 §5.5 C8 — code never puts a secret in a message — and the collector's redaction
-processor is the third layer for attribute *names*. If you find a shape that leaks, add it to
-`SecretRedactor` with a negative test in `tests/Hosts.IntegrationTests` rather than to a collector
-rule, so it holds for every deployment.
+contract stays 00 §5.5 C8 — code never puts a secret in a message. The collector is the third layer
+where it runs (§5: it deletes credential-named attribute keys outright and masks assignment-shaped
+text in a log body), and the dev profile is the only place it runs today, so a shape that leaks has
+to be fixed here, not there. If you find a shape that leaks, add it to `SecretRedactor` with a
+negative test in `tests/Hosts.IntegrationTests` rather than to a collector rule, so it holds for
+every deployment.
 
 ## 4. Keys, in one place
 
@@ -174,7 +176,7 @@ sets it). Without the flag the dev stack is unchanged and exports nowhere.
 
 | Service | Signal | Loopback port (override) | Retention | Ceiling | Memory |
 |---|---|---|---|---|---|
-| `otel-collector` | OTLP in, three `otlphttp` exporters out | 4317 gRPC, 4318 HTTP (`EVIDGATE_OBS_OTLP_GRPC_PORT`, `EVIDGATE_OBS_OTLP_HTTP_PORT`) | none (stateless) | `memory_limiter` 60 MiB (RSS runs above the limiter value, so it sits well under the cgroup) | 128m |
+| `otel-collector` | OTLP in, `memory_limiter` + `transform/redaction` + `batch`, three `otlphttp` exporters out | 4317 gRPC, 4318 HTTP (`EVIDGATE_OBS_OTLP_GRPC_PORT`, `EVIDGATE_OBS_OTLP_HTTP_PORT`) | none (stateless) | `memory_limiter` 60 MiB (RSS runs above the limiter value, so it sits well under the cgroup) | 128m |
 | `victoriatraces` | traces | 10428 (`EVIDGATE_OBS_TRACES_PORT`) | 7 d | 2 GiB | 256m |
 | `victorialogs` | logs | 9428 (`EVIDGATE_OBS_LOGS_PORT`) | 30 d | 3 GiB | 256m |
 | `prometheus` | metrics | 9090 (`EVIDGATE_OBS_PROMETHEUS_PORT`) | 90 d | 2 GiB | 256m |
@@ -188,7 +190,38 @@ The ceilings are retention-by-size thresholds, not allocation limits: the Victor
 keep at least the newest per-day partitions and Prometheus can overshoot while compacting
 (ADR-0012 decision 4), so keep disk headroom. The application only knows the collector;
 changing a backend means editing the exporters in `infra/observability/otel-collector.yaml`.
-Redaction and sampling processors arrive with the collector deployment task.
+
+Every pipeline runs the same three processors in this order: `memory_limiter` →
+`transform/redaction` → `batch`.
+
+- **`memory_limiter` first**, at 60 MiB with a 15 MiB spike allowance: past it the collector
+  refuses data instead of buffering without bound (the refusals are its own
+  `otelcol_processor_refused_*` counters), so the process stays under the container's 128 MiB
+  `mem_limit`. A refusal costs a signal; nothing downstream is asked to hold it.
+- **`transform/redaction` second** (10.3.1-T2.2): the third redaction layer. It **deletes** every
+  attribute whose key names a credential — `authorization`, `cookie`/`set-cookie`, `token`,
+  `secret`, `password`/`passwd`/`pwd`, `api_key`/`apikey`, `credential`, `pepper`, and any
+  `__Host-`/`__Secure-` cookie name — on resource, scope, span, span-event, datapoint and log
+  record attributes, because a masked key would still say that a value existed. It **masks to
+  `***`** the shapes the app cannot see once a record has left the process: `password=…` /
+  `token: …`-style assignments in a log body or in a log attribute string (quoted values
+  included), and an `authorization`/`cookie` header pair, which is masked to the end of its line
+  so a `Bearer` token with spaces or a multi-cookie list cannot survive past its first word. It
+  is the stock `transform` (OTTL) processor, not the alpha `redaction` one: that one masks a
+  matched key with `****` and cannot delete it, so the key name would still ship.
+- **`batch` last**, at 512 items to wake a batch, at most 1024 items per request and 5 s for a
+  quiet signal, so a masked record is what the batch and the queues ever hold.
+
+Each `otlphttp` exporter retries with backoff for at most 5 minutes and then drops the batch, and
+keeps a queue bounded in items (5000, four consumers, overflow rejected and counted in
+`otelcol_exporter_enqueue_failed_*`). A store outage therefore costs at most one queue and one
+batch per exporter: memory cannot creep past the limiter because it cannot creep past the queues.
+
+This profile, its collector and these processors are the dev stack (ADR-0012). Staging and
+production still supply their own endpoint through `EVIDGATE__TELEMETRY__OTLPENDPOINT`, and
+nothing here is a deployment. The receivers also set no CORS block, so no
+`Access-Control-Allow-*` header is emitted and a browser origin cannot post to them; the public
+web traces intake 10.3.1-T2.2 describes is a separate deployment, not this profile.
 
 Prove the profile on a throwaway compose project (no `.env.dev`, free ports, torn down at
 the end): `scripts/dev/observability-smoke.sh`. It checks that the default stack is still

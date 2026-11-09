@@ -4,6 +4,10 @@
 # passed to the container through EVIDGATE_OTEL_COLLECTOR_CONFIG (`--config=env:`),
 # because a repo file cannot be bind-mounted under colima/virtiofs.
 receivers:
+  # Internal listeners only: compose publishes 4317/4318 on 127.0.0.1, and this
+  # receiver has no CORS block, so it emits no Access-Control-Allow-* header and
+  # a browser origin cannot post to it. Exposing it off-host would be an open,
+  # unauthenticated ingest.
   otlp:
     protocols:
       grpc:
@@ -14,19 +18,131 @@ receivers:
 processors:
   # Bounded buffering: past the limit the collector refuses data (counted in its
   # own `otelcol_processor_refused_*` metrics) instead of growing past mem_limit.
+  # Soft 60 + spike 15 stays well under the container's 128m cgroup.
   memory_limiter:
     check_interval: 1s
     limit_mib: 60
     spike_limit_mib: 15
-  batch: {}
+
+  # Third redaction layer: the app's SecretRedactor is the first two (see
+  # docs/runbooks/telemetry.md §3). A key naming a credential is DELETED on every
+  # attribute map — resource, scope, span, span event, datapoint and log record —
+  # because a masked key still tells a reader that the value existed. Separately,
+  # a log body or log attribute string is masked where it carries a
+  # `secret=value` assignment or an authorization/cookie header pair, which is
+  # the shape the app cannot see once it has left the process.
+  #
+  # Stock `transform` (OTTL) rather than the `redaction` processor: `redaction`
+  # masks a matched key with `****` and cannot delete it, so the key name would
+  # still ship. The key pattern is written once and reused by YAML alias, because
+  # a second copy is a drift risk in a security control. The target is the
+  # context-relative `attributes`, so the alias serves every context verbatim
+  # (the collector prefixes it per context at startup and logs one info line).
+  transform/redaction:
+    error_mode: ignore
+    trace_statements:
+      - context: resource
+        statements:
+          - &delete_secret_keys 'delete_matching_keys(attributes, "(?i)(authorization|cookie|token|secret|password|passwd|pwd|api[_-]?key|apikey|credential|pepper|__host-|__secure-)")'
+      - context: scope
+        statements:
+          - *delete_secret_keys
+      - context: span
+        statements:
+          - *delete_secret_keys
+      - context: spanevent
+        statements:
+          - *delete_secret_keys
+    metric_statements:
+      - context: resource
+        statements:
+          - *delete_secret_keys
+      - context: scope
+        statements:
+          - *delete_secret_keys
+      - context: datapoint
+        statements:
+          - *delete_secret_keys
+    log_statements:
+      - context: resource
+        statements:
+          - *delete_secret_keys
+      - context: scope
+        statements:
+          - *delete_secret_keys
+      - context: log
+        statements:
+          - *delete_secret_keys
+          # Capture refs stay doubled: confmap unescapes `$$` to `$`, and a bare
+          # `${1}` would be expanded as environment variable `1` (its default
+          # scheme is env), which fails the collector's startup validation.
+          # Header pairs mask to the end of the line, so a `Bearer` token with
+          # spaces or a multi-cookie list cannot survive past its first word.
+          # The quote in the separator class catches a JSON-shaped pair.
+          - >-
+            replace_pattern(body, "(?i)((?:set-)?cookie|authorization)([\\s\"']*[:=][\\s]*)[^\\r\\n]+", "$$1$$2***") where IsString(body)
+          # Every other assignment masks only its value (quoted values included),
+          # so the rest of the line stays readable in the store.
+          - >-
+            replace_pattern(body, "(?i)(password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper)([\\s\"']*[:=][\\s]*)(\"[^\"]*\"|'[^']*'|[^\\s,;&|\"'}]+)", "$$1$$2***") where IsString(body)
+          - >-
+            replace_all_patterns(attributes, "value", "(?i)(password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper)([\\s\"']*[:=][\\s]*)(\"[^\"]*\"|'[^']*'|[^\\s,;&|\"'}]+)", "$$1$$2***")
+          # The same header shape in a string attribute value under a harmless
+          # key (`message`), so a pair cannot ride in on a log attribute.
+          - >-
+            replace_all_patterns(attributes, "value", "(?i)((?:set-)?cookie|authorization)([\\s\"']*[:=][\\s]*)[^\\r\\n]+", "$$1$$2***")
+
+  # Explicit bounds: a store outage cannot turn into an unbounded buffer. 512
+  # items wake a batch, one request never exceeds 1024 items, and 5 s is the
+  # longest a quiet signal waits before it is exported.
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+    send_batch_max_size: 1024
 
 exporters:
+  # Retry and queue are bounded per exporter: after 5 minutes of failed attempts
+  # the batch is dropped, and the queue is measured in items (5000) so its worst
+  # case is a fixed number of signals, not a fixed number of arbitrary batches.
   otlphttp/metrics:
     endpoint: http://prometheus:9090/api/v1/otlp
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 5m
+    sending_queue:
+      sizer: items
+      queue_size: 5000
+      num_consumers: 4
+      block_on_overflow: false
   otlphttp/logs:
     endpoint: http://victorialogs:9428/insert/opentelemetry
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 5m
+    sending_queue:
+      sizer: items
+      queue_size: 5000
+      num_consumers: 4
+      block_on_overflow: false
   otlphttp/traces:
     endpoint: http://victoriatraces:10428/insert/opentelemetry
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 5m
+    sending_queue:
+      sizer: items
+      queue_size: 5000
+      num_consumers: 4
+      block_on_overflow: false
 
 extensions:
   health_check:
@@ -34,16 +150,19 @@ extensions:
 
 service:
   extensions: [health_check]
+  # Redaction runs before batch in every pipeline, so a masked record is what the
+  # batch and the queues hold; memory_limiter comes first so it sees a payload
+  # before any later processor holds a copy of it.
   pipelines:
     metrics:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter, transform/redaction, batch]
       exporters: [otlphttp/metrics]
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter, transform/redaction, batch]
       exporters: [otlphttp/logs]
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter, transform/redaction, batch]
       exporters: [otlphttp/traces]

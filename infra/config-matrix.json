@@ -1962,7 +1962,7 @@
         "staging": "environment",
         "prod": "environment"
       },
-      "note": "absolute http(s) OTLP/gRPC endpoint of the collector (10.3.1-T2). Unset disables the exporter, so dev omits it; staging and prod must set it (FR-10-5, 00 §11). Backend, region and exact endpoint are [OPEN] until 10.3.1-T2 settles them."
+      "note": "absolute http(s) OTLP/gRPC endpoint of the collector (10.3.1-T2). Unset disables the exporter. The dev stack settles its own value locally: `up.sh --observability` points it at the profile's loopback collector (`EVIDGATE_OBS_OTLP_GRPC_PORT`, 4317) unless `.env.dev` already sets it, so a dev host without that profile exports nowhere. Staging and prod must set it (FR-10-5, 00 §11); there it is a deployment value supplied through this key, and the choice of backend and its exact endpoint remain [OPEN] until the deployment settles them."
     },
     {
       "key": "EVIDGATE__TELEMETRY__SAMPLERATIO",
@@ -2671,7 +2671,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "dev-stack only, profile `observability`: the whole collector configuration, exported by scripts/dev/up.sh from infra/observability/otel-collector.yaml and read by the container as `--config=env:` (a host bind mount is unusable under colima/virtiofs). Holds no secret."
+      "note": "dev-stack only, profile `observability`: the whole collector configuration (receivers, the redaction transform, batch and the three exporters), exported by scripts/dev/up.sh from infra/observability/otel-collector.yaml and read by the container as `--config=env:` (a host bind mount is unusable under colima/virtiofs). Holds no secret."
     },
     {
       "key": "EVIDGATE_WORKER_SCHED_PASSWORD",
