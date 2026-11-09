@@ -14,7 +14,7 @@ public sealed partial class UsageQuotaGateTests
     private const int StorageGateCalls = 9;
 
     [Fact]
-    public async Task QuotaCounter_KeepsPageHeadroom_ForTheGatesInPlaceUpdates()
+    public async Task QuotaCounter_HasFillfactor80Reloption()
     {
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);
 
