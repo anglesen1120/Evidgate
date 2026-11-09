@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
@@ -42,7 +43,8 @@ internal sealed class RevokeRoleCommandValidator : AbstractValidator<RevokeRoleC
 /// <summary>
 /// Handler of <see cref="RevokeRoleCommand"/>. A membership the tenant cannot see is
 /// 404, and so is a pair that was never granted (00 §9.2: the addressed resource does
-/// not exist) — the route is not an upsert. Only an <b>active</b> membership's
+/// not exist) — the route is not an upsert. A target whose administrative rank is above
+/// the caller's is 403 <c>forbidden</c>. Only an <b>active</b> membership's
 /// <c>tenant_admin</c> grant can trip the last-admin guard: a pending or removed row
 /// grants nothing, so revoking from it is harmless.
 /// </summary>
@@ -52,6 +54,7 @@ internal sealed class RevokeRoleCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
+    IRequestPrincipalAccessor principals,
     IAuditTrail audit,
     ISessionPrivilegeChange privilegeChanges)
     : ICommandHandler<RevokeRoleCommand, Result>
@@ -90,6 +93,15 @@ internal sealed class RevokeRoleCommandHandler(
         if (grant is null)
         {
             return Result.Failure(Error.NotFound("that membership does not hold that role"));
+        }
+
+        // After the pair's own 404 and before the last-admin and write branches: the
+        // hierarchy applies whatever the current grant set or membership state is.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure(MemberRankGuard.Refused);
         }
 
         if (membership.IsActive)

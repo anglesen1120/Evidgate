@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
@@ -32,7 +33,8 @@ internal sealed record RemoveMemberCommand(Guid OrgId, Guid MembershipId, string
 /// request tenant (404), unknown membership (404, RLS decides — another org's id is
 /// indistinguishable from a missing one, AC7), illegal source state (409
 /// <c>invalid_transition</c>: <c>pending → removed</c> is not one of 02.1.2 §6's
-/// edges, a pending invite is cancelled through 02.1.2-T2's route), last admin (409
+/// edges, a pending invite is cancelled through 02.1.2-T2's route), a target whose
+/// administrative rank is above the caller's (403 <c>forbidden</c>), last admin (409
 /// <c>last_admin</c>, AC4), then the write.
 /// </summary>
 /// <remarks>
@@ -45,6 +47,7 @@ internal sealed class RemoveMemberCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
+    IRequestPrincipalAccessor principals,
     IAuditTrail audit,
     ISessionRevocation sessions)
     : ICommandHandler<RemoveMemberCommand, Result>
@@ -72,6 +75,15 @@ internal sealed class RemoveMemberCommandHandler(
         if (membership is null)
         {
             return Result.Failure(Error.NotFound("no membership with that id is visible to this tenant"));
+        }
+
+        // Checked whatever the row's state: an already removed or pending target must not
+        // turn a rank refusal into a success, and the last-admin guard is not the hierarchy.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure(MemberRankGuard.Refused);
         }
 
         if (string.Equals(membership.Status, MembershipStatus.Removed, StringComparison.Ordinal))
