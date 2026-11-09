@@ -171,21 +171,7 @@ public sealed class SeaweedFsStore : IAsyncLifetime
 {
     private const string Region = "us-east-1";
 
-    /// <summary>
-    /// How long a freshly started gateway may keep refusing its first writes before the fixture gives up. A
-    /// healthy start accepts the first write within ~4 s (measured on the reference host), so the budget is
-    /// only spent on a start that really is unhealthy; it bounds the extra wall time instead of retrying
-    /// without limit.
-    /// </summary>
-    private static readonly TimeSpan StartupBudget = TimeSpan.FromSeconds(120);
-
-    /// <summary>
-    /// One attempt's ceiling. AWSSDK v4 has no settable request timeout on the client config
-    /// (<c>IClientConfig.Timeout</c> is read-only there), so the attempt is bounded with its own cancellation
-    /// token; the SDK's own retries are off for these calls (<c>MaxErrorRetry = 0</c>), which leaves
-    /// <see cref="StartupBudget"/> as the only backoff in play.
-    /// </summary>
-    private static readonly TimeSpan StartupAttemptTimeout = TimeSpan.FromSeconds(20);
+    // The start-up retry budget lives in TransientS3RetryOptions.Startup (shared with the parity fixture).
 
     /// <summary>The probe object of the warm-up (written and deleted inside the retry loop).</summary>
     private const string WarmUpKey = "warm-up/probe";
@@ -253,68 +239,14 @@ public sealed class SeaweedFsStore : IAsyncLifetime
     }
 
     /// <summary>
-    /// Runs <paramref name="step"/> until it succeeds, retrying only what a starting SeaweedFS produces, each
-    /// attempt bounded by its own cancellation token: a 5xx or 408 answer (the gateway's "S3 internal error"),
-    /// the transport failures measured against this image (<see cref="HttpRequestException"/> for a refused
-    /// connection, <see cref="IOException"/> for one closed mid-request), and the attempt's own timeout. An
-    /// auth, 404 or other 4xx answer is a real fault and is rethrown at once, so a wrong credential or a
-    /// missing bucket is never retried away. When the budget is spent the last error is rethrown with the
-    /// container's log tail, so the next flake carries its own cause instead of a bare 500.
+    /// The shared bounded, transient-only retry, with the container's log tail attached when the budget is
+    /// spent so the next flake carries its own cause instead of a bare 500.
     /// </summary>
-    private static async Task RetryWhileStartingAsync(Func<CancellationToken, Task> step)
-    {
-        var deadline = DateTime.UtcNow + StartupBudget;
-        Exception? lastError = null;
-
-        while (true)
-        {
-            var remaining = deadline - DateTime.UtcNow;
-            if (remaining <= TimeSpan.Zero)
-            {
-                throw new InvalidOperationException(
-                    "the SeaweedFS store refused its first writes for "
-                    + $"{(int)StartupBudget.TotalSeconds}s after the container started (last error: "
-                    + $"{(lastError is null ? "none" : lastError.GetType().Name + ": " + lastError.Message)})"
-                    + $". Container log tail:{Environment.NewLine}{await Server.ContainerLogTailAsync()}",
-                    lastError);
-            }
-
-            using var attempt = new CancellationTokenSource(
-                remaining < StartupAttemptTimeout ? remaining : StartupAttemptTimeout);
-
-            try
-            {
-                await step(attempt.Token);
-                return;
-            }
-            catch (Exception exception) when (IsTransientStartupFailure(exception, attempt.IsCancellationRequested))
-            {
-                lastError = exception;
-            }
-
-            await Task.Delay(TimeSpan.FromSeconds(1));
-        }
-    }
-
-    /// <summary>
-    /// True for the failures a starting store produces and never for a real fault. A 4xx (bad credential,
-    /// missing bucket, wrong signature) is a real fault; a 5xx or 408 is the gateway's own "S3 internal error";
-    /// and the transport arms are the shapes AWSSDK v4 actually throws here (measured: <see cref="HttpRequestException"/>
-    /// wrapping a <see cref="System.Net.Sockets.SocketException"/> for a refused connection, <see cref="IOException"/>
-    /// for one closed before the response). <see cref="OperationCanceledException"/> counts only when this
-    /// loop's own per-attempt token fired, so a cancelled run is never retried away.
-    /// </summary>
-    private static bool IsTransientStartupFailure(Exception exception, bool attemptTimedOut) =>
-        exception switch
-        {
-            OperationCanceledException => attemptTimedOut,
-            AmazonServiceException service => IsTransientStatus(service.StatusCode),
-            HttpRequestException or IOException or WebException => true,
-            _ => false,
-        };
-
-    private static bool IsTransientStatus(HttpStatusCode status) =>
-        status == HttpStatusCode.RequestTimeout || (int)status >= 500;
+    private static async Task RetryWhileStartingAsync(Func<CancellationToken, Task> step) =>
+        await TransientS3Retry.RunAsync(
+            step,
+            TransientS3RetryOptions.Startup,
+            async () => $"Container log tail:{Environment.NewLine}{await Server.ContainerLogTailAsync()}");
 
     /// <summary>The bucket this class uploads into; a retry after a partial attempt may find it already created.</summary>
     private async Task CreateBucketAsync(CancellationToken cancellationToken)
@@ -390,16 +322,8 @@ public sealed class SeaweedFsStore : IAsyncLifetime
     /// <summary>A signed client for the arrange/assert steps that bypass the presigned URL.</summary>
     internal AmazonS3Client CreateClient() => new(new BasicAWSCredentials(AccessKey, SecretKey), ClientConfig());
 
-    /// <summary>
-    /// A client for the start-up retry loop: no SDK-side retries and no SDK-side waits, so the loop's
-    /// per-attempt token is the whole bound and <see cref="StartupBudget"/> is the only backoff in play.
-    /// </summary>
-    private AmazonS3Client CreateStartupClient()
-    {
-        var config = ClientConfig();
-        config.MaxErrorRetry = 0;
-        return new AmazonS3Client(new BasicAWSCredentials(AccessKey, SecretKey), config);
-    }
+    private AmazonS3Client CreateStartupClient() =>
+        TransientS3Retry.CreateClient(Endpoint, AccessKey, SecretKey);
 
     private AmazonS3Config ClientConfig() => new()
     {
