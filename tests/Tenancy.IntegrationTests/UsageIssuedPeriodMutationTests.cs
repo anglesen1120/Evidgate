@@ -1,4 +1,5 @@
 using Evidgate.Migrator;
+using Npgsql;
 using Shouldly;
 using Xunit;
 
@@ -190,11 +191,11 @@ public sealed class UsageIssuedPeriodMutationTests
     }
 
     [Fact]
-    public async Task IssueAndReissue_StillPass()
+    public async Task StatementReplayInsert_StillPasses()
     {
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
-        var (_, _) = await SeedIssuedAndOpenAsync(world, OwnerString(database));
+        await SeedIssuedAndOpenAsync(world, OwnerString(database));
 
         // The issue flow's idempotent insert: a second issue of the same period collides and writes nothing, and the
         // guards never see an UPDATE or DELETE.
@@ -211,6 +212,94 @@ public sealed class UsageIssuedPeriodMutationTests
             ("org", world.Org),
             ("period", Issued))).ShouldBe(0, "the replay inserts nothing and raises nothing");
         await app.CommitAsync();
+    }
+
+    [Fact]
+    public async Task Ledger_IssuedRowMovedOut_OrMovedToIssuedTenant_Refused_MixedBulkRefusedWhole()
+    {
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
+        var (otherOrg, _) = await world.AddOtherOrgAsync();
+        var (issuedRow, openRow) = await SeedIssuedAndOpenAsync(world, OwnerString(database));
+        await InsertStatementAsync(OwnerString(database), otherOrg, Open);
+
+        foreach (var sql in new[]
+        {
+            $"update public.usage_ledger_entry set period = '2026-12' where id = '{issuedRow}'",
+            $"update public.usage_ledger_entry set org_id = '{otherOrg:D}', period = '{Open}' where id = '{openRow}'",
+        })
+        {
+            await using var scope = await TenantScope.BeginAsync(OwnerString(database), world.Org);
+            (await scope.CaptureErrorAsync(sql)).ConstraintName.ShouldBe(LedgerGuard, sql);
+        }
+
+        // One statement over an issued and an open row fails whole: the open row keeps its quantity.
+        await using (var scope = await TenantScope.BeginAsync(OwnerString(database), world.Org))
+        {
+            (await scope.CaptureErrorAsync(
+                $"update public.usage_ledger_entry set quantity = 7 where org_id = '{world.Org:D}'"))
+                .ConstraintName.ShouldBe(LedgerGuard);
+        }
+
+        (await world.ScalarAsync<long>(
+            $"select count(*) from public.usage_ledger_entry where org_id = '{world.Org:D}' and quantity = 1"))
+            .ShouldBe(2, "a refused bulk statement changes no row");
+    }
+
+    [Fact]
+    public async Task Ledger_UpdateOrDeleteUnderRepeatableRead_Refused()
+    {
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
+        var (_, openRow) = await SeedIssuedAndOpenAsync(world, OwnerString(database));
+
+        foreach (var sql in new[]
+        {
+            $"update public.usage_ledger_entry set quantity = 9 where id = '{openRow}'",
+            $"delete from public.usage_ledger_entry where id = '{openRow}'",
+        })
+        {
+            await using var connection = new NpgsqlConnection(OwnerString(database));
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
+            await using var transaction = await connection.BeginTransactionAsync(
+                System.Data.IsolationLevel.RepeatableRead, TestContext.Current.CancellationToken);
+            await using var command = new NpgsqlCommand(sql, connection, transaction);
+            var error = await Should.ThrowAsync<PostgresException>(
+                () => command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
+            error.SqlState.ShouldBe("25000", sql);
+        }
+    }
+
+    [Fact]
+    public async Task Issue_WhileLedgerUpdateIsInFlight_WaitsForIt()
+    {
+        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
+        var (_, openRow) = await SeedIssuedAndOpenAsync(world, OwnerString(database));
+
+        await using var mover = await TenantScope.BeginAsync(OwnerString(database), world.Org);
+        var holderPid = await mover.ScalarAsync<int>("select pg_backend_pid()");
+        (await mover.ExecuteAsync($"update public.usage_ledger_entry set quantity = 2 where id = '{openRow}'"))
+            .ShouldBe(1);
+
+        await using var issue = await TenantScope.BeginAsync(OwnerString(database), world.Org);
+        var pending = issue.ExecuteAsync(
+            """
+            insert into public.billing_statement
+                (id, org_id, period, kind, total_amount, currency, line_count, content_hash, worksheet_json,
+                 issued_by, issued_at)
+            values (gen_random_uuid(), @org, @period, 'invoice', 0, 'USD', 0, repeat('a', 64), '{}'::jsonb,
+                    gen_random_uuid(), now())
+            """,
+            ("org", world.Org),
+            ("period", Open));
+
+        await world.WaitForBlockedByAsync(holderPid);
+        pending.IsCompleted.ShouldBeFalse("the issue waits for the in-flight ledger update's shared lock");
+
+        await mover.CommitAsync();
+        (await pending).ShouldBe(1);
+        await issue.CommitAsync();
     }
 
     [Fact]

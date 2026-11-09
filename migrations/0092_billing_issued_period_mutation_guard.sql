@@ -43,16 +43,18 @@ create or replace function evidgate.usage_ledger_entry_issued_mutation_guard() r
         using errcode = '23514', constraint = 'usage_ledger_entry_issued_mutation';
     end if;
 
-    if tg_op = 'UPDATE' and (new.org_id, new.period) is distinct from (old.org_id, old.period) then
-      perform pg_catalog.pg_advisory_xact_lock_shared(
-        pg_catalog.hashtextextended(new.org_id::text || ':' || new.period, 0));
+    if tg_op = 'UPDATE' then
+      if (new.org_id, new.period) is distinct from (old.org_id, old.period) then
+        perform pg_catalog.pg_advisory_xact_lock_shared(
+          pg_catalog.hashtextextended(new.org_id::text || ':' || new.period, 0));
 
-      if exists (
-        select 1 from public.billing_statement s
-        where s.org_id = new.org_id and s.period = new.period
-      ) then
-        raise exception 'usage period % is already issued', new.period
-          using errcode = '23514', constraint = 'usage_ledger_entry_issued_mutation';
+        if exists (
+          select 1 from public.billing_statement s
+          where s.org_id = new.org_id and s.period = new.period
+        ) then
+          raise exception 'usage period % is already issued', new.period
+            using errcode = '23514', constraint = 'usage_ledger_entry_issued_mutation';
+        end if;
       end if;
     end if;
 

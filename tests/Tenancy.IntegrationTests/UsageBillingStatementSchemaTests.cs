@@ -94,8 +94,7 @@ public sealed class UsageBillingStatementSchemaTests
         constraints.ShouldContain(constraint => constraint.StartsWith("f:billing_statement_organization_fk:", StringComparison.Ordinal)
             && constraint.Contains("FOREIGN KEY (org_id) REFERENCES organization(id)", StringComparison.Ordinal));
 
-        // The shared concurrency trigger is attached, so the owner path that may update a row still moves
-        // updated_at and the version token.
+        // The shared concurrency trigger is attached; the issued-period guard refuses every UPDATE before it fires.
         (await _fixture.ScalarAsync<long>(
             database,
             "select count(*) from pg_catalog.pg_trigger where tgrelid = 'public.billing_statement'::regclass"
