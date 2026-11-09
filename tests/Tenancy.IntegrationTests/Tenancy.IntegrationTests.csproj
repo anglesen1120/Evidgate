@@ -56,6 +56,7 @@
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
     <Compile Include="..\Shared\ContractSchemaWarmup.cs" Link="ContractSchemaWarmup.cs" />
     <Compile Include="..\Shared\TemplateDatabase.cs" Link="TemplateDatabase.cs" />
+    <Compile Include="..\Shared\TransientS3Retry.cs" Link="TransientS3Retry.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- Bounded class-level parallelism (4 workers): more workers can overload a small Postgres container VM (copy timeouts, 100 ms regex guard trips). -->

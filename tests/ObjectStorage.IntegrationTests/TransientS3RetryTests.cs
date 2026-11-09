@@ -1,0 +1,111 @@
+using System.Net;
+using Amazon.S3;
+using Evidgate.Testing;
+using Shouldly;
+using Xunit;
+
+namespace ObjectStorage.IntegrationTests;
+
+/// <summary>Pure tests of the shared first-write retry: no container, no network.</summary>
+public sealed class TransientS3RetryTests
+{
+    private static readonly TransientS3RetryOptions Fast = new(
+        Budget: TimeSpan.FromSeconds(30),
+        AttemptTimeout: TimeSpan.FromSeconds(5),
+        Delay: TimeSpan.FromMilliseconds(1),
+        MaxDelay: TimeSpan.FromMilliseconds(2),
+        MaxAttempts: 4);
+
+    private static AmazonS3Exception Answer(HttpStatusCode status) =>
+        new("answer", Amazon.Runtime.ErrorType.Unknown, "Code", "req", status);
+
+    [Fact]
+    public async Task SucceedsOnTheSecondAttempt_AfterATransientAnswer()
+    {
+        var calls = 0;
+
+        await TransientS3Retry.RunAsync(
+            _ =>
+            {
+                calls++;
+                return calls == 1 ? Task.FromException(Answer(HttpStatusCode.InternalServerError)) : Task.CompletedTask;
+            },
+            Fast);
+
+        calls.ShouldBe(2);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    [InlineData(HttpStatusCode.RequestTimeout)]
+    public async Task ATransientAnswer_IsRetriedUpToTheCap_ThenRethrownWithItsCause(HttpStatusCode status)
+    {
+        var calls = 0;
+
+        var failure = await Should.ThrowAsync<InvalidOperationException>(() => TransientS3Retry.RunAsync(
+            _ =>
+            {
+                calls++;
+                return Task.FromException(Answer(status));
+            },
+            Fast,
+            () => Task.FromResult("log tail marker")));
+
+        calls.ShouldBe(Fast.MaxAttempts);
+        failure.InnerException.ShouldBeOfType<AmazonS3Exception>().StatusCode.ShouldBe(status);
+        failure.Message.ShouldContain("log tail marker");
+    }
+
+    [Fact]
+    public async Task ATransportFailure_IsRetried()
+    {
+        var calls = 0;
+
+        await TransientS3Retry.RunAsync(
+            _ =>
+            {
+                calls++;
+                return calls < 3 ? Task.FromException(new HttpRequestException("reset")) : Task.CompletedTask;
+            },
+            Fast);
+
+        calls.ShouldBe(3);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.NotFound)]
+    public async Task A4xxAnswer_IsRethrownAtOnce_WithoutRetry(HttpStatusCode status)
+    {
+        var calls = 0;
+
+        var failure = await Should.ThrowAsync<AmazonS3Exception>(() => TransientS3Retry.RunAsync(
+            _ =>
+            {
+                calls++;
+                return Task.FromException(Answer(status));
+            },
+            Fast));
+
+        calls.ShouldBe(1);
+        failure.StatusCode.ShouldBe(status);
+    }
+
+    [Fact]
+    public async Task ACancelledCaller_IsNotRetriedAway()
+    {
+        var calls = 0;
+
+        await Should.ThrowAsync<TaskCanceledException>(() => TransientS3Retry.RunAsync(
+            _ =>
+            {
+                calls++;
+                return Task.FromCanceled(new CancellationToken(canceled: true));
+            },
+            Fast));
+
+        calls.ShouldBe(1);
+    }
+}
