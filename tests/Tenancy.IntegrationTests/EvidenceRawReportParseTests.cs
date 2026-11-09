@@ -13,6 +13,7 @@ using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -94,7 +95,8 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
         string Database,
         Guid Org,
         Guid Project,
-        Guid RunId) : IAsyncDisposable
+        Guid RunId,
+        string ApplicationName) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync() => await Host.DisposeAsync();
     }
@@ -338,8 +340,15 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
+        // The database is shared with sibling classes, so the host's connections carry a name only this world uses: a
+        // probe on pg_stat_activity then sees this handler's backends and not a neighbour's.
+        var applicationName = "evidgate-raw-report-" + Guid.NewGuid().ToString("N");
+        var hostConnection = new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database))
+        {
+            ApplicationName = applicationName,
+        }.ConnectionString;
         var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database),
+            hostConnection,
             org,
             project,
             RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-report-1"),
@@ -353,7 +362,7 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
             database,
             $"update public.run set state = 'queued' where id = '{runId:D}'");
 
-        return new World(host, database, org, project, runId);
+        return new World(host, database, org, project, runId, applicationName);
     }
 
     /// <summary>Moves the seeded run into one state, as the owner seam the reconciler's tests also use.</summary>

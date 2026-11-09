@@ -41,13 +41,31 @@ public sealed class SecretScanConsumerTests(PostgresTenancyFixture fixture, Seaw
             await scope.CommitAsync(Token);
         }
         (await ArtifactValueAsync<string>(world, artifact, "scan_state")).ShouldBe("pending");
-        await world.Host.Services.GetRequiredService<OutboxDispatcher>().DispatchBatchAsync(Token);
-        var task = await fixture.ScalarAsync<Guid>(world.Database,
-            $"select id from public.task where idempotency_key='outbox:{outbox:D}'");
+        // The outbox is shared with sibling classes: one batch takes the oldest 200 rows or finds ours locked by a
+        // neighbour's dispatcher, so dispatch until our own row has produced its task instead of reading it once.
+        var task = await DispatchedTaskAsync(world, outbox);
         var queue = await TaskValueAsync<string>(world, task, "queue");
         (await world.Host.Services.GetRequiredService<TaskConsumer>().PollOnceAsync(queue, Token)).ShouldBeGreaterThan(0);
         (await TaskValueAsync<string>(world, task, "state")).ShouldBe("done");
         (await ArtifactValueAsync<string>(world, artifact, "scan_state")).ShouldBe("flagged");
+    }
+
+    private async Task<Guid> DispatchedTaskAsync(World world, Guid outbox)
+    {
+        var dispatcher = world.Host.Services.GetRequiredService<OutboxDispatcher>();
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (true)
+        {
+            await dispatcher.DispatchBatchAsync(Token);
+            var task = await fixture.ScalarAsync<Guid?>(world.Database,
+                $"select id from public.task where idempotency_key='outbox:{outbox:D}'");
+            if (task is { } found)
+            {
+                return found;
+            }
+            (DateTime.UtcNow < deadline).ShouldBeTrue($"outbox row {outbox:D} was never dispatched into a task");
+            await Task.Delay(100, Token);
+        }
     }
 
     [Fact]

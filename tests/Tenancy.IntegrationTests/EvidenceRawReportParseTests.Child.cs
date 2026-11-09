@@ -60,6 +60,7 @@ public sealed partial class EvidenceRawReportParseTests
             DuringRun = async () => idleInTransaction = await _fixture.ScalarAsync<long>(
                 world.Database,
                 "select count(*) from pg_stat_activity where datname = current_database() "
+                + $"and application_name = '{world.ApplicationName}' "
                 + "and pid <> pg_backend_pid() and state like 'idle in transaction%'"),
         };
 
