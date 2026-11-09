@@ -2797,6 +2797,8 @@
       <trans-unit id="runs.detail.producers.finalize" datatype="html"><source>Finalize status</source></trans-unit>
       <trans-unit id="runs.detail.producers.last-sequence" datatype="html"><source>Last sequence</source></trans-unit>
       <trans-unit id="runs.detail.producers.count" datatype="html"><source>Count / expected</source></trans-unit>
+      <trans-unit id="runs.detail.producers.open-slot" datatype="html"><source>(expected not set)</source></trans-unit>
+      <trans-unit id="runs.detail.producers.open-count" datatype="html"><source><x id="count" equiv-text="count"/> served, expected count not set yet</source></trans-unit>
       <trans-unit id="runs.detail.producers.mismatch" datatype="html"><source>Count does not match expected</source></trans-unit>
       <trans-unit id="runs.detail.producers.events" datatype="html"><source>Informational events</source></trans-unit>
       <trans-unit id="runs.detail.producers.no-events" datatype="html"><source>No informational events</source></trans-unit>
