@@ -76,6 +76,9 @@ public static partial class AuditMetadata
         "metric",
         "limit",
         "has_cursor",
+        // A late ledger row the insert guard re-dated records the month it was metered for next to the month it was
+        // billed in; both are `YYYY-MM` shapes, never an amount or a key.
+        "original_period",
     };
 
     /// <summary>

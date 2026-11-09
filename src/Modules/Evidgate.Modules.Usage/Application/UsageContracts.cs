@@ -20,13 +20,15 @@ namespace Evidgate.Modules.Usage.Application;
 /// </summary>
 internal sealed class UsageContracts(
     UsageLedgerStore store,
+    LedgerRedateAudit redateAudit,
     ITenantScopeAccessor scopes) : IUsageLedger
 {
     /// <inheritdoc />
     /// <remarks>
-    /// A period an issued statement froze is not translated into a result here: the module's typed refusal propagates,
-    /// so an emitter that names a billed month fails loudly mid-work and its own queue retries and dead-letters the row
-    /// rather than the ledger accepting a row the issued document does not describe.
+    /// A period an issued statement froze no longer refuses the batch: the insert guard re-dates such a row into the
+    /// next open month and this call records that move in the caller's own transaction, so an emitter that meters
+    /// after month-end bills the work late instead of failing. A month with no open period after it is the one refusal
+    /// that still propagates, because there is nowhere to bill.
     /// </remarks>
     public async Task<UsageBatchResult> RecordAsync(
         RecordUsageBatchRequest request,
@@ -64,11 +66,13 @@ internal sealed class UsageContracts(
                 nameof(request));
         }
 
-        var inserted = await store
+        var write = await store
             .RecordBatchAsync(orgId, batch, cancellationToken)
             .ConfigureAwait(false);
 
-        return UsageBatchOutcome.Merge(batch, inserted);
+        await redateAudit.RecordAsync(orgId, write.Redated, cancellationToken).ConfigureAwait(false);
+
+        return UsageBatchOutcome.Merge(batch, write.Inserted);
     }
 
     /// <inheritdoc />

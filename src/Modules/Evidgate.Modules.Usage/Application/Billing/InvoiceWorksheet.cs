@@ -28,6 +28,10 @@ namespace Evidgate.Modules.Usage.Application.Billing;
 /// <param name="Currency">The amount's currency, or null while unpriced.</param>
 /// <param name="AdjustmentOf">The row this one corrects, or null for usage of the period itself.</param>
 /// <param name="Reason">Why the correction was recorded, or null on a usage row.</param>
+/// <param name="OriginalPeriod">
+/// The month the row was metered for when that month was already issued, so the row bills in this worksheet's
+/// period instead; null when the row landed in its own month.
+/// </param>
 internal sealed record WorksheetLine(
     Guid Id,
     Guid? ProjectId,
@@ -40,7 +44,8 @@ internal sealed record WorksheetLine(
     decimal? Amount,
     string? Currency,
     Guid? AdjustmentOf,
-    string? Reason);
+    string? Reason,
+    string? OriginalPeriod);
 
 /// <summary>
 /// The statement one period was issued under, as the worksheet read reports it beside the live figures: what was
@@ -295,7 +300,8 @@ internal sealed class InvoiceWorksheetReader(
         row.Amount,
         row.Currency,
         row.AdjustmentOf,
-        row.Reason);
+        row.Reason,
+        row.OriginalPeriod);
 
     /// <summary>
     /// Records which period was read, how many rows it described, which bound shaped the answer and whether the

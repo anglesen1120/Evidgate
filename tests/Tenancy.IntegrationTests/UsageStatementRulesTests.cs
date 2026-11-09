@@ -232,6 +232,37 @@ public sealed class UsageStatementRulesTests
     }
 
     [Fact]
+    public void Canonical_RowNeverReDated_KeepsTheExactBytesOfThePreMarkerDocument()
+    {
+        var sheet = Sheet([Line(1m, 2m)], lineTotal: 2m, total: 2m);
+
+        // The bytes this period produced before `original_period` existed, derived from the canonical writer at the
+        // commit that introduced the marker: the row carries no marker, so the document must be identical, and a
+        // removed or re-encoded member fails here.
+        const string expected = """{"adjustment_total":null,"adjustments":[],"currency":"USD","line_total":"2","lines":[{"adjustment_of":null,"amount":"2","billing_key":"key:1","currency":"USD","id":"11111111-1111-1111-1111-111111111111","metric":"results","occurred_at":"2026-10-20T08:00:00.0000000+00:00","price_ref":null,"project_id":"22222222-2222-2222-2222-222222222222","quantity":"1","reason":null,"unit":"batch"}],"period":"2026-10","total":"2"}""";
+
+        InvoiceWorksheetCanonical.ToJson(sheet).ShouldBe(expected);
+        InvoiceWorksheetCanonical.Hash(sheet).ShouldBe(
+            "bc3870df81dbdd82eea6d54bb37896eebf9f48254a2c8e20f791730f1b8d547b",
+            "the digest of the document that was issued before the marker existed");
+    }
+
+    [Fact]
+    public void Canonical_ReDatedRow_WritesTheMonthItWasMeteredForAndMovesTheHash()
+    {
+        var redated = Line(1m, 2m) with { OriginalPeriod = "2026-09" };
+        var sheet = Sheet([redated], lineTotal: 2m, total: 2m);
+
+        using var document = JsonDocument.Parse(InvoiceWorksheetCanonical.ToJson(sheet));
+        document.RootElement.GetProperty("lines")[0].GetProperty("original_period").GetString()
+            .ShouldBe("2026-09");
+
+        InvoiceWorksheetCanonical.Hash(sheet).ShouldNotBe(
+            InvoiceWorksheetCanonical.Hash(Sheet([Line(1m, 2m)], lineTotal: 2m, total: 2m)),
+            "a statement issued before the row was re-dated must not match the document that now carries it");
+    }
+
+    [Fact]
     public void WorksheetTotals_ReconcilesCountAmountAndCurrency()
     {
         var ledger = LedgerSide(total: 5m, currency: "USD", rowCount: 2);
@@ -320,7 +351,8 @@ public sealed class UsageStatementRulesTests
         amount,
         amount is null ? null : currency,
         AdjustmentOf: null,
-        Reason: null);
+        Reason: null,
+        OriginalPeriod: null);
 
     /// <summary>
     /// A correction carrying the longest reason the ledger accepts. Its length is fixed by <paramref name="index"/>
