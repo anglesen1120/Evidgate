@@ -95,7 +95,7 @@ public sealed partial class CiAuthTests
             ("wrong iss", api.Jwks.Mint(RepoId, (_, o) => o.Issuer = "https://evil.example")),
             ("wrong aud", api.Jwks.Mint(RepoId, (_, o) => o.Audience = "someone-else")),
             ("expired", api.Jwks.Mint(RepoId, (_, o) => { o.NotBeforeOffset = TimeSpan.FromMinutes(-20); o.ExpiresOffset = TimeSpan.FromMinutes(-10); })),
-            ("nbf beyond the skew", api.Jwks.Mint(RepoId, (_, o) => o.NotBeforeOffset = TimeSpan.FromMinutes(5))),
+            ("nbf beyond the skew", api.Jwks.Mint(RepoId, (_, o) => { o.NotBeforeOffset = TimeSpan.FromMinutes(5); o.ExpiresOffset = TimeSpan.FromMinutes(10); })),
             ("unknown kid", api.Jwks.Mint(RepoId, (_, o) => o.KeyId = "rotated-away")),
             ("HS256 confusion", api.Jwks.Mint(RepoId, (_, o) => o.Algorithm = SecurityAlgorithms.RsaSsaPssSha256)),
             ("missing repository_id", api.Jwks.Mint(RepoId, (c, _) => c.Remove("repository_id"))),
