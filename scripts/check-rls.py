@@ -107,7 +107,7 @@ DEFINER_AUDIT_EXEMPT = {
         "chain to write into — a session is the credential of a person, not of an org; called by "
         "Sessions/SessionStore.cs:115 for the login completion (Login/Completion/CompleteLoginCommandHandler.cs:199); the "
         "`auth.login` row that names the sign-in is written by `IdentityAuditWriter` (Login/Audit/IdentityAuditWriter.cs:59-95, "
-        "Login/Completion/CompleteLoginCommandHandler.cs:137)"
+        "Login/Completion/CompleteLoginCommandHandler.cs:188-193)"
     ),
     "evidgate_resolve.session_user": (
         "created 0044_identity_login_linking.sql:198 (bytea, integer) and dropped again by 0045:729: pre-tenant, no "

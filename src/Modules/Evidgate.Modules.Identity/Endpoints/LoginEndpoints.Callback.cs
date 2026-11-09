@@ -16,7 +16,7 @@ namespace Evidgate.Modules.Identity.Endpoints;
 public static partial class LoginEndpoints
 {
     /// <summary>What a callback that passed every pre-provider check carries into the provider exchange.</summary>
-    private sealed record CallbackInput(LoginStatePayload Pending, string Code, Uri CallbackUri);
+    private readonly record struct CallbackInput(LoginStatePayload Pending, string Code, Uri CallbackUri);
 
     /// <summary>
     /// <c>callback</c>: one use of one pending login. Both cookies are deleted on every outcome - the 429
@@ -74,14 +74,14 @@ public static partial class LoginEndpoints
             return refused;
         }
 
-        var verified = await VerifyAsync(context, selected, input!, login, cancellationToken).ConfigureAwait(false);
+        var verified = await VerifyAsync(context, selected, input, login, cancellationToken).ConfigureAwait(false);
         if (verified.Refusal is not null)
         {
             return verified.Refusal;
         }
 
         return await CompleteAsync(
-            context, selected, input!.Pending, verified.Identity!, inviteCookie.Read(stagedInvite), completion, login, cancellationToken)
+            context, selected, input.Pending, verified.Identity!, inviteCookie.Read(stagedInvite), completion, login, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -97,9 +97,9 @@ public static partial class LoginEndpoints
         string? presented,
         LoginOptions login,
         LoginReplayCache replay,
-        out CallbackInput? input)
+        out CallbackInput input)
     {
-        input = null;
+        input = default;
 
         var pending = cookie.Unprotect(presented);
         if (pending is null || !string.Equals(pending.Provider, selected.Name, StringComparison.Ordinal))
