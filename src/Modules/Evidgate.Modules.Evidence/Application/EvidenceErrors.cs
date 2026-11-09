@@ -55,6 +55,18 @@ internal static class EvidenceErrors
     internal static Error RunNotFound => Error.NotFound("the run does not exist in this project");
 
     /// <summary>
+    /// 409, internal only (no route mints without the run scope check): the artifact's project is not the run's
+    /// project. The code is local to this module and is not in the wire catalogue; a route that ever exposes the
+    /// mint must add it there.
+    /// </summary>
+    internal const string ArtifactRunProjectMismatchCode = "artifact_run_project_mismatch";
+
+    /// <summary>The mint refusal for an artifact whose project differs from its run's project.</summary>
+    internal static Error ArtifactRunProjectMismatch => Error.Conflict(
+        ArtifactRunProjectMismatchCode,
+        "the artifact's project is not the project of its run");
+
+    /// <summary>
     /// 404: no stored report with that id is visible for the route's run and the caller's scope. RLS hides another
     /// tenant's row, the run predicate hides a report of another run, and the project check hides a sibling project's
     /// row, so every one of them is this single body — an unknown run included, because its reports are not visible
