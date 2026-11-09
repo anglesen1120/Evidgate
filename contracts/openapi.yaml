@@ -1171,8 +1171,10 @@ paths:
         cookie's HMAC (`evidgate_resolve.session_revoke_all_admin`), never from a parameter, and the org comes
         only from `X-Evidgate-Org`: the caller must hold an ACTIVE `membership:write` in that org (a built-in
         role or an org custom role, the same join the single admin revoke uses) and `{u}` must hold an ACTIVE
-        membership in the SAME org. Every refusal — `{u}` not a uuid, the header absent or not a uuid, an
-        unknown user, no permission, a foreign org, a target with no active membership there, or `{u}` being
+        membership in the SAME org, ranking no higher there than the caller: only a `tenant_admin` may revoke a
+        `tenant_admin`'s sessions. Every refusal — `{u}` not a uuid, the header absent or not a uuid, an
+        unknown user, no permission, a foreign org, a target with no active membership there, a target that
+        outranks the caller in that org, or `{u}` being
         the caller's own id (that caller uses the self route) — answers the SAME 404 `not_found` object the
         single revoke answers for an unknown session, so the route is not an oracle for another org's users.
         Only after the request was authenticated does the handler parse `{u}`, so neither an anonymous caller

@@ -1015,3 +1015,17 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
   and the update one atomic step.
 - Deploy: any order; the helpers and the definers change in one transaction. Rollback: re-state the `0051` and
   `0085` bodies with `create or replace`, then drop the two helpers.
+
+## Notes on the revoke-all hierarchy (`0091`)
+
+- `session_revoke_all_admin` let any `membership:write` holder end every session of any active member, a
+  `tenant_admin` included. `0091` adds `session_admin_may_revoke_all` (the old check, the caller is not the target,
+  and `session_admin_rank(org, actor) >= session_admin_rank(org, target)`), and the definer asks it before and
+  after the target's user lock. Every refusal stays the one `not_found`.
+- Rank has one source, `evidgate.session_admin_rank`: 2 = built-in `tenant_admin` in the acting org, 1 = `membership:write`
+  through another role, 0 = otherwise. Another org's grants never count. The `membership:write` join of `0090` now
+  lives in `session_admin_holds_write`; `session_admin_may_revoke` (used by the single revoke) answers as before.
+- The audit row stays in the acting org's chain only. The three helpers are owner-only (`DefinerExecuteScopeTests`).
+- Deploy: any order, one transaction. Rollback: re-state the `0090` bodies of `session_revoke_all_admin` and
+  `session_admin_may_revoke`, then drop the three new helpers.
+- Residual, accepted pending an owner decision: sessions are per user, so an administrator of any org the target belongs to at a lower rank can still end the target's sessions in every org; `RemoveMember`, `UpdateMembership` and `RevokeRole` carry no rank guard either.
