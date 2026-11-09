@@ -1025,10 +1025,18 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - Rank has one source, `evidgate.session_admin_rank`: 2 = built-in `tenant_admin` in the acting org, 1 = `membership:write`
   through another role, 0 = otherwise. Another org's grants never count. The `membership:write` join of `0090` now
   lives in `session_admin_holds_write`; `session_admin_may_revoke` (used by the single revoke) answers as before.
-- The audit row stays in the acting org's chain only. The three helpers are owner-only (`DefinerExecuteScopeTests`).
+- The audit row stays in the acting org's chain only. `session_admin_may_revoke`, `session_admin_may_revoke_all` and
+  `session_revoke_audit_append` stay owner-only (`DefinerExecuteScopeTests`); `0093` later grants the app role
+  EXECUTE on `session_admin_rank` and `session_admin_holds_write`, the two the member commands ask (see its note
+  below).
 - Deploy: any order, one transaction. Rollback: re-state the `0090` bodies of `session_revoke_all_admin` and
   `session_admin_may_revoke`, then drop the three new helpers.
-- Residual, accepted pending an owner decision: sessions are per user, so an administrator of any org the target belongs to at a lower rank can still end the target's sessions in every org; `RemoveMember`, `UpdateMembership` and `RevokeRole` carry no rank guard either.
+- Residual, accepted pending an owner decision: sessions are per user, so an administrator of any org the target
+  belongs to at a lower rank can still end the target's sessions in every org. `RemoveMember`, `UpdateMembership`
+  and `RevokeRole` are no longer in this residual: they compare actor and target with the same
+  `session_admin_rank`, which `0093` makes reachable from the app role. `session_revoke_one` stays outside the
+  hierarchy on purpose: it ends ONE session of an addressed target under `session_admin_may_revoke`, and the
+  hierarchy exists for the revoke-all path, whose blast radius is every session the person holds.
 
 ## Notes on the issued-period mutation guard (`0092`)
 
@@ -1036,6 +1044,36 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - No code path mutates either table (the app role holds no UPDATE/DELETE grant; issue and re-issue only insert and read). Existing rows in issued periods are not backfilled. Accepted residuals: the table owner or a superuser can still `DROP`/`DISABLE TRIGGER`, `TRUNCATE` (row triggers do not fire) or set `session_replication_role = replica`. An owner repair of an issued period is one transaction: `alter table ... disable trigger`, repair, `enable trigger`, commit (SHARE ROW EXCLUSIVE lock). A bulk owner statement takes one shared advisory lock per distinct (org_id, period): batch by org.
 - The ledger guard takes the `0087` shared advisory lock on the old and the new period key and refuses non-READ COMMITTED writers, like the insert guard.
 - Deploy: any order, one transaction. Rollback: drop the two triggers, then the two `evidgate.*_issued_mutation_guard` functions.
+
+## Notes on the member rank grant (`0093`)
+
+- The member commands (`RemoveMember`, `UpdateMembership`, `RevokeRole`) refuse an actor whose admin rank in the
+  org is below the target's, and the rank has one source, `0091`'s `evidgate.session_admin_rank(org, user)` (2 =
+  the built-in `tenant_admin` of that org, 1 = `membership:write` through another role, 0 = otherwise), which
+  delegates its write probe to `evidgate.session_admin_holds_write`. Both are invoker-rights, so the command runs
+  them under its own privileges and `evidgate_app` needs EXECUTE on both; `0093` grants exactly that, on those two
+  functions. No function body, table, column, row or policy changes. Read the signatures before calling either
+  directly: `session_admin_rank(org, user)` takes the org first, `session_admin_holds_write(actor, org)` the actor.
+- Invoker rights is also the isolation: the answer is computed under the request's `evidgate.org_id`, so the
+  policies of `membership`, `membership_role`, `role` and `role_permission` apply as usual. Another org's
+  administrator ranks 0 here even when that org's id is passed explicitly — the rows are hidden, not filtered after
+  the fact. `MemberRankGrantTests` pins own-org owner 2, another org's owner 0 under this org, another org's owner 0
+  when its own id is named, and the no-scope answer 0.
+- The app role is the only grantee added: PUBLIC, `evidgate_operator` and `evidgate_worker_sched` are restated as
+  EXECUTE-less in the same file, and `DefinerExecuteScopeTests` pins each grantee list to the owner and
+  `evidgate_app`. `session_admin_may_revoke`, `session_admin_may_revoke_all` and `session_revoke_audit_append` stay
+  owner-only: they are reached through the owner-run definers.
+- Deploy the migration first, then the application: the commands call both functions, so an application
+  deployed ahead of `0093` fails every member mutation on the missing EXECUTE. Rollback in the other order — roll
+  the application back before `revoke execute` on both functions from `evidgate_app` (the `0091` ACL), because a
+  host that still calls them answers 500. The file only widens an ACL, so it is a no-op on a database that already
+  carries it.
+- Residual, accepted: the commands compare the rank twice, before and after the last-admin guard, which narrows the
+  window in which a concurrent demotion of the actor could land between the check and the write. It is not atomic:
+  the guard's `for update` covers the org's active admin rows, while the insert or delete that changes a role grant
+  does not lock the membership row the comparison reads.
+- Residual, accepted: rank counts active memberships only, so a removed or pending target ranks 0 whatever grants
+  its row still carries.
 
 ## Notes on the late-usage re-date (`0094`)
 

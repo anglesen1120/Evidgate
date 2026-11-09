@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Npgsql;
 
 namespace Identity.IntegrationTests;
 
@@ -72,8 +73,40 @@ internal sealed class IdentityApiFactory : WebApplicationFactory<Program>
             fixture,
             new IdentityHostSetup(
                 orgId,
-                Principal: RequestPrincipal.Member(Guid.CreateVersion7()),
+                Principal: RequestPrincipal.Member(DefaultActor(fixture, orgId)),
                 Evaluator: grantAll ? new GrantAllPermissionEvaluator() : new DenyAllPermissionEvaluator()));
+    }
+
+    /// <summary>
+    /// The caller the default host publishes: an existing active <c>tenant_admin</c> of the
+    /// org, so a case about a member mutation acts at the org's owner rank. A random id
+    /// remains the fallback for a route whose fixture seeds no administrator.
+    /// </summary>
+    private static Guid DefaultActor(DatabaseFixture fixture, Guid orgId)
+    {
+        using var connection = new NpgsqlConnection(fixture.OwnerConnectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            select m.user_id
+              from public.membership m
+              join public.membership_role mr
+                   on mr.membership_id = m.id
+                  and mr.org_id = m.org_id
+              join public.role r
+                   on r.id = mr.role_id
+                  and r.org_id is null
+                  and r.code = 'tenant_admin'
+             where m.org_id = @org_id
+               and m.status = 'active'
+               and m.user_id is not null
+             order by m.user_id
+             limit 1
+            """;
+        command.Parameters.AddWithValue("org_id", orgId);
+
+        return command.ExecuteScalar() as Guid? ?? Guid.CreateVersion7();
     }
 
     /// <summary>A host configured by <see cref="IdentityHostSetup"/>.</summary>

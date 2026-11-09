@@ -269,3 +269,57 @@ internal sealed class CountingTenantDb(ITenantDb inner) : ITenantDb
         return inner.ScalarAsync<T>(sql, parameters, cancellationToken);
     }
 }
+
+/// <summary>
+/// Records the one statement a rule issues instead of running it, so a guard whose answer comes from SQL can be
+/// pinned without a database: the case asserts the statement's text and its parameters, and its fixed
+/// <c>result</c> decides the branch the rule takes.
+/// </summary>
+internal sealed class RecordingTenantDb(bool result) : ITenantDb
+{
+    /// <summary>How many statements the rule issued.</summary>
+    internal int Statements { get; private set; }
+
+    /// <summary>The last statement's text.</summary>
+    internal string? Sql { get; private set; }
+
+    /// <summary>The last statement's parameters, read back by name.</summary>
+    internal object? Parameters { get; private set; }
+
+    /// <inheritdoc />
+    public DbConnection Connection => throw new NotSupportedException();
+
+    /// <inheritdoc />
+    public DbTransaction Transaction => throw new NotSupportedException();
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<T>> QueryAsync<T>(
+        string sql,
+        object? parameters = null,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    /// <inheritdoc />
+    public Task<T?> QuerySingleOrDefaultAsync<T>(
+        string sql,
+        object? parameters = null,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    /// <inheritdoc />
+    public Task<int> ExecuteAsync(
+        string sql,
+        object? parameters = null,
+        CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+    /// <inheritdoc />
+    public Task<T?> ScalarAsync<T>(
+        string sql,
+        object? parameters = null,
+        CancellationToken cancellationToken = default)
+    {
+        Statements++;
+        Sql = sql;
+        Parameters = parameters;
+
+        return Task.FromResult<T?>((T)(object)result);
+    }
+}
