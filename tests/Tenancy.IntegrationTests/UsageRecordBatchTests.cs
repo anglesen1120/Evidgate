@@ -349,7 +349,7 @@ public sealed partial class UsageRecordBatchTests
         statements[0].ShouldStartWith("insert into public.usage_ledger_entry");
         statements[0].ShouldContain("on conflict (org_id, billing_key) do nothing");
         statements[0].ShouldContain("from unnest(");
-        statements[0].ShouldContain("returning billing_key");
+        statements[0].ShouldContain("returning id, billing_key, period, original_period");
 
         // The project check is one read for the whole batch, not one per entry (review F-C), and it is what turns an
         // unknown project into a 422 instead of a 23503 that would abort the caller's transaction.

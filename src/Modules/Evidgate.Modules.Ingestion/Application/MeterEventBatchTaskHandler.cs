@@ -34,7 +34,9 @@ internal interface IMeterEventBatchReader
 /// Meters one accepted ingest batch into the usage ledger: one row per batch per metric, keyed
 /// <c>batch:&lt;event_batch_id&gt;:&lt;metric&gt;</c> so a resend or a retried attempt cannot bill twice. Tenant-bound:
 /// the batch is re-read on the claim's scope and its own accepted count is the quantity, so a payload cannot inflate
-/// a bill. Every failure throws and the queue's retry cap dead-letters the row; a duplicate key is a success.
+/// a bill. A batch metered for a month that is already billed is recorded in the next open period and audited, so late
+/// metering is billed rather than dead-lettered. Every other failure throws and the queue's retry cap dead-letters the
+/// row; a duplicate key is a success.
 /// </summary>
 /// <param name="scopeFactory">Creates the per-attempt scope the scoped reader, run lookup and ledger are resolved from.</param>
 internal sealed class MeterEventBatchTaskHandler(IServiceScopeFactory scopeFactory)
@@ -112,9 +114,11 @@ internal sealed class MeterEventBatchTaskHandler(IServiceScopeFactory scopeFacto
 
     /// <summary>
     /// Compares the stored row of a duplicate key with the entry this attempt built. A missing row (the ledger just
-    /// reported it, so this is a contract failure) or a different metric, project, quantity, unit or period means the
-    /// batch was billed as something else: the attempt throws, so the queue retries and dead-letters the row instead of
-    /// accepting a wrong bill. The message names the batch and the differing fields, never their values.
+    /// reported it, so this is a contract failure) or a different metric, project, quantity or unit means the batch was
+    /// billed as something else: the attempt throws, so the queue retries and dead-letters the row instead of accepting
+    /// a wrong bill. The period is compared through the row's provenance: an entry metered for a month already billed
+    /// was re-dated, so its stored <c>period</c> is the open month it moved to — but only when its <c>original_period</c>
+    /// is exactly the entry's month. The message names the batch and the differing fields, never their values.
     /// </summary>
     private static async Task EnsureDuplicateIsThisBatchAsync(
         IUsageLedger ledger,
@@ -147,7 +151,9 @@ internal sealed class MeterEventBatchTaskHandler(IServiceScopeFactory scopeFacto
             differ.Add("unit");
         }
 
-        if (!string.Equals(stored.Period, entry.Period, StringComparison.Ordinal))
+        // A row that moved names the month it was metered for; one that did not names the month it was asked for.
+        var storedMetered = stored.OriginalPeriod ?? stored.Period;
+        if (!string.Equals(storedMetered, entry.Period, StringComparison.Ordinal))
         {
             differ.Add("period");
         }

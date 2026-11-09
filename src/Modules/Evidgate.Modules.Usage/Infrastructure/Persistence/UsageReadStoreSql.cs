@@ -22,7 +22,7 @@ internal static class UsageReadStoreSql
     internal const string LedgerPage =
         """
         select id, project_id, metric, quantity, unit, period, billing_key, occurred_at,
-               price_ref, amount, currency, adjustment_of, reason, created_at
+               price_ref, amount, currency, adjustment_of, reason, original_period, created_at
           from public.usage_ledger_entry
          where org_id = @org_id
            and (@period::text is null or period = @period)
@@ -138,7 +138,7 @@ internal static class UsageReadStoreSql
     internal const string WorksheetLines =
         """
         select id, project_id, metric, quantity, unit, billing_key, occurred_at, price_ref, amount,
-               currency, adjustment_of, reason
+               currency, adjustment_of, reason, original_period
           from public.usage_ledger_entry
          where org_id = @org_id
            and period = @period

@@ -17,6 +17,12 @@ public interface IAuditTrail
     IDisposable BeginUnit();
 
     /// <summary>
+    /// True when the current async flow already holds a unit. A helper that must flush its own entries needs it: a
+    /// unit it merely joined belongs to the caller, which flushes at commit and holds the chain lock only that long.
+    /// </summary>
+    bool HasUnit { get; }
+
+    /// <summary>
     /// Describes the object the running audited command changed. Called by a handler; the next
     /// <see cref="Record"/> picks it up. Metadata is validated against the allowlist.
     /// </summary>
@@ -60,6 +66,9 @@ public sealed class AuditTrail : IAuditTrail
 
         return new UnitScope(this, unit);
     }
+
+    /// <inheritdoc />
+    public bool HasUnit => _unit.Value is not null;
 
     /// <inheritdoc />
     public void Describe(AuditObject auditObject)

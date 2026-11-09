@@ -122,14 +122,22 @@ public sealed record UsageEntryInput(
 /// <param name="ProjectId">The row's project, or null for an org-level metric.</param>
 /// <param name="Quantity">The recorded amount in <paramref name="Unit"/>.</param>
 /// <param name="Unit">The recorded unit.</param>
-/// <param name="Period">The recorded billing period, <c>YYYY-MM</c>.</param>
+/// <param name="Period">
+/// The period the row was stored in: the period the entry named, unless the row was metered for a month already
+/// billed, in which case the ledger moved it into the next open one.
+/// </param>
+/// <param name="OriginalPeriod">
+/// The <c>YYYY-MM</c> period the row was metered for when the ledger re-dated it, or null when nothing moved. A
+/// replay compares it with the entry's own period, not with <paramref name="Period"/>.
+/// </param>
 public sealed record UsageEntryRecord(
     string BillingKey,
     string Metric,
     Guid? ProjectId,
     decimal Quantity,
     string Unit,
-    string Period);
+    string Period,
+    string? OriginalPeriod);
 
 /// <summary>
 /// One <see cref="IUsageLedger.RecordAsync"/> call: the entries of one metering source (04.8.1's batch,

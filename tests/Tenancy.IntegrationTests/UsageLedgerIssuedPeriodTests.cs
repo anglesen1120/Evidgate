@@ -5,9 +5,11 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The issued-period guard of <c>usage_ledger_entry</c> against a real PostgreSQL: a ledger row — an adjustment
-/// row included — cannot enter a period that holds a <c>billing_statement</c>, whoever writes it, and the two
-/// sides serialise on the same advisory key so a concurrent issue and ledger insert cannot both succeed.
+/// The late-usage re-date of <c>usage_ledger_entry</c> against a real PostgreSQL: a ledger row — an adjustment row
+/// included — metered for a period that holds a <c>billing_statement</c> is moved into the next open month, keeps the
+/// month it was metered for in <c>original_period</c>, and never enters the issued month itself. The two sides
+/// serialise on the same advisory key per candidate month, so a concurrent issue either blocks the walk or is seen
+/// by it. A row for a month that is still open is written exactly as it was asked for.
 /// <para>
 /// Every insert runs as the role the case names (the app role inside a tenant-scoped transaction unless a case
 /// deliberately speaks as the owner), so the guard is exercised through the same RLS path production uses. Races
@@ -16,17 +18,23 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 [Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class UsageLedgerIssuedPeriodTests
+public sealed partial class UsageLedgerIssuedPeriodTests
 {
-    private const string MigrationFile = "0087_usage_ledger_issued_period_guard.sql";
+    private const string MigrationFile = "0094_usage_ledger_late_redate.sql";
 
-    /// <summary>
-    /// The trigger's name and, deliberately, the constraint label its refusal carries: one string a caller can
-    /// map a 23514 back to the issued period from.
-    /// </summary>
+    /// <summary>The migration whose guard this one replaces; its journal row must survive the replacement.</summary>
+    private const string PriorMigration = "0087_usage_ledger_issued_period_guard.sql";
+
+    /// <summary>The trigger both migrations attach to the ledger's rows.</summary>
     private const string Guard = "usage_ledger_entry_period_issued";
 
     private const string StatementTrigger = "billing_statement_period_lock";
+
+    /// <summary>The named refusal of a row whose month and every month after it are issued.</summary>
+    private const string NoOpenPeriod = "usage_ledger_entry_no_open_period";
+
+    /// <summary>The named refusal of a row that names its own provenance while it is being moved.</summary>
+    private const string SuppliedPeriod = "usage_ledger_entry_original_period_supplied";
 
     private readonly PostgresTenancyFixture _fixture;
 
@@ -35,12 +43,63 @@ public sealed class UsageLedgerIssuedPeriodTests
     // ------------------------------------------------------------------ (a) the migration
 
     [Fact]
-    public async Task Schema_GuardJournalledAndAttached_WithOwnerOnlyFunctions()
+    public async Task Schema_ReplacesThePriorGuard_AndIsJournalled()
     {
         var database = await _fixture.SharedDatabaseAsync();
 
-        (await _fixture.ReadJournalAsync(database))
-            .ShouldContain(row => row.Name == MigrationFile, "the real runner must journal the guard");
+        var journal = await _fixture.ReadJournalAsync(database);
+        journal.ShouldContain(row => row.Name == PriorMigration, "the re-date replaces the 0087 guard, it does not drop it");
+        journal.ShouldContain(row => row.Name == MigrationFile, "the real runner must journal the re-date");
+    }
+
+    [Fact]
+    public async Task Schema_OriginalPeriodColumn_IsNullableTextWithNoDefault()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
+
+        // The column stays nullable with no default: every row that existed before the re-date keeps no provenance.
+        (await _fixture.ScalarAsync<string>(
+            database,
+            """
+            select data_type || '|' || is_nullable || '|' || coalesce(column_default, '-')
+              from information_schema.columns
+             where table_schema = 'public' and table_name = 'usage_ledger_entry'
+               and column_name = 'original_period'
+            """))
+            .ShouldBe("text|YES|-");
+    }
+
+    [Fact]
+    public async Task Schema_OriginalPeriodChecks_AreAttachedOnceAndValidated()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
+
+        foreach (var constraint in new[]
+        {
+            "usage_ledger_entry_original_period_check",
+            "usage_ledger_entry_original_period_order_check",
+        })
+        {
+            (await _fixture.ScalarAsync<long>(
+                database,
+                "select count(*) from pg_catalog.pg_constraint "
+                + $"where conrelid = 'public.usage_ledger_entry'::regclass and conname = '{constraint}'"))
+                .ShouldBe(1, $"the ledger must carry exactly one {constraint}");
+
+            // Each check is added `not valid` and validated in the same migration, so trusting one is what proves the
+            // validate ran instead of leaving the constraint unenforced on every row that predates it.
+            (await _fixture.ScalarAsync<bool>(
+                database,
+                "select convalidated from pg_catalog.pg_constraint "
+                + $"where conrelid = 'public.usage_ledger_entry'::regclass and conname = '{constraint}'"))
+                .ShouldBeTrue($"{constraint} must be validated, not left `not valid`");
+        }
+    }
+
+    [Fact]
+    public async Task Schema_BothGuards_AreAttachedOnce()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var (table, trigger) in new[]
         {
@@ -54,6 +113,12 @@ public sealed class UsageLedgerIssuedPeriodTests
                 + $"where tgrelid = 'public.{table}'::regclass and tgname = '{trigger}' and not tgisinternal"))
                 .ShouldBe(1, $"{table} must carry exactly one {trigger} trigger");
         }
+    }
+
+    [Fact]
+    public async Task Schema_GuardFunctions_AreInvokerSearchPathPinnedAndClosed()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
 
         // Both bodies run as their invoker (the app role sees its own org's statement through its tenant policy,
         // the owner through the permissive backfill policy), pin an empty search_path and are closed to PUBLIC.
@@ -72,6 +137,12 @@ public sealed class UsageLedgerIssuedPeriodTests
                   where a.grantee = 0 and a.privilege_type = 'EXECUTE')
             """))
             .ShouldBe(2, "both guard functions are invoker, search_path-pinned and not executable by PUBLIC");
+    }
+
+    [Fact]
+    public async Task Schema_GuardFunctions_GrantNoExecuteToTheAppRole()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var function in new[]
         {
@@ -112,20 +183,26 @@ public sealed class UsageLedgerIssuedPeriodTests
                 .ShouldBe(1, $"a re-run of {MigrationFile} must leave one {trigger} trigger, never two");
         }
 
+        (await _fixture.ScalarAsync<long>(
+            database,
+            "select count(*) from information_schema.columns "
+            + "where table_schema = 'public' and table_name = 'usage_ledger_entry' and column_name = 'original_period'"))
+            .ShouldBe(1, "the re-run adds the column once");
+
         (await _fixture.ReadJournalAsync(database)).Count(row => row.Name == MigrationFile)
             .ShouldBe(1, "the re-run is journalled once");
     }
 
-    // ------------------------------------------------------------------ (b) refusal and its controls
+    // ------------------------------------------------------------------ (b) the re-date and its controls
 
     [Fact]
-    public async Task Ledger_InsertIntoIssuedPeriod_Refused()
+    public async Task Ledger_InsertIntoIssuedPeriod_RedatedIntoTheNextOpenMonth()
     {
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);
         var (otherOrg, otherProject) = await world.AddOtherOrgAsync();
         await IssueAsAppAsync(world, world.Org, "2026-09");
 
-        // Positive control 1: the same org's open period holds no statement, so its row is written.
+        // Control 1: the same org's open period holds no statement, so its row is written exactly as asked for.
         await using (var open = await world.BeginAppScopeAsync())
         {
             var row = LedgerRow(world.Org, world.Project, "2026-10", Unique.Slug("open"));
@@ -133,35 +210,55 @@ public sealed class UsageLedgerIssuedPeriodTests
             await open.CommitAsync();
         }
 
+        const string Late = "late-row";
         await using (var issued = await world.BeginAppScopeAsync())
         {
-            var row = LedgerRow(world.Org, world.Project, "2026-09", Unique.Slug("issued"));
-            var error = await issued.CaptureErrorAsync(row.Sql, row.Parameters);
-
-            error.SqlState.ShouldBe("23514", "an issued period is closed to new ledger rows");
-            error.ConstraintName.ShouldBe(Guard, "the refusal names the guard, so a caller can map it");
-            error.MessageText.Contains("2026-09", StringComparison.Ordinal).ShouldBeTrue("the message names the period");
+            var row = LedgerRow(world.Org, world.Project, "2026-09", Late);
+            (await issued.ExecuteAsync(row.Sql, row.Parameters))
+                .ShouldBe(1, "a late row is billed in the next open month, never refused");
+            await issued.CommitAsync();
         }
 
-        // Positive control 2: another org's identical period has issued nothing, so its row is written.
+        (await RowPeriodAsync(world, Late)).ShouldBe("2026-10|2026-09");
+
+        // Control 2: another org's identical period has issued nothing, so its row stays where it was metered.
+        const string Other = "other-row";
         await using (var other = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), otherOrg))
         {
-            var row = LedgerRow(otherOrg, otherProject, "2026-09", Unique.Slug("other"));
+            var row = LedgerRow(otherOrg, otherProject, "2026-09", Other);
             (await other.ExecuteAsync(row.Sql, row.Parameters)).ShouldBe(1, "the guard is per tenant and period");
             await other.CommitAsync();
         }
 
         (await world.ScalarAsync<long>(
             $"select count(*) from public.usage_ledger_entry where org_id = '{world.Org:D}' and period = '2026-09'"))
-            .ShouldBe(0, "the refused insert must leave no row behind");
-
+            .ShouldBe(0, "no row may land in the issued month, not even the one that was moved out of it");
         (await world.ScalarAsync<long>(
             $"select count(*) from public.billing_statement where org_id = '{world.Org:D}' and period = '2026-09'"))
             .ShouldBe(1, "the zero above is the guard, not a missing statement");
     }
 
     [Fact]
-    public async Task Ledger_AdjustmentIntoIssuedPeriod_Refused()
+    public async Task Ledger_ConsecutiveIssuedMonths_SkipsToTheFirstOpenOne()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await IssueAsAppAsync(world, world.Org, "2026-09");
+        await IssueAsAppAsync(world, world.Org, "2026-10");
+
+        const string Late = "chained-row";
+        await using (var issued = await world.BeginAppScopeAsync())
+        {
+            var row = LedgerRow(world.Org, world.Project, "2026-09", Late);
+            (await issued.ExecuteAsync(row.Sql, row.Parameters)).ShouldBe(1);
+            await issued.CommitAsync();
+        }
+
+        (await RowPeriodAsync(world, Late))
+            .ShouldBe("2026-11|2026-09", "every issued month in the chain is skipped, not just the requested one");
+    }
+
+    [Fact]
+    public async Task Ledger_AdjustmentIntoIssuedPeriod_RedatedToo()
     {
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);
 
@@ -175,28 +272,23 @@ public sealed class UsageLedgerIssuedPeriodTests
 
         await IssueAsAppAsync(world, world.Org, "2026-09");
 
-        // A correction is a row too: an adjustment cannot reach an issued period either.
+        // A correction is a row too: metered for the issued month it is billed in the open one, like a plain row.
+        const string Correction = "correction-row";
         await using (var issued = await world.BeginAppScopeAsync())
         {
-            var row = AdjustmentRow(world.Org, world.Project, "2026-09", Unique.Slug("fix"), original);
-            (await issued.CaptureErrorAsync(row.Sql, row.Parameters)).ConstraintName.ShouldBe(Guard);
+            var row = AdjustmentRow(world.Org, world.Project, "2026-09", Correction, original);
+            (await issued.ExecuteAsync(row.Sql, row.Parameters)).ShouldBe(1);
+            await issued.CommitAsync();
         }
 
-        // The same correction into an open period is the sanctioned path, so the refusal above is the period.
-        await using (var open = await world.BeginAppScopeAsync())
-        {
-            var row = AdjustmentRow(world.Org, world.Project, "2026-10", Unique.Slug("fix"), original);
-            (await open.ExecuteAsync(row.Sql, row.Parameters)).ShouldBe(1, "a correction lands in an open period");
-            await open.CommitAsync();
-        }
-
+        (await RowPeriodAsync(world, Correction)).ShouldBe("2026-10|2026-09");
         (await world.ScalarAsync<long>(
-            $"select count(*) from public.usage_ledger_entry where org_id = '{world.Org:D}' and reason is not null"))
-            .ShouldBe(1, "only the open-period correction was written");
+            $"select count(*) from public.usage_ledger_entry where org_id = '{world.Org:D}' and reason is null"))
+            .ShouldBe(1, "only the seeded row carries no reason");
     }
 
     [Fact]
-    public async Task Ledger_OwnerInsertIntoIssuedPeriod_Refused()
+    public async Task Ledger_OwnerInsertIntoIssuedPeriod_RedatedToo()
     {
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);
         var owner = _fixture.OwnerConnectionString(world.Database);
@@ -208,20 +300,41 @@ public sealed class UsageLedgerIssuedPeriodTests
             await issue.CommitAsync();
         }
 
-        // The guard binds the backfill path too: the owner policy exposes the statement, so the probe finds it.
+        // The guard binds the backfill path too: the owner policy exposes the statement, so the walk finds it.
+        const string Late = "owner-row";
         await using (var issued = await TenantScope.BeginAsync(owner, world.Org))
         {
-            var row = LedgerRow(world.Org, world.Project, "2026-08", Unique.Slug("owner"));
-            (await issued.CaptureErrorAsync(row.Sql, row.Parameters)).ConstraintName
-                .ShouldBe(Guard, "no role bypasses the guard by holding the owner's permissive policy");
+            var row = LedgerRow(world.Org, world.Project, "2026-08", Late);
+            (await issued.ExecuteAsync(row.Sql, row.Parameters))
+                .ShouldBe(1, "no role bypasses the guard by holding the owner's permissive policy");
+            await issued.CommitAsync();
         }
 
-        await using (var open = await TenantScope.BeginAsync(owner, world.Org))
+        (await RowPeriodAsync(world, Late)).ShouldBe("2026-09|2026-08");
+    }
+
+    [Fact]
+    public async Task Ledger_NoOpenMonthAfterTheLastPeriod_RefusedWithTheNamedReason()
+    {
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await IssueAsAppAsync(world, world.Org, "9999-12");
+
+        // The calendar ends at 9999-12, so there is no month left to bill: the walk refuses under its own name instead
+        // of writing into the billed month.
+        await using (var issued = await world.BeginAppScopeAsync())
         {
-            var row = LedgerRow(world.Org, world.Project, "2026-10", Unique.Slug("owner"));
-            (await open.ExecuteAsync(row.Sql, row.Parameters)).ShouldBe(1, "the owner still writes open periods");
-            await open.CommitAsync();
+            var row = LedgerRow(world.Org, world.Project, "9999-12", Unique.Slug("last"));
+            var error = await issued.CaptureErrorAsync(row.Sql, row.Parameters);
+
+            error.SqlState.ShouldBe("23514");
+            error.ConstraintName.ShouldBe(NoOpenPeriod);
+            error.MessageText.Contains("9999-12", StringComparison.Ordinal)
+                .ShouldBeTrue("the reason names the period whose chain is exhausted");
         }
+
+        (await world.ScalarAsync<long>(
+            $"select count(*) from public.usage_ledger_entry where org_id = '{world.Org:D}'"))
+            .ShouldBe(0, "a row that cannot be billed anywhere is never written");
     }
 
     // ------------------------------------------------------------------ (c) the race with an issue
@@ -255,7 +368,7 @@ public sealed class UsageLedgerIssuedPeriodTests
     }
 
     [Fact]
-    public async Task Ledger_WhileIssueIsInFlight_BlocksThenRefused()
+    public async Task Ledger_WhileIssueIsInFlight_BlocksThenLandsInTheMonthAfterIt()
     {
         await using var world = await UsageQuotaWorld.StartAsync(_fixture);
         const string Period = "2026-12";
@@ -265,19 +378,21 @@ public sealed class UsageLedgerIssuedPeriodTests
         var statement = StatementRow(world.Org, Period);
         (await issue.ExecuteAsync(statement.Sql, statement.Parameters)).ShouldBe(1);
 
+        const string Late = "blocked-row";
         await using var ledger = await world.BeginAppScopeAsync();
-        var row = LedgerRow(world.Org, world.Project, Period, Unique.Slug("race"));
-        var pending = ledger.CaptureErrorAsync(row.Sql, row.Parameters);
+        var row = LedgerRow(world.Org, world.Project, Period, Late);
+        var pending = ledger.ExecuteAsync(row.Sql, row.Parameters);
 
         await world.WaitForBlockedByAsync(holderPid);
         pending.IsCompleted.ShouldBeFalse("the ledger insert waits for the statement's exclusive lock");
 
         await issue.CommitAsync();
 
-        (await pending).ConstraintName.ShouldBe(
-            Guard,
-            "the insert re-reads the issued period once the lock is released");
+        (await pending).ShouldBe(1, "the row is written once the lock is released, in the month that follows");
+        await ledger.CommitAsync();
 
+        (await RowPeriodAsync(world, Late))
+            .ShouldBe("2027-01|2026-12", "the insert re-reads the issued month and moves out of it");
         (await world.ScalarAsync<long>(
             $"select count(*) from public.usage_ledger_entry where org_id = '{world.Org:D}' and period = '{Period}'"))
             .ShouldBe(0, "the blocked insert must not slip a row into the issued period");
@@ -288,8 +403,8 @@ public sealed class UsageLedgerIssuedPeriodTests
     private const string LedgerSql =
         """
         insert into public.usage_ledger_entry
-            (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at)
-        values (@id, @org_id, @project_id, 'results', 1, 'count', @period, @billing_key, now())
+            (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at, original_period)
+        values (@id, @org_id, @project_id, 'results', 1, 'count', @period, @billing_key, now(), @original_period)
         """;
 
     private const string AdjustmentSql =
@@ -311,12 +426,19 @@ public sealed class UsageLedgerIssuedPeriodTests
         """;
 
     /// <summary>One plain ledger row; every other member takes its default or a value the CHECKs accept.</summary>
+    /// <param name="org">The tenant.</param>
+    /// <param name="project">The row's project.</param>
+    /// <param name="period">The period the writer meters for.</param>
+    /// <param name="billingKey">The row's key.</param>
+    /// <param name="id">The row id, when a caller needs it up front.</param>
+    /// <param name="originalPeriod">A provenance a writer supplies itself, which the guard refuses while moving the row.</param>
     private static (string Sql, (string Name, object Value)[] Parameters) LedgerRow(
         Guid org,
         Guid project,
         string period,
         string billingKey,
-        Guid? id = null) =>
+        Guid? id = null,
+        string? originalPeriod = null) =>
         (LedgerSql,
         [
             ("id", id ?? Guid.CreateVersion7()),
@@ -324,6 +446,7 @@ public sealed class UsageLedgerIssuedPeriodTests
             ("project_id", project),
             ("period", period),
             ("billing_key", billingKey),
+            ("original_period", (object?)originalPeriod ?? DBNull.Value),
         ]);
 
     /// <summary>One adjustment row naming the row it corrects; the reason CHECK demands the reason.</summary>
@@ -352,6 +475,12 @@ public sealed class UsageLedgerIssuedPeriodTests
             ("period", period),
             ("issued_by", Guid.CreateVersion7()),
         ]);
+
+    /// <summary>The stored <c>period|original_period</c> of <paramref name="billingKey"/>'s row.</summary>
+    private static async Task<string?> RowPeriodAsync(UsageQuotaWorld world, string billingKey) =>
+        await world.ScalarAsync<string>(
+            $"select period || '|' || coalesce(original_period, '-') from public.usage_ledger_entry "
+            + $"where org_id = '{world.Org:D}' and billing_key = '{billingKey}'");
 
     /// <summary>Issues a period as the app role inside its tenant transaction: what the route does.</summary>
     private async Task IssueAsAppAsync(UsageQuotaWorld world, Guid org, string period)
