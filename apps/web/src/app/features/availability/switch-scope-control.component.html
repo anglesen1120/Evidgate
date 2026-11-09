@@ -1,0 +1,131 @@
+<section
+  hlmCard
+  class="min-w-0 gap-4 p-3 md:p-4"
+  [attr.aria-labelledby]="titleId()"
+  [attr.data-healing-scope]="scope()"
+>
+  <header class="grid gap-2">
+    <h2 [id]="titleId()" class="m-0 text-lg font-semibold">{{ title() }}</h2>
+    @if (scope() === 'system') {
+      <p class="m-0 text-sm text-muted-foreground" data-healing-system-note>
+        {{ copy.systemReadOnly }}
+      </p>
+    }
+  </header>
+
+  @if (row(); as stored) {
+    <dl class="m-0 grid min-w-0 gap-2">
+      <div class="flex flex-wrap justify-between gap-2">
+        <dt>{{ copy.mode }}</dt>
+        <dd class="m-0 font-semibold" data-healing-stored-mode>{{ modeLabel(stored.mode) }}</dd>
+      </div>
+      <div class="flex flex-wrap justify-between gap-2">
+        <dt>{{ copy.setBy }}</dt>
+        <dd class="m-0" data-healing-set-by>{{ fieldValue(stored.set_by) }}</dd>
+      </div>
+      <div class="grid min-w-0 gap-1">
+        <dt>{{ copy.reason }}</dt>
+        <dd class="m-0 wrap-anywhere" data-healing-reason>{{ fieldValue(stored.reason) }}</dd>
+      </div>
+      <div class="flex flex-wrap justify-between gap-2">
+        <dt>{{ copy.changedAt }}</dt>
+        <dd class="m-0" data-healing-changed-at>
+          @if (changedAt(); as at) {
+            <time [attr.datetime]="stored.at">{{ at | date: 'medium' }}</time>
+          } @else {
+            {{ copy.notProvided }}
+          }
+        </dd>
+      </div>
+      <div class="flex flex-wrap justify-between gap-2">
+        <dt>{{ copy.version }}</dt>
+        <dd class="m-0" data-healing-version>{{ stored.version }}</dd>
+      </div>
+    </dl>
+  } @else {
+    <p class="m-0 text-sm text-muted-foreground" data-healing-no-row>{{ copy.noRow }}</p>
+  }
+
+  @if (scope() !== 'system') {
+    <div class="grid min-w-0 gap-3 border-t border-border pt-3">
+      <div class="grid min-w-0 gap-2">
+        <label hlmLabel [for]="modeId()">{{ copy.setMode }}</label>
+        <select
+          hlmInput
+          [id]="modeId()"
+          class="w-full min-w-0 min-h-(--eg-control-touch)"
+          data-healing-mode
+          [disabled]="!writable() || saving()"
+          [aria-describedby]="describedBy()"
+          (change)="modeChanged($event)"
+        >
+          @for (mode of modes; track mode) {
+            <option [value]="mode" [selected]="mode === selectedMode()">
+              {{ modeLabel(mode) }}
+            </option>
+          }
+        </select>
+      </div>
+
+      <div class="grid min-w-0 gap-2">
+        <label hlmLabel [for]="reasonId()">{{ copy.reasonLabel }}</label>
+        <textarea
+          hlmInput
+          [id]="reasonId()"
+          rows="3"
+          class="w-full min-w-0"
+          data-healing-reason-input
+          [value]="reason()"
+          [readOnly]="!writable() || saving()"
+          [aria-describedby]="reasonDescribedBy()"
+          (input)="reasonChanged($event)"
+        ></textarea>
+        <p [id]="reasonHintId()" class="m-0 text-sm text-muted-foreground">{{ copy.reasonHint }}</p>
+        @if (reasonTooLong()) {
+          <p
+            [id]="reasonTooLongId()"
+            role="alert"
+            class="m-0 text-sm text-destructive"
+            data-healing-reason-too-long
+          >
+            {{ copy.reasonTooLong }}
+          </p>
+        }
+      </div>
+
+      @if (note().length > 0) {
+        <p [id]="noteId()" class="m-0 text-sm text-muted-foreground" data-healing-note>
+          {{ note() }}
+        </p>
+      }
+
+      @if (error(); as failure) {
+        <p [id]="errorId()" role="alert" class="m-0 text-sm text-destructive" data-healing-error>
+          {{ failure.message }}
+        </p>
+      }
+
+      <p
+        role="status"
+        class="m-0 text-sm empty:hidden"
+        [attr.data-healing-saved]="saved() ? '' : null"
+      >
+        {{ saved() ? copy.saved : '' }}
+      </p>
+
+      @if (writable()) {
+        <button
+          hlmBtn
+          type="button"
+          class="min-h-(--eg-control-touch) w-full whitespace-normal sm:w-fit"
+          data-healing-save
+          [disabled]="saving() || reasonTooLong()"
+          [attr.aria-busy]="saving()"
+          (click)="submit()"
+        >
+          {{ saving() ? copy.saving : copy.save }}
+        </button>
+      }
+    </div>
+  }
+</section>
