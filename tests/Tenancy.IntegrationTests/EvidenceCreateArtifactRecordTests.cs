@@ -69,11 +69,12 @@ public sealed class EvidenceCreateArtifactRecordTests
         long declaredBytes = 1024,
         string executionKey = ExecutionKey,
         int attemptNo = 1,
-        string mediaType = "application/zip")
+        string mediaType = "application/zip",
+        Guid? project = null)
     {
         await using var services = world.Api.Services.CreateAsyncScope();
         var provider = services.ServiceProvider;
-        using var tenant = provider.GetRequiredService<IRequestTenantContextSetter>().Publish(world.Org, world.Project);
+        using var tenant = provider.GetRequiredService<IRequestTenantContextSetter>().Publish(world.Org, project ?? world.Project);
         using var principal = provider.GetRequiredService<IRequestPrincipalSetter>()
             .Publish(RequestPrincipal.Service(null, [Permissions.Artifact.Write]));
 
@@ -251,5 +252,23 @@ public sealed class EvidenceCreateArtifactRecordTests
 
         (await _fixture.ScalarAsync<string>(world.Database, $"select sensitivity from public.artifact where id = '{result.Value.ArtifactId}'"))
             .ShouldBe(ArtifactSensitivity.Normal);
+    }
+
+    [Fact]
+    public async Task Mint_ForARunOfAnotherProject_IsRefusedAndWritesNoRow()
+    {
+        await using var world = await StartAsync();
+        var runId = await CreateRunAsync(world);
+        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, "billing");
+
+        var result = await MintAsync(world, runId, project: otherProject);
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(EvidenceErrors.ArtifactRunProjectMismatchCode);
+        (await RowsAsync(world)).ShouldBe(0);
+
+        // The same run still mints for its own project.
+        (await MintAsync(world, runId)).IsSuccess.ShouldBeTrue();
+        (await RowsAsync(world)).ShouldBe(1);
     }
 }
