@@ -108,8 +108,8 @@ public sealed class EvidenceArtifactMinterRunProjectTests
     [Fact]
     public async Task Mint_RefusesWhatTheUploadUrlPathRefuses_AndPassesTheSameControl()
     {
-        ArtifactMinter.DeletingRefusal(new RunPlanLookup(Project, "deleted", true)).ShouldBe(EvidenceErrors.ProjectDeleting);
-        ArtifactMinter.PlanRefusal(new RunPlanLookup(Project, "active", false)).ShouldBe(EvidenceErrors.UnknownExecutionKey);
+        ArtifactMinter.DeletingRefusal(new RunPlanLookup(Project, "deleted", true))!.Code.ShouldBe(EvidenceErrors.ProjectDeleting.Code);
+        ArtifactMinter.PlanRefusal(new RunPlanLookup(Project, "active", false))!.Code.ShouldBe(EvidenceErrors.UnknownExecutionKey.Code);
         ArtifactMinter.DeletingRefusal(new RunPlanLookup(Project, "suspended", true)).ShouldBeNull();
         ArtifactMinter.PlanRefusal(new RunPlanLookup(Project, "active", true)).ShouldBeNull();
         await Should.ThrowAsync<ReachedInsertException>(async () =>
