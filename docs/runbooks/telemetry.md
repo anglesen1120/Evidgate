@@ -202,10 +202,10 @@ Every pipeline runs the same three processors in this order: `memory_limiter` �
 - **`memory_limiter` first**, at `limit_mib: 60` with `spike_limit_mib: 15`, so the soft
   limit is 60 − 15 = **45 MiB** and 60 MiB is the hard one. At 45 MiB the collector
   refuses data (its `otelcol_processor_refused_*` counters) instead of buffering without
-  bound; past 60 MiB it also forces a GC. The limit counts pipeline data only, so total
-  RSS runs about 50 MiB above it (Go runtime, exporter buffers), and `GOMEMLIMIT=96MiB`
-  puts the Go heap under the container's 128 MiB `mem_limit` so the limiter acts before
-  the cgroup does.
+  bound; past 60 MiB it also forces a GC. The limiter reads the Go heap of the whole process, so total
+  RSS still runs about 50 MiB above it, and `GOMEMLIMIT=96MiB` makes the GC work harder as
+  the heap nears the container's 128 MiB `mem_limit`. This mitigates an OOM kill; it does not
+  guarantee against one.
 - **`transform/redaction` second** (10.3.1-T2.2): the third redaction layer, with
   `error_mode: propagate`, so a statement that errors drops that payload instead of
   shipping it unredacted. It **deletes** every attribute whose key names a credential —
@@ -248,6 +248,9 @@ Accepted limits — deliberate, recorded so a review does not re-open them:
 - the stores accept OTLP writes directly on their loopback ports with no credential, so a
   local process can bypass the collector; the collector is a redaction layer, not an
   enforcement point;
+- a bare `Bearer`/`Basic` token shorter than eight characters under an otherwise harmless
+  key is not masked, there is no allowlist of metric label keys, and no static test pins the
+  loopback prefix of the compose ports (the smoke reads the bound addresses back at run time);
 - the store UIs answer cross-origin reads, which this profile accepts because every port
   is loopback-only and no store has a credential to commit.
 
