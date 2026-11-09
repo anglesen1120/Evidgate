@@ -81,6 +81,73 @@ public sealed class SessionRevokeAllAdminLockTests : SessionRevokeAllAdminTestBa
     }
 
     /// <summary>
+    /// The caller is proved AGAIN once the target's user lock is held: an administrator whose membership ends (or
+    /// loses its role), or a target who leaves the org, while the call is parked on the lock is refused with the
+    /// same <c>not_found</c> every refusal gets, and nothing is revoked or recorded.
+    /// </summary>
+    /// <param name="change">What commits while the call waits.</param>
+    [Theory]
+    [InlineData("actor_removed")]
+    [InlineData("actor_role_revoked")]
+    [InlineData("target_removed")]
+    public async Task An_Admin_Revoke_All_Is_Refused_When_The_Caller_No_Longer_Qualifies_After_The_Lock_Wait(
+        string change)
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "tenant_admin", cancellationToken: Token);
+        var member = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+
+        var adminTicket = await CreateSessionAsync(admin, clock);
+        var memberTicket = await CreateSessionAsync(member, clock);
+
+        await using var holder = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await holder.OpenAsync(Token);
+        await using var held = await holder.BeginTransactionAsync(Token);
+        await ExecuteAsync(holder, held, "select evidgate.session_user_lock(@user)", ("user", member));
+
+        await using var waiter = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await waiter.OpenAsync(Token);
+
+        var pending = Task.Run(
+            () => AdminRevokeAllSqlAsync(waiter, null, ProofOf(adminTicket), member, org, clock.GetUtcNow()),
+            Token);
+
+        await WaitForUserLockWaitersAsync(member, expected: 1);
+        pending.IsCompleted.ShouldBeFalse("the call parks on the target's user lock after authorising");
+
+        // Committed while the call waits: the first check already passed, only the re-check can see it.
+        switch (change)
+        {
+            case "actor_removed":
+                await OwnerExecuteAsync(
+                    "update public.membership set status = 'removed' where org_id = @org and user_id = @user",
+                    ("org", org), ("user", admin));
+                break;
+            case "actor_role_revoked":
+                await OwnerExecuteAsync(
+                    "delete from public.membership_role mr using public.membership m "
+                    + "where mr.membership_id = m.id and m.org_id = @org and m.user_id = @user",
+                    ("org", org), ("user", admin));
+                break;
+            default:
+                await OwnerExecuteAsync(
+                    "update public.membership set status = 'removed' where org_id = @org and user_id = @user",
+                    ("org", org), ("user", member));
+                break;
+        }
+
+        await held.CommitAsync(Token);
+
+        var (status, revoked) = await pending.WaitAsync(WaitLimit, Token);
+
+        status.ShouldBe("not_found", "the caller no longer qualifies once the lock is held");
+        revoked.ShouldBe(0);
+        (await IsLiveAsync(memberTicket.SessionId)).ShouldBeTrue("a refused call revokes nothing");
+        (await AdminRowCountAsync(org)).ShouldBe(0L, "a refusal writes no audit row");
+    }
+
+    /// <summary>
     /// Two writers of one user — the administrative call and the member-removal definer's bare
     /// <c>session_revoke_all_for_user</c> call (not the self-service revoke-all route) — queue on the same per-user
     /// lock and BOTH complete whatever order they were started in: no deadlock (<c>40P01</c>) in either direction,

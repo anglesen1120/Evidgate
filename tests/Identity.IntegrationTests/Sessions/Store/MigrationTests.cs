@@ -377,16 +377,29 @@ public sealed class MigrationTests : SessionHardeningTestBase
              where oid = 'public.audit_log'::regclass
             """)).ShouldBeTrue("the definer appends under FORCE row level security");
 
-        var body = await OwnerScalarAsync<string>(RevokeBodySql);
+        // At head the append lives in the shared helper that 0090 introduced; the definer only calls it.
+        (await OwnerScalarAsync<string>(RevokeBodySql))
+            .ShouldContain("evidgate.session_revoke_audit_append", Case.Sensitive);
 
-        body.ShouldContain("insert into public.audit_log", Case.Sensitive);
-        body.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive);
-        body.ShouldContain("pg_advisory_xact_lock(hashtext('audit:' || p_org_id::text))", Case.Sensitive);
+        var helperBody = await OwnerScalarAsync<string>(
+            """
+            select p.prosrc
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate' and p.proname = 'session_revoke_audit_append'
+            """);
+
+        helperBody.ShouldContain("insert into public.audit_log", Case.Sensitive);
+        helperBody.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive);
+        helperBody.ShouldContain("pg_advisory_xact_lock(pg_catalog.hashtext('audit:' || p_org_id::text))", Case.Sensitive);
 
         var migration = await File.ReadAllTextAsync(Path.Combine(DatabaseFixture.MigrationsPath, MigrationFile), Token);
 
         await Fixture.SeedAsync(migration, [], Token);
         await Fixture.SeedAsync(migration, [], Token);
+
+        // 0051 alone re-states the inline body; the head state is 0090's delegating one.
+        await ApplyHelperMigrationAsync();
 
         await AssertRevokeDefinerAsync("a re-apply keeps the definer hygiene and its bounded wait");
         (await HasExecuteAsync("evidgate_app", "evidgate_resolve", "session_revoke_one"))
@@ -444,6 +457,7 @@ public sealed class MigrationTests : SessionHardeningTestBase
                 await File.ReadAllTextAsync(Path.Combine(DatabaseFixture.MigrationsPath, MigrationFile), Token),
                 [],
                 Token);
+            await ApplyHelperMigrationAsync();
         }
     }
 
@@ -574,6 +588,16 @@ public sealed class MigrationTests : SessionHardeningTestBase
 
     /// <summary>0051, the file this case re-applies; it is the correlation-id half of F58.</summary>
     private const string MigrationFile = "0051_identity_session_revoke_audit_ids.sql";
+
+    /// <summary>0090, which re-points the revoke definers at the shared helpers; the head state of the function.</summary>
+    private const string HelperMigrationFile = "0090_identity_session_revoke_helpers.sql";
+
+    /// <summary>Re-applies 0090 so a case that re-stated an older body leaves the database at head.</summary>
+    private async Task ApplyHelperMigrationAsync() =>
+        await Fixture.SeedAsync(
+            await File.ReadAllTextAsync(Path.Combine(DatabaseFixture.MigrationsPath, HelperMigrationFile), Token),
+            [],
+            Token);
 
     /// <summary>The migration 0051 supersedes for this one function: the body a database at 0050 runs.</summary>
     private const string PredecessorMigrationFile = "0050_identity_session_revoke_audit.sql";
