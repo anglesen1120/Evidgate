@@ -309,6 +309,28 @@ public sealed class UsageLedgerReadTests
         first.GetProperty("currency").GetString().ShouldBe("USD");
     }
 
+    [Fact]
+    public async Task LedgerPage_RedatedRow_CarriesTheMonthItWasMeteredFor()
+    {
+        await using var world = await UsageReadsWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+        // Seeded as the owner: a month that was never issued is written as it comes, and the re-dating the write
+        // path would have done is recorded here as the two periods it leaves behind.
+        var redated = Later(world, "redated:1", 1) with { OriginalPeriod = "2026-09" };
+        var ordinary = Later(world, "redated:2", 2);
+        await world.SeedLedgerAsync(redated, ordinary);
+
+        var answer = await world.GetAsync(world.LedgerUrl($"period={Period}"));
+        answer.Status.ShouldBe(HttpStatusCode.OK);
+
+        var items = answer.Body.GetProperty("items").EnumerateArray().ToArray();
+        items.Single(item => item.GetProperty("id").GetGuid() == redated.Id)
+            .GetProperty("original_period").GetString().ShouldBe("2026-09");
+        items.Single(item => item.GetProperty("id").GetGuid() == ordinary.Id)
+            .GetProperty("original_period").ValueKind.ShouldBe(
+                JsonValueKind.Null,
+                "a row that landed in its own month names no other month");
+    }
+
     /// <summary>A ledger row of this world's project at <paramref name="offset"/> days after the shared instant.</summary>
     /// <param name="world">The world whose project the row belongs to.</param>
     /// <param name="key">The billing key.</param>

@@ -79,6 +79,26 @@ public sealed class UsageInvoiceWorksheetTests
     }
 
     [Fact]
+    public async Task Worksheet_RedatedRow_CarriesTheMonthItWasMeteredFor()
+    {
+        await using var world = await StartAsync();
+        var redated = Ledger(world, "redated:1", "results", 1m, 2m, 20) with { OriginalPeriod = Earlier };
+        var ordinary = Ledger(world, "redated:2", "results", 2m, 3m, 21);
+        await world.SeedLedgerAsync(redated, ordinary);
+
+        var answer = await world.GetAsync(world.WorksheetUrl($"period={Period}"));
+
+        answer.Status.ShouldBe(HttpStatusCode.OK);
+        var lines = Lines(answer);
+        lines.Single(line => line.GetProperty("id").GetGuid() == redated.Id)
+            .GetProperty("original_period").GetString().ShouldBe(Earlier);
+        lines.Single(line => line.GetProperty("id").GetGuid() == ordinary.Id)
+            .GetProperty("original_period").ValueKind.ShouldBe(
+                JsonValueKind.Null,
+                "a row that landed in its own month carries no marker");
+    }
+
+    [Fact]
     public async Task Worksheet_ReadTwice_IsByteIdenticalAndHoldsTheSameHash()
     {
         await using var world = await StartAsync();

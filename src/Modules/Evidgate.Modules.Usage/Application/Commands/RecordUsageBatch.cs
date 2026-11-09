@@ -40,21 +40,23 @@ internal sealed record RecordUsageBatch(
 /// cannot name another org, and RLS would refuse it anyway (00 §5.4, ruling T2). A batch whose every key is already on
 /// file changed nothing, so it describes no audit object and suppresses its row — the same no-op rule 13.1.1's import
 /// and 04.1.1's ingest use. A batch that inserted rows audits under the first inserted row's id with the row count.
-/// A batch naming a period an issued statement froze answers a conflict and writes nothing: that month is billed.
+/// A row whose period is already issued is re-dated into the next open period and audited as a move; only a period
+/// with no open month after it answers a conflict, and then nothing is written.
 /// </para>
 /// </summary>
 [AuditedAction("usage.record_batch")]
 [Permission(Permissions.Billing.Write)]
 internal sealed class RecordUsageBatchHandler(
     UsageLedgerStore store,
+    LedgerRedateAudit redateAudit,
     ITenantScopeAccessor scopes,
     IAuditTrail audit) : ICommandHandler<RecordUsageBatch, Result<UsageBatchResult>>
 {
     /// <summary>
-    /// The conflict code of a batch that names a period an issued statement froze: nothing about the request is
-    /// malformed, the billed month is simply closed, so a correction belongs to a later period.
+    /// The conflict code of a batch that names a period whose month and every month after it are issued: nothing about
+    /// the request is malformed, there is simply no open period left to bill.
     /// </summary>
-    internal const string PeriodIssuedCode = "period_issued";
+    internal const string NoOpenPeriodCode = "no_open_period";
 
     /// <summary>Runs the batch.</summary>
     /// <param name="command">The command.</param>
@@ -98,30 +100,35 @@ internal sealed class RecordUsageBatchHandler(
 
         // (d) One statement for the batch (plan §8 P2); the returning set is the inserted half of the answer. The
         // duplicate keys of the same call are counted in this transaction, so a refusal never leaves a tally behind.
-        // A period an issued statement froze is refused here as a conflict, before the insert aborts the transaction.
-        IReadOnlyList<string> inserted;
+        // A row the insert guard re-dated is billed in its new month, and there is nowhere to bill one whose month and
+        // every month after it are issued: that refusal is the command's conflict.
+        UsageLedgerWrite write;
         try
         {
-            inserted = await store
+            write = await store
                 .RecordBatchAsync(orgId, batch, cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (LedgerPeriodIssuedException refused)
+        catch (LedgerNoOpenPeriodException refused)
         {
             // A failed Result writes no audit row: the stage records only a command that succeeds.
-            return Result.Failure<UsageBatchResult>(Error.Conflict(PeriodIssuedCode, refused.Message));
+            return Result.Failure<UsageBatchResult>(Error.Conflict(NoOpenPeriodCode, refused.Message));
         }
 
-        var result = UsageBatchOutcome.Merge(batch, inserted);
+        var result = UsageBatchOutcome.Merge(batch, write.Inserted);
 
-        // (e) Audit: the rows this call wrote, or nothing at all when every key was already on file.
+        // (e) Audit: the rows this call wrote, or nothing at all when every key was already on file. A re-dated row is
+        // audited before the batch object is described, because the last description is the one the command's own
+        // audit entry carries and that entry must name the rows, not the move.
         if (result.Inserted.Count == 0)
         {
             audit.Suppress();
         }
         else
         {
-            var insertedKeys = inserted.ToHashSet(StringComparer.Ordinal);
+            await redateAudit.RecordAsync(orgId, write.Redated, cancellationToken).ConfigureAwait(false);
+
+            var insertedKeys = write.Inserted.ToHashSet(StringComparer.Ordinal);
             var firstInserted = batch.Rows.First(row => insertedKeys.Contains(row.BillingKey));
 
             audit.Describe(new AuditObject(

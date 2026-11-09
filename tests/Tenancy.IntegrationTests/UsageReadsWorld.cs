@@ -118,44 +118,6 @@ internal sealed partial class UsageReadsWorld : IAsyncDisposable
         return (otherOrg, otherProject);
     }
 
-    /// <summary>Inserts the given ledger rows, one parameterised statement each.</summary>
-    /// <param name="rows">The rows to insert.</param>
-    internal async Task SeedLedgerAsync(params LedgerSeed[] rows)
-    {
-        await using var connection = await OpenOwnerAsync();
-
-        foreach (var row in rows)
-        {
-            await using var command = connection.CreateCommand();
-            command.CommandText =
-                """
-                insert into public.usage_ledger_entry
-                    (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at, created_at,
-                     adjustment_of, reason, price_ref, amount, currency)
-                values
-                    (@id, @org_id, @project_id, @metric, @quantity, @unit, @period, @billing_key, @occurred_at,
-                     @created_at, @adjustment_of, @reason, @price_ref, @amount, @currency)
-                """;
-            command.Parameters.Add(new NpgsqlParameter("id", row.Id));
-            command.Parameters.Add(new NpgsqlParameter("org_id", row.Org ?? Org));
-            command.Parameters.Add(new NpgsqlParameter("project_id", (object?)row.ProjectId ?? DBNull.Value));
-            command.Parameters.Add(new NpgsqlParameter("metric", row.Metric));
-            command.Parameters.Add(new NpgsqlParameter("quantity", row.Quantity));
-            command.Parameters.Add(new NpgsqlParameter("unit", row.Unit));
-            command.Parameters.Add(new NpgsqlParameter("period", row.Period));
-            command.Parameters.Add(new NpgsqlParameter("billing_key", row.BillingKey));
-            command.Parameters.Add(new NpgsqlParameter("occurred_at", row.OccurredAt ?? row.CreatedAt));
-            command.Parameters.Add(new NpgsqlParameter("created_at", row.CreatedAt));
-            command.Parameters.Add(new NpgsqlParameter("adjustment_of", (object?)row.AdjustmentOf ?? DBNull.Value));
-            command.Parameters.Add(new NpgsqlParameter("reason", (object?)row.Reason ?? DBNull.Value));
-            command.Parameters.Add(new NpgsqlParameter("price_ref", (object?)row.PriceRef ?? DBNull.Value));
-            command.Parameters.Add(new NpgsqlParameter("amount", (object?)row.Amount ?? DBNull.Value));
-            command.Parameters.Add(new NpgsqlParameter("currency", (object?)row.Currency ?? DBNull.Value));
-
-            await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
-        }
-    }
-
     /// <summary>
     /// Inserts many ledger rows of one period without a round trip each: the shape a large period takes,
     /// where the read must stay one aggregate statement whatever the row count.
@@ -467,7 +429,8 @@ internal sealed record LedgerSeed(
     Guid? Org = null,
     Guid? PriceRef = null,
     decimal? Amount = null,
-    string? Currency = null);
+    string? Currency = null,
+    string? OriginalPeriod = null);
 
 /// <summary>One roll-up row to seed.</summary>
 internal sealed record RollupSeed(
