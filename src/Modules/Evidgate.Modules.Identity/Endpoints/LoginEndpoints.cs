@@ -9,7 +9,6 @@ using Evidgate.Modules.Identity.Login;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Identity.Endpoints;
@@ -62,7 +61,7 @@ namespace Evidgate.Modules.Identity.Endpoints;
 /// PKCE or failure handling.
 /// </para>
 /// </remarks>
-public static class LoginEndpoints
+public static partial class LoginEndpoints
 {
     /// <summary>Both routes' response cache policy: a login answer is never reusable.</summary>
     private const string NoStore = "no-store";
@@ -273,220 +272,23 @@ public static class LoginEndpoints
             return Result.Failure<Uri>(LoginErrors.Unavailable(context, provider.Name, login).Error!);
         }
 
-        cookie.Write(
-            context,
-            new LoginStatePayload(
-                LoginStateCookie.PayloadVersion,
-                provider.Name,
-                state,
-                nonce,
-                verifier,
-                returnUrl,
-                issuedAt,
-                linkUserId is null ? LoginStatePayload.PurposeLogin : LoginStatePayload.PurposeLink,
-                linkUserId));
+        cookie.Write(context, NewPending(provider.Name, state, nonce, verifier, returnUrl, issuedAt, linkUserId));
 
         return Result.Success(authorization);
     }
-
-    /// <summary>
-    /// <c>callback</c>: one use of one pending login. Both cookies are deleted on every outcome - the 429
-    /// included - and a spent window is answered right after those deletions and before either cookie is
-    /// unprotected, the <c>state</c> is compared in constant time and recorded as consumed before the
-    /// provider is called, and the provider's typed failure becomes 401 or 503 without any provider text.
-    /// </summary>
-    private static async Task<Result> CallbackAsync(
-        HttpContext context,
-        string provider,
-        IEnumerable<ILoginProvider> providers,
-        LoginStateCookie cookie,
-        InviteTokenCookie inviteCookie,
-        LoginReplayCache replay,
-        ILoginCompletion completion,
-        ExchangeRateLimiter limiter,
-        IOptions<LoginOptions> options,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(cookie);
-        ArgumentNullException.ThrowIfNull(inviteCookie);
-        ArgumentNullException.ThrowIfNull(replay);
-        ArgumentNullException.ThrowIfNull(completion);
-        ArgumentNullException.ThrowIfNull(limiter);
-        ArgumentNullException.ThrowIfNull(options);
-
-        context.Response.Headers.CacheControl = NoStore;
-
-        // Read the pending login and delete BOTH cookies next, whatever happens after: one attempt, one use.
-        // The staged invite token is a bearer secret (Q1), so it leaves the browser on the first
-        // callback that sees it, whether that callback succeeds, is refused or never reads it.
-        var presented = context.Request.Cookies[LoginStateCookie.Name];
-        LoginStateCookie.Delete(context);
-        var stagedInvite = context.Request.Cookies[InviteTokenCookie.Name];
-        InviteTokenCookie.Delete(context);
-
-        // Then, still ahead of every expensive step: this is the route an anonymous flood uses to fill the
-        // replay set and to drive outbound token exchanges, so it spends the client's window before the
-        // cookie is unprotected, before the one-time record and before the provider call - while the
-        // deletion above keeps "the cookie is deleted on every outcome" literally true.
-        if (Throttle(context, limiter, CallbackLimiterPrefix + ExchangeRateLimiter.ClientKey(context.Connection.RemoteIpAddress), CallbackCost) is { } throttled)
-        {
-            return Result.Failure(throttled);
-        }
-
-        var login = options.Value;
-        var selected = Find(providers, provider);
-
-        if (selected is null)
-        {
-            EvidgateTelemetry.RecordLoginAttempt(UnknownProviderTag, ApiErrorCode.NotFound);
-
-            return Result.Failure(LoginErrors.UnknownProvider);
-        }
-
-        var pending = cookie.Unprotect(presented);
-        if (pending is null || !string.Equals(pending.Provider, selected.Name, StringComparison.Ordinal))
-        {
-            return LoginErrors.Invalid(selected.Name);
-        }
-
-        if (!FixedTimeEquals(pending.State, context.Request.Query["state"].ToString()))
-        {
-            return LoginErrors.Invalid(selected.Name);
-        }
-
-        // The provider's own `error` value is never echoed: it can carry the code or a description.
-        if (context.Request.Query.ContainsKey("error"))
-        {
-            return LoginErrors.Invalid(selected.Name);
-        }
-
-        var code = context.Request.Query["code"].ToString();
-        if (code.Length is 0 or > MaxCodeLength)
-        {
-            return LoginErrors.Invalid(selected.Name);
-        }
-
-        var callbackUri = login.CallbackUri(selected.Name);
-        if (!selected.IsConfigured || callbackUri is null)
-        {
-            return LoginErrors.Unavailable(context, selected.Name, login);
-        }
-
-        // Recorded before the provider call: a replayed callback must be refused even if the first attempt
-        // failed, and two concurrent replays must not both reach the provider.
-        if (!replay.TryConsume(selected.Name + ":" + pending.State, login.StateLifetime))
-        {
-            return LoginErrors.Invalid(selected.Name);
-        }
-
-        LoginProviderResult verified;
-        try
-        {
-            verified = await selected
-                .CompleteAsync(new LoginCallbackRequest(code, pending.Verifier, pending.Nonce, callbackUri), cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            // A provider timeout that escaped its own handling is an outage, not a bad callback (AC8).
-            return LoginErrors.Unavailable(context, selected.Name, login);
-        }
-        catch (HttpRequestException)
-        {
-            return LoginErrors.Unavailable(context, selected.Name, login);
-        }
-        catch (TimeoutException)
-        {
-            return LoginErrors.Unavailable(context, selected.Name, login);
-        }
-
-        if (verified.Failure == LoginFailure.ProviderUnavailable)
-        {
-            return LoginErrors.Unavailable(context, selected.Name, login);
-        }
-
-        if (verified.Failure is not null
-            || verified.Identity is not { } identity
-            || !string.Equals(identity.Provider, selected.Name, StringComparison.Ordinal))
-        {
-            return LoginErrors.Invalid(selected.Name);
-        }
-
-        var request = new LoginCompletionRequest(
-            identity,
-            pending.ReturnUrl,
-            context.Connection.RemoteIpAddress?.ToString(),
-            UserAgent(context),
-            context,
-            inviteCookie.Read(stagedInvite),
-            pending.LinkUserId);
-
-        // The purpose the SIGNED state cookie carries decides which seam may complete this attempt, and only
-        // that seam: a link is never completed by the login completion (it would bind a provider to an account
-        // without the explicit confirm of AC6), and a sign-in is never completed by the link one. Unprotect
-        // already refused every purpose but these two, so "not link" is "login" here.
-        var isLink = string.Equals(pending.Purpose, LoginStatePayload.PurposeLink, StringComparison.Ordinal);
-        var completed = isLink
-            ? await CompleteLinkAsync(context, request, selected.Name, login, cancellationToken).ConfigureAwait(false)
-            : await completion.CompleteAsync(request, cancellationToken).ConfigureAwait(false);
-
-        // The attempt counter is the SIGN-IN success rate and nothing else: a link stages an
-        // identity for the explicit confirm of AC6 and signs nobody in, so counting its outcome here — as
-        // `completed` or as its seam's refusal code — would inflate that rate. The linking slice counts no
-        // counter of its own (there is none in EvidgateTelemetry), so what a link decides is recorded
-        // nowhere, exactly as LinkErrors documents; a refusal this route raises itself (an unusable state
-        // cookie, a provider outage) has no known purpose and stays counted as before.
-        if (!isLink)
-        {
-            EvidgateTelemetry.RecordLoginAttempt(
-                selected.Name,
-                completed.IsSuccess ? OutcomeCompleted : completed.Error!.Code);
-        }
-
-        if (!completed.IsSuccess)
-        {
-            return completed;
-        }
-
-        // The seam promises an app path, and the browser is sent here right after a successful sign-in:
-        // this is the sink where a completion bug (a computed target, a provider value) would become an
-        // open redirect, so the allowlist is applied once more to what actually leaves the server. The value
-        // is already percent-encoded by the completion (ReturnUrlEncoder), so a non-ASCII path is a valid
-        // ASCII Location and this check sees the bytes Kestrel writes.
-        var target = ReturnUrlPolicy.IsAppPath(completed.Value) ? completed.Value : ReturnUrlPolicy.Root;
-
-        return Result.Success<IResult>(Results.Redirect(target), StatusCodes.Status302Found);
-    }
-
-    /// <summary>
-    /// Completes an explicit second-provider link through <see cref="ILinkCompletion"/> (Q4) and
-    /// answers the routes' existing 503 when no link seam is composed.
-    /// </summary>
-    /// <param name="context">The request, whose container holds the seam.</param>
-    /// <param name="request">The verified identity and the account the link was started for.</param>
-    /// <param name="provider">The registered provider name, for the outcome count (never a route value).</param>
-    /// <param name="login">The bound login options (<c>Retry-After</c> of the 503).</param>
-    /// <param name="cancellationToken">Request abort.</param>
-    private static ValueTask<Result<string>> CompleteLinkAsync(
-        HttpContext context,
-        LoginCompletionRequest request,
-        string provider,
-        LoginOptions login,
-        CancellationToken cancellationToken)
-    {
-        // Resolved here, not declared as an endpoint parameter: only this branch ever needs the seam, and a
-        // host that composes none must still serve the sign-in routes. An absent seam fails closed with the
-        // 503 these routes already answer for a composition gap — never by falling back to the login
-        // completion, which would bind a second provider without the confirm AC6 requires.
-        if (context.RequestServices.GetService<ILinkCompletion>() is not { } link)
-        {
-            return ValueTask.FromResult(
-                Result.Failure<string>(LoginErrors.Unavailable(context, provider, login).Error!));
-        }
-
-        return link.CompleteAsync(request, cancellationToken);
-    }
+    /// <summary>The pending-attempt payload; a link names its account and so changes the purpose (see <see cref="BeginAuthorization"/>).</summary>
+    private static LoginStatePayload NewPending(
+        string provider, string state, string nonce, string verifier, string returnUrl, DateTimeOffset issuedAt, Guid? linkUserId) =>
+        new(
+            LoginStateCookie.PayloadVersion,
+            provider,
+            state,
+            nonce,
+            verifier,
+            returnUrl,
+            issuedAt,
+            linkUserId is null ? LoginStatePayload.PurposeLogin : LoginStatePayload.PurposeLink,
+            linkUserId);
 
     /// <summary>
     /// Spends up to <paramref name="cost"/> units of the client's window in the CI exchange limiter and
@@ -536,29 +338,6 @@ public static class LoginEndpoints
         return null;
     }
 
-    /// <summary>
-    /// The client's user agent, or null when it sent none (session metadata, never logged). Truncated to
-    /// <see cref="MaxUserAgentLength"/> — and never mid-surrogate-pair — so what the completion hands the
-    /// session row always satisfies the column's length check.
-    /// </summary>
-    private static string? UserAgent(HttpContext context)
-    {
-        if (context.Request.Headers.UserAgent.Count == 0)
-        {
-            return null;
-        }
-
-        var userAgent = context.Request.Headers.UserAgent.ToString();
-        if (userAgent.Length <= MaxUserAgentLength)
-        {
-            return userAgent;
-        }
-
-        var truncated = userAgent[..MaxUserAgentLength];
-
-        return char.IsHighSurrogate(truncated[^1]) ? truncated[..^1] : truncated;
-    }
-
     /// <summary>A fresh 256-bit secret as base64url (43 characters: a valid RFC 7636 verifier).</summary>
     private static string NewSecret() => Base64Url(RandomNumberGenerator.GetBytes(SecretBytes));
 
@@ -568,8 +347,4 @@ public static class LoginEndpoints
     /// <summary>base64url without padding (RFC 7636 §A).</summary>
     private static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-
-    /// <summary>Constant-time comparison of the stored and presented <c>state</c> (never a plain string equality).</summary>
-    private static bool FixedTimeEquals(string expected, string presented) =>
-        CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(presented));
 }
