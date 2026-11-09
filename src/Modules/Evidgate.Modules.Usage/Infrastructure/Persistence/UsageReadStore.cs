@@ -172,7 +172,8 @@ internal sealed record WorksheetLineRow(
     decimal? Amount,
     string? Currency,
     Guid? AdjustmentOf,
-    string? Reason);
+    string? Reason,
+    string? OriginalPeriod);
 
 /// <summary>Dapper shape of one <c>usage_ledger_entry</c> row of a page.</summary>
 internal sealed class UsageLedgerPageRow
@@ -202,6 +203,8 @@ internal sealed class UsageLedgerPageRow
     public Guid? AdjustmentOf { get; set; }
 
     public string? Reason { get; set; }
+
+    public string? OriginalPeriod { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 }

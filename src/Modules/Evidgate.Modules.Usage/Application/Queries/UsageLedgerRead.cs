@@ -26,6 +26,10 @@ namespace Evidgate.Modules.Usage.Application.Queries;
 /// <param name="Currency">The amount's currency, or null while unpriced.</param>
 /// <param name="AdjustmentOf">The row this one corrects, or null for an original row.</param>
 /// <param name="Reason">The correction's reason, or null for an original row.</param>
+/// <param name="OriginalPeriod">
+/// The period the row was metered for when that period was already issued, so the row was re-dated into
+/// <paramref name="Period"/>; null when the row landed in its own month.
+/// </param>
 /// <param name="CreatedAt">When the row was recorded; the keyset's first member.</param>
 internal sealed record UsageLedgerRow(
     Guid Id,
@@ -41,6 +45,7 @@ internal sealed record UsageLedgerRow(
     string? Currency,
     Guid? AdjustmentOf,
     string? Reason,
+    string? OriginalPeriod,
     DateTimeOffset CreatedAt);
 
 /// <summary>One keyset page of the ledger, oldest first, with the next page's cursor when one exists.</summary>
@@ -191,6 +196,7 @@ internal sealed class UsageLedgerReader(
         row.Currency,
         row.AdjustmentOf,
         row.Reason,
+        row.OriginalPeriod,
         row.CreatedAt);
 
     /// <summary>

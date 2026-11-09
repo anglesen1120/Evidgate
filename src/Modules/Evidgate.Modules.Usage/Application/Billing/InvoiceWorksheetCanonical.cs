@@ -19,7 +19,9 @@ namespace Evidgate.Modules.Usage.Application.Billing;
 /// <remarks>
 /// Decimals are written as invariant strings without trailing zeros rather than as JSON numbers: an amount is not
 /// a floating-point value, and <c>10.50</c> and <c>10.5</c> are the same amount at two scales. Anything added to
-/// the document changes what an already issued statement means, so a hash from another version is never equal.
+/// the document changes what an already issued statement means, so a hash from another version is never equal —
+/// which is why a member only a re-dated row carries is written on that row alone and leaves every other row's
+/// bytes as they were.
 /// <para>
 /// The digest is the bare lowercase hex the statement's <c>content_hash</c> column accepts; it is the same SHA-256
 /// over the same canonical bytes as <see cref="CanonicalHash"/>, which prefixes its answer with the 00 §7
@@ -108,6 +110,10 @@ internal static class InvoiceWorksheetCanonical
         WriteText(writer, "currency", line.Currency);
         WriteText(writer, "adjustment_of", line.AdjustmentOf?.ToString("D", CultureInfo.InvariantCulture));
         WriteText(writer, "reason", line.Reason);
+
+        // Omitted rather than written as null: a row that was never re-dated keeps the document, and therefore
+        // the hash, that the same period produced before this field existed.
+        WritePresent(writer, "original_period", line.OriginalPeriod);
         writer.WriteEndObject();
     }
 
@@ -124,5 +130,18 @@ internal static class InvoiceWorksheetCanonical
         }
 
         writer.WriteString(name, value);
+    }
+
+    /// <summary>
+    /// Writes a property only when it has a value. The document's other members write an explicit null, but a
+    /// re-dating marker is absent from every row that was never re-dated, so writing it either way would change
+    /// what those rows hash to.
+    /// </summary>
+    private static void WritePresent(Utf8JsonWriter writer, string name, string? value)
+    {
+        if (value is not null)
+        {
+            writer.WriteString(name, value);
+        }
     }
 }

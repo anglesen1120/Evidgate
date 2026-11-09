@@ -131,10 +131,10 @@ internal sealed partial class UsageReadsWorld : IAsyncDisposable
                 """
                 insert into public.usage_ledger_entry
                     (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at, created_at,
-                     adjustment_of, reason, price_ref, amount, currency)
+                     adjustment_of, reason, price_ref, amount, currency, original_period)
                 values
                     (@id, @org_id, @project_id, @metric, @quantity, @unit, @period, @billing_key, @occurred_at,
-                     @created_at, @adjustment_of, @reason, @price_ref, @amount, @currency)
+                     @created_at, @adjustment_of, @reason, @price_ref, @amount, @currency, @original_period)
                 """;
             command.Parameters.Add(new NpgsqlParameter("id", row.Id));
             command.Parameters.Add(new NpgsqlParameter("org_id", row.Org ?? Org));
@@ -151,6 +151,7 @@ internal sealed partial class UsageReadsWorld : IAsyncDisposable
             command.Parameters.Add(new NpgsqlParameter("price_ref", (object?)row.PriceRef ?? DBNull.Value));
             command.Parameters.Add(new NpgsqlParameter("amount", (object?)row.Amount ?? DBNull.Value));
             command.Parameters.Add(new NpgsqlParameter("currency", (object?)row.Currency ?? DBNull.Value));
+            command.Parameters.Add(new NpgsqlParameter("original_period", (object?)row.OriginalPeriod ?? DBNull.Value));
 
             await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         }
@@ -467,7 +468,8 @@ internal sealed record LedgerSeed(
     Guid? Org = null,
     Guid? PriceRef = null,
     decimal? Amount = null,
-    string? Currency = null);
+    string? Currency = null,
+    string? OriginalPeriod = null);
 
 /// <summary>One roll-up row to seed.</summary>
 internal sealed record RollupSeed(

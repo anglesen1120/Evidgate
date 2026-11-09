@@ -18,9 +18,6 @@ public sealed class UsageInvoiceGuardsTests(PostgresTenancyFixture fixture)
     private const string RefusedAction = "usage.statement_refused";
     private const string IssuedAction = "usage.statement_issued";
     private const string ReplayedAction = "usage.statement_replayed";
-    private const string Guard = "usage_ledger_entry_period_issued";
-    // 23514: the issued-period guard; 25000: the guard refusing a snapshot it cannot trust; 40001: serialization.
-    private static readonly string[] RefusalStates = ["23514", "25000", "40001"];
     private static readonly DateTimeOffset Now = new(2026, 11, 6, 9, 0, 0, TimeSpan.Zero);
 
     private const string RawLedgerSql = """
@@ -34,7 +31,7 @@ public sealed class UsageInvoiceGuardsTests(PostgresTenancyFixture fixture)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Ledger_RawInsertIntoIssuedPeriod_RefusesPlainAndAdjustmentRowsButAcceptsLaterPeriod(bool adjustment)
+    public async Task Ledger_RawInsertIntoIssuedPeriod_RedatesPlainAndAdjustmentRowsIntoTheOpenMonth(bool adjustment)
     {
         await using var world = await StartAsync();
         var original = Ledger(world, "original");
@@ -44,22 +41,27 @@ public sealed class UsageInvoiceGuardsTests(PostgresTenancyFixture fixture)
         var frozen = await world.StatementRowAsync(Period);
         Guid? adjustmentOf = adjustment ? original.Id : null;
 
-        await using (var refused = await TenantScope.BeginAsync(fixture.AppConnectionString(world.Database), world.Org))
+        // The row is metered for the month the statement froze: the guard bills it in the next open month and keeps the
+        // month it was metered for, so the insert succeeds and the issued month gains nothing.
+        await using (var redated = await TenantScope.BeginAsync(fixture.AppConnectionString(world.Database), world.Org))
         {
-            var error = await Should.ThrowAsync<PostgresException>(async () =>
-                await RawInsertAsync(refused, world, Period, adjustmentOf));
-            error.SqlState.ShouldBe("23514");
-            error.ConstraintName.ShouldBe(Guard);
+            (await RawInsertAsync(redated, world, Period, adjustmentOf)).ShouldBe(1);
+            await redated.CommitAsync();
         }
 
-        await using (var accepted = await TenantScope.BeginAsync(fixture.AppConnectionString(world.Database), world.Org))
+        await using (var open = await TenantScope.BeginAsync(fixture.AppConnectionString(world.Database), world.Org))
         {
-            (await RawInsertAsync(accepted, world, Current, adjustmentOf)).ShouldBe(1);
-            await accepted.CommitAsync();
+            (await RawInsertAsync(open, world, Current, adjustmentOf)).ShouldBe(1);
+            await open.CommitAsync();
         }
 
-        (await world.LedgerRowCountAsync(Period)).ShouldBe(1L);
-        (await world.LedgerRowCountAsync(Current)).ShouldBe(1L);
+        (await world.LedgerRowCountAsync(Period)).ShouldBe(1L, "the seeded row is the only one the issued month keeps");
+        (await world.LedgerRowCountAsync(Current)).ShouldBe(2L, "both raw rows are billed in the open month");
+        (await fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.usage_ledger_entry where org_id = '{world.Org:D}' "
+            + $"and period = '{Current}' and original_period = '{Period}'"))
+            .ShouldBe(1L, "the moved row names the month it was metered for; the open-period one names nothing");
         (await world.StatementRowAsync(Period)).ShouldBe(frozen);
         var replayed = await world.PostStatementAsync(Period, 5m, "USD");
         replayed.Status.ShouldBe(HttpStatusCode.OK, replayed.ErrorMessage);
@@ -195,17 +197,57 @@ public sealed class UsageInvoiceGuardsTests(PostgresTenancyFixture fixture)
         (await world.AuditCountAsync(RefusedAction)).ShouldBe(0L);
     }
 
-    [Theory]
-    [InlineData(IsolationLevel.ReadCommitted)]
-    [InlineData(IsolationLevel.RepeatableRead)]
-    public async Task Ledger_StatementCommitsAfterWriterSnapshot_StillRefusesAnIssuedPeriod(IsolationLevel isolation)
+    [Fact]
+    public async Task Ledger_StatementCommitsAfterWriterSnapshot_ReadCommittedRedatesIntoTheOpenMonth()
     {
         await using var world = await StartAsync();
         await world.SeedLedgerAsync(Ledger(world, "snapshot-original"));
         var token = TestContext.Current.CancellationToken;
         await using var writer = new NpgsqlConnection(fixture.AppConnectionString(world.Database));
         await writer.OpenAsync(token);
-        await using var transaction = await writer.BeginTransactionAsync(isolation, token);
+        await using var transaction = await writer.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
+        await using var command = writer.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "select set_config('evidgate.org_id', @org, true)";
+        command.Parameters.AddWithValue("org", world.Org.ToString("D"));
+        await command.ExecuteScalarAsync(token);
+        command.Parameters.Clear();
+
+        // The writer opened its transaction before the statement existed, but READ COMMITTED gives every statement a
+        // fresh snapshot: the insert's own trigger sees the statement the writer never read and moves the row out.
+        command.CommandText = "select count(*) from public.billing_statement";
+        ((long)(await command.ExecuteScalarAsync(token))!).ShouldBe(0L);
+        var issued = await world.PostStatementAsync(Period, 5m, "USD");
+        issued.Status.ShouldBe(HttpStatusCode.OK, issued.ErrorMessage);
+        var frozen = await world.StatementRowAsync(Period);
+
+        command.CommandText = RawLedgerSql;
+        foreach (var (name, value) in RawParameters(world, Period, null))
+        {
+            command.Parameters.AddWithValue(name, value);
+        }
+
+        (await command.ExecuteNonQueryAsync(token)).ShouldBe(1, "the insert is not refused, it is moved");
+        await transaction.CommitAsync(token);
+
+        (await world.LedgerRowCountAsync(Period)).ShouldBe(1L, "the issued month keeps only the seeded row");
+        (await fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.usage_ledger_entry where org_id = '{world.Org:D}' "
+            + $"and period = '{Current}' and original_period = '{Period}'"))
+            .ShouldBe(1L, "the row landed in the open month and names the one it was metered for");
+        (await world.StatementRowAsync(Period)).ShouldBe(frozen);
+    }
+
+    [Fact]
+    public async Task Ledger_StatementCommitsAfterWriterSnapshot_RepeatableReadIsRefusedRatherThanGuessed()
+    {
+        await using var world = await StartAsync();
+        await world.SeedLedgerAsync(Ledger(world, "snapshot-original"));
+        var token = TestContext.Current.CancellationToken;
+        await using var writer = new NpgsqlConnection(fixture.AppConnectionString(world.Database));
+        await writer.OpenAsync(token);
+        await using var transaction = await writer.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
         await using var command = writer.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = "select set_config('evidgate.org_id', @org, true)";
@@ -225,12 +267,10 @@ public sealed class UsageInvoiceGuardsTests(PostgresTenancyFixture fixture)
             command.Parameters.AddWithValue(name, value);
         }
 
+        // Above READ COMMITTED the walk could not see the statement it must route around, so the guard refuses instead
+        // of guessing a month: a snapshot that cannot prove the target month is open never writes into it.
         var error = await Should.ThrowAsync<PostgresException>(async () => await command.ExecuteNonQueryAsync(token));
-        RefusalStates.ShouldContain(error.SqlState);
-        if (error.SqlState == "23514")
-        {
-            error.ConstraintName.ShouldBe(Guard);
-        }
+        error.SqlState.ShouldBe("25000");
 
         await transaction.RollbackAsync(token);
         (await world.LedgerRowCountAsync(Period)).ShouldBe(1L);

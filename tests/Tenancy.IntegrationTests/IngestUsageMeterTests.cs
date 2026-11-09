@@ -1,3 +1,4 @@
+using System.Globalization;
 using Evidgate.Testing;
 // The ingest-side usage emitter end to end: the real ingest route writes the metering outbox row in its own commit, the
 // real dispatcher turns it into a task row, and the real consumer runs the metering handler against a real PostgreSQL and
@@ -157,6 +158,35 @@ public sealed class IngestUsageMeterTests
 
     private static TaskConsumer Consumer(IngestTestWorld world) =>
         world.Host.Services.GetRequiredService<TaskConsumer>();
+
+    /// <summary>The month after <paramref name="period"/>, the first one a late row can be billed in.</summary>
+    private static string NextMonth(string period) =>
+        DateOnly.ParseExact(period + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture)
+            .AddMonths(1)
+            .ToString("yyyy-MM", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Seeds the one statement row an issue writes for <paramref name="period"/>, committed. It runs as the superuser
+    /// because reaching an issued period through the issuer's rules (priced rows, a closed month) is not what these
+    /// cases are about: the ledger guard reacts to the row, not to how it came to exist.
+    /// </summary>
+    private async Task IssueStatementAsync(string database, Guid org, string period)
+    {
+        await using var connection = await _fixture.OpenSuperuserAsync(database);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            insert into public.billing_statement
+                (id, org_id, period, kind, total_amount, currency, line_count, content_hash, worksheet_json,
+                 issued_by, issued_at)
+            values (@id, @org_id, @period, 'invoice', 0, 'USD', 0, repeat('a', 64), '{}'::jsonb, @issued_by, now())
+            """;
+        command.Parameters.AddWithValue("id", Guid.CreateVersion7());
+        command.Parameters.AddWithValue("org_id", org);
+        command.Parameters.AddWithValue("period", period);
+        command.Parameters.AddWithValue("issued_by", Guid.CreateVersion7());
+
+        (await command.ExecuteNonQueryAsync(Token)).ShouldBe(1, $"{period} must be issuable");
+    }
 
     private static OutboxDispatcher Dispatcher(IngestTestWorld world) =>
         world.Host.Services.GetRequiredService<OutboxDispatcher>();
@@ -430,6 +460,60 @@ public sealed class IngestUsageMeterTests
         (await TaskStateAsync(world.Database)).ShouldBe("done");
         (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1);
         (await LedgerColumnAsync(world.Database, world.Org, batchId, "quantity::text")).ShouldBe("2");
+    }
+
+    // ------------------------------------------------------------------ late metering
+
+    [Fact]
+    public async Task MeterBatch_MeteringMonthAlreadyIssued_RecordedInTheNextOpenMonthAndSucceeds()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(owned.Name);
+        var batchId = await PostBatchAsync(world, events: 2);
+        var metered = await BatchColumnAsync(
+            world.Database, batchId, "to_char(created_at at time zone 'UTC', 'YYYY-MM')");
+
+        // The batch commits after its month was billed: the ledger bills it in the next open month instead of refusing it.
+        await IssueStatementAsync(world.Database, world.Org, metered);
+
+        await DispatchAndRunAsync(world);
+
+        (await TaskStateAsync(world.Database))
+            .ShouldBe("done", "a late meter is billed, never retried into the dead-letter cap");
+        (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1);
+        (await LedgerColumnAsync(world.Database, world.Org, batchId, "period")).ShouldBe(NextMonth(metered));
+        (await LedgerColumnAsync(world.Database, world.Org, batchId, "original_period")).ShouldBe(metered);
+        (await _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.audit_log where org_id = '{world.Org:D}' and action = 'usage.entry_redated'"))
+            .ShouldBe(1L, "the move is audited in the transaction that wrote the row");
+    }
+
+    [Fact]
+    public async Task MeterBatch_SeededRedatedDuplicateWithDifferentQuantity_FailsClosed()
+    {
+        await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(owned.Name);
+        var batchId = await PostBatchAsync(world, events: 2);
+        var metered = await BatchColumnAsync(
+            world.Database, batchId, "to_char(created_at at time zone 'UTC', 'YYYY-MM')");
+
+        // The stored row of this batch was itself re-dated, and it bills another quantity: the period alone no longer
+        // settles whether a duplicate is this batch's own replay, so a disagreeing payload is still a failure.
+        await IssueStatementAsync(world.Database, world.Org, metered);
+        await SeedLedgerAsync(world, await SeededEntryAsync(world, batchId, quantity: 7m));
+        (await LedgerColumnAsync(world.Database, world.Org, batchId, "period"))
+            .ShouldBe(NextMonth(metered), "the stored row is the re-dated one this case is about");
+
+        (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.task set max_attempts = 1 where task_type = '{MeteringTask}'");
+        (await Consumer(world).PollOnceAsync(Queue, Token)).ShouldBe(1);
+
+        (await TaskStateAsync(world.Database)).ShouldBe("dead_letter");
+        (await LastErrorAsync(world)).ShouldContain("quantity");
+        (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1, "the stored bill is never rewritten");
+        (await LedgerColumnAsync(world.Database, world.Org, batchId, "quantity::text")).ShouldBe("7");
     }
 
     // ------------------------------------------------------------------ dead-letter cap

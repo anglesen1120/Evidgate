@@ -232,6 +232,31 @@ public sealed class UsageStatementRulesTests
     }
 
     [Fact]
+    public void Canonical_RowNeverReDated_KeepsTheDocumentItHadBeforeTheMarker()
+    {
+        var sheet = Sheet([Line(1m, 2m)], lineTotal: 2m, total: 2m);
+
+        InvoiceWorksheetCanonical.ToJson(sheet).Contains("original_period", StringComparison.Ordinal)
+            .ShouldBeFalse(
+                "the marker is written only where a re-date happened, so an untouched period keeps its bytes");
+    }
+
+    [Fact]
+    public void Canonical_ReDatedRow_WritesTheMonthItWasMeteredForAndMovesTheHash()
+    {
+        var redated = Line(1m, 2m) with { OriginalPeriod = "2026-09" };
+        var sheet = Sheet([redated], lineTotal: 2m, total: 2m);
+
+        using var document = JsonDocument.Parse(InvoiceWorksheetCanonical.ToJson(sheet));
+        document.RootElement.GetProperty("lines")[0].GetProperty("original_period").GetString()
+            .ShouldBe("2026-09");
+
+        InvoiceWorksheetCanonical.Hash(sheet).ShouldNotBe(
+            InvoiceWorksheetCanonical.Hash(Sheet([Line(1m, 2m)], lineTotal: 2m, total: 2m)),
+            "a statement issued before the row was re-dated must not match the document that now carries it");
+    }
+
+    [Fact]
     public void WorksheetTotals_ReconcilesCountAmountAndCurrency()
     {
         var ledger = LedgerSide(total: 5m, currency: "USD", rowCount: 2);
@@ -320,7 +345,8 @@ public sealed class UsageStatementRulesTests
         amount,
         amount is null ? null : currency,
         AdjustmentOf: null,
-        Reason: null);
+        Reason: null,
+        OriginalPeriod: null);
 
     /// <summary>
     /// A correction carrying the longest reason the ledger accepts. Its length is fixed by <paramref name="index"/>
