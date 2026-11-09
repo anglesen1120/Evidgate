@@ -77,4 +77,42 @@ public sealed class EvidenceArtifactMinterRunProjectTests
     public async Task Mint_RunOfTheSameProject_ReachesTheInsert() =>
         await Should.ThrowAsync<ReachedInsertException>(async () =>
             await MintAsync(new FixedRuns(new RunPlanLookup(Project, "active", true))));
+
+    [Fact]
+    public async Task Mint_RunOfADeletingProject_IsRefusedBeforeAnyInsert()
+    {
+        var result = await MintAsync(new FixedRuns(new RunPlanLookup(Project, "deleted", true)));
+
+        result.Error!.Code.ShouldBe(EvidenceErrors.ProjectDeleting.Code);
+    }
+
+    [Fact]
+    public async Task Mint_KnownRunOfADeletingProject_IsRefusedWithoutReadingTheRunAgain()
+    {
+        var runs = new FixedRuns(null);
+
+        var result = await MintAsync(runs, new RunPlanLookup(Project, "deleted", true));
+
+        result.Error!.Code.ShouldBe(EvidenceErrors.ProjectDeleting.Code);
+        runs.Calls.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Mint_UnplannedExecution_IsRefusedBeforeAnyInsert()
+    {
+        var result = await MintAsync(new FixedRuns(new RunPlanLookup(Project, "active", false)));
+
+        result.Error!.Code.ShouldBe(EvidenceErrors.UnknownExecutionKey.Code);
+    }
+
+    [Fact]
+    public async Task Mint_RefusesWhatTheUploadUrlPathRefuses_AndPassesTheSameControl()
+    {
+        ArtifactMinter.DeletingRefusal(new RunPlanLookup(Project, "deleted", true)).ShouldBe(EvidenceErrors.ProjectDeleting);
+        ArtifactMinter.PlanRefusal(new RunPlanLookup(Project, "active", false)).ShouldBe(EvidenceErrors.UnknownExecutionKey);
+        ArtifactMinter.DeletingRefusal(new RunPlanLookup(Project, "suspended", true)).ShouldBeNull();
+        ArtifactMinter.PlanRefusal(new RunPlanLookup(Project, "active", true)).ShouldBeNull();
+        await Should.ThrowAsync<ReachedInsertException>(async () =>
+            await MintAsync(new FixedRuns(new RunPlanLookup(Project, "suspended", true))));
+    }
 }

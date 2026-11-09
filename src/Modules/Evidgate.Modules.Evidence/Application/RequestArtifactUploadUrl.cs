@@ -131,9 +131,6 @@ internal sealed class RequestArtifactUploadUrlHandler(
     IAuditTrail audit)
     : ICommandHandler<RequestArtifactUploadUrl, Result<UploadUrlResponse>>
 {
-    /// <summary>The <c>project.state</c> that refuses a new upload (migration 0005, 06.4.4 AC2).</summary>
-    private const string ProjectDeleted = "deleted";
-
     /// <inheritdoc />
     public async ValueTask<Result<UploadUrlResponse>> Handle(RequestArtifactUploadUrl command, CancellationToken cancellationToken)
     {
@@ -172,9 +169,9 @@ internal sealed class RequestArtifactUploadUrlHandler(
             return Result.Failure<UploadUrlResponse>(EvidenceErrors.RunNotFound);
         }
 
-        if (string.Equals(run.ProjectState, ProjectDeleted, StringComparison.Ordinal))
+        if (ArtifactMinter.DeletingRefusal(run) is { } deleting)
         {
-            return Result.Failure<UploadUrlResponse>(EvidenceErrors.ProjectDeleting);
+            return Result.Failure<UploadUrlResponse>(deleting);
         }
 
         // (2) Kind policy, one statement plus the resolution. The row is no longer the only authority: the static
@@ -205,9 +202,9 @@ internal sealed class RequestArtifactUploadUrlHandler(
         // (3) The (execution_key, attempt_no) pair must be planned. planned_execution has no attempt_no column, so
         // only the key's membership is checked here; the attempt number is validated for shape (>= 1) by the
         // command validator (T10/T17).
-        if (!run.Planned)
+        if (ArtifactMinter.PlanRefusal(run) is { } unplanned)
         {
-            return Result.Failure<UploadUrlResponse>(EvidenceErrors.UnknownExecutionKey);
+            return Result.Failure<UploadUrlResponse>(unplanned);
         }
 
         // A caller with no token identity can never bind a slot: refuse it before the registry is called. It sits

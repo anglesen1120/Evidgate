@@ -166,6 +166,9 @@ internal sealed class ArtifactMinter(
     ITenantDbContextFactory<EvidenceDbContext> contexts,
     IRunPlanReader runs)
 {
+    /// <summary>The <c>project.state</c> that refuses a new artifact (migration 0005, 06.4.4 AC2).</summary>
+    private const string ProjectDeleted = "deleted";
+
     /// <summary>
     /// Mints one artifact row for the ambient tenant scope; returns its id, final key and state, or
     /// <see cref="EvidenceErrors.RunNotFound"/> / <see cref="EvidenceErrors.ArtifactRunProjectMismatch"/>.
@@ -233,8 +236,26 @@ internal sealed class ArtifactMinter(
         return Result.Success(new ArtifactRecord(artifactId, objectKey, ArtifactState.PendingUpload));
     }
 
+    /// <summary>
+    /// The refusal for a run this caller may not attach an artifact to, or null. Upload-url calls the two parts
+    /// at its own points in its order (the policy answers sit between them); the minter applies both, so the
+    /// internal create path refuses exactly what upload-url refuses.
+    /// </summary>
     private static Error? RunRefusal(RunPlanLookup? run, Guid projectId) =>
         run is null ? EvidenceErrors.RunNotFound
         : run.ProjectId != projectId ? EvidenceErrors.ArtifactRunProjectMismatch
-        : null;
+        : DeletingRefusal(run) ?? PlanRefusal(run);
+
+    /// <summary>A project in the <c>deleted</c> state takes no new artifact.</summary>
+    internal static Error? DeletingRefusal(RunPlanLookup run) =>
+        string.Equals(run.ProjectState, ProjectDeleted, StringComparison.Ordinal)
+            ? EvidenceErrors.ProjectDeleting
+            : null;
+
+    /// <summary>
+    /// The <c>(execution_key, attempt_no)</c> must be planned; <c>planned_execution</c> has no attempt column, so
+    /// only the key's membership is checked.
+    /// </summary>
+    internal static Error? PlanRefusal(RunPlanLookup run) =>
+        run.Planned ? null : EvidenceErrors.UnknownExecutionKey;
 }
