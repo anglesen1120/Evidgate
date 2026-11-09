@@ -334,6 +334,72 @@ describe('HealingSwitchPage', () => {
     );
   });
 
+  it('keeps the controls and saved status mounted while the save reload runs', async () => {
+    const { root, data, settle, until } = mount({
+      answer: resolution({ tenant: switchRow('tenant', 'shadow') }),
+    });
+    await settle();
+    const tenant = scopeCard(root, 'tenant');
+    data.holdReads = true;
+
+    saveButton(root, 'tenant')?.click();
+    await until(() => data.reads.length === 2);
+
+    expect(scopeCard(root, 'tenant')).toBe(tenant);
+    expect(scopeCard(root, 'tenant')?.querySelector('[data-healing-saved]')?.textContent).toContain(
+      'Switch saved',
+    );
+    expect(root.querySelector('[role="status"][aria-busy="true"]')).toBeNull();
+
+    data.releaseRead('p-1', resolution({ tenant: switchRow('tenant', 'disabled') }));
+    await settle();
+    expect(scopeCard(root, 'tenant')).toBe(tenant);
+    expect(scopeCard(root, 'tenant')?.querySelector('[data-healing-saved]')).not.toBeNull();
+  });
+
+  it('keeps the 412 message mounted while the reload it triggered is in flight', async () => {
+    const { root, data, settle, until } = mount({
+      answer: resolution({ tenant: switchRow('tenant', 'shadow') }),
+    });
+    data.writeFailure = refusal('precondition_failed', 412, 'The switch changed; review it.');
+    await settle();
+    const tenant = scopeCard(root, 'tenant');
+    data.holdReads = true;
+
+    saveButton(root, 'tenant')?.click();
+    await until(() => data.reads.length === 2);
+
+    expect(scopeCard(root, 'tenant')).toBe(tenant);
+    expect(scopeCard(root, 'tenant')?.querySelector('[role="alert"]')?.textContent).toContain(
+      'The switch changed; review it.',
+    );
+
+    data.releaseRead('p-1', resolution({ tenant: switchRow('tenant', 'enabled') }));
+    await settle();
+    expect(scopeCard(root, 'tenant')).toBe(tenant);
+    expect(scopeCard(root, 'tenant')?.querySelector('[role="alert"]')?.textContent).toContain(
+      'The switch changed; review it.',
+    );
+  });
+
+  it('leaves the busy state when a read fails with a non-API error', async () => {
+    const { root, data, settle, until } = mount({
+      readFailure: new Error('the response did not parse'),
+    });
+    await settle();
+
+    expect(root.querySelector('[role="status"][aria-busy="true"]')).toBeNull();
+    expect(root.querySelector('[data-healing-read-error] [role="alert"]')?.textContent).toContain(
+      'The healing switch could not be loaded.',
+    );
+
+    data.readFailure = null;
+    root.querySelector<HTMLButtonElement>('[data-healing-reload]')?.click();
+    await until(() => data.reads.length === 2);
+    await settle();
+    expect(root.querySelector('[data-healing-resolved]')).not.toBeNull();
+  });
+
   it('has zero WCAG 2.2 AA violations in jsdom', async () => {
     const { root, settle } = mount({
       answer: resolution({

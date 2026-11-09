@@ -3263,7 +3263,7 @@
       <trans-unit id="healing-switch.decided-by-project" datatype="html"><source>The project scope decides this.</source><target>Phạm vi dự án quyết định điều này.</target></trans-unit>
       <trans-unit id="healing-switch.resolved-default" datatype="html"><source>No scope stores a switch, so healing stays in the default shadow mode.</source><target>Không phạm vi nào lưu công tắc, nên tự phục hồi giữ ở chế độ chỉ quan sát mặc định.</target></trans-unit>
       <trans-unit id="healing-switch.unavailable-resolved" datatype="html"><source>Healing is unavailable.</source><target>Tự phục hồi hiện không khả dụng.</target></trans-unit>
-      <trans-unit id="healing-switch.unavailable-explanation" datatype="html"><source>While healing is unavailable the switch is read-only. The platform reports this state; no scope can change it from here.</source><target>Khi tự phục hồi không khả dụng, công tắc chỉ được đọc. Nền tảng báo trạng thái này; không phạm vi nào có thể thay đổi từ đây.</target></trans-unit>
+      <trans-unit id="healing-switch.unavailable-explanation" datatype="html"><source>While healing is unavailable the switch is read-only. The service reports this state; no scope can change it from here.</source><target>Khi tự phục hồi không khả dụng, công tắc chỉ được đọc. Dịch vụ báo trạng thái này; không phạm vi nào có thể thay đổi từ đây.</target></trans-unit>
       <trans-unit id="healing-switch.dependencies" datatype="html"><source>Dependency health</source><target>Tình trạng phụ thuộc</target></trans-unit>
       <trans-unit id="healing-switch.dependency-llm" datatype="html"><source>Model endpoint</source><target>Điểm cuối mô hình</target></trans-unit>
       <trans-unit id="healing-switch.dependency-knowledge" datatype="html"><source>Knowledge store</source><target>Kho tri thức</target></trans-unit>
@@ -3288,6 +3288,7 @@
       <trans-unit id="healing-switch.no-row" datatype="html"><source>No switch is stored at this scope.</source><target>Không có công tắc nào được lưu tại phạm vi này.</target></trans-unit>
       <trans-unit id="healing-switch.reason-label" datatype="html"><source>Reason (optional)</source><target>Lý do (không bắt buộc)</target></trans-unit>
       <trans-unit id="healing-switch.reason-hint" datatype="html"><source>Up to 2000 characters. The reason is stored with the change.</source><target>Tối đa 2000 ký tự. Lý do được lưu cùng thay đổi.</target></trans-unit>
+      <trans-unit id="healing-switch.reason-too-long" datatype="html"><source>The reason is longer than 2000 characters. Shorten it to save.</source><target>Lý do dài hơn 2000 ký tự. Hãy rút ngắn để lưu.</target></trans-unit>
       <trans-unit id="healing-switch.mode-hint" datatype="html"><source>The most restrictive scope wins. Choose one of the three modes.</source><target>Phạm vi hạn chế nhất sẽ thắng. Chọn một trong ba chế độ.</target></trans-unit>
       <trans-unit id="healing-switch.save" datatype="html"><source>Save switch</source><target>Lưu công tắc</target></trans-unit>
       <trans-unit id="healing-switch.saving" datatype="html"><source>Saving…</source><target>Đang lưu…</target></trans-unit>

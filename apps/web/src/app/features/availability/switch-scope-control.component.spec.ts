@@ -53,6 +53,13 @@ function field(root: HTMLElement, hook: string): HTMLElement | null {
   return root.querySelector<HTMLElement>(`[data-healing-${hook}]`);
 }
 
+function enterReason(root: HTMLElement, text: string): void {
+  const reason = root.querySelector<HTMLTextAreaElement>('textarea');
+  if (reason === null) throw new Error('the reason field did not render');
+  reason.value = text;
+  reason.dispatchEvent(new Event('input'));
+}
+
 describe('SwitchScopeControl', () => {
   afterEach(() => TestBed.resetTestingModule());
 
@@ -193,6 +200,22 @@ describe('SwitchScopeControl', () => {
     expect(root.querySelector('[role="status"]')?.textContent).toContain('Switch saved');
   });
 
+  it('keeps the saved status region mounted before the write answers', () => {
+    const { fixture, root } = mount({
+      scope: 'tenant',
+      row: switchRow('tenant', 'shadow'),
+      editable: true,
+    });
+
+    const status = root.querySelector('[role="status"]');
+    expect(status).not.toBeNull();
+    expect(status?.textContent?.trim()).toBe('');
+
+    fixture.componentRef.setInput('saved', true);
+    fixture.detectChanges();
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('Switch saved');
+  });
+
   it('labels the project scope with the current project name', () => {
     const { root } = mount({ scope: 'project', row: switchRow('project', 'shadow') });
 
@@ -210,5 +233,45 @@ describe('SwitchScopeControl', () => {
     expect(field(root, 'save')?.textContent).toContain('Saving');
     expect(root.querySelector<HTMLSelectElement>('select')?.disabled).toBe(true);
     expect(root.querySelector<HTMLTextAreaElement>('textarea')?.readOnly).toBe(true);
+  });
+
+  it.each([
+    ['1001 emoji', '🙂'.repeat(1001), 1001],
+    ['1999 ASCII and one emoji', 'a'.repeat(1999) + '🙂', 2000],
+  ] as const)('submits a valid code-point reason intact: %s', (_label, reason, count) => {
+    const { fixture, root, emitted } = mount({
+      scope: 'tenant',
+      row: switchRow('tenant', 'shadow'),
+      editable: true,
+    });
+
+    enterReason(root, reason);
+    fixture.detectChanges();
+    expect(root.querySelector('textarea')?.hasAttribute('maxlength')).toBe(false);
+    expect(root.querySelector('[data-healing-reason-too-long]')).toBeNull();
+
+    field(root, 'save')?.click();
+    const sent = emitted[0]?.reason ?? '';
+    expect([...sent].length).toBe(count);
+    expect(sent).toBe(reason);
+  });
+
+  it('blocks a reason above 2000 code points with a visible message', () => {
+    const { fixture, root, emitted } = mount({
+      scope: 'tenant',
+      row: switchRow('tenant', 'shadow'),
+      editable: true,
+    });
+
+    enterReason(root, 'a'.repeat(2001));
+    fixture.detectChanges();
+
+    expect(root.querySelector('[data-healing-reason-too-long]')?.textContent).toContain(
+      'longer than 2000 characters',
+    );
+    expect(root.querySelector<HTMLButtonElement>('[data-healing-save]')?.disabled).toBe(true);
+
+    field(root, 'save')?.click();
+    expect(emitted).toEqual([]);
   });
 });

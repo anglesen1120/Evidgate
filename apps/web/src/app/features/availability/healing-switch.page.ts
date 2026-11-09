@@ -3,7 +3,7 @@ import { HlmButton } from '@evidgate/ui/button';
 
 import { SessionStore } from '../../core/session/session.store';
 import { NotFoundPatternComponent } from '../../shared/ui/states/not-found-pattern.component';
-import { HEALING_SWITCH_COPY } from './healing-switch.copy';
+import { HEALING_SWITCH_COPY, modeLabel as healingModeLabel } from './healing-switch.copy';
 import { HealingSwitchStore, type SettableMode, type SwitchScope } from './healing-switch.store';
 import { SwitchScopeControl } from './switch-scope-control.component';
 
@@ -24,6 +24,7 @@ export class HealingSwitchPage {
   protected readonly store = inject(HealingSwitchStore);
   protected readonly session = inject(SessionStore);
   protected readonly copy = HEALING_SWITCH_COPY;
+  protected readonly modeLabel = healingModeLabel;
 
   /** The write controls need both the permission and a resolution whose modes are settable. */
   protected readonly canEdit = computed(
@@ -32,19 +33,6 @@ export class HealingSwitchPage {
 
   protected canRead(): boolean {
     return this.session.has('healing:triage');
-  }
-
-  protected modeLabel(mode: 'enabled' | 'shadow' | 'disabled' | 'unavailable'): string {
-    switch (mode) {
-      case 'enabled':
-        return this.copy.modeEnabled;
-      case 'shadow':
-        return this.copy.modeShadow;
-      case 'disabled':
-        return this.copy.modeDisabled;
-      case 'unavailable':
-        return this.copy.modeUnavailable;
-    }
   }
 
   protected deciderCopy(scope: SwitchScope | null): string {

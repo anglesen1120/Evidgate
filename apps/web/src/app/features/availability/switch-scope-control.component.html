@@ -73,7 +73,6 @@
           hlmInput
           [id]="reasonId()"
           rows="3"
-          [attr.maxlength]="reasonLimit"
           class="w-full min-w-0"
           data-healing-reason-input
           [value]="reason()"
@@ -82,6 +81,16 @@
           (input)="reasonChanged($event)"
         ></textarea>
         <p [id]="reasonHintId()" class="m-0 text-sm text-muted-foreground">{{ copy.reasonHint }}</p>
+        @if (reasonTooLong()) {
+          <p
+            [id]="reasonTooLongId()"
+            role="alert"
+            class="m-0 text-sm text-destructive"
+            data-healing-reason-too-long
+          >
+            {{ copy.reasonTooLong }}
+          </p>
+        }
       </div>
 
       @if (note().length > 0) {
@@ -96,9 +105,13 @@
         </p>
       }
 
-      @if (saved()) {
-        <p role="status" class="m-0 text-sm" data-healing-saved>{{ copy.saved }}</p>
-      }
+      <p
+        role="status"
+        class="m-0 text-sm empty:hidden"
+        [attr.data-healing-saved]="saved() ? '' : null"
+      >
+        {{ saved() ? copy.saved : '' }}
+      </p>
 
       @if (writable()) {
         <button
@@ -106,7 +119,7 @@
           type="button"
           class="min-h-(--eg-control-touch) w-full whitespace-normal sm:w-fit"
           data-healing-save
-          [disabled]="saving()"
+          [disabled]="saving() || reasonTooLong()"
           [attr.aria-busy]="saving()"
           (click)="submit()"
         >

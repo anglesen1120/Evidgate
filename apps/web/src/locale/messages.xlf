@@ -3083,7 +3083,7 @@
       <trans-unit id="healing-switch.decided-by-project" datatype="html"><source>The project scope decides this.</source></trans-unit>
       <trans-unit id="healing-switch.resolved-default" datatype="html"><source>No scope stores a switch, so healing stays in the default shadow mode.</source></trans-unit>
       <trans-unit id="healing-switch.unavailable-resolved" datatype="html"><source>Healing is unavailable.</source></trans-unit>
-      <trans-unit id="healing-switch.unavailable-explanation" datatype="html"><source>While healing is unavailable the switch is read-only. The platform reports this state; no scope can change it from here.</source></trans-unit>
+      <trans-unit id="healing-switch.unavailable-explanation" datatype="html"><source>While healing is unavailable the switch is read-only. The service reports this state; no scope can change it from here.</source></trans-unit>
       <trans-unit id="healing-switch.dependencies" datatype="html"><source>Dependency health</source></trans-unit>
       <trans-unit id="healing-switch.dependency-llm" datatype="html"><source>Model endpoint</source></trans-unit>
       <trans-unit id="healing-switch.dependency-knowledge" datatype="html"><source>Knowledge store</source></trans-unit>
@@ -3108,6 +3108,7 @@
       <trans-unit id="healing-switch.no-row" datatype="html"><source>No switch is stored at this scope.</source></trans-unit>
       <trans-unit id="healing-switch.reason-label" datatype="html"><source>Reason (optional)</source></trans-unit>
       <trans-unit id="healing-switch.reason-hint" datatype="html"><source>Up to 2000 characters. The reason is stored with the change.</source></trans-unit>
+      <trans-unit id="healing-switch.reason-too-long" datatype="html"><source>The reason is longer than 2000 characters. Shorten it to save.</source></trans-unit>
       <trans-unit id="healing-switch.mode-hint" datatype="html"><source>The most restrictive scope wins. Choose one of the three modes.</source></trans-unit>
       <trans-unit id="healing-switch.save" datatype="html"><source>Save switch</source></trans-unit>
       <trans-unit id="healing-switch.saving" datatype="html"><source>Saving…</source></trans-unit>

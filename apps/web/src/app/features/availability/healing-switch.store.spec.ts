@@ -282,6 +282,60 @@ describe('HealingSwitchStore', () => {
     expect(h.data.reads[0]?.signal?.aborted).toBe(true);
   });
 
+  it('reports loading only before the first resolution, not during a reload', async () => {
+    const h = mountHealingSwitch({ answer: SETTABLE });
+    h.data.holdReads = true;
+    await h.advance();
+    await h.advance();
+    expect(h.store.loading()).toBe(true);
+
+    h.data.releaseRead('p-1', SETTABLE);
+    await h.settle();
+    expect(h.store.loading()).toBe(false);
+
+    h.data.holdReads = true;
+    h.store.reload();
+    await h.advance();
+    await h.advance();
+    expect(h.store.loading()).toBe(false);
+    expect(h.store.resolution()).not.toBeNull();
+
+    h.data.releaseRead('p-1', SETTABLE);
+    await h.settle();
+  });
+
+  it('reports an untyped read failure instead of leaving the page loading', async () => {
+    const h = mountHealingSwitch({ answer: SETTABLE });
+    h.data.readFailure = new Error('the payload did not parse');
+    await h.settle();
+    expect(h.store.readFailed()).toBe(true);
+    expect(h.store.readError()).toBeNull();
+    expect(h.store.loading()).toBe(false);
+    expect(h.store.resolution()).toBeNull();
+  });
+
+  it('drops the attempt entry once its save settles', async () => {
+    const h = mountHealingSwitch({ answer: SETTABLE });
+    await h.settle();
+    h.data.holdWrites = true;
+    const saving = h.store.save('tenant', 'disabled', null);
+    await h.advance();
+    expect(h.store.attempts.latest.size).toBe(1);
+
+    h.data.releaseWrite();
+    expect(await saving).toBe(true);
+    expect(h.store.attempts.latest.size).toBe(0);
+    await h.settle();
+  });
+
+  it('drops the attempt entry after a refused save', async () => {
+    const h = mountHealingSwitch({ answer: SETTABLE });
+    await h.settle();
+    h.data.writeFailure = refusal('validation', 422, 'mode_not_available (test)');
+    expect(await h.store.save('tenant', 'enabled', null)).toBe(false);
+    expect(h.store.attempts.latest.size).toBe(0);
+  });
+
   it('reports no saved claim and no write error before a write', async () => {
     const h = mountHealingSwitch({ answer: SETTABLE, codes: [TRIAGE, CONFIGURE] });
     await h.settle();

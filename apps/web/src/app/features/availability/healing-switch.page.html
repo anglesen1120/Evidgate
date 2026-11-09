@@ -15,10 +15,10 @@
   <p role="status" [attr.aria-busy]="true" class="m-0 min-h-(--eg-control-touch) text-sm">
     {{ copy.loading }}
   </p>
-} @else if (store.readError(); as error) {
+} @else if (store.readFailed()) {
   <div class="grid gap-3" data-healing-read-error>
     <p role="alert" class="m-0 text-sm text-destructive">
-      {{ error.message || copy.readFailed }}
+      {{ store.readError()?.message || copy.readFailed }}
     </p>
     <button
       hlmBtn

@@ -17,11 +17,12 @@ import { HlmLabel } from '@evidgate/ui/label';
 
 import type { ApiError } from '../../core/http/api-error';
 import { SessionStore } from '../../core/session/session.store';
-import { HEALING_SWITCH_COPY } from './healing-switch.copy';
+import { HEALING_SWITCH_COPY, modeLabel as healingModeLabel } from './healing-switch.copy';
 import type { SettableMode, SwitchScope } from './healing-switch.store';
 
 /** `unavailable` is an observation, never a value this editor may offer. */
 const SETTABLE_MODES: readonly SettableMode[] = ['enabled', 'shadow', 'disabled'];
+/** The reason limit in Unicode code points; `String.length` counts UTF-16 units and cuts emoji. */
 const REASON_LIMIT = 2000;
 
 function isSettableMode(value: string | undefined): value is SettableMode {
@@ -51,6 +52,7 @@ export class SwitchScopeControl {
   readonly submitted = output<{ mode: SettableMode; reason: string | null }>();
 
   protected readonly copy = HEALING_SWITCH_COPY;
+  protected readonly modeLabel = healingModeLabel;
   protected readonly modes = SETTABLE_MODES;
   private readonly session = inject(SessionStore);
 
@@ -59,6 +61,11 @@ export class SwitchScopeControl {
     computation: (row) => row?.mode ?? 'shadow',
   });
   protected readonly reason = signal('');
+
+  /** Measured on the trimmed value, so trailing whitespace never blocks a save. */
+  protected readonly reasonTooLong = computed(
+    () => [...this.reason().trim()].length > REASON_LIMIT,
+  );
 
   protected readonly projectName = computed(() => this.session.currentProject()?.name ?? '');
 
@@ -72,7 +79,9 @@ export class SwitchScopeControl {
   protected readonly noteId = computed(() => `healing-switch-${this.scope()}-note`);
   protected readonly reasonHintId = computed(() => `healing-switch-${this.scope()}-reason-hint`);
   protected readonly errorId = computed(() => `healing-switch-${this.scope()}-error`);
-  protected readonly reasonLimit = REASON_LIMIT;
+  protected readonly reasonTooLongId = computed(
+    () => `healing-switch-${this.scope()}-reason-too-long`,
+  );
 
   protected readonly note = computed(() => {
     if (this.scope() === 'system') return '';
@@ -93,6 +102,7 @@ export class SwitchScopeControl {
 
   protected readonly reasonDescribedBy = computed(() => {
     const ids: string[] = [this.reasonHintId()];
+    if (this.reasonTooLong()) ids.push(this.reasonTooLongId());
     if (this.note().length > 0) ids.push(this.noteId());
     if (this.error() !== null) ids.push(this.errorId());
     return ids.join(' ');
@@ -108,17 +118,6 @@ export class SwitchScopeControl {
         const name = this.projectName();
         return name.length === 0 ? this.copy.scopeProject : `${this.copy.scopeProject}: ${name}`;
       }
-    }
-  }
-
-  protected modeLabel(mode: SettableMode): string {
-    switch (mode) {
-      case 'enabled':
-        return this.copy.modeEnabled;
-      case 'shadow':
-        return this.copy.modeShadow;
-      case 'disabled':
-        return this.copy.modeDisabled;
     }
   }
 
@@ -143,11 +142,11 @@ export class SwitchScopeControl {
 
   protected reasonChanged(event: Event): void {
     const value = (event.target as HTMLTextAreaElement | null)?.value ?? '';
-    this.reason.set(value.slice(0, REASON_LIMIT));
+    this.reason.set(value);
   }
 
   protected submit(): void {
-    if (!this.writable() || this.saving()) return;
+    if (!this.writable() || this.saving() || this.reasonTooLong()) return;
     const reason = this.reason().trim();
     this.submitted.emit({ mode: this.selectedMode(), reason: reason.length === 0 ? null : reason });
   }

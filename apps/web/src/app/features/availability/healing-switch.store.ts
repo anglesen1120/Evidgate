@@ -119,11 +119,21 @@ export const HealingSwitchStore = signalStore(
         ? store.switchResource.value()
         : null,
     ),
-    loading: computed(() => store.scope() !== undefined && store.switchResource.isLoading()),
+    // Only a first load replaces the screen with a busy placeholder: a reload after a save or a
+    // 412 keeps the resolution, so the controls, their status and the typed reason stay mounted.
+    loading: computed(
+      () =>
+        store.scope() !== undefined &&
+        !store.switchResource.hasValue() &&
+        store.switchResource.isLoading(),
+    ),
     readError: computed(() => {
       const error = store.switchResource.error();
       return isApiRequestError(error) ? error.error : null;
     }),
+    // A read can reject with something that is not an `ApiRequestError` (a defect): the page must
+    // leave the busy state and offer a reload rather than stay on "Loading" forever.
+    readFailed: computed(() => store.switchResource.error() !== undefined),
     canConfigure: computed(() => store.session.has('healing:configure')),
   })),
   withComputed((store) => {
@@ -203,6 +213,8 @@ export const HealingSwitchStore = signalStore(
         if (failure.kind === 'precondition_failed') store.switchResource.reload();
         return false;
       } finally {
+        // The attempt is settled here; drop it unless a newer attempt already replaced it.
+        if (store.attempts.latest.get(key) === attempt) store.attempts.latest.delete(key);
         // Every path out of this attempt stops it claiming to be saving, including a rethrown error
         // and a write whose scope moved on while it was in flight.
         const write = store.write();
