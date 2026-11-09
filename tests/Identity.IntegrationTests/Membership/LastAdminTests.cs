@@ -221,7 +221,7 @@ public sealed class LastAdminTests : CatalogueTestBase
                 // caller's own admin row first. Either refusal keeps the org's admin.
                 var code = (await refused.Content.ReadFromJsonAsync<JsonElement>(Token))
                     .GetProperty("error").GetProperty("code").GetString();
-                new[] { "last_admin", "forbidden" }.ShouldContain(code!, round);
+                (code is "last_admin" or "forbidden").ShouldBeTrue(round + ": refused as last_admin or forbidden, got " + code);
 
                 (await ActiveAdminCountAsync(org)).ShouldBe(
                     1, round + ": the org keeps at least one active tenant_admin (AC4)");

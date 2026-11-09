@@ -244,7 +244,7 @@ public sealed partial class MembershipEndpointTests : CatalogueTestBase
 
             var code = (await refused.Content.ReadFromJsonAsync<JsonElement>(Token))
                 .GetProperty("error").GetProperty("code").GetString();
-            new[] { "last_admin", "forbidden" }.ShouldContain(code!);
+            (code is "last_admin" or "forbidden").ShouldBeTrue("refused as last_admin or forbidden, got " + code);
 
             (await ActiveAdminCountAsync(org)).ShouldBe(1, "the org keeps at least one active tenant_admin (AC4)");
         }
