@@ -154,8 +154,8 @@ internal sealed partial class CreateArtifactRecordHandler(
 /// throws (<c>NpgsqlTenantScopeFactory</c>) — so the two handlers call this service instead, and each describes
 /// its own single audit entry, so exactly one audit row is written per request.
 /// <para>
-/// It is the one choke point of every artifact insert, so it refuses a run that is not visible or that belongs to
-/// another project than the artifact's (the database key is <c>(org_id, run_id)</c> only, so it cannot). It then
+/// It is the one choke point of every artifact insert, so it refuses a run that is not visible, belongs to another
+/// project (the database key is <c>(org_id, run_id)</c> only), sits in a deleting project or lacks the planned key. It then
 /// resolves <c>default_sensitivity</c> from <c>artifact_kind_policy</c> with the
 /// <see cref="ArtifactSensitivity.ForKind"/> fallback, mints the server-chosen final key, and inserts the row in
 /// state <c>pending_upload</c> with <c>scan_state</c> <c>pending</c>, no attempt and the declared size persisted
@@ -166,6 +166,9 @@ internal sealed class ArtifactMinter(
     ITenantDbContextFactory<EvidenceDbContext> contexts,
     IRunPlanReader runs)
 {
+    /// <summary>The <c>project.state</c> that refuses a new artifact (migration 0005, 06.4.4 AC2).</summary>
+    private const string ProjectDeleted = "deleted";
+
     /// <summary>
     /// Mints one artifact row for the ambient tenant scope; returns its id, final key and state, or
     /// <see cref="EvidenceErrors.RunNotFound"/> / <see cref="EvidenceErrors.ArtifactRunProjectMismatch"/>.
@@ -233,8 +236,26 @@ internal sealed class ArtifactMinter(
         return Result.Success(new ArtifactRecord(artifactId, objectKey, ArtifactState.PendingUpload));
     }
 
+    /// <summary>
+    /// The refusal for a run this caller may not attach an artifact to, or null. Upload-url calls the two parts
+    /// at its own points in its order (the policy answers sit between them); the minter applies both, so both
+    /// paths refuse the same run states (kind policy and slot binding stay in the upload-url handler).
+    /// </summary>
     private static Error? RunRefusal(RunPlanLookup? run, Guid projectId) =>
         run is null ? EvidenceErrors.RunNotFound
         : run.ProjectId != projectId ? EvidenceErrors.ArtifactRunProjectMismatch
-        : null;
+        : DeletingRefusal(run) ?? PlanRefusal(run);
+
+    /// <summary>A project in the <c>deleted</c> state takes no new artifact.</summary>
+    internal static Error? DeletingRefusal(RunPlanLookup run) =>
+        string.Equals(run.ProjectState, ProjectDeleted, StringComparison.Ordinal)
+            ? EvidenceErrors.ProjectDeleting
+            : null;
+
+    /// <summary>
+    /// The <c>(execution_key, attempt_no)</c> must be planned; <c>planned_execution</c> has no attempt column, so
+    /// only the key's membership is checked.
+    /// </summary>
+    internal static Error? PlanRefusal(RunPlanLookup run) =>
+        run.Planned ? null : EvidenceErrors.UnknownExecutionKey;
 }

@@ -252,7 +252,7 @@ Rules that decide the outcome: only `pending_upload`/`uploaded` are completable 
 | Action you take | Audit row | Evidence |
 |---|---|---|
 | `POST /v1/artifacts/{a}/complete` (any committed outcome, `ready` or `rejected`) | `artifact.complete`, object `artifact`/`<id>` | `[AuditedAction("artifact.complete")]` `CompleteArtifactUpload.cs:150`; taxonomy row `docs/security/audit-taxonomy.md:105` |
-| Mint / upload-url | `artifact.mint` | `CreateArtifactRecord.cs:84`; `RequestArtifactUploadUrl.cs:122`; taxonomy `:104` |
+| Mint / upload-url | `artifact.mint` | `CreateArtifactRecord.cs:85`; `RequestArtifactUploadUrl.cs:122`; taxonomy `:104` |
 | `PUT /v1/projects/{p}/retention` | `project.retention.set` | `SetRetentionPolicy.cs:37` — **not** listed in `docs/security/audit-taxonomy.md`, whose table carries `artifact.mint`/`artifact.complete` only (`:104-105`) `[OPEN]` (taxonomy update) |
 | A refused sensitive download | `artifact.download_denied`, metadata `outcome=sensitive_forbidden`, `run_id` | `IssueArtifactDownloadUrl.cs:52`, `:150-174`; also absent from the taxonomy table `[OPEN]` |
 | Staging delete task | none — the task row is the record | `ArtifactStagingDeleteTask.cs:21-23` |
