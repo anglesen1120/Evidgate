@@ -1,0 +1,99 @@
+<header class="mb-4 grid min-w-0 gap-2">
+  <h1 tabindex="-1" class="m-0 font-[family-name:var(--eg-font-display)] text-2xl">
+    {{ copy.title }}
+  </h1>
+  <p class="m-0 text-muted-foreground">{{ copy.description }}</p>
+</header>
+
+@if (!canRead()) {
+  <p role="status" class="m-0 text-sm" data-healing-forbidden>{{ copy.forbidden }}</p>
+} @else if (!session.currentProject()) {
+  <p role="status" class="m-0 text-sm" data-healing-no-project>{{ copy.noProject }}</p>
+} @else if (store.notFound()) {
+  <app-not-found-pattern data-healing-not-found />
+} @else if (store.loading()) {
+  <p role="status" [attr.aria-busy]="true" class="m-0 min-h-(--eg-control-touch) text-sm">
+    {{ copy.loading }}
+  </p>
+} @else if (store.readError(); as error) {
+  <div class="grid gap-3" data-healing-read-error>
+    <p role="alert" class="m-0 text-sm text-destructive">
+      {{ error.message || copy.readFailed }}
+    </p>
+    <button
+      hlmBtn
+      type="button"
+      [variant]="'outline'"
+      class="min-h-(--eg-control-touch) w-full whitespace-normal sm:w-fit"
+      data-healing-reload
+      (click)="store.reload()"
+    >
+      {{ copy.retry }}
+    </button>
+  </div>
+} @else if (store.resolution(); as resolution) {
+  <section class="mb-4 grid min-w-0 gap-2" aria-labelledby="healing-switch-posture">
+    <h2 id="healing-switch-posture" class="m-0 text-lg font-semibold">{{ copy.posture }}</h2>
+    @if (resolution.resolved === 'unavailable') {
+      <p class="m-0 font-semibold" data-healing-unavailable-posture>
+        {{ copy.unavailableResolved }}
+      </p>
+      <p class="m-0 text-sm text-muted-foreground">{{ copy.unavailableExplanation }}</p>
+    } @else {
+      <p class="m-0 grid gap-1" data-healing-resolved>
+        <span>
+          {{ copy.resolvedPrefix }}
+          <strong data-healing-resolved-mode>{{ modeLabel(resolution.resolved) }}</strong>
+        </span>
+        <span>{{ deciderCopy(store.decidingScope()) }}</span>
+      </p>
+    }
+  </section>
+
+  <section class="mb-4 grid min-w-0 gap-2" aria-labelledby="healing-switch-health">
+    <h2 id="healing-switch-health" class="m-0 text-lg font-semibold">{{ copy.dependencies }}</h2>
+    <dl class="m-0 grid min-w-0 gap-2">
+      <div class="flex flex-wrap justify-between gap-2">
+        <dt>{{ copy.dependencyLlm }}</dt>
+        <dd class="m-0 font-semibold" [attr.data-healing-health]="'llm'">
+          {{ resolution.dependency_health.llm ?? copy.notObserved }}
+        </dd>
+      </div>
+      <div class="flex flex-wrap justify-between gap-2">
+        <dt>{{ copy.dependencyKnowledge }}</dt>
+        <dd class="m-0 font-semibold" [attr.data-healing-health]="'knowledge-store'">
+          {{ resolution.dependency_health.knowledge_store ?? copy.notObserved }}
+        </dd>
+      </div>
+    </dl>
+    <p class="m-0 text-sm text-muted-foreground">{{ copy.healthHint }}</p>
+  </section>
+
+  <div class="grid min-w-0 gap-4" data-healing-controls>
+    <app-switch-scope-control scope="system" [row]="resolution.system" />
+    <app-switch-scope-control
+      scope="tenant"
+      [row]="resolution.tenant"
+      [blockedBy]="store.blockedBy('tenant')"
+      [editable]="canEdit()"
+      [saving]="store.saving() === 'tenant'"
+      [error]="store.writeError('tenant')"
+      [saved]="store.saved() === 'tenant'"
+      (submitted)="submit('tenant', $event)"
+    />
+    <app-switch-scope-control
+      scope="project"
+      [row]="resolution.project"
+      [blockedBy]="store.blockedBy('project')"
+      [editable]="canEdit()"
+      [saving]="store.saving() === 'project'"
+      [error]="store.writeError('project')"
+      [saved]="store.saved() === 'project'"
+      (submitted)="submit('project', $event)"
+    />
+  </div>
+} @else {
+  <p role="status" [attr.aria-busy]="true" class="m-0 min-h-(--eg-control-touch) text-sm">
+    {{ copy.loading }}
+  </p>
+}
