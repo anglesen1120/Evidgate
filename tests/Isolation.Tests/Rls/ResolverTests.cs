@@ -436,14 +436,14 @@ public sealed class ResolverTests : HarnessTest
             "0051's signature: 0050's four named arguments plus the two defaulted correlation ids, so a "
             + "four-argument caller still binds");
 
-        body.ShouldContain("insert into public.audit_log", Case.Sensitive,
-            "the row must be written inside the definer, so it commits or rolls back with the revoke");
-        body.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive,
-            "the action 0048's handler wrote from a second transaction");
-        body.ShouldContain("pg_advisory_xact_lock(hashtext('audit:' || p_org_id::text))", Case.Sensitive,
-            "the same chain lock the application writer takes (AuditTrail.cs AuditSql.AdvisoryLock)");
+        body.ShouldContain("perform evidgate.session_revoke_audit_append(", Case.Sensitive,
+            "the row is written inside the definer through the shared helper, so it commits or rolls back with the revoke");
+        body.ShouldContain("evidgate.session_admin_may_revoke(", Case.Sensitive,
+            "the membership:write join is the shared helper's, not a second copy");
         body.ShouldContain("v_target_user <> v_actor", Case.Sensitive,
             "the row is the administrative act only: a self revoke writes nothing");
+        body.ShouldNotContain("insert into public.audit_log", Case.Sensitive,
+            "the chain append lives in the helper alone");
 
         // proconfig spells a numeric value as the catalogue likes (`2000` or `"2000"`), so the values are
         // compared quote-stripped: what the assertions pin is the SETTING and its value, not its spelling.
@@ -467,15 +467,30 @@ public sealed class ResolverTests : HarnessTest
         grantees.ShouldBe("evidgate_app:EXECUTE",
             "EXECUTE is held by evidgate_app alone among non-owner roles — never PUBLIC, never the operator or sweep role");
 
-        // The ids are validated and HASHED, not merely stored: the deployed body carries the two accepted
-        // shapes and builds the canonical spelling from the VALIDATED values (F58, migration 0051).
-        body.ShouldContain("p_request_id ~ '^[!-~]{1,128}$'", Case.Sensitive,
+        // The ids are validated and HASHED in the shared helper, which builds the canonical spelling from the
+        // VALIDATED values.
+        await using var helper = connection.CreateCommand();
+        helper.CommandText =
+            """
+            select p.prosrc
+              from pg_catalog.pg_proc p
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate' and p.proname = 'session_revoke_audit_append'
+            """;
+        var helperBody = (string)(await helper.ExecuteScalarAsync(Token))!;
+
+        helperBody.ShouldContain("insert into public.audit_log", Case.Sensitive);
+        helperBody.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive,
+            "the action 0048's handler wrote from a second transaction");
+        helperBody.ShouldContain("pg_advisory_xact_lock(pg_catalog.hashtext('audit:' || p_org_id::text))", Case.Sensitive,
+            "the same chain lock the application writer takes (AuditTrail.cs AuditSql.AdvisoryLock)");
+        helperBody.ShouldContain("p_request_id ~ '^[!-~]{1,128}$'", Case.Sensitive,
             "the request id is accepted only in CorrelationNames.IsSafeRequestId's shape");
-        body.ShouldContain("p_trace_id ~ '^[0-9a-f]{32}$'", Case.Sensitive,
+        helperBody.ShouldContain("p_trace_id ~ '^[0-9a-f]{32}$'", Case.Sensitive,
             "the trace id is accepted only as the 32 lowercase hex digits Activity.TraceId.ToString() yields");
-        body.ShouldContain("coalesce(to_jsonb(v_request_id)::text, 'null')", Case.Sensitive,
+        helperBody.ShouldContain("coalesce(pg_catalog.to_jsonb(v_request_id)::text, 'null')", Case.Sensitive,
             "the canonical field is the escaped JSON string, or `null`, exactly what AuditHashing hashes");
-        body.ShouldContain("v_request_id, v_trace_id", Case.Sensitive,
+        helperBody.ShouldContain("v_request_id, v_trace_id", Case.Sensitive,
             "the row stores the validated ids in request_id/trace_id");
 
         await using var count = connection.CreateCommand();

@@ -13,6 +13,8 @@ namespace Tenancy.IntegrationTests;
 [Trait("Category", "Docker")]
 public sealed class DefinerExecuteScopeTests
 {
+    private const string OwnerOnly = "evidgate_owner";
+
     private readonly PostgresTenancyFixture _fixture;
 
     public DefinerExecuteScopeTests(PostgresTenancyFixture fixture) => _fixture = fixture;
@@ -29,6 +31,16 @@ public sealed class DefinerExecuteScopeTests
             + "timestamptz '2030-01-01', null, null, 'scope-card')",
             "evidgate_app"
         },
+        {
+            "evidgate.session_admin_may_revoke(uuid, uuid, uuid)",
+            "select evidgate.session_admin_may_revoke(gen_random_uuid(), gen_random_uuid(), gen_random_uuid())",
+            OwnerOnly
+        },
+        {
+            "evidgate.session_revoke_audit_append(uuid, uuid, text, text, jsonb, text, text)",
+            "select evidgate.session_revoke_audit_append(gen_random_uuid(), gen_random_uuid(), 'user', 'x', '{}'::jsonb, null, null)",
+            OwnerOnly
+        },
     };
 
     [Theory]
@@ -43,7 +55,8 @@ public sealed class DefinerExecuteScopeTests
             "select case when a.grantee = 0 then 'public' else a.grantee::regrole::text end "
             + "from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a "
             + $"where p.oid = '{signature}'::regprocedure and a.privilege_type = 'EXECUTE' order by 1");
-        grantees.Order(StringComparer.Ordinal).ShouldBe(new[] { "evidgate_owner", intended }.Order(StringComparer.Ordinal), signature);
+        grantees.Order(StringComparer.Ordinal).ShouldBe(
+            new[] { "evidgate_owner", intended }.Distinct().Order(StringComparer.Ordinal), signature);
 
         // No grantee may pass EXECUTE on: a grant option widens the list without changing who is named above.
         (await _fixture.ScalarAsync<long>(
