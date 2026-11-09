@@ -252,7 +252,7 @@ export function createWorld(
  */
 export class HeldTransition {
   onEnter: (() => void) | null = null;
-  private pending: (() => void) | null = null;
+  private pending: ((allow: boolean) => void) | null = null;
   private arrived: (() => void) | null = null;
   private readonly reached = new Promise<void>((resolve) => (this.arrived = resolve));
   private holding = false;
@@ -265,8 +265,8 @@ export class HeldTransition {
     return this.reached;
   }
 
-  release(): void {
-    this.pending?.();
+  release(allow = true): void {
+    this.pending?.(allow);
   }
 
   readonly guard: CanActivateFn = () => {
@@ -275,7 +275,7 @@ export class HeldTransition {
     this.onEnter?.();
     this.arrived?.();
     return new Promise<boolean>((resolve) => {
-      this.pending = () => resolve(true);
+      this.pending = resolve;
     });
   };
 }
