@@ -10,22 +10,25 @@ table's indexes were read from the migration that creates them. Evidence is stat
 (`n_tup_hot_upd` vs `n_tup_upd`) run was taken, so every verdict is `[INFERENCE]`. The method for a later
 measurement: run the owning integration class on a dedicated database and compare the two counters for the table.
 
-Every table also has the shared `set_updated_at_and_version` trigger; it writes `updated_at`/`version`, which are
-never indexed, so it does not defeat HOT.
+Most tables carry the shared `set_updated_at_and_version` trigger; it writes `updated_at`/`version`, which are
+never indexed, so it does not defeat HOT. `outbox` and `authoring_code_counter` have neither column.
 
 Rate classes: **request** = at least once per API call; **task** = once or more per queued task or ingest batch;
 **rare** = human or admin action, or once per run lifecycle.
 
 | Table | Updated columns | Indexed column updated? | Rate | Recommendation |
 |---|---|---|---|---|
-| `task` | `state`, `locked_until`, `available_at`, `attempts`, `last_error` | yes: all in `task_claim_idx`, `task_active_idx` or their predicates (0008) | task | none: HOT impossible |
+| `session` | `last_seen_at`, `expires_at`, `revoked_at`, `rotation_required_at` | no after 0045 swapped the index so the sliding `expires_at` is not indexed | request | already tuned: fillfactor 80 (0045) |
+| `usage_rollup` | `total_quantity`, `total_amount`, `currency`, `row_count`, `gap_flag`, `computed_at` | no (key columns never updated) | task (per recompute) | already tuned: fillfactor 80 (0047) |
+| `quota_counter` | `used`, `quota_limit`, `blocked_at`, `warned_at` | no | request | already tuned: fillfactor 80 (0086) |
+| `task` | `state`, `locked_until`, `available_at`, `attempts`, `last_error` | yes: `state`, `locked_until` and `available_at` are keys or predicates of `task_claim_idx`, `task_active_idx` (0008); `attempts` and `last_error` are not, but every write also changes the indexed ones | task | none: HOT impossible |
 | `outbox` | `dispatched_at` | yes: predicate of `outbox_undispatched_idx` (0006) | task | none: HOT impossible |
 | `producer_slot` | `last_sequence`, `bound_token_jti`, `bound_ci_run_ref`, `closed_at`, `declared_*` | no: indexes are `(org_id, run_id)`, `(org_id, run_id, producer_id)`, `(org_id, run_id, shard_index)`, PK (0029) | task (per ingest batch) | **candidate: fillfactor 80**, needs a migration |
 | `idempotency_record` | `response_status`, `response_body` | no (`expires_at` is not written) (0007) | request, exactly once per row | candidate, low value: one update per row would need roughly half-empty pages; measure first |
-| `ingest_token` | `last_used_at` | no: the only secondary index is `(org_id, project_id, created_at, id)` (0018) | rare (guarded to one write per interval) | none |
-| `run` | `state` | yes: `state` is in the predicate of `run_overdue_idx` (0058) | rare (few transitions per run) | none: HOT impossible |
-| `authoring_code_counter` | `next_value` | no (primary key `(org_id, project_id)` only, 0039) | request-class for manual-case creation: one row per project, rewritten on every code allocation | **candidate: fillfactor 80**, same shape as `quota_counter`; needs a migration |
-| `artifact` | `attempt_id` | no: indexes are `(org_id, run_id)`, `(expires_at)`, `(org_id, project_id)` (0028) | rare (once per artifact at freeze) | none |
+| `ingest_token` | `last_used_at` | no: the only secondary index is `(org_id, project_id, created_at, id)` (0018) | request-driven (every exchange of a token, at most one write per 60 s per token; workload rate unmeasured) | none: one row per token, low write rate |
+| `run` | `state`, `current_evidence_revision_id` | yes: `state` is in the predicate of `run_overdue_idx` (0058) and the evidence pointer is a key of `run_current_evidence_revision_idx` (0049) | rare (few transitions per run) | none: HOT impossible |
+| `authoring_code_counter` | `next_value` | no (primary key `(org_id, project_id)` only, 0039) | request-class for manual-case creation: one row per project, rewritten on every code allocation (single and batch, `AuthoringCodeAllocator`) | **candidate: fillfactor 80**, same shape as `quota_counter`; needs a migration |
+| `artifact` | `attempt_id` (freeze), `state` and lifecycle columns (upload completion, EF write) | yes for `state`: predicate of `artifact_run_idx` and `artifact_expiry_idx` (0028); `attempt_id` alone is unindexed | rare (per artifact lifecycle step) | none: lifecycle writes change `state` |
 | `environment` | `current_revision_id`, `name` | no `[INFERENCE]` | rare | none |
 | `healing_llm_budget` | `used_cost`, `used_tokens` | no (keyed by org, project, period) | request once its consumer ships (no consumer code yet) | add `fillfactor=80` in the migration that adds the consumer, same shape as `quota_counter` |
 | `healing_switch` | `mode`, `reason`, `set_by`, `at` | no `[INFERENCE]` | rare (operator action) | none |
