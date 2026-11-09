@@ -370,64 +370,47 @@ public sealed class EvidenceSecretPatternScannerTests
     /// <summary>
     /// A cancelled attempt stops instead of finishing the object, including the worst shape for the bearer arm: one
     /// unbroken token run from the first byte to the last. The pass has to reach its own cancellation check inside that
-    /// run instead of walking the run to its end first, so the walk from the pass's first byte to its first check may
-    /// cost no more than the same bytes scanned on their own — that scan is also the positive control, because the
-    /// shape matches one credential.
+    /// run instead of walking the run to its end first. The proof is the offsets the pass reports, never elapsed time:
+    /// the token is cancelled at the first interval checkpoint, that checkpoint must lie within one interval of the
+    /// start, and the pass must report nothing after it. The shape also matches one credential, which the positive
+    /// control on a prefix of the same bytes confirms.
     /// </summary>
     [Fact]
     public async Task Scan_Honours_Cancellation_During_A_Large_Pass()
     {
+        const int interval = 4 * 1024 * 1024;
+
         // The platform's own object cap: the token run is longer than any artifact the pass can be handed.
         var content = new byte[256 * 1024 * 1024];
         "Bearer "u8.CopyTo(content);
         content.AsSpan(7).Fill((byte)'Q');
 
-        var walk = content.AsSpan(0, 4 * 1024 * 1024).ToArray();
-        var referenceWatch = System.Diagnostics.Stopwatch.GetTimestamp();
-        Scan(walk).ShouldHaveSingleItem().PatternClass.ShouldBe(SecretPatternClass.GenericBearerToken);
-        var reference = System.Diagnostics.Stopwatch.GetElapsedTime(referenceWatch);
+        Scan(content.AsSpan(0, interval).ToArray()).ShouldHaveSingleItem().PatternClass.ShouldBe(SecretPatternClass.GenericBearerToken);
 
         using var cancellation = new CancellationTokenSource();
-        var armed = false;
-        var walked = TimeSpan.Zero;
+        var offsets = new List<int>();
 
-        // Both timestamps are taken on the scan thread inside the pass: the checkpoint at offset zero proves the walk
-        // began, and the first interval checkpoint is where the token is armed, so no scheduling delay outside the
-        // pass can pass for work.
+        // The checkpoint runs on the scan thread; the token is armed from inside it, so no scheduler delay is involved.
         var pass = Task.Run(
-            () =>
-            {
-                var start = 0L;
-
-                Should.Throw<OperationCanceledException>(() => SecretPatternScanner.Scan(
-                    content,
-                    cancellation.Token,
-                    offset =>
+            () => Should.Throw<OperationCanceledException>(() => SecretPatternScanner.Scan(
+                content,
+                cancellation.Token,
+                offset =>
+                {
+                    offsets.Add(offset);
+                    if (offset != 0)
                     {
-                        if (offset == 0)
-                        {
-                            start = System.Diagnostics.Stopwatch.GetTimestamp();
-                            return;
-                        }
-
-                        if (armed)
-                        {
-                            return;
-                        }
-
-                        armed = true;
-                        walked = System.Diagnostics.Stopwatch.GetElapsedTime(start);
                         Arm(cancellation);
-                    }));
-            },
+                    }
+                })),
             Token);
 
         await pass;
 
-        walked.ShouldBeGreaterThan(TimeSpan.Zero, "the pass never reached its first check");
-        walked.ShouldBeLessThan(
-            reference * 2,
-            "the walk to the first check must cost one interval, not the rest of the token run");
+        offsets.Count.ShouldBe(2, "the pass must report its start and one interval checkpoint, then stop");
+        offsets[0].ShouldBe(0);
+        offsets[1].ShouldBeGreaterThanOrEqualTo(interval);
+        offsets[1].ShouldBeLessThan(interval * 2, "the first check must come one interval into the token run, not at its end");
     }
 
     /// <summary>
