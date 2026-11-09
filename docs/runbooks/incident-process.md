@@ -42,7 +42,7 @@ Entry criteria are written as tests over repo invariants and states, so they do 
 | P1-e | The audit hash chain is broken, a gap or a mismatch in one org's chain | Treated as possible tampering; the product loses its reconstruction claim (`docs/runbooks/breach.md:68`, `plans/10-operations.md:34`) | [breach](breach.md) §5.2 |
 | P1-f | The service is unusable for every tenant: readiness red on every API replica, or every ingest batch fails | Total loss of the core loop; availability target 99.5 %/month is measured, not promised (`plans/00-overview.md:453`, health endpoints at `plans/10-operations.md:55`) | restore/DR runbook `[OPEN]` 10.5.1-T4; release runbook `[OPEN]` 10.2.2-T4 |
 
-**P1 behaviour.** Drop everything else. Start the record before the first fix. If P1-a or P1-d holds, the breach clock and notice path take precedence over any technical mitigation (§4).
+**P1 behaviour.** Drop everything else. Start the record before the first fix. If P1-a or P1-d holds, the breach clock starts at once — record `signal_seen_at` and the notice fields as they stand — but **containment still comes first**, exactly as §5 step 4 orders it and as the breach matrix's ordered first actions do: record ids, times and a hash, restrict access, then purge/redact and rotate, and notify on the facts that gives you (`docs/runbooks/breach.md:58-60`). Do not hold a containment step while a notice is written; send the first notice as soon as containment allows, and add detail later (`docs/runbooks/breach.md:24`).
 
 ### P2 — degraded, bounded, no invariant broken yet
 
@@ -56,7 +56,7 @@ Entry criteria are written as tests over repo invariants and states, so they do 
 | P2-f | A key class is past its rotation window, or a rotation did not complete cleanly | No evidence of use yet; the rotation procedure bounds it (`docs/runbooks/key-rotation.md:9`) | [key-rotation](key-rotation.md) |
 | P2-g | A backlog alert fires for queue age, outbox lag, lease loss or incomplete rate (the FR-10-6 set) | Ingest keeps accepting within quota instead of failing open (`plans/10-operations.md:26`, `:75`) | [dead-letter](dead-letter.md), [stuck-run](stuck-run.md) |
 
-**P2 behaviour.** Work it in the same working session. If a P2 holds long enough that data could be lost or a tenant's release is blocked, it becomes P1 by re-declaration.
+**P2 behaviour.** Work it in the same working session, and record it. The session window is the `[DECISION]` proposal of §2 and **not in force**: until the owner signs it, treat "the same working session" as unset and fall back to the breach runbook's internal S2 cadence, itself `[INFERENCE]`/`[OPEN]` (`docs/runbooks/breach.md:79`, `:82`). If a P2 holds long enough that data could be lost or a tenant's release is blocked, it becomes P1 by re-declaration.
 
 **Healing-scope constraint (P2-d).** The system-scope flip needs the platform-operator credential, which is not usable on this tree; the tenant and project scopes work with a member session holding `healing:configure` (`docs/runbooks/kill-switch.md:13`). Use the narrowest scope that bounds the incident, and record which scope was flipped.
 
@@ -69,7 +69,7 @@ Entry criteria are written as tests over repo invariants and states, so they do 
 | P3-c | One alert fires and the runbook's own triage shows no customer impact (a false positive with a documented benign cause, `docs/runbooks/breach.md:49`) | the runbook the alert links to |
 | P3-d | Telemetry or a dashboard cannot answer a reconstruction question for one run (`plans/10-operations.md:34`) | [telemetry](telemetry.md) |
 
-**P3 behaviour.** Handle in working hours; record it. `plans/10-operations.md:76` fixes only alert grouping and post-drill tuning, not a repeat rule, so this one is a `[DECISION]` proposal and **not in force**: if the same class fires twice in one week, re-declare P2 and treat the pattern as the incident. Nothing in the repo defines that window today.
+**P3 behaviour.** Handle in working hours, and record it — like the P2 window, "working hours" is the `[DECISION]` proposal of §2 and **not in force**: until the owner signs it, treat the window as unset. `plans/10-operations.md:76` fixes only alert grouping and post-drill tuning, not a repeat rule, so the repeat rule below is a proposal too and **not in force**: if the same class fires twice in one week, re-declare P2 and treat the pattern as the incident. Nothing in the repo defines that window today.
 
 ### Response targets
 
@@ -264,7 +264,7 @@ Read order for a P1: §2 class → the class's runbook → §4.2 if a customer m
 | `docs/runbooks/key-rotation.md:9-13` | Secret handling, no ad-hoc writes, no invented operator endpoint, who rotates what |
 | `docs/runbooks/kill-switch.md:3` | Kill-switch status: T5.1 written; T5.2 staging drill open, AC6 half open |
 | `docs/runbooks/kill-switch.md:13` | Tenant/project scope needs a member session with `healing:configure`; the system scope's platform-operator credential is not usable today |
-| `docs/README.md:8` | `docs/runbooks/` is the runbook index (this page is not yet listed there) |
+| `docs/README.md:8` | `docs/runbooks/` is the runbook index, and it lists both `runbooks/kill-switch.md` and `runbooks/incident-process.md` under 10.7.1-T5.1/T6.1 (drills T5.2/T6.2 open) |
 
 ## 8. What this page does not cover
 
@@ -276,4 +276,4 @@ Read order for a P1: §2 class → the class's runbook → §4.2 if a customer m
 - **Response-time targets for this ladder** — §2; nothing in the repo defines them, and the proposal there is not in force.
 - **Restore/DR, release/rollback and orphan-artifact procedures** — the runbooks listed `[OPEN]` in §6. This page routes to them; it does not replace them.
 - **The drill status of every other runbook** — each runbook states its own (`docs/runbooks/dead-letter.md:3`, `docs/runbooks/stuck-run.md:3`, `docs/runbooks/key-rotation.md:3`, `docs/runbooks/breach.md:3`). AC1 as a whole is therefore not met.
-- **Where this page is indexed** — `docs/README.md:8` lists the runbook directory but not this file; adding it there is outside this subtask.
+- **Where this page is indexed** — `docs/README.md:8`, in the runbook row that also names `runbooks/kill-switch.md`; that row is the index, so a status change here is carried there in the same edit.
