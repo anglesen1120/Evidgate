@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
@@ -32,7 +33,8 @@ internal sealed record RemoveMemberCommand(Guid OrgId, Guid MembershipId, string
 /// request tenant (404), unknown membership (404, RLS decides — another org's id is
 /// indistinguishable from a missing one, AC7), illegal source state (409
 /// <c>invalid_transition</c>: <c>pending → removed</c> is not one of 02.1.2 §6's
-/// edges, a pending invite is cancelled through 02.1.2-T2's route), last admin (409
+/// edges, a pending invite is cancelled through 02.1.2-T2's route), a target whose
+/// administrative rank is above the caller's (403 <c>forbidden</c>), last admin (409
 /// <c>last_admin</c>, AC4), then the write.
 /// </summary>
 /// <remarks>
@@ -45,6 +47,7 @@ internal sealed class RemoveMemberCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
+    IRequestPrincipalAccessor principals,
     IAuditTrail audit,
     ISessionRevocation sessions)
     : ICommandHandler<RemoveMemberCommand, Result>
@@ -74,6 +77,15 @@ internal sealed class RemoveMemberCommandHandler(
             return Result.Failure(Error.NotFound("no membership with that id is visible to this tenant"));
         }
 
+        // The hierarchy is a property of the caller and the target, so it is checked before the state
+        // branches. Rank counts active memberships only: a removed or pending target ranks zero.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure(MemberRankGuard.Refused);
+        }
+
         if (string.Equals(membership.Status, MembershipStatus.Removed, StringComparison.Ordinal))
         {
             // Already removed: nothing changed, so no audit row.
@@ -94,6 +106,15 @@ internal sealed class RemoveMemberCommandHandler(
             return Result.Failure(Error.Conflict(
                 ApiErrorCode.LastAdmin,
                 "the organization must keep at least one active tenant_admin (AC4)"));
+        }
+
+        // The guard's row lock is where a concurrent demotion of the actor can land, so the
+        // rank is compared again after it. This narrows the window; it is not atomic.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure(MemberRankGuard.Refused);
         }
 
         membership.Remove();

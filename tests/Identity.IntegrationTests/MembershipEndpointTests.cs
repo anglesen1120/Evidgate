@@ -212,8 +212,9 @@ public sealed partial class MembershipEndpointTests : CatalogueTestBase
     /// AC4 concurrency — demotion (02.1.2 §8): two requests demote the org's two admins
     /// in parallel. <c>ActiveMembershipsHoldingRole</c> takes <c>SELECT … FOR UPDATE</c>
     /// over the org's active <c>tenant_admin</c> rows, so the two tenant transactions
-    /// serialise and the second re-evaluates the reduced set: exactly one 204, one 409
-    /// <c>last_admin</c>, and one active admin left. A plain count would let both
+    /// serialise and the second re-evaluates the reduced set: exactly one 204, the loser
+    /// refused (409 <c>last_admin</c>, or 403 when the winner's commit already removed the
+    /// caller's own admin row), and one active admin left. A plain count would let both
     /// through and leave the org with none.
     /// </summary>
     [Fact]
@@ -236,11 +237,14 @@ public sealed partial class MembershipEndpointTests : CatalogueTestBase
         try
         {
             raced.Count(response => response.StatusCode == HttpStatusCode.NoContent).ShouldBe(1);
-            raced.Count(response => response.StatusCode == HttpStatusCode.Conflict).ShouldBe(1);
 
-            var refused = raced.Single(response => response.StatusCode == HttpStatusCode.Conflict);
-            (await refused.Content.ReadFromJsonAsync<JsonElement>(Token))
-                .GetProperty("error").GetProperty("code").GetString().ShouldBe("last_admin");
+            var refused = raced.Single(response => response.StatusCode != HttpStatusCode.NoContent);
+            (refused.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.Forbidden).ShouldBeTrue(
+                "the loser is refused, not silently dropped");
+
+            var code = (await refused.Content.ReadFromJsonAsync<JsonElement>(Token))
+                .GetProperty("error").GetProperty("code").GetString();
+            (code is "last_admin" or "forbidden").ShouldBeTrue("refused as last_admin or forbidden, got " + code);
 
             (await ActiveAdminCountAsync(org)).ShouldBe(1, "the org keeps at least one active tenant_admin (AC4)");
         }
@@ -255,8 +259,9 @@ public sealed partial class MembershipEndpointTests : CatalogueTestBase
 
     /// <summary>
     /// AC4 concurrency — removal: same race on the <c>DELETE …/memberships/{m}</c> path,
-    /// which takes the guard through <c>RemoveMemberCommand</c>. Whichever request loses
-    /// the row lock sees the remaining admin as the last one and refuses.
+    /// which takes the guard through <c>RemoveMemberCommand</c>. Whichever request loses is
+    /// refused: by the guard seeing the remaining admin as the last one, or by the rank
+    /// comparison once the winner's commit removed the caller's own admin row.
     /// </summary>
     [Fact]
     public async Task Concurrent_Removal_Of_Both_Admins_Keeps_One()
@@ -275,7 +280,8 @@ public sealed partial class MembershipEndpointTests : CatalogueTestBase
         try
         {
             raced.Count(response => response.StatusCode == HttpStatusCode.NoContent).ShouldBe(1);
-            raced.Count(response => response.StatusCode == HttpStatusCode.Conflict).ShouldBe(1);
+            raced.Count(response => response.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.Forbidden)
+                .ShouldBe(1, "the loser is refused by the guard or by the rank comparison");
 
             (await ActiveAdminCountAsync(org)).ShouldBe(1);
             (await CountAsync("select count(*) from public.membership where status = 'active'")).ShouldBe(1);

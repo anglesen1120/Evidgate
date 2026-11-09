@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
@@ -62,8 +63,9 @@ internal sealed class UpdateMembershipCommandValidator : AbstractValidator<Updat
 /// see is 404 (RLS decides, AC7); an already <c>removed</c> row answers 200 with its
 /// current state so a retry is not an error; any other current status is 409
 /// <c>invalid_transition</c> (02.1.2 §6 lists <c>active → removed</c> only, and a
-/// pending invite is cancelled through 02.1.2-T2's route); removing the org's last
-/// active <c>tenant_admin</c> is 409 <c>last_admin</c> (AC4).
+/// pending invite is cancelled through 02.1.2-T2's route); a target whose
+/// administrative rank is above the caller's is 403 <c>forbidden</c>; removing the
+/// org's last active <c>tenant_admin</c> is 409 <c>last_admin</c> (AC4).
 /// </summary>
 /// <remarks>
 /// <c>ISessionRevocation</c> is called in this path in the same transaction (AC3).
@@ -74,6 +76,7 @@ internal sealed class UpdateMembershipCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
+    IRequestPrincipalAccessor principals,
     IAuditTrail audit,
     ISessionRevocation sessions)
     : ICommandHandler<UpdateMembershipCommand, Result<MembershipView>>
@@ -101,6 +104,15 @@ internal sealed class UpdateMembershipCommandHandler(
         if (membership is null)
         {
             return Result.Failure<MembershipView>(Error.NotFound("no membership with that id is visible to this tenant"));
+        }
+
+        // Checked before the version and retry branches: the hierarchy is a property of the caller and
+        // the target. Rank counts active memberships only, so a removed or pending target ranks zero.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure<MembershipView>(MemberRankGuard.Refused);
         }
 
         if (membership.Version != command.ExpectedVersion)
@@ -131,6 +143,15 @@ internal sealed class UpdateMembershipCommandHandler(
             return Result.Failure<MembershipView>(Error.Conflict(
                 ApiErrorCode.LastAdmin,
                 "the organization must keep at least one active tenant_admin (AC4)"));
+        }
+
+        // The guard's row lock is where a concurrent demotion of the actor can land, so the
+        // rank is compared again after it. This narrows the window; it is not atomic.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure<MembershipView>(MemberRankGuard.Refused);
         }
 
         membership.Remove();

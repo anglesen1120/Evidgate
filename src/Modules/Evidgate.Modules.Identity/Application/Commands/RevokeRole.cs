@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
@@ -42,7 +43,8 @@ internal sealed class RevokeRoleCommandValidator : AbstractValidator<RevokeRoleC
 /// <summary>
 /// Handler of <see cref="RevokeRoleCommand"/>. A membership the tenant cannot see is
 /// 404, and so is a pair that was never granted (00 §9.2: the addressed resource does
-/// not exist) — the route is not an upsert. Only an <b>active</b> membership's
+/// not exist) — the route is not an upsert. A target whose administrative rank is above
+/// the caller's is 403 <c>forbidden</c>. Only an <b>active</b> membership's
 /// <c>tenant_admin</c> grant can trip the last-admin guard: a pending or removed row
 /// grants nothing, so revoking from it is harmless.
 /// </summary>
@@ -52,6 +54,7 @@ internal sealed class RevokeRoleCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
+    IRequestPrincipalAccessor principals,
     IAuditTrail audit,
     ISessionPrivilegeChange privilegeChanges)
     : ICommandHandler<RevokeRoleCommand, Result>
@@ -79,6 +82,16 @@ internal sealed class RevokeRoleCommandHandler(
         if (membership is null)
         {
             return Result.Failure(Error.NotFound("no membership with that id is visible to this tenant"));
+        }
+
+        // Before the pair's 404 on purpose: after it, a 404-versus-403 difference would tell the
+        // caller whether a higher-ranked member holds the role. Rank counts active memberships only,
+        // so a removed or pending target ranks zero here.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure(MemberRankGuard.Refused);
         }
 
         var grant = await context.MembershipRoles
@@ -110,6 +123,15 @@ internal sealed class RevokeRoleCommandHandler(
                     ApiErrorCode.LastAdmin,
                     "the organization must keep at least one active tenant_admin (AC4)"));
             }
+        }
+
+        // The guard's row lock is where a concurrent demotion of the actor can land, so the
+        // rank is compared again after it. This narrows the window; it is not atomic.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure(MemberRankGuard.Refused);
         }
 
         context.MembershipRoles.Remove(grant);
