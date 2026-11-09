@@ -112,7 +112,7 @@ describe('RunDetailPage producer region', () => {
     );
     expect(text('shard-3', 'identity')).toBe('unbound');
     expect(text('shard-3', 'last-sequence')).toBe('4');
-    expect(text('shard-3', 'count')).toBe('4(expected not set)');
+    expect(text('shard-3', 'count')).toBe('4 (expected not set)');
     expect(row('shard-3')?.querySelectorAll('td[data-unavailable]')).toHaveLength(0);
     expect(root.querySelector('#producers [data-completeness]')).toBeNull();
   });

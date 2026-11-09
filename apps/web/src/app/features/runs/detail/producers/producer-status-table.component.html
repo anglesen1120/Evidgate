@@ -113,8 +113,9 @@
                   "
                 >
                   @if (slot.count !== null && slot.expected === null) {
-                    <span class="font-mono">{{ slot.count }}</span>
-                    <span class="text-muted-foreground" aria-hidden="true">{{
+                    <span class="font-mono">{{ slot.count }}</span
+                    >{{ ' '
+                    }}<span class="text-muted-foreground" aria-hidden="true">{{
                       copy.openSlot
                     }}</span>
                   } @else if (slot.count !== null && slot.expected !== null) {

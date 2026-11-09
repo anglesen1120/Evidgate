@@ -108,9 +108,16 @@ describe('ProducerStatusTableComponent', () => {
     const { root } = await render([{ ...FINALIZED, count: 3, expected: null }]);
     const cell = root.querySelector('[data-fact="count"]');
     expect(cell?.hasAttribute('data-unavailable')).toBe(false);
-    expect(cell?.textContent?.replace(/\s+/g, ' ').trim()).toBe('3(expected not set)');
+    expect(cell?.textContent?.replace(/\s+/g, ' ').trim()).toBe('3 (expected not set)');
     expect(cell?.getAttribute('aria-label')).toBe('3 served, expected count not set yet');
     expect(root.querySelector('[data-count-mismatch]')).toBeNull();
+  });
+
+  it('shows a zero count of an open slot as a served value', async () => {
+    const { root } = await render([{ ...FINALIZED, count: 0, expected: null }]);
+    const cell = root.querySelector('[data-fact="count"]');
+    expect(cell?.hasAttribute('data-unavailable')).toBe(false);
+    expect(cell?.getAttribute('aria-label')).toBe('0 served, expected count not set yet');
   });
 
   it('keeps the existing count / expected format and no label when expected is set', async () => {
