@@ -99,7 +99,7 @@ const runDetailManyProducers: FixtureDocument = {
 };
 
 /**
- * One finalized, one count-mismatched and one stale-epoch slot, so the table's three per-slot
+ * One clean, one count-mismatched and one stale-epoch slot, so the table's three per-slot
  * states each have a served document to render.
  */
 const runDetailSlotStates: FixtureDocument = {
