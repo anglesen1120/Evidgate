@@ -154,8 +154,8 @@ internal sealed partial class CreateArtifactRecordHandler(
 /// throws (<c>NpgsqlTenantScopeFactory</c>) — so the two handlers call this service instead, and each describes
 /// its own single audit entry, so exactly one audit row is written per request.
 /// <para>
-/// It is the one choke point of every artifact insert, so it refuses a run that is not visible or that belongs to
-/// another project than the artifact's (the database key is <c>(org_id, run_id)</c> only, so it cannot). It then
+/// It is the one choke point of every artifact insert, so it refuses a run that is not visible, belongs to another
+/// project (the database key is <c>(org_id, run_id)</c> only), sits in a deleting project or lacks the planned key. It then
 /// resolves <c>default_sensitivity</c> from <c>artifact_kind_policy</c> with the
 /// <see cref="ArtifactSensitivity.ForKind"/> fallback, mints the server-chosen final key, and inserts the row in
 /// state <c>pending_upload</c> with <c>scan_state</c> <c>pending</c>, no attempt and the declared size persisted
@@ -238,8 +238,8 @@ internal sealed class ArtifactMinter(
 
     /// <summary>
     /// The refusal for a run this caller may not attach an artifact to, or null. Upload-url calls the two parts
-    /// at its own points in its order (the policy answers sit between them); the minter applies both, so the
-    /// internal create path refuses exactly what upload-url refuses.
+    /// at its own points in its order (the policy answers sit between them); the minter applies both, so both
+    /// paths refuse the same run states (kind policy and slot binding stay in the upload-url handler).
     /// </summary>
     private static Error? RunRefusal(RunPlanLookup? run, Guid projectId) =>
         run is null ? EvidenceErrors.RunNotFound

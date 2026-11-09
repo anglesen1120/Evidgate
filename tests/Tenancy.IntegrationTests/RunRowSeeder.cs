@@ -129,6 +129,33 @@ internal static class RunRowSeeder
         return id;
     }
 
+    /// <summary>
+    /// One <c>planned_execution</c> row for <paramref name="runId"/> on the test revision this seeder derives, so a
+    /// run created by <see cref="SeedRunAsync"/> can carry an artifact for <paramref name="executionKey"/>.
+    /// </summary>
+    public static async Task PlanExecutionAsync(
+        PostgresTenancyFixture fixture,
+        string database,
+        Guid org,
+        Guid runId,
+        string executionKey)
+    {
+        await using var scope = await TenantScope.BeginAsync(fixture.OwnerConnectionString(database));
+
+        var project = await scope.ScalarAsync<Guid>(
+            "select id from public.project where org_id = @org_id order by created_at, id limit 1",
+            ("org_id", org));
+
+        (await scope.ExecuteAsync(
+            "insert into public.planned_execution (id, org_id, run_id, execution_key, case_revision_id, variant_hash, target_env, shard_id, required) "
+            + "values (@id, @org_id, @run_id, @execution_key, @case_revision_id, @variant_hash, 'staging', 'shard-1', true)",
+            ("id", Guid.CreateVersion7()), ("org_id", org), ("run_id", runId), ("execution_key", executionKey),
+            ("case_revision_id", Derived(org, project, "test-revision")),
+            ("variant_hash", "sha256:" + new string('c', 64)))).ShouldBe(1);
+
+        await scope.CommitAsync();
+    }
+
     /// <summary>A stable id for one parent of <c>(org, project)</c>, so repeated calls reuse the row.</summary>
     private static Guid Derived(Guid org, Guid project, string kind)
     {

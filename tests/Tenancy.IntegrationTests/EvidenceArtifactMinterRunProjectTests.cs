@@ -115,4 +115,23 @@ public sealed class EvidenceArtifactMinterRunProjectTests
         await Should.ThrowAsync<ReachedInsertException>(async () =>
             await MintAsync(new FixedRuns(new RunPlanLookup(Project, "suspended", true))));
     }
+
+    [Fact]
+    public async Task Mint_KnownUnplannedRun_IsRefusedWithoutReadingTheRunAgain()
+    {
+        var runs = new FixedRuns(null);
+
+        var result = await MintAsync(runs, new RunPlanLookup(Project, "active", false));
+
+        result.Error!.Code.ShouldBe(EvidenceErrors.UnknownExecutionKey.Code);
+        runs.Calls.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Mint_DeletingProjectWithUnplannedKey_AnswersProjectDeleting()
+    {
+        var result = await MintAsync(new FixedRuns(new RunPlanLookup(Project, "deleted", false)));
+
+        result.Error!.Code.ShouldBe(EvidenceErrors.ProjectDeleting.Code);
+    }
 }
