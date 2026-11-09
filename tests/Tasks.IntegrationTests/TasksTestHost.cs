@@ -85,6 +85,12 @@ internal sealed class TasksTestHost : IAsyncDisposable
         collection.AddLogging();
         collection.AddEvidgateTenancy();
         collection.AddEvidgateTasks(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
+        // Cases shorten the lease to expire it on command; the purge budget guard is not under test here.
+        foreach (var guard in collection.Where(d => d.ImplementationType == typeof(PurgeLeaseGuardValidator)).ToList())
+        {
+            collection.Remove(guard);
+        }
+
         collection.AddSingleton<TaskRunRecorder>();
         collection.AddSingleton<BlockingTaskProbe>();
         collection.AddTaskHandler<RecordingPayload, RecordingTaskHandler>();
