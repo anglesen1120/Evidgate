@@ -98,6 +98,43 @@ const runDetailManyProducers: FixtureDocument = {
   },
 };
 
+/**
+ * One clean, one count-mismatched and one stale-epoch slot, so the table's three per-slot
+ * states each have a served document to render.
+ */
+const runDetailSlotStates: FixtureDocument = {
+  ...runDetail,
+  variant: 'detail-slot-states',
+  body: {
+    ...runDetail.body,
+    declared_producers: ['shard-1', 'shard-2', 'shard-3'],
+    shard_count: 3,
+    producers: [
+      ...finalizedSlots(['shard-1']),
+      {
+        producer_id: 'shard-2',
+        identity_state: 'bound',
+        finalize_status: 'finalized',
+        last_sequence: 9,
+        count: 7,
+        expected: 9,
+        stale_epoch_events: 0,
+        after_cancel_events: 0,
+      },
+      {
+        producer_id: 'shard-3',
+        identity_state: 'bound',
+        finalize_status: 'finalized',
+        last_sequence: 5,
+        count: 5,
+        expected: 5,
+        stale_epoch_events: 2,
+        after_cancel_events: 0,
+      },
+    ],
+  },
+};
+
 const runDetailRelease: FixtureDocument = {
   ...runDetail,
   variant: 'detail-release',
@@ -169,6 +206,7 @@ export const FIXTURE_CATALOG_RUN_ROWS: readonly FixtureCatalogRow[] = [
   { name: 'run-detail-not-found', document: runDetailNotFound },
   { name: 'run-detail-null-evidence', document: runDetailNullEvidence },
   { name: 'run-detail-ref-format', document: runDetailRefFormat },
+  { name: 'run-detail-slot-states', document: runDetailSlotStates, derived: true },
   { name: 'run-detail-release', document: runDetailRelease, derived: true },
   { name: 'run-detail-releases', document: runDetailReleases, derived: true },
   { name: 'run-detail-release-refused', document: runDetailReleaseRefused, derived: true },

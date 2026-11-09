@@ -148,6 +148,59 @@ public sealed class SessionRevokeAllAdminLockTests : SessionRevokeAllAdminTestBa
     }
 
     /// <summary>
+    /// The rank is proved again after the lock too: a target promoted to <c>tenant_admin</c> while the call of a
+    /// custom administrator is parked on the lock is refused, and nothing is revoked or recorded.
+    /// </summary>
+    [Fact]
+    public async Task An_Admin_Revoke_All_Is_Refused_When_The_Target_Is_Promoted_During_The_Lock_Wait()
+    {
+        var clock = ClockAt();
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var admin = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+        var member = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
+
+        var roleId = Guid.CreateVersion7();
+        await OwnerExecuteAsync(
+            "insert into public.role (id, org_id, code, name, is_builtin, kind) "
+            + "values (@id, @org, 'member_admin', 'Member administrator', false, 'member')",
+            ("id", roleId), ("org", org));
+        await OwnerExecuteAsync(
+            "insert into public.role_permission (id, org_id, role_id, permission_code) "
+            + "values (@id, @org, @role, 'membership:write')",
+            ("id", Guid.CreateVersion7()), ("org", org), ("role", roleId));
+        await IdentityTestData.GrantRoleToMemberAsync(Fixture, org, admin, roleId, Token);
+
+        var adminTicket = await CreateSessionAsync(admin, clock);
+        var memberTicket = await CreateSessionAsync(member, clock);
+
+        await using var holder = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await holder.OpenAsync(Token);
+        await using var held = await holder.BeginTransactionAsync(Token);
+        await ExecuteAsync(holder, held, "select evidgate.session_user_lock(@user)", ("user", member));
+
+        await using var waiter = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await waiter.OpenAsync(Token);
+
+        var pending = Task.Run(
+            () => AdminRevokeAllSqlAsync(waiter, null, ProofOf(adminTicket), member, org, clock.GetUtcNow()),
+            Token);
+
+        await WaitForUserLockWaitersAsync(member, expected: 1);
+
+        await IdentityTestData.GrantRoleToMemberAsync(
+            Fixture, org, member, await IdentityTestData.RoleIdAsync(Fixture, org, "tenant_admin", Token), Token);
+
+        await held.CommitAsync(Token);
+
+        var (status, revoked) = await pending.WaitAsync(WaitLimit, Token);
+
+        status.ShouldBe("not_found", "the target outranks the caller once the lock is held");
+        revoked.ShouldBe(0);
+        (await IsLiveAsync(memberTicket.SessionId)).ShouldBeTrue("a refused call revokes nothing");
+        (await AdminRowCountAsync(org)).ShouldBe(0L, "a refusal writes no audit row");
+    }
+
+    /// <summary>
     /// Two writers of one user — the administrative call and the member-removal definer's bare
     /// <c>session_revoke_all_for_user</c> call (not the self-service revoke-all route) — queue on the same per-user
     /// lock and BOTH complete whatever order they were started in: no deadlock (<c>40P01</c>) in either direction,

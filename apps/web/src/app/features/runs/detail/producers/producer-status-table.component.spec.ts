@@ -74,7 +74,9 @@ describe('ProducerStatusTableComponent', () => {
   });
 
   it('uses the shared unavailable state for every missing fact, never zero or missing identity', async () => {
-    const { root } = await render(producerSlotsFromRun({ declared_producers: ['shard-3'] }));
+    const { root } = await render(
+      producerSlotsFromRun({ declared_producers: ['shard-3'], producers: [] }),
+    );
     const cells = [...root.querySelectorAll('td[data-fact][data-unavailable]')];
     expect(cells).toHaveLength(4);
     expect(cells.every((cell) => cell.querySelector('app-status-pill') !== null)).toBe(true);
@@ -128,7 +130,10 @@ describe('ProducerStatusTableComponent', () => {
   });
 
   it('shows a run-level count once without assigning it to any producer', async () => {
-    const slots = producerSlotsFromRun({ declared_producers: ['shard-1', 'shard-2'] });
+    const slots = producerSlotsFromRun({
+      declared_producers: ['shard-1', 'shard-2'],
+      producers: [],
+    });
     const { root } = await render(slots, 'ready', 3);
     expect(root.querySelectorAll('[data-badge="after-cancel"]')).toHaveLength(1);
     expect(root.querySelector('[data-run-after-cancel]')?.textContent).toContain(
