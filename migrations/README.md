@@ -272,22 +272,38 @@ is written by the tenant-scope primitive, never from request input.
   rejected for this record: its `org_id` is NOT NULL and every row is
   hash-chained per org (0015), so a purge that deletes across every tenant would
   have to name one org and take that org's chain lock once per org touched.
-- Append-only is enforced twice. A guard trigger
-  (`evidgate.platform_sweep_audit_append_only`) raises 23514 for UPDATE and
-  DELETE for every role, the owner included, and every runtime role's DML is
-  revoked except the operator's `select`. TRUNCATE is not subject to row
-  triggers; the only statement that empties the table is the test harness's
-  reset, which runs as the table owner (`tests/Shared/RespawnCheckpoint.cs`
-  truncates every table it finds and seeds nothing here, which is correct for an
-  append-only audit table).
+- Append-only is enforced at two layers, and neither of them alone covers every
+  statement. A guard trigger (`evidgate.platform_sweep_audit_append_only`)
+  raises 23514 for UPDATE and DELETE of a row, the same guard 0064, 0072 and 0081
+  ship. Row level security is the other layer, and it is where this table differs
+  from those three: they also hand the owner a `for all … using (true)` policy, so
+  the trigger is what refuses the owner there, while here the owner holds `insert`
+  and `select` policies only — an UPDATE or DELETE as the owner changes zero rows
+  and no row trigger ever fires (`0015`'s `audit_log` has the same owner
+  read/insert shape). The trigger therefore covers the statements row level
+  security does not filter: the superuser, and any future role granted an UPDATE
+  or DELETE policy. Every runtime role's DML is revoked except the operator's
+  `select`. TRUNCATE is not subject to row triggers; the only statement that
+  empties the table is the test harness's reset, which runs as the table owner
+  (`tests/Shared/RespawnCheckpoint.cs` truncates every table it finds and seeds
+  nothing here, which is correct for an append-only audit table).
 - There is exactly one writer: `evidgate.record_sweep_audit`, a `SECURITY
   DEFINER` function owned by the migration role with a pinned empty
   `search_path`. It stamps `actor = 'evidgate_worker_sched'` itself and returns
   the new row's id; `evidgate_worker_sched` holds EXECUTE on it and no table
   privilege, `evidgate_app` holds nothing and has no policy, and
-  `evidgate_operator` reads. `scripts/check-rls.py` therefore needs no
-  `DEFINER_AUDIT_EXEMPT` entry: the function's body inserts into a table whose
-  name ends in `audit`, which is the lint's own per-call-audit signal.
+  `evidgate_operator` holds the `select` grant with no policy — the grant-gated
+  read posture 0052:196-199 records for `healing_switch`, so the operator reads
+  zero rows until 02.8.1's operator scope opens the grant.
+  `scripts/check-rls.py` therefore needs no `DEFINER_AUDIT_EXEMPT` entry: the
+  function's body inserts into a table whose name ends in `audit`, which is the
+  lint's own per-call-audit signal.
+- Known limit of the trail: each purge batch autocommits (every function call is
+  its own transaction) and the audit row is written after the loop ends, so a
+  hard process kill between a committed batch and that write leaves the removed
+  rows unaudited — no in-process path can write that row. Failure and
+  cancellation inside the handler are covered: the recovery write records what
+  the fire had already removed, on a fresh connection within 5 seconds.
 - Rollback is recorded in the file header. Dropping the table loses the sweep
   history only; no tenant row references it.
 

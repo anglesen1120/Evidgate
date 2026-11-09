@@ -19,6 +19,13 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 /// audited: the row goes through <c>evidgate.record_sweep_audit</c>, the sweep
 /// role's only write path, because <c>public.audit_log</c> is per-org and this
 /// purge is cross-tenant platform work.
+/// <para>
+/// Known limit: each batch commits on its own (the function is called outside a
+/// transaction here) and the audit row is written after the loop, so a hard process
+/// kill between a committed batch and that write leaves the removed rows unaudited —
+/// no in-process path can write them. An exception or a cancellation inside the
+/// handler is covered: the recovery write records what the fire removed.
+/// </para>
 /// </remarks>
 public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<IdempotencyPurgePayload>
 {
@@ -68,15 +75,14 @@ public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<Idempoten
         ArgumentNullException.ThrowIfNull(payload);
 
         // The owner function caps its own batch (`least(greatest(p_limit, 0), 10000)`,
-        // 0007), so the loop works in the function's units: `deleted < limit` is only
-        // a drained backlog when `limit` is what the function actually deleted up to.
-        // A payload asking for more than the cap would stop after the first capped
-        // batch, and a non-positive one would ask for zero rows and spin the whole
-        // time budget deleting nothing (a task row is replayable by an operator, so
-        // the payload is not trusted to stay in range).
+        // 0007), so the loop works in the function's units: `deleted < limit` only means
+        // nothing claimable is left when `limit` is what the function actually deleted
+        // up to. A payload asking for more than the cap would stop after the first
+        // capped batch, and a non-positive one would ask for zero rows and spin the
+        // whole time budget deleting nothing (a task row is replayable by an operator,
+        // so the payload is not trusted to stay in range).
         var limit = Math.Clamp(payload.Limit, 1, EvidgateSweeps.PurgeMaxBatchSize);
         var progress = new DrainProgress();
-        bool budgetExhausted;
 
         try
         {
@@ -85,9 +91,9 @@ public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<Idempoten
             // locked` batch is what keeps a concurrent purge safe.
             await using (var connection = await _sweep.OpenAsync(cancellationToken).ConfigureAwait(false))
             {
-                budgetExhausted = await DrainAsync(connection, limit, progress, cancellationToken).ConfigureAwait(false);
+                await DrainAsync(connection, limit, progress, cancellationToken).ConfigureAwait(false);
 
-                await AuditAsync(connection, progress.Removed, limit, budgetExhausted, cancellationToken).ConfigureAwait(false);
+                await AuditAsync(connection, limit, progress, cancellationToken).ConfigureAwait(false);
             }
         }
         catch
@@ -100,23 +106,23 @@ public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<Idempoten
             // and it is time-bounded so a sick database does not delay the failure.
             if (progress.Removed > 0)
             {
-                await TryAuditAsync(progress.Removed, limit).ConfigureAwait(false);
+                await TryAuditAsync(limit, progress).ConfigureAwait(false);
             }
 
             throw;
         }
 
-        LogPurged(progress.Removed, limit, budgetExhausted);
+        LogPurged(progress.Removed, limit, progress.BudgetExhausted);
     }
 
     /// <summary>
     /// Drains the expired backlog in batches of <paramref name="limit"/> until the function
-    /// comes back short (the backlog is gone) or the fire has spent
+    /// comes back short (nothing claimable now) or the fire has spent
     /// <see cref="EvidgateSweeps.PurgeTimeBudget"/>. The budget is measured on the injected
     /// clock, never on the loop's count, so a slow database stops the fire instead of holding
     /// the worker; at least one batch always runs.
     /// </summary>
-    private async Task<bool> DrainAsync(
+    private async Task DrainAsync(
         NpgsqlConnection connection,
         int limit,
         DrainProgress progress,
@@ -133,11 +139,12 @@ public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<Idempoten
 
             progress.Removed += deleted;
 
-            // A short batch means the backlog is drained; looping again would be a
-            // second round trip that can only return zero.
+            // A short batch means nothing is claimable right now, not that the table is
+            // empty: the function's `for update skip locked` leaves a row another purge
+            // holds, and the next fire picks it up. Looping again could only return zero.
             if (deleted < limit)
             {
-                return false;
+                return;
             }
 
             // Only a full batch can leave a remainder, so only it can stop on the
@@ -145,16 +152,16 @@ public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<Idempoten
             // runs in a fire.
             if (_time.GetElapsedTime(start) >= EvidgateSweeps.PurgeTimeBudget)
             {
-                return true;
+                progress.BudgetExhausted = true;
+                return;
             }
         }
     }
 
     private static async Task AuditAsync(
         NpgsqlConnection connection,
-        int removed,
         int limit,
-        bool budgetExhausted,
+        DrainProgress progress,
         CancellationToken cancellationToken)
     {
         await connection.ExecuteScalarAsync<Guid>(new CommandDefinition(
@@ -162,9 +169,9 @@ public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<Idempoten
             new
             {
                 action = EvidgateSweeps.IdempotencyPurgeTaskType,
-                removed,
+                removed = progress.Removed,
                 limit,
-                budget_exhausted = budgetExhausted,
+                budget_exhausted = progress.BudgetExhausted,
             },
             cancellationToken: cancellationToken)).ConfigureAwait(false);
     }
@@ -174,18 +181,18 @@ public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<Idempoten
     /// <see cref="AuditRecoveryTimeout"/>. It runs while the original exception is still
     /// pending, so it can never wait indefinitely on a sick database or a cancelled host.
     /// </summary>
-    private async Task TryAuditAsync(int removed, int limit)
+    private async Task TryAuditAsync(int limit, DrainProgress progress)
     {
         using var timeout = new CancellationTokenSource(AuditRecoveryTimeout);
 
         try
         {
             await using var connection = await _sweep.OpenAsync(timeout.Token).ConfigureAwait(false);
-            await AuditAsync(connection, removed, limit, budgetExhausted: false, timeout.Token).ConfigureAwait(false);
+            await AuditAsync(connection, limit, progress, timeout.Token).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            LogAuditFailed(exception, removed);
+            LogAuditFailed(exception, progress.Removed);
         }
     }
 
@@ -195,10 +202,13 @@ public sealed partial class IdempotencyPurgeTaskHandler : ITaskHandler<Idempoten
         Message = "Audited sweep evidgate.purge_expired_idempotency as evidgate_worker_sched removed {Removed} expired records (batch limit {Limit}, budget exhausted {BudgetExhausted})")]
     private partial void LogPurged(int removed, int limit, bool budgetExhausted);
 
-    /// <summary>Rows this fire removed so far, shared with the failure path the drain escapes to.</summary>
+    /// <summary>What this fire did so far, shared with the failure path the drain escapes to.</summary>
     private sealed class DrainProgress
     {
         public int Removed { get; set; }
+
+        /// <summary>Set when the time budget ended a full-batch drain with rows still due.</summary>
+        public bool BudgetExhausted { get; set; }
     }
 
     [LoggerMessage(

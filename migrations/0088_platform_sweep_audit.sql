@@ -9,26 +9,32 @@
 -- the platform identity tables already use: no `org_id`, no customer business
 -- data, and no privilege at all for `evidgate_app`.
 --
--- WHAT A ROW IS. One row per sweep fire, written after the handler returns: the
--- action (`idempotency.purge`), the number of rows that fire removed, the batch
--- limit it used, whether the time budget stopped the drain with rows still due,
--- and when. It names no tenant, no record id and no payload, so it cannot become
--- a second, unprotected copy of tenant data.
+-- WHAT A ROW IS. One row per sweep fire, written by the handler after its drain
+-- loop ends and before the call returns: the action (`idempotency.purge`), the
+-- number of rows that fire removed, the batch limit it used, whether the time
+-- budget stopped the drain with rows still due, and when. It names no tenant, no
+-- record id and no payload, so it cannot become a second, unprotected copy of
+-- tenant data.
 --
--- APPEND-ONLY BY TRIGGER. An audit record that can be edited is not an audit
--- record, so a guard trigger refuses UPDATE and DELETE for every role, the owner
--- included. TRUNCATE is revoked for every runtime role as well; the only
--- statement that empties the table is the test harness's reset, which runs as
--- the table owner and is not subject to row triggers.
+-- APPEND-ONLY, AT TWO LAYERS. An audit record that can be edited is not an audit
+-- record, so a guard trigger refuses UPDATE and DELETE for every statement that
+-- reaches a row. FORCE row level security is the other layer: the owner holds
+-- insert and select policies only, so an UPDATE or DELETE as the owner changes
+-- zero rows and the trigger never fires for it. TRUNCATE is revoked for every
+-- runtime role as well; the only statement that empties the table is the test
+-- harness's reset, which runs as the table owner and is not subject to row
+-- triggers.
 --
 -- ONE WRITE PATH. Rows are inserted only by `evidgate.record_sweep_audit`, a
 -- `SECURITY DEFINER` function owned by the migration role with a pinned empty
 -- `search_path`. `evidgate_worker_sched` holds EXECUTE on that function and no
 -- table privilege, so the actor column is stamped inside the function and a
 -- caller cannot forge it; `evidgate_app` holds nothing at all and has no policy,
--- so even a leaked privilege would read zero rows. The operator role reads the
--- trail (a platform audit surface, the same grant-gated read posture as the
--- healing switch); `evidgate_worker_sched` cannot read it back.
+-- so even a leaked privilege would read zero rows. `evidgate_operator` holds
+-- SELECT and no policy -- the grant-gated read posture 0052:196-199 records for
+-- `healing_switch`: the grant is in place and the operator reads zero rows until
+-- 02.8.1's operator scope lands; `evidgate_worker_sched` cannot read the trail
+-- back.
 --
 -- Idempotent in the shape the README's file contract allows: `create table if not
 -- exists`, `create or replace function`, `drop trigger if exists` / `drop policy
@@ -36,12 +42,14 @@
 -- file runs in one transaction, so the table, its policies and its definer are
 -- never observable apart.
 --
--- Rollback: `drop function if exists evidgate.record_sweep_audit(text, integer,
--- integer, boolean); drop function if exists
--- evidgate.platform_sweep_audit_append_only(); drop table if exists
--- public.platform_sweep_audit;` and remove the `platform` line from
--- `contracts/rls-exceptions.txt` in the same change. Only the sweep history is
--- lost; no tenant row depends on it.
+-- Rollback: `drop trigger if exists platform_sweep_audit_append_only on
+-- public.platform_sweep_audit; drop function if exists
+-- evidgate.record_sweep_audit(text, integer, integer, boolean); drop table if exists
+-- public.platform_sweep_audit; drop function if exists
+-- evidgate.platform_sweep_audit_append_only();` -- the trigger and the table go
+-- before the trigger function they depend on -- and remove the `platform` line
+-- from `contracts/rls-exceptions.txt` in the same change. Only the sweep history
+-- is lost; no tenant row depends on it.
 
 create table if not exists public.platform_sweep_audit (
   id uuid not null default gen_random_uuid(),
@@ -52,11 +60,15 @@ create table if not exists public.platform_sweep_audit (
   budget_exhausted boolean not null,
   created_at timestamptz not null default now(),
   constraint platform_sweep_audit_pkey primary key (id),
-  -- The action is a sweep's handler key (`idempotency.purge`), never free text
-  -- from a request; the bound keeps a mis-wired caller from storing a document.
+  -- The action is a sweep's handler key (`idempotency.purge`). The definer
+  -- accepts any 1-128 character string -- it cannot know the handler keys -- and
+  -- the only caller is the purge handler, passing its own task type.
   constraint platform_sweep_audit_action_check check (char_length(action) between 1 and 128),
   -- A negative count would read as a refund; the only producer is a delete loop.
-  constraint platform_sweep_audit_removed_check check (removed >= 0)
+  constraint platform_sweep_audit_removed_check check (removed >= 0),
+  -- Below one, a batch limit would describe a call that asked for no rows at all;
+  -- the handler clamps its payload into `[1, 10000]` before it calls.
+  constraint platform_sweep_audit_batch_limit_check check (batch_limit >= 1)
 );
 
 -- One guard for both forbidden commands, so no future grant can quietly turn the
@@ -98,21 +110,21 @@ create policy platform_sweep_audit_owner_read on public.platform_sweep_audit
   to evidgate_owner
   using (true);
 
--- The operator's read of the platform audit trail. There is no predicate to
--- confine: the table carries no tenant dimension by construction, and the role
--- holds no write privilege.
+-- No `TO evidgate_operator` policy on purpose (D1, the same posture 0052:196-199
+-- records for `healing_switch`): the operator's SELECT is grant-gated, and with
+-- FORCE and no operator policy it reads zero rows until 02.8.1's operator scope
+-- lands. The table carries no tenant dimension by construction, so the scope that
+-- opens it is the grant, not an `org_id` predicate. The drop below is the
+-- idempotency the file contract asks for: it also removes the policy from a
+-- database where an earlier revision of this file created one.
 drop policy if exists platform_sweep_audit_operator_read on public.platform_sweep_audit;
-create policy platform_sweep_audit_operator_read on public.platform_sweep_audit
-  for select
-  to evidgate_operator
-  using (true);
 
 -- 0001's default privileges hand `evidgate_app` full DML and `evidgate_operator`
 -- SELECT on every table the migration role creates in `public`, so the revokes
 -- below are load-bearing, not a formality (0006/0009/0052 precedent). After them
 -- the app role holds nothing — no policy names it either — the sweep role holds
 -- no table privilege at all (its write goes through the definer), and the
--- operator reads and only reads.
+-- operator holds the read grant and only that.
 revoke all on public.platform_sweep_audit from public;
 revoke all on public.platform_sweep_audit from evidgate_app;
 revoke all on public.platform_sweep_audit from evidgate_worker_sched;

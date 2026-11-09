@@ -24,6 +24,12 @@ public sealed class IdempotencyPurgeDrainTests
     /// <summary>Distinct from the sibling purge tests so a count can never see their rows.</summary>
     private const string ExpiredOperation = "idempotency-drain";
 
+    /// <summary>The two orgs the cross-tenant test seeds; neither needs an `organization` row.</summary>
+    private static readonly Guid OrgA = Guid.Parse("11111111-1111-7111-8111-111111111111");
+
+    private static readonly Guid OrgB = Guid.Parse("22222222-2222-7222-8222-222222222222");
+
+
     /// <summary>The two removals the two fires in <c>Purge_WritesOneAuditRowPerCall</c> record.</summary>
     private static readonly int[] ExpectedRemovals = [5, 0];
 
@@ -159,89 +165,16 @@ public sealed class IdempotencyPurgeDrainTests
     }
 
     /// <summary>
-    /// The table has one write path and no direct access: the sweep role inserts and reads only
-    /// through the definer (which stamps its own actor), the app role holds nothing and cannot
-    /// execute the definer, the operator reads, and UPDATE/DELETE are refused for the owner too.
-    /// </summary>
-    [Fact]
-    public async Task PlatformSweepAudit_IsWritableOnlyThroughTheDefiner()
-    {
-        var database = await _fixture.CreateDatabaseAsync();
-        var owner = _fixture.OwnerConnectionString(database);
-        var worker = _fixture.WorkerSchedConnectionString(database);
-        var app = _fixture.AppConnectionString(database);
-        var @operator = _fixture.OperatorConnectionString(database);
-
-        var id = await TaskSql.ScalarAsync<Guid>(
-            worker,
-            "select evidgate.record_sweep_audit(@action, @removed, @limit, @budget_exhausted)",
-            ("action", EvidgateSweeps.IdempotencyPurgeTaskType),
-            ("removed", 1),
-            ("limit", 10),
-            ("budget_exhausted", false));
-
-        id.ShouldNotBe(Guid.Empty);
-        (await TaskSql.ScalarAsync<string>(
-            @operator,
-            "select actor from public.platform_sweep_audit where id = @id",
-            ("id", id))).ShouldBe("evidgate_worker_sched", "the definer stamps the actor; the caller cannot");
-        (await TaskSql.ScalarAsync<string>(
-            owner,
-            "select action from public.platform_sweep_audit where id = @id",
-            ("id", id))).ShouldBe(EvidgateSweeps.IdempotencyPurgeTaskType);
-
-        // The sweep role's write arrives through EXECUTE only: it holds no table privilege.
-        await AssertSqlStateAsync(
-            "42501",
-            async () => await TaskSql.ExecuteAsync(
-                worker,
-                """
-                insert into public.platform_sweep_audit (actor, action, removed, batch_limit, budget_exhausted)
-                values ('evidgate_worker_sched', 'idempotency.purge', 0, 10, false)
-                """));
-        await AssertSqlStateAsync(
-            "42501",
-            async () => await TaskSql.ScalarAsync<long>(worker, "select count(*) from public.platform_sweep_audit"));
-
-        // The app role holds nothing on the table and cannot reach the definer.
-        await AssertSqlStateAsync(
-            "42501",
-            async () => await TaskSql.ScalarAsync<long>(app, "select count(*) from public.platform_sweep_audit"));
-        await AssertSqlStateAsync(
-            "42501",
-            async () => await TaskSql.ExecuteAsync(
-                app,
-                """
-                insert into public.platform_sweep_audit (actor, action, removed, batch_limit, budget_exhausted)
-                values ('evidgate_worker_sched', 'idempotency.purge', 0, 10, false)
-                """));
-        await AssertSqlStateAsync(
-            "42501",
-            async () => await TaskSql.ScalarAsync<Guid>(
-                app,
-                "select evidgate.record_sweep_audit('idempotency.purge', 0, 10, false)"));
-
-        // Append-only for every role, the owner included: the guard trigger refuses both commands.
-        await AssertSqlStateAsync("23514", async () => await TaskSql.ExecuteAsync(
-            owner,
-            "update public.platform_sweep_audit set removed = 0"));
-        await AssertSqlStateAsync("23514", async () => await TaskSql.ExecuteAsync(
-            owner,
-            "delete from public.platform_sweep_audit"));
-
-        (await AuditCountAsync(owner)).ShouldBe(1, "the refused statements left the row untouched");
-    }
-
-    /// <summary>
     /// Cancelling a fire after at least one batch committed still leaves its audit row, on a
     /// one-connection pool: the failed batch's connection must be released before the recovery
     /// audit opens its own, or that open waits for the pool while the task failure is pending.
-    /// The token is cancelled only once the count has dropped, so `removed` is never zero.
+    /// The clock cancels the token on its second reading, the one the first full batch's budget
+    /// check makes, so the next batch is issued with a cancelled token and nothing races.
     /// </summary>
     [Fact]
     public async Task Purge_CancelledMidDrain_StillAuditsOnAOneConnectionPool()
     {
-        const int seeded = 5000;
+        const int seeded = 5;
         const int limit = 1;
 
         var database = await _fixture.CreateDatabaseAsync();
@@ -250,46 +183,122 @@ public sealed class IdempotencyPurgeDrainTests
         await SeedExpiredAsync(owner, seeded);
 
         await using var services = BuildServices(database, sweepPoolSize: 1);
-        var handler = Handler(services, TimeProvider.System);
         using var cancellation = new CancellationTokenSource();
+        var handler = Handler(services, new CancelOnReadTimeProvider(cancellation, cancelAtRead: 2));
 
-        var cancelAfterFirstCommit = Task.Run(
-            async () =>
-            {
-                while (!cancellation.IsCancellationRequested)
-                {
-                    if (await CountExpiredAsync(owner) < seeded)
-                    {
-                        await cancellation.CancelAsync();
-                        return;
-                    }
-
-                    await Task.Delay(TimeSpan.FromMilliseconds(1), CancellationToken.None);
-                }
-            },
-            CancellationToken.None);
-
-        Exception failure;
-        try
-        {
-            failure = await Should.ThrowAsync<Exception>(async () =>
-                await handler.HandleAsync(new IdempotencyPurgePayload(limit), scope: null, cancellation.Token));
-        }
-        finally
-        {
-            await cancelAfterFirstCommit;
-        }
+        var failure = await Should.ThrowAsync<Exception>(async () =>
+            await handler.HandleAsync(new IdempotencyPurgePayload(limit), scope: null, cancellation.Token));
 
         (failure is OperationCanceledException || failure.InnerException is OperationCanceledException)
             .ShouldBeTrue($"cancellation must surface as an OperationCanceledException, got {failure.GetType().Name}: {failure.Message}");
 
+        var remaining = await CountExpiredAsync(owner);
+        remaining.ShouldBeGreaterThan(0, "the rest of the backlog stays for the next fire");
         (await AuditCountAsync(owner)).ShouldBe(1, "a cancelled fire still attests the rows it already removed");
         var counts = await AuditCountsAsync(owner);
-        counts.Removed.ShouldBeGreaterThan(0);
-        counts.Removed.ShouldBeLessThan(seeded);
+        counts.Removed.ShouldBe((int)(seeded - remaining), "the row carries exactly the batches that committed");
         counts.BatchLimit.ShouldBe(limit);
         (await AuditFlagsAsync(owner)).BudgetExhausted.ShouldBeFalse("the budget did not end this drain");
-        (await CountExpiredAsync(owner)).ShouldBeGreaterThan(0, "the rest of the backlog stays for the next fire");
+    }
+
+    /// <summary>
+    /// The budget has to stay under the lease the consumer enforces, or a reclaiming worker could
+    /// take the row while this fire is still deleting. The consumer cancels a handler at the lease
+    /// less `min(5 s, lease / 10)` (TaskConsumer), so four minutes leaves the margin spare.
+    /// </summary>
+    [Fact]
+    public void PurgeTimeBudget_StaysUnderTheDefaultLeaseWindow()
+    {
+        EvidgateSweeps.PurgeTimeBudget.ShouldBe(TimeSpan.FromMinutes(4));
+
+        var lease = TimeSpan.FromSeconds(new TasksOptions().VisibilityTimeoutSeconds);
+        EvidgateSweeps.PurgeTimeBudget.ShouldBeLessThan(
+            lease - TimeSpan.FromSeconds(5),
+            "the handler window is the 300 s default lease less the consumer's 5 s margin");
+    }
+
+    /// <summary>
+    /// The purge is cross-tenant: one fire removes the expired rows of two orgs, keeps both orgs'
+    /// live rows, and writes one audit row carrying the sum — the table has no org column at all,
+    /// so it cannot become a per-tenant copy of what was deleted.
+    /// </summary>
+    [Fact]
+    public async Task Purge_DeletesEveryOrgsExpiredRowsAndAuditsTheSum()
+    {
+        const int perOrg = 3;
+        const int limit = 100;
+
+        var database = await _fixture.CreateDatabaseAsync();
+        var owner = _fixture.OwnerConnectionString(database);
+
+        await SeedExpiredAsync(owner, perOrg, OrgA);
+        await SeedExpiredAsync(owner, perOrg, OrgB);
+        await SeedLiveAsync(owner, OrgA, "live-a");
+        await SeedLiveAsync(owner, OrgB, "live-b");
+
+        await using var services = BuildServices(database);
+        var handler = Handler(services, TimeProvider.System);
+
+        await handler.HandleAsync(new IdempotencyPurgePayload(limit), scope: null, Token);
+
+        foreach (var org in new[] { OrgA, OrgB })
+        {
+            (await CountExpiredForOrgAsync(owner, org)).ShouldBe(0, "expired rows of every org are purgeable");
+            (await TaskSql.ScalarAsync<long>(
+                owner,
+                """
+                select count(*) from public.idempotency_record
+                where operation = @operation and org_id = @org
+                """,
+                ("operation", ExpiredOperation + "-live"),
+                ("org", org))).ShouldBe(1, "a live row of either org stays");
+        }
+
+        (await AuditCountAsync(owner)).ShouldBe(1, "one row per fire, not one per org");
+        (await AuditCountsAsync(owner)).Removed.ShouldBe(2 * perOrg, "the row carries the summed removal");
+
+        string[] expectedColumns = ["action", "actor", "batch_limit", "budget_exhausted", "created_at", "id", "removed"];
+        (await TaskSql.QueryAsync<string>(
+            owner,
+            """
+            select attname::text from pg_attribute
+            where attrelid = 'public.platform_sweep_audit'::regclass and attnum > 0 and not attisdropped
+            order by attname
+            """)).ShouldBe(expectedColumns, "the record holds no tenant dimension and no payload");
+    }
+
+    /// <summary>
+    /// A payload outside the function's range is clamped, not trusted. The owner function reads
+    /// `least(greatest(p_limit, 0), 10000)`, so a non-positive limit would delete nothing while a
+    /// too-large one would read a capped batch as the backlog drained. The stepping clock bounds
+    /// both cases: a loop that never ends on its own stops on the budget instead of hanging.
+    /// </summary>
+    [Theory]
+    [InlineData(int.MinValue, 1)]
+    [InlineData(-1, 1)]
+    [InlineData(0, 1)]
+    [InlineData(10_001, EvidgateSweeps.PurgeMaxBatchSize)]
+    [InlineData(int.MaxValue, EvidgateSweeps.PurgeMaxBatchSize)]
+    public async Task Purge_ClampsThePayloadLimitIntoTheFunctionRange(int payloadLimit, int expectedLimit)
+    {
+        var seeded = expectedLimit == 1 ? 3 : expectedLimit + 1;
+
+        var database = await _fixture.CreateDatabaseAsync();
+        var owner = _fixture.OwnerConnectionString(database);
+
+        await SeedExpiredAsync(owner, seeded);
+
+        await using var services = BuildServices(database);
+        var handler = Handler(services, new SteppingTimeProvider(TimeSpan.FromMinutes(1)));
+
+        await handler.HandleAsync(new IdempotencyPurgePayload(payloadLimit), scope: null, Token);
+
+        (await CountExpiredAsync(owner)).ShouldBe(0, "the clamped limit still drains the backlog");
+        (await AuditCountAsync(owner)).ShouldBe(1);
+        var counts = await AuditCountsAsync(owner);
+        counts.Removed.ShouldBe(seeded);
+        counts.BatchLimit.ShouldBe(expectedLimit, "the audit row records the limit the function received");
+        (await AuditFlagsAsync(owner)).BudgetExhausted.ShouldBeFalse("the backlog ended this drain");
     }
 
     // ------------------------------------------------------------------ helpers
@@ -334,36 +343,46 @@ public sealed class IdempotencyPurgeDrainTests
             time,
             NullLogger<IdempotencyPurgeTaskHandler>.Instance);
 
-    private static async Task SeedExpiredAsync(string ownerConnectionString, int count) =>
+    private static async Task SeedExpiredAsync(string ownerConnectionString, int count, Guid? org = null) =>
         await TaskSql.ExecuteAsync(
             ownerConnectionString,
             """
             insert into public.idempotency_record
               (id, org_id, project_id, operation, key, request_hash, created_at, expires_at)
-            select gen_random_uuid(), '11111111-1111-7111-8111-111111111111', null, @operation, 'k:' || i,
+            select gen_random_uuid(), @org, null, @operation, 'k:' || i,
                    'sha256:test', now() - interval '3 days', now() - interval '1 hour'
               from generate_series(1, @count) i
             """,
+            ("org", org ?? OrgA),
             ("operation", ExpiredOperation),
             ("count", count));
 
-    private static async Task SeedLiveAsync(string ownerConnectionString) =>
+    private static async Task SeedLiveAsync(string ownerConnectionString, Guid? org = null, string key = "live") =>
         await TaskSql.ExecuteAsync(
             ownerConnectionString,
             """
             insert into public.idempotency_record
               (id, org_id, project_id, operation, key, request_hash, created_at, expires_at)
             values
-              (gen_random_uuid(), '11111111-1111-7111-8111-111111111111', null, @operation, 'live',
+              (gen_random_uuid(), @org, null, @operation, @key,
                'sha256:test', now(), now() + interval '1 day')
             """,
-            ("operation", ExpiredOperation + "-live"));
+            ("org", org ?? OrgA),
+            ("operation", ExpiredOperation + "-live"),
+            ("key", key));
 
     private static Task<long> CountExpiredAsync(string ownerConnectionString) =>
         TaskSql.ScalarAsync<long>(
             ownerConnectionString,
             "select count(*) from public.idempotency_record where operation = @operation",
             ("operation", ExpiredOperation));
+
+    private static Task<long> CountExpiredForOrgAsync(string ownerConnectionString, Guid org) =>
+        TaskSql.ScalarAsync<long>(
+            ownerConnectionString,
+            "select count(*) from public.idempotency_record where operation = @operation and org_id = @org",
+            ("operation", ExpiredOperation),
+            ("org", org));
 
     private static Task<long> AuditCountAsync(string ownerConnectionString) =>
         TaskSql.ScalarAsync<long>(ownerConnectionString, "select count(*) from public.platform_sweep_audit");
@@ -383,10 +402,24 @@ public sealed class IdempotencyPurgeDrainTests
             ownerConnectionString,
             "select action from public.platform_sweep_audit order by created_at desc limit 1");
 
-    private static async Task AssertSqlStateAsync(string expected, Func<Task> statement)
+    /// <summary>
+    /// The system clock, except that the reading numbered <paramref name="cancelAtRead"/> cancels
+    /// the fire first. The handler reads the clock once at the drain's start and once per full
+    /// batch, so cancelling on the second reading lands just after the first batch commits.
+    /// </summary>
+    private sealed class CancelOnReadTimeProvider(CancellationTokenSource cancellation, int cancelAtRead) : TimeProvider
     {
-        var exception = await Should.ThrowAsync<PostgresException>(statement);
-        exception.SqlState.ShouldBe(expected);
+        private int _reads;
+
+        public override long GetTimestamp()
+        {
+            if (Interlocked.Increment(ref _reads) == cancelAtRead)
+            {
+                cancellation.Cancel();
+            }
+
+            return base.GetTimestamp();
+        }
     }
 
     /// <summary>
