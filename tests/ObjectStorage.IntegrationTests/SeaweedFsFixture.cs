@@ -93,15 +93,52 @@ public sealed class SeaweedFsFixture : IAsyncLifetime
     /// <summary>The bucket the parity keys live in, created with the same credentials the tests use.</summary>
     private async Task CreateBucketAsync()
     {
-        using var client = Target.CreateClient();
+        await RetryWhileStartingAsync(async cancellationToken =>
+        {
+            using var client = CreateStartupClient();
+            try
+            {
+                await client.PutBucketAsync(new PutBucketRequest { BucketName = Target.Bucket }, cancellationToken);
+            }
+            catch (AmazonS3Exception exception)
+                when (exception.ErrorCode is "BucketAlreadyOwnedByYou" or "BucketAlreadyExists")
+            {
+                // Reused container state is fine — the bucket is the same.
+            }
+        });
+    }
+
+    /// <summary>
+    /// A freshly started gateway refuses its first writes for a moment (master election, lazy first
+    /// volume), so both set-up calls retry through the shared transient-only helper; a 4xx still fails at once.
+    /// </summary>
+    private async Task RetryWhileStartingAsync(Func<CancellationToken, Task> step) =>
+        await TransientS3Retry.RunAsync(
+            step,
+            TransientS3RetryOptions.Startup,
+            ContainerLogTailAsync);
+
+    private AmazonS3Client CreateStartupClient() =>
+        TransientS3Retry.CreateClient(Target.ServiceUrl, Target.AccessKey, Target.SecretKey);
+
+    private async Task<string> ContainerLogTailAsync()
+    {
+        if (_container is null)
+        {
+            return "(no container)";
+        }
+
         try
         {
-            await client.PutBucketAsync(new PutBucketRequest { BucketName = Target.Bucket });
+            var (stdout, stderr) = await _container.GetLogsAsync(DateTime.UtcNow.AddMinutes(-10), DateTime.UtcNow);
+            var log = stdout + stderr;
+            const int tailLength = 4000;
+            return $"Container log tail:{Environment.NewLine}"
+                + (log.Length <= tailLength ? log : log[^tailLength..]);
         }
-        catch (AmazonS3Exception exception)
-            when (exception.ErrorCode is "BucketAlreadyOwnedByYou" or "BucketAlreadyExists")
+        catch (Exception exception)
         {
-            // Reused container state is fine — the bucket is the same.
+            return $"(reading the container log failed: {exception.Message})";
         }
     }
 
@@ -115,8 +152,7 @@ public sealed class SeaweedFsFixture : IAsyncLifetime
     {
         PendingLifecycle = ReadPendingLifecycle(_lifecycleFile);
 
-        using var client = Target.CreateClient();
-        await client.PutLifecycleConfigurationAsync(new PutLifecycleConfigurationRequest
+        var request = new PutLifecycleConfigurationRequest
         {
             BucketName = Target.Bucket,
             Configuration = new LifecycleConfiguration
@@ -138,6 +174,12 @@ public sealed class SeaweedFsFixture : IAsyncLifetime
                     },
                 ],
             },
+        };
+
+        await RetryWhileStartingAsync(async cancellationToken =>
+        {
+            using var client = CreateStartupClient();
+            await client.PutLifecycleConfigurationAsync(request, cancellationToken);
         });
     }
 
