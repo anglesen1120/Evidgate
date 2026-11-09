@@ -315,9 +315,9 @@ DEFINER` function owned by the migration role with a pinned empty
   nothing else, so a correction is an adjustment row (`adjustment_of` → the
   corrected row's `(org_id, id)`, the reason CHECK requiring a 1-2000 character
   reason) and the original row is never rewritten. The owner/migration role
-  keeps `update` and `delete` (an erasure sweep or a backfill is a real UPDATE),
-  which is why the immutability claim is about the app role and not about the
-  table. `DELETE` is owner-path only; the `usage_ledger_entry_owner_backfill`
+  keeps `update` and `delete` for periods that hold no statement; `0092`
+  refuses both for an issued period, for every role. `DELETE` is owner-path
+  only; the `usage_ledger_entry_owner_backfill`
   policy is what lets that owner path (and a backfill) see the rows under FORCE
   row level security. That policy is the accepted `0004`/`0028` precedent —
   `for all to evidgate_owner using (true) with check (true)` — because FORCE row
@@ -1029,3 +1029,10 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - Deploy: any order, one transaction. Rollback: re-state the `0090` bodies of `session_revoke_all_admin` and
   `session_admin_may_revoke`, then drop the three new helpers.
 - Residual, accepted pending an owner decision: sessions are per user, so an administrator of any org the target belongs to at a lower rank can still end the target's sessions in every org; `RemoveMember`, `UpdateMembership` and `RevokeRole` carry no rank guard either.
+
+## Notes on the issued-period mutation guard (`0092`)
+
+- `0087` refused INSERTs into an issued billing period; `0092` refuses UPDATE and DELETE too, for every role, the owner included, with plain row triggers (`usage_ledger_entry_issued_mutation`, `billing_statement_issued_mutation`), not grants or policies. A statement row exists only once its period is issued, so every statement UPDATE/DELETE is refused; a ledger row is refused when its (org_id, period) has a statement, or when an UPDATE moves it into such a period. SQLSTATE `23514`, constraint label = trigger name.
+- No code path mutates either table (the app role holds no UPDATE/DELETE grant; issue and re-issue only insert and read). Existing rows in issued periods are not backfilled. Accepted residuals: the table owner or a superuser can still `DROP`/`DISABLE TRIGGER`, `TRUNCATE` (row triggers do not fire) or set `session_replication_role = replica`. An owner repair of an issued period is one transaction: `alter table ... disable trigger`, repair, `enable trigger`, commit (SHARE ROW EXCLUSIVE lock). A bulk owner statement takes one shared advisory lock per distinct (org_id, period): batch by org.
+- The ledger guard takes the `0087` shared advisory lock on the old and the new period key and refuses non-READ COMMITTED writers, like the insert guard.
+- Deploy: any order, one transaction. Rollback: drop the two triggers, then the two `evidgate.*_issued_mutation_guard` functions.
