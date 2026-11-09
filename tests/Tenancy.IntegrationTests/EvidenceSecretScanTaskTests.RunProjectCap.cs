@@ -62,6 +62,30 @@ public sealed partial class EvidenceSecretScanTaskTests
     }
 
     /// <summary>
+    /// The other direction of the same rule: the run's project admits a megabyte while the artifact's own project
+    /// declares 8 bytes, and the object between them is read and flagged — the row's project cap never bounds a run it
+    /// does not belong to.
+    /// </summary>
+    [Fact]
+    public async Task Scan_Mismatched_Artifact_Under_A_Restrictive_Artifact_Cap_Is_Flagged()
+    {
+        await using var world = await StartAsync();
+        var otherProject = await FixtureSeed.ProjectAsync(_fixture, world.Database, world.Org);
+        await SeedKindPolicyAsync(world, rejectOnSecret: false, maxBytes: PermissiveCap);
+        await SeedKindPolicyAsync(world, rejectOnSecret: false, projectId: otherProject, maxBytes: 8);
+        var seeded = await SeedAsync(
+            world, ArtifactState.Ready, BodyWith(AwsPrefix + AwsBody), storeBody: true, projectId: otherProject);
+
+        await InvokeAsync(world, seeded.ArtifactId);
+
+        (await ColumnAsync(world, seeded.ArtifactId, "scan_state")).ShouldBe(ArtifactScanState.Flagged);
+        (await ColumnAsync(world, seeded.ArtifactId, "state")).ShouldBe(ArtifactState.Ready);
+        (await ColumnAsync(world, seeded.ArtifactId, "failure_code")).ShouldBeNull();
+        (await EventsAsync(world, seeded.ArtifactId)).ShouldBe(
+            [(SecretPatternClass.AwsAccessKey, 1, MaskingEventAction.Flagged)]);
+    }
+
+    /// <summary>
     /// The read is bounded by the run's project's cap too: an object over the run project's 8 bytes while the artifact's
     /// own project admits a megabyte throws instead of being scanned truncated, so the row keeps its pending scan and no
     /// verdict is invented.
@@ -75,6 +99,27 @@ public sealed partial class EvidenceSecretScanTaskTests
         await SeedKindPolicyAsync(world, rejectOnSecret: false, projectId: otherProject, maxBytes: PermissiveCap);
         var seeded = await SeedAsync(
             world, ArtifactState.Ready, BodyWith(AwsPrefix + AwsBody), storeBody: true, projectId: otherProject);
+
+        await Should.ThrowAsync<InvalidOperationException>(() => InvokeAsync(world, seeded.ArtifactId));
+
+        (await ColumnAsync(world, seeded.ArtifactId, "scan_state")).ShouldBe(ArtifactScanState.Pending);
+        (await ColumnAsync(world, seeded.ArtifactId, "state")).ShouldBe(ArtifactState.Ready);
+        (await EventCountAsync(world, seeded.ArtifactId)).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// The same bound on an artifact of the run's own project: its project is the run's, so the 8 bytes are the read's
+    /// cap, and the object over them throws instead of being scanned truncated. The class's planted-key case is the
+    /// control at the default cap.
+    /// </summary>
+    [Fact]
+    public async Task Scan_Artifact_Of_The_Runs_Own_Project_Is_Read_Under_That_Projects_Cap()
+    {
+        await using var world = await StartAsync();
+        var otherProject = await FixtureSeed.ProjectAsync(_fixture, world.Database, world.Org);
+        await SeedKindPolicyAsync(world, rejectOnSecret: false, maxBytes: 8);
+        await SeedKindPolicyAsync(world, rejectOnSecret: false, projectId: otherProject, maxBytes: PermissiveCap);
+        var seeded = await SeedReadyAsync(world, BodyWith(AwsPrefix + AwsBody));
 
         await Should.ThrowAsync<InvalidOperationException>(() => InvokeAsync(world, seeded.ArtifactId));
 
