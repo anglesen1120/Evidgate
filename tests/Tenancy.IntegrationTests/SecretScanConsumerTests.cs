@@ -41,13 +41,43 @@ public sealed class SecretScanConsumerTests(PostgresTenancyFixture fixture, Seaw
             await scope.CommitAsync(Token);
         }
         (await ArtifactValueAsync<string>(world, artifact, "scan_state")).ShouldBe("pending");
-        await world.Host.Services.GetRequiredService<OutboxDispatcher>().DispatchBatchAsync(Token);
-        var task = await fixture.ScalarAsync<Guid>(world.Database,
-            $"select id from public.task where idempotency_key='outbox:{outbox:D}'");
-        var queue = await TaskValueAsync<string>(world, task, "queue");
-        (await world.Host.Services.GetRequiredService<TaskConsumer>().PollOnceAsync(queue, Token)).ShouldBeGreaterThan(0);
+        // Outbox and queue are shared with sibling classes: a dispatch batch takes the oldest 200 rows (or skips ours
+        // while a neighbour's dispatcher holds it) and a claim takes the oldest 50 due tasks, so dispatch and consume
+        // until our own task is done instead of reading each step once.
+        var task = await DispatchAndConsumeAsync(world, outbox);
         (await TaskValueAsync<string>(world, task, "state")).ShouldBe("done");
         (await ArtifactValueAsync<string>(world, artifact, "scan_state")).ShouldBe("flagged");
+    }
+
+    private async Task<Guid> DispatchAndConsumeAsync(World world, Guid outbox)
+    {
+        var dispatcher = world.Host.Services.GetRequiredService<OutboxDispatcher>();
+        var consumer = world.Host.Services.GetRequiredService<TaskConsumer>();
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        budget.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            while (true)
+            {
+                await dispatcher.DispatchBatchAsync(budget.Token);
+                var task = await fixture.ScalarAsync<Guid?>(world.Database,
+                    $"select id from public.task where idempotency_key='outbox:{outbox:D}'");
+                if (task is { } found)
+                {
+                    var queue = await TaskValueAsync<string>(world, found, "queue");
+                    await consumer.PollOnceAsync(queue, budget.Token);
+                    if (await TaskValueAsync<string>(world, found, "state") == "done")
+                    {
+                        return found;
+                    }
+                }
+                await Task.Delay(100, budget.Token);
+            }
+        }
+        catch (OperationCanceledException) when (!Token.IsCancellationRequested)
+        {
+            throw new TimeoutException($"outbox row {outbox:D} did not become a done task within 30 s");
+        }
     }
 
     [Fact]
