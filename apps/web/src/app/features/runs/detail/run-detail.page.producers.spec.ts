@@ -76,7 +76,7 @@ describe('RunDetailPage producer region', () => {
     expect(region?.textContent).not.toMatch(/PASS|FAIL|finalized/);
   });
 
-  it('renders the served per-slot facts, with unavailable only for a null expected count', async () => {
+  it('renders the served per-slot facts, with an open slot showing its count', async () => {
     const base = run.producers[0];
     if (base === undefined) throw new Error('run fixture must serve a producer slot');
     get.mockResolvedValue({
@@ -112,8 +112,8 @@ describe('RunDetailPage producer region', () => {
     );
     expect(text('shard-3', 'identity')).toBe('unbound');
     expect(text('shard-3', 'last-sequence')).toBe('4');
-    expect(row('shard-3')?.querySelector('td[data-fact="count"][data-unavailable]')).not.toBeNull();
-    expect(row('shard-3')?.querySelectorAll('td[data-unavailable]')).toHaveLength(1);
+    expect(text('shard-3', 'count')).toBe('4 (expected not set)');
+    expect(row('shard-3')?.querySelectorAll('td[data-unavailable]')).toHaveLength(0);
     expect(root.querySelector('#producers [data-completeness]')).toBeNull();
   });
 
