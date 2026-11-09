@@ -22,8 +22,11 @@ Rate classes: **request** = at least once per API call; **task** = once or more 
 | `outbox` | `dispatched_at` | yes: predicate of `outbox_undispatched_idx` (0006) | task | none: HOT impossible |
 | `producer_slot` | `last_sequence`, `bound_token_jti`, `bound_ci_run_ref`, `closed_at`, `declared_*` | no: indexes are `(org_id, run_id)`, `(org_id, run_id, producer_id)`, `(org_id, run_id, shard_index)`, PK (0029) | task (per ingest batch) | **candidate: fillfactor 80**, needs a migration |
 | `idempotency_record` | `response_status`, `response_body` | no (`expires_at` is not written) (0007) | request, exactly once per row | candidate, low value: one update per row would need roughly half-empty pages; measure first |
-| `ingest_token` | `last_used_at` | no `[INFERENCE]`: no secondary index found in migrations | rare (guarded to one write per interval) | none |
-| `run` | `state` | no `[INFERENCE]`: `run_project_created_idx` is the only secondary index (0031) | rare (few transitions per run) | none |
+| `ingest_token` | `last_used_at` | no: the only secondary index is `(org_id, project_id, created_at, id)` (0018) | rare (guarded to one write per interval) | none |
+| `run` | `state` | yes: `state` is in the predicate of `run_overdue_idx` (0058) | rare (few transitions per run) | none: HOT impossible |
+| `authoring_code_counter` | `next_value` | no (primary key `(org_id, project_id)` only, 0039) | request-class for manual-case creation: one row per project, rewritten on every code allocation | **candidate: fillfactor 80**, same shape as `quota_counter`; needs a migration |
+| `artifact` | `attempt_id` | no: indexes are `(org_id, run_id)`, `(expires_at)`, `(org_id, project_id)` (0028) | rare (once per artifact at freeze) | none |
+| `environment` | `current_revision_id`, `name` | no `[INFERENCE]` | rare | none |
 | `healing_llm_budget` | `used_cost`, `used_tokens` | no (keyed by org, project, period) | request once its consumer ships (no consumer code yet) | add `fillfactor=80` in the migration that adds the consumer, same shape as `quota_counter` |
 | `healing_switch` | `mode`, `reason`, `set_by`, `at` | no `[INFERENCE]` | rare (operator action) | none |
 | `retention_policy` | `artifact_days`, `metadata_days` | no `[INFERENCE]` | rare | none |
@@ -34,6 +37,6 @@ Rate classes: **request** = at least once per API call; **task** = once or more 
 | `membership`, `project`, `release`, `suite`, `suite_revision`, `test_case`, `run_cancel_request` | status/state, head pointer, taxonomy | mixed | rare | none |
 | `feature_node`, `checklist_item`, `manual_test_case`, `authoring_change` | title, position, state, `deleted_at`, apply stamps | `[INFERENCE]` | rare (human edits) | none |
 
-Outcome: one table qualifies today (`producer_slot`), and one qualifies when its writer lands
+Outcome: two tables qualify today (`producer_slot`, `authoring_code_counter`), and one qualifies when its writer lands
 (`healing_llm_budget`). `idempotency_record` needs a measurement before a decision. Applying any of these
 needs a migration, which this audit does not add.
