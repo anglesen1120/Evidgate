@@ -163,3 +163,35 @@ rule, so it holds for every deployment.
 
 `node scripts/check-env-matrix.mjs` keeps that file equal to what the code consumes;
 `bash scripts/check-no-secret-literals.sh` keeps a literal secret out of the repository.
+
+## 5. Local backend: the `observability` compose profile (ADR-0012)
+
+`scripts/dev/up.sh --observability` starts four more containers next to PostgreSQL and
+SeaweedFS and points the Api and Worker at the collector
+(`EVIDGATE__TELEMETRY__OTLPENDPOINT=http://127.0.0.1:4317`, unless `.env.dev` already
+sets it). Without the flag the dev stack is unchanged and exports nowhere.
+`scripts/dev/down.sh` stops them; `up.sh --reset` also deletes their volumes.
+
+| Service | Signal | Loopback port (override) | Retention | Ceiling | Memory |
+|---|---|---|---|---|---|
+| `otel-collector` | OTLP in, three `otlphttp` exporters out | 4317 gRPC, 4318 HTTP (`EVIDGATE_OBS_OTLP_GRPC_PORT`, `EVIDGATE_OBS_OTLP_HTTP_PORT`) | none (stateless) | `memory_limiter` 90 MiB | 128m |
+| `victoriatraces` | traces | 10428 (`EVIDGATE_OBS_TRACES_PORT`) | 7 d | 2 GiB | 256m |
+| `victorialogs` | logs | 9428 (`EVIDGATE_OBS_LOGS_PORT`) | 30 d | 3 GiB | 256m |
+| `prometheus` | metrics | 9090 (`EVIDGATE_OBS_PROMETHEUS_PORT`) | 90 d | 2 GiB | 256m |
+
+Query UIs: Prometheus `http://127.0.0.1:9090/`, VictoriaLogs and VictoriaTraces
+`http://127.0.0.1:<port>/select/vmui/` (traces also answer the Jaeger Query API under
+`/select/jaeger/`). The UIs have no login, which is why every port is bound to `127.0.0.1`
+and none is ever published on a review or production host.
+
+The ceilings are retention-by-size thresholds, not allocation limits: the Victoria stores
+keep at least the newest per-day partitions and Prometheus can overshoot while compacting
+(ADR-0012 decision 4), so keep disk headroom. The application only knows the collector;
+changing a backend means editing the exporters in `infra/observability/otel-collector.yaml`.
+Redaction and sampling processors arrive with the collector deployment task.
+
+Prove the profile on a throwaway compose project (no `.env.dev`, free ports, torn down at
+the end): `scripts/dev/observability-smoke.sh`. It checks that the default stack is still
+`postgres seaweedfs`, that every published port is loopback, that each store reports the
+retention above, and that one span, one metric point and one log record sent to the
+collector are queryable.

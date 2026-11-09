@@ -96,6 +96,7 @@ scripts/dev/logs.sh worker       # api | worker | web | postgres | seaweedfs | a
 scripts/dev/down.sh              # stop hosts + compose, keep volumes (AC4)
 scripts/dev/up.sh --reset        # stop hosts, delete the volumes, start clean
 scripts/dev/up.sh --with-token   # start, then mint the dev ingest token (printed once)
+scripts/dev/up.sh --observability  # also start the observability profile (docs/runbooks/telemetry.md §5)
 ```
 
 Data lives in the named volumes `pg-data` and `s3-data`: `down.sh` then `up.sh`
