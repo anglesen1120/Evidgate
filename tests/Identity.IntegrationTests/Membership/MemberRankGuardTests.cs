@@ -1,7 +1,5 @@
-using System.Data.Common;
 using System.Net;
 using System.Text;
-using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Identity.Infrastructure.Persistence;
@@ -237,6 +235,62 @@ public sealed class MemberRankGuardTests : TenantTest
         (await HoldsRoleAsync(host, secondMembership, second.RoleId)).ShouldBeFalse();
     }
 
+    /// <summary>Equal rank is allowed on the disable route: one custom administrator disables another.</summary>
+    [Fact]
+    public async Task Custom_Admin_Disables_An_Equal_Rank_Target()
+    {
+        using var host = SessionTestHost.Start(Fixture);
+        using var client = host.CreateSessionClient();
+        var founder = await host.SignInMemberAsync(client);
+        var actor = await SignInCustomAdminAsync(host, client, founder.OrgId);
+        var peer = await SignInCustomAdminAsync(host, client, founder.OrgId);
+        var peerMembership = await MembershipIdAsync(host, founder.OrgId, peer.UserId);
+        var version = (int)(await host.ScalarAsync(
+            "select version from public.membership where id = @id",
+            [("id", peerMembership)]))!;
+
+        using var response = await SendMutationAsync(
+            client,
+            HttpMethod.Patch,
+            $"/v1/orgs/{founder.OrgId}/memberships/{peerMembership}",
+            actor,
+            founder.OrgId,
+            "rank-disable-equal",
+            """{"status":"removed"}""",
+            version.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await MembershipStatusAsync(host, peerMembership)).ShouldBe("removed");
+        (await host.SessionRowAsync(await host.SessionIdOfAsync(peer.SessionCookie))).RevokedAt.ShouldNotBeNull();
+    }
+
+    /// <summary>Equal rank is allowed on the revoke route: one custom administrator demotes another.</summary>
+    [Fact]
+    public async Task Custom_Admin_Revokes_An_Equal_Rank_Targets_Role()
+    {
+        using var host = SessionTestHost.Start(Fixture);
+        using var client = host.CreateSessionClient();
+        var founder = await host.SignInMemberAsync(client);
+        var actor = await SignInCustomAdminAsync(host, client, founder.OrgId);
+        var peer = await SignInCustomAdminWithRoleAsync(host, client, founder.OrgId);
+        var peerMembership = await MembershipIdAsync(host, founder.OrgId, peer.Member.UserId);
+
+        using var response = await SendMutationAsync(
+            client,
+            HttpMethod.Delete,
+            $"/v1/orgs/{founder.OrgId}/memberships/{peerMembership}/roles/{peer.RoleId}",
+            actor,
+            founder.OrgId,
+            "rank-revoke-equal",
+            jsonBody: null,
+            ifMatch: null);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        (await HoldsRoleAsync(host, peerMembership, peer.RoleId)).ShouldBeFalse();
+        (await host.SessionRowAsync(await host.SessionIdOfAsync(peer.Member.SessionCookie)))
+            .RotationRequiredAt.ShouldNotBeNull();
+    }
+
     /// <summary>An unbound invite ranks zero, so the guard passes it to the route's state refusal.</summary>
     [Fact]
     public async Task Pending_Invite_Is_Not_A_Rank_Refusal()
@@ -415,45 +469,5 @@ public sealed class MemberRankGuardTests : TenantTest
         }
 
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
-    }
-
-    private sealed class RecordingTenantDb(bool result) : ITenantDb
-    {
-        internal int Statements { get; private set; }
-
-        internal string? Sql { get; private set; }
-
-        internal object? Parameters { get; private set; }
-
-        public DbConnection Connection => throw new NotSupportedException();
-
-        public DbTransaction Transaction => throw new NotSupportedException();
-
-        public Task<IReadOnlyList<T>> QueryAsync<T>(
-            string sql,
-            object? parameters = null,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-        public Task<T?> QuerySingleOrDefaultAsync<T>(
-            string sql,
-            object? parameters = null,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-        public Task<int> ExecuteAsync(
-            string sql,
-            object? parameters = null,
-            CancellationToken cancellationToken = default) => throw new NotSupportedException();
-
-        public Task<T?> ScalarAsync<T>(
-            string sql,
-            object? parameters = null,
-            CancellationToken cancellationToken = default)
-        {
-            Statements++;
-            Sql = sql;
-            Parameters = parameters;
-
-            return Task.FromResult<T?>((T)(object)result);
-        }
     }
 }

@@ -77,8 +77,8 @@ internal sealed class RemoveMemberCommandHandler(
             return Result.Failure(Error.NotFound("no membership with that id is visible to this tenant"));
         }
 
-        // Checked whatever the row's state: an already removed or pending target must not
-        // turn a rank refusal into a success, and the last-admin guard is not the hierarchy.
+        // The hierarchy is a property of the caller and the target, so it is checked before the state
+        // branches. Rank counts active memberships only: a removed or pending target ranks zero.
         if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
                 db, orgId, principals.Current, membership.UserId, cancellationToken)
             .ConfigureAwait(false))
@@ -106,6 +106,15 @@ internal sealed class RemoveMemberCommandHandler(
             return Result.Failure(Error.Conflict(
                 ApiErrorCode.LastAdmin,
                 "the organization must keep at least one active tenant_admin (AC4)"));
+        }
+
+        // The guard's row lock is where a concurrent demotion of the actor can land, so the
+        // rank is compared again after it. This narrows the window; it is not atomic.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure(MemberRankGuard.Refused);
         }
 
         membership.Remove();

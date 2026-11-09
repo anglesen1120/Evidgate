@@ -106,8 +106,8 @@ internal sealed class UpdateMembershipCommandHandler(
             return Result.Failure<MembershipView>(Error.NotFound("no membership with that id is visible to this tenant"));
         }
 
-        // Before the version and idempotency branches: the hierarchy is a property of the
-        // caller and target, not of whether this retry happens to find the row already removed.
+        // Checked before the version and retry branches: the hierarchy is a property of the caller and
+        // the target. Rank counts active memberships only, so a removed or pending target ranks zero.
         if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
                 db, orgId, principals.Current, membership.UserId, cancellationToken)
             .ConfigureAwait(false))
@@ -143,6 +143,15 @@ internal sealed class UpdateMembershipCommandHandler(
             return Result.Failure<MembershipView>(Error.Conflict(
                 ApiErrorCode.LastAdmin,
                 "the organization must keep at least one active tenant_admin (AC4)"));
+        }
+
+        // The guard's row lock is where a concurrent demotion of the actor can land, so the
+        // rank is compared again after it. This narrows the window; it is not atomic.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure<MembershipView>(MemberRankGuard.Refused);
         }
 
         membership.Remove();

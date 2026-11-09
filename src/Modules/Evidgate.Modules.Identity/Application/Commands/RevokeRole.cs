@@ -84,6 +84,16 @@ internal sealed class RevokeRoleCommandHandler(
             return Result.Failure(Error.NotFound("no membership with that id is visible to this tenant"));
         }
 
+        // Before the pair's 404 on purpose: after it, a 404-versus-403 difference would tell the
+        // caller whether a higher-ranked member holds the role. Rank counts active memberships only,
+        // so a removed or pending target ranks zero here.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure(MemberRankGuard.Refused);
+        }
+
         var grant = await context.MembershipRoles
             .SingleOrDefaultAsync(
                 row => row.MembershipId == membership.Id && row.RoleId == command.RoleId,
@@ -93,15 +103,6 @@ internal sealed class RevokeRoleCommandHandler(
         if (grant is null)
         {
             return Result.Failure(Error.NotFound("that membership does not hold that role"));
-        }
-
-        // After the pair's own 404 and before the last-admin and write branches: the
-        // hierarchy applies whatever the current grant set or membership state is.
-        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
-                db, orgId, principals.Current, membership.UserId, cancellationToken)
-            .ConfigureAwait(false))
-        {
-            return Result.Failure(MemberRankGuard.Refused);
         }
 
         if (membership.IsActive)
@@ -122,6 +123,15 @@ internal sealed class RevokeRoleCommandHandler(
                     ApiErrorCode.LastAdmin,
                     "the organization must keep at least one active tenant_admin (AC4)"));
             }
+        }
+
+        // The guard's row lock is where a concurrent demotion of the actor can land, so the
+        // rank is compared again after it. This narrows the window; it is not atomic.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.UserId, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure(MemberRankGuard.Refused);
         }
 
         context.MembershipRoles.Remove(grant);

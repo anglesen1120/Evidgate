@@ -1056,5 +1056,14 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
   EXECUTE-less in the same file, and `DefinerExecuteScopeTests` pins each grantee list to the owner and
   `evidgate_app`. `session_admin_may_revoke`, `session_admin_may_revoke_all` and `session_revoke_audit_append` stay
   owner-only: they are reached through the owner-run definers.
-- Deploy: any order, one transaction; the file only widens an ACL, so it is a no-op on a database that already
-  carries it. Rollback: `revoke execute` on both functions from `evidgate_app` — the `0091` ACL.
+- Deploy the migration first, then the application: the commands call both functions, so an application
+  deployed ahead of `0093` fails every member mutation on the missing EXECUTE. Rollback in the other order — roll
+  the application back before `revoke execute` on both functions from `evidgate_app` (the `0091` ACL), because a
+  host that still calls them answers 500. The file only widens an ACL, so it is a no-op on a database that already
+  carries it.
+- Residual, accepted: the commands compare the rank twice, before and after the last-admin guard, which narrows the
+  window in which a concurrent demotion of the actor could land between the check and the write. It is not atomic:
+  the guard's `for update` covers the org's active admin rows, while the insert or delete that changes a role grant
+  does not lock the membership row the comparison reads.
+- Residual, accepted: rank counts active memberships only, so a removed or pending target ranks 0 whatever grants
+  its row still carries.
