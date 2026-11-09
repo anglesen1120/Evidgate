@@ -93,6 +93,9 @@ export const ApiTokensStore = signalStore(
       { equal: sameScope },
     );
     const createTarget = computed(() => store.createOrigin()?.target ?? null);
+    // The page the user's Next asked for while its navigation is still in flight. Plain state, not
+    // a signal: only a URL emission re-runs the computation below, and that is when it is read.
+    const move: { held: string | undefined } = { held: undefined };
     const cursor = linkedSignal({
       source: () => ({
         scope: scope(),
@@ -104,6 +107,17 @@ export const ApiTokensStore = signalStore(
       // the user moved to is not that: its navigation never landed, so the landing keeps the URL.
       computation: (source, previous): string | undefined => {
         if (source.project !== source.scope?.project) return undefined;
+        // A re-emission naming the cursor the URL already named is not a navigation: while Next is
+        // in flight it must not hand the page back to the entry the user is leaving.
+        if (
+          move.held !== undefined &&
+          previous?.value === move.held &&
+          previous.source.cursor === source.cursor &&
+          previous.source.project === source.project &&
+          sameScope(previous.source.scope, source.scope)
+        )
+          return move.held;
+        move.held = undefined;
         const staleRetirement =
           previous !== undefined &&
           previous.value === undefined &&
@@ -133,6 +147,7 @@ export const ApiTokensStore = signalStore(
       scope,
       createTarget,
       cursor,
+      move,
       pageResource,
     };
   }),
@@ -182,13 +197,21 @@ export const ApiTokensStore = signalStore(
         store.selectedProject.set(project);
     },
     setCursor(cursor: string | undefined): void {
+      store.move.held = undefined;
       store.cursor.set(cursor);
     },
     next(): void {
       if (!store.pageResource.isLoading() && store.pageResource.hasValue()) {
         const cursor = store.pageResource.value().next_cursor;
-        if (cursor && cursor !== store.cursor()) store.cursor.set(cursor);
+        if (cursor && cursor !== store.cursor()) {
+          store.cursor.set(cursor);
+          store.move.held = cursor;
+        }
       }
+    },
+    // The navigation a Next started has landed, failed or been overtaken: the URL leads again.
+    settleMove(): void {
+      store.move.held = undefined;
     },
     reload(): void {
       store.pageResource.reload();
@@ -196,6 +219,7 @@ export const ApiTokensStore = signalStore(
     // A mutation changes the first page, so the next read starts there: an old cursor can name a
     // page the server no longer accepts once a row moves.
     reloadFirst(): void {
+      store.move.held = undefined;
       if (store.cursor() === undefined) store.pageResource.reload();
       else store.cursor.set(undefined);
     },

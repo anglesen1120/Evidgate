@@ -1,5 +1,6 @@
 import { isSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { convertToParamMap } from '@angular/router';
 import { getState } from '@ngrx/signals';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { createIntent } from '../../../core/http/intent';
@@ -96,6 +97,44 @@ describe('ApiTokensStore', () => {
     expect(h.store.hasNext()).toBe(false);
     h.store.next();
     expect(h.list).toHaveBeenCalledTimes(2);
+  });
+
+  describe('a Next whose navigation is in flight', () => {
+    async function heldNext() {
+      const h = mount(undefined, { query: { project: 'project-1', cursor: 'page-2' } });
+      h.list.mockResolvedValueOnce({ items: [ROW], next_cursor: 'page-3' });
+      await h.settle();
+      h.store.next();
+      expect(h.store.cursor()).toBe('page-3');
+      return h;
+    }
+
+    it('keeps its page when the entry it leaves is emitted again', async () => {
+      const h = await heldNext();
+      await h.settle();
+      const reads = h.list.mock.calls.length;
+      h.query.next(convertToParamMap({ project: 'project-1', cursor: 'page-2', ref: '1' }));
+      expect(h.store.cursor()).toBe('page-3');
+      await h.settle();
+      expect(h.store.cursor()).toBe('page-3');
+      expect(h.list).toHaveBeenCalledTimes(reads);
+      expect(h.list).toHaveBeenLastCalledWith('project-1', 'page-3', expect.any(AbortSignal));
+    });
+
+    it('hands the page back to the URL once the navigation has settled', async () => {
+      const h = await heldNext();
+      h.store.settleMove();
+      h.query.next(convertToParamMap({ project: 'project-1', cursor: 'page-2', ref: '1' }));
+      expect(h.store.cursor()).toBe('page-2');
+    });
+
+    it('follows a URL that names another cursor even while held', async () => {
+      const h = await heldNext();
+      h.query.next(convertToParamMap({ project: 'project-1', cursor: 'page-9' }));
+      expect(h.store.cursor()).toBe('page-9');
+      h.query.next(convertToParamMap({ project: 'project-1', cursor: 'page-9', ref: '1' }));
+      expect(h.store.cursor()).toBe('page-9');
+    });
   });
 
   it('clears the old scope immediately when switching project', async () => {
