@@ -1,8 +1,23 @@
+import type { RunProducerSlot } from '@evidgate/sdk';
 import { producerSlotsFromRun } from './producer-slots';
 
+const finalized: RunProducerSlot = {
+  producer_id: 'shard-2',
+  identity_state: 'bound',
+  finalize_status: 'finalized',
+  last_sequence: 9,
+  count: 9,
+  expected: 9,
+  stale_epoch_events: 0,
+  after_cancel_events: 0,
+};
+
 describe('producerSlotsFromRun', () => {
-  it('keeps declared shard order and makes every unserved fact unavailable', () => {
-    const rows = producerSlotsFromRun({ declared_producers: ['shard-9', 'shard-2'] });
+  it('keeps declared shard order and leaves a slot with no served facts unavailable', () => {
+    const rows = producerSlotsFromRun({
+      declared_producers: ['shard-9', 'shard-2'],
+      producers: [finalized],
+    });
     expect(rows.map((row) => row.producerId)).toEqual(['shard-9', 'shard-2']);
     expect(rows[0]).toEqual({
       producerId: 'shard-9',
@@ -16,27 +31,51 @@ describe('producerSlotsFromRun', () => {
     });
   });
 
-  it('preserves supplied zero values and does not introduce undeclared slots', () => {
-    const facts = {
-      'shard-2': { count: 0, expected: 0, lastSequence: 0, afterCancelEvents: 0 },
-      undeclared: { count: 99 },
+  it('carries the served facts, preserves zeros and null expected, and adds no undeclared slot', () => {
+    const open: RunProducerSlot = {
+      ...finalized,
+      identity_state: 'unbound',
+      finalize_status: 'open',
+      last_sequence: 0,
+      count: 0,
+      expected: null,
     };
-    const rows = producerSlotsFromRun({ declared_producers: ['shard-2'] }, facts);
+    const rows = producerSlotsFromRun({
+      declared_producers: ['shard-2'],
+      producers: [open, { ...finalized, producer_id: 'undeclared', count: 99 }],
+    });
     expect(rows).toEqual([
       {
         producerId: 'shard-2',
-        identityState: null,
-        finalizeStatus: null,
+        identityState: 'unbound',
+        finalizeStatus: 'open',
         lastSequence: 0,
         count: 0,
-        expected: 0,
-        staleEpochEvents: null,
+        expected: null,
+        staleEpochEvents: 0,
         afterCancelEvents: 0,
       },
     ]);
   });
 
+  it('maps a finalized slot field for field, including per-slot late counts', () => {
+    const [row] = producerSlotsFromRun({
+      declared_producers: ['shard-2'],
+      producers: [{ ...finalized, count: 7, stale_epoch_events: 2, after_cancel_events: 1 }],
+    });
+    expect(row).toEqual({
+      producerId: 'shard-2',
+      identityState: 'bound',
+      finalizeStatus: 'finalized',
+      lastSequence: 9,
+      count: 7,
+      expected: 9,
+      staleEpochEvents: 2,
+      afterCancelEvents: 1,
+    });
+  });
+
   it('returns empty only for an empty declaration', () => {
-    expect(producerSlotsFromRun({ declared_producers: [] })).toEqual([]);
+    expect(producerSlotsFromRun({ declared_producers: [], producers: [] })).toEqual([]);
   });
 });

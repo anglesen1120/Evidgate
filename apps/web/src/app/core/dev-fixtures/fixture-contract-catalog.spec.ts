@@ -45,6 +45,7 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       'run-detail-canceled',
       'run-detail-many-producers',
       'run-detail-no-producers',
+      'run-detail-slot-states',
       'run-detail-release',
       'run-detail-releases',
       'run-detail-release-refused',

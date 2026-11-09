@@ -25,7 +25,9 @@ describe('RunDetailPage producer region', () => {
   const getDecision = vi.fn<(id: string) => Promise<unknown>>();
 
   beforeEach(() => {
-    get.mockReset().mockResolvedValue({ ...run, declared_producers: ['shard-9', 'shard-2'] });
+    get
+      .mockReset()
+      .mockResolvedValue({ ...run, declared_producers: ['shard-9', 'shard-2'], producers: [] });
     listAttempts.mockReset().mockResolvedValue(attemptPage);
     listEvidenceRevisions.mockReset().mockResolvedValue({ items: [], next_cursor: null });
     getDecision.mockReset().mockResolvedValue(pendingBody());
@@ -57,7 +59,7 @@ describe('RunDetailPage producer region', () => {
     return root;
   }
 
-  it('mounts declared ids in shard order and leaves all unserved facts unavailable', async () => {
+  it('mounts declared ids in shard order and leaves slots with no served facts unavailable', async () => {
     const root = await open();
     const region = root.querySelector('section#producers[data-producer-status]');
     expect(region?.querySelector('h2')?.textContent).toBe('Producers');
@@ -74,19 +76,67 @@ describe('RunDetailPage producer region', () => {
     expect(region?.textContent).not.toMatch(/PASS|FAIL|finalized/);
   });
 
+  it('renders the served per-slot facts, with unavailable only for a null expected count', async () => {
+    const base = run.producers[0];
+    if (base === undefined) throw new Error('run fixture must serve a producer slot');
+    get.mockResolvedValue({
+      ...run,
+      declared_producers: ['shard-1', 'shard-2', 'shard-3'],
+      producers: [
+        { ...base, producer_id: 'shard-1' },
+        { ...base, producer_id: 'shard-2', count: 7, stale_epoch_events: 2 },
+        {
+          ...base,
+          producer_id: 'shard-3',
+          identity_state: 'unbound',
+          finalize_status: 'open',
+          last_sequence: 4,
+          count: 4,
+          expected: null,
+        },
+      ],
+    });
+    const root = await open();
+    const row = (id: string) => root.querySelector<HTMLElement>(`tr[data-producer-slot="${id}"]`);
+    const text = (id: string, fact: string) =>
+      row(id)?.querySelector(`td[data-fact="${fact}"]`)?.textContent?.replace(/\s+/g, ' ').trim();
+    expect(text('shard-1', 'identity')).toBe('bound');
+    expect(text('shard-1', 'finalize')).toBe('finalized');
+    expect(text('shard-1', 'last-sequence')).toBe(String(base.last_sequence));
+    expect(text('shard-1', 'count')).toBe(`${base.count} / ${base.expected}`);
+    expect(row('shard-1')?.querySelector('[data-count-mismatch], [data-badge]')).toBeNull();
+    expect(text('shard-2', 'count')).toContain(`7 / ${base.expected}`);
+    expect(row('shard-2')?.querySelector('[data-count-mismatch]')).not.toBeNull();
+    expect(row('shard-2')?.querySelector('[data-badge="stale-epoch"]')?.textContent).toContain(
+      '2 stale-epoch events',
+    );
+    expect(text('shard-3', 'identity')).toBe('unbound');
+    expect(text('shard-3', 'last-sequence')).toBe('4');
+    expect(row('shard-3')?.querySelector('td[data-fact="count"][data-unavailable]')).not.toBeNull();
+    expect(row('shard-3')?.querySelectorAll('td[data-unavailable]')).toHaveLength(1);
+    expect(root.querySelector('#producers [data-completeness]')).toBeNull();
+  });
+
   it('does not infer slots from shard_count or treat a complete run as finalized producers', async () => {
-    get.mockResolvedValue({ ...run, state: 'complete', declared_producers: [], shard_count: 50 });
+    get.mockResolvedValue({
+      ...run,
+      state: 'complete',
+      declared_producers: [],
+      producers: [],
+      shard_count: 50,
+    });
     const root = await open();
     expect(root.querySelectorAll('tr[data-producer-slot]')).toHaveLength(0);
     expect(root.querySelector('#producers [data-state="empty"]')).not.toBeNull();
     expect(root.querySelector('#producers')?.textContent).not.toContain('finalized');
   });
 
-  it('shows the served run-level late count once while every per-slot fact stays unavailable', async () => {
+  it('shows the served run-level late count once while a slot with no served facts stays unavailable', async () => {
     get.mockResolvedValue({
       ...run,
       state: 'canceled',
       declared_producers: ['shard-1', 'shard-2'],
+      producers: [],
       after_cancel_events: 3,
     });
     const root = await open();
@@ -132,6 +182,7 @@ describe('RunDetailPage producer region', () => {
     get.mockResolvedValue({
       ...run,
       declared_producers: Array.from({ length: 256 }, (_, index) => `shard-${index}`),
+      producers: [],
       shard_count: 256,
     });
     listAttempts.mockRejectedValue(new Error('attempts unavailable'));
