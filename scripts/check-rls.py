@@ -101,11 +101,12 @@ DEFINER_AUDIT_EXEMPT = {
         "pre-tenant refusals are security_event (11.5.1-T5)"
     ),
     "evidgate_resolve.session_create": (
-        "created 0045_identity_session_hardening.sql:253 (uuid, uuid, bytea, integer, text, text, timestamptz, "
-        "timestamptz, bytea[] default null, timestamptz default null; the 8-argument 0042:181 and the 9-argument "
-        "form were dropped at 0045:250-251): pre-tenant, no org "
-        "chain to write into — a session is the credential of a person, not of an org; the `auth.login` row that "
-        "names the sign-in is written by `IdentityAuditWriter` (Login/Audit/IdentityAuditWriter.cs:59-95, "
+        "current body created 0065_identity_session_user_lock.sql:52 (uuid, uuid, bytea, integer, text, text, timestamptz, "
+        "timestamptz, bytea[] default null, timestamptz default null; 0065 re-created the 0045:253 body around the per-user "
+        "advisory lock, and the 8- and 9-argument forms were dropped at 0045:250-251): pre-tenant, no org "
+        "chain to write into — a session is the credential of a person, not of an org; called by "
+        "Sessions/SessionStore.cs:115 for the login completion (Login/Completion/CompleteLoginCommandHandler.cs:199); the "
+        "`auth.login` row that names the sign-in is written by `IdentityAuditWriter` (Login/Audit/IdentityAuditWriter.cs:59-95, "
         "Login/Completion/CompleteLoginCommandHandler.cs:137)"
     ),
     "evidgate_resolve.session_user": (
@@ -130,12 +131,13 @@ DEFINER_AUDIT_EXEMPT = {
         "an act inside an org"
     ),
     "evidgate_resolve.session_revoke_all_for_user": (
-        "created 0045_identity_session_hardening.sql:548 (uuid, timestamptz): the membership-lifecycle seam "
+        "current body created 0065_identity_session_user_lock.sql:231 (uuid, timestamptz; first created "
+        "0045_identity_session_hardening.sql:548, unchanged by 0090): the membership-lifecycle seam "
         "`ISessionRevocation` (src/Modules/Evidgate.Modules.Identity.Contracts/ISessionRevocation.cs:3-20) ends "
         "ANOTHER member's live sessions when an org-scoped membership command removes or disables them, so the "
         "calling command's own audit row — `[AuditedAction]` membership.remove / membership.update — covers the "
-        "effect (Sessions/SessionRevocationStore.cs:30-42); there is no C# caller yet (RemoveMember.cs:131-134 "
-        "records the call as 02.1.2-T3's and deliberately does not make it), hence no per-call row of its own"
+        "effect (Sessions/SessionRevocationStore.cs:30-42); its callers are Application/Commands/RemoveMember.cs:139 "
+        "and UpdateMembership.cs:156, each inside its audited transaction, hence no per-call row of its own"
     ),
     "evidgate_resolve.session_require_rotation": (
         "created 0045_identity_session_hardening.sql:572 (uuid, timestamptz): a side effect of a membership or role "
