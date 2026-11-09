@@ -27,7 +27,7 @@ namespace Tenancy.IntegrationTests;
 /// it polls: a sibling case's row would otherwise be claimed here and the attempt count would stop meaning anything.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class IngestUsageMeterTests
+public sealed partial class IngestUsageMeterTests
 {
     /// <summary>The usage task type the ingest commit enqueues, spelled once in production code.</summary>
     private const string MeteringTask = "usage.batch_accepted";

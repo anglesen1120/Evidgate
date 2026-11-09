@@ -2,7 +2,6 @@
 // into the next open month instead of refused, keeps the month it was metered for in original_period, and is audited in
 // the caller's own transaction. A month with no open month after it is the one remaining refusal.
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
-using Evidgate.Modules.Usage.Application.Commands;
 using Evidgate.Modules.Usage.Contracts;
 using Evidgate.Modules.Usage.Domain;
 using Microsoft.Extensions.DependencyInjection;
@@ -146,7 +145,7 @@ public sealed partial class UsageRecordBatchTests
 
         refused.IsSuccess.ShouldBeFalse();
         refused.Error!.Status.ShouldBe(409);
-        refused.Error.Code.ShouldBe(RecordUsageBatchHandler.NoOpenPeriodCode);
+        refused.Error.Code.ShouldBe("no_open_period", "the wire code is the contract's, not a constant read back");
         refused.Error.Message.ShouldBe(
             "the billing period 9999-12 and every period after it are already issued",
             "the refusal names the period and the reason, and nothing else of the batch");

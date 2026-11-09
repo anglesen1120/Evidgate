@@ -18,7 +18,7 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 [Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class UsageLedgerIssuedPeriodTests
+public sealed partial class UsageLedgerIssuedPeriodTests
 {
     private const string MigrationFile = "0094_usage_ledger_late_redate.sql";
 
@@ -43,13 +43,19 @@ public sealed class UsageLedgerIssuedPeriodTests
     // ------------------------------------------------------------------ (a) the migration
 
     [Fact]
-    public async Task Schema_RedateColumnAndItsChecks_Added_WithTheGuardStillInvokerOnly()
+    public async Task Schema_ReplacesThePriorGuard_AndIsJournalled()
     {
         var database = await _fixture.SharedDatabaseAsync();
 
         var journal = await _fixture.ReadJournalAsync(database);
         journal.ShouldContain(row => row.Name == PriorMigration, "the re-date replaces the 0087 guard, it does not drop it");
         journal.ShouldContain(row => row.Name == MigrationFile, "the real runner must journal the re-date");
+    }
+
+    [Fact]
+    public async Task Schema_OriginalPeriodColumn_IsNullableTextWithNoDefault()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
 
         // The column stays nullable with no default: every row that existed before the re-date keeps no provenance.
         (await _fixture.ScalarAsync<string>(
@@ -61,6 +67,12 @@ public sealed class UsageLedgerIssuedPeriodTests
                and column_name = 'original_period'
             """))
             .ShouldBe("text|YES|-");
+    }
+
+    [Fact]
+    public async Task Schema_OriginalPeriodChecks_AreAttachedOnceAndValidated()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var constraint in new[]
         {
@@ -73,7 +85,21 @@ public sealed class UsageLedgerIssuedPeriodTests
                 "select count(*) from pg_catalog.pg_constraint "
                 + $"where conrelid = 'public.usage_ledger_entry'::regclass and conname = '{constraint}'"))
                 .ShouldBe(1, $"the ledger must carry exactly one {constraint}");
+
+            // Each check is added `not valid` and validated in the same migration, so trusting one is what proves the
+            // validate ran instead of leaving the constraint unenforced on every row that predates it.
+            (await _fixture.ScalarAsync<bool>(
+                database,
+                "select convalidated from pg_catalog.pg_constraint "
+                + $"where conrelid = 'public.usage_ledger_entry'::regclass and conname = '{constraint}'"))
+                .ShouldBeTrue($"{constraint} must be validated, not left `not valid`");
         }
+    }
+
+    [Fact]
+    public async Task Schema_BothGuards_AreAttachedOnce()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var (table, trigger) in new[]
         {
@@ -87,6 +113,12 @@ public sealed class UsageLedgerIssuedPeriodTests
                 + $"where tgrelid = 'public.{table}'::regclass and tgname = '{trigger}' and not tgisinternal"))
                 .ShouldBe(1, $"{table} must carry exactly one {trigger} trigger");
         }
+    }
+
+    [Fact]
+    public async Task Schema_GuardFunctions_AreInvokerSearchPathPinnedAndClosed()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
 
         // Both bodies run as their invoker (the app role sees its own org's statement through its tenant policy,
         // the owner through the permissive backfill policy), pin an empty search_path and are closed to PUBLIC.
@@ -105,6 +137,12 @@ public sealed class UsageLedgerIssuedPeriodTests
                   where a.grantee = 0 and a.privilege_type = 'EXECUTE')
             """))
             .ShouldBe(2, "both guard functions are invoker, search_path-pinned and not executable by PUBLIC");
+    }
+
+    [Fact]
+    public async Task Schema_GuardFunctions_GrantNoExecuteToTheAppRole()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var function in new[]
         {
@@ -273,28 +311,6 @@ public sealed class UsageLedgerIssuedPeriodTests
         }
 
         (await RowPeriodAsync(world, Late)).ShouldBe("2026-09|2026-08");
-    }
-
-    [Fact]
-    public async Task Ledger_InsertNamingItsOwnProvenanceWhileMoving_Refused()
-    {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
-        await IssueAsAppAsync(world, world.Org, "2026-09");
-
-        // The guard decides which month a late row lands in, and it is the only side holding that month's lock, so a
-        // row that names its own provenance is refused rather than trusted.
-        await using (var issued = await world.BeginAppScopeAsync())
-        {
-            var row = LedgerRow(world.Org, world.Project, "2026-09", Unique.Slug("supplied"), originalPeriod: "2026-08");
-            var error = await issued.CaptureErrorAsync(row.Sql, row.Parameters);
-
-            error.SqlState.ShouldBe("23514");
-            error.ConstraintName.ShouldBe(SuppliedPeriod);
-        }
-
-        (await world.ScalarAsync<long>(
-            $"select count(*) from public.usage_ledger_entry where org_id = '{world.Org:D}'"))
-            .ShouldBe(0, "the refused insert leaves no row behind");
     }
 
     [Fact]

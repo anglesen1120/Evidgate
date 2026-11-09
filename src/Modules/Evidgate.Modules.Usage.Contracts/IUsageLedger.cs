@@ -28,9 +28,9 @@ public interface IUsageLedger
     /// <c>(org_id, billing_key)</c> is inserted once, so a resent metering event reports its key under
     /// <see cref="UsageBatchResult.Duplicates"/> instead of writing a second row (ruling T43). The rows themselves are one
     /// <c>INSERT … SELECT FROM unnest(…)</c> statement with <c>ON CONFLICT (org_id, billing_key) DO NOTHING</c>
-    /// (ruling T50, plan §8 P2) whatever the batch size, and the projects it names are read once before it, so a batch is
-    /// three statements — never one per entry. The rows are written in billing-key order, so two concurrent batches with
-    /// overlapping keys lock in one order and cannot deadlock.
+    /// (ruling T50, plan §8 P2) whatever the batch size, and the projects it names are read once before it, so a batch
+    /// costs a constant number of statements — never one per entry. The rows are written in billing-key order, so two
+    /// concurrent batches with overlapping keys lock in one order and cannot deadlock.
     /// <para>
     /// An entry that repeats an earlier entry's billing key inside the same request is reported under
     /// <see cref="UsageBatchResult.Duplicates"/> as well: the first occurrence is the one recorded. A key already on

@@ -30,8 +30,8 @@ internal static class UsageModule
         services.AddEvidgateDbContext<UsageDbContext>(typeof(UsageDbContext).Assembly);
         services.TryAddScoped<UsageLedgerStore>();
 
-        // 12.3.1 §5: the in-process surface the metering callers resolve (00 §5.5), and the audit of the one decision
-        // its write path cannot take alone — a late row the insert guard re-dated into an open period.
+        // The in-process surface the metering callers resolve, and the audit of the one decision its write path cannot
+        // take alone — a late row the insert guard re-dated into an open period.
         services.TryAddScoped<LedgerRedateAudit>();
         services.TryAddScoped<IUsageLedger, UsageContracts>();
 

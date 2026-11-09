@@ -338,13 +338,17 @@ internal sealed class UsageLedgerStore(
             await using var reader = await command.ExecuteReaderAsync(CommandBehavior.SequentialAccess, cancellationToken)
                 .ConfigureAwait(false);
 
+            // SequentialAccess only moves forward over the row, so the columns are read in ordinal order.
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
+                var id = reader.GetGuid(0);
+                var billingKey = reader.GetString(1);
+                var period = reader.GetString(2);
                 var originalPeriodIsNull = await reader.IsDBNullAsync(3, cancellationToken).ConfigureAwait(false);
                 recorded.Add(new RecordedUsageRow(
-                    reader.GetGuid(0),
-                    reader.GetString(1),
-                    reader.GetString(2),
+                    id,
+                    billingKey,
+                    period,
                     originalPeriodIsNull ? null : reader.GetString(3)));
             }
         }
