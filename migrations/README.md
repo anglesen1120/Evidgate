@@ -1011,6 +1011,7 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
   exact grantee list.
 - Behaviour fix: `session_revoke_all_admin` now proves the caller and the target again after it holds the
   target's user lock, so a removal that commits during the lock wait refuses the call (`not_found`, nothing
-  revoked or recorded). `session_revoke_one` takes no user lock and has no such window.
+  revoked or recorded). This narrows the window to the statements after the check; it does not make the check
+  and the update one atomic step.
 - Deploy: any order; the helpers and the definers change in one transaction. Rollback: re-state the `0051` and
   `0085` bodies with `create or replace`, then drop the two helpers.

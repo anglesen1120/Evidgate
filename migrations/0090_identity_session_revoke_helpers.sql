@@ -22,15 +22,15 @@
 -- and trusted that answer afterwards. A member removal that committed during the wait (the removal definer takes
 -- the same lock) left a revoked administrator able to end the sessions. The check now runs again right after the
 -- lock is held, in a new statement and therefore a new snapshot; a caller who no longer qualifies gets the same
--- `not_found` every other refusal gets and nothing is revoked or recorded. `session_revoke_one` takes no user
--- lock, so it has no such window.
+-- `not_found` every other refusal gets and nothing is revoked or recorded. This narrows the window to the
+-- statements after the check; it does not make the check and the update one atomic step.
 --
 -- RESULTS: statuses, error codes, audit payloads and entry hashes of every existing case are unchanged. Both
 -- definers keep their signatures, bodies' control flow, `security definer`, pinned `search_path` and
 -- `lock_timeout`; `create or replace` keeps their ACLs and the grants are restated below anyway.
 --
--- GRANTS: the schema default privileges would let the app role call a new function. The audit helper must never
--- be callable by a tenant-facing role (it writes a chain row for any org), so EXECUTE is revoked from PUBLIC and
+-- GRANTS: the audit helper must never be callable by a tenant-facing role (it writes a chain row for any org),
+-- so EXECUTE is restated as revoked from PUBLIC and
 -- from every non-owner role the platform runs as; only the definers' owner reaches the helpers.
 --
 -- DEPLOY ORDER: any order; the definers are replaced in the same transaction that creates the helpers.
@@ -151,14 +151,14 @@ begin
   v_canonical := pg_catalog.format(
     '{"action":"%s","actor_id":"%s","actor_type":"user","after_hash":null,"before_hash":null,'
     || '"created_at":"%s","id":"%s","metadata":%s,'
-    || '"object_id":"%s","object_type":"%s","org_id":"%s","request_id":%s,"seq":%s,"trace_id":%s}',
+    || '"object_id":%s,"object_type":%s,"org_id":"%s","request_id":%s,"seq":%s,"trace_id":%s}',
     'auth.session_revoke_admin',
     p_actor::text,
     pg_catalog.to_char(v_created_at at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
     v_id::text,
     v_metadata_json,
-    p_object_id,
-    p_object_type,
+    pg_catalog.to_jsonb(p_object_id)::text,
+    pg_catalog.to_jsonb(p_object_type)::text,
     p_org_id::text,
     v_request_json,
     v_seq,
@@ -174,7 +174,7 @@ begin
 end
 $$;
 
--- A new function inherits the schema default privileges, which include the app role: close it explicitly.
+-- Restated explicitly (owner-only is the intended ACL, pinned by a test).
 revoke all on function evidgate.session_admin_may_revoke(uuid, uuid, uuid)
   from public, evidgate_app, evidgate_operator, evidgate_worker_sched;
 revoke all on function evidgate.session_revoke_audit_append(uuid, uuid, text, text, jsonb, text, text)
@@ -231,7 +231,7 @@ begin
 
   if v_target_user <> v_actor then
     if p_org_id is null
-       or not evidgate.session_admin_may_revoke(v_actor, p_org_id, v_target_user)
+       or evidgate.session_admin_may_revoke(v_actor, p_org_id, v_target_user) is not true
     then
       return query select 'not_found'::text;
       return;
@@ -309,7 +309,7 @@ begin
   -- Every refusal below is the SAME `not_found`: the target is the caller (who has the self-service route),
   -- the org is absent, the caller does not administer it, or the target is not an active member.
   if p_org_id is null or p_target_user_id is null or p_target_user_id = v_actor
-     or not evidgate.session_admin_may_revoke(v_actor, p_org_id, p_target_user_id)
+     or evidgate.session_admin_may_revoke(v_actor, p_org_id, p_target_user_id) is not true
   then
     return query select 'not_found'::text, 0;
     return;
@@ -321,7 +321,7 @@ begin
 
   -- The answer above predates the lock wait: a removal that committed meanwhile must stop this call, so the
   -- caller and the target are proved again from a fresh snapshot.
-  if not evidgate.session_admin_may_revoke(v_actor, p_org_id, p_target_user_id) then
+  if evidgate.session_admin_may_revoke(v_actor, p_org_id, p_target_user_id) is not true then
     return query select 'not_found'::text, 0;
     return;
   end if;

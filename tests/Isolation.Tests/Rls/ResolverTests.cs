@@ -467,8 +467,6 @@ public sealed class ResolverTests : HarnessTest
         grantees.ShouldBe("evidgate_app:EXECUTE",
             "EXECUTE is held by evidgate_app alone among non-owner roles — never PUBLIC, never the operator or sweep role");
 
-        // The ids are validated and HASHED in the shared helper, which builds the canonical spelling from the
-        // VALIDATED values.
         await using var helper = connection.CreateCommand();
         helper.CommandText =
             """
@@ -478,20 +476,14 @@ public sealed class ResolverTests : HarnessTest
              where n.nspname = 'evidgate' and p.proname = 'session_revoke_audit_append'
             """;
         var helperBody = (string)(await helper.ExecuteScalarAsync(Token))!;
-
+        // Insert, action, chain lock, id shapes and escaped canonical spelling live in the helper.
         helperBody.ShouldContain("insert into public.audit_log", Case.Sensitive);
-        helperBody.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive,
-            "the action 0048's handler wrote from a second transaction");
-        helperBody.ShouldContain("pg_advisory_xact_lock(pg_catalog.hashtext('audit:' || p_org_id::text))", Case.Sensitive,
-            "the same chain lock the application writer takes (AuditTrail.cs AuditSql.AdvisoryLock)");
-        helperBody.ShouldContain("p_request_id ~ '^[!-~]{1,128}$'", Case.Sensitive,
-            "the request id is accepted only in CorrelationNames.IsSafeRequestId's shape");
-        helperBody.ShouldContain("p_trace_id ~ '^[0-9a-f]{32}$'", Case.Sensitive,
-            "the trace id is accepted only as the 32 lowercase hex digits Activity.TraceId.ToString() yields");
-        helperBody.ShouldContain("coalesce(pg_catalog.to_jsonb(v_request_id)::text, 'null')", Case.Sensitive,
-            "the canonical field is the escaped JSON string, or `null`, exactly what AuditHashing hashes");
-        helperBody.ShouldContain("v_request_id, v_trace_id", Case.Sensitive,
-            "the row stores the validated ids in request_id/trace_id");
+        helperBody.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive);
+        helperBody.ShouldContain("pg_advisory_xact_lock(pg_catalog.hashtext('audit:' || p_org_id::text))", Case.Sensitive);
+        helperBody.ShouldContain("p_request_id ~ '^[!-~]{1,128}$'", Case.Sensitive);
+        helperBody.ShouldContain("p_trace_id ~ '^[0-9a-f]{32}$'", Case.Sensitive);
+        helperBody.ShouldContain("coalesce(pg_catalog.to_jsonb(v_request_id)::text, 'null')", Case.Sensitive);
+        helperBody.ShouldContain("v_request_id, v_trace_id", Case.Sensitive);
 
         await using var count = connection.CreateCommand();
         count.CommandText =
