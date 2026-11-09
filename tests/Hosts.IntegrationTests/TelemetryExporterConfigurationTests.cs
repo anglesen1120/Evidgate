@@ -148,9 +148,10 @@ public sealed partial class TelemetryExporterConfigurationTests
 
         EvidgateTelemetry.RecordSessionRevoked(1);
 
-        ProbeRecord(host.Services
+        var logger = host.Services
             .GetRequiredService<ILoggerFactory>()
-            .CreateLogger("Hosts.IntegrationTests.ExporterProbe"));
+            .CreateLogger("Hosts.IntegrationTests.ExporterProbe");
+        ProbeRecord(logger);
     }
 
     /// <summary>

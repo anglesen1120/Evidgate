@@ -315,7 +315,7 @@ redaction_trace_id="$(python3 -c 'import secrets; print(secrets.token_hex(16))')
 # stamp should not decide whether these records are inside the store's window.
 redaction_now_ns="$(python3 -c 'import time; print(time.time_ns())')"
 redaction_end_ns=$((redaction_now_ns + 1000000))
-redaction_resource="{\"attributes\":[{\"key\":\"service.name\",\"value\":{\"stringValue\":\"evg-smoke-redaction-$run_id\"}},{\"key\":\"x-api-key\",\"value\":{\"stringValue\":\"$canary_resource_key\"}}]}"
+redaction_resource="{\"attributes\":[{\"key\":\"service.name\",\"value\":{\"stringValue\":\"evg-smoke-redaction-$run_id\"}},{\"key\":\"deployment.environment\",\"value\":{\"stringValue\":\"smoke\"}},{\"key\":\"x-api-key\",\"value\":{\"stringValue\":\"$canary_resource_key\"}}]}"
 
 # One body carries every assignment shape the collector must mask plus a header
 # pair. The value after TAIL is a different random string, so a mask that runs past
