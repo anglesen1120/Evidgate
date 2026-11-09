@@ -221,7 +221,7 @@ for enc in "Accept-Encoding: gzip" "X-Probe: plain"; do
   echo "GET /$css [$enc] -> Vary: Accept-Encoding"
 done
 api() {
-  # api UPSTREAM_HEADER_LINE EXPECTED_STATUS EXPECTED_CACHE_CONTROL
+  # api UPSTREAM_HEADER_LINE EXPECTED_STATUS EXPECTED_CACHE_CONTROL [REQUEST_HEADER_LINE]
   if [ "$1" != none ]; then
     ( printf "HTTP/1.1 200 OK\r\n%bContent-Length: 2\r\nConnection: close\r\n\r\nok" "$1" | nc -l -s 127.0.0.1 -p 9000 >/dev/null 2>&1 ) &
     # Bound to IPv4 so it shows in /proc/net/tcp. Port 9000 is 0x2328; state 0A is LISTEN. Reading /proc does not connect,
@@ -234,16 +234,24 @@ api() {
   fi
   # The pause keeps nc from exiting on stdin EOF before the proxied answer
   # arrives; a static file is served fast enough not to need it.
-  resp=$( { printf "GET /v1/probe HTTP/1.0\r\nHost: review.example.test\r\n\r\n"; sleep 1; } | timeout 5 nc 127.0.0.1 8080 | tr -d "\r")
+  resp=$( { printf "GET /v1/probe HTTP/1.0\r\nHost: review.example.test\r\n%b\r\n" "${4:-}"; sleep 1; } | timeout 5 nc 127.0.0.1 8080 | tr -d "\r")
   status=$(printf "%s\n" "$resp" | sed -n "1s/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p")
   cc=$(printf "%s\n" "$resp" | sed "/^$/q" | sed -n "s/^[Cc]ache-[Cc]ontrol: //p")
-  [ "$status" = "$2" ] && [ "$cc" = "$3" ] || { echo "FAIL: GET /v1/probe [upstream: $1] gave $status with Cache-Control [$cc], expected $2 with [$3] (one header, no duplicate)"; exit 1; }
-  echo "GET /v1/probe [upstream: $1] -> $status Cache-Control: $cc"
+  [ "$status" = "$2" ] && [ "$cc" = "$3" ] || { echo "FAIL: GET /v1/probe [upstream: $1${4:+; request: $4}] gave $status with Cache-Control [$cc], expected $2 with [$3] (one header, no duplicate)"; exit 1; }
+  echo "GET /v1/probe [upstream: $1${4:+; request: $4}] -> $status Cache-Control: $cc"
 }
 api "Cache-Control: private, max-age=60\r\n" 200 "private, max-age=60"
 api "X-Other: 1\r\n" 200 "no-store"
 api "Cache-Control: no-store\r\n" 200 "no-store"
 api "Cache-Control:\r\nCache-Control:\r\n" 200 "no-store"
+# A credentialed response never keeps a shared-cache directive; an anonymous
+# one and every other upstream value pass verbatim.
+api "Cache-Control: public, max-age=60\r\n" 200 "public, max-age=60"
+api "Cache-Control: public, max-age=60\r\n" 200 "private" "Authorization: Bearer probe\r\n"
+api "Cache-Control: max-age=60, s-maxage=120\r\n" 200 "private" "Cookie: a=b; __Host-evidgate_session=probe\r\n"
+api "Cache-Control: PUBLIC\r\n" 200 "private" "Authorization: Bearer probe\r\n"
+api "Cache-Control: private, max-age=60\r\n" 200 "private, max-age=60" "Authorization: Bearer probe\r\n"
+api "Cache-Control: public, max-age=60\r\n" 200 "public, max-age=60" "Cookie: other=1\r\n"
 api none 502 "no-store"
 # nginx answers a stranger itself, before the Api is asked, and that 401 must
 # not be storable either.
