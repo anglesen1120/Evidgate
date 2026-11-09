@@ -98,8 +98,8 @@ describe('SwitchScopeControl', () => {
     expect(select?.value).toBe('disabled');
   });
 
-  it('keeps the editor visible but disabled under a blocked system scope and names it', () => {
-    const { root } = mount({
+  it('keeps the editor focusable but inert under a blocked system scope and names it', () => {
+    const { fixture, root, emitted } = mount({
       scope: 'tenant',
       row: switchRow('tenant', 'shadow'),
       blockedBy: 'system',
@@ -107,12 +107,23 @@ describe('SwitchScopeControl', () => {
     });
 
     const select = root.querySelector<HTMLSelectElement>('select');
-    expect(select?.disabled).toBe(true);
+    if (select === null) throw new Error('the mode select did not render');
+    expect(select.disabled).toBe(false);
+    expect(select.getAttribute('aria-disabled')).toBe('true');
+    select.focus();
+    expect(document.activeElement).toBe(select);
+
+    const note = field(root, 'note');
+    expect(note?.textContent).toContain('system scope takes precedence');
+    const describedBy = select.getAttribute('aria-describedby') ?? '';
+    expect(describedBy.split(' ')).toContain(note?.id);
+
+    select.value = 'disabled';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(select.value).toBe('shadow');
+    expect(emitted).toEqual([]);
     expect(field(root, 'save')).toBeNull();
-    expect(field(root, 'note')?.textContent).toContain('system scope takes precedence');
-    expect(select?.getAttribute('aria-describedby')).toContain(
-      field(root, 'note')?.id ?? 'missing',
-    );
   });
 
   it('names the tenant scope when it blocks the project scope', () => {
@@ -124,7 +135,9 @@ describe('SwitchScopeControl', () => {
     });
 
     expect(field(root, 'note')?.textContent).toContain('tenant scope takes precedence');
-    expect(root.querySelector<HTMLSelectElement>('select')?.disabled).toBe(true);
+    const select = root.querySelector<HTMLSelectElement>('select');
+    expect(select?.disabled).toBe(false);
+    expect(select?.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('removes the save control without healing:configure while keeping the modes visible', () => {
@@ -134,7 +147,9 @@ describe('SwitchScopeControl', () => {
       editable: false,
     });
 
-    expect(root.querySelector<HTMLSelectElement>('select')?.disabled).toBe(true);
+    const select = root.querySelector<HTMLSelectElement>('select');
+    expect(select?.disabled).toBe(false);
+    expect(select?.getAttribute('aria-disabled')).toBe('true');
     expect(field(root, 'note')?.textContent).toContain('needs permission to configure healing');
     expect(field(root, 'save')).toBeNull();
   });
@@ -209,10 +224,12 @@ describe('SwitchScopeControl', () => {
 
     const status = root.querySelector('[role="status"]');
     expect(status).not.toBeNull();
+    expect(status?.childNodes).toHaveLength(0);
     expect(status?.textContent?.trim()).toBe('');
 
     fixture.componentRef.setInput('saved', true);
     fixture.detectChanges();
+    expect(root.querySelector('[role="status"]')?.childNodes.length).toBeGreaterThan(0);
     expect(root.querySelector('[role="status"]')?.textContent).toContain('Switch saved');
   });
 
@@ -231,8 +248,28 @@ describe('SwitchScopeControl', () => {
     });
 
     expect(field(root, 'save')?.textContent).toContain('Saving');
-    expect(root.querySelector<HTMLSelectElement>('select')?.disabled).toBe(true);
+    const select = root.querySelector<HTMLSelectElement>('select');
+    expect(select?.disabled).toBe(false);
+    expect(select?.getAttribute('aria-disabled')).toBe('true');
     expect(root.querySelector<HTMLTextAreaElement>('textarea')?.readOnly).toBe(true);
+  });
+
+  it('refuses a mode change while the write is in flight and restores the stored value', () => {
+    const { fixture, root, emitted } = mount({
+      scope: 'tenant',
+      row: switchRow('tenant', 'shadow'),
+      editable: true,
+      saving: true,
+    });
+
+    const select = root.querySelector<HTMLSelectElement>('select');
+    if (select === null) throw new Error('the mode select did not render');
+    select.value = 'disabled';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(select.value).toBe('shadow');
+    expect(emitted).toEqual([]);
   });
 
   it.each([
@@ -266,12 +303,48 @@ describe('SwitchScopeControl', () => {
     enterReason(root, 'a'.repeat(2001));
     fixture.detectChanges();
 
-    expect(root.querySelector('[data-healing-reason-too-long]')?.textContent).toContain(
-      'longer than 2000 characters',
-    );
+    expect(root.querySelector('[data-healing-reason-too-long]')?.textContent).toContain('too long');
     expect(root.querySelector<HTMLButtonElement>('[data-healing-save]')?.disabled).toBe(true);
 
     field(root, 'save')?.click();
     expect(emitted).toEqual([]);
+  });
+
+  it('blocks a reason inside the code-point limit but over the serialized byte cap', () => {
+    const { fixture, root, emitted } = mount({
+      scope: 'tenant',
+      row: switchRow('tenant', 'shadow'),
+      editable: true,
+    });
+
+    // 1013 four-byte emoji are 1013 code points but 4098 serialized bytes on a tenant body.
+    enterReason(root, '🙂'.repeat(1013));
+    fixture.detectChanges();
+    expect(root.querySelector('[data-healing-reason-too-long]')?.textContent).toContain('4 KB');
+    expect(root.querySelector<HTMLButtonElement>('[data-healing-save]')?.disabled).toBe(true);
+    field(root, 'save')?.click();
+    expect(emitted).toEqual([]);
+
+    enterReason(root, '🙂'.repeat(1012));
+    fixture.detectChanges();
+    expect(root.querySelector('[data-healing-reason-too-long]')).toBeNull();
+    field(root, 'save')?.click();
+    expect(emitted.map((event) => [...(event.reason ?? '')].length)).toEqual([1012]);
+  });
+
+  it('replaces the server message of a 413 with the reason-specific guidance', () => {
+    const { root } = mount({
+      scope: 'tenant',
+      row: switchRow('tenant', 'shadow'),
+      editable: true,
+      error: refusal('payload_too_large', 413, 'request body too large').error,
+    });
+
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain(
+      'The reason is too large to send. Shorten it.',
+    );
+    expect(root.querySelector('[role="alert"]')?.textContent).not.toContain(
+      'request body too large',
+    );
   });
 });

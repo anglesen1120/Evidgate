@@ -53,9 +53,9 @@
         <select
           hlmInput
           [id]="modeId()"
-          class="w-full min-w-0 min-h-(--eg-control-touch)"
+          class="w-full min-w-0 min-h-(--eg-control-touch) aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
           data-healing-mode
-          [disabled]="!writable() || saving()"
+          [attr.aria-disabled]="!writable() || saving() ? 'true' : null"
           [aria-describedby]="describedBy()"
           (change)="modeChanged($event)"
         >
@@ -101,7 +101,7 @@
 
       @if (error(); as failure) {
         <p [id]="errorId()" role="alert" class="m-0 text-sm text-destructive" data-healing-error>
-          {{ failure.message }}
+          {{ errorText(failure) }}
         </p>
       }
 
@@ -109,9 +109,8 @@
         role="status"
         class="m-0 text-sm empty:hidden"
         [attr.data-healing-saved]="saved() ? '' : null"
-      >
-        {{ saved() ? copy.saved : '' }}
-      </p>
+        [textContent]="saved() ? copy.saved : ''"
+      ></p>
 
       @if (writable()) {
         <button
