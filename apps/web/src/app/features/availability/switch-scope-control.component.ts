@@ -19,11 +19,10 @@ import type { ApiError } from '../../core/http/api-error';
 import { SessionStore } from '../../core/session/session.store';
 import { HEALING_SWITCH_COPY, modeLabel as healingModeLabel } from './healing-switch.copy';
 import type { SettableMode, SwitchScope } from './healing-switch.store';
+import { reasonExceedsLimit } from './reason-limit';
 
 /** `unavailable` is an observation, never a value this editor may offer. */
 const SETTABLE_MODES: readonly SettableMode[] = ['enabled', 'shadow', 'disabled'];
-/** The reason limit in Unicode code points; `String.length` counts UTF-16 units and cuts emoji. */
-const REASON_LIMIT = 2000;
 
 function isSettableMode(value: string | undefined): value is SettableMode {
   return value === 'enabled' || value === 'shadow' || value === 'disabled';
@@ -31,8 +30,8 @@ function isSettableMode(value: string | undefined): value is SettableMode {
 
 /**
  * One scope of the healing switch: its stored row, and — for tenant and project only — the mode
- * editor. The system row is never writable from this page, and an ancestor that takes precedence
- * keeps the editor visible but disabled so the reason it cannot change stays on screen.
+ * editor. A blocking ancestor keeps the editor focusable so the note that names it stays
+ * discoverable, while the store refuses every write such a change would send.
  */
 @Component({
   selector: 'app-switch-scope-control',
@@ -63,8 +62,12 @@ export class SwitchScopeControl {
   protected readonly reason = signal('');
 
   /** Measured on the trimmed value, so trailing whitespace never blocks a save. */
-  protected readonly reasonTooLong = computed(
-    () => [...this.reason().trim()].length > REASON_LIMIT,
+  protected readonly reasonTooLong = computed(() =>
+    reasonExceedsLimit(
+      this.reason(),
+      this.scope() === 'project' ? 'project' : 'tenant',
+      this.session.currentProject()?.id ?? '',
+    ),
   );
 
   protected readonly projectName = computed(() => this.session.currentProject()?.name ?? '');
@@ -135,9 +138,18 @@ export class SwitchScopeControl {
     return Number.isNaN(at.getTime()) ? null : at;
   });
 
+  protected errorText(error: ApiError): string {
+    return error.kind === 'payload_too_large' ? this.copy.reasonTooLarge : error.message;
+  }
+
   protected modeChanged(event: Event): void {
-    const value = (event.target as HTMLSelectElement | null)?.value;
-    if (isSettableMode(value)) this.selectedMode.set(value);
+    const select = event.target;
+    if (!(select instanceof HTMLSelectElement)) return;
+    if (!this.writable() || this.saving() || !isSettableMode(select.value)) {
+      select.value = this.selectedMode();
+      return;
+    }
+    this.selectedMode.set(select.value);
   }
 
   protected reasonChanged(event: Event): void {

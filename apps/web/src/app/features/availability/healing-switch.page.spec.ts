@@ -197,6 +197,57 @@ describe('HealingSwitchPage', () => {
     expect(values).toEqual(['Not observed', 'Not observed']);
   });
 
+  it('labels known dependency observations', async () => {
+    const { root, settle } = mount({
+      answer: resolution({
+        dependency_health: { llm: 'ok', knowledge_store: 'degraded' },
+      }),
+    });
+    await settle();
+
+    const health = [...root.querySelectorAll<HTMLElement>('[data-healing-health]')];
+    expect(health.map((element) => element.textContent?.trim())).toEqual(['Healthy', 'Degraded']);
+  });
+
+  it.each([
+    ['ok', 'Healthy'],
+    ['healthy', 'Healthy'],
+    ['degraded', 'Degraded'],
+    ['unavailable', 'Unavailable'],
+  ] as const)('maps the observation %s to %s', async (value, label) => {
+    const { root, settle } = mount({
+      answer: resolution({ dependency_health: { llm: value, knowledge_store: null } }),
+    });
+    await settle();
+
+    expect(root.querySelector('[data-healing-health="llm"]')?.textContent?.trim()).toBe(label);
+    expect(root.querySelector('[data-healing-health="knowledge-store"]')?.textContent?.trim()).toBe(
+      'Not observed',
+    );
+  });
+
+  it('shows an unrecognised observation verbatim under a label that says so', async () => {
+    const { root, settle } = mount({
+      answer: resolution({
+        dependency_health: { llm: 'warming-up', knowledge_store: 'surprising' },
+      }),
+    });
+    await settle();
+
+    const llm = root.querySelector<HTMLElement>('[data-healing-health="llm"]');
+    const wrapper = llm?.querySelector('[data-healing-health-unrecognised]');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper?.textContent).toContain('Unrecognised value:');
+    expect(wrapper?.querySelector('[data-healing-health-value]')?.textContent?.trim()).toBe(
+      'warming-up',
+    );
+    expect(
+      root.querySelector(
+        '[data-healing-health="knowledge-store"] [data-healing-health-unrecognised]',
+      )?.textContent,
+    ).toContain('surprising');
+  });
+
   it('disables both lower scopes under a disabled system row and names it', async () => {
     const { root, settle } = mount({
       answer: resolution({
@@ -207,8 +258,10 @@ describe('HealingSwitchPage', () => {
     });
     await settle();
 
-    expect(selectOf(root, 'tenant')?.disabled).toBe(true);
-    expect(selectOf(root, 'project')?.disabled).toBe(true);
+    expect(selectOf(root, 'tenant')?.disabled).toBe(false);
+    expect(selectOf(root, 'tenant')?.getAttribute('aria-disabled')).toBe('true');
+    expect(selectOf(root, 'project')?.disabled).toBe(false);
+    expect(selectOf(root, 'project')?.getAttribute('aria-disabled')).toBe('true');
     expect(saveButton(root, 'tenant')).toBeNull();
     expect(saveButton(root, 'project')).toBeNull();
     expect(scopeCard(root, 'tenant')?.querySelector('[data-healing-note]')?.textContent).toContain(
@@ -226,7 +279,9 @@ describe('HealingSwitchPage', () => {
     await settle();
 
     expect(selectOf(root, 'tenant')?.disabled).toBe(false);
-    expect(selectOf(root, 'project')?.disabled).toBe(true);
+    expect(selectOf(root, 'tenant')?.hasAttribute('aria-disabled')).toBe(false);
+    expect(selectOf(root, 'project')?.disabled).toBe(false);
+    expect(selectOf(root, 'project')?.getAttribute('aria-disabled')).toBe('true');
     expect(scopeCard(root, 'project')?.querySelector('[data-healing-note]')?.textContent).toContain(
       'tenant scope takes precedence',
     );
@@ -242,8 +297,10 @@ describe('HealingSwitchPage', () => {
     const modes = [...root.querySelectorAll('option')].map((option) => option.value);
     expect(modes).not.toContain('unavailable');
     expect(new Set(modes)).toEqual(new Set(['enabled', 'shadow', 'disabled']));
-    expect(selectOf(root, 'tenant')?.disabled).toBe(true);
-    expect(selectOf(root, 'project')?.disabled).toBe(true);
+    expect(selectOf(root, 'tenant')?.disabled).toBe(false);
+    expect(selectOf(root, 'tenant')?.getAttribute('aria-disabled')).toBe('true');
+    expect(selectOf(root, 'project')?.disabled).toBe(false);
+    expect(selectOf(root, 'project')?.getAttribute('aria-disabled')).toBe('true');
     expect(saveButton(root, 'tenant')).toBeNull();
   });
 
@@ -259,7 +316,8 @@ describe('HealingSwitchPage', () => {
 
     expect(saveButton(root, 'tenant')).toBeNull();
     expect(saveButton(root, 'project')).toBeNull();
-    expect(selectOf(root, 'tenant')?.disabled).toBe(true);
+    expect(selectOf(root, 'tenant')?.disabled).toBe(false);
+    expect(selectOf(root, 'tenant')?.getAttribute('aria-disabled')).toBe('true');
     expect(scopeCard(root, 'tenant')?.querySelector('[data-healing-note]')?.textContent).toContain(
       'needs permission to configure healing',
     );
@@ -315,6 +373,21 @@ describe('HealingSwitchPage', () => {
       'Healing configuration is not granted.',
     );
     expect(scopeCard(root, 'project')?.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('explains a 413 on the scope with the reason-specific guidance', async () => {
+    const { root, data, settle } = mount({
+      answer: resolution({ tenant: switchRow('tenant', 'shadow') }),
+    });
+    data.writeFailure = refusal('payload_too_large', 413, 'request body too large');
+    await settle();
+
+    saveButton(root, 'tenant')?.click();
+    await settle();
+
+    const alert = scopeCard(root, 'tenant')?.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain('The reason is too large to send. Shorten it.');
+    expect(alert?.textContent).not.toContain('request body too large');
   });
 
   it('refetches the resolution after a 412 and shows its message', async () => {
@@ -403,7 +476,7 @@ describe('HealingSwitchPage', () => {
   it('has zero WCAG 2.2 AA violations in jsdom', async () => {
     const { root, settle } = mount({
       answer: resolution({
-        system: switchRow('system', 'shadow', { set_by: null, reason: null }),
+        system: switchRow('system', 'disabled', { set_by: null, reason: null }),
         tenant: switchRow('tenant', 'shadow'),
       }),
     });
@@ -411,7 +484,9 @@ describe('HealingSwitchPage', () => {
     document.body.append(root);
     try {
       const result = await axe.run(root, AXE_JSDOM_RUN_OPTIONS);
-      // A scan that never reached the editors would pass vacuously.
+      // A scan that never reached the editors would pass vacuously; this answer leaves both
+      // lower editors inert through `aria-disabled`, which axe must also accept.
+      expect(root.querySelectorAll('select[aria-disabled="true"]')).toHaveLength(2);
       expect(result.passes.some((rule) => rule.id === 'select-name')).toBe(true);
       expect(formatViolations(unexceptedViolations(result.violations, A11Y_EXCEPTIONS))).toEqual(
         [],

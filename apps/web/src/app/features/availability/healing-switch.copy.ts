@@ -18,6 +18,10 @@ export const HEALING_SWITCH_COPY = {
   dependencyLlm: $localize`:@@healingswitch.dependency-llm:Model endpoint`,
   dependencyKnowledge: $localize`:@@healingswitch.dependency-knowledge:Knowledge store`,
   notObserved: $localize`:@@healingswitch.not-observed:Not observed`,
+  healthHealthy: $localize`:@@healingswitch.health-healthy:Healthy`,
+  healthDegraded: $localize`:@@healingswitch.health-degraded:Degraded`,
+  healthUnavailable: $localize`:@@healingswitch.health-unavailable:Unavailable`,
+  healthUnrecognised: $localize`:@@healingswitch.health-unrecognised:Unrecognised value:`,
   healthHint: $localize`:@@healingswitch.health-hint:Not observed means no health probe has reported yet. It is not a healthy signal.`,
   scopeSystem: $localize`:@@healingswitch.scope-system:System scope`,
   scopeTenant: $localize`:@@healingswitch.scope-tenant:Tenant scope`,
@@ -37,8 +41,9 @@ export const HEALING_SWITCH_COPY = {
   notProvided: $localize`:@@healingswitch.not-provided:—`,
   noRow: $localize`:@@healingswitch.no-row:No switch is stored at this scope.`,
   reasonLabel: $localize`:@@healingswitch.reason-label:Reason (optional)`,
-  reasonHint: $localize`:@@healingswitch.reason-hint:Up to 2000 characters. The reason is stored with the change.`,
-  reasonTooLong: $localize`:@@healingswitch.reason-too-long:The reason is longer than 2000 characters. Shorten it to save.`,
+  reasonHint: $localize`:@@healingswitch.reason-hint:Up to 2000 characters, and no more than 4 KB once sent. The reason is stored with the change.`,
+  reasonTooLong: $localize`:@@healingswitch.reason-too-long:The reason is too long. Keep it within 2000 characters and 4 KB once sent.`,
+  reasonTooLarge: $localize`:@@healingswitch.reason-too-large:The reason is too large to send. Shorten it.`,
   modeHint: $localize`:@@healingswitch.mode-hint:The most restrictive scope wins. Choose one of the three modes.`,
   save: $localize`:@@healingswitch.save:Save switch`,
   saving: $localize`:@@healingswitch.saving:Saving…`,
@@ -61,5 +66,23 @@ export function modeLabel(mode: HealingMode): string {
       return HEALING_SWITCH_COPY.modeDisabled;
     case 'unavailable':
       return HEALING_SWITCH_COPY.modeUnavailable;
+  }
+}
+
+/**
+ * The contract leaves `dependency_health` open, so a value this build does not know is shown as
+ * the server sent it instead of being guessed into a healthy or unavailable label.
+ */
+export function healthLabel(value: string | null): string | null {
+  switch (value) {
+    case 'ok':
+    case 'healthy':
+      return HEALING_SWITCH_COPY.healthHealthy;
+    case 'degraded':
+      return HEALING_SWITCH_COPY.healthDegraded;
+    case 'unavailable':
+      return HEALING_SWITCH_COPY.healthUnavailable;
+    default:
+      return null;
   }
 }
