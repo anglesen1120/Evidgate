@@ -6,6 +6,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Modules;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Evidence.Domain;
 using Evidgate.Modules.Evidence.Infrastructure.Persistence;
+using Evidgate.Modules.Orchestrator.Contracts;
 using FluentValidation;
 using Mediator;
 using Microsoft.EntityFrameworkCore;
@@ -124,7 +125,7 @@ internal sealed partial class CreateArtifactRecordHandler(
             return Result.Failure<ArtifactRecord>(EvidenceErrors.ProjectRequired);
         }
 
-        var record = await minter.MintAsync(
+        var minted = await minter.MintAsync(
             scope.OrgId,
             projectId,
             command.RunId,
@@ -135,7 +136,12 @@ internal sealed partial class CreateArtifactRecordHandler(
             command.DeclaredBytes,
             command.Checksum,
             cancellationToken).ConfigureAwait(false);
+        if (!minted.IsSuccess)
+        {
+            return Result.Failure<ArtifactRecord>(minted.Error!);
+        }
 
+        var record = minted.Value!;
         audit.Describe(new AuditObject("artifact", record.ArtifactId.ToString("D")));
 
         return Result.Success(record, 201);
@@ -148,21 +154,28 @@ internal sealed partial class CreateArtifactRecordHandler(
 /// throws (<c>NpgsqlTenantScopeFactory</c>) — so the two handlers call this service instead, and each describes
 /// its own single audit entry, so exactly one audit row is written per request.
 /// <para>
-/// It resolves <c>default_sensitivity</c> from <c>artifact_kind_policy</c> with the
+/// It is the one choke point of every artifact insert, so it refuses a run that is not visible or that belongs to
+/// another project than the artifact's (the database key is <c>(org_id, run_id)</c> only, so it cannot). It then
+/// resolves <c>default_sensitivity</c> from <c>artifact_kind_policy</c> with the
 /// <see cref="ArtifactSensitivity.ForKind"/> fallback, mints the server-chosen final key, and inserts the row in
 /// state <c>pending_upload</c> with <c>scan_state</c> <c>pending</c>, no attempt and the declared size persisted
-/// (06.1.2-T2 compares it at <c>complete</c>). The caller has already validated the shape and the run scope.
+/// (06.1.2-T2 compares it at <c>complete</c>). The caller has already validated the shape.
 /// </para>
 /// </summary>
-internal sealed class ArtifactMinter(ITenantDbContextFactory<EvidenceDbContext> contexts)
+internal sealed class ArtifactMinter(
+    ITenantDbContextFactory<EvidenceDbContext> contexts,
+    IRunPlanReader runs)
 {
     /// <summary>
-    /// Mints one artifact row for the ambient tenant scope; returns its id, final key and state.
+    /// Mints one artifact row for the ambient tenant scope; returns its id, final key and state, or
+    /// <see cref="EvidenceErrors.RunNotFound"/> / <see cref="EvidenceErrors.ArtifactRunProjectMismatch"/>.
     /// <paramref name="sensitivity"/> lets a caller that already read the kind policy (06.1.2's upload-url
     /// handler) pass its <c>default_sensitivity</c> in, so the row is not read twice; when it is null the policy is
-    /// read here, which is the only path <see cref="CreateArtifactRecordHandler"/> takes.
+    /// read here. <paramref name="knownRun"/> must be the <c>FindAsync</c> answer for this same run id and
+    /// execution key; it lets a caller that already read the run skip a second read, and its project is still
+    /// compared here.
     /// </summary>
-    public async ValueTask<ArtifactRecord> MintAsync(
+    public async ValueTask<Result<ArtifactRecord>> MintAsync(
         Guid orgId,
         Guid projectId,
         Guid runId,
@@ -173,8 +186,16 @@ internal sealed class ArtifactMinter(ITenantDbContextFactory<EvidenceDbContext> 
         long declaredBytes,
         string checksum,
         CancellationToken cancellationToken,
-        string? sensitivity = null)
+        string? sensitivity = null,
+        RunPlanLookup? knownRun = null)
     {
+        var run = knownRun
+            ?? await runs.FindAsync(runId, executionKey, cancellationToken).ConfigureAwait(false);
+        if (RunRefusal(run, projectId) is { } refusal)
+        {
+            return Result.Failure<ArtifactRecord>(refusal);
+        }
+
         await using var context = contexts.Create();
 
         var resolved = sensitivity ?? await context.KindPolicies
@@ -209,6 +230,11 @@ internal sealed class ArtifactMinter(ITenantDbContextFactory<EvidenceDbContext> 
         // unique violation is left to surface as an infrastructure fault rather than masked as a 409.
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return new ArtifactRecord(artifactId, objectKey, ArtifactState.PendingUpload);
+        return Result.Success(new ArtifactRecord(artifactId, objectKey, ArtifactState.PendingUpload));
     }
+
+    private static Error? RunRefusal(RunPlanLookup? run, Guid projectId) =>
+        run is null ? EvidenceErrors.RunNotFound
+        : run.ProjectId != projectId ? EvidenceErrors.ArtifactRunProjectMismatch
+        : null;
 }

@@ -235,7 +235,7 @@ internal sealed class RequestArtifactUploadUrlHandler(
         // structurally unreachable on this path. The resolved policy above already carries the sensitivity — the
         // project's row when there is one, the kind's static default otherwise — so the minter is spared a second
         // read of it (F2).
-        var record = await minter.MintAsync(
+        var minted = await minter.MintAsync(
             scope.OrgId,
             projectId,
             command.RunId,
@@ -246,7 +246,14 @@ internal sealed class RequestArtifactUploadUrlHandler(
             command.DeclaredBytes,
             command.Checksum,
             cancellationToken,
-            policy.DefaultSensitivity).ConfigureAwait(false);
+            policy.DefaultSensitivity,
+            run).ConfigureAwait(false);
+        if (!minted.IsSuccess)
+        {
+            return Result.Failure<UploadUrlResponse>(minted.Error!);
+        }
+
+        var record = minted.Value!;
 
         // (6) Presign the staging key. The URL is a bearer credential: it is never logged, thrown or audited (S3).
         // The idempotency store keeps this response body — including the URL — for the key's lifetime, which is why
