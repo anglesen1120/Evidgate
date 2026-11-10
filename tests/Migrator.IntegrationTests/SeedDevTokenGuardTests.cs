@@ -189,6 +189,7 @@ public sealed partial class SeedDevTokenGuardTests
         var run = new Thread(() => result[0] = SeedDevTokenHarness.Run(["seed-dev", "--with-token"], variables));
         run.Start();
 
+        var finished = false;
         try
         {
             // The second run is really in the lock wait, so the hold below is what the assertion measures; then the
@@ -199,10 +200,12 @@ public sealed partial class SeedDevTokenGuardTests
         }
         finally
         {
+            // Released and joined on every exit, so a cancelled or failed test leaves no seed thread behind.
             await holder.DisposeAsync();
+            finished = run.Join(TimeSpan.FromSeconds(60));
         }
 
-        run.Join(TimeSpan.FromSeconds(60)).ShouldBeTrue("the second run did not finish after the lock was released");
+        finished.ShouldBeTrue("the second run did not finish after the lock was released");
 
         result[0].ExitCode.ShouldBe(MigratorExitCodes.Success, result[0].Error);
         SeedDevTokenHarness.CountOf(result[0].Output, SeedDevTokenHarness.DevTokenLine).ShouldBe(1);

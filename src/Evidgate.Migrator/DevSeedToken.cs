@@ -374,8 +374,8 @@ internal static class DevSeedToken
             try
             {
                 // No command timeout on the wait: a run that arrives second must wait for the holder's session rather
-                // than fail after Npgsql's 30 s default. The session owns the lock, so the wait can only end with the
-                // holder's run or the caller's cancellation.
+                // than fail after Npgsql's 30 s default. The session owns the lock, so the wait ends when the holder's
+                // session ends, or when a caller that passes a token cancels it.
                 await LockAsync(connection, "select pg_advisory_lock(@key)", cancellationToken, timeoutSeconds: 0)
                     .ConfigureAwait(false);
             }
