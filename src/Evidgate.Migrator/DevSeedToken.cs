@@ -366,12 +366,18 @@ internal static class DevSeedToken
 
         private SeedGuard(NpgsqlConnection connection) => _connection = connection;
 
-        internal static async Task<SeedGuard> AcquireAsync(NpgsqlDataSource dataSource)
+        internal static async Task<SeedGuard> AcquireAsync(
+            NpgsqlDataSource dataSource,
+            CancellationToken cancellationToken = default)
         {
-            var connection = await dataSource.OpenConnectionAsync().ConfigureAwait(false);
+            var connection = await dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                await LockAsync(connection, "select pg_advisory_lock(@key)").ConfigureAwait(false);
+                // No command timeout on the wait: a run that arrives second must wait for the holder's session rather
+                // than fail after Npgsql's 30 s default. The session owns the lock, so the wait ends when the holder's
+                // session ends, or when a caller that passes a token cancels it.
+                await LockAsync(connection, "select pg_advisory_lock(@key)", cancellationToken, timeoutSeconds: 0)
+                    .ConfigureAwait(false);
             }
             catch
             {
@@ -387,8 +393,10 @@ internal static class DevSeedToken
             try
             {
                 // Released before the connection returns to the pool: a pooled session outlives the run, and its lock
-                // would otherwise outlive the process that took it.
-                await LockAsync(_connection, "select pg_advisory_unlock(@key)").ConfigureAwait(false);
+                // would otherwise outlive the process that took it. The unlock never waits on another session, so it
+                // keeps the connection's command timeout rather than the lock command's unbounded one.
+                await LockAsync(_connection, "select pg_advisory_unlock(@key)", CancellationToken.None)
+                    .ConfigureAwait(false);
             }
             catch (Exception exception) when (IsGone(exception))
             {
@@ -416,12 +424,21 @@ internal static class DevSeedToken
         private static bool IsGone(Exception exception) =>
             exception is NpgsqlException or InvalidOperationException;
 
-        private static async Task LockAsync(NpgsqlConnection connection, string sql)
+        private static async Task LockAsync(
+            NpgsqlConnection connection,
+            string sql,
+            CancellationToken cancellationToken,
+            int? timeoutSeconds = null)
         {
             await using var command = connection.CreateCommand();
             command.CommandText = sql;
+            if (timeoutSeconds is { } seconds)
+            {
+                command.CommandTimeout = seconds;
+            }
+
             command.Parameters.AddWithValue("key", Key);
-            await command.ExecuteNonQueryAsync().ConfigureAwait(false);
+            await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
     }
 }
