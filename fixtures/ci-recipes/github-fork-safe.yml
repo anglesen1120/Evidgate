@@ -17,9 +17,9 @@
 #                                 the comment after it names the release tag.
 #   R3-token-permissions        - the workflow-level GITHUB_TOKEN has no permission at all;
 #                                 each job asks for the least it needs.
-#   R4-add-mask                 - no run step writes a derived value to GITHUB_ENV,
-#                                 GITHUB_OUTPUT or GITHUB_STATE; the Evidgate CLI writes the
-#                                 minted token to GITHUB_ENV only after ::add-mask::.
+#   R4-add-mask                 - a run step writes a derived value to GITHUB_ENV,
+#                                 GITHUB_OUTPUT or GITHUB_STATE only after ::add-mask::; the
+#                                 Evidgate CLI does the same for the minted token.
 #   R5-no-long-lived-credential - no secrets reference and no stored Evidgate credential: the
 #                                 stored settings are configuration VARIABLES (EVIDGATE_API_URL,
 #                                 and the single-use EVIDGATE_BINDING_CHALLENGE until the
@@ -125,9 +125,31 @@ jobs:
       # ::add-mask:: for the token, then appends EVIDGATE_CI_TOKEN to GITHUB_ENV. No
       # credential is passed as an argument.
       - run: 'npx --yes --package @evidgate/cli@0.0.0 -- evidgate auth login --github-env'
-      # The artifact is data: the API validates it like any other upload.
-      - run: 'npx --yes --package @evidgate/cli@0.0.0 -- evidgate manifests upload --file evidgate-results/evidgate-manifest.json'
-      # Not yet available - these steps land with their owning tasks:
-      #   runs create (04.2.2-T2)
-      #   events send + runs finalize (04.2.3-T1/T2)
-      #   artifacts upload (04.2.4-T1)
+      # The artifact is data: the API validates it like any other upload. The ids
+      # are masked before they reach GITHUB_OUTPUT, because R4 refuses an unmasked
+      # derived value in a command file.
+      - id: 'manifest'
+        run: |
+          out=$(npx --yes --package @evidgate/cli@0.0.0 -- evidgate manifests upload --file evidgate-results/evidgate-manifest.json --json)
+          manifest_id=$(printf '%s' "$out" | jq -r .manifest_id)
+          manifest_hash=$(printf '%s' "$out" | jq -r .manifest_hash)
+          echo "::add-mask::$manifest_id"
+          echo "::add-mask::$manifest_hash"
+          echo "manifest_id=$manifest_id" >> "$GITHUB_OUTPUT"
+          echo "manifest_hash=$manifest_hash" >> "$GITHUB_OUTPUT"
+      # Create the run for that manifest. The ids travel in the step env, never
+      # interpolated into the script; --json is what makes run_id machine-readable.
+      - id: 'run'
+        env:
+          MANIFEST_ID: '${{ steps.manifest.outputs.manifest_id }}'
+          MANIFEST_HASH: '${{ steps.manifest.outputs.manifest_hash }}'
+        run: |
+          out=$(npx --yes --package @evidgate/cli@0.0.0 -- evidgate runs create --manifest-id "$MANIFEST_ID" --manifest-hash "$MANIFEST_HASH" --ci-ref "$GITHUB_REF" --json)
+          run_id=$(printf '%s' "$out" | jq -r .run_id)
+          echo "::add-mask::$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+      # Not run by this upload-only job: events send and runs finalize (04.2.3-T1/T2)
+      # drain the spool of the job that produced the evidence, and artifacts upload
+      # (04.2.4-T1) needs the report files, which this artifact does not carry. A
+      # workflow that runs the suite in this job adds both; see
+      # docs/quickstart/github-actions.yml and fixtures/fork-pr-repo/.
