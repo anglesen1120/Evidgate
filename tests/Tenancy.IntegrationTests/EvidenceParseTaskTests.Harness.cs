@@ -163,15 +163,19 @@ public sealed partial class EvidenceParseTaskTests
 
     /// <summary>
     /// The call the task consumer makes, minus the queue: the production handler over this tenant's scope, invoked
-    /// through the same <c>TaskHandlerAdapter</c> the consumer uses, so the payload binding is the consumer's.
+    /// through the same <c>TaskHandlerAdapter</c> the consumer uses, so the payload binding is the consumer's. A
+    /// <paramref name="commit"/> of <see langword="false"/> disposes the scope uncommitted, which is the rollback a
+    /// crashed worker performs. The scope it returns records what the attempt registered for its commit, which is how
+    /// a test tells a deferred measurement from one the attempt took inside the open transaction.
     /// </summary>
-    private static async Task InvokeAsync(
+    private static async Task<RecordingTenantScope> InvokeAsync(
         World world,
         Guid artifactId,
         StubParseRunner runner,
         CancellationToken? cancellationToken = null,
         ILogger<ParseArtifactTaskHandler>? logger = null,
-        IOptions<IngestionLimits>? limits = null)
+        IOptions<IngestionLimits>? limits = null,
+        bool commit = true)
     {
         var token = cancellationToken ?? Token;
 
@@ -188,9 +192,23 @@ public sealed partial class EvidenceParseTaskTests
         var payload = JsonSerializer.Serialize(new { artifact_id = artifactId });
         var factory = world.Host.Services.GetRequiredService<ITenantScopeFactory>();
 
-        await using var scope = await factory.BeginAsync(world.Org, world.Project, cancellationToken: token);
-        await invoker.InvokeAsync(payload, scope, token);
-        await scope.CommitAsync(token);
+        var scope = new RecordingTenantScope(
+            await factory.BeginAsync(world.Org, world.Project, cancellationToken: token));
+        try
+        {
+            await invoker.InvokeAsync(payload, scope, token);
+
+            if (commit)
+            {
+                await scope.CommitAsync(token);
+            }
+        }
+        finally
+        {
+            await scope.DisposeAsync();
+        }
+
+        return scope;
     }
 
     /// <summary>One freeze of the world's run with no requirements, through the production service.</summary>

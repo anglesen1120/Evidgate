@@ -221,7 +221,7 @@ internal sealed partial class ParseArtifactTaskHandler(
             // store is excluded by the filter: that is the host's fault (shutdown), never a property of the artifact.
             LogOversizeRejected(logger, artifact.Id, maxBytes);
             EvidgateTelemetry.RecordIngestCapExceeded(ReportBytesCap);
-            await RejectAsync(context, artifact, ArtifactFailureCode.TooLarge, cancellationToken).ConfigureAwait(false);
+            await RejectAsync(context, artifact, ArtifactFailureCode.TooLarge, scope, cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -256,7 +256,7 @@ internal sealed partial class ParseArtifactTaskHandler(
                 }
 
                 LogChildRejected(logger, artifact.Id, reported, succeeded.ChildExitCode);
-                await RejectAsync(context, artifact, reported, cancellationToken).ConfigureAwait(false);
+                await RejectAsync(context, artifact, reported, scope, cancellationToken).ConfigureAwait(false);
             }
 
             return;
@@ -270,7 +270,7 @@ internal sealed partial class ParseArtifactTaskHandler(
         }
 
         LogRejected(logger, artifact.Id, reason, failed.ChildExitCode, failed.StderrExcerpt);
-        await RejectAsync(context, artifact, reason, cancellationToken).ConfigureAwait(false);
+        await RejectAsync(context, artifact, reason, scope, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -280,6 +280,7 @@ internal sealed partial class ParseArtifactTaskHandler(
     /// <param name="context">This attempt's write model, holding the tracked row.</param>
     /// <param name="artifact">The row this attempt read.</param>
     /// <param name="reason">The failure code the run derived.</param>
+    /// <param name="scope">This attempt's tenant scope, whose commit the failure measurement waits for.</param>
     /// <param name="cancellationToken">Cancels the write.</param>
     /// <remarks>
     /// The <c>UPDATE</c>'s predicate is the version token the entity's concurrency mapping appends (EvidenceDbContext:
@@ -296,6 +297,7 @@ internal sealed partial class ParseArtifactTaskHandler(
         EvidenceDbContext context,
         Artifact artifact,
         string reason,
+        ITenantScope scope,
         CancellationToken cancellationToken)
     {
         context.Entry(artifact).CurrentValues.SetValues(artifact.MarkRejected(reason));
@@ -334,6 +336,11 @@ internal sealed partial class ParseArtifactTaskHandler(
             throw new InvalidOperationException(
                 "the parse verdict could not be written because the artifact changed while it was parsed, so the task is retried");
         }
+
+        // Only the attempt whose rejection committed counts it: a stored verdict and a row that left the
+        // parseable set both returned above, and their writer owns the one sample for this artifact. The measurement
+        // waits for the commit this attempt does not own, so a rolled-back verdict records nothing.
+        scope.AfterCommit(() => EvidgateTelemetry.RecordArtifactFailure("parse", reason));
     }
 
     /// <summary>True when the artifact may still be parsed: <c>uploaded</c> or <c>ready</c>.</summary>

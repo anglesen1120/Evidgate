@@ -57,6 +57,7 @@
     <Compile Include="..\Shared\ContractSchemaWarmup.cs" Link="ContractSchemaWarmup.cs" />
     <Compile Include="..\Shared\PurgeLeaseGuardTestExtensions.cs" Link="PurgeLeaseGuardTestExtensions.cs" />
     <Compile Include="..\Shared\TemplateDatabase.cs" Link="TemplateDatabase.cs" />
+    <Compile Include="..\Shared\LeanLibraryMetrics.cs" Link="LeanLibraryMetrics.cs" />
     <Compile Include="..\Shared\TransientS3Retry.cs" Link="TransientS3Retry.cs" />
   </ItemGroup>
   <ItemGroup>

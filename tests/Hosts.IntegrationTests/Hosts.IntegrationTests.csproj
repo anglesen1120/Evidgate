@@ -12,6 +12,8 @@
     <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="Testcontainers.PostgreSQL" />
+    <!-- The metrics catalogue is YAML; the test parses the committed file with the pinned parser. -->
+    <PackageReference Include="YamlDotNet" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Evidgate.Api\Evidgate.Api.csproj" />

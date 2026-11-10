@@ -117,6 +117,8 @@ internal sealed class RecordUsageBatchHandler(
 
         var result = UsageBatchOutcome.Merge(batch, write.Inserted);
 
+        UsageMetering.Schedule(scopes.Require(), batch.Rows, result.Inserted);
+
         // (e) Audit: the rows this call wrote, or nothing at all when every key was already on file. A re-dated row is
         // audited before the batch object is described, because the last description is the one the command's own
         // audit entry carries and that entry must name the rows, not the move.

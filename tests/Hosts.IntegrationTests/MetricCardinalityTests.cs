@@ -2,8 +2,11 @@ using System.Collections.Concurrent;
 using System.Diagnostics.Metrics;
 using System.Reflection;
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.Persistence;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -59,6 +62,8 @@ public sealed class MetricCardinalityTests
         "cap",
         "issue",
         "kind",
+        "stage",
+        "metric",
     };
 
     /// <summary>Id-shaped key names that must never become a label (they would be one series per row).</summary>
@@ -107,7 +112,11 @@ public sealed class MetricCardinalityTests
 
         // The dispatcher creates its own meter and instruments in its constructor; publishing them
         // is what proves its two instruments sit on a watched meter.
-        using var dataSource = NpgsqlDataSource.Create(DispatcherProbeConnectionString);
+        using var dataSource = new NpgsqlDataSourceBuilder(DispatcherProbeConnectionString)
+        {
+            // A fixed name, like the production builders: an unnamed pool reports its DSN as the label.
+            Name = "metric_probe",
+        }.Build();
         int measurementsInvoked;
         using (new OutboxDispatcher(
                    dataSource,
@@ -265,6 +274,12 @@ public sealed class MetricCardinalityTests
             return 2L;
         }
 
+        // The usage-units counter adds a fractional quantity, so 2 is a valid committed amount.
+        if (type == typeof(double))
+        {
+            return 2d;
+        }
+
         // The apply batch-size histogram counts changes rather than tagging them; 2 is inside its 1..200 range.
         if (type == typeof(int))
         {
@@ -290,5 +305,76 @@ public sealed class MetricCardinalityTests
             $"the parameter '{parameter.Name}' of a public recording method has type {type}, which this "
             + "probe has no closed-vocabulary value for: add one so the new tag vocabulary is verified "
             + "here rather than discovered in the billing dashboard");
+    }
+
+    /// <summary>
+    /// S1: Npgsql reports <c>db.client.connection.pool.name</c> from the data source's own name, and the
+    /// driver's default is the connection string without its password — so the host, the user and the
+    /// database would become a metric label, one series per deployment. The app-role pool is built by the
+    /// production wiring, and both the name and the label it exports are a fixed token, never the DSN this
+    /// test hands the builder.
+    /// </summary>
+    [Fact]
+    public void TheAppRolePool_IsLabelledWithAFixedToken_NotItsConnectionString()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["EVIDGATE:Database:ConnectionString"] = DispatcherProbeConnectionString,
+            })
+            .Build();
+        services.AddEvidgatePersistence(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        var dataSource = provider.GetRequiredService<NpgsqlDataSource>();
+
+        // The production builder names the pool: the driver's default is the connection string, which
+        // would put the host, the user and the database on a label. The data source is touched once so
+        // the pool exists before the instruments are observed.
+        Assert.NotNull(dataSource);
+
+        using var listener = PoolNames(out var reported);
+        listener.RecordObservableInstruments();
+
+        Assert.Contains(PersistenceExtensions.AppDataSourceName, reported);
+
+        // The tag carries the name, never the credential-bearing string the name was derived from.
+        Assert.DoesNotContain(DispatcherProbeConnectionString, reported);
+    }
+
+    /// <summary>
+    /// Listens for Npgsql's <c>db.client.connection.count</c> and collects the pool name of every
+    /// measurement an observable collection reports — the label an operator's series is cut by.
+    /// </summary>
+    private static MeterListener PoolNames(out ConcurrentQueue<string> names)
+    {
+        var queue = new ConcurrentQueue<string>();
+        names = queue;
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == TelemetryMeters.Npgsql
+                    && instrument.Name == "db.client.connection.count")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<int>((_, _, tags, _) =>
+        {
+            foreach (var tag in tags)
+            {
+                if (tag.Key == "db.client.connection.pool.name" && tag.Value is string name)
+                {
+                    queue.Enqueue(name);
+                }
+            }
+        });
+        listener.Start();
+
+        return listener;
     }
 }

@@ -30,6 +30,13 @@ public sealed class WorkerSchedDataSource : IWorkerSchedDataSource, IAsyncDispos
     /// <summary>Key an operator has to set; the failure message names it.</summary>
     internal const string ConfigurationKey = SecretNames.TasksSweepConnectionString;
 
+    /// <summary>
+    /// The <see cref="NpgsqlDataSource.Name"/> of the sweep pool: Npgsql exports it as
+    /// <c>db.client.connection.pool.name</c>, and the driver's default (the connection string without
+    /// its password) would put the host, user and database of the sweep role on a metric label.
+    /// </summary>
+    public const string DataSourceName = "evidgate_worker_sched";
+
     private readonly NpgsqlDataSource? _dataSource;
 
     /// <summary>Creates the source, or a fail-closed placeholder when no credential is configured.</summary>
@@ -59,7 +66,12 @@ public sealed class WorkerSchedDataSource : IWorkerSchedDataSource, IAsyncDispos
                     + "EXECUTE on the owner SECURITY DEFINER functions (TL T80).");
             }
 
-            _dataSource = NpgsqlDataSource.Create(builder);
+            // Npgsql exports the data-source name as db.client.connection.pool.name; the default would be
+            // this connection string (host, user, database of the sweep role) as a label value.
+            _dataSource = new NpgsqlDataSourceBuilder(builder.ConnectionString)
+            {
+                Name = DataSourceName,
+            }.Build();
         }
         catch (ArgumentException)
         {

@@ -147,6 +147,7 @@ internal sealed class CompleteArtifactUploadValidator : AbstractValidator<Comple
 /// The run's manifest-declared producer kind, read in this transaction's tenant scope: the report's dialect is server
 /// truth, never a value the upload declared.
 /// </param>
+/// <param name="scopes">The ambient tenant scope the failure measurement waits on, since this handler does not own the commit.</param>
 [AuditedAction("artifact.complete")]
 [Permission(Permissions.Artifact.Write)]
 internal sealed class CompleteArtifactUploadHandler(
@@ -155,7 +156,8 @@ internal sealed class CompleteArtifactUploadHandler(
     IAuditTrail audit,
     ITenantDb db,
     IOptions<ParseRunnerOptions> parseOptions,
-    IRawReportProducerKindReader producerKinds)
+    IRawReportProducerKindReader producerKinds,
+    ITenantScopeAccessor scopes)
     : ICommandHandler<CompleteArtifactUpload, Result<CompleteResponse>>
 {
     /// <summary>The outbox aggregate the rows belong to (00 §5.3).</summary>
@@ -259,6 +261,15 @@ internal sealed class CompleteArtifactUploadHandler(
             // this completion may not leave: the trigger refused the move. The transaction is aborted, so the stored
             // outcome cannot be re-read; the contract's 409 answers it, never a 500.
             return Result.Failure<CompleteResponse>(EvidenceErrors.ArtifactStateConflict);
+        }
+
+        // The committed verdict is the only place a refusal becomes countable: a replay returns above, and a
+        // concurrency loser is counted by the writer whose rejection actually committed. The measurement waits
+        // for the commit this handler does not own, so a rolled-back attempt records nothing.
+        if (!command.Verdict.Verified)
+        {
+            var failureCode = command.Verdict.FailureCode;
+            scopes.Require().AfterCommit(() => EvidgateTelemetry.RecordArtifactFailure("upload", failureCode));
         }
 
         if (command.Verdict.Verified)

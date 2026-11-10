@@ -72,6 +72,8 @@ internal sealed class UsageContracts(
 
         await redateAudit.RecordAsync(orgId, write.Redated, cancellationToken).ConfigureAwait(false);
 
+        UsageMetering.Schedule(scopes.Require(), batch.Rows, write.Inserted);
+
         return UsageBatchOutcome.Merge(batch, write.Inserted);
     }
 

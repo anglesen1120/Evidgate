@@ -164,6 +164,8 @@ public sealed partial class TaskClaimer : ITaskClaimer
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
 
+        RecordLeaseLoss(reclaim.Requeued, reclaim.DeadLettered.Count);
+
         // The alert hook of 01.5.1 §7 fires only after the commit AND after the
         // pooled connection has been returned: a slow or non-compliant sink is
         // bounded by nothing but the caller's token, so it must not hold a pool
@@ -209,6 +211,8 @@ public sealed partial class TaskClaimer : ITaskClaimer
         var reclaim = await ReclaimAsync(connection, transaction, queue, cancellationToken).ConfigureAwait(false);
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+
+        RecordLeaseLoss(reclaim.Requeued, reclaim.DeadLettered.Count);
 
         await transaction.DisposeAsync().ConfigureAwait(false);
         await connection.DisposeAsync().ConfigureAwait(false);

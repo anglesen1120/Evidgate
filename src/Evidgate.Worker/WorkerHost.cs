@@ -111,6 +111,11 @@ public static class WorkerHost
         // and the task_idem_uq dedupe key make concurrent dispatchers harmless).
         builder.Services.AddHostedService<OutboxDispatcherHostedService>();
 
+        // The queue-state gauges have their own refresher: a queue with no consumer still reports its
+        // age and dead-letter depth, and a scrape never runs SQL on the claim path.
+        builder.Services.AddSingleton<TaskQueueStateGauge>();
+        builder.Services.AddHostedService<TaskQueueGaugeHostedService>();
+
         return builder;
     }
 
