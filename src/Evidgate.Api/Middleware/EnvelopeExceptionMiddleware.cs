@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 
@@ -35,24 +34,17 @@ public sealed partial class EnvelopeExceptionMiddleware
         }
         catch (BadHttpRequestException exception) when (!context.Response.HasStarted)
         {
-            // D6: preserve the framework's status (e.g. 413 for an oversized body)
-            // instead of flattening every bad request to 400.
+            // The framework raises this for every request-binding failure, malformed JSON
+            // body included. Keep its status (e.g. 413) instead of flattening to 400; log only
+            // the status, never the exception text or body.
             var status = exception.StatusCode;
+            LogBadRequest(status);
             await ErrorEnvelopeWriter.WriteAsync(
                 context,
                 status,
                 ErrorEnvelopeWriter.CodeForStatus(status),
                 ErrorEnvelopeWriter.MessageForStatus(status));
         }
-        catch (JsonException) when (!context.Response.HasStarted)
-        {
-            await ErrorEnvelopeWriter.WriteAsync(
-                context,
-                StatusCodes.Status400BadRequest,
-                ApiErrorCode.RequestInvalid,
-                "the request body is not valid JSON");
-        }
-
         // 01.4.2-T4: a pipeline-managed message dispatched without a resolved
         // request tenant fails closed — 401, never a silently picked org.
         catch (TenantContextMissingException) when (!context.Response.HasStarted)
@@ -72,6 +64,10 @@ public sealed partial class EnvelopeExceptionMiddleware
                 ApiErrorCode.Unavailable,
                 "the audit chain is busy; retry");
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // The client went away; nobody reads a response and nothing failed.
+        }
         catch (Exception exception) when (!context.Response.HasStarted)
         {
             LogUnhandled(exception);
@@ -85,7 +81,13 @@ public sealed partial class EnvelopeExceptionMiddleware
 
     [LoggerMessage(
         EventId = 1201,
-        Level = LogLevel.Warning,
+        Level = LogLevel.Error,
         Message = "Unhandled request failure mapped to the 9.2 envelope")]
     private partial void LogUnhandled(Exception exception);
+
+    [LoggerMessage(
+        EventId = 1202,
+        Level = LogLevel.Debug,
+        Message = "Request rejected by the framework with status {Status}")]
+    private partial void LogBadRequest(int status);
 }

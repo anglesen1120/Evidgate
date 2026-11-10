@@ -283,7 +283,6 @@ public static partial class ApiHost
         {
             await using var app = BuildApp(args);
             ValidateOptions(app);
-            LogBootConfiguration(app);
             await app.RunAsync();
             return 0;
         }
@@ -340,23 +339,4 @@ public static partial class ApiHost
         // first so a missing connection string is still the key a host with no configuration at all reports.
         app.Services.ValidateOrchestratorOptions();
     }
-
-    /// <summary>
-    /// Boot line that deliberately carries the bound connection string — the
-    /// redaction layer (AC4, 00 §5.7 S3) must mask it wherever it appears. The
-    /// <c>Authorization</c> header side is logged by <see cref="RequestIdMiddleware"/>
-    /// per request; keep both, tests assert the mask.
-    /// </summary>
-    private static void LogBootConfiguration(WebApplication app)
-    {
-        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(ApiHost));
-        var database = app.Services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
-        logger.LogBootConnectionString(database.ConnectionString);
-    }
-
-    [LoggerMessage(
-        EventId = 1001,
-        Level = LogLevel.Information,
-        Message = "Boot configuration bound: database connection string {DatabaseConnectionString}")]
-    private static partial void LogBootConnectionString(this ILogger logger, string databaseConnectionString);
 }
