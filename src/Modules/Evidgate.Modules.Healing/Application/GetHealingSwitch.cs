@@ -66,7 +66,10 @@ internal sealed record DependencyHealth(string? Llm, string? KnowledgeStore);
 /// <param name="System">The platform row, or null.</param>
 /// <param name="Tenant">The org row, or null.</param>
 /// <param name="Project">The project row, or null.</param>
-/// <param name="Resolved">The most restrictive stored mode; <c>shadow</c> when no scope has a row.</param>
+/// <param name="Resolved">
+/// The most restrictive stored mode clamped by the deployment's apply setting — <c>shadow</c> when a scope stored
+/// <c>enabled</c> and healing may not apply here — or <c>shadow</c> when no scope has a row.
+/// </param>
 /// <param name="DependencyHealth">The observations; both null until T2.</param>
 internal sealed record HealingSwitchResolutionView(
     HealingSwitchView? System,
@@ -91,7 +94,8 @@ internal sealed record GetHealingSwitchQuery(Guid? ProjectId) : IQuery<Result<He
 internal sealed class GetHealingSwitchQueryHandler(
     HealingSwitchStore store,
     IRequestPrincipalAccessor principals,
-    IRequestTenantContextAccessor tenant)
+    IRequestTenantContextAccessor tenant,
+    IHealingApplyPolicy apply)
     : IQueryHandler<GetHealingSwitchQuery, Result<HealingSwitchResolutionView>>
 {
     /// <inheritdoc />
@@ -152,7 +156,9 @@ internal sealed class GetHealingSwitchQueryHandler(
             system,
             tenantRow,
             projectRow,
-            HealingAvailabilityModes.ToWire(HealingAvailabilityResolution.Resolve(modes)),
+            HealingAvailabilityModes.ToWire(HealingApplyClamp.Apply(
+                HealingAvailabilityResolution.Resolve(modes),
+                apply.IsApplyEnabled)),
             new DependencyHealth(Llm: null, KnowledgeStore: null)));
     }
 }

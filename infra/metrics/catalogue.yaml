@@ -354,3 +354,12 @@ entries:
       EF Core 10's Microsoft.EntityFrameworkCore meter publishes query, SaveChanges and
       compiled-query counters and an active-context gauge, but no command-duration
       instrument. Npgsql's db.client.operation.duration is the command-level latency instead.
+
+  - id: healing_llm_refused_total
+    instrument: evidgate_healing_llm_refused_total
+    meter: evidgate
+    kind: counter
+    unit: '{call}'
+    description: Healing LLM calls refused before any provider was reached, by reason (no provider selected, the kill switch, or the project's daily budget). A refused call spends nothing and writes no healing_llm_call row.
+    labels: [reason]
+    source: src/BuildingBlocks/Observability/EvidgateTelemetry.HealingGateway.cs

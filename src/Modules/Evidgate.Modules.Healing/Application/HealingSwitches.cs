@@ -46,6 +46,20 @@ internal sealed class HealingApplyPolicy(IOptionsMonitor<HealingOptions> options
 }
 
 /// <summary>
+/// The clamp on a resolved mode: a deployment that may not apply healing reports <c>shadow</c> even when a scope stored
+/// <c>enabled</c>, so no reader of the resolution is told healing may act here. Only the resolved answer is clamped —
+/// the stored rows stay exactly as they were written, and the read of each scope still reports what it holds.
+/// </summary>
+internal static class HealingApplyClamp
+{
+    /// <summary>The mode in force once the deployment's apply setting is taken into account.</summary>
+    /// <param name="resolved">The most restrictive stored mode.</param>
+    /// <param name="applyEnabled">Whether this deployment may run healing in <c>enabled</c>.</param>
+    internal static HealingAvailability Apply(HealingAvailability resolved, bool applyEnabled) =>
+        resolved == HealingAvailability.Enabled && !applyEnabled ? HealingAvailability.Shadow : resolved;
+}
+
+/// <summary>
 /// The one place the switch body's mode and reason are judged (08.6.3 §3, AC1/AC2/AC7), shared by the tenant route
 /// and the operator's system-scope writer so the two can never drift: the mode is one of the three storable values
 /// (<c>unavailable</c> and every other token is 422 <c>invalid_switch_mode</c>), <c>enabled</c> is 422
@@ -305,7 +319,8 @@ internal sealed class HealingSwitchStore(ITenantDb db, ITenantScopeAccessor scop
 /// parse them, and let <see cref="HealingAvailabilityResolution"/> answer the most restrictive one. No health probe
 /// is consulted (T2 owns that), so the answer is never <c>unavailable</c> in this story.
 /// </summary>
-internal sealed class HealingAvailabilityResolver(HealingSwitchStore store) : IHealingAvailabilityResolver
+internal sealed class HealingAvailabilityResolver(HealingSwitchStore store, IHealingApplyPolicy apply)
+    : IHealingAvailabilityResolver
 {
     /// <inheritdoc />
     public async ValueTask<HealingAvailability> ResolveAsync(Guid? projectId, CancellationToken cancellationToken)
@@ -323,6 +338,10 @@ internal sealed class HealingAvailabilityResolver(HealingSwitchStore store) : IH
             }
         }
 
-        return HealingAvailabilityResolution.Resolve(modes);
+        // The most restrictive stored row decides; the deployment's apply setting then holds it at shadow, so "enabled"
+        // is never reported by a deployment that may not act on it.
+        return HealingApplyClamp.Apply(
+            HealingAvailabilityResolution.Resolve(modes),
+            apply.IsApplyEnabled);
     }
 }
