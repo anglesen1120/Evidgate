@@ -52,7 +52,7 @@ public sealed partial class ReconcileRunTests
     /// <param name="NormalizedStatus">The normalized status, or null for "the producer reported none".</param>
     /// <param name="ExecutionKey">The attempt's <c>execution_key</c> (<c>^[0-9a-f]{64}$</c>); derived when null.</param>
     /// <param name="AttemptNo">The attempt number (1-based).</param>
-    /// <param name="Stale">The owner's-flag column (00 §9.4): set on the stale-evidence case, never read differently by the aggregate.</param>
+    /// <param name="Stale">The <c>event.stale</c> flag the ingest insert derives; a closed shard that carries one names <c>stale_epoch</c>.</param>
     private sealed record StoredEvent(
         string ProducerId,
         long Sequence,
@@ -737,14 +737,12 @@ public sealed partial class ReconcileRunTests
     }
 
     /// <summary>
-    /// An in-range event carrying <c>stale = true</c> is an acknowledged event like any other, and it names no reason:
-    /// nothing in the product writes that flag — no producer's current epoch is stored anywhere to compare an event's
-    /// epoch against — so a reason built on it could only ever fire for a row an operator backfilled by hand, and the
-    /// comparison would then claim a check it does not make. The flag stays in the row and in the 00 §8.5 code list; the
-    /// reason returns with lease epochs, together with the writer that sets it.
+    /// An in-range event carrying <c>stale = true</c> is an acknowledged event like any other, and the closed shard names
+    /// <c>stale_epoch</c> exactly once however many of its events are stale: foreign-epoch evidence is kept, but it can
+    /// never leave the shard complete.
     /// </summary>
     [Fact]
-    public async Task Reconcile_StaleFlag_NamesNoReasonAndLeavesTheShardDecidedByItsCounts()
+    public async Task Reconcile_StaleFlag_NamesStaleEpochOnceAndLeavesTheShardIncomplete()
     {
         await using var world = await StartAsync();
         var runId = world.RunId;
@@ -759,8 +757,12 @@ public sealed partial class ReconcileRunTests
         var outcome = await ReconcileAsync(world, runId);
 
         var comparison = outcome.Comparison.ShouldNotBeNull();
-        comparison.Missing.ShouldBeEmpty($"{Describe(outcome)}: the flag names nothing, the counts agree");
-        comparison.EventsMatch.ShouldBeTrue();
+        comparison.Missing.Count.ShouldBe(1, $"{Describe(outcome)}: the counts agree, only the flag is left");
+        var reason = comparison.Missing[0];
+        reason.Code.ShouldBe(ReconcileMissingCodes.StaleEpoch);
+        reason.ProducerId.ShouldBe(Producer);
+        reason.Detail.ShouldBe("stale=1");
+        comparison.EventsMatch.ShouldBeFalse();
         (await StateAsync(world, runId)).ShouldBe("collecting", "T2.2 reports, T2.4 persists");
         (await RevisionCountAsync(world)).ShouldBe(0);
     }

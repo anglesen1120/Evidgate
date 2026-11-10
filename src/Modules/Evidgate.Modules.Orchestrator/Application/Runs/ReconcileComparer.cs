@@ -20,7 +20,9 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// <para>
 /// Every stored event counts as acknowledged, so a <c>blocked</c> <c>test.finished</c> — a failed setup (00 §8.3) — is
 /// counted beside that total and a closed shard holding one names <see cref="ReconcileMissingCodes.SetupError"/> instead
-/// of looking complete.
+/// of looking complete. An event stored from a superseded epoch is acknowledged the same way and names
+/// <see cref="ReconcileMissingCodes.StaleEpoch"/>: it is kept as evidence, never dropped, but it cannot complete the
+/// shard.
 /// </para>
 /// <para>
 /// A shard whose slot never closed is reported once as <see cref="ReconcileMissingCodes.MissingShard"/> and neither its
@@ -44,8 +46,9 @@ internal static class ReconcileComparer
     /// <summary>
     /// Compares the planned shards against the observed events, and the run's plan against the attempts it recorded.
     /// Reasons are ordered by producer id (ordinal), then code (ordinal), then detail (ordinal): one closed shard
-    /// reports <c>count_mismatch</c>, <c>setup_error</c> and <c>unknown_status</c> in that order, an open shard reports
-    /// only <c>missing_shard</c>, and a planned execution with no attempt reports one <c>missing_result</c> of its own.
+    /// reports <c>count_mismatch</c>, <c>setup_error</c>, <c>stale_epoch</c> and <c>unknown_status</c> in that order, an
+    /// open shard reports only <c>missing_shard</c>, and a planned execution with no attempt reports one
+    /// <c>missing_result</c> of its own.
     /// </summary>
     /// <param name="planned">The run's producer slots as the shard plan; one row per shard.</param>
     /// <param name="observed">The grouped aggregate rows, at most one per producer.</param>
@@ -165,6 +168,16 @@ internal static class ReconcileComparer
                     string.Create(CultureInfo.InvariantCulture, $"blocked={seen.BlockedCount}")));
             }
 
+            // Stale evidence is kept, never dropped, but it cannot complete a shard: one entry per closed shard
+            // however many of its events arrived under a foreign epoch.
+            if (seen.StaleCount > 0)
+            {
+                missing.Add(new ReconcileMissing(
+                    ReconcileMissingCodes.StaleEpoch,
+                    shard.ProducerId,
+                    string.Create(CultureInfo.InvariantCulture, $"stale={seen.StaleCount}")));
+            }
+
             // A null normalized_status and a started attempt with no finish do not depend on the declaration, so this
             // reason is also named for a shard that already reported declared_missing.
             if (seen.UnknownStatusCount > 0 || seen.UnfinishedStartedCount > 0)
@@ -238,7 +251,8 @@ internal static class ReconcileComparer
             MaxSequence: null,
             UnknownStatusCount: 0,
             UnfinishedStartedCount: 0,
-            BlockedCount: 0);
+            BlockedCount: 0,
+            StaleCount: 0);
 
     /// <summary>
     /// The detail of a closed shard whose declaration at least one bound breaks, or null when the declared pair and the

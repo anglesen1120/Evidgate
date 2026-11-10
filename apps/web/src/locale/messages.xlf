@@ -2802,7 +2802,7 @@
       <trans-unit id="runs.detail.producers.mismatch" datatype="html"><source>Count does not match expected</source></trans-unit>
       <trans-unit id="runs.detail.producers.events" datatype="html"><source>Informational events</source></trans-unit>
       <trans-unit id="runs.detail.producers.no-events" datatype="html"><source>No informational events</source></trans-unit>
-      <trans-unit id="runs.detail.producers.event-note" datatype="html"><source>Stale-epoch and after-cancel event counts are informational and do not affect completeness.</source></trans-unit>
+      <trans-unit id="runs.detail.producers.event-note" datatype="html"><source>After-cancel event counts are informational only; a stale-epoch event on a closed shard makes the evidence incomplete.</source></trans-unit>
       <trans-unit id="runs.detail.producers.stale-epoch" datatype="html"><source><x id="count" equiv-text="count"/> stale-epoch events</source></trans-unit>
       <trans-unit id="runs.detail.producers.after-cancel" datatype="html"><source><x id="count" equiv-text="count"/> after-cancel events</source></trans-unit>
       <trans-unit id="runs.detail.producers.stale-epoch-one" datatype="html"><source>1 stale-epoch event</source></trans-unit>

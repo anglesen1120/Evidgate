@@ -402,14 +402,12 @@ public sealed partial class ReconcileRunTests
     // ------------------------------------------------------------------ the epoch flag
 
     /// <summary>
-    /// An event's declared <c>epoch</c> is stored verbatim and marks nothing stale, because nothing can compare it: no
-    /// job or job-lease table exists, and neither the run nor the producer slot stores a current epoch, so
-    /// <c>event.stale</c> has no writer and the comparison names no epoch reason. This pins the state the removal left
-    /// behind — the flag and the 00 §8.5 code stay in the schema, the reason returns with lease epochs — so an
-    /// accidental half-restore (a writer without a source, or a reason without a writer) fails here.
+    /// A run that records no CI run reference has no current epoch: every declared epoch is stored verbatim and none is
+    /// marked stale, because there is nothing to compare it with. The comparison therefore names no epoch reason, and
+    /// the closed shard is decided by its counts alone.
     /// </summary>
     [Fact]
-    public async Task Older_Declared_Epoch_Is_Stored_Verbatim_And_Marks_Nothing_Stale()
+    public async Task Run_Without_Ci_Run_Reference_Stores_Epochs_Verbatim_And_Marks_Nothing_Stale()
     {
         // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
@@ -418,7 +416,8 @@ public sealed partial class ReconcileRunTests
         var runId = world.RunId;
         await SetRunStateAsync(world, runId, "collecting");
 
-        // Two events of the same producer, the second declaring a lower epoch: the shape a superseded lease would send.
+        // Two events of the same producer declaring different epochs: with no CI run reference on the run neither is
+        // foreign, because the run records no current epoch to compare against.
         var first = await IngestQaRequests.PostEventsAsync(
             world.Client,
             runId,
@@ -446,7 +445,7 @@ public sealed partial class ReconcileRunTests
         (await world.ScalarAsync<long>($"select epoch from public.event where org_id = '{world.Org:D}' and sequence = 1")).ShouldBe(3);
         (await world.ScalarAsync<long>($"select epoch from public.event where org_id = '{world.Org:D}' and sequence = 2")).ShouldBe(2);
         (await EventFlagAsync(world, 1, "stale")).ShouldBeFalse();
-        (await EventFlagAsync(world, 2, "stale")).ShouldBeFalse("no epoch source exists to call it superseded");
+        (await EventFlagAsync(world, 2, "stale")).ShouldBeFalse("the run records no CI run reference, so it has no current epoch");
 
         // The comparison names no epoch reason either: the shard's counts decide it, and nothing else.
         await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 2);
@@ -455,6 +454,6 @@ public sealed partial class ReconcileRunTests
         outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
         finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Complete, Describe(outcome));
         (await RevisionSummaryAsync(world, runId)).Missing.ShouldBeEmpty(
-            "stale_epoch has no producer: the flag's only writer would be a current epoch nothing stores");
+            "with no current epoch on the run no event can be stale, so the counts decide the shard");
     }
 }

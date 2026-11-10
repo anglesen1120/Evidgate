@@ -9,10 +9,8 @@ namespace Evidgate.Modules.Orchestrator.Application.Runs;
 /// (<see cref="MissingResult"/>) and <c>artifact_missing</c>, which the freeze result contributes. None of them is ever
 /// renamed.
 /// <para>
-/// <c>stale_epoch</c> stays in the CHECK but has no constant here: no writer sets <c>event.stale</c> — nothing stores a
-/// producer's current epoch to compare against (no job or job-lease table, and no epoch column on the slot) — so the
-/// reason could never fire and a code that cannot be produced is not a decision this module makes. The flag and the
-/// reason return together with lease epochs, when an authoritative current epoch exists to compare at insert time.
+/// Ingest compares declared event epochs with the run's CI attempt and marks foreign epochs stale; the comparison
+/// names <see cref="StaleEpoch"/> for every closed shard carrying that evidence.
 /// </para>
 /// </summary>
 internal static class ReconcileMissingCodes
@@ -42,6 +40,9 @@ internal static class ReconcileMissingCodes
     /// the run cannot be complete (00 §8.3; 05.3.2-T2.3, T14).
     /// </summary>
     public const string SetupError = "setup_error";
+
+    /// <summary>A closed shard contains events from an epoch other than the run's current epoch.</summary>
+    public const string StaleEpoch = "stale_epoch";
 
     /// <summary>
     /// A planned execution of the run with no recorded <c>case_attempt</c>: no status was ever reported for it, so the
@@ -91,7 +92,7 @@ internal sealed record ExecutionCoverage(IReadOnlyList<PlannedExecution> Uncover
 /// <summary>
 /// What the acknowledged <c>event</c> rows of one producer say, computed in one grouped statement (no per-event
 /// round trip). Every stored event counts as acknowledged, whatever its <c>late</c>/<c>after_cancel</c>/<c>stale</c>
-/// flag, and a blocked finish is counted beside that total so it is reported instead of hidden.
+/// flag; blocked finishes and stale events are counted beside that total so they cannot leave evidence complete.
 /// </summary>
 /// <param name="ProducerId">The producer id.</param>
 /// <param name="CountUpToDeclared">Events with <c>sequence &lt;= declared_last_sequence</c> (0 for an open shard).</param>
@@ -111,6 +112,7 @@ internal sealed record ExecutionCoverage(IReadOnlyList<PlannedExecution> Uncover
 /// <c>test.finished</c> events whose normalized status is <c>blocked</c>: a failed setup marks its dependants blocked
 /// (00 §8.3), so a closed shard reports <see cref="ReconcileMissingCodes.SetupError"/>.
 /// </param>
+/// <param name="StaleCount">Events marked stale by the ingestion epoch comparison.</param>
 internal sealed record ObservedShard(
     string ProducerId,
     long CountUpToDeclared,
@@ -119,7 +121,8 @@ internal sealed record ObservedShard(
     long? MaxSequence,
     long UnknownStatusCount,
     long UnfinishedStartedCount,
-    long BlockedCount);
+    long BlockedCount,
+    long StaleCount);
 
 /// <summary>One reason the evidence is incomplete.</summary>
 /// <param name="Code">A <see cref="ReconcileMissingCodes"/> value (00 §8.5).</param>
