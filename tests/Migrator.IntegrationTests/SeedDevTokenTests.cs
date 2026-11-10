@@ -125,6 +125,13 @@ public sealed class SeedDevTokenTests
         var (database, pepper) = await _harness.SeededDatabaseAsync();
         var variables = _harness.Variables(database, pepper);
 
+        // The loser of the race waits inside pg_advisory_lock on a command that Npgsql cuts off after 30 s by default
+        // ("Exception while reading from stream"); on a loaded host the winner's seed can outlast that, so the wait
+        // budget is explicit and far above any seed duration.
+        variables[SecretNames.DatabaseConnectionString] = SeedDevTokenHarness.WithCommandTimeout(
+            variables[SecretNames.DatabaseConnectionString]!,
+            seconds: 300);
+
         // Threads and a gate, not Task.Run: each run blocks inside the real command, so they need their own threads to
         // overlap, and a task started elsewhere and awaited here is the pattern VSTHRD003 forbids.
         var gate = new ManualResetEventSlim(false);
