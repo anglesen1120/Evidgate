@@ -10,7 +10,8 @@ namespace Tenancy.IntegrationTests;
 /// <remarks>
 /// A row that carries <c>original_period</c> is written with the insert guard lifted, because the guard decides that
 /// marker itself and refuses a writer that supplies one. Lifting it for the seed is the only way to represent a row
-/// the guard re-dated earlier; it is restored immediately afterwards.
+/// the guard re-dated earlier; it is restored immediately afterwards, and the restore ignores the test's cancellation
+/// token so a cancelled case cannot leave the trigger disabled in its private database.
 /// </remarks>
 internal sealed partial class UsageReadsWorld
 {

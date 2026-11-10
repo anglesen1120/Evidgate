@@ -10,7 +10,8 @@ namespace Migrator.IntegrationTests;
 
 /// <summary>
 /// The sides of <c>seed-dev --with-token</c> that must never carry the one-time secret: what reaches a logger, what the
-/// error text says when the mint or the print fails, and what the advisory-lock guard does when its session dies.
+/// error text says when the mint or the print fails, and what the advisory-lock guard does when its session dies or its
+/// wait outlasts the connection's command timeout.
 /// </summary>
 [Collection(MigratorPostgresSuite.Name)]
 [Trait("Category", "Docker")]
@@ -116,7 +117,8 @@ public sealed partial class SeedDevTokenGuardTests
         var (database, _) = await _harness.SeededDatabaseAsync();
         await using var dataSource = new NpgsqlDataSourceBuilder(
             SeedDevTokenHarness.Unpooled(_harness.Fixture.AppConnectionString(database))).Build();
-        var guard = await DevSeedToken.SeedGuard.AcquireAsync(dataSource);
+        var guard = await DevSeedToken.SeedGuard.AcquireAsync(
+            dataSource, TestContext.Current.CancellationToken);
 
         await using (var connection = await _harness.Fixture.OpenSuperuserAsync(database))
         {
@@ -152,12 +154,80 @@ public sealed partial class SeedDevTokenGuardTests
         var (database, _) = await _harness.SeededDatabaseAsync();
         await using var dataSource = new NpgsqlDataSourceBuilder(
             SeedDevTokenHarness.Unpooled(_harness.Fixture.AppConnectionString(database))).Build();
-        var guard = await DevSeedToken.SeedGuard.AcquireAsync(dataSource);
+        var guard = await DevSeedToken.SeedGuard.AcquireAsync(
+            dataSource, TestContext.Current.CancellationToken);
 
         await guard.DisposeAsync();
 
         // The connection is closed now, so this second disposal is the already-closed path.
         await guard.DisposeAsync();
+    }
+
+    /// <summary>
+    /// A second run waits for the holder even though its own connection cuts every command off after two seconds, and
+    /// then completes: the advisory lock is not a statement with a deadline, so a seed that outlasts the connection's
+    /// command timeout must not become a failed run.
+    /// </summary>
+    [Fact]
+    public async Task SeedDev_Token_SecondRun_WaitsPastTheConnectionsCommandTimeout()
+    {
+        var (database, pepper) = await _harness.SeededDatabaseAsync();
+        await using var dataSource = new NpgsqlDataSourceBuilder(
+            SeedDevTokenHarness.Unpooled(_harness.Fixture.AppConnectionString(database))).Build();
+        await using var holder = await DevSeedToken.SeedGuard.AcquireAsync(
+            dataSource, TestContext.Current.CancellationToken);
+        var variables = _harness.Variables(
+            database,
+            pepper,
+            appConnectionString: SeedDevTokenHarness.WithCommandTimeout(
+                SeedDevTokenHarness.Unpooled(_harness.Fixture.AppConnectionString(database)),
+                seconds: 2));
+
+        // A thread, not Task.Run: the real command blocks inside the lock wait, and a task started elsewhere and joined
+        // here is the pattern VSTHRD003 forbids.
+        var result = new SeedDevTokenHarness.RunResult[1];
+        var run = new Thread(() => result[0] = SeedDevTokenHarness.Run(["seed-dev", "--with-token"], variables));
+        run.Start();
+
+        var finished = false;
+        try
+        {
+            // The second run is really in the lock wait, so the hold below is what the assertion measures; then the
+            // wait runs past the two-second command timeout before the holder lets go.
+            await WaitForAdvisoryWaiterAsync(database);
+            await Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+            run.IsAlive.ShouldBeTrue("the second run must still wait for the lock, not have failed after two seconds");
+        }
+        finally
+        {
+            // Released and joined on every exit, so a cancelled or failed test leaves no seed thread behind.
+            await holder.DisposeAsync();
+            finished = run.Join(TimeSpan.FromSeconds(60));
+        }
+
+        finished.ShouldBeTrue("the second run did not finish after the lock was released");
+
+        result[0].ExitCode.ShouldBe(MigratorExitCodes.Success, result[0].Error);
+        SeedDevTokenHarness.CountOf(result[0].Output, SeedDevTokenHarness.DevTokenLine).ShouldBe(1);
+        (await _harness.Fixture.ScalarAsync<long>(database, "select count(*) from public.ingest_token")).ShouldBe(1);
+    }
+
+    /// <summary>The second run's backend sits in an advisory-lock wait; without that the hold would prove nothing.</summary>
+    private async Task WaitForAdvisoryWaiterAsync(string database)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (await _harness.Fixture.ScalarAsync<long>(
+            database,
+            "select count(*) from pg_stat_activity where wait_event = 'advisory' and usename = 'evidgate_app' " +
+            $"and datname = '{database}'") == 0)
+        {
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException($"no seed run is waiting on the advisory lock in '{database}'");
+            }
+
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+        }
     }
 
     /// <summary>The probe's log calls (CA1848/CA1873: no format strings at the call site).</summary>

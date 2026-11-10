@@ -226,10 +226,16 @@ internal sealed partial class UsageReadsWorld
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
-    /// <summary>Restores the guard, so a later write to an issued period is refused again.</summary>
+    /// <summary>
+    /// Restores the guard, so a later insert into an issued month is re-dated instead of landing there.
+    /// </summary>
+    /// <remarks>
+    /// Runs on the seed's <c>finally</c>, so it ignores the test's cancellation token: a cancelled test must still
+    /// restore the trigger, or every later test in the same private database seeds against a lifted guard.
+    /// </remarks>
     internal async Task EnableIssuedPeriodGuardAsync()
     {
-        await using var connection = await OpenOwnerAsync();
+        await using var connection = await OpenOwnerAsync(CancellationToken.None);
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
@@ -237,7 +243,7 @@ internal sealed partial class UsageReadsWorld
             alter table public.usage_ledger_entry enable trigger usage_ledger_entry_period_issued;
             """;
 
-        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+        await command.ExecuteNonQueryAsync(CancellationToken.None);
     }
 
     /// <summary>
