@@ -25,3 +25,7 @@ The Api keys its rate limits (login, account link, invite, CI token exchange) an
 2. Send a request straight to the Api (not through the proxy) with a forged `X-Forwarded-For`: the limit must apply to your own address.
 3. Send a request straight to the Api with a forged `X-Forwarded-Proto: https` over plain HTTP: a Secure-only route must still answer as plaintext.
 4. Remove both keys in Production: the Api must exit at start with the message naming `EVIDGATE__FORWARDEDHEADERS__KNOWNPROXIES`.
+
+## Operator note
+
+A non-Development Api start now requires the proxy stance: set `EVIDGATE__FORWARDEDHEADERS__KNOWNPROXIES` (IPs, or `none` when nothing proxies to the Api) and/or `EVIDGATE__FORWARDEDHEADERS__KNOWNNETWORKS` (CIDRs). Without one the Api refuses to start; add it to every staging and prod deployment before rolling out this version.
