@@ -5,19 +5,23 @@
 -- at another org's custom role, or at a `staff`/`service` role. The evaluator ignores such a row, but the rank
 -- helpers (`0093`, `0096`) read `role_id` directly, so the DB itself must refuse it.
 --
--- SHAPE: the foreign key is the single-column, deferrable `role_id -> role (id)`. The composite tenant key
+-- SHAPE: the foreign key is the single-column, non-deferrable `role_id -> role (id)`. The composite tenant key
 -- `(org_id, role_id) -> role (org_id, id)` that `0011` considered cannot hold for a built-in role (`org_id IS NULL`
 -- never matches a composite key), and `0011` kept the column key-less for that reason alone. What a foreign key
 -- cannot say, the trigger says: `role.kind = 'member'` and (`role.org_id` is null or equals the grant's `org_id`).
 -- The key is `ON DELETE NO ACTION`: the app role holds no DELETE on `role` and no command deletes one, so a role
--- that is still granted cannot disappear (the owner's delete fails at commit). The two schema scans carry a
+-- that is still granted cannot disappear (the owner's delete fails at the statement). The two schema scans carry a
 -- documented allowance for this one key, as they do for `role_permission`.
 --
 -- The role side: a second trigger refuses to change `kind` or `org_id` of a role that a `membership_role` row still
 -- references, so a violating pair cannot be created by editing the role afterwards.
 --
+-- SERIALISATION: both guards take `pg_advisory_xact_lock(hashtext('evidgate.membership_role'), hashtext(role id))`
+-- before they read the other table, so a grant insert and a kind/org change of that role run in one order and the
+-- second one's check sees the first one's committed row.
+--
 -- DATA: the file never rewrites or deletes rows. A pre-check counts the existing violations and raises with the
--- count; the operator fixes the rows and re-runs. The key is added `not valid` and validated in the same file.
+-- count; the operator fixes the rows and re-runs. The small membership_role table gets a directly validated key.
 --
 -- ERRORS: SQLSTATE `23514` (constraint name `membership_role_role_guard`) from the trigger, `23503` (`membership_role_role_fk`) from the key. The commands
 -- resolve the role under RLS first, so these only fire on a race or a write around the commands; they are mapped to
@@ -44,20 +48,31 @@ begin
 end
 $$;
 
-alter table public.membership_role
-  drop constraint if exists membership_role_role_fk;
-alter table public.membership_role
-  add constraint membership_role_role_fk
-  foreign key (role_id) references public.role (id)
-  deferrable initially immediate
-  not valid;
-alter table public.membership_role validate constraint membership_role_role_fk;
+-- membership_role is small and the pre-check proves validity, so add the validated key directly;
+-- a separate validation migration would add deployment work without a useful lock saving here.
+do $$
+begin
+  if not exists (
+      select 1
+        from pg_catalog.pg_constraint
+       where conrelid = 'public.membership_role'::regclass
+         and conname = 'membership_role_role_fk') then
+    alter table public.membership_role
+      add constraint membership_role_role_fk
+      foreign key (role_id) references public.role (id);
+  end if;
+end
+$$;
 
 create or replace function evidgate.membership_role_guard_role() returns trigger
   language plpgsql
   set search_path = ''
   as $$
   begin
+    -- Share one namespace with the role-side guard so its checking query sees the committed winner.
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtext('evidgate.membership_role'), pg_catalog.hashtext(new.role_id::text));
+
     if not exists (
         select 1
           from public.role r
@@ -85,6 +100,10 @@ create or replace function evidgate.role_guard_granted_scope() returns trigger
   set search_path = ''
   as $$
   begin
+    -- The trigger WHEN limits this lock to kind/org changes; grant inserts take the same key first.
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtext('evidgate.membership_role'), pg_catalog.hashtext(new.id::text));
+
     if exists (
         select 1
           from public.membership_role mr

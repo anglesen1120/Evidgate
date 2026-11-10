@@ -119,34 +119,27 @@ public sealed class MembershipSchemaTests : CatalogueTestBase
     }
 
     /// <summary>
-    /// The composite tenant foreign key AC7 rests on, and the recorded deviation of the
-    /// plan's role key: <c>membership_role.role_id</c> carries NO foreign key at all —
-    /// a composite key to <c>role (org_id, id)</c> could never match a built-in role
-    /// (0010 seeds them with <c>org_id IS NULL</c>) and a single-column key is refused by
-    /// 02.9.1-T2's composite-FK rule for any tenant table (migration 0011's header, 00 §15
-    /// 2026-09-27).
+    /// The two declarative references of <c>membership_role</c>: the composite tenant key to
+    /// <c>membership</c>, and <c>role_id -> role (id)</c>. A composite key to <c>role (org_id, id)</c> cannot
+    /// hold for a built-in role (its <c>org_id</c> is null), so the role is keyed by id alone; the guard
+    /// trigger of the same migration carries what a key cannot say (kind and the role's own org).
     /// </summary>
     [Fact]
-    public async Task Membership_Role_References_Membership_Compositely_And_Role_By_Value()
+    public async Task Membership_Role_References_Membership_Compositely_And_Role_By_Id()
     {
         var foreignKeys = await ForeignKeysAsync("membership_role");
 
-        foreignKeys.Count.ShouldBe(1, "the only declarative reference is the composite tenant one");
+        foreignKeys.Count.ShouldBe(2, "the composite tenant key and the role key");
 
-        var composite = foreignKeys[0];
-        composite.Name.ShouldBe("membership_role_membership_fk");
+        var composite = foreignKeys.Single(key => key.Name == "membership_role_membership_fk");
         composite.Columns.ShouldBe(["org_id", "membership_id"]);
         composite.Principal.ShouldBe("public.membership");
         composite.PrincipalColumns.ShouldBe(["org_id", "id"]);
 
-        (await ScalarAsync<long>(
-            """
-            select count(*)
-              from pg_constraint con
-              join pg_class c on c.oid = con.conrelid
-              join pg_class rc on rc.oid = con.confrelid
-             where con.contype = 'f' and c.relname = 'membership_role' and rc.relname = 'role'
-            """)).ShouldBe(0, "role_id is a by-value reference, enforced by GrantRoleCommand (409 unknown_role)");
+        var role = foreignKeys.Single(key => key.Name == "membership_role_role_fk");
+        role.Columns.ShouldBe(["role_id"]);
+        role.Principal.ShouldBe("public.role");
+        role.PrincipalColumns.ShouldBe(["id"]);
     }
 
     /// <summary>

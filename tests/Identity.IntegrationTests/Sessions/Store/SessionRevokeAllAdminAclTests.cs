@@ -11,9 +11,9 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// as an authority: the defined privilege of the function itself, and the org scope of a custom role.
 /// </summary>
 /// <remarks>
-/// <c>membership_role.role_id</c> carries no foreign key (0011), so a row written around the commands can point an
-/// org-A membership at another org's custom role. This definer does not run under the app path's role RLS, so the
-/// grant join has to scope the role itself, and the cases here are what make that scope fire.
+/// The role key refuses a grant of another org's custom role at write time, but this definer does not run under
+/// the app path's role RLS, so its grant join still scopes the role itself instead of trusting the row; the
+/// cases here are what make that scope fire.
 /// </remarks>
 [Trait("Category", "Docker")]
 public sealed class SessionRevokeAllAdminAclTests : SessionRevokeAllAdminTestBase
@@ -45,9 +45,8 @@ public sealed class SessionRevokeAllAdminAclTests : SessionRevokeAllAdminTestBas
 
     /// <summary>
     /// A custom role is an authority only inside its own org: the same-org role holding <c>membership:write</c>
-    /// authorizes the call (the positive control, so the only variable in the refusals is the role's org), a
-    /// membership pointing at ANOTHER org's role does not, and a membership whose status is <c>removed</c> holds
-    /// its <c>membership_role</c> row but no active grant.
+    /// authorizes the call (the positive control), another org's role cannot even be granted to the membership,
+    /// and a membership whose status is <c>removed</c> holds its <c>membership_role</c> row but no active grant.
     /// </summary>
     [Fact]
     public async Task Only_A_Custom_Role_Of_The_Acting_Org_Authorizes_The_Admin_Revoke_All()
@@ -58,19 +57,14 @@ public sealed class SessionRevokeAllAdminAclTests : SessionRevokeAllAdminTestBas
 
         var localRole = await SeedCustomRoleAsync(org, "admin_revoke_local");
         var localActor = await SeedMemberWithRoleAsync(org, localRole, "active", Unique.Email("admin-revoke-local"));
-        var foreignRole = await SeedCustomRoleAsync(otherOrg, "admin_revoke_foreign");
-        var foreignActor = await SeedMemberWithRoleAsync(org, foreignRole, "active", Unique.Email("admin-revoke-foreign"));
         var removedActor = await SeedMemberWithRoleAsync(org, localRole, "removed", Unique.Email("admin-revoke-removed"));
 
         var localTarget = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
-        var refusedTarget = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
         var removedTarget = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
 
         var localTicket = await CreateSessionAsync(localActor, clock);
-        var foreignTicket = await CreateSessionAsync(foreignActor, clock);
         var removedTicket = await CreateSessionAsync(removedActor, clock);
         var localTargetTicket = await CreateSessionAsync(localTarget, clock);
-        var refusedTargetTicket = await CreateSessionAsync(refusedTarget, clock);
         var removedTargetTicket = await CreateSessionAsync(removedTarget, clock);
         var routes = CreateRoutes(clock);
 
@@ -79,10 +73,21 @@ public sealed class SessionRevokeAllAdminAclTests : SessionRevokeAllAdminTestBas
                 SessionRouteStatus.Done,
                 "a custom role of THIS org carrying membership:write authorizes the call");
 
-        (await routes.RevokeAllForUserAsAdminAsync(ProofOf(foreignTicket), refusedTarget, org, null, null, Token))
-            .Status.ShouldBe(
-                SessionRouteStatus.NotFound,
-                "one org's custom role grants nothing in another org, whatever the membership_role row says");
+        // The role key refuses the foreign grant, so the definer's own org scope is a second line rather
+        // than the only one: the row it used to see cannot be written.
+        var foreignRole = await SeedCustomRoleAsync(otherOrg, "admin_revoke_foreign");
+        var membershipId = await OwnerScalarAsync<Guid>(
+            "select id from public.membership where org_id = @org and user_id = @user",
+            ("org", org),
+            ("user", localActor));
+        var refusal = await OwnerRefusalAsync(
+            "insert into public.membership_role (id, org_id, membership_id, role_id) values (@id, @org, @membership, @role)",
+            ("id", Guid.CreateVersion7()),
+            ("org", org),
+            ("membership", membershipId),
+            ("role", foreignRole));
+        refusal.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
+        refusal.ConstraintName.ShouldBe("membership_role_role_guard");
 
         (await routes.RevokeAllForUserAsAdminAsync(ProofOf(removedTicket), removedTarget, org, null, null, Token))
             .Status.ShouldBe(
@@ -90,7 +95,6 @@ public sealed class SessionRevokeAllAdminAclTests : SessionRevokeAllAdminTestBas
                 "a removed membership still holds its role row, but grants no membership:write");
 
         (await IsLiveAsync(localTargetTicket.SessionId)).ShouldBeFalse("the authorized call revoked the target's row");
-        (await IsLiveAsync(refusedTargetTicket.SessionId)).ShouldBeTrue("the foreign-role refusal revokes nothing");
         (await IsLiveAsync(removedTargetTicket.SessionId)).ShouldBeTrue();
         (await AdminRowCountAsync(org)).ShouldBe(1L, "only the authorized call writes a row");
         (await AdminRowCountAsync(otherOrg)).ShouldBe(0L);
