@@ -50,8 +50,8 @@ internal static class HealingLlmHttpClients
 }
 
 /// <summary>
-/// 08.5.1-T1: the real-provider adapter seam, over a typed <see cref="HttpClient"/> whose base address and resilience
-/// policy are the host's (O4). Its wire shape is this adapter's own, provider-neutral request/answer envelope:
+/// The real-provider adapter seam, over a typed <see cref="HttpClient"/> whose base address, resilience policy and key
+/// the host configures. Its wire shape is this adapter's own, provider-neutral request/answer envelope:
 /// <c>{ "model", "prompt_version", "prompt", "response_schema" }</c> out, <c>{ "content", "tokens", "cost" }</c> back,
 /// where <c>content</c> is the answer body as a JSON string or a nested JSON value. A concrete provider's mapping lands
 /// with O4 without changing the gateway contract.

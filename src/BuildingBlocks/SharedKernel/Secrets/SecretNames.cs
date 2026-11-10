@@ -43,6 +43,12 @@ public static class SecretNames
     /// <summary>Client secret of the GitHub OAuth login client (02.3.1-T1.3); the client id is plain configuration.</summary>
     public const string OauthGithubClientSecret = "EVIDGATE__OAUTH__GITHUB__CLIENTSECRET";
 
+    /// <summary>
+    /// API key the healing adapter presents to its provider. Deployments name it in
+    /// <c>EVIDGATE__HEALING__LLM__APIKEYSECRET</c>; the value is resolved per request and never stored.
+    /// </summary>
+    public const string HealingLlmApiKey = "EVIDGATE__HEALING__LLM__APIKEY";
+
     /// <summary>Base64 current pepper behind the HMAC of the session cookie value (02.3.1-T1.3/T1.4).</summary>
     public const string SessionPepper = "EVIDGATE__SESSION__PEPPER";
 
@@ -82,6 +88,7 @@ public static class SecretNames
         ObjectSecretKey,
         OidcGoogleClientSecret,
         OauthGithubClientSecret,
+        HealingLlmApiKey,
         SessionPepper,
         SessionPreviousPepper,
         InvitePepper,
