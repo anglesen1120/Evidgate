@@ -1,0 +1,45 @@
+# The untrusted side of the fixture: runs for a pull request (including one from a
+# fork) and for a push to the default branch. It holds no Evidgate setting, no
+# secret and no token; it only uploads its report as workflow artifact data.
+# The run procedure and the proof it records: fixtures/fork-pr-repo/README.md.
+name: 'fork-safe-tests'
+
+on:
+  pull_request:
+  push:
+    branches:
+      - 'main'
+
+# Nothing at workflow level; a job without its own permissions block gets nothing.
+permissions: {}
+
+jobs:
+  test:
+    runs-on: 'ubuntu-24.04'
+    # Read the code, nothing else. A fork pull request gets a read-only token anyway.
+    permissions:
+      contents: 'read'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      # One pinned package and no lockfile: the example has no dependencies of its
+      # own, and the suite never launches a browser.
+      - run: 'npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.64.1'
+      # The runner itself starts the suite under `env -i` and fails when no report
+      # was produced, so the credential-free claim is executed, not asserted.
+      - run: './run-fork-context.sh'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: '${{ !cancelled() }}'
+        with:
+          name: 'fork-pr-report'
+          path: |
+            test-results/report.json
+            test-results/run-context.json
+            playwright-report/
+            evidgate-manifest.json
+          if-no-files-found: 'error'
+          retention-days: 7

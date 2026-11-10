@@ -1,0 +1,95 @@
+# The maintainer side of the fixture: never triggered by a pull request, never
+# runs pull-request code, and holds no stored Evidgate credential. It exchanges a
+# GitHub OIDC token for a project-scoped ci_producer token (at most 60 minutes)
+# and uses that token to create the Evidgate run and upload its report.
+#
+# A dispatch uploads the artifact of a run the maintainer names; a push to main
+# produces that report in this trusted job instead, because the fork-safe
+# workflow is a separate run whose artifact cannot be depended on here.
+# Setup and the negative proofs: fixtures/fork-pr-repo/README.md.
+name: 'evidgate-maintainer-upload'
+
+on:
+  push:
+    branches:
+      - 'main'
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Run id of the fork-safe test run whose report to upload'
+        required: true
+        type: 'string'
+      manifest_path:
+        description: 'Path to your suite manifest, produced by your own tooling'
+        required: true
+        default: 'evidgate-manifest.json'
+        type: 'string'
+
+# Nothing at workflow level; the upload job elevates for itself.
+permissions: {}
+
+jobs:
+  upload:
+    runs-on: 'ubuntu-24.04'
+    # No secrets: required reviewers and a main-only branch rule gate this job,
+    # and a compromised step finds nothing here to read.
+    environment: 'evidgate-upload'
+    # Per-job elevation: actions read downloads another run's artifact; id-token
+    # write lets the CLI request the GitHub OIDC token for the exchange.
+    permissions:
+      contents: 'read'
+      actions: 'read'
+      id-token: 'write'
+    env:
+      EVIDGATE_API_URL: '${{ vars.EVIDGATE_API_URL }}'
+      EVIDGATE_PROJECT: 'my-project'
+      # A 64-hex digest of the planned execution, not a secret.
+      EVIDGATE_EXECUTION: '${{ vars.EVIDGATE_EXECUTION }}'
+      MANIFEST_PATH: "${{ inputs.manifest_path || 'evidgate-manifest.json' }}"
+    steps:
+      # A dispatch input, or this run's own id after a push to main; refuse
+      # anything that is not a number before it reaches a step.
+      - name: 'Check the run id'
+        env:
+          TESTED_RUN: '${{ inputs.run_id || github.run_id }}'
+        run: |
+          case "$TESTED_RUN" in
+            "" | *[!0-9]*)
+              echo "run id must be a number" >&2
+              exit 1
+              ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: "github.event_name == 'push'"
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - if: "github.event_name == 'push'"
+        run: 'npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.64.1'
+      - if: "github.event_name == 'push'"
+        run: './run-fork-context.sh'
+      # The artifact is data: it lands at test-results/ and playwright-report/,
+      # the two roots the CLI accepts for an upload, and nothing here executes it.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: "github.event_name == 'workflow_dispatch'"
+        with:
+          name: 'fork-pr-report'
+          path: '.'
+          run-id: '${{ inputs.run_id || github.run_id }}'
+          github-token: '${{ github.token }}'
+      # Exchange the GitHub OIDC token at POST /v1/ci/token. The CLI prints
+      # ::add-mask:: for the token, then appends EVIDGATE_CI_TOKEN to GITHUB_ENV;
+      # no credential is passed as an argument.
+      - run: 'npx --yes --package @evidgate/cli@0.0.0 -- evidgate auth login --github-env'
+      # One step, so no derived id is written to a command file: upload the
+      # manifest, create the run for it, then upload the report against that run.
+      - name: 'Create the run and upload the report'
+        run: |
+          manifest=$(npx --yes --package @evidgate/cli@0.0.0 -- evidgate manifests upload --file "$MANIFEST_PATH" --json)
+          manifest_id=$(printf '%s' "$manifest" | jq -r .manifest_id)
+          manifest_hash=$(printf '%s' "$manifest" | jq -r .manifest_hash)
+          created=$(npx --yes --package @evidgate/cli@0.0.0 -- evidgate runs create --manifest-id "$manifest_id" --manifest-hash "$manifest_hash" --ci-ref "$GITHUB_REF" --json)
+          run_id=$(printf '%s' "$created" | jq -r .run_id)
+          npx --yes --package @evidgate/cli@0.0.0 -- evidgate artifacts upload --run "$run_id" --file playwright-report/index.html --kind raw_report --media-type text/html --execution-key "$EVIDGATE_EXECUTION"
