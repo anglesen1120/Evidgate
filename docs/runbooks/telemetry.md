@@ -264,7 +264,8 @@ Prove the profile on a throwaway compose project (no `.env.dev`, free ports, tor
 the end): `scripts/dev/observability-smoke.sh`. It checks that the default stack is still
 `postgres seaweedfs`, that every published port is loopback, that each store reports the
 retention above, and that one span, one metric point and one log record sent to the
-collector are queryable.
+collector are queryable. It also builds and runs the real Api and asserts its span, log,
+metric and resource version arrive, and that planted secret canaries do not reach the stores.
 
 Not covered yet (open items, see the 10.3.2 hand-over): the memory limits above are
 sized, not measured — neither the limiter ceiling nor RSS with full queues has been
