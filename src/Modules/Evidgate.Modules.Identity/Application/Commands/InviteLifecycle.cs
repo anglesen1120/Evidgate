@@ -2,6 +2,7 @@ using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.Messaging;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
@@ -46,6 +47,7 @@ internal sealed class ResendInviteCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
+    IRequestPrincipalAccessor principals,
     IAuditTrail audit,
     IOutboxWriter outbox,
     InviteSecrets inviteSecrets,
@@ -87,9 +89,25 @@ internal sealed class ResendInviteCommandHandler(
             return Result.Failure<InviteIssuedView>(Error.NotFound(NotFoundMessage));
         }
 
+        // A resend returns a fresh working token to the caller, so a lower-rank administrator must not
+        // re-mint an invite that carries a higher rank.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.Id, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure<InviteIssuedView>(MemberRankGuard.Refused);
+        }
+
         if (!string.Equals(membership.Status, MembershipStatus.Pending, StringComparison.Ordinal))
         {
             return Result.Failure<InviteIssuedView>(InviteErrors.NotPending);
+        }
+
+        if (await MemberRankGuard.LockedRefusalAsync(
+                db, orgId, principals.Current, membership.Id, cancellationToken)
+            .ConfigureAwait(false) is { } refusal)
+        {
+            return Result.Failure<InviteIssuedView>(refusal);
         }
 
         var mint = await InviteMints.MintAsync(context, inviteSecrets, cancellationToken).ConfigureAwait(false);
@@ -162,7 +180,9 @@ internal sealed record CancelInviteCommand(Guid OrgId, Guid MembershipId, string
 [Permission(Permissions.Membership.Write)]
 internal sealed class CancelInviteCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
+    ITenantDb db,
     ITenantScopeAccessor scopes,
+    IRequestPrincipalAccessor principals,
     IAuditTrail audit)
     : ICommandHandler<CancelInviteCommand, Result>
 {
@@ -193,9 +213,26 @@ internal sealed class CancelInviteCommandHandler(
             return Result.Failure(Error.NotFound("no membership with that id is visible to this tenant"));
         }
 
+        // A pending invite carries the roles it was issued with, so cancelling one an administrator of a
+        // higher rank issued would undo that administrator's grant. Checked before the state branch so a
+        // refusal does not reveal whether the row is pending.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.Id, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure(MemberRankGuard.Refused);
+        }
+
         if (!string.Equals(membership.Status, MembershipStatus.Pending, StringComparison.Ordinal))
         {
             return Result.Failure(InviteErrors.NotPending);
+        }
+
+        if (await MemberRankGuard.LockedRefusalAsync(
+                db, orgId, principals.Current, membership.Id, cancellationToken)
+                .ConfigureAwait(false) is { } refusal)
+        {
+            return Result.Failure(refusal);
         }
 
         // The transition of 02.1.2 §6. The token columns stay: the resolver filters on
