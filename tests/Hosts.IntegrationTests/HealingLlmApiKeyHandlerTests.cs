@@ -48,9 +48,9 @@ public sealed partial class HealingLlmApiKeyHandlerTests
 
         // The capture is live: a line written through the host's own logger reaches it, so the absence of the key below
         // is a fact about every line the call wrote, not an empty list.
-        provider.GetRequiredService<ILoggerFactory>()
-            .CreateLogger("HealingProviderKeyTests")
-            .CaptureProbe("healing-provider-capture-live");
+        Log.CaptureProbe(
+            provider.GetRequiredService<ILoggerFactory>().CreateLogger("HealingProviderKeyTests"),
+            "healing-provider-capture-live");
         capture.Logs.ShouldContain(log => log.Text.Contains("healing-provider-capture-live", StringComparison.Ordinal));
         capture.Logs.ShouldNotContain(log => log.Text.Contains(key, StringComparison.Ordinal));
         result.ToString().ShouldNotContain(key);
@@ -142,7 +142,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
     private static partial class Log
     {
         [LoggerMessage(EventId = 1, Level = LogLevel.Information, Message = "capture probe {Probe}")]
-        public static partial void CaptureProbe(this ILogger logger, string probe);
+        public static partial void CaptureProbe(ILogger logger, string probe);
     }
 
     private sealed class FixedSecrets(string? value) : ISecretProvider
