@@ -45,6 +45,7 @@ public sealed class ArtifactStateGuardTests(PostgresTenancyFixture fixture)
         }
 
         (await StateAsync(seeded)).ShouldBe(to);
+        (await VersionAsync(seeded)).ShouldBe(2, "the one-tracked-update trigger bumps version once");
     }
 
     [Theory]
@@ -168,7 +169,7 @@ public sealed class ArtifactStateGuardTests(PostgresTenancyFixture fixture)
         (await StateAsync(database, own)).ShouldBe(ArtifactState.Uploaded);
     }
 
-    /// <summary>An org with one project, seeded as the superuser; the artifact only needs the composite project FK.</summary>
+    /// <summary>An org with one project, seeded as the superuser.</summary>
     private async Task<Guid> SeedOrgAsync(string database)
     {
         var org = Guid.CreateVersion7();
@@ -189,12 +190,16 @@ public sealed class ArtifactStateGuardTests(PostgresTenancyFixture fixture)
         return new Seeded(database, org, await SeedArtifactAsync(database, org, state));
     }
 
+    /// <summary>
+    /// One artifact in <paramref name="state"/>, seeded as the superuser; the run row comes from
+    /// <see cref="RunRowSeeder.SeedRunAsync"/> because 0031's composite key names a run in the same org.
+    /// </summary>
     private async Task<Guid> SeedArtifactAsync(string database, Guid org, string state)
     {
         var project = await _fixture.ScalarAsync<Guid>(
             database, $"select id from public.project where org_id = '{org:D}'");
+        var runId = await RunRowSeeder.SeedRunAsync(_fixture, database, org);
         var id = Guid.CreateVersion7();
-        var runId = Guid.CreateVersion7();
         var objectKey =
             $"org/{org:D}/project/{project:D}/run/{runId:D}/attempt/{ExecutionKey}/1/{id:D}";
 
