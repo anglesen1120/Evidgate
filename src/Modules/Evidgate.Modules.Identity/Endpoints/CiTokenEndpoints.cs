@@ -62,7 +62,7 @@ public static class CiTokenEndpoints
             return Result.Failure<CiTokenResponse>(CiErrors.NotConfigured);
         }
 
-        if (Throttle(context, limiter, "ip:" + ExchangeRateLimiter.ClientKey(context.Connection.RemoteIpAddress)) is { } throttled)
+        if (Throttle(context, limiter, "ip:" + ClientIp.LimiterKey(context)) is { } throttled)
         {
             return Result.Failure<CiTokenResponse>(throttled);
         }
@@ -159,7 +159,7 @@ public static class CiTokenEndpoints
         }
 
         // Keyed by caller address too: the prefix is not secret, so a bucket on it alone would let anyone lock the real job out.
-        if (Throttle(context, limiter, "tok:" + ExchangeRateLimiter.ClientKey(context.Connection.RemoteIpAddress) + ":" + prefix) is { } throttled)
+        if (Throttle(context, limiter, "tok:" + ClientIp.LimiterKey(context) + ":" + prefix) is { } throttled)
         {
             return Result.Failure<CiTokenResponse>(throttled);
         }
