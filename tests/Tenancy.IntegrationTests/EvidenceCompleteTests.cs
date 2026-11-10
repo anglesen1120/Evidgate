@@ -553,10 +553,11 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
         bool commit)
     {
         var services = world.Host.Services;
+        var audit = services.GetRequiredService<IAuditTrail>();
         var handler = new CompleteArtifactUploadHandler(
             services.GetRequiredService<ITenantDbContextFactory<EvidenceDbContext>>(),
             services.GetRequiredService<IOutboxWriter>(),
-            services.GetRequiredService<IAuditTrail>(),
+            audit,
             services.GetRequiredService<ITenantDb>(),
             services.GetRequiredService<IOptions<ParseRunnerOptions>>(),
             services.GetRequiredService<IRawReportProducerKindReader>(),
@@ -565,6 +566,8 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
         var factory = services.GetRequiredService<ITenantScopeFactory>();
         var token = TestContext.Current.CancellationToken;
 
+        // The handler describes its audit entry, which only a pipeline unit of work accepts.
+        using var auditUnit = audit.BeginUnit();
         await using var scope = await factory.BeginAsync(world.Org, world.Project, cancellationToken: token);
         var result = await handler.Handle(
             new CompleteArtifactUpload(artifactId, verdict, CredentialId: null, NewKey()), token);

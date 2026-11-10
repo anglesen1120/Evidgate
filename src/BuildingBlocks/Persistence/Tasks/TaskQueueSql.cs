@@ -18,18 +18,39 @@ public static class TaskQueueSql
     /// <summary>
     /// The queue-state snapshot behind <c>task_queue_oldest_age_seconds</c> and <c>task_dead_letter_depth</c>.
     /// The age reads only the live backlog — rows queued or retry and already due — so it walks
-    /// <c>task_claim_idx</c> and is bounded by the waiting work, not by the table's history; no due row means zero.
+    /// <c>task_claim_idx</c> once per live queue (a skip scan, because the index leads with the queue column and a
+    /// plain <c>min(available_at)</c> would scan the table); it is bounded by the waiting work, not by the table's
+    /// history, and no due row means zero.
     /// The depth walks <c>task_dead_idx</c> up to <see cref="DeadLetterGaugeCap"/> rows, so it saturates at
     /// the cap instead of counting every dead letter on each refresh.
     /// </summary>
     public const string QueueStateSnapshot = """
+        with recursive live_queue(queue) as (
+            (select queue
+               from public.task
+              where state in ('queued', 'retry')
+              order by queue
+              limit 1)
+            union all
+            select (select t.queue
+                      from public.task t
+                     where t.state in ('queued', 'retry')
+                       and t.queue > live_queue.queue
+                     order by t.queue
+                     limit 1)
+              from live_queue
+             where live_queue.queue is not null)
         select
           coalesce(
               extract(epoch from now() - (
-                  select min(available_at)
-                    from public.task
-                   where state in ('queued', 'retry')
-                     and available_at <= now())),
+                  select min(oldest_due)
+                    from (select (select min(t.available_at)
+                                    from public.task t
+                                   where t.queue = live_queue.queue
+                                     and t.state in ('queued', 'retry')
+                                     and t.available_at <= now()) as oldest_due
+                            from live_queue
+                           where live_queue.queue is not null) per_queue)),
               0)::double precision as "OldestAgeSeconds",
           (select count(*)
              from (
