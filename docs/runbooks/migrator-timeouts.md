@@ -33,11 +33,11 @@ On `5` or `6` the transcript carries the failing script, the reason, then the ro
 
 ```
 migration failed in 0033_orchestration_collection.sql: canceling statement due to lock timeout
-0033_orchestration_collection.sql hit lock_timeout of 5 s (relation run); another session holds a conflicting lock: find it in pg_stat_activity / pg_locks, end or wait for it, then rerun (EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS; exit 5)
+0033_orchestration_collection.sql hit lock_timeout (runner setting 5 s; the script may set its own) (relation run); another session holds a conflicting lock: find it in pg_locks / pg_stat_activity, end or wait for it, then rerun (EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS; exit 5)
 the failed script's transaction was rolled back and it was not journalled
 ```
 
-Exit `6` prints the same shape with `statement_timeout`, the configured seconds, and `... raise the limit or split the migration (EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS; exit 6)`. The relation or `where` clause is appended when PostgreSQL reports one; either may be absent.
+Exit `6` prints the same shape with `statement_timeout`, the runner setting (a script's own `set local` may have changed the limit that fired), and `... raise the limit or split the migration (EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS; exit 6)`. The relation or `where` clause is appended when PostgreSQL reports one; either may be absent.
 
 ## 3. A lock timeout during a deploy
 
@@ -52,7 +52,15 @@ Exit `6` prints the same shape with `statement_timeout`, the configured seconds,
    order by xact_start nulls last;
    ```
 
-   Then the blocking pair, which is the pid the migration waited on:
+   `pg_blocking_pids` only works while a session is waiting, and the migration has already given up, so after exit `5` list who holds locks on the relation named in the transcript (or on the table the script touches) instead:
+
+   ```sql
+   select l.pid, l.mode, l.granted, a.state, left(a.query, 120) as query
+   from pg_locks l join pg_stat_activity a using (pid)
+   where l.relation = 'public.<table>'::regclass and l.pid <> pg_backend_pid();
+   ```
+
+   To see a live wait (for example while the deploy is retried), the blocking pair is:
 
    ```sql
    select pid, pg_blocking_pids(pid) as blocker_pids, wait_event_type, wait_event,
@@ -70,7 +78,7 @@ Exit `6` prints the same shape with `statement_timeout`, the configured seconds,
 
 - Raise it when a script **legitimately** needs longer than 900 s (a large backfill or index build) and the block is a statement duration, not a lock queue: the transcript names `statement_timeout`, not `lock_timeout`.
 - Set the variable **for the deploy job** (`EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS=<n>`, or `0` for that one run) and record why in the deploy log. Never edit an already-applied script to add `set statement_timeout`, and never raise the default for an environment just to get one migration through.
-- Raising it does not shorten a lock **hold**: a long statement under `ACCESS EXCLUSIVE` blocks every reader and writer for its whole duration. The hold is bounded by the statement itself and by the deploy window, not by these settings.
+- Raising it does not shorten a lock **hold**: a long statement under `ACCESS EXCLUSIVE` blocks every reader and writer for its whole duration. `statement_timeout` bounds each statement, so a single long statement is cut off, but nothing bounds the transaction as a whole: several statements in one script can hold a lock longer than either setting. Lock holds are bounded in practice by the deploy window.
 - A script that is too long to run inside a transaction belongs in a separate operator step, not in `migrations/` (`migrations/README.md` "Known limits": `create index concurrently` and `vacuum` cannot run in the per-script transaction).
 
 ## 5. Scripts that set their own timeout

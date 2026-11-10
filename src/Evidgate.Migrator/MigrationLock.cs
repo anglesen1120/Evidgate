@@ -87,6 +87,11 @@ internal sealed class MigrationLock : IDisposable
                 // Best effort: a failed unlock cannot be reported from Dispose, and
                 // closing the session is the authoritative release.
                 _ = Execute(_connection, _options, UnlockSql);
+
+                // The session-level zeros must not survive on a connection a pooler hands out again.
+                using var reset = _connection.CreateCommand();
+                reset.CommandText = "reset lock_timeout; reset statement_timeout";
+                reset.ExecuteNonQuery();
             }
         }
         catch (NpgsqlException)

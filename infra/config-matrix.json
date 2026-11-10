@@ -2389,7 +2389,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "lock_timeout of every script, applied with set local inside that script's own transaction: the 5 s default turns DDL queued behind a long transaction into a fast failure instead of stalling every later query, and 0 disables it explicitly. The accepted range is 0–2147483 whole seconds (2147483 is the largest millisecond value the server takes); a value outside it fails start-up. A wait that times out is SQLSTATE 55P03, exit 5."
+      "note": "lock_timeout of every script, applied with set local inside that script's own transaction: the 5 s default turns DDL queued behind a long transaction into a fast failure instead of stalling every later query, and 0 disables it explicitly. The accepted range is 0–2147483 whole seconds (2147483 s is the largest whole-second value whose millisecond form the server accepts); a value outside it fails start-up. A wait that times out is SQLSTATE 55P03, exit 5."
     },
     {
       "key": "EVIDGATE_MIGRATOR__MIGRATIONSPATH",
@@ -2429,7 +2429,7 @@
         "staging": "default",
         "prod": "default"
       },
-      "note": "statement_timeout of every script, applied with set local inside that script's own transaction: the 900 s default stops a runaway statement without cutting a normal index build, and 0 disables it explicitly. The accepted range is 0–2147483 whole seconds (2147483 is the largest millisecond value the server takes); a value outside it fails start-up. A statement that outruns it is SQLSTATE 57014, exit 6."
+      "note": "statement_timeout of every script, applied with set local inside that script's own transaction: the 900 s default stops a runaway statement without cutting a normal index build, and 0 disables it explicitly. The accepted range is 0–2147483 whole seconds (2147483 s is the largest whole-second value whose millisecond form the server accepts); a value outside it fails start-up. A statement that outruns it is SQLSTATE 57014, exit 6."
     },
     {
       "key": "EVIDGATE_OPERATOR_PASSWORD",

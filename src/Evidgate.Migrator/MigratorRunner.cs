@@ -191,7 +191,7 @@ public static class MigratorRunner
             var timeoutExit = ServerTimeout(result.Error);
             if (timeoutExit is { } serverTimeout)
             {
-                EmitServerTimeout(run, failed, serverTimeout, result.Error);
+                EmitServerTimeout(run, log, failed, serverTimeout, result.Error);
             }
             else if (IsCommandTimeout(result.Error))
             {
@@ -246,18 +246,20 @@ public static class MigratorRunner
         return null;
     }
 
-    private static void EmitServerTimeout(RunContext run, string script, ServerTimeoutKind kind, Exception? error)
+    private static void EmitServerTimeout(RunContext run, MigratorUpgradeLog log, string script, ServerTimeoutKind kind, Exception? error)
     {
         var seconds = kind.ExitCode == MigratorExitCodes.LockTimeout
             ? run.Options.LockTimeoutSeconds
             : run.Options.StatementTimeoutSeconds;
         var relation = error is PostgresException { TableName: { Length: > 0 } table }
-            ? $" (relation {table})"
-            : error is PostgresException { Where: { Length: > 0 } where } ? $" ({where.ReplaceLineEndings(" ")})" : string.Empty;
+            ? $" (relation {log.Redact(table)})"
+            : error is PostgresException { Where: { Length: > 0 } where } ? $" ({log.Redact(where.ReplaceLineEndings(" "))})" : string.Empty;
+        // The runner value is a default: a script's own `set local` may have shortened or lengthened the limit that fired.
+        var configured = seconds == 0 ? "disabled" : $"{seconds.ToString(CultureInfo.InvariantCulture)} s";
         run.Emit(
-            $"{script} hit {kind.Setting} of {DescribeTimeout(seconds)}{relation}; " +
+            $"{script} hit {kind.Setting} (runner setting {configured}; the script may set its own){relation}; " +
             (kind.ExitCode == MigratorExitCodes.LockTimeout
-                ? "another session holds a conflicting lock: find it in pg_stat_activity / pg_locks, end or wait for it, then rerun"
+                ? "another session holds a conflicting lock: find it in pg_locks / pg_stat_activity, end or wait for it, then rerun"
                 : "the statement ran longer than allowed: raise the limit or split the migration") +
             $" ({kind.Variable}; exit {kind.ExitCode.ToString(CultureInfo.InvariantCulture)})");
     }

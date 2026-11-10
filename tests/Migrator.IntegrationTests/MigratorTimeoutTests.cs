@@ -66,7 +66,9 @@ public sealed partial class MigratorTimeoutTests
         blocked.Transcript.ShouldContain("0002_probe_column.sql");
         blocked.Transcript.ShouldContain("lock_timeout");
         blocked.Messages.ShouldContain(line =>
-            line.StartsWith("0002_probe_column.sql hit lock_timeout of 1 s", StringComparison.Ordinal));
+            line.StartsWith(
+                "0002_probe_column.sql hit lock_timeout (runner setting 1 s; the script may set its own)",
+                StringComparison.Ordinal));
         blocked.Messages.ShouldContain("the failed script's transaction was rolled back and it was not journalled");
 
         (await _fixture.ReadJournalAsync(database)).Select(row => row.Name).ShouldBe(["0001_probe_table.sql"]);
@@ -106,11 +108,50 @@ public sealed partial class MigratorTimeoutTests
         outcome.Transcript.ShouldContain("0001_probe_sleep.sql");
         outcome.Transcript.ShouldContain("statement_timeout");
         outcome.Messages.ShouldContain(line =>
-            line.StartsWith("0001_probe_sleep.sql hit statement_timeout of 1 s", StringComparison.Ordinal));
+            line.StartsWith(
+                "0001_probe_sleep.sql hit statement_timeout (runner setting 1 s; the script may set its own)",
+                StringComparison.Ordinal));
         outcome.Messages.ShouldContain("the failed script's transaction was rolled back and it was not journalled");
 
         (await _fixture.ReadJournalAsync(database)).ShouldBeEmpty();
         (await _fixture.TableExistsAsync(database, "statement_timeout_probe")).ShouldBeFalse();
+    }
+
+    /// <summary>
+    /// A statement timeout journals the earlier files and leaves the failed one
+    /// pending; a rerun with a larger limit applies it without replaying 0001.
+    /// </summary>
+    [Fact]
+    public async Task Statement_Timeout_Leaves_The_File_Pending_For_A_Rerun()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        using var migrations = TempMigrations.Create()
+            .Add("0001_probe_table.sql", "create table if not exists public.statement_timeout_first (id int primary key);")
+            .Add("0002_probe_sleep.sql", "select pg_sleep(2);");
+        var owner = _fixture.OwnerConnectionString(database);
+
+        var timedOut = MigratorHarness.Run(
+            migrations.Path,
+            owner,
+            MigrationCommand.Apply,
+            statementTimeoutSeconds: 1);
+
+        timedOut.ExitCode.ShouldBe(MigratorExitCodes.StatementTimeout);
+        timedOut.Messages.ShouldContain(line =>
+            line.StartsWith(
+                "0002_probe_sleep.sql hit statement_timeout (runner setting 1 s; the script may set its own)",
+                StringComparison.Ordinal));
+        (await _fixture.ReadJournalAsync(database)).Select(row => row.Name).ShouldBe(["0001_probe_table.sql"]);
+
+        var retried = MigratorHarness.Run(
+            migrations.Path,
+            owner,
+            MigrationCommand.Apply,
+            statementTimeoutSeconds: 30);
+
+        retried.ExitCode.ShouldBe(MigratorExitCodes.Success, string.Join(" | ", retried.Messages));
+        (await _fixture.ReadJournalAsync(database)).Select(row => row.Name)
+            .ShouldBe(["0001_probe_table.sql", "0002_probe_sleep.sql"]);
     }
 
     /// <summary>
@@ -148,6 +189,113 @@ public sealed partial class MigratorTimeoutTests
         (await _fixture.ScalarAsync<string>(
             database,
             "select statement_timeout from public.timeout_capture_runner")).ShouldBe("2s");
+    }
+
+    /// <summary>
+    /// A script may shorten <c>lock_timeout</c> for its own transaction: the
+    /// script's one second fires even though the runner setting is thirty.
+    /// </summary>
+    [Fact]
+    public async Task Script_Own_Lock_Timeout_Fires_Under_A_Larger_Runner_Value()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var database = await _fixture.CreateDatabaseAsync();
+        using var migrations = TempMigrations.Create()
+            .Add("0001_probe_table.sql", "create table if not exists public.lock_override_probe (id int primary key);");
+        var owner = _fixture.OwnerConnectionString(database);
+        MigratorHarness.Run(migrations.Path, owner).ExitCode.ShouldBe(MigratorExitCodes.Success);
+
+        migrations.Add(
+            "0002_probe_column.sql",
+            "set local lock_timeout = '1s';\nalter table public.lock_override_probe add column note text;");
+
+        await using var blocker = await _fixture.OpenSuperuserAsync(database);
+        await using var transaction = (NpgsqlTransaction)await blocker.BeginTransactionAsync(token);
+        await using (var hold = blocker.CreateCommand())
+        {
+            hold.Transaction = transaction;
+            hold.CommandText = "lock table public.lock_override_probe in access exclusive mode";
+            await hold.ExecuteNonQueryAsync(token);
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        var blocked = MigratorHarness.Run(
+            migrations.Path,
+            owner,
+            MigrationCommand.Apply,
+            lockTimeoutSeconds: 30);
+        stopwatch.Stop();
+
+        blocked.ExitCode.ShouldBe(MigratorExitCodes.LockTimeout);
+        stopwatch.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(1) + Bound);
+        blocked.Transcript.ShouldContain("lock_timeout");
+        blocked.Transcript.ShouldContain("runner setting 30 s");
+        blocked.Transcript.ShouldNotContain("of 30 s");
+        (await _fixture.ReadJournalAsync(database)).Select(row => row.Name).ShouldBe(["0001_probe_table.sql"]);
+        (await ColumnExistsAsync(database, "lock_override_probe", "note")).ShouldBeFalse();
+
+        await transaction.RollbackAsync(token);
+
+        var retried = MigratorHarness.Run(
+            migrations.Path,
+            owner,
+            MigrationCommand.Apply,
+            lockTimeoutSeconds: 30);
+
+        retried.ExitCode.ShouldBe(MigratorExitCodes.Success, string.Join(" | ", retried.Messages));
+        (await _fixture.ReadJournalAsync(database)).Select(row => row.Name)
+            .ShouldBe(["0001_probe_table.sql", "0002_probe_column.sql"]);
+        (await ColumnExistsAsync(database, "lock_override_probe", "note")).ShouldBeTrue();
+    }
+
+    /// <summary>
+    /// A file whose first statement succeeded but whose later statement cannot
+    /// take its lock rolls back every statement in the file.
+    /// </summary>
+    [Fact]
+    public async Task Multi_Statement_Lock_Timeout_Rolls_Back_The_Whole_File()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var database = await _fixture.CreateDatabaseAsync();
+        using var migrations = TempMigrations.Create()
+            .Add("0001_probe_table.sql", "create table if not exists public.multi_statement_held (id int primary key);");
+        var owner = _fixture.OwnerConnectionString(database);
+        MigratorHarness.Run(migrations.Path, owner).ExitCode.ShouldBe(MigratorExitCodes.Success);
+
+        migrations.Add(
+            "0002_probe_two_statements.sql",
+            "create table if not exists public.multi_statement_created (id int primary key);\n" +
+            "alter table public.multi_statement_held add column note text;");
+
+        await using var blocker = await _fixture.OpenSuperuserAsync(database);
+        await using var transaction = (NpgsqlTransaction)await blocker.BeginTransactionAsync(token);
+        await using (var hold = blocker.CreateCommand())
+        {
+            hold.Transaction = transaction;
+            hold.CommandText = "lock table public.multi_statement_held in access exclusive mode";
+            await hold.ExecuteNonQueryAsync(token);
+        }
+
+        var blocked = MigratorHarness.Run(
+            migrations.Path,
+            owner,
+            MigrationCommand.Apply,
+            lockTimeoutSeconds: 1);
+
+        blocked.ExitCode.ShouldBe(MigratorExitCodes.LockTimeout);
+        (await _fixture.ReadJournalAsync(database)).Select(row => row.Name).ShouldBe(["0001_probe_table.sql"]);
+        (await _fixture.TableExistsAsync(database, "multi_statement_created")).ShouldBeFalse();
+        (await ColumnExistsAsync(database, "multi_statement_held", "note")).ShouldBeFalse();
+
+        await transaction.RollbackAsync(token);
+
+        var retried = MigratorHarness.Run(migrations.Path, owner);
+
+        retried.ExitCode.ShouldBe(MigratorExitCodes.Success, string.Join(" | ", retried.Messages));
+        (await _fixture.ReadJournalAsync(database)).Select(row => row.Name)
+            .ShouldBe(["0001_probe_table.sql", "0002_probe_two_statements.sql"]);
+        (await _fixture.TableExistsAsync(database, "multi_statement_created")).ShouldBeTrue();
+        (await ColumnExistsAsync(database, "multi_statement_held", "note")).ShouldBeTrue();
     }
 
     /// <summary>An explicit <c>0</c> disables both server timeouts, not falls back to a default.</summary>
@@ -195,6 +343,26 @@ public sealed partial class MigratorTimeoutTests
         (await _fixture.ScalarAsync<string>(
             database,
             "select statement_timeout from public.timeout_capture_defaults")).ShouldBe("15min");
+    }
+
+    /// <summary>
+    /// The repository's own migrations take far less than the default
+    /// <c>statement_timeout</c>, so the default cannot cut a normal deploy.
+    /// </summary>
+    [Fact]
+    public async Task Repository_Migrations_Finish_Well_Inside_The_Default_Statement_Timeout()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+
+        var outcome = MigratorHarness.Run(
+            PostgresMigratorFixture.RepoMigrationsPath,
+            _fixture.OwnerConnectionString(database));
+
+        outcome.ExitCode.ShouldBe(MigratorExitCodes.Success, string.Join(" | ", outcome.Messages));
+        var rows = await _fixture.ReadJournalAsync(database);
+        rows.Select(row => row.Name).ShouldBe(PostgresMigratorFixture.RealMigrationFileNames);
+        var slowest = rows.Max(row => row.DurationMs ?? 0);
+        slowest.ShouldBeLessThan(MigratorOptions.DefaultStatementTimeoutSeconds * 1000 / 2);
     }
 
     /// <summary>
