@@ -5,11 +5,11 @@ using Xunit;
 namespace Hosts.IntegrationTests;
 
 /// <summary>
-/// AC4 (T1.1/T1.2, 00 §5.7 S3): the connection string bound from
-/// <c>EVIDGATE__DATABASE__CONNECTIONSTRING</c> reaches no provider with its
-/// password readable — including inside the rendered message, and including a
-/// password that needs quoting because it contains the <c>;</c> separator
-/// (Review#2).
+/// AC4 (00 §5.7 S3): the connection string bound from
+/// <c>EVIDGATE__DATABASE__CONNECTIONSTRING</c> reaches no log provider at all over
+/// the whole boot — password, host or key — including a password that needs quoting
+/// because it contains the <c>;</c> separator. The masking itself is covered by
+/// <see cref="SecretRedactorTests"/> and the redaction pipeline suite.
 /// </summary>
 public sealed class RedactionTests
 {
@@ -22,8 +22,7 @@ public sealed class RedactionTests
         var connectionString =
             $"Host=db.internal;Port=5432;Username=evidgate_app;Password={Secret};Database=evidgate;Timeout=2";
 
-        // The Api logs the bound connection string at boot (ApiHost); it must be
-        // masked both in the structured value and in the rendered message.
+        // The Api never logs the bound connection string, so nothing of it may reach a provider.
         await using var factory = new EvidgateApiFactory(connectionString, capture);
         using var client = factory.CreateClient();
 
@@ -36,9 +35,8 @@ public sealed class RedactionTests
         Assert.NotEmpty(logs);
         Assert.DoesNotContain(logs, log => log.Text.Contains(Secret, StringComparison.Ordinal));
 
-        var boot = Assert.Single(logs, log => log.Text.Contains("Boot configuration bound", StringComparison.Ordinal));
-        Assert.Contains("Password=***", boot.Text, StringComparison.Ordinal);
-        Assert.Contains("db.internal", boot.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(logs, log => log.Text.Contains("db.internal", StringComparison.Ordinal));
+        Assert.DoesNotContain(logs, log => log.Text.Contains("Password=", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -64,8 +62,7 @@ public sealed class RedactionTests
         Assert.DoesNotContain(logs, log => log.Text.Contains(tail, StringComparison.Ordinal));
         Assert.DoesNotContain(logs, log => log.Text.Contains("Sup3r;", StringComparison.Ordinal));
 
-        var boot = Assert.Single(logs, log => log.Text.Contains("Boot configuration bound", StringComparison.Ordinal));
-        Assert.Contains("Password=***", boot.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(logs, log => log.Text.Contains("db.internal", StringComparison.Ordinal));
     }
 }
 

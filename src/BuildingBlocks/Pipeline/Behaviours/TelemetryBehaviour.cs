@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using Evidgate.BuildingBlocks.Observability;
 using Mediator;
-using Microsoft.Extensions.Logging;
 
 namespace Evidgate.BuildingBlocks.Pipeline.Behaviours;
 
@@ -10,10 +9,11 @@ namespace Evidgate.BuildingBlocks.Pipeline.Behaviours;
 /// per dispatched message, tagged by message type and <c>error.type</c> on a
 /// thrown failure (01.4.2 §11 — 10's dashboards chart these). Runs for every
 /// message — the tenant-bound stages further in are the ones restricted to the
-/// C8 Result contract — and carries no tenant id or payload (00 §5.7 S3).
+/// C8 Result contract — and carries no tenant id or payload (00 §5.7 S3). It does not log: the span and
+/// the error tag record the failure, and the one Error line of an unhandled request is the
+/// envelope middleware's, so a failure is never logged once per layer.
 /// </summary>
-public sealed partial class TelemetryBehaviour<TMessage, TResponse>(
-    ILogger<TelemetryBehaviour<TMessage, TResponse>> logger)
+public sealed class TelemetryBehaviour<TMessage, TResponse>
     : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
@@ -38,14 +38,7 @@ public sealed partial class TelemetryBehaviour<TMessage, TResponse>(
             EvidgateTelemetry.RecordPipelineDuration(operation, Stopwatch.GetElapsedTime(started), error: true);
             activity?.SetStatus(ActivityStatusCode.Error, exception.GetType().Name);
             activity?.SetTag(EvidgateTelemetry.PipelineErrorTag, exception.GetType().FullName);
-            LogHandlerFailed(exception, operation, exception.GetType().Name);
             throw;
         }
     }
-
-    [LoggerMessage(
-        EventId = 1401,
-        Level = LogLevel.Warning,
-        Message = "Pipeline handler {Operation} failed with {ErrorType}")]
-    private partial void LogHandlerFailed(Exception exception, string operation, string errorType);
 }
