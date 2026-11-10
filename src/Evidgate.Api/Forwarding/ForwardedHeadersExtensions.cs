@@ -47,7 +47,7 @@ public static class ForwardedHeadersExtensions
         return services;
     }
 
-    /// <summary>Adds the middleware when a proxy is trusted; a direct Api ignores <c>X-Forwarded-For</c> altogether.</summary>
+    /// <summary>Adds the middleware when a proxy is trusted; a direct Api ignores <c>X-Forwarded-For</c> and <c>X-Forwarded-Proto</c> altogether.</summary>
     public static WebApplication UseTrustedForwardedHeaders(this WebApplication app)
     {
         if (app.Services.GetRequiredService<IOptions<TrustedProxyOptions>>().Value.HasTrust)

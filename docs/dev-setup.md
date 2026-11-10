@@ -429,7 +429,7 @@ the curl above.
 
 Behind a TLS-terminating proxy (a tunnel or a load balancer) the Api sees plaintext unless the
 proxy is listed (`EVIDGATE__FORWARDEDHEADERS__KNOWNPROXIES`, see `docs/runbooks/forwarded-headers.md`)
-and sends `X-Forwarded-Proto: https`, and then this route refuses with the same `503`: the
+and sends `X-Forwarded-Proto: https`, otherwise this route refuses with the same `503`: the
 deployment has to terminate TLS at the Api or trust the proxy that does. It is never solved by
 relaxing the cookie flags.
 

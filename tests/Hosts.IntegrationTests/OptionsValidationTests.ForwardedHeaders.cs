@@ -110,6 +110,18 @@ public sealed partial class OptionsValidationTests
     }
 
     [Fact]
+    public void A_Development_Host_With_A_Listed_Proxy_Takes_Address_And_Scheme_Only_From_It()
+    {
+        using var factory = Boot(Development, proxies: "203.0.113.10", frameworkSwitch: true);
+
+        var middleware = factory.Services.GetRequiredService<IOptions<ForwardedHeadersOptions>>().Value;
+
+        // The host is never forwarded, loopback is no longer trusted, and the listed proxy replaces the defaults.
+        middleware.ForwardedHeaders.ShouldBe(ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
+        middleware.KnownProxies.Select(p => p.ToString()).ShouldBe(["203.0.113.10"]);
+    }
+
+    [Fact]
     public void None_With_Known_Networks_Is_Refused_Naming_The_Contradiction()
     {
         using var factory = Boot(Production, proxies: TrustedProxyOptions.None, networks: "10.0.0.0/8");

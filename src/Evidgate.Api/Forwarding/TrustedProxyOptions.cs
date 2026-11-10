@@ -3,7 +3,7 @@ using System.Net;
 namespace Evidgate.Api.Forwarding;
 
 /// <summary>
-/// Which senders the Api trusts to speak for a client through <c>X-Forwarded-For</c>, bound from
+/// Which senders the Api trusts to speak for a client through <c>X-Forwarded-For</c> and <c>X-Forwarded-Proto</c>, bound from
 /// <c>EVIDGATE__FORWARDEDHEADERS__*</c>. Both lists are comma-separated; the whole setting is read once at start.
 /// </summary>
 public sealed class TrustedProxyOptions
