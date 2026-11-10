@@ -144,4 +144,4 @@ jobs:
           manifest_hash=$(printf '%s' "$manifest" | jq -r .manifest_hash)
           created=$("$EVIDGATE_CLI" runs create --manifest-id "$manifest_id" --manifest-hash "$manifest_hash" --ci-ref "$GITHUB_REF" --json)
           run_id=$(printf '%s' "$created" | jq -r .run_id)
-          "$EVIDGATE_CLI" artifacts upload --run "$run_id" --file "$REPORT_DIR/playwright-report/index.html" --kind raw_report --media-type text/html --execution-key "$EVIDGATE_EXECUTION"
+          "$EVIDGATE_CLI" artifacts upload --run "$run_id" --dir "$REPORT_DIR" --file "$REPORT_DIR/playwright-report/index.html" --kind raw_report --media-type text/html --execution-key "$EVIDGATE_EXECUTION"

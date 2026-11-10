@@ -23,7 +23,11 @@ copy_suite() {
     "$here/suite-env.global-setup.ts" "$here/run-fork-context.sh" "$target/"
   cp -R "$here/src" "$target/src"
   chmod +x "$target/run-fork-context.sh"
-  ln -s "$here/node_modules" "$target/node_modules"
+  # Playwright resolves from this directory's node_modules or, in an Evidgate
+  # checkout, from the root install; link whichever the real suite resolves.
+  local pkg
+  pkg="$(cd "$here" && node -e 'process.stdout.write(require("path").resolve(require.resolve("@playwright/test/package.json"), "..", "..", ".."))')"
+  ln -s "$pkg" "$target/node_modules"
 }
 
 # 1. A credential-shaped variable in the caller's shell is not inherited, and the

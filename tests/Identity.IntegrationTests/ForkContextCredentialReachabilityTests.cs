@@ -288,6 +288,8 @@ public sealed class ForkContextCredentialReachabilityTests(DatabaseFixture fixtu
             RouteRequests.Build(ManifestUpload, context) with { Bearer = jwt },
             Token);
         fresh.StatusCode.ShouldNotBe(HttpStatusCode.Unauthorized, "the fresh token must authenticate");
+        fresh.StatusCode.ShouldNotBe(HttpStatusCode.Forbidden, "run:create is in the ci_producer set");
+        ((int)fresh.StatusCode).ShouldBeLessThan(500, "the control must reach the handler, not fail inside it");
 
         clock.Advance(TimeSpan.FromHours(1) + TimeSpan.FromMinutes(1));
 
