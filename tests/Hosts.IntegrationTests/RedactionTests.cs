@@ -1,5 +1,6 @@
 using Evidgate.BuildingBlocks.Observability.Redaction;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Hosts.IntegrationTests;
@@ -16,14 +17,14 @@ public sealed class RedactionTests
     private const string Secret = "Sup3r-Secret-P4ss";
 
     [Fact]
-    public async Task ConnectionString_Masked()
+    public async Task ConnectionString_Never_Logged()
     {
         var capture = new CaptureLoggerProvider();
         var connectionString =
             $"Host=db.internal;Port=5432;Username=evidgate_app;Password={Secret};Database=evidgate;Timeout=2";
 
         // The Api never logs the bound connection string, so nothing of it may reach a provider.
-        await using var factory = new EvidgateApiFactory(connectionString, capture);
+        await using var factory = new EvidgateApiFactory(connectionString, capture, services => services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Trace)));
         using var client = factory.CreateClient();
 
         using (var response = await client.GetAsync("/internal/health/live", TestContext.Current.CancellationToken))
@@ -40,7 +41,7 @@ public sealed class RedactionTests
     }
 
     [Fact]
-    public async Task Quoted_Password_With_Semicolon_Fully_Masked()
+    public async Task Quoted_Password_With_Semicolon_Never_Logged()
     {
         // Npgsql accepts and re-renders a password containing ';' in double quotes;
         // an unquoted-only pattern would mask up to the first ';' and log the tail.
@@ -49,7 +50,7 @@ public sealed class RedactionTests
         var connectionString =
             $"Host=db.internal;Port=5432;Username=evidgate_app;Password=\"Sup3r;{tail}\";Database=evidgate;Timeout=2";
 
-        await using var factory = new EvidgateApiFactory(connectionString, capture);
+        await using var factory = new EvidgateApiFactory(connectionString, capture, services => services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Trace)));
         using var client = factory.CreateClient();
 
         using (var response = await client.GetAsync("/internal/health/live", TestContext.Current.CancellationToken))

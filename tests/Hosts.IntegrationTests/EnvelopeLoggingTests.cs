@@ -29,6 +29,7 @@ public sealed class EnvelopeLoggingTests
         var capture = new CaptureLoggerProvider();
         await using var factory = NewFactory(capture);
         using var client = factory.CreateClient();
+        var boot = capture.Logs.Count;
 
         using var response = await client.PostAsync(
             Evidgate.Testing.TransportProbeStartupFilter.Path,
@@ -36,7 +37,7 @@ public sealed class EnvelopeLoggingTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.DoesNotContain(capture.Logs, log => log.Level >= LogLevel.Warning);
+        Assert.Empty(Problems(capture, boot));
         Assert.DoesNotContain(capture.Logs, log => log.Text.Contains(BodyCanary, StringComparison.Ordinal));
     }
 
@@ -46,6 +47,7 @@ public sealed class EnvelopeLoggingTests
         var capture = new CaptureLoggerProvider();
         await using var factory = NewFactory(capture);
         using var client = factory.CreateClient();
+        var boot = capture.Logs.Count;
 
         using var response = await client.PostAsync(
             BoundRoute,
@@ -53,7 +55,7 @@ public sealed class EnvelopeLoggingTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.DoesNotContain(capture.Logs, log => log.Level >= LogLevel.Warning);
+        Assert.Empty(Problems(capture, boot));
         Assert.DoesNotContain(capture.Logs, log => log.Text.Contains(BodyCanary, StringComparison.Ordinal));
     }
 
@@ -65,6 +67,7 @@ public sealed class EnvelopeLoggingTests
         var capture = new CaptureLoggerProvider();
         await using var factory = NewFactory(capture);
         using var client = factory.CreateClient();
+        var boot = capture.Logs.Count;
 
         using var response = await client.GetAsync(route, TestContext.Current.CancellationToken);
 
@@ -72,37 +75,78 @@ public sealed class EnvelopeLoggingTests
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal("internal_error", document.RootElement.GetProperty("error").GetProperty("code").GetString());
 
-        var errors = capture.Logs.Where(log => log.Level >= LogLevel.Warning).ToArray();
+        var errors = Problems(capture, boot);
         var only = Assert.Single(errors);
         Assert.Equal(LogLevel.Error, only.Level);
         Assert.Equal(1201, only.EventId.Id);
     }
 
     [Fact]
-    public async Task A_Cancelled_Request_Is_Not_Logged_As_An_Error()
+    public async Task Explicit_Bad_Request_Keeps_Its_Status_And_Logs_Only_The_Status_At_Debug()
     {
         var capture = new CaptureLoggerProvider();
         await using var factory = NewFactory(capture);
         using var client = factory.CreateClient();
+        var boot = capture.Logs.Count;
+
+        using var response = await client.GetAsync(TooLargeRoute, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.Empty(Problems(capture, boot));
+        var line = Assert.Single(capture.Logs.Skip(boot), log => log.EventId.Id == 1202);
+        Assert.Equal(LogLevel.Debug, line.Level);
+        Assert.Contains("413", line.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(BodyCanary, line.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_Cancelled_Request_Is_Not_Logged_As_An_Error()
+    {
+        var capture = new CaptureLoggerProvider();
+        var signals = new HangSignals();
+        await using var factory = NewFactory(capture, signals);
+        using var client = factory.CreateClient();
+        var boot = capture.Logs.Count;
 
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        cancel.CancelAfter(TimeSpan.FromMilliseconds(300));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => client.GetAsync(HangRoute, cancel.Token));
+        var call = Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.GetAsync(HangRoute, cancel.Token));
+        await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+        await cancel.CancelAsync();
+        await call;
 
-        // Let the server side observe the abort and unwind before asserting an absence.
-        await Task.Delay(500, TestContext.Current.CancellationToken);
+        // OnCompleted runs after the whole pipeline, middleware included, has unwound.
+        await signals.Completed.Task.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
 
-        Assert.DoesNotContain(capture.Logs, log => log.Level >= LogLevel.Warning);
+        Assert.Empty(Problems(capture, boot));
+    }
+
+    /// <summary>Warning-and-above entries written after the host booted (boot itself warns about the disabled isolation check).</summary>
+    private static CapturedLog[] Problems(CaptureLoggerProvider capture, int boot) =>
+        capture.Logs.Skip(boot).Where(log => log.Level >= LogLevel.Warning).ToArray();
+
+    private sealed class HangSignals
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private const string JsonBugRoute = "/v1/test/json-bug";
     private const string BoomRoute = "/v1/test/boom";
     private const string HangRoute = "/v1/test/hang";
     private const string BoundRoute = "/v1/test/bound";
+    private const string TooLargeRoute = "/v1/test/too-large";
 
-    private static EvidgateApiFactory NewFactory(CaptureLoggerProvider capture) =>
-        new(DeadConnectionString, capture, services => services.AddSingleton<IStartupFilter, FailingRoutesStartupFilter>());
+    private static EvidgateApiFactory NewFactory(CaptureLoggerProvider capture, HangSignals? signals = null) =>
+        new(
+            DeadConnectionString,
+            capture,
+            services =>
+            {
+                services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Debug));
+                services.AddSingleton(signals ?? new HangSignals());
+                services.AddSingleton<IStartupFilter, FailingRoutesStartupFilter>();
+            });
 
     private sealed record BoundBody(string? Name);
 
@@ -124,10 +168,18 @@ public sealed class EnvelopeLoggingTests
         {
             endpoints.MapGet(JsonBugRoute, () => JsonSerializer.Deserialize<BoundBody>("{ broken") is null ? Results.Ok() : Results.Ok())
                 .ExcludeFromDescription();
-            endpoints.MapGet(BoomRoute, () => (IResult)throw new InvalidOperationException("boom"))
+            endpoints.MapGet(BoomRoute, IResult () => throw new InvalidOperationException("boom"))
                 .ExcludeFromDescription();
-            endpoints.MapGet(HangRoute, async (HttpContext context) =>
+            endpoints.MapGet(TooLargeRoute, IResult () => throw new BadHttpRequestException("too large " + BodyCanary, StatusCodes.Status413PayloadTooLarge))
+                .ExcludeFromDescription();
+            endpoints.MapGet(HangRoute, async (HttpContext context, HangSignals signals) =>
             {
+                context.Response.OnCompleted(() =>
+                {
+                    signals.Completed.TrySetResult();
+                    return Task.CompletedTask;
+                });
+                signals.Entered.TrySetResult();
                 await Task.Delay(Timeout.Infinite, context.RequestAborted);
                 return Results.Ok();
             }).ExcludeFromDescription();
