@@ -16,8 +16,8 @@
 -- The role side: a second trigger refuses to change `kind` or `org_id` of a role that a `membership_role` row still
 -- references, so a violating pair cannot be created by editing the role afterwards.
 --
--- SERIALISATION: both guards take `pg_advisory_xact_lock(hashtext('evidgate.membership_role'), hashtext(role id))`
--- before they read the other table, so a grant insert and a kind/org change of that role run in one order and the
+-- SERIALISATION: both guards take a two-key advisory lock (`hashtext('evidgate.membership_role'), hashtext(role id)`;
+-- shared for a grant insert, exclusive for a role change) before they read the other table, so a grant insert and a kind/org change of that role run in one order and the
 -- second one's check sees the first one's committed row.
 --
 -- DATA: the file never rewrites or deletes rows. A pre-check counts the existing violations and raises with the
@@ -69,8 +69,9 @@ create or replace function evidgate.membership_role_guard_role() returns trigger
   set search_path = ''
   as $$
   begin
-    -- Share one namespace with the role-side guard so its checking query sees the committed winner.
-    perform pg_catalog.pg_advisory_xact_lock(
+    -- Shared: grants never block each other (a founder inserts several grants per transaction, and
+    -- concurrent orgs would deadlock on an exclusive lock), but they exclude a role kind/org change.
+    perform pg_catalog.pg_advisory_xact_lock_shared(
       pg_catalog.hashtext('evidgate.membership_role'), pg_catalog.hashtext(new.role_id::text));
 
     if not exists (
@@ -100,7 +101,7 @@ create or replace function evidgate.role_guard_granted_scope() returns trigger
   set search_path = ''
   as $$
   begin
-    -- The trigger WHEN limits this lock to kind/org changes; grant inserts take the same key first.
+    -- Exclusive against the shared lock of grant inserts; the WHEN clause limits it to kind/org changes.
     perform pg_catalog.pg_advisory_xact_lock(
       pg_catalog.hashtext('evidgate.membership_role'), pg_catalog.hashtext(new.id::text));
 
