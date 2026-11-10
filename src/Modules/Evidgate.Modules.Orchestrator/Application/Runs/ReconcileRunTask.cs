@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Orchestrator.Contracts;
@@ -105,6 +106,13 @@ internal sealed partial class ReconcileRunTaskHandler(
             .ConfigureAwait(false);
 
         LogFinalized(logger, payload.RunId, finalization.Completeness, finalization.RevisionNo);
+
+        // Only a verdict the platform actually settled as incomplete feeds the rate: a late or reprocess
+        // attempt appends a revision and settles no state, so it is not a decision the rate describes.
+        if (string.Equals(finalization.Completeness, ReconcileFinisher.Incomplete, StringComparison.Ordinal))
+        {
+            EvidgateTelemetry.RecordRunIncomplete();
+        }
     }
 
     /// <summary>

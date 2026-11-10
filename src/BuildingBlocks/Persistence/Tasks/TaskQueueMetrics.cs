@@ -46,4 +46,41 @@ public static class TaskQueueMetrics
 
     /// <summary>Unit of <see cref="DeferredCounterName"/>.</summary>
     public const string DeferredUnit = "{attempt}";
+
+    /// <summary>
+    /// Gauge of how long the oldest due-but-unclaimed row has waited, in seconds. Zero means nothing is
+    /// due; a value above the alert threshold is the queue-age signal the on-call runbook reads.
+    /// </summary>
+    public const string OldestAgeGaugeName = "task_queue_oldest_age_seconds";
+
+    /// <summary>Description of <see cref="OldestAgeGaugeName"/>.</summary>
+    public const string OldestAgeDescription =
+        "Seconds between now and the available_at of the oldest queued or retry task row whose available_at has passed.";
+
+    /// <summary>Unit of <see cref="OldestAgeGaugeName"/>.</summary>
+    public const string OldestAgeUnit = "s";
+
+    /// <summary>Gauge of rows currently parked in <c>dead_letter</c>, the depth an operator drains.</summary>
+    public const string DeadLetterDepthGaugeName = "task_dead_letter_depth";
+
+    /// <summary>Description of <see cref="DeadLetterDepthGaugeName"/>.</summary>
+    public const string DeadLetterDepthDescription =
+        "Task rows currently in state dead_letter (terminal, awaiting replay or deletion).";
+
+    /// <summary>Unit of <see cref="DeadLetterDepthGaugeName"/>.</summary>
+    public const string DeadLetterDepthUnit = "{row}";
+
+    /// <summary>
+    /// Counter of leases that expired before their handler finished: the row came back as <c>queued</c>,
+    /// or went to <c>dead_letter</c> when its attempts were used up. A rising value means consumers are
+    /// dying or hanging, not that the queue is slow.
+    /// </summary>
+    public const string LeaseLostCounterName = "task_lease_lost_total";
+
+    /// <summary>Description of <see cref="LeaseLostCounterName"/>.</summary>
+    public const string LeaseLostDescription =
+        "Task rows whose lease expired before completion (requeued, or dead-lettered at the attempt cap).";
+
+    /// <summary>Unit of <see cref="LeaseLostCounterName"/>.</summary>
+    public const string LeaseLostUnit = "{row}";
 }

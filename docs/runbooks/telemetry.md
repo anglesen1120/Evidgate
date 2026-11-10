@@ -273,3 +273,43 @@ measured under load; the collector's own drop counters (`otelcol_*`) are not scr
 smoke reads the retention settings back and proves ingest and query, but does not wait for
 expiry or for a store to hit its size ceiling; the stores share the default compose
 network with PostgreSQL and SeaweedFS.
+
+## 6. The metrics catalogue
+
+`infra/metrics/catalogue.yaml` is the register of every metric an operator or the cost view
+reads: per entry its id, the exact OTel instrument name, the meter that publishes it, the
+instrument kind and unit, its labels, and **either** `source` (the code or library
+subscription that emits it) **or** `unavailable` (a sentence saying why it cannot be reported
+in this build). A metric with no source is absent, never `0`: an absent series is what a
+dashboard shows as "no data", and a fabricated zero is indistinguishable from a measured one.
+
+Both hosts subscribe to the catalogue's meters through `AddEvidgateTelemetry`
+(`src/BuildingBlocks/Observability/ObservabilityExtensions.cs`): the application meter
+`Evidgate`, the runtime's built-in `System.Runtime` (via `AddRuntimeInstrumentation`; on .NET 9+ the
+instrument names are the runtime's own, so queries read `dotnet.gc.last_collection.heap.size`
+for gen-2 and LOH, `dotnet.thread_pool.queue.length` and `dotnet.monitor.lock_contentions` for
+starvation, and `dotnet.exceptions` for the exception counter), and
+Npgsql's `Npgsql` meter (pool occupancy by state, pool timeouts, operation durations). The Api
+adds the hosting meter's `http.server.request.duration` histogram, which is the ingest SLI
+filtered by route template.
+
+Labels are bounded token vocabularies. No label carries an organization, tenant, run, job,
+request, trace, artifact or project id, a billing key, a token or a secret — a label is a
+series, and a series is a bill. Two of them are worth knowing about when writing a query:
+`evidgate_artifact_failure_total` carries `stage` and the artifact failure `code`, and the
+usage counter carries the ledger's closed `metric` vocabulary.
+
+The gauges that need a database — `task_queue_oldest_age_seconds` and
+`task_dead_letter_depth` — are refreshed by a single Worker loop every 10 s with one bounded
+aggregate query; a scrape runs no SQL, a failed refresh keeps the last value, and a value not
+renewed within two intervals is not reported at all. Alerts that read these series are
+10.3.1-T5's rules; the thresholds are not in this file.
+
+The catalogue is pinned by `tests/Hosts.IntegrationTests/MetricCatalogueTests.cs`: the
+committed YAML is parsed, every entry must name exactly one of a source or a reason, every
+declared source instrument must actually be published by the real registration (a
+`MeterListener` over the four meter names, fed by the application's own recording methods, a
+real PostgreSQL connection and the runtime instrumentation), and a banned label fails the
+test. `scripts/dev/observability-smoke.sh` additionally asserts that a runtime metric
+(`dotnet_thread_pool_thread_count`) reaches Prometheus through the collector in the dev
+profile.

@@ -294,6 +294,10 @@ await_hit_for 90 "api meter metric" "$prom/api/v1/query" \
   --data-urlencode 'query=evidgate_login_attempts_total{job="evidgate-api",provider="unknown"}' 'evidgate_login_attempts_total'
 await_hit_for 90 "api resource version" "$prom/api/v1/query" \
   --data-urlencode "query=target_info{job=\"evidgate-api\",service_version=\"obs-smoke-$run_id\"}" "obs-smoke-$run_id"
+# The runtime instrumentation path is live, not merely declared: the built-in System.Runtime meter
+# reaches Prometheus under its normalised name, which is what the thread-pool and GC panels read.
+await_hit_for 90 "api runtime metric" "$prom/api/v1/query" \
+  --data-urlencode 'query=dotnet_thread_pool_thread_count{job="evidgate-api"}' 'dotnet_thread_pool_thread_count'
 
 # Collector redaction: the contract puts the secret shapes at the collector, not in
 # each application. A key that names a credential is deleted in every context, and a

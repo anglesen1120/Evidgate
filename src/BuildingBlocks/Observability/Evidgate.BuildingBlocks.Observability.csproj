@@ -10,5 +10,6 @@
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <!-- 10.3.1-T1.1: Npgsql and HttpClient client spans, wired by AddEvidgateCorrelation. -->
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
   </ItemGroup>
 </Project>

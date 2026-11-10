@@ -15,6 +15,21 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 public static class TaskQueueSql
 {
     /// <summary>
+    /// The queue-state snapshot behind <c>task_queue_oldest_age_seconds</c> and <c>task_dead_letter_depth</c>:
+    /// one aggregate pass over the claim index for the due queue and the dead-letter partial index for the
+    /// depth, so a scrape of the two gauges costs one bounded query per refresh interval, never one per row.
+    /// </summary>
+    internal const string QueueStateSnapshot = """
+        select
+          coalesce(
+              extract(epoch from now() - min(available_at))
+                  filter (where state in ('queued', 'retry') and available_at <= now()),
+              0)::double precision as "OldestAgeSeconds",
+          count(*) filter (where state = 'dead_letter')::bigint as "DeadLetters"
+        from public.task
+        """;
+
+    /// <summary>
     /// The visibility timeout of 01.5.1 §6: a lease that ran out without a
     /// completion is flipped back to <c>queued</c> so the next claim pass takes it
     /// again. This is the crashed-worker path, and it is why a claim never needs a

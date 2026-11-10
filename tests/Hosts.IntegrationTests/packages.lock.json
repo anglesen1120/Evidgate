@@ -100,6 +100,12 @@
           "xunit.v3.mtp-v2": "[4.0.2]"
         }
       },
+      "YamlDotNet": {
+        "type": "Direct",
+        "requested": "[18.1.0, )",
+        "resolved": "18.1.0",
+        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
+      },
       "AWSSDK.Core": {
         "type": "Transitive",
         "resolved": "4.0.102.14",
@@ -1037,7 +1043,8 @@
           "Microsoft.Extensions.Options.DataAnnotations": "[10.0.14, )",
           "OpenTelemetry.Exporter.OpenTelemetryProtocol": "[1.20.1, )",
           "OpenTelemetry.Extensions.Hosting": "[1.20.1, )",
-          "OpenTelemetry.Instrumentation.Http": "[1.20.1, )"
+          "OpenTelemetry.Instrumentation.Http": "[1.20.1, )",
+          "OpenTelemetry.Instrumentation.Runtime": "[1.20.1, )"
         }
       },
       "evidgate.buildingblocks.persistence": {
@@ -1563,6 +1570,15 @@
           "OpenTelemetry.Api.ProviderBuilderExtensions": "[1.20.1, 2.0.0)"
         }
       },
+      "OpenTelemetry.Instrumentation.Runtime": {
+        "type": "CentralTransitive",
+        "requested": "[1.20.1, )",
+        "resolved": "1.20.1",
+        "contentHash": "1ngVOV2ZYqFy38g2g+vZ50poeF66GJtinITBDB7TNRP4fmrDxYYyPfs1uGrPHkhJJRV5I7mElPFOctvlatu41w==",
+        "dependencies": {
+          "OpenTelemetry.Api": "[1.20.1, 2.0.0)"
+        }
+      },
       "Testcontainers": {
         "type": "CentralTransitive",
         "requested": "[4.16.0, )",
@@ -1575,12 +1591,6 @@
           "SSH.NET": "2026.0.0",
           "SharpZipLib": "1.4.2"
         }
-      },
-      "YamlDotNet": {
-        "type": "CentralTransitive",
-        "requested": "[18.1.0, )",
-        "resolved": "18.1.0",
-        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
       }
     }
   }

@@ -1,0 +1,348 @@
+# The operations metrics catalogue (10.3.1 §8): every metric an on-call responder or the
+# 10.9.1 cost view reads, with its exact OTel instrument name, the meter that publishes it,
+# and either the code that emits it or the reason it cannot be reported yet.
+#
+# Rules this file follows, and that tests/Hosts.IntegrationTests/MetricCatalogueTests.cs
+# enforces:
+#   - an entry names `source` (a real instrument, published by the code at that path) XOR
+#     `unavailable` (a non-empty reason) — never both, never neither. A missing source is
+#     "unavailable with a reason", never 0 (ruling T60: no fabricated measurements).
+#   - a label is a bounded token vocabulary, never free text and never a correlation or
+#     tenant identifier (`org_id`, `run_id`, `job_id`, `trace_id`, `request_id`, a token, a
+#     secret, an artifact or project id). Labels are series, and a series is a bill.
+#   - `kind` is the OTel instrument kind the exporter sees: counter, histogram,
+#     observable_gauge or observable_updowncounter.
+# Every source entry is exported per environment: the resource attribute named by
+# `environment_attribute` separates staging from production on one backend.
+
+version: 1
+environment_attribute: deployment.environment
+
+meters:
+  evidgate: Evidgate
+  runtime: System.Runtime
+  npgsql: Npgsql
+  aspnetcore: Microsoft.AspNetCore.Hosting
+
+entries:
+  # --- task queue and outbox -------------------------------------------------------------
+  - id: task_queue_age
+    instrument: task_queue_oldest_age_seconds
+    meter: evidgate
+    kind: observable_gauge
+    unit: s
+    description: Seconds between now and the available_at of the oldest queued or retry task row that is already due. Zero means nothing is due.
+    labels: []
+    source: src/BuildingBlocks/Persistence/Tasks/TaskQueueStateGauge.cs
+
+  - id: task_dead_letter_depth
+    instrument: task_dead_letter_depth
+    meter: evidgate
+    kind: observable_gauge
+    unit: '{row}'
+    description: Task rows currently parked in dead_letter, the queue an operator drains.
+    labels: []
+    source: src/BuildingBlocks/Persistence/Tasks/TaskQueueStateGauge.cs
+
+  - id: task_dead_letter_total
+    instrument: task_dead_letter_total
+    meter: evidgate
+    kind: counter
+    unit: '{row}'
+    description: Task rows that reached dead_letter (retry cap reached, or a lease that expired with every attempt used).
+    labels: []
+    source: src/BuildingBlocks/Persistence/Tasks/TaskAlertNotifier.cs
+
+  - id: task_lease_lost_total
+    instrument: task_lease_lost_total
+    meter: evidgate
+    kind: counter
+    unit: '{row}'
+    description: Task rows whose lease expired before completion, requeued or dead-lettered at the attempt cap. A rising rate means consumers are dying or hanging, not that the queue is slow.
+    labels: []
+    source: src/BuildingBlocks/Persistence/Tasks/TaskClaimer.Metrics.cs
+
+  - id: outbox_undispatched
+    instrument: outbox_undispatched
+    meter: evidgate
+    kind: observable_gauge
+    unit: '{row}'
+    description: Outbox rows committed but not yet moved into the task queue.
+    labels: []
+    source: src/BuildingBlocks/Persistence/Outbox/OutboxDispatcher.Backlog.cs
+
+  - id: outbox_dispatch_lag
+    instrument: task_dispatch_lag_seconds
+    meter: evidgate
+    kind: histogram
+    unit: s
+    description: Seconds between an outbox row's business commit and its dispatch into the task queue. The p95 is the mechanism-overhead SLI.
+    labels: []
+    source: src/BuildingBlocks/Persistence/Outbox/OutboxDispatcher.cs
+
+  # --- run, artifact and ingest outcomes -------------------------------------------------
+  - id: incomplete_rate
+    instrument: evidgate_run_incomplete_total
+    meter: evidgate
+    kind: counter
+    unit: '{run}'
+    description: Runs a reconcile settled as incomplete (a planned shard or required result never arrived). The rate over settled runs is the incomplete rate.
+    labels: []
+    source: src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileRunTask.cs
+
+  - id: artifact_failure_rate
+    instrument: evidgate_artifact_failure_total
+    meter: evidgate
+    kind: counter
+    unit: '{artifact}'
+    description: Artifacts refused by a completion or parse verdict, by stage and bounded failure code.
+    labels: [stage, reason]
+    source: src/BuildingBlocks/Observability/EvidgateTelemetry.Operations.cs
+
+  - id: parser_error_rate
+    instrument: evidgate_artifact_failure_total
+    meter: evidgate
+    kind: counter
+    unit: '{artifact}'
+    description: The parser's share of the artifact-failure counter, selected by stage="parse". Parser errors are artifact verdicts in this build; no separate parser-internal counter exists.
+    selection: 'stage="parse"'
+    labels: [stage, reason]
+    source: src/Modules/Evidgate.Modules.Evidence/Application/ParseArtifactTask.cs
+
+  - id: decision_p95
+    instrument: evidgate_evaluation_decision_latency_seconds
+    meter: evidgate
+    kind: histogram
+    unit: s
+    description: Seconds between the evaluation row's created_at and the frozen evidence it read, recorded once per committed decision. The p95 is the decision SLI.
+    labels: []
+    source: src/Modules/Evidgate.Modules.Policy/Application/Evaluation/EvaluateRunCommand.cs
+
+  - id: ingest_p95
+    instrument: http.server.request.duration
+    meter: aspnetcore
+    kind: histogram
+    unit: s
+    description: Server request duration per route template. The ingest p95 is this histogram filtered to the ingest routes; a 404 carries the route fallback, never a path value.
+    labels:
+      [
+        http.request.method,
+        http.route,
+        http.response.status_code,
+        url.scheme,
+        network.protocol.version,
+        error.type,
+      ]
+    source: src/Evidgate.Api/ApiHost.cs
+
+  # --- cost inputs -----------------------------------------------------------------------
+  - id: unit_cost
+    instrument: evidgate_usage_units_total
+    meter: evidgate
+    kind: counter
+    unit: '{unit}'
+    description: Billed units committed to the usage ledger, by the ledger's closed metric vocabulary; this is the cost input (unit cost multiplies a published price by this rate).
+    labels: [metric]
+    source: src/Modules/Evidgate.Modules.Usage/Application/UsageMetering.cs
+
+  # --- .NET runtime health (the built-in System.Runtime meter; .NET 9+ supplies these itself) --
+  - id: gc_heap_size
+    instrument: dotnet.gc.last_collection.heap.size
+    meter: runtime
+    kind: observable_updowncounter
+    unit: By
+    description: Managed GC heap size including fragmentation as observed during the latest collection, split by generation (gen0-2, loh, poh). The gen2 and loh series are the heap panels.
+    labels: [gc.heap.generation]
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: gc_heap_fragmentation
+    instrument: dotnet.gc.last_collection.heap.fragmentation.size
+    meter: runtime
+    kind: observable_updowncounter
+    unit: By
+    description: Heap fragmentation as observed during the latest collection, split by generation.
+    labels: [gc.heap.generation]
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: gc_heap_committed
+    instrument: dotnet.gc.last_collection.memory.committed_size
+    meter: runtime
+    kind: observable_updowncounter
+    unit: By
+    description: Committed virtual memory the GC holds as observed during the latest collection. Larger than the heap because it includes room for future allocations.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: gc_collections_count
+    instrument: dotnet.gc.collections
+    meter: runtime
+    kind: observable_counter
+    unit: '{collection}'
+    description: Garbage collections since process start, by the maximum generation collected.
+    labels: [gc.heap.generation]
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: gc_allocations_size
+    instrument: dotnet.gc.heap.total_allocated
+    meter: runtime
+    kind: observable_counter
+    unit: By
+    description: Approximate bytes allocated on the managed heap since process start.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: gc_pause_time
+    instrument: dotnet.gc.pause.time
+    meter: runtime
+    kind: observable_counter
+    unit: s
+    description: Time threads spent paused in GC since process start; the share of wall time lost to collections.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: thread_pool_threads
+    instrument: dotnet.thread_pool.thread.count
+    meter: runtime
+    kind: observable_counter
+    unit: '{thread}'
+    description: Thread pool threads that currently exist.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: thread_pool_queue_length
+    instrument: dotnet.thread_pool.queue.length
+    meter: runtime
+    kind: observable_counter
+    unit: '{work_item}'
+    description: Work items currently queued to the thread pool. A rising queue against flat completed items is how starvation is alerted; no separate starvation metric is needed.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: thread_pool_completed_items
+    instrument: dotnet.thread_pool.work_item.count
+    meter: runtime
+    kind: observable_counter
+    unit: '{work_item}'
+    description: Work items the thread pool has completed since process start.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: lock_contentions
+    instrument: dotnet.monitor.lock_contentions
+    meter: runtime
+    kind: observable_counter
+    unit: '{contention}'
+    description: Times a thread had to wait to acquire a monitor lock. The second starvation signal, next to the thread-pool queue.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: timer_count
+    instrument: dotnet.timer.count
+    meter: runtime
+    kind: observable_updowncounter
+    unit: '{timer}'
+    description: Timer instances that are currently active.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: exception_count
+    instrument: dotnet.exceptions
+    meter: runtime
+    kind: counter
+    unit: '{exception}'
+    description: Exceptions thrown in managed code, by exception type.
+    labels: [error.type]
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: assembly_count
+    instrument: dotnet.assembly.count
+    meter: runtime
+    kind: observable_updowncounter
+    unit: '{assembly}'
+    description: .NET assemblies currently loaded in the process.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: jit_compilation_time
+    instrument: dotnet.jit.compilation.time
+    meter: runtime
+    kind: observable_counter
+    unit: s
+    description: Time the JIT compiler has spent compiling methods since process start.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: jit_compiled_il
+    instrument: dotnet.jit.compiled_il.size
+    meter: runtime
+    kind: observable_counter
+    unit: By
+    description: Bytes of IL the JIT has compiled since process start.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: process_cpu_time
+    instrument: dotnet.process.cpu.time
+    meter: runtime
+    kind: observable_counter
+    unit: s
+    description: CPU time the process has used, split by cpu.mode (user, system).
+    labels: [cpu.mode]
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: process_working_set
+    instrument: dotnet.process.memory.working_set
+    meter: runtime
+    kind: observable_updowncounter
+    unit: By
+    description: Physical memory mapped to the process.
+    labels: []
+    source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  # --- PostgreSQL pool and commands ------------------------------------------------------
+  - id: npgsql_pool_connections
+    instrument: db.client.connection.count
+    meter: npgsql
+    kind: observable_gauge
+    unit: '{connection}'
+    description: Connections in each state of the pool (idle, used), by data source.
+    labels: [db.client.connection.state, db.client.connection.pool.name]
+    source: Npgsql 10.0.3 subscription in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: npgsql_pool_timeouts
+    instrument: db.client.connection.npgsql.timeouts
+    meter: npgsql
+    kind: counter
+    unit: '{timeout}'
+    description: Pool waits that gave up — the pool was exhausted long enough for the timeout to fire.
+    labels: []
+    source: Npgsql 10.0.3 subscription in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  - id: npgsql_operation_duration
+    instrument: db.client.operation.duration
+    meter: npgsql
+    kind: histogram
+    unit: s
+    description: Duration of PostgreSQL operations, the command-level latency the ORM does not report.
+    labels: [db.system, db.operation.name]
+    source: Npgsql 10.0.3 subscription in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
+
+  # --- not reportable in this build (T60: absent, never 0) -------------------------------
+  - id: healing_false_positive_rate
+    description: Share of healing actions later judged false positives, the loop's precision signal.
+    unavailable: >-
+      The healing loop is plan 08 work and no code classifies a healing action as a false
+      positive yet, so no counter exists to divide. Reporting 0 would claim a measurement.
+
+  - id: npgsql_pool_wait
+    description: Time a caller waited to check a connection out of the Npgsql pool under saturation.
+    unavailable: >-
+      Npgsql 10.0.3 exports pool occupancy and a pool-timeout counter, not the time a checkout
+      waited. A wait histogram would have to be built inside the pool and is not available.
+
+  - id: ef_command_duration
+    description: EF Core command duration, the ORM-level latency split that would explain an Npgsql spike.
+    unavailable: >-
+      EF Core 10's Microsoft.EntityFrameworkCore meter publishes query, SaveChanges and
+      compiled-query counters and an active-context gauge, but no command-duration
+      instrument. Npgsql's db.client.operation.duration is the command-level latency instead.

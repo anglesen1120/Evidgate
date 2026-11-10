@@ -254,6 +254,13 @@ internal sealed class CompleteArtifactUploadHandler(
             return loser;
         }
 
+        // The committed verdict is the only place a refusal becomes countable: a replay returns above, and a
+        // concurrency loser is counted by the writer whose rejection actually committed.
+        if (!command.Verdict.Verified)
+        {
+            EvidgateTelemetry.RecordArtifactFailure("upload", command.Verdict.FailureCode);
+        }
+
         if (command.Verdict.Verified)
         {
             try

@@ -334,6 +334,10 @@ internal sealed partial class ParseArtifactTaskHandler(
             throw new InvalidOperationException(
                 "the parse verdict could not be written because the artifact changed while it was parsed, so the task is retried");
         }
+
+        // Only the attempt whose rejection committed counts it: a stored verdict and a row that left the
+        // parseable set both returned above, and their writer owns the one sample for this artifact.
+        EvidgateTelemetry.RecordArtifactFailure("parse", reason);
     }
 
     /// <summary>True when the artifact may still be parsed: <c>uploaded</c> or <c>ready</c>.</summary>

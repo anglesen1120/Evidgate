@@ -59,6 +59,8 @@ public sealed class MetricCardinalityTests
         "cap",
         "issue",
         "kind",
+        "stage",
+        "metric",
     };
 
     /// <summary>Id-shaped key names that must never become a label (they would be one series per row).</summary>
@@ -263,6 +265,12 @@ public sealed class MetricCardinalityTests
         if (type == typeof(long))
         {
             return 2L;
+        }
+
+        // The usage-units counter adds a fractional quantity, so 2 is a valid committed amount.
+        if (type == typeof(double))
+        {
+            return 2d;
         }
 
         // The apply batch-size histogram counts changes rather than tagging them; 2 is inside its 1..200 range.
