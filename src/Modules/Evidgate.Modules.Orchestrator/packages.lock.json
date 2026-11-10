@@ -26,110 +26,116 @@
       },
       "Corvus.Json.CodeGeneration": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "2qM0MgWmoEIjM1fZSOH3VFw3JvcRL5MpFARYXol/xpYSBGNh9blisf2i+HGFOZYOdewn0KzIaE/WGSZF5fZWUQ==",
+        "resolved": "5.8.8",
+        "contentHash": "VgZ2TcmEi309o1o0j8xVgS0unR2BKQyRd9i4KZkfTnNQwWAl22tWvz5hMxeuW616upSbDDaRTBIG8XK7zN1JZA==",
         "dependencies": {
-          "Corvus.Json.JsonReference": "5.6.1"
+          "Corvus.Json.JsonReference": "5.8.8"
         }
       },
       "Corvus.Json.CodeGeneration.201909": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "SWyt0C6uAG2I0UP4lM6Wtw+mTIxEm2r6qbn+zm0t/W8xkrzyZ32T8vSBBljDGrNnxisLHUgPBe4JuXKe21MGUg==",
+        "resolved": "5.8.8",
+        "contentHash": "YY6tP6gfTsao8kjUsLtFtZqdKLXumlBwZwgzuCFjD30zENQvcr/YfEe95L455uMxsO7GOE2Xk8voiZLpu7jHMw==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.6.1"
+          "Corvus.Json.CodeGeneration": "5.8.8"
         }
       },
       "Corvus.Json.CodeGeneration.202012": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "MtJqHLkmvcsdd/Dgm2RC2rWhQy+SF2F/L4Uxm+kR4twZAH+18Tol7eMOz9EXwPa4Bo4XjihR9NhnVhZNnBkW2A==",
+        "resolved": "5.8.8",
+        "contentHash": "vYuZkJglD6BO7r0lavfR8fxvWRJ/Y2vyNd+pY1hQ0D1URQ5LoA8x+VXMa2m2TnhGeBEnKDr31SZQEVU6cA9sKQ==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.6.1"
+          "Corvus.Json.CodeGeneration": "5.8.8"
         }
       },
       "Corvus.Json.CodeGeneration.4": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "T0QZIw3jENSJliD/Ap0rjwOzYrIJEoCq48wA1NlPDbMOprpdZyXZh6lOxx6q+MpvCVedg0u8ayFIIacR3QOKIg==",
+        "resolved": "5.8.8",
+        "contentHash": "xGThMgPBoPRTLW8/Asxbk5msL18Q0fg8MyrCh7OJTK/tT9YnLJSY4nH4DAmDBhw0ycLq2p249QE3Yzft6Qn1LQ==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.6.1"
+          "Corvus.Json.CodeGeneration": "5.8.8"
         }
       },
       "Corvus.Json.CodeGeneration.6": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "SB1KBqXdhvLUwlGK28jtFj+mUR5ctG/DCB2HLTr6ssKzxerupBKppabhqLMsDfG53qTs+lxpyyYvQThqZepwTQ==",
+        "resolved": "5.8.8",
+        "contentHash": "Ze/3BLQe8eTno+ebAAHgtHBECyEm10RF/E/xzI4wr4WKCSE/qqiOOhtYV9V3uIGHSVBJ+CDWDOs4pKjaHh/mvQ==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.6.1"
+          "Corvus.Json.CodeGeneration": "5.8.8"
         }
       },
       "Corvus.Json.CodeGeneration.7": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "SbDBo9OCYoju1ytDZ9WQXGUScuPtTMRL5Qow7GwbJ08Is5FU27ekn8E0btB/CvgkWJOXvWup/qrfPB/SMFhKdw==",
+        "resolved": "5.8.8",
+        "contentHash": "Egfsu3a7u7zZVa59ea/dmKOnJcJsT99S5u+SokGIVjOZx2bba/f1G5wpC5IDsi6QNRCxArJhOXBjJVYuRKWbTw==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.6.1"
+          "Corvus.Json.CodeGeneration": "5.8.8"
         }
       },
       "Corvus.Json.CodeGeneration.CorvusVocabulary": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "xmTOsHC9Mjo//XvXB1YGBfqMZQOZsO0yM1+nZpoLyd8f6H5vWvBSSm2FxtUU1NuOjf9Xw3z3BNtiRB6aP6XGyg==",
+        "resolved": "5.8.8",
+        "contentHash": "U0tCqxccXDrayho9Or2pfdUUaQPcDSyGmJbr9k6duF3CiGyaLEztXWiOK8Mg64c9tljye64x0IyKrb34I4nbNw==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.6.1"
+          "Corvus.Json.CodeGeneration": "5.8.8"
         }
       },
       "Corvus.Json.CodeGeneration.CSharp": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "BVBLkoV9tzRrL389qodxk+ITSs3KzNS6yfK3ll8cmldSLDO/mVYNJsLb6RQ/diJjxOO+xVsDGJDnqfgXJ1LF/Q==",
+        "resolved": "5.8.8",
+        "contentHash": "05IDrztPzjMmdMwMyhQmnOEynAGrD1j1Il4Gy4FOwF11Udy9JIfGtqYEX1vavwNSxb4QXbNulUWXIkLq7zsMcw==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.6.1",
+          "Corvus.Json.CodeGeneration": "5.8.8",
           "Microsoft.CodeAnalysis.CSharp": "5.3.0"
         }
       },
       "Corvus.Json.CodeGeneration.HttpClientDocumentResolver": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "98+UcG6FIfNQzdh7wP45Yqr/k9s8JzlZoosZLtZHLCqZS6SiqgJGddHBUyz1gmusxc3CSWys5zbC8whBBfXu+Q==",
+        "resolved": "5.8.8",
+        "contentHash": "k5N2y6Pq1a4srMRAT9LOepsxtovmY0EOubcZCTe0Bqq7D8Fv6IwEIU0y5+TMe7cRLLF/82ZOx3ss7K6mzlKI8A==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.6.1"
+          "Corvus.Json.CodeGeneration": "5.8.8"
         }
       },
       "Corvus.Json.CodeGeneration.OpenApi20": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "g+CZ7hOEcSWQC3a8ohm3RmncrRa/lzofYhr1f72FVBd8RNhtUbNooNaPLJb7kHjLT20AZwS3klg7HsYFpLF8cg==",
+        "resolved": "5.8.8",
+        "contentHash": "0e98rJBEZ/rng02/D1+SoAlkmxlsUdtNJstZiDKoDvAak5dxlcD9sfTXp0TMogVFziOg3AHMfyMCcDQIF8vvnQ==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.6.1"
+          "Corvus.Json.CodeGeneration": "5.8.8"
         }
       },
       "Corvus.Json.CodeGeneration.OpenApi30": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "FBAuTm/R3TRuKbpogmVratg1a0o+tANM/CeTs5rnC6bZqalUisUYPdmgatB52b9TzyiSlj+1md3ZgSLdnZGyYw==",
+        "resolved": "5.8.8",
+        "contentHash": "/4bMrGnieI8KD+H5C+P5g6jyxt0n0YEkXZL6LxmuRkCoxmafdNWopG6ipPPZIMszKwi1u41AmtiJuMTPuWIEZg==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.6.1"
+          "Corvus.Json.CodeGeneration": "5.8.8"
         }
       },
       "Corvus.Json.ExtendedTypes": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "0I1jJAva6RNDMd8FI5MbvddF7YenbvmLtbpHEBIywKYCscRVP6lo42/0y49KUTVQv7BD3hJcayTdOX236yK7Ew==",
+        "resolved": "5.8.8",
+        "contentHash": "WLZVC3qMrO70iVAszY92JoyGL8FxK+iZNrVl02/5mREKPRK0TVY5bDKNFofXRimglFfz1lFjjASACAB0z05+wg==",
         "dependencies": {
-          "Corvus.Json.JsonReference": "5.6.1",
+          "Corvus.Json.JsonReference": "5.8.8",
+          "Corvus.Regex.Ecma262": "1.0.15",
           "Corvus.UriTemplates": "2.3.2",
           "NodaTime": "3.3.1"
         }
       },
       "Corvus.Json.JsonReference": {
         "type": "Transitive",
-        "resolved": "5.6.1",
-        "contentHash": "mRWP8gkrePcdUBC244E5WQdTqJRAIrptCALQber4cmBOAo9vLal78/bPlgVJQT5wFfEARR0/MEwyneVBxQgcRQ==",
+        "resolved": "5.8.8",
+        "contentHash": "WPs+ekC0dLbZzxQLWGSRhXBmTATtak6n+mqy6LbpbF4N4FU/vnkQkITrCMMVf5x+ErFp79ChiPR4EuAF8dWIvw==",
         "dependencies": {
           "Corvus.HighPerformance": "1.0.4"
         }
+      },
+      "Corvus.Regex.Ecma262": {
+        "type": "Transitive",
+        "resolved": "1.0.15",
+        "contentHash": "wDC21MqsPI9L8PBs3dst8kebfY0rxE9KFiacCuk2Zwju6q3+DO49JFnQ61SwBBJgVUh2xSx2L6NQ4C6LXL6Vrg=="
       },
       "Corvus.UriTemplates": {
         "type": "Transitive",
@@ -209,7 +215,7 @@
       "evidgate.buildingblocks.contracts.validation": {
         "type": "Project",
         "dependencies": {
-          "Corvus.Json.Validator": "[5.6.1, )",
+          "Corvus.Json.Validator": "[5.8.8, )",
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
         }
       },
@@ -218,7 +224,7 @@
         "dependencies": {
           "OpenTelemetry.Exporter.OpenTelemetryProtocol": "[1.20.1, )",
           "OpenTelemetry.Extensions.Hosting": "[1.20.1, )",
-          "OpenTelemetry.Instrumentation.Http": "[1.20.1, )",
+          "OpenTelemetry.Instrumentation.Http": "[1.20.2, )",
           "OpenTelemetry.Instrumentation.Runtime": "[1.20.1, )"
         }
       },
@@ -274,22 +280,22 @@
       },
       "Corvus.Json.Validator": {
         "type": "CentralTransitive",
-        "requested": "[5.6.1, )",
-        "resolved": "5.6.1",
-        "contentHash": "oBtvuhNdbQ62qTye7q5U49GSCe3oxzcW68e7t6mhXYYKYLzVfH9dmcla8dh54apy7udTo94wETMPXA84roIbwA==",
+        "requested": "[5.8.8, )",
+        "resolved": "5.8.8",
+        "contentHash": "arhOEvLDswz4gkltl9K8ZJCDKujhq9B88dsTVLfrR8h3xzJQYdMwP4r621EelW16ft9JqqzBdgjX3zwaLcBD2g==",
         "dependencies": {
-          "Corvus.Json.CodeGeneration": "5.6.1",
-          "Corvus.Json.CodeGeneration.201909": "5.6.1",
-          "Corvus.Json.CodeGeneration.202012": "5.6.1",
-          "Corvus.Json.CodeGeneration.4": "5.6.1",
-          "Corvus.Json.CodeGeneration.6": "5.6.1",
-          "Corvus.Json.CodeGeneration.7": "5.6.1",
-          "Corvus.Json.CodeGeneration.CSharp": "5.6.1",
-          "Corvus.Json.CodeGeneration.CorvusVocabulary": "5.6.1",
-          "Corvus.Json.CodeGeneration.HttpClientDocumentResolver": "5.6.1",
-          "Corvus.Json.CodeGeneration.OpenApi20": "5.6.1",
-          "Corvus.Json.CodeGeneration.OpenApi30": "5.6.1",
-          "Corvus.Json.ExtendedTypes": "5.6.1",
+          "Corvus.Json.CodeGeneration": "5.8.8",
+          "Corvus.Json.CodeGeneration.201909": "5.8.8",
+          "Corvus.Json.CodeGeneration.202012": "5.8.8",
+          "Corvus.Json.CodeGeneration.4": "5.8.8",
+          "Corvus.Json.CodeGeneration.6": "5.8.8",
+          "Corvus.Json.CodeGeneration.7": "5.8.8",
+          "Corvus.Json.CodeGeneration.CSharp": "5.8.8",
+          "Corvus.Json.CodeGeneration.CorvusVocabulary": "5.8.8",
+          "Corvus.Json.CodeGeneration.HttpClientDocumentResolver": "5.8.8",
+          "Corvus.Json.CodeGeneration.OpenApi20": "5.8.8",
+          "Corvus.Json.CodeGeneration.OpenApi30": "5.8.8",
+          "Corvus.Json.ExtendedTypes": "5.8.8",
           "Microsoft.CodeAnalysis.CSharp": "5.3.0",
           "Microsoft.Extensions.DependencyModel": "10.0.7"
         }
@@ -368,9 +374,9 @@
       },
       "OpenTelemetry.Instrumentation.Http": {
         "type": "CentralTransitive",
-        "requested": "[1.20.1, )",
-        "resolved": "1.20.1",
-        "contentHash": "XJTM6imVztxLraOrzsdlZf5shdH9TVeEWNBxpyepB5e3Gy+KNeQf2hyic398210UxqlPtt4iOkBELtjfIFTzug==",
+        "requested": "[1.20.2, )",
+        "resolved": "1.20.2",
+        "contentHash": "B84T2n4U7r3l+N5qP8vmoztGhbliWXc+vSz0BefjYNXbW9BA9q7iqU9+xn5dtCPlMNdHb+9Horgk8YhcO+eNTw==",
         "dependencies": {
           "OpenTelemetry.Api.ProviderBuilderExtensions": "[1.20.1, 2.0.0)"
         }
