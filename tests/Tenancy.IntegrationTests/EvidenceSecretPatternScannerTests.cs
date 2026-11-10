@@ -370,64 +370,64 @@ public sealed class EvidenceSecretPatternScannerTests
     /// <summary>
     /// A cancelled attempt stops instead of finishing the object, including the worst shape for the bearer arm: one
     /// unbroken token run from the first byte to the last. The pass has to reach its own cancellation check inside that
-    /// run instead of walking the run to its end first, so the walk from the pass's first byte to its first check may
-    /// cost no more than the same bytes scanned on their own — that scan is also the positive control, because the
-    /// shape matches one credential.
+    /// run instead of walking the run to its end first. Where the pass stops is proven by the offsets it reports, not by
+    /// elapsed time: the token is cancelled at the first interval checkpoint, which must lie within one interval of the
+    /// start, with nothing reported after it. Offsets cannot see the bearer lookahead, which is capped inside the arm; an
+    /// unbounded walk of the 256 MiB run would be about 64 times the reference cost, so a deliberately coarse bound
+    /// (16 times the best of three reference scans, never under 100 ms) catches it without a tight timing ratio.
     /// </summary>
     [Fact]
     public async Task Scan_Honours_Cancellation_During_A_Large_Pass()
     {
+        const int interval = 4 * 1024 * 1024;
+
         // The platform's own object cap: the token run is longer than any artifact the pass can be handed.
         var content = new byte[256 * 1024 * 1024];
         "Bearer "u8.CopyTo(content);
         content.AsSpan(7).Fill((byte)'Q');
 
-        var walk = content.AsSpan(0, 4 * 1024 * 1024).ToArray();
-        var referenceWatch = System.Diagnostics.Stopwatch.GetTimestamp();
-        Scan(walk).ShouldHaveSingleItem().PatternClass.ShouldBe(SecretPatternClass.GenericBearerToken);
-        var reference = System.Diagnostics.Stopwatch.GetElapsedTime(referenceWatch);
+        var reference = TimeSpan.MaxValue;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var prefix = content.AsSpan(0, interval).ToArray();
+            var referenceWatch = System.Diagnostics.Stopwatch.GetTimestamp();
+            Scan(prefix).ShouldHaveSingleItem().PatternClass.ShouldBe(SecretPatternClass.GenericBearerToken);
+            var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(referenceWatch);
+            reference = elapsed < reference ? elapsed : reference;
+        }
 
         using var cancellation = new CancellationTokenSource();
-        var armed = false;
+        var offsets = new List<int>();
+        var start = 0L;
         var walked = TimeSpan.Zero;
 
-        // Both timestamps are taken on the scan thread inside the pass: the checkpoint at offset zero proves the walk
-        // began, and the first interval checkpoint is where the token is armed, so no scheduling delay outside the
-        // pass can pass for work.
+        // The checkpoint runs on the scan thread; the token is armed from inside it, so no scheduler delay is involved.
         var pass = Task.Run(
-            () =>
-            {
-                var start = 0L;
-
-                Should.Throw<OperationCanceledException>(() => SecretPatternScanner.Scan(
-                    content,
-                    cancellation.Token,
-                    offset =>
+            () => Should.Throw<OperationCanceledException>(() => SecretPatternScanner.Scan(
+                content,
+                cancellation.Token,
+                offset =>
+                {
+                    offsets.Add(offset);
+                    if (offset == 0)
                     {
-                        if (offset == 0)
-                        {
-                            start = System.Diagnostics.Stopwatch.GetTimestamp();
-                            return;
-                        }
+                        start = System.Diagnostics.Stopwatch.GetTimestamp();
+                        return;
+                    }
 
-                        if (armed)
-                        {
-                            return;
-                        }
-
-                        armed = true;
-                        walked = System.Diagnostics.Stopwatch.GetElapsedTime(start);
-                        Arm(cancellation);
-                    }));
-            },
+                    walked = System.Diagnostics.Stopwatch.GetElapsedTime(start);
+                    Arm(cancellation);
+                })),
             Token);
 
         await pass;
 
-        walked.ShouldBeGreaterThan(TimeSpan.Zero, "the pass never reached its first check");
-        walked.ShouldBeLessThan(
-            reference * 2,
-            "the walk to the first check must cost one interval, not the rest of the token run");
+        offsets.Count.ShouldBe(2, "the pass must report its start and one interval checkpoint, then stop");
+        offsets[0].ShouldBe(0);
+        offsets[1].ShouldBeGreaterThanOrEqualTo(interval);
+        offsets[1].ShouldBeLessThan(interval * 2, "the first check must come one interval into the token run, not at its end");
+        var bound = reference * 16 > TimeSpan.FromMilliseconds(100) ? reference * 16 : TimeSpan.FromMilliseconds(100);
+        walked.ShouldBeLessThan(bound, "the walk to the first check must cost one interval, not the whole token run");
     }
 
     /// <summary>
