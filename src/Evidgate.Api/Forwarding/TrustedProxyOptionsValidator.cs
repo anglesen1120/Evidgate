@@ -7,7 +7,7 @@ namespace Evidgate.Api.Forwarding;
 /// <summary>
 /// Fails the start of an Api that has no stated stance on proxies: outside Development, either a trusted
 /// proxy/network is configured or <c>KNOWNPROXIES=none</c> says there is none. Silence is refused because the
-/// per-client rate limits, session rows and audit rows would then key every client on the proxy's address.
+/// per-client rate limits, session rows would then key every client on the proxy's address.
 /// </summary>
 public sealed class TrustedProxyOptionsValidator(IHostEnvironment environment, IConfiguration configuration) : IValidateOptions<TrustedProxyOptions>
 {
