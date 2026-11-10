@@ -125,7 +125,8 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
                 row.MaxSequence,
                 row.UnknownStatusCount,
                 row.UnfinishedStartedCount,
-                row.BlockedCount);
+                row.BlockedCount,
+                row.StaleCount);
         }
 
         // An open shard before the collection deadline is not a verdict: the attempt waits (Pending) so the run stays
@@ -258,6 +259,8 @@ internal sealed class RunReconciler(ITenantDb db, ITenantScopeAccessor scopes) :
         public long UnfinishedStartedCount { get; set; }
 
         public long BlockedCount { get; set; }
+
+        public long StaleCount { get; set; }
     }
 
     /// <summary>
