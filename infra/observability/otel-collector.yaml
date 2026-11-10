@@ -4,29 +4,172 @@
 # passed to the container through EVIDGATE_OTEL_COLLECTOR_CONFIG (`--config=env:`),
 # because a repo file cannot be bind-mounted under colima/virtiofs.
 receivers:
+  # Internal listeners only: compose publishes 4317/4318 on 127.0.0.1, and this
+  # receiver has no CORS block, so it emits no Access-Control-Allow-* header and
+  # a browser origin cannot post to it. Exposing it off-host would be an open,
+  # unauthenticated ingest.
   otlp:
     protocols:
       grpc:
         endpoint: 0.0.0.0:4317
+        # 1 MiB per message and per HTTP body: a payload is read before any
+        # processor can refuse it, so the size cap is the only bound that keeps
+        # one request from outgrowing the memory limiter.
+        max_recv_msg_size_mib: 1
       http:
         endpoint: 0.0.0.0:4318
+        max_request_body_size: 1048576
 
 processors:
-  # Bounded buffering: past the limit the collector refuses data (counted in its
-  # own `otelcol_processor_refused_*` metrics) instead of growing past mem_limit.
+  # Bounded buffering: past the soft limit (60 − 15 = 45 MiB) the collector
+  # refuses data, counted in its own `otelcol_processor_refused_*` metrics, rather
+  # than growing past mem_limit; 60 MiB is the hard limit.
   memory_limiter:
     check_interval: 1s
     limit_mib: 60
     spike_limit_mib: 15
-  batch: {}
+
+  # Third redaction layer: the app's SecretRedactor is the first two (see
+  # docs/runbooks/telemetry.md §3). A key naming a credential is DELETED on every
+  # attribute map — resource, scope, span, span event, datapoint, log record —
+  # because a masked key still says the value existed; string values are masked
+  # next, so a shape the app never parsed cannot ride through.
+  # Stock `transform` (OTTL), not the alpha `redaction` processor: that one masks
+  # a key to `****` and cannot delete it. Every pattern is written once and
+  # aliased into each context, because a second copy drifts in a security control.
+  transform/redaction:
+    # Fail closed: an error drops the payload instead of shipping it unredacted.
+    # The value masks skip non-string values, and each body statement names the
+    # type it accepts, so a string body never fails the map one.
+    error_mode: propagate
+    trace_statements:
+      - context: resource
+        # Values only, never keys, so the key name stays readable in the store.
+        # Order runs from the specific shapes (JSON pair, header, XML, URL) to
+        # the broad `key=value` forms, which mask to end of line, `;` or `&`.
+        statements: &attribute_secrets
+          - &delete_secret_keys >-
+            delete_matching_keys(attributes, "(?i)(authorization|cookie|token|secret|password|passwd|pwd|api[_-]?key|apikey|credential|pepper|__host-|__secure-|(?:private|access|account|signing|encryption|shared[_-]?access)[_.-]?key|signature|session|(^|[._-])sid($|[._-])|jwt|bearer|connection[_-]?string|dsn)")
+          # Capture refs stay doubled: confmap unescapes `$$` to `$`, and a bare
+          # `${1}` would be read as environment variable `1`, failing startup.
+          - &mask_json_pair >-
+            replace_all_patterns(attributes, "value", "(?i)\\\\*\"(?:password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper|signature|session|jwt|bearer|dsn|connection[_-]?string|(?:private|access|account|signing|encryption)[_.-]?key|authorization|cookie)\\\\*\"\\s*:\\s*\\\\*\"[^\"\\r\\n]*\\\\*\"", "***")
+          - &mask_header_pair >-
+            replace_all_patterns(attributes, "value", "(?i)((?:set-)?cookie|authorization)([\\s\"']*[:=][\\s]*)[^\\r\\n]+", "$$1$$2***")
+          - &mask_xml_element >-
+            replace_all_patterns(attributes, "value", "(?i)(<(?:password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper|signature|session|jwt|bearer|dsn|connection[_-]?string|(?:private|access|account|signing|encryption)[_.-]?key|authorization|cookie)(?:\\s[^>]*)?>)([^<]*)(</)", "$$1***$$3")
+          - &mask_url_query >-
+            replace_all_patterns(attributes, "value", "(?i)([?&][a-z0-9_.-]*(?:password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper|signature|session|jwt|bearer|dsn|connection[_-]?string|(?:private|access|account|signing|encryption)[_.-]?key|authorization|cookie|sig|key)=)([^&#\\s\"']*)", "$$1***")
+          - &mask_url_userinfo >-
+            replace_all_patterns(attributes, "value", "(?i)([a-z][a-z0-9+.-]*://[^:/\\s@\"']*:)([^@/\\s\"']+)(@)", "$$1***$$3")
+          - &mask_auth_scheme >-
+            replace_all_patterns(attributes, "value", "(?i)((?:bearer|basic)\\s+)[a-z0-9._~+/=-]{8,}", "$$1***")
+          - &mask_assignment >-
+            replace_all_patterns(attributes, "value", "(?i)((?:password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper|signature|session|jwt|bearer|dsn|connection[_-]?string|(?:private|access|account|signing|encryption)[_.-]?key|authorization|cookie))([\\s\"']*(?:[:=]|%3[dA])[\\s]*)(\\\\*\"[^\"\\r\\n]*\\\\*\"|'[^'\\r\\n]*'|[^\\r\\n;&]*)", "$$1$$2***")
+          - &mask_identifier >-
+            replace_all_patterns(attributes, "value", "(?i)((?:^|[^a-z0-9_.-])[a-z0-9_.-]*(?:password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper|signature|session|jwt|bearer|dsn|connection[_-]?string|(?:private|access|account|signing|encryption)[_.-]?key|authorization|cookie)[a-z0-9_.-]*)(\\s*=\\s*)(\"[^\"\\r\\n]*\"|'[^'\\r\\n]*'|[^\\s;&]*)", "$$1$$2***")
+      - context: scope
+        statements: *attribute_secrets
+      - context: span
+        statements: *attribute_secrets
+      - context: spanevent
+        statements: *attribute_secrets
+    metric_statements:
+      - context: resource
+        statements: *attribute_secrets
+      - context: scope
+        statements: *attribute_secrets
+      - context: datapoint
+        statements: *attribute_secrets
+    log_statements:
+      - context: resource
+        statements: *attribute_secrets
+      - context: scope
+        statements: *attribute_secrets
+      - context: log
+        # A body is a string or a structured map, so each statement names the
+        # type it takes: a map loses secret-shaped keys (top level only), a
+        # string goes through the same masks as the attributes above.
+        statements:
+          - *delete_secret_keys
+          - *mask_json_pair
+          - *mask_header_pair
+          - *mask_xml_element
+          - *mask_url_query
+          - *mask_url_userinfo
+          - *mask_auth_scheme
+          - *mask_assignment
+          - *mask_identifier
+          - >-
+            delete_matching_keys(body, "(?i)(authorization|cookie|token|secret|password|passwd|pwd|api[_-]?key|apikey|credential|pepper|__host-|__secure-|(?:private|access|account|signing|encryption|shared[_-]?access)[_.-]?key|signature|session|(^|[._-])sid($|[._-])|jwt|bearer|connection[_-]?string|dsn)") where IsMap(body)
+          - >-
+            replace_pattern(body, "(?i)\\\\*\"(?:password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper|signature|session|jwt|bearer|dsn|connection[_-]?string|(?:private|access|account|signing|encryption)[_.-]?key|authorization|cookie)\\\\*\"\\s*:\\s*\\\\*\"[^\"\\r\\n]*\\\\*\"", "***") where IsString(body)
+          - >-
+            replace_pattern(body, "(?i)((?:set-)?cookie|authorization)([\\s\"']*[:=][\\s]*)[^\\r\\n]+", "$$1$$2***") where IsString(body)
+          - >-
+            replace_pattern(body, "(?i)(<(?:password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper|signature|session|jwt|bearer|dsn|connection[_-]?string|(?:private|access|account|signing|encryption)[_.-]?key|authorization|cookie)(?:\\s[^>]*)?>)([^<]*)(</)", "$$1***$$3") where IsString(body)
+          - >-
+            replace_pattern(body, "(?i)([?&][a-z0-9_.-]*(?:password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper|signature|session|jwt|bearer|dsn|connection[_-]?string|(?:private|access|account|signing|encryption)[_.-]?key|authorization|cookie|sig|key)=)([^&#\\s\"']*)", "$$1***") where IsString(body)
+          - >-
+            replace_pattern(body, "(?i)([a-z][a-z0-9+.-]*://[^:/\\s@\"']*:)([^@/\\s\"']+)(@)", "$$1***$$3") where IsString(body)
+          - >-
+            replace_pattern(body, "(?i)((?:bearer|basic)\\s+)[a-z0-9._~+/=-]{8,}", "$$1***") where IsString(body)
+          - >-
+            replace_pattern(body, "(?i)((?:password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper|signature|session|jwt|bearer|dsn|connection[_-]?string|(?:private|access|account|signing|encryption)[_.-]?key|authorization|cookie))([\\s\"']*(?:[:=]|%3[dA])[\\s]*)(\\\\*\"[^\"\\r\\n]*\\\\*\"|'[^'\\r\\n]*'|[^\\r\\n;&]*)", "$$1$$2***") where IsString(body)
+          - >-
+            replace_pattern(body, "(?i)((?:^|[^a-z0-9_.-])[a-z0-9_.-]*(?:password|passwd|pwd|token|secret|api[_-]?key|apikey|credential|pepper|signature|session|jwt|bearer|dsn|connection[_-]?string|(?:private|access|account|signing|encryption)[_.-]?key|authorization|cookie)[a-z0-9_.-]*)(\\s*=\\s*)(\"[^\"\\r\\n]*\"|'[^'\\r\\n]*'|[^\\s;&]*)", "$$1$$2***") where IsString(body)
+
+  # Explicit bounds: a store outage cannot turn into an unbounded buffer. 512
+  # items wake a batch, one request never exceeds 1024 items, and 5 s is the
+  # longest a quiet signal waits before it is exported.
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+    send_batch_max_size: 1024
 
 exporters:
+  # Retry and queue are bounded per exporter: after 5 minutes of failed attempts
+  # the batch is dropped, and the queue is measured in items (5000) so its worst
+  # case is a fixed number of signals, not a fixed number of arbitrary batches.
   otlphttp/metrics:
     endpoint: http://prometheus:9090/api/v1/otlp
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 5m
+    sending_queue:
+      sizer: items
+      queue_size: 5000
+      num_consumers: 4
+      block_on_overflow: false
   otlphttp/logs:
     endpoint: http://victorialogs:9428/insert/opentelemetry
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 5m
+    sending_queue:
+      sizer: items
+      queue_size: 5000
+      num_consumers: 4
+      block_on_overflow: false
   otlphttp/traces:
     endpoint: http://victoriatraces:10428/insert/opentelemetry
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 5m
+    sending_queue:
+      sizer: items
+      queue_size: 5000
+      num_consumers: 4
+      block_on_overflow: false
 
 extensions:
   health_check:
@@ -34,16 +177,19 @@ extensions:
 
 service:
   extensions: [health_check]
+  # Redaction runs before batch in every pipeline, so a masked record is what the
+  # batch and the queues hold; memory_limiter comes first so it sees a payload
+  # before any later processor holds a copy of it.
   pipelines:
     metrics:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter, transform/redaction, batch]
       exporters: [otlphttp/metrics]
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter, transform/redaction, batch]
       exporters: [otlphttp/logs]
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter, transform/redaction, batch]
       exporters: [otlphttp/traces]
