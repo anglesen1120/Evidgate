@@ -68,7 +68,7 @@ The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none 
 | 10.1.1-T3 | T3.3, T3.4 | #558 |
 | 10.1.2-T1 | T1.1 | #516 |
 | 10.2.1-T1 | T1.4 | #12 |
-| 10.3.2-T1 | none (T1.2 landed by S348, #713, 1c021d7b; credit at the next recount) | #465, #713 |
+| 10.3.2-T1 | none (T1.2 landed by S348, #713, 1c021d7b; credit at the next recount) | #465, #713; 10.3.1-T2 landed by S352 (#722, dbcba3e2, dev profile only, credit at the next recount) |
 | 10.7.1-T1 | T1.2 | #341 |
 | 10.7.1-T2 | T2.2 | #341 |
 | 10.7.1-T4 | T4.2 | #222 |
