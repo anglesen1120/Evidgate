@@ -366,10 +366,14 @@ internal sealed partial class UsageReadsWorld : IAsyncDisposable
     }
 
     /// <summary>One owner connection of this world's database: the seed path, which row security must not narrow.</summary>
-    private async Task<NpgsqlConnection> OpenOwnerAsync()
+    private async Task<NpgsqlConnection> OpenOwnerAsync() =>
+        await OpenOwnerAsync(TestContext.Current.CancellationToken);
+
+    /// <summary>The same connection opened under a caller-chosen token, for a step that must survive cancellation.</summary>
+    private async Task<NpgsqlConnection> OpenOwnerAsync(CancellationToken cancellationToken)
     {
         var connection = new NpgsqlConnection(_fixture.OwnerConnectionString(Database));
-        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await connection.OpenAsync(cancellationToken);
         return connection;
     }
 
