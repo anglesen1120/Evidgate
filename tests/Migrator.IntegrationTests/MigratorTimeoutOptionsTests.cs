@@ -1,5 +1,6 @@
 using System.Globalization;
 using Evidgate.Migrator;
+using Npgsql;
 using Shouldly;
 using Xunit;
 
@@ -12,8 +13,14 @@ namespace Migrator.IntegrationTests;
 /// </summary>
 public sealed partial class MigratorTimeoutOptionsTests
 {
-    private const string ValidConnectionString =
-        "Host=127.0.0.1;Port=1;Database=evidgate;Username=evidgate_owner;Password=test-only";
+    private static readonly string ValidConnectionString = new NpgsqlConnectionStringBuilder
+    {
+        Host = "127.0.0.1",
+        Port = 1,
+        Database = "evidgate",
+        Username = "evidgate_owner",
+        Password = nameof(ValidConnectionString),
+    }.ConnectionString;
 
     [Fact]
     public void New_Options_Carry_The_Server_Timeout_Defaults()
