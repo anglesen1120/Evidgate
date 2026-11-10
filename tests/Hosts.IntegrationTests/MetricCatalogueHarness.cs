@@ -233,8 +233,10 @@ internal sealed class MetricCatalogueHarness : IAsyncDisposable
         public async ValueTask DisposeAsync()
         {
             await _stop.CancelAsync();
+#pragma warning disable VSTHRD003 // Both refresher loops are started by this harness with its own token.
             await _queueRefresher;
             await _backlogRefresher;
+#pragma warning restore VSTHRD003
             _stop.Dispose();
             _queueGauge.Dispose();
             _dispatcher.Dispose();
@@ -250,7 +252,7 @@ internal sealed class MetricCatalogueHarness : IAsyncDisposable
             new NpgsqlDataSourceBuilder(
                 new NpgsqlConnectionStringBuilder(connectionString)
                 {
-                    MaximumPoolSize = maximumPoolSize,
+                    MaxPoolSize = maximumPoolSize,
                     Timeout = timeoutSeconds,
                 }.ConnectionString)
             {
