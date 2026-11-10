@@ -7,7 +7,6 @@ using Evidgate.Testing;
 using Evidgate.BuildingBlocks.Persistence.Outbox;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
-using Evidgate.Modules.Usage.Application;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
