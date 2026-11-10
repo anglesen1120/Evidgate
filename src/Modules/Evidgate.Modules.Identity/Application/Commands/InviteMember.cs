@@ -177,6 +177,13 @@ internal sealed class InviteMemberCommandHandler(
             return Result.Failure<InviteIssuedView>(SelfEscalation.Refused);
         }
 
+        if (!await MemberRankGuard.ActorMayGrantAsync(
+                db, orgId, caller, [.. roles.Select(role => role.Id)], cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure<InviteIssuedView>(MemberRankGuard.Refused);
+        }
+
         // `membership_org_user_key` spans every status, so a pending row for this address
         // could never bind while the removed one exists: refuse instead of issuing an
         // invite no login can redeem.

@@ -85,10 +85,10 @@ internal sealed class RevokeRoleCommandHandler(
         }
 
         // Before the pair's 404 on purpose: after it, a 404-versus-403 difference would tell the
-        // caller whether a higher-ranked member holds the role. Rank counts active memberships only,
-        // so a removed or pending target ranks zero here.
+        // caller whether a higher-ranked member holds the role. The rank is read from the target row
+        // whatever its status, so a removed owner's row is as protected as an active one.
         if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
-                db, orgId, principals.Current, membership.UserId, cancellationToken)
+                db, orgId, principals.Current, membership.Id, cancellationToken)
             .ConfigureAwait(false))
         {
             return Result.Failure(MemberRankGuard.Refused);
@@ -125,13 +125,13 @@ internal sealed class RevokeRoleCommandHandler(
             }
         }
 
-        // The guard's row lock is where a concurrent demotion of the actor can land, so the
-        // rank is compared again after it. This narrows the window; it is not atomic.
-        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
-                db, orgId, principals.Current, membership.UserId, cancellationToken)
-            .ConfigureAwait(false))
+        // The one authoritative comparison: it locks the target and actor membership rows first, so a
+        // concurrent grant change cannot land between this check and the write below.
+        if (await MemberRankGuard.LockedRefusalAsync(
+                db, orgId, principals.Current, membership.Id, cancellationToken)
+                .ConfigureAwait(false) is { } refusal)
         {
-            return Result.Failure(MemberRankGuard.Refused);
+            return Result.Failure(refusal);
         }
 
         context.MembershipRoles.Remove(grant);

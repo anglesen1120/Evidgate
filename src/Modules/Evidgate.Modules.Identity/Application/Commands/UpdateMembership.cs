@@ -107,9 +107,9 @@ internal sealed class UpdateMembershipCommandHandler(
         }
 
         // Checked before the version and retry branches: the hierarchy is a property of the caller and
-        // the target. Rank counts active memberships only, so a removed or pending target ranks zero.
+        // the target. The rank is read from the target row whatever its status.
         if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
-                db, orgId, principals.Current, membership.UserId, cancellationToken)
+                db, orgId, principals.Current, membership.Id, cancellationToken)
             .ConfigureAwait(false))
         {
             return Result.Failure<MembershipView>(MemberRankGuard.Refused);
@@ -145,13 +145,13 @@ internal sealed class UpdateMembershipCommandHandler(
                 "the organization must keep at least one active tenant_admin (AC4)"));
         }
 
-        // The guard's row lock is where a concurrent demotion of the actor can land, so the
-        // rank is compared again after it. This narrows the window; it is not atomic.
-        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
-                db, orgId, principals.Current, membership.UserId, cancellationToken)
-            .ConfigureAwait(false))
+        // The one authoritative comparison: it locks the target and actor membership rows first, so a
+        // concurrent grant change cannot land between this check and the write below.
+        if (await MemberRankGuard.LockedRefusalAsync(
+                db, orgId, principals.Current, membership.Id, cancellationToken)
+                .ConfigureAwait(false) is { } refusal)
         {
-            return Result.Failure<MembershipView>(MemberRankGuard.Refused);
+            return Result.Failure<MembershipView>(refusal);
         }
 
         membership.Remove();

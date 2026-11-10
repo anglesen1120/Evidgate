@@ -126,6 +126,12 @@ internal sealed class GrantRoleCommandHandler(
             return Result.Failure<MembershipView>(SelfEscalation.Refused);
         }
 
+        if (!await MemberRankGuard.ActorMayGrantAsync(db, orgId, caller, [role.Id], cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure<MembershipView>(MemberRankGuard.Refused);
+        }
+
         var alreadyGranted = await context.MembershipRoles
             .AnyAsync(
                 grant => grant.MembershipId == membership.Id && grant.RoleId == role.Id,
