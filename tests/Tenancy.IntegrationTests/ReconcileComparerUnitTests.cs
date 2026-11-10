@@ -389,8 +389,8 @@ public sealed class ReconcileComparerUnitTests
     public void A_Closed_Shard_Without_Stale_Events_Names_No_EpochReason()
     {
         var result = ReconcileComparer.CompareEvents(
-            [Planned("producer-1", declaredLastSequence: 1, declaredCount: 1)],
-            [Observed("producer-1", upTo: 1, max: 1)]);
+            [Planned("producer-1")],
+            [Observed("producer-1")]);
 
         result.Missing.ShouldBeEmpty();
         result.Missing.Any(reason => reason.Code == ReconcileMissingCodes.StaleEpoch)
