@@ -57,7 +57,8 @@ Exit `6` prints the same shape with `statement_timeout`, the runner setting (a s
    ```sql
    select l.pid, l.mode, l.granted, a.state, left(a.query, 120) as query
    from pg_locks l join pg_stat_activity a using (pid)
-   where l.relation = 'public.<table>'::regclass and l.pid <> pg_backend_pid();
+   where l.database = (select oid from pg_database where datname = current_database())
+     and l.relation = 'public.<table>'::regclass and l.pid <> pg_backend_pid();
    ```
 
    To see a live wait (for example while the deploy is retried), the blocking pair is:
@@ -83,7 +84,7 @@ Exit `6` prints the same shape with `statement_timeout`, the runner setting (a s
 
 ## 5. Scripts that set their own timeout
 
-The prefix runs first, so a script that sets its own `set local lock_timeout` **overrides** the default for that script and keeps it. That is deliberate where the file's header documents the wait it wants:
+The prefix is applied with `set local` inside every script's transaction, so it also overrides a role- or database-level `lock_timeout`/`statement_timeout` (set the environment variables, not the role default, to change what a deploy uses). It runs first, so a script that sets its own `set local lock_timeout` **overrides** the default for that script and keeps it. That is deliberate where the file's header documents the wait it wants:
 
 - `0045`, `0048`, `0095` set `set local lock_timeout = '5s'` explicitly (the 5 s equals the default, but the file states it).
 - `0050`/`0051` set `set lock_timeout = '2000'` in the `SECURITY DEFINER` function header, which bounds the waits that function takes whenever it is called, not just during the migration.
