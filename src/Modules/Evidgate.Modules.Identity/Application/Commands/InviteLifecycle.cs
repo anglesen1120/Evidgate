@@ -47,6 +47,7 @@ internal sealed class ResendInviteCommandHandler(
     ITenantDbContextFactory<IdentityDbContext> contexts,
     ITenantDb db,
     ITenantScopeAccessor scopes,
+    IRequestPrincipalAccessor principals,
     IAuditTrail audit,
     IOutboxWriter outbox,
     InviteSecrets inviteSecrets,
@@ -88,9 +89,25 @@ internal sealed class ResendInviteCommandHandler(
             return Result.Failure<InviteIssuedView>(Error.NotFound(NotFoundMessage));
         }
 
+        // A resend returns a fresh working token to the caller, so a lower-rank administrator must not
+        // re-mint an invite that carries a higher rank.
+        if (!await MemberRankGuard.ActorOutranksOrEqualsAsync(
+                db, orgId, principals.Current, membership.Id, cancellationToken)
+            .ConfigureAwait(false))
+        {
+            return Result.Failure<InviteIssuedView>(MemberRankGuard.Refused);
+        }
+
         if (!string.Equals(membership.Status, MembershipStatus.Pending, StringComparison.Ordinal))
         {
             return Result.Failure<InviteIssuedView>(InviteErrors.NotPending);
+        }
+
+        if (await MemberRankGuard.LockedRefusalAsync(
+                db, orgId, principals.Current, membership.Id, cancellationToken)
+            .ConfigureAwait(false) is { } refusal)
+        {
+            return Result.Failure<InviteIssuedView>(refusal);
         }
 
         var mint = await InviteMints.MintAsync(context, inviteSecrets, cancellationToken).ConfigureAwait(false);
@@ -211,11 +228,11 @@ internal sealed class CancelInviteCommandHandler(
             return Result.Failure(InviteErrors.NotPending);
         }
 
-        if (!await MemberRankGuard.LockedActorOutranksOrEqualsAsync(
+        if (await MemberRankGuard.LockedRefusalAsync(
                 db, orgId, principals.Current, membership.Id, cancellationToken)
-            .ConfigureAwait(false))
+                .ConfigureAwait(false) is { } refusal)
         {
-            return Result.Failure(MemberRankGuard.Refused);
+            return Result.Failure(refusal);
         }
 
         // The transition of 02.1.2 §6. The token columns stay: the resolver filters on

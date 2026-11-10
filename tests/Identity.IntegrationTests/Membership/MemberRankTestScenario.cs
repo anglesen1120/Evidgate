@@ -78,16 +78,35 @@ internal static class MemberRankTestScenario
     internal static async Task<Guid> SeedPendingInviteAsync(
         SessionTestHost host,
         Guid orgId,
-        Guid? roleId = null)
+        Guid? roleId = null,
+        string? invitePrefix = null,
+        byte[]? inviteHash = null)
     {
         var membershipId = Guid.CreateVersion7();
+        var email = $"pending-{membershipId:N}@example.test";
 
-        await host.ArrangeAsync(
-            "insert into public.membership (id, org_id, invited_email, status) "
-            + "values (@id, @org, @email, 'pending')",
-            ("id", membershipId),
-            ("org", orgId),
-            ("email", $"pending-{membershipId:N}@example.test"));
+        if (invitePrefix is null && inviteHash is null)
+        {
+            await host.ArrangeAsync(
+                "insert into public.membership (id, org_id, invited_email, status) "
+                + "values (@id, @org, @email, 'pending')",
+                ("id", membershipId),
+                ("org", orgId),
+                ("email", email));
+        }
+        else
+        {
+            await host.ArrangeAsync(
+                "insert into public.membership "
+                + "(id, org_id, invited_email, status, invite_secret_prefix, invite_token_hash, "
+                + "invite_pepper_version, invite_expires_at) "
+                + "values (@id, @org, @email, 'pending', @prefix, @hash, 1, now() + interval '7 days')",
+                ("id", membershipId),
+                ("org", orgId),
+                ("email", email),
+                ("prefix", invitePrefix!),
+                ("hash", inviteHash!));
+        }
 
         if (roleId is { } role)
         {
@@ -95,6 +114,59 @@ internal static class MemberRankTestScenario
         }
 
         return membershipId;
+    }
+
+    /// <summary>The invite's stored lookup prefix and digest, as one opaque value; null when it carries none.</summary>
+    internal static async Task<string?> InviteTokenStateAsync(
+        SessionTestHost host,
+        Guid membershipId) =>
+        (string?)await host.ScalarAsync(
+            "select case when invite_secret_prefix is null and invite_token_hash is null then null "
+            + "else invite_secret_prefix || ':' || encode(invite_token_hash, 'hex') end "
+            + "from public.membership where id = @id",
+            [("id", membershipId)]);
+
+    /// <summary>
+    /// Signs a member in and gives it a custom role that holds every permission of the built-in
+    /// <c>tenant_admin</c>. The role still ranks one: the rank ceiling keys on the role, not its codes.
+    /// </summary>
+    internal static async Task<(SignedInMember Member, Guid RoleId)> SignInFullPermissionAdminAsync(
+        SessionTestHost host,
+        HttpClient client,
+        Guid orgId)
+    {
+        var signedIn = await host.SignInMemberInOrgAsync(client, orgId, roleCode: null);
+        var roleId = await SeedFullPermissionRoleAsync(host, orgId);
+        await GrantToMembershipAsync(
+            host,
+            orgId,
+            await MembershipIdAsync(host, orgId, signedIn.UserId),
+            roleId);
+
+        return (signedIn, roleId);
+    }
+
+    /// <summary>An org-local member role carrying every permission the built-in <c>tenant_admin</c> holds.</summary>
+    internal static async Task<Guid> SeedFullPermissionRoleAsync(SessionTestHost host, Guid orgId)
+    {
+        var roleId = Guid.CreateVersion7();
+
+        await host.ArrangeAsync(
+            "insert into public.role (id, org_id, code, name, is_builtin, kind) "
+            + "values (@id, @org, @code, 'Full member administrator', false, 'member')",
+            ("id", roleId),
+            ("org", orgId),
+            ("code", "member_full_" + roleId.ToString("N")));
+        await host.ArrangeAsync(
+            "insert into public.role_permission (id, org_id, role_id, permission_code) "
+            + "select gen_random_uuid(), @org, @role, rp.permission_code "
+            + "from public.role r "
+            + "join public.role_permission rp on rp.role_id = r.id and rp.org_id is null "
+            + "where r.org_id is null and r.code = 'tenant_admin'",
+            ("org", orgId),
+            ("role", roleId));
+
+        return roleId;
     }
 
     /// <summary>The membership row of a user in the org.</summary>

@@ -1,4 +1,8 @@
 using System.Diagnostics;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Identity.Infrastructure.Persistence;
 using Evidgate.Testing;
 using Npgsql;
 using Shouldly;
@@ -49,7 +53,7 @@ public sealed class MemberRankRaceTests : TenantTest
         await using var decision = await OpenScopedAsync(Fixture.AppConnectionString, world.OrgId);
         await using var decisionTransaction = (NpgsqlTransaction)await decision.BeginTransactionAsync(Token);
 
-        (await LockAndCompareAsync(decision, decisionTransaction, world)).ShouldBeTrue(
+        (await LockWithProductionGuardAsync(decision, decisionTransaction, world)).ShouldBeNull(
             "the actor and target both rank one before the promotion");
 
         await using var grant = await OpenScopedAsync(Fixture.AppConnectionString, world.OrgId);
@@ -107,7 +111,7 @@ public sealed class MemberRankRaceTests : TenantTest
         await using var decision = await OpenScopedAsync(Fixture.AppConnectionString, world.OrgId);
         await using var decisionTransaction = (NpgsqlTransaction)await decision.BeginTransactionAsync(Token);
 
-        (await LockAndCompareAsync(decision, decisionTransaction, world)).ShouldBeTrue();
+        (await LockWithProductionGuardAsync(decision, decisionTransaction, world)).ShouldBeNull();
 
         await using var grant = await OpenScopedAsync(Fixture.AppConnectionString, world.OrgId);
         await using var grantTransaction = (NpgsqlTransaction)await grant.BeginTransactionAsync(Token);
@@ -148,41 +152,25 @@ public sealed class MemberRankRaceTests : TenantTest
             "the rolled-back decision's delete left the target's original grant in place");
     }
 
-    /// <summary>The guard's one lock statement and its one comparison, on the decision's connection.</summary>
-    private static async Task<bool> LockAndCompareAsync(
+    /// <summary>
+    /// Calls the production <see cref="MemberRankGuard.LockedRefusalAsync"/> on the decision's real connection and
+    /// transaction, through a tenant scope that exposes exactly those objects to <see cref="TenantDb"/>. Null is the
+    /// guard's allow answer; a refusal or contention is surfaced instead of being flattened to a boolean.
+    /// </summary>
+    private static Task<Error?> LockWithProductionGuardAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         RaceWorld world)
     {
-        var locked = await ScalarAsync<long>(
-            connection,
-            transaction,
-            """
-            select count(*) from (
-              select m.id
-                from public.membership m
-               where m.org_id = @org_id
-                 and (m.id = @target_membership
-                      or (m.user_id = @actor_user and m.status = 'active'))
-               order by m.id
-                 for update) locked
-            """,
-            TestContext.Current.CancellationToken,
-            ("org_id", world.OrgId),
-            ("target_membership", world.TargetMembershipId),
-            ("actor_user", world.ActorUserId));
+        var scope = new ConnectionTenantScope(connection, transaction, world.OrgId);
+        var db = new TenantDb(new SingleScopeAccessor(scope));
 
-        locked.ShouldBe(2, "the decision locks exactly the target and the actor's membership rows");
-
-        return await ScalarAsync<bool>(
-            connection,
-            transaction,
-            "select evidgate.session_admin_rank(@org_id, @actor_user) "
-            + ">= evidgate.membership_rank(@org_id, @target_membership)",
-            TestContext.Current.CancellationToken,
-            ("org_id", world.OrgId),
-            ("actor_user", world.ActorUserId),
-            ("target_membership", world.TargetMembershipId));
+        return MemberRankGuard.LockedRefusalAsync(
+            db,
+            world.OrgId,
+            RequestPrincipal.Member(world.ActorUserId),
+            world.TargetMembershipId,
+            TestContext.Current.CancellationToken);
     }
 
     /// <summary>The concurrent grant that adds the built-in <c>tenant_admin</c> to the target membership.</summary>
@@ -378,6 +366,41 @@ public sealed class MemberRankRaceTests : TenantTest
         }
 
         return await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>One already-open scope, exposed to the production guard without opening a second connection.</summary>
+    private sealed class SingleScopeAccessor(ITenantScope scope) : ITenantScopeAccessor
+    {
+        public ITenantScope? Current => scope;
+
+        public ITenantScope Require() => scope;
+    }
+
+    /// <summary>The test's own connection and transaction, presented as the active tenant scope.</summary>
+    private sealed class ConnectionTenantScope(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        Guid orgId) : ITenantScope
+    {
+        public Guid OrgId { get; } = orgId;
+
+        public Guid? ProjectId => null;
+
+        public bool IsReadOnly => false;
+
+        public bool IsActive => true;
+
+        public NpgsqlConnection Connection { get; } = connection;
+
+        public NpgsqlTransaction Transaction { get; } = transaction;
+
+        public Task CommitAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("the race test owns this transaction");
+
+        public void AfterCommit(Action action) =>
+            throw new NotSupportedException("the rank guard registers no after-commit work");
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed record RaceWorld(

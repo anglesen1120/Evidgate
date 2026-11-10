@@ -28,7 +28,7 @@
 --
 -- Deploy the migration first, then the application (the commands call `membership_rank`); rolling the application
 -- back first is safe. Rollback: re-state the `0091` bodies of `session_admin_holds_write` and `session_admin_rank`,
--- then drop `membership_rank` and `membership_holds_write`. No table, column, row or policy changes.
+-- then drop `role_rank`, `membership_rank` and `membership_holds_write`. No table, column, row or policy changes.
 set local lock_timeout = '5s';
 
 create or replace function evidgate.membership_holds_write(
@@ -135,3 +135,39 @@ grant execute on function evidgate.session_admin_holds_write(uuid, uuid) to evid
 revoke all on function evidgate.session_admin_rank(uuid, uuid)
   from public, evidgate_app, evidgate_operator, evidgate_worker_sched;
 grant execute on function evidgate.session_admin_rank(uuid, uuid) to evidgate_app;
+
+-- The rank a role confers, for the grant ceiling: a caller may grant or invite with a role only when its own rank
+-- is at least the role's. `GrantRole` and `InviteMember` otherwise compare permission codes, so an administrator
+-- who holds every `tenant_admin` permission through a custom role (rank 1) could grant the built-in role (rank 2).
+create or replace function evidgate.role_rank(
+  p_org_id uuid,
+  p_role_id uuid)
+returns integer
+language sql
+volatile
+set search_path = ''
+as $$
+  select case
+           when exists (
+             select 1 from public.role r
+              where r.id = p_role_id and r.org_id is null and r.code = 'tenant_admin') then 2
+           when exists (
+             select 1
+               from public.role r
+               join public.role_permission rp
+                    on rp.role_id = r.id
+                   and rp.org_id is not distinct from r.org_id
+               join public.permission p
+                    on p.code = rp.permission_code
+              where r.id = p_role_id
+                and r.kind = 'member'
+                and (r.org_id is null or r.org_id = p_org_id)
+                and p.tenant_assignable
+                and rp.permission_code = 'membership:write') then 1
+           else 0
+         end
+$$;
+
+revoke all on function evidgate.role_rank(uuid, uuid)
+  from public, evidgate_app, evidgate_operator, evidgate_worker_sched;
+grant execute on function evidgate.role_rank(uuid, uuid) to evidgate_app;

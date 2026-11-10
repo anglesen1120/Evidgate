@@ -52,6 +52,11 @@ public sealed class DefinerExecuteScopeTests
             "evidgate_app"
         },
         {
+            "evidgate.role_rank(uuid, uuid)",
+            "select evidgate.role_rank(gen_random_uuid(), gen_random_uuid())",
+            "evidgate_app"
+        },
+        {
             "evidgate.membership_rank(uuid, uuid)",
             "select evidgate.membership_rank(gen_random_uuid(), gen_random_uuid())",
             "evidgate_app"

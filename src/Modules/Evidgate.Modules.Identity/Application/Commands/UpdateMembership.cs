@@ -147,11 +147,11 @@ internal sealed class UpdateMembershipCommandHandler(
 
         // The one authoritative comparison: it locks the target and actor membership rows first, so a
         // concurrent grant change cannot land between this check and the write below.
-        if (!await MemberRankGuard.LockedActorOutranksOrEqualsAsync(
+        if (await MemberRankGuard.LockedRefusalAsync(
                 db, orgId, principals.Current, membership.Id, cancellationToken)
-            .ConfigureAwait(false))
+                .ConfigureAwait(false) is { } refusal)
         {
-            return Result.Failure<MembershipView>(MemberRankGuard.Refused);
+            return Result.Failure<MembershipView>(refusal);
         }
 
         membership.Remove();
