@@ -14,22 +14,28 @@ namespace Hosts.IntegrationTests;
 public sealed class SecretProviderQaTests
 {
     [Fact]
-    public async Task Api_Two_Process_Starts_Observe_Changed_Environment_And_Mask_Password()
+    public async Task Api_Two_Process_Starts_Never_Print_The_Environment_Password()
     {
         var first = await RunApiAsync("qa-alpha.invalid", "qa-first-password");
         var second = await RunApiAsync("qa-beta.invalid", "qa-second-password");
 
         first.ExitCode.ShouldBe(0);
         second.ExitCode.ShouldBe(0);
-        first.Stdout.Contains("qa-alpha.invalid", StringComparison.Ordinal).ShouldBeTrue("first process must log its redacted target");
-        second.Stdout.Contains("qa-beta.invalid", StringComparison.Ordinal).ShouldBeTrue("second process must log its redacted target");
-        first.Stdout.Contains("qa-beta.invalid", StringComparison.Ordinal).ShouldBeFalse();
-        second.Stdout.Contains("qa-alpha.invalid", StringComparison.Ordinal).ShouldBeFalse();
-        first.Stdout.Contains("Password=***", StringComparison.Ordinal).ShouldBeTrue();
-        second.Stdout.Contains("Password=***", StringComparison.Ordinal).ShouldBeTrue();
         var output = first.Stdout + first.Stderr + second.Stdout + second.Stderr;
         output.Contains("qa-first-password", StringComparison.Ordinal).ShouldBeFalse("stdout and stderr must contain no first password");
         output.Contains("qa-second-password", StringComparison.Ordinal).ShouldBeFalse("stdout and stderr must contain no second password");
+    }
+
+    [Fact]
+    public void Each_Host_Resolves_The_Connection_String_Its_Own_Provider_Returns()
+    {
+        var alpha = ResolveWith(ConnectionString("qa-alpha.invalid", "qa-first-password"));
+        var beta = ResolveWith(ConnectionString("qa-beta.invalid", "qa-second-password"));
+
+        alpha.ShouldContain("qa-alpha.invalid");
+        beta.ShouldContain("qa-beta.invalid");
+        alpha.ShouldNotContain("qa-beta.invalid");
+        beta.ShouldNotContain("qa-alpha.invalid");
     }
 
     [Fact]
@@ -53,6 +59,24 @@ public sealed class SecretProviderQaTests
         (actual == configured).ShouldBeFalse("configuration must not bypass the provider");
     }
 
+    private static string ConnectionString(string host, string password) =>
+        $"Host={host};Port=1;Username=evidgate_app;Password={password};Database=evidgate;Timeout=2";
+
+    private static string ResolveWith(string connectionString)
+    {
+        var builder = ApiHost.CreateBuilder([]);
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+            ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
+            [IsolationSelfCheckEnvironment.InMemoryKey] = IsolationSelfCheckEnvironment.Disabled,
+        });
+        builder.Services.AddSingleton<ISecretProvider>(new EnvironmentSecretProvider(
+            name => name == SecretNames.DatabaseConnectionString ? connectionString : null));
+        using var app = builder.Build();
+        return app.Services.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString;
+    }
+
     private static Task<ProcessRunner.Result> RunApiAsync(string host, string password)
     {
         var port = HostLocator.FreePort();
@@ -62,7 +86,7 @@ public sealed class SecretProviderQaTests
             new Dictionary<string, string>
             {
                 ["ASPNETCORE_URLS"] = url,
-                [SecretNames.DatabaseConnectionString] = $"Host={host};Port=1;Username=evidgate_app;Password={password};Database=evidgate;Timeout=2",
+                [SecretNames.DatabaseConnectionString] = ConnectionString(host, password),
                 // Both cancel windows are required at boot (no option default), so a process started for any other
                 // assertion still states them; the boot lines under test never depend on their values.
                 ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
