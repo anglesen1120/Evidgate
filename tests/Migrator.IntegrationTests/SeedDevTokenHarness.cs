@@ -100,6 +100,10 @@ internal sealed class SeedDevTokenHarness(PostgresMigratorFixture fixture)
         Pooling = false,
     }.ConnectionString;
 
+    /// <summary>The same connection string with an explicit per-command timeout, in seconds.</summary>
+    internal static string WithCommandTimeout(string connectionString, int seconds) =>
+        new NpgsqlConnectionStringBuilder(connectionString) { CommandTimeout = seconds }.ConnectionString;
+
     internal static RunResult Run(string[] args, IReadOnlyDictionary<string, string?> variables)
     {
         var output = new StringWriter(CultureInfo.InvariantCulture);
