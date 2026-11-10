@@ -1,5 +1,7 @@
 using Evidgate.Api.Forwarding;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -93,6 +95,18 @@ public sealed partial class OptionsValidationTests
 
         stance.DeclaredDirect.ShouldBeFalse();
         stance.HasTrust.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void A_Development_Host_With_The_Framework_Switch_And_No_Trust_Keeps_The_Framework_Options()
+    {
+        using var factory = Boot(Development, proxies: string.Empty, frameworkSwitch: true);
+
+        var middleware = factory.Services.GetRequiredService<IOptions<ForwardedHeadersOptions>>().Value;
+
+        // The switch's own defaults stay: this host's configuration only overrides them when a proxy is listed.
+        middleware.ForwardedHeaders.HasFlag(ForwardedHeaders.XForwardedProto).ShouldBeTrue();
+        middleware.KnownProxies.ShouldBeEmpty();
     }
 
     [Fact]
