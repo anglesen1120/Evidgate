@@ -1,4 +1,5 @@
 using Evidgate.Api.Endpoints;
+using Evidgate.Api.Forwarding;
 using Evidgate.Api.Json;
 using Evidgate.Api.Middleware;
 using Evidgate.Api.Tenancy;
@@ -72,6 +73,7 @@ public static partial class ApiHost
         builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = ShutdownTimeout);
+        builder.Services.AddTrustedForwardedHeaders(builder.Configuration);
 
         builder.Services.AddEvidgatePersistence(builder.Configuration);
         // 10.1.1-T2: the single secret seam. Idempotent (TryAdd*), so the
@@ -187,6 +189,9 @@ public static partial class ApiHost
     public static WebApplication BuildApp(string[] args)
     {
         var app = CreateBuilder(args).Build();
+
+        // First, so every later middleware and endpoint sees the client address, not the proxy's.
+        app.UseTrustedForwardedHeaders();
 
         // 10.3.1-T1.2 (AC1): routing is pinned to the start of the pipeline so the edge
         // knows a route's `{r}` value before it tags the request's span, whatever the

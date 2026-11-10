@@ -1,14 +1,9 @@
 using System.Net;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Modules.Identity.Login;
-using Evidgate.Modules.Identity.Options;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
+using Identity.IntegrationTests.Forwarding;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Shouldly;
 using Xunit;
 
@@ -111,9 +106,8 @@ public sealed class LoginThrottleTests
         // client address null, so every request of one host shares one key), so this variant of the same
         // host only sets the address from a header — no second login configuration.
         using var remote = host.WithWebHostBuilder(builder =>
-            builder.ConfigureTestServices(services => services.AddTransient<IStartupFilter, RemoteIpStartupFilter>()));
-        using var client = remote.CreateClient(
-            new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false });
+            ForwardedHeadersTestHost.Configure(builder, proxies: "none"));
+        using var client = ForwardedHeadersTestHost.CreateClient(remote);
         var burst = Burst(remote);
 
         for (var attempt = 1; attempt <= burst; attempt++)
@@ -277,11 +271,10 @@ public sealed class LoginThrottleTests
     }
 
     /// <summary>The request header the address-setting filter reads the client address from.</summary>
-    private const string ClientIpHeader = "X-Test-Client-Ip";
+    private const string ClientIpHeader = ForwardedHeadersTestHost.SocketAddressHeader;
 
     /// <summary>The burst the routes actually spend: the CI exchange limiter's own budget, bound at boot.</summary>
-    private static int Burst(WebApplicationFactory<Program> host) =>
-        host.Services.GetRequiredService<IOptions<CiAuthOptions>>().Value.ExchangeBurstLimit;
+    private static int Burst(WebApplicationFactory<Program> host) => ForwardedHeadersTestHost.Burst(host);
 
     /// <summary>A <c>start</c> request that reaches the app from <paramref name="address"/>.</summary>
     private static HttpRequestMessage Start(string address)
@@ -311,33 +304,5 @@ public sealed class LoginThrottleTests
         /// <inheritdoc />
         public Task<LoginProviderResult> CompleteAsync(LoginCallbackRequest request, CancellationToken cancellationToken) =>
             throw new NotSupportedException("a start that cannot build its URL never reaches the completion");
-    }
-
-    /// <summary>Sets <c>RemoteIpAddress</c> from <see cref="ClientIpHeader"/> before the app's pipeline.</summary>
-    private sealed class RemoteIpStartupFilter : IStartupFilter
-    {
-        /// <inheritdoc />
-        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
-        {
-            ArgumentNullException.ThrowIfNull(next);
-
-            return app =>
-            {
-                // Use(Func<RequestDelegate, RequestDelegate>): the client address is in place before
-                // routing, so the login routes' limiter reads the address under test.
-                app.Use(nextDelegate => context =>
-                {
-                    if (context.Request.Headers.TryGetValue(ClientIpHeader, out var header)
-                        && IPAddress.TryParse(header.ToString(), out var address))
-                    {
-                        context.Connection.RemoteIpAddress = address;
-                    }
-
-                    return nextDelegate(context);
-                });
-
-                next(app);
-            };
-        }
     }
 }

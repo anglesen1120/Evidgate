@@ -55,7 +55,7 @@ public static partial class LoginEndpoints
         InviteTokenCookie.Delete(context);
 
         // Ahead of every expensive step: an anonymous flood fills the replay set and drives provider calls here.
-        if (Throttle(context, limiter, CallbackLimiterPrefix + ExchangeRateLimiter.ClientKey(context.Connection.RemoteIpAddress), CallbackCost) is { } throttled)
+        if (Throttle(context, limiter, CallbackLimiterPrefix + ClientIp.LimiterKey(context), CallbackCost) is { } throttled)
         {
             return Result.Failure(throttled);
         }
@@ -206,7 +206,7 @@ public static partial class LoginEndpoints
         var request = new LoginCompletionRequest(
             identity,
             pending.ReturnUrl,
-            context.Connection.RemoteIpAddress?.ToString(),
+            ClientIp.Text(context),
             UserAgent(context),
             context,
             inviteToken,

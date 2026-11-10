@@ -122,7 +122,7 @@ internal static class DevSessionEndpoints
         var throttled = LoginEndpoints.Throttle(
             context,
             limiter,
-            LimiterPrefix + ExchangeRateLimiter.ClientKey(context.Connection.RemoteIpAddress),
+            LimiterPrefix + ClientIp.LimiterKey(context),
             cost: 1);
         if (throttled is not null)
         {
@@ -175,7 +175,7 @@ internal static class DevSessionEndpoints
                 token => handler.IssueKnownUserAsync(
                     KnownDevUser.UserId,
                     Provider,
-                    context.Connection.RemoteIpAddress?.ToString(),
+                    ClientIp.Text(context),
                     context.Request.Headers.UserAgent.ToString(),
                     // The value the browser already holds, handed over as the rotation predecessor: signing in
                     // again replaces that session instead of leaving a second live row behind.

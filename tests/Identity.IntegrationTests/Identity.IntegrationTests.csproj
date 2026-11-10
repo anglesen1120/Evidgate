@@ -27,6 +27,7 @@
     <!-- Shared Testcontainers harness (01.6.1-T2), linked like Foundation.IntegrationTests. -->
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
     <Compile Include="..\Shared\LeanLibraryMetrics.cs" Link="LeanLibraryMetrics.cs" />
+    <Compile Include="..\Shared\NoForwardedProxy.cs" Link="NoForwardedProxy.cs" />
     <Compile Include="..\Shared\ContractSchemaWarmup.cs" Link="ContractSchemaWarmup.cs" />
     <Compile Include="..\Shared\FixtureLoader.cs" Link="Shared/FixtureLoader.cs" />
     <Compile Include="..\Shared\DatabaseFixture.cs" Link="Shared/DatabaseFixture.cs" />
