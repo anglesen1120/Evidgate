@@ -108,6 +108,7 @@ public sealed class MetricCatalogueTests
     }
 
     [Fact]
+    [Trait("Category", "Docker")]
     public async Task EverySourceInstrumentIsCollectedByTheProductionProvider()
     {
         await using var database = await _postgres.CreateMigratedDatabaseAsync();
