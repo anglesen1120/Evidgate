@@ -104,6 +104,39 @@ public sealed class MembershipRoleKeyConcurrencyTests : CatalogueTestBase
             ("role", granted))).ShouldBe(1L);
     }
 
+    /// <summary>
+    /// Two transactions granting the same two roles in opposite order must both commit: the grant guards share the
+    /// key, so they never wait on each other. An exclusive lock would park the second statement on the first
+    /// transaction's role and then on the other's, so the bounded lock_timeout turns a regression into a fast failure.
+    /// </summary>
+    [Fact]
+    public async Task Grants_Of_The_Same_Roles_In_Opposite_Order_Do_Not_Block_Each_Other()
+    {
+        var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        var first = await SeedMembershipInAsync(org);
+        var second = await SeedMembershipInAsync(org);
+        var roleA = await SeedCustomRoleAsync(org, "member");
+        var roleB = await SeedCustomRoleAsync(org, "member");
+
+        await using var one = await OpenOwnerTransactionAsync();
+        await using var two = await OpenOwnerTransactionAsync();
+        await ExecuteAsync(two, "set local lock_timeout = '5s'");
+        await ExecuteAsync(one, "set local lock_timeout = '5s'");
+
+        await ExecuteAsync(one, InsertGrant, Grant(org, first, roleA));
+        await ExecuteAsync(two, InsertGrant, Grant(org, second, roleB));
+        await ExecuteAsync(two, InsertGrant, Grant(org, second, roleA));
+        await ExecuteAsync(one, InsertGrant, Grant(org, first, roleB));
+
+        await one.Transaction.CommitAsync(Token);
+        await two.Transaction.CommitAsync(Token);
+
+        (await OwnerScalarAsync(
+            "select count(*) from public.membership_role where role_id in (@a, @b)",
+            ("a", roleA),
+            ("b", roleB))).ShouldBe(4L);
+    }
+
     private static (string, object)[] Grant(Guid org, Guid membership, Guid role) =>
         [("id", Guid.CreateVersion7()), ("org", org), ("membership", membership), ("role", role)];
 
@@ -178,12 +211,17 @@ public sealed class MembershipRoleKeyConcurrencyTests : CatalogueTestBase
     private async Task<(Guid Org, Guid Membership)> SeedMembershipAsync()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
+        return (org, await SeedMembershipInAsync(org));
+    }
+
+    private async Task<Guid> SeedMembershipInAsync(Guid org)
+    {
         var membership = Guid.CreateVersion7();
         await Fixture.SeedAsync(
             "insert into public.membership (id, org_id, invited_email, status) values (@id, @org, @email, 'pending')",
             [("id", membership), ("org", org), ("email", $"m-{membership:N}@example.test")],
             Token);
-        return (org, membership);
+        return membership;
     }
 
     private async Task<Guid> SeedCustomRoleAsync(Guid org, string kind)

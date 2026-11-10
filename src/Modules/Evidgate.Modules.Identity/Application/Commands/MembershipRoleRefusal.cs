@@ -1,5 +1,6 @@
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Identity.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -27,4 +28,14 @@ internal static class MembershipRoleRefusal
             SqlState: PostgresErrorCodes.ForeignKeyViolation or PostgresErrorCodes.CheckViolation,
         } postgres
         && postgres.ConstraintName is ForeignKey or Guard;
+
+    /// <summary>The retryable 503 of the rank guard: a role guard lock wait that deadlocked or timed out.</summary>
+    internal static Error Contention => MemberRankGuard.Contention;
+
+    /// <summary>True when the grant waited on the role guard lock and lost (<c>40P01</c> or <c>55P03</c>).</summary>
+    internal static bool IsContention(DbUpdateException exception) =>
+        exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.LockNotAvailable,
+        };
 }

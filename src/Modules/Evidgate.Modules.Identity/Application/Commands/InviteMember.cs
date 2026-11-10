@@ -272,6 +272,10 @@ internal sealed class InviteMemberCommandHandler(
         {
             return Result.Failure<InviteIssuedView>(MembershipRoleRefusal.UnknownRole);
         }
+        catch (DbUpdateException exception) when (MembershipRoleRefusal.IsContention(exception))
+        {
+            return Result.Failure<InviteIssuedView>(MembershipRoleRefusal.Contention);
+        }
         catch (DbUpdateException exception) when (IsUniqueViolation(exception))
         {
             // The platform-wide prefix index (another org's row won the same 62^12 draw). The
