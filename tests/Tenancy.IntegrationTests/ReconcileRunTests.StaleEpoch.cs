@@ -46,21 +46,47 @@ public sealed partial class ReconcileRunTests
     private static Task<ApiAnswer> PostBatchAsync(IngestTestWorld world, params object[] events) =>
         IngestQaRequests.PostEventsAsync(world.Client, world.RunId, IngestQaRequests.Batch(events));
 
-    [Fact]
-    public async Task Foreign_Epoch_Batch_Is_Stored_Stale_And_Its_Shard_Is_Never_Complete()
+    /// <summary>
+    /// One event of the world's plan delivered over the real route, declaring <paramref name="epoch"/>. It is a
+    /// <c>test.step</c> without a status, the shape the late-evidence partial file's epoch case already posts: the
+    /// suite's world has answered every planned execution, so a <c>test.finished</c> would reach the case-attempt
+    /// writer on the seeded attempt 1 with a different finish instant and be refused with
+    /// <c>duplicate_different_payload</c> (409), while a step event writes no attempt and is stored as ordinary
+    /// evidence the reconciler counts.
+    /// </summary>
+    private static Dictionary<string, object?> EpochEvent(
+        IngestTestWorld world,
+        int executionIndex,
+        long sequence,
+        long epoch) =>
+        IngestQaRequests.Event(
+            Guid.CreateVersion7(),
+            IngestQaRequests.KeyOf(world, executionIndex),
+            sequence,
+            type: "test.step",
+            status: null,
+            epoch: epoch);
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(ForeignEpoch)]
+    [InlineData(3L)]
+    [InlineData(long.MaxValue)]
+    public async Task Foreign_Epoch_Batch_Is_Stored_Stale_And_Its_Shard_Is_Never_Complete(long epoch)
     {
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartEpochWorldAsync(dedicated.Name);
         await SetRunStateAsync(world, world.RunId, "collecting");
 
-        // The event declares the superseded attempt, so the batch is accepted and kept, marked rather than refused.
-        var foreign = IngestQaRequests.Event(
-            Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1, epoch: ForeignEpoch);
+        // The event declares an epoch the run's own attempt never took, so the batch is accepted and kept, marked
+        // rather than refused.
+        var foreign = EpochEvent(world, executionIndex: 0, sequence: 1, epoch);
         var answer = await PostBatchAsync(world, foreign);
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         answer.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
-        (await EventFlagAsync(world, 1, "stale")).ShouldBeTrue("epoch 1 is not the run's attempt 2");
+        (await EventFlagAsync(world, 1, "stale"))
+            .ShouldBeTrue($"epoch {epoch} is not the run's attempt {CurrentEpoch}");
 
         // The derived flag is not part of the payload hash: a replay is still one row, with the same flag.
         var replay = await PostBatchAsync(world, foreign);
@@ -90,10 +116,7 @@ public sealed partial class ReconcileRunTests
         await SetRunStateAsync(world, world.RunId, "collecting");
 
         // The control of the stale case: the same shape declaring the run's own attempt is ordinary evidence.
-        var answer = await PostBatchAsync(
-            world,
-            IngestQaRequests.Event(
-                Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1, epoch: CurrentEpoch));
+        var answer = await PostBatchAsync(world, EpochEvent(world, executionIndex: 0, sequence: 1, CurrentEpoch));
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         (await EventFlagAsync(world, 1, "stale")).ShouldBeFalse("epoch 2 is the run's attempt 2");
@@ -115,10 +138,8 @@ public sealed partial class ReconcileRunTests
 
         var answer = await PostBatchAsync(
             world,
-            IngestQaRequests.Event(
-                Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1, epoch: CurrentEpoch),
-            IngestQaRequests.Event(
-                Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 1), sequence: 2, epoch: ForeignEpoch));
+            EpochEvent(world, executionIndex: 0, sequence: 1, CurrentEpoch),
+            EpochEvent(world, executionIndex: 1, sequence: 2, ForeignEpoch));
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         answer.Body.GetProperty("accepted").GetInt32().ShouldBe(2);
@@ -141,8 +162,7 @@ public sealed partial class ReconcileRunTests
         await SetRunStateAsync(world, world.RunId, "collecting");
 
         // An absent epoch is undeclared, not a foreign one: the insert leaves the flag alone and the batch is accepted.
-        var undeclared = IngestQaRequests.Event(
-            Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1);
+        var undeclared = EpochEvent(world, executionIndex: 0, sequence: 1, CurrentEpoch);
         undeclared.Remove("epoch");
 
         var answer = await PostBatchAsync(world, undeclared);
@@ -159,10 +179,7 @@ public sealed partial class ReconcileRunTests
         await SetRunStateAsync(world, world.RunId, "collecting");
 
         // This world's run records no CI reference, so no attempt exists to compare a declared epoch with.
-        var answer = await PostBatchAsync(
-            world,
-            IngestQaRequests.Event(
-                Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1, epoch: 9L));
+        var answer = await PostBatchAsync(world, EpochEvent(world, executionIndex: 0, sequence: 1, epoch: 9L));
 
         answer.Status.ShouldBe(HttpStatusCode.OK, answer.ErrorMessage);
         (await EventFlagAsync(world, 1, "stale")).ShouldBeFalse("a run without a CI reference declares no current epoch");
