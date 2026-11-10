@@ -970,7 +970,7 @@ export const createMembership = <ThrowOnError extends boolean = false>(options: 
 /**
  * Remove a member; the last active tenant_admin is protected (02, AC4)
  *
- * Sets `status = removed` and keeps the row as audit history (02.1.2 §8). Removing the org's last active `tenant_admin` is 409 `last_admin`; a `pending` invite is 409 `invalid_transition` (cancel it through 02.1.2-T2's route). Removal revokes the user's sessions in every org in the same transaction (AC3).
+ * Sets `status = removed` and keeps the row as audit history (02.1.2 §8). Removing the org's last active `tenant_admin` is 409 `last_admin`; a `pending` invite is 409 `invalid_transition` (cancel it through 02.1.2-T2's route). Removal revokes the user's sessions in every org in the same transaction (AC3). A caller whose administrative rank in the org is below the target's is refused with 403 `forbidden`: the target's rank is read from its membership row whatever its status, and only an owner may act on an owner.
  */
 export const removeMember = <ThrowOnError extends boolean = false>(options: Options<RemoveMemberData, ThrowOnError>): RequestResult<RemoveMemberResponses, RemoveMemberErrors, ThrowOnError> => (options.client ?? client).delete<RemoveMemberResponses, RemoveMemberErrors, ThrowOnError>({
     security: [{
@@ -998,7 +998,7 @@ export const getMembership = <ThrowOnError extends boolean = false>(options: Opt
 /**
  * Disable a member (status removed) under If-Match; last-admin guard applies (02)
  *
- * The admin disable path: `active → removed` (02.1.2 AC3, §6). `If-Match` carries the row's `version`; a stale value is 412. Removing the org's last active `tenant_admin` is 409 `last_admin` (AC4), and a `pending` invite is cancelled through 02.1.2-T2's route, so any other source status is 409 `invalid_transition`.
+ * The admin disable path: `active → removed` (02.1.2 AC3, §6). `If-Match` carries the row's `version`; a stale value is 412. Removing the org's last active `tenant_admin` is 409 `last_admin` (AC4), and a `pending` invite is cancelled through 02.1.2-T2's route, so any other source status is 409 `invalid_transition`. A caller whose administrative rank in the org is below the target's is refused with 403 `forbidden`: the target's rank is read from its membership row whatever its status, and only an owner may act on an owner.
  */
 export const updateMembership = <ThrowOnError extends boolean = false>(options: Options<UpdateMembershipData, ThrowOnError>): RequestResult<UpdateMembershipResponses, UpdateMembershipErrors, ThrowOnError> => (options.client ?? client).patch<UpdateMembershipResponses, UpdateMembershipErrors, ThrowOnError>({
     security: [{
@@ -1032,7 +1032,7 @@ export const resendMembershipInvite = <ThrowOnError extends boolean = false>(opt
 /**
  * Cancel a pending invite (pending -> revoked); 409 invite_not_pending (02, AC6)
  *
- * Moves a `pending` membership to `revoked` (02.1.2 §6). The stored prefix and hash stay on the row for the audit trail, and the resolver only ever returns `pending` rows, so a cancelled invite can never bind. No notification is enqueued: there is nothing to send. `Idempotency-Key` per T11.
+ * Moves a `pending` membership to `revoked` (02.1.2 §6). The stored prefix and hash stay on the row for the audit trail, and the resolver only ever returns `pending` rows, so a cancelled invite can never bind. No notification is enqueued: there is nothing to send. A caller whose administrative rank is below the roles the invite carries is refused with 403 `forbidden`. `Idempotency-Key` per T11.
  */
 export const cancelMembershipInvite = <ThrowOnError extends boolean = false>(options: Options<CancelMembershipInviteData, ThrowOnError>): RequestResult<CancelMembershipInviteResponses, CancelMembershipInviteErrors, ThrowOnError> => (options.client ?? client).post<CancelMembershipInviteResponses, CancelMembershipInviteErrors, ThrowOnError>({
     security: [{
@@ -1066,7 +1066,7 @@ export const grantMembershipRole = <ThrowOnError extends boolean = false>(option
 /**
  * Revoke one role from a membership; the last admin is protected (02, AC4)
  *
- * Revoking the `tenant_admin` role from the org's last active admin is 409 `last_admin` — demoting the last admin locks the tenant out exactly as removing them would. A pair that was never granted is 404; AC5: the next request evaluates the reduced role set.
+ * Revoking the `tenant_admin` role from the org's last active admin is 409 `last_admin` — demoting the last admin locks the tenant out exactly as removing them would. A pair that was never granted is 404; AC5: the next request evaluates the reduced role set. A caller whose administrative rank in the org is below the target's is refused with 403 `forbidden` before the pair is looked up: the target's rank is read from its membership row whatever its status (a removed owner's row included), and only an owner may act on an owner.
  */
 export const revokeMembershipRole = <ThrowOnError extends boolean = false>(options: Options<RevokeMembershipRoleData, ThrowOnError>): RequestResult<RevokeMembershipRoleResponses, RevokeMembershipRoleErrors, ThrowOnError> => (options.client ?? client).delete<RevokeMembershipRoleResponses, RevokeMembershipRoleErrors, ThrowOnError>({
     security: [{

@@ -10,33 +10,67 @@ internal static class MemberRankGuard
         "the caller's administrative rank must be at least the target's rank in this organization");
 
     /// <summary>
-    /// Fail-closed entry point: a request without a resolved member has no rank and is refused.
-    /// The SQL function remains the only definition of the rank rule.
+    /// Fail-closed entry point for the early, unlocked refusal: a request without a resolved member has
+    /// no rank and is refused. The SQL functions remain the only definition of the rank rule, and the
+    /// target is the membership row, whatever its status (a removed or pending row keeps its grants).
     /// </summary>
-    internal static async Task<bool> ActorOutranksOrEqualsAsync(
+    internal static Task<bool> ActorOutranksOrEqualsAsync(
         ITenantDb db,
         Guid orgId,
         IRequestPrincipal? actor,
-        Guid? targetUserId,
-        CancellationToken cancellationToken)
-    {
-        return actor?.UserId is { } actorUserId
-            && await ActorOutranksOrEqualsAsync(
-                db, orgId, actorUserId, targetUserId, cancellationToken).ConfigureAwait(false);
-    }
+        Guid targetMembershipId,
+        CancellationToken cancellationToken) =>
+        CompareAsync(db, orgId, actor, targetMembershipId, locked: false, cancellationToken);
 
-    internal static async Task<bool> ActorOutranksOrEqualsAsync(
+    /// <summary>
+    /// The authoritative comparison, made atomic: the target and the actor's membership rows are locked
+    /// (one statement, ordered by id, so two callers cannot lock them in opposite orders) and the ranks are
+    /// read afterwards. A grant insert takes a key-share lock on its membership row through the foreign key
+    /// and every command that lowers a rank takes this lock, so none can land between this read and the write
+    /// that follows in the same transaction.
+    /// </summary>
+    internal static Task<bool> LockedActorOutranksOrEqualsAsync(
         ITenantDb db,
         Guid orgId,
-        Guid actorUserId,
-        Guid? targetUserId,
+        IRequestPrincipal? actor,
+        Guid targetMembershipId,
+        CancellationToken cancellationToken) =>
+        CompareAsync(db, orgId, actor, targetMembershipId, locked: true, cancellationToken);
+
+    private static async Task<bool> CompareAsync(
+        ITenantDb db,
+        Guid orgId,
+        IRequestPrincipal? actor,
+        Guid targetMembershipId,
+        bool locked,
         CancellationToken cancellationToken)
     {
-        // An unbound invite has no user, and the function ranks it zero. The pipeline has
-        // already required membership:write, so the comparison only orders administrators.
+        if (actor?.UserId is not { } actorUserId)
+        {
+            return false;
+        }
+
+        if (locked)
+        {
+            _ = await db.ScalarAsync<long>(
+                """
+                select count(*) from (
+                  select m.id
+                    from public.membership m
+                   where m.org_id = @org_id
+                     and (m.id = @target or (m.user_id = @actor and m.status = 'active'))
+                   order by m.id
+                     for update) locked
+                """,
+                new { org_id = orgId, target = targetMembershipId, actor = actorUserId },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        // A target the tenant cannot see ranks 0; the pipeline has already required membership:write, so
+        // the comparison only orders administrators.
         return await db.ScalarAsync<bool?>(
-            "select evidgate.session_admin_rank(@org_id, @actor) >= evidgate.session_admin_rank(@org_id, @target)",
-            new { org_id = orgId, actor = actorUserId, target = targetUserId },
+            "select evidgate.session_admin_rank(@org_id, @actor) >= evidgate.membership_rank(@org_id, @target)",
+            new { org_id = orgId, actor = actorUserId, target = targetMembershipId },
             cancellationToken).ConfigureAwait(false) ?? false;
     }
 }
