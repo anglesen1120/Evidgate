@@ -95,7 +95,7 @@ public sealed partial class CiAuthTests
             ("wrong iss", api.Jwks.Mint(RepoId, (_, o) => o.Issuer = "https://evil.example")),
             ("wrong aud", api.Jwks.Mint(RepoId, (_, o) => o.Audience = "someone-else")),
             ("expired", api.Jwks.Mint(RepoId, (_, o) => { o.NotBeforeOffset = TimeSpan.FromMinutes(-20); o.ExpiresOffset = TimeSpan.FromMinutes(-10); })),
-            ("nbf 61s ahead", api.Jwks.Mint(RepoId, (_, o) => o.NotBeforeOffset = TimeSpan.FromSeconds(61))),
+            ("nbf beyond the skew", api.Jwks.Mint(RepoId, (_, o) => { o.NotBeforeOffset = TimeSpan.FromMinutes(5); o.ExpiresOffset = TimeSpan.FromMinutes(10); })),
             ("unknown kid", api.Jwks.Mint(RepoId, (_, o) => o.KeyId = "rotated-away")),
             ("HS256 confusion", api.Jwks.Mint(RepoId, (_, o) => o.Algorithm = SecurityAlgorithms.RsaSsaPssSha256)),
             ("missing repository_id", api.Jwks.Mint(RepoId, (c, _) => c.Remove("repository_id"))),
@@ -116,9 +116,11 @@ public sealed partial class CiAuthTests
             answer.ErrorCode.ShouldBe("token_invalid", name);
         }
 
-        // Skew boundary: 59 s ahead is inside the 60 s allowance, and an exp 59 s in the past still passes.
+        // Skew boundary: 59 s ahead is inside the 60 s allowance (elapsed time only moves it closer), and an exp 30 s in
+        // the past still passes with room for the time the request takes; the exact edges are pinned against a fixed clock
+        // in CiUnitTests.Lifetime_HonoursTheSkewOnBothEdges.
         (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (_, o) => o.NotBeforeOffset = TimeSpan.FromSeconds(59)))).Status.ShouldBe(HttpStatusCode.OK);
-        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (_, o) => { o.NotBeforeOffset = TimeSpan.FromMinutes(-5); o.ExpiresOffset = TimeSpan.FromSeconds(-59); })))
+        (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (_, o) => { o.NotBeforeOffset = TimeSpan.FromMinutes(-5); o.ExpiresOffset = TimeSpan.FromSeconds(-30); })))
             .Status.ShouldBe(HttpStatusCode.OK);
         (await ExchangeAsync(client, api.Jwks.Mint(RepoId, (_, o) => { o.NotBeforeOffset = TimeSpan.FromMinutes(-5); o.ExpiresOffset = TimeSpan.FromSeconds(-61); })))
             .ErrorCode.ShouldBe("token_invalid");
