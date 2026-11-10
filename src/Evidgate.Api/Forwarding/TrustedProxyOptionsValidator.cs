@@ -25,8 +25,9 @@ public sealed class TrustedProxyOptionsValidator(IHostEnvironment environment, I
                 + "list the proxies in EVIDGATE__FORWARDEDHEADERS__KNOWNPROXIES / EVIDGATE__FORWARDEDHEADERS__KNOWNNETWORKS");
         }
 
-        if (options.KnownProxies?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length > 1
-            && options.KnownProxies.Contains(TrustedProxyOptions.None, StringComparison.OrdinalIgnoreCase))
+        var entries = (options.KnownProxies ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (entries.Length > 1 && entries.Any(e => e.Equals(TrustedProxyOptions.None, StringComparison.OrdinalIgnoreCase)))
         {
             problems.Add("EVIDGATE__FORWARDEDHEADERS__KNOWNPROXIES: 'none' must stand alone, not be mixed with other entries");
         }
