@@ -20,6 +20,8 @@ public sealed class MigratorOptions
     public const string ConnectionStringVariable = SecretNames.MigratorConnectionString;
     public const string MigrationsPathVariable = "EVIDGATE_MIGRATOR__MIGRATIONSPATH";
     public const string CommandTimeoutVariable = "EVIDGATE_MIGRATOR__COMMANDTIMEOUTSECONDS";
+    public const string LockTimeoutVariable = "EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS";
+    public const string StatementTimeoutVariable = "EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS";
 
     /// <summary>
     /// Command timeout, in seconds, for every statement the Migrator runs:
@@ -29,6 +31,22 @@ public sealed class MigratorOptions
     /// of 30 s would otherwise abort such a statement.
     /// </summary>
     public const int DefaultCommandTimeoutSeconds = 0;
+
+    /// <summary>
+    /// Default <c>lock_timeout</c> in seconds, applied with <c>SET LOCAL</c> inside every script's
+    /// transaction. DDL on a hot table queues behind any open transaction and every later query then
+    /// queues behind the DDL, so a script that cannot get its lock quickly must fail and roll back.
+    /// </summary>
+    public const int DefaultLockTimeoutSeconds = 5;
+
+    /// <summary>
+    /// Default <c>statement_timeout</c> in seconds, applied like <see cref="DefaultLockTimeoutSeconds"/>.
+    /// Generous on purpose: an index build or backfill must finish; the value only stops a runaway.
+    /// </summary>
+    public const int DefaultStatementTimeoutSeconds = 900;
+
+    /// <summary>Largest value PostgreSQL accepts for a millisecond timeout (2^31-1 ms) expressed in whole seconds.</summary>
+    public const int MaxServerTimeoutSeconds = int.MaxValue / 1000;
 
     /// <summary>Schema holding the journal table (01.4.1 contracts: <c>public.schema_migration</c>).</summary>
     public const string Schema = "public";
@@ -52,6 +70,12 @@ public sealed class MigratorOptions
 
     /// <summary>Seconds before a statement is aborted; <c>0</c> disables the command timeout.</summary>
     public int CommandTimeoutSeconds { get; init; } = DefaultCommandTimeoutSeconds;
+
+    /// <summary>Seconds a script may wait for a lock before it fails; <c>0</c> disables <c>lock_timeout</c> explicitly.</summary>
+    public int LockTimeoutSeconds { get; init; } = DefaultLockTimeoutSeconds;
+
+    /// <summary>Seconds one statement of a script may run before it fails; <c>0</c> disables <c>statement_timeout</c> explicitly.</summary>
+    public int StatementTimeoutSeconds { get; init; } = DefaultStatementTimeoutSeconds;
 
     /// <summary>
     /// Reads the <c>EVIDGATE_MIGRATOR__*</c> variables. The connection string is
@@ -119,6 +143,9 @@ public sealed class MigratorOptions
             commandTimeout = DefaultCommandTimeoutSeconds;
         }
 
+        var lockTimeout = ReadServerTimeout(values, LockTimeoutVariable, DefaultLockTimeoutSeconds, errors);
+        var statementTimeout = ReadServerTimeout(values, StatementTimeoutVariable, DefaultStatementTimeoutSeconds, errors);
+
         if (errors.Count > 0)
         {
             throw new MigratorSetupException(errors);
@@ -129,6 +156,8 @@ public sealed class MigratorOptions
             ConnectionString = connectionString!,
             MigrationsPath = Path.GetFullPath(migrationsPath!),
             CommandTimeoutSeconds = commandTimeout,
+            LockTimeoutSeconds = lockTimeout,
+            StatementTimeoutSeconds = statementTimeout,
         };
     }
 
@@ -152,7 +181,26 @@ public sealed class MigratorOptions
 
     /// <inheritdoc />
     public override string ToString() =>
-        $"{nameof(MigratorOptions)} {{ MigrationsPath = {MigrationsPath}, Target = {DescribeTarget()}, CommandTimeoutSeconds = {CommandTimeoutSeconds.ToString(CultureInfo.InvariantCulture)} }}";
+        $"{nameof(MigratorOptions)} {{ MigrationsPath = {MigrationsPath}, Target = {DescribeTarget()}, CommandTimeoutSeconds = {CommandTimeoutSeconds.ToString(CultureInfo.InvariantCulture)}, " +
+        $"LockTimeoutSeconds = {LockTimeoutSeconds.ToString(CultureInfo.InvariantCulture)}, StatementTimeoutSeconds = {StatementTimeoutSeconds.ToString(CultureInfo.InvariantCulture)} }}";
+
+    /// <summary>Reads a server-side timeout; an unset value takes the default, anything unparsable, negative or too large fails closed.</summary>
+    private static int ReadServerTimeout(IReadOnlyDictionary<string, string?> values, string key, int fallback, List<string> errors)
+    {
+        var text = Read(values, key);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return fallback;
+        }
+
+        if (int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds) && seconds <= MaxServerTimeoutSeconds)
+        {
+            return seconds;
+        }
+
+        errors.Add($"invalid {key}: '{text}' is not a whole number of seconds between 0 and {MaxServerTimeoutSeconds.ToString(CultureInfo.InvariantCulture)} (0 = disabled)");
+        return fallback;
+    }
 
     /// <summary>Default migrations path: <c>&lt;repo root&gt;/migrations</c>, falling back to the application directory.</summary>
     private static string DefaultMigrationsPath(string? startDirectory)

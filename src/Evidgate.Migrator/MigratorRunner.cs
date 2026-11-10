@@ -175,6 +175,7 @@ public static class MigratorRunner
             .WithVariablesDisabled()
             .WithScripts(plan.Pending.Select(script => new SqlScript(script.Name, script.Contents)))
             .WithTransactionPerScript()
+            .WithPreprocessor(new ScriptTimeoutPreprocessor(run.Options))
             .WithPreprocessor(timing)
             .JournalTo(journal)
             .LogTo(log)
@@ -187,7 +188,12 @@ public static class MigratorRunner
         {
             var failed = result.ErrorScript?.Name ?? "unknown script";
             run.Emit($"migration failed in {failed}: {log.Redact(result.Error?.Message)}");
-            if (IsCommandTimeout(result.Error))
+            var timeoutExit = ServerTimeout(result.Error);
+            if (timeoutExit is { } serverTimeout)
+            {
+                EmitServerTimeout(run, failed, serverTimeout, result.Error);
+            }
+            else if (IsCommandTimeout(result.Error))
             {
                 run.Emit(
                     $"{failed} exceeded the configured command timeout of {DescribeTimeout(run.Options.CommandTimeoutSeconds)} " +
@@ -195,7 +201,7 @@ public static class MigratorRunner
             }
 
             run.Emit("the failed script's transaction was rolled back and it was not journalled");
-            return run.Result(MigratorExitCodes.MigrationFailed, plan, appliedNow);
+            return run.Result(timeoutExit?.ExitCode ?? MigratorExitCodes.MigrationFailed, plan, appliedNow);
         }
 
         foreach (var name in appliedNow)
@@ -217,6 +223,46 @@ public static class MigratorRunner
             run.Emit($"drifted {drift.Name}: {reason}");
         }
     }
+
+    private const string LockNotAvailable = "55P03";
+    private const string QueryCanceled = "57014";
+
+    /// <summary>Finds a server-side lock or statement timeout in the failure chain.</summary>
+    private static ServerTimeoutKind? ServerTimeout(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException { SqlState: LockNotAvailable })
+            {
+                return new ServerTimeoutKind(MigratorExitCodes.LockTimeout, "lock_timeout", MigratorOptions.LockTimeoutVariable);
+            }
+
+            if (current is PostgresException { SqlState: QueryCanceled })
+            {
+                return new ServerTimeoutKind(MigratorExitCodes.StatementTimeout, "statement_timeout", MigratorOptions.StatementTimeoutVariable);
+            }
+        }
+
+        return null;
+    }
+
+    private static void EmitServerTimeout(RunContext run, string script, ServerTimeoutKind kind, Exception? error)
+    {
+        var seconds = kind.ExitCode == MigratorExitCodes.LockTimeout
+            ? run.Options.LockTimeoutSeconds
+            : run.Options.StatementTimeoutSeconds;
+        var relation = error is PostgresException { TableName: { Length: > 0 } table }
+            ? $" (relation {table})"
+            : error is PostgresException { Where: { Length: > 0 } where } ? $" ({where.ReplaceLineEndings(" ")})" : string.Empty;
+        run.Emit(
+            $"{script} hit {kind.Setting} of {DescribeTimeout(seconds)}{relation}; " +
+            (kind.ExitCode == MigratorExitCodes.LockTimeout
+                ? "another session holds a conflicting lock: find it in pg_stat_activity / pg_locks, end or wait for it, then rerun"
+                : "the statement ran longer than allowed: raise the limit or split the migration") +
+            $" ({kind.Variable}; exit {kind.ExitCode.ToString(CultureInfo.InvariantCulture)})");
+    }
+
+    private sealed record ServerTimeoutKind(int ExitCode, string Setting, string Variable);
 
     /// <summary>True when the failure chain carries a driver timeout rather than a server error.</summary>
     private static bool IsCommandTimeout(Exception? exception)
