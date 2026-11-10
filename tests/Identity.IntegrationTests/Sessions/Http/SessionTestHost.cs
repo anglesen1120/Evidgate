@@ -707,6 +707,8 @@ internal sealed class SessionTestHost : WebApplicationFactory<Program>
                 ["EVIDGATE:Login:PublicBaseUrl"] = PublicBaseUrl,
                 ["EVIDGATE:Login:StateLifetimeSeconds"] = StateLifetimeSeconds.ToString(CultureInfo.InvariantCulture),
                 ["EVIDGATE:Login:RetryAfterSeconds"] = RetryAfterSeconds.ToString(CultureInfo.InvariantCulture),
+                // Invite minting and resend answer 503 without a pepper; generated per host, never a literal.
+                ["EVIDGATE:Invite:Pepper"] = Convert.ToBase64String(RandomNumberGenerator.GetBytes(PepperBytes)),
             }));
 
         builder.ConfigureTestServices(services =>
