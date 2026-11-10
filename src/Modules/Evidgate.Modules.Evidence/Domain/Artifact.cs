@@ -158,6 +158,40 @@ internal static class ArtifactState
         value is null || IsKnown(value)
             ? value
             : throw new ArgumentOutOfRangeException(nameof(value), value, "state is outside the 00 §8.4 closed list (06.1.1 §4)");
+
+    /// <summary>
+    /// The 00 §8.4 edges, the same list <c>artifact_guard_transition</c> (0095) enforces in SQL; <c>ready → rejected</c> is
+    /// the parse verdict on stored bytes. <c>rejected</c> and <c>deleted</c> are terminal.
+    /// </summary>
+    private static readonly (string From, string To)[] Edges =
+    [
+        (PendingUpload, Uploaded),
+        (PendingUpload, Ready),
+        (PendingUpload, Rejected),
+        (Uploaded, Ready),
+        (Uploaded, Rejected),
+        (Ready, Rejected),
+        (Ready, PendingDelete),
+        (PendingDelete, Deleted),
+    ];
+
+    /// <summary>True when <paramref name="from"/> → <paramref name="to"/> is an edge, or the same state (a no-op).</summary>
+    /// <param name="from">The stored state; null is the column default, <c>pending_upload</c>.</param>
+    /// <param name="to">The state to write.</param>
+    public static bool IsAllowedMove(string? from, string to)
+    {
+        var source = from ?? PendingUpload;
+
+        return string.Equals(source, to, StringComparison.Ordinal)
+            || Array.Exists(Edges, edge => edge.From == source && edge.To == to);
+    }
+
+    /// <summary>The state, or an <see cref="ArgumentOutOfRangeException"/> when it is outside the closed list (C6).</summary>
+    /// <param name="value">The state to check.</param>
+    public static string Ensure(string? value) =>
+        IsKnown(value)
+            ? value!
+            : throw new ArgumentOutOfRangeException(nameof(value), value, "state is outside the 00 §8.4 closed list (06.1.1 §4)");
 }
 
 /// <summary>
@@ -286,13 +320,38 @@ internal sealed class Artifact
     /// final key (06.1.2-T1 decision 7), and it is the one column migration 0028 does not grant the app role.
     /// </summary>
     /// <param name="verifiedBytes">The stored length <c>HEAD</c> reported for the verified object.</param>
-    public Artifact MarkReady(long? verifiedBytes) => Copy(
-        Sensitivity,
-        verifiedBytes,
-        ArtifactScanState.Pending,
-        ArtifactState.Ready,
-        ExpiresAt,
-        failureCode: null);
+    public Artifact MarkReady(long? verifiedBytes)
+    {
+        EnsureTransition(ArtifactState.Ready);
+
+        return Copy(Sensitivity, verifiedBytes, ArtifactScanState.Pending, ArtifactState.Ready, ExpiresAt, failureCode: null);
+    }
+
+    /// <summary>
+    /// Moves the row to <paramref name="next"/> along the 00 §8.4 allow-list (<see cref="ArtifactState.IsAllowedMove"/>),
+    /// keeping every other column. The named transitions below add their own columns and use the same check, so there
+    /// is one allow-list in the aggregate and the same one in the <c>artifact_guard_transition</c> trigger (0095).
+    /// </summary>
+    /// <param name="next">One of <see cref="ArtifactState.All"/>.</param>
+    /// <exception cref="ArgumentOutOfRangeException">The value is outside the closed list.</exception>
+    /// <exception cref="InvalidOperationException">The move is not an edge of the state machine.</exception>
+    public Artifact TransitionTo(string next)
+    {
+        ArtifactState.Ensure(next);
+        EnsureTransition(next);
+
+        return Copy(Sensitivity, Bytes, ScanState, next, ExpiresAt, FailureCode);
+    }
+
+    /// <summary>Throws when <paramref name="next"/> is not a legal move from the row's current state.</summary>
+    /// <param name="next">The state the caller is about to write.</param>
+    private void EnsureTransition(string next)
+    {
+        if (!ArtifactState.IsAllowedMove(State, next))
+        {
+            throw new InvalidOperationException($"artifact state {State} cannot move to {next}");
+        }
+    }
 
     /// <summary>
     /// The <c>pending_upload|uploaded → rejected</c> transition of 06.1.2 §6 (AC3): the object never became
@@ -311,6 +370,7 @@ internal sealed class Artifact
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(failureCode.Length, 128);
+        EnsureTransition(ArtifactState.Rejected);
 
         return Copy(Sensitivity, Bytes, ScanState, ArtifactState.Rejected, ExpiresAt, failureCode);
     }
