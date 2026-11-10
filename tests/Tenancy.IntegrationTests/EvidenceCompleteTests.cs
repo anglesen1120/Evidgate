@@ -837,8 +837,12 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
         var runId = await SeedRunAsync(world);
         await InsertKindPolicyAsync(world);
 
-        // A matching staging object is in place, so only the state guard can refuse the completion.
+        // A matching staging object is in place, so only the state guard can refuse the completion. The row reaches
+        // `pending_delete` over the two edges the contract allows, because the trigger refuses the direct move from
+        // `pending_upload`.
         var (artifactId, _, _) = await MintAndUploadAsync(world, runId, GoodBody);
+        await _fixture.ExecuteAsync(
+            world.Database, $"update public.artifact set state = 'ready' where id = '{artifactId:D}'");
         await _fixture.ExecuteAsync(
             world.Database, $"update public.artifact set state = 'pending_delete' where id = '{artifactId:D}'");
 

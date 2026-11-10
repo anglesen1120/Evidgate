@@ -255,6 +255,13 @@ internal sealed class CompleteArtifactUploadHandler(
 
             return loser;
         }
+        catch (DbUpdateException exception) when (ArtifactTransitionFault.IsIllegalTransition(exception))
+        {
+            // A writer the version token could not see (a sweeper or an operator statement) moved the row to a state
+            // this completion may not leave: the trigger refused the move. The transaction is aborted, so the stored
+            // outcome cannot be re-read; the contract's 409 answers it, never a 500.
+            return Result.Failure<CompleteResponse>(EvidenceErrors.ArtifactStateConflict);
+        }
 
         // The committed verdict is the only place a refusal becomes countable: a replay returns above, and a
         // concurrency loser is counted by the writer whose rejection actually committed. The measurement waits
