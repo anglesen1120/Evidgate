@@ -47,6 +47,21 @@ public sealed class DefinerExecuteScopeTests
             "evidgate_app"
         },
         {
+            "evidgate.membership_holds_write(uuid, uuid)",
+            "select evidgate.membership_holds_write(gen_random_uuid(), gen_random_uuid())",
+            "evidgate_app"
+        },
+        {
+            "evidgate.role_rank(uuid, uuid)",
+            "select evidgate.role_rank(gen_random_uuid(), gen_random_uuid())",
+            "evidgate_app"
+        },
+        {
+            "evidgate.membership_rank(uuid, uuid)",
+            "select evidgate.membership_rank(gen_random_uuid(), gen_random_uuid())",
+            "evidgate_app"
+        },
+        {
             "evidgate.session_admin_may_revoke_all(uuid, uuid, uuid)",
             "select evidgate.session_admin_may_revoke_all(gen_random_uuid(), gen_random_uuid(), gen_random_uuid())",
             OwnerOnly

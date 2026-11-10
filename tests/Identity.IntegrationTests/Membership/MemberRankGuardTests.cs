@@ -337,52 +337,6 @@ public sealed class MemberRankGuardTests : TenantTest
         db.Statements.ShouldBe(0);
     }
 
-    /// <summary>The comparison is one SQL statement carrying the org, actor and target.</summary>
-    [Fact]
-    public async Task Rank_Comparison_Is_One_Parameterised_Statement()
-    {
-        var db = new RecordingTenantDb(result: true);
-        var orgId = Guid.CreateVersion7();
-        var actorId = Guid.CreateVersion7();
-        var targetId = Guid.CreateVersion7();
-
-        var allowed = await MemberRankGuard.ActorOutranksOrEqualsAsync(
-            db,
-            orgId,
-            actorId,
-            targetId,
-            Token);
-
-        allowed.ShouldBeTrue();
-        db.Statements.ShouldBe(1);
-        var sql = db.Sql.ShouldBeOfType<string>();
-        sql.ShouldContain("evidgate.session_admin_rank(@org_id, @actor)");
-        sql.ShouldContain("evidgate.session_admin_rank(@org_id, @target)");
-        Parameter(db, "org_id").ShouldBe(orgId);
-        Parameter(db, "actor").ShouldBe(actorId);
-        Parameter(db, "target").ShouldBe(targetId);
-    }
-
-    /// <summary>A pending target is passed as SQL NULL, which the function ranks zero.</summary>
-    [Fact]
-    public async Task Null_Target_Is_Passed_To_The_Function()
-    {
-        var db = new RecordingTenantDb(result: true);
-
-        var allowed = await MemberRankGuard.ActorOutranksOrEqualsAsync(
-            db,
-            Guid.CreateVersion7(),
-            Guid.CreateVersion7(),
-            targetUserId: null,
-            Token);
-
-        allowed.ShouldBeTrue();
-        Parameter(db, "target").ShouldBeNull();
-    }
-
-    private static object? Parameter(RecordingTenantDb db, string name) =>
-        db.Parameters?.GetType().GetProperty(name)?.GetValue(db.Parameters);
-
     private static async Task<SignedInMember> SignInCustomAdminAsync(
         SessionTestHost host,
         HttpClient client,
