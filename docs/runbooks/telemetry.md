@@ -161,6 +161,7 @@ for every deployment.
 |---|---|---|
 | `EVIDGATE__TELEMETRY__OTLPENDPOINT` | `infra/config-matrix.json` | both hosts; unset disables export |
 | `EVIDGATE__TELEMETRY__SAMPLERATIO` | `infra/config-matrix.json` | both hosts; trace head sampling |
+| `EVIDGATE__TELEMETRY__LIBRARYMETRICS` | `infra/config-matrix.json` | both hosts; runtime/Npgsql/ASP.NET Core meters, default on |
 | `EVIDGATE__TELEMETRY__SERVICEVERSION` | `infra/config-matrix.json` | both hosts; `service.version` |
 
 `node scripts/check-env-matrix.mjs` keeps that file equal to what the code consumes;

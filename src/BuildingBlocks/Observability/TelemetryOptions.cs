@@ -44,6 +44,15 @@ public sealed class TelemetryOptions : IValidatableObject
     /// </summary>
     public string? ServiceVersion { get; init; }
 
+    /// <summary>
+    /// Whether the host subscribes to the libraries' own meters (the .NET runtime, Npgsql and, in the API,
+    /// ASP.NET Core hosting) that the operations catalogue reports. On by default. Every live meter provider
+    /// receives every measurement those libraries make, so a process that builds many hosts (the integration
+    /// suites) switches it off with <c>EVIDGATE__TELEMETRY__LIBRARYMETRICS=false</c> instead of paying for
+    /// metrics nobody scrapes.
+    /// </summary>
+    public bool LibraryMetrics { get; init; } = true;
+
     /// <inheritdoc />
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {

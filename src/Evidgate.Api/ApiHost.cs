@@ -103,9 +103,17 @@ public static partial class ApiHost
         // The server request-duration histogram (http.server.request.duration) is the ingest SLI's source:
         // its p95 per route template is what the dashboards read, and the instrumentation labels a request by
         // its template rather than its URL, so no path parameter becomes a series.
-        otel.WithMetrics(metrics => metrics
-            .AddAspNetCoreInstrumentation()
-            .AddPrometheusExporter());
+        var libraryMetrics = builder.Configuration.GetSection(TelemetryOptions.SectionName).Get<TelemetryOptions>()?.LibraryMetrics
+            ?? true;
+        otel.WithMetrics(metrics =>
+        {
+            if (libraryMetrics)
+            {
+                metrics.AddAspNetCoreInstrumentation();
+            }
+
+            metrics.AddPrometheusExporter();
+        });
         // 10.3.1-T1.1/T1.2: Npgsql/HttpClient client spans and the log-record
         // correlation processor on the pipeline above. The ASP.NET Core instrumentation
         // stays here, where its login-route query redaction is configured.

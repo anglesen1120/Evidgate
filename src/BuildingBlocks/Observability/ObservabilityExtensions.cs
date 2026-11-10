@@ -113,14 +113,17 @@ public static class ObservabilityExtensions
         {
             metrics.AddMeter(EvidgateTelemetry.MeterName);
 
-            // The runtime and pool instruments the operations catalogue reports are published by the
-            // libraries themselves; subscribing here is what puts them on the pipeline both hosts export.
-            metrics.AddMeter(TelemetryMeters.Runtime)
-                .AddMeter(TelemetryMeters.Npgsql);
+            if (options.LibraryMetrics)
+            {
+                // The runtime and pool instruments the operations catalogue reports are published by the
+                // libraries themselves; subscribing here is what puts them on the pipeline both hosts export.
+                metrics.AddMeter(TelemetryMeters.Runtime)
+                    .AddMeter(TelemetryMeters.Npgsql);
 
-            // GC, JIT, thread-pool and exception counters come from the runtime instrumentation; the
-            // application records none of them itself.
-            metrics.AddRuntimeInstrumentation();
+                // GC, JIT, thread-pool and exception counters come from the runtime instrumentation; the
+                // application records none of them itself.
+                metrics.AddRuntimeInstrumentation();
+            }
 
             if (otlpEndpoint is not null)
             {

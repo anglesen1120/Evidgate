@@ -1985,6 +1985,26 @@
       "note": "head-sampling ratio for traces (10.3.1-T1.3), a decimal fraction 0–1 typed as `double` in `TelemetryOptions` (the matrix's `string` bucket is the coarse type check-env-matrix derives for every non-integer, non-bool property); unset means 1, keep every trace, so no telemetry is lost silently. The root decision is ParentBased(TraceIdRatioBased): a root trace is kept with this probability by trace id and every child follows it in every service. Error spans are exported whatever the ratio says (the recorded flag is set on an error span before export), at the cost of recording instrumentation work for dropped traces; a non-error span of a dropped trace never leaves the process, so an exported error of such a trace arrives alone until the collector tail-samples (10.3.1-T2). A value outside 0–1, NaN or infinity fails the boot naming this key; metrics are aggregates and are never head-sampled. Downgrade path (§11): 0 keeps only error traces."
     },
     {
+      "key": "EVIDGATE__TELEMETRY__LIBRARYMETRICS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "boolean",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "whether the host subscribes to the runtime, Npgsql and (API) ASP.NET Core hosting meters that the operations catalogue reports (10.3.1-T3); unset means true. Every live meter provider receives every database command's measurement, so only a process that builds many hosts (the integration suites) sets it to false. Production leaves it unset."
+    },
+    {
       "key": "EVIDGATE__TELEMETRY__SERVICEVERSION",
       "scope": "runtime",
       "consumers": ["api", "migrator", "worker"],
