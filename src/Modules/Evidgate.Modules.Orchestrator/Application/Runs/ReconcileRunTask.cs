@@ -107,11 +107,14 @@ internal sealed partial class ReconcileRunTaskHandler(
 
         LogFinalized(logger, payload.RunId, finalization.Completeness, finalization.RevisionNo);
 
-        // Only a verdict the platform actually settled as incomplete feeds the rate: a late or reprocess
-        // attempt appends a revision and settles no state, so it is not a decision the rate describes.
-        if (string.Equals(finalization.Completeness, ReconcileFinisher.Incomplete, StringComparison.Ordinal))
+        // Only a settlement that decides the run feeds the rate: a late or reprocess attempt appends a revision (or
+        // answers with the one its evidence already has) and settles no state, so it is not the decision the rate
+        // describes. The measurement waits for the commit this handler does not own, so a rolled-back attempt
+        // records nothing.
+        if (settlement is ReconcileSettlement.DecideCollection or ReconcileSettlement.CloseOverdue
+            && string.Equals(finalization.Completeness, ReconcileFinisher.Incomplete, StringComparison.Ordinal))
         {
-            EvidgateTelemetry.RecordRunIncomplete();
+            scope.AfterCommit(EvidgateTelemetry.RecordRunIncomplete);
         }
     }
 

@@ -4,7 +4,8 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 /// The mechanism's statements (01.5.1 §4/§7 high-level plan §7). They live in one
 /// place because more than one component issues them and because the index proofs
 /// of 01.5.1 §9 run <c>EXPLAIN</c> on the very text production runs
-/// (<c>Claim_UsesTaskClaimIndex</c>), rather than on a copy that could drift.
+/// (<c>Claim_UsesTaskClaimIndex</c>, <c>Snapshot_WalksTheQueueIndexes_NotTheTaskTable</c>), rather than on a
+/// copy that could drift.
 /// </summary>
 /// <remarks>
 /// Column aliases are quoted PascalCase so Dapper binds the positional records of
@@ -15,19 +16,35 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 public static class TaskQueueSql
 {
     /// <summary>
-    /// The queue-state snapshot behind <c>task_queue_oldest_age_seconds</c> and <c>task_dead_letter_depth</c>:
-    /// one aggregate pass over the claim index for the due queue and the dead-letter partial index for the
-    /// depth, so a scrape of the two gauges costs one bounded query per refresh interval, never one per row.
+    /// The queue-state snapshot behind <c>task_queue_oldest_age_seconds</c> and <c>task_dead_letter_depth</c>.
+    /// The age reads only the live backlog — rows queued or retry and already due — so it walks
+    /// <c>task_claim_idx</c> and is bounded by the waiting work, not by the table's history; no due row means zero.
+    /// The depth walks <c>task_dead_idx</c> up to <see cref="DeadLetterGaugeCap"/> rows, so it saturates at
+    /// the cap instead of counting every dead letter on each refresh.
     /// </summary>
-    internal const string QueueStateSnapshot = """
+    public const string QueueStateSnapshot = """
         select
           coalesce(
-              extract(epoch from now() - min(available_at))
-                  filter (where state in ('queued', 'retry') and available_at <= now()),
+              extract(epoch from now() - (
+                  select min(available_at)
+                    from public.task
+                   where state in ('queued', 'retry')
+                     and available_at <= now())),
               0)::double precision as "OldestAgeSeconds",
-          count(*) filter (where state = 'dead_letter')::bigint as "DeadLetters"
-        from public.task
+          (select count(*)
+             from (
+                   select 1
+                     from public.task
+                    where state = 'dead_letter'
+                    limit @dead_letter_cap) capped) as "DeadLetters"
         """;
+
+    /// <summary>
+    /// Dead-letter cap for <see cref="QueueStateSnapshot"/>; above it the gauge reports the cap. An exact
+    /// count is linear in the dead-letter backlog, and the refresher runs on its timer whether or not a
+    /// scrape is due, so one refresh reads at most this many dead-letter rows.
+    /// </summary>
+    public const int DeadLetterGaugeCap = 100_000;
 
     /// <summary>
     /// The visibility timeout of 01.5.1 §6: a lease that ran out without a

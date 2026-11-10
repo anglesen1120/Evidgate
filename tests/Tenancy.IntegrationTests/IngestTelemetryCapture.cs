@@ -113,6 +113,110 @@ internal static class IngestTelemetryCapture
     }
 
     /// <summary>
+    /// Listens for <c>evidgate_artifact_failure_total</c> and collects the <c>stage</c> and <c>reason</c> tags of every
+    /// measurement taken while the listener runs.
+    /// </summary>
+    internal static MeterListener ArtifactFailures(out ConcurrentQueue<(string Stage, string Reason)> failures)
+    {
+        var queue = new ConcurrentQueue<(string Stage, string Reason)>();
+        failures = queue;
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == EvidgateTelemetry.MeterName
+                    && instrument.Name == EvidgateTelemetry.ArtifactFailureMetricName)
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            var stage = "other";
+            var reason = "other";
+            foreach (var tag in tags)
+            {
+                if (tag.Key == "stage" && tag.Value is string written)
+                {
+                    stage = written;
+                }
+                else if (tag.Key == "reason" && tag.Value is string code)
+                {
+                    reason = code;
+                }
+            }
+
+            queue.Enqueue((stage, reason));
+        });
+        listener.Start();
+
+        return listener;
+    }
+
+    /// <summary>
+    /// Listens for <c>evidgate_usage_units_total</c> and collects the <c>metric</c> tag and the quantity of every
+    /// measurement taken while the listener runs.
+    /// </summary>
+    internal static MeterListener UsageUnits(out ConcurrentQueue<(string Metric, double Quantity)> units)
+    {
+        var queue = new ConcurrentQueue<(string Metric, double Quantity)>();
+        units = queue;
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == EvidgateTelemetry.MeterName
+                    && instrument.Name == EvidgateTelemetry.UsageUnitsMetricName)
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<double>((_, value, tags, _) =>
+        {
+            var metric = "other";
+            foreach (var tag in tags)
+            {
+                if (tag.Key == "metric" && tag.Value is string written)
+                {
+                    metric = written;
+                }
+            }
+
+            queue.Enqueue((metric, value));
+        });
+        listener.Start();
+
+        return listener;
+    }
+
+    /// <summary>
+    /// Listens for <c>evidgate_run_incomplete_total</c> and counts every measurement taken while the listener runs. The
+    /// counter carries no tags, so the measurement itself is the whole sample.
+    /// </summary>
+    internal static MeterListener IncompleteRuns(out ConcurrentQueue<long> measurements)
+    {
+        var queue = new ConcurrentQueue<long>();
+        measurements = queue;
+        var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Meter.Name == EvidgateTelemetry.MeterName
+                    && instrument.Name == EvidgateTelemetry.RunIncompleteMetricName)
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            },
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, _, _) => queue.Enqueue(value));
+        listener.Start();
+
+        return listener;
+    }
+
+    /// <summary>
     /// Listens to every source, so the request's own server span (ASP.NET Core) and the application's
     /// module spans are captured alike.
     /// </summary>

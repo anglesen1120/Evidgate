@@ -7,7 +7,8 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 
 /// <summary>
 /// Publishes the two queue-state gauges an on-call responder needs without querying the table by hand:
-/// how long the oldest due row has waited and how deep the dead-letter queue is.
+/// how long the oldest due row has waited and how deep the dead-letter queue is, capped at
+/// <see cref="TaskQueueSql.DeadLetterGaugeCap"/> rows.
 /// </summary>
 /// <remarks>
 /// The gauges read a cache a single refresher keeps fresh on its own timer, so a metrics scrape never
@@ -104,6 +105,7 @@ public sealed partial class TaskQueueStateGauge : IDisposable
             await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
             var snapshot = await connection.QuerySingleAsync<TaskQueueSnapshot>(new CommandDefinition(
                 TaskQueueSql.QueueStateSnapshot,
+                new { dead_letter_cap = TaskQueueSql.DeadLetterGaugeCap },
                 commandTimeout: 5,
                 cancellationToken: cancellationToken)).ConfigureAwait(false);
 

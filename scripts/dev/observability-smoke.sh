@@ -296,8 +296,10 @@ await_hit_for 90 "api resource version" "$prom/api/v1/query" \
   --data-urlencode "query=target_info{job=\"evidgate-api\",service_version=\"obs-smoke-$run_id\"}" "obs-smoke-$run_id"
 # The runtime instrumentation path is live, not merely declared: the built-in System.Runtime meter
 # reaches Prometheus under its normalised name, which is what the thread-pool and GC panels read.
+# dotnet.thread_pool.thread.count is an observable counter (a monotonic OTLP sum), so the collector's
+# translation appends `_total`; its {thread} annotation unit is not transliterated, so no unit suffix.
 await_hit_for 90 "api runtime metric" "$prom/api/v1/query" \
-  --data-urlencode 'query=dotnet_thread_pool_thread_count{job="evidgate-api"}' 'dotnet_thread_pool_thread_count'
+  --data-urlencode 'query=dotnet_thread_pool_thread_count_total{job="evidgate-api"}' 'dotnet_thread_pool_thread_count_total'
 
 # Collector redaction: the contract puts the secret shapes at the collector, not in
 # each application. A key that names a credential is deleted in every context, and a

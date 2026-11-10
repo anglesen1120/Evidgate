@@ -30,13 +30,16 @@ internal static class UsageMetering
         }
 
         var recorded = insertedKeys.ToHashSet(StringComparer.Ordinal);
-        var totals = new Dictionary<string, decimal>(StringComparer.Ordinal);
+
+        // Double, the counter's own representation: summing the ledger's decimals can overflow decimal.MaxValue and
+        // throw away a batch the ledger already accepted.
+        var totals = new Dictionary<string, double>(StringComparer.Ordinal);
 
         foreach (var row in rows)
         {
             if (recorded.Contains(row.BillingKey))
             {
-                totals[row.Metric] = totals.GetValueOrDefault(row.Metric) + row.Quantity;
+                totals[row.Metric] = totals.GetValueOrDefault(row.Metric) + (double)row.Quantity;
             }
         }
 
@@ -44,7 +47,7 @@ internal static class UsageMetering
         {
             foreach (var total in totals)
             {
-                EvidgateTelemetry.RecordUsageUnits(total.Key, (double)total.Value);
+                EvidgateTelemetry.RecordUsageUnits(total.Key, total.Value);
             }
         });
     }

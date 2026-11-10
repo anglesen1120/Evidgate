@@ -255,4 +255,55 @@ public sealed partial class EvidenceParseTaskTests
         (await VersionAsync(world, seeded.ArtifactId)).ShouldBe(versionBefore + 1, "one guarded write");
         runner.Calls.ShouldBe(0, "an object the cap refuses is never handed to a child");
     }
+
+    // ------------------------------------------------------------------ counters: measured on the commit, never before
+
+    /// <summary>
+    /// The parse failure counter measures a committed verdict: the attempt registers it for the commit it does not
+    /// own, so the rejection is counted exactly once — after the commit, with the mapped reason.
+    /// </summary>
+    [Fact]
+    public async Task Parse_Rejection_Is_Counted_Once_On_The_Commit()
+    {
+        await using var world = await StartAsync();
+        var seeded = await SeedReadyAsync(world);
+        var runner = new StubParseRunner
+        {
+            Result = new ParseRunFailed(ParseRunFailureKind.WallClockExceeded, null, 1024, 3, "slow"),
+        };
+
+        using var listener = IngestTelemetryCapture.ArtifactFailures(out var failures);
+
+        var scope = await InvokeAsync(world, seeded.ArtifactId, runner);
+
+        scope.RegisteredCount.ShouldBe(1, "one committed rejection, one measurement registered for the commit");
+        scope.ExecutedCount.ShouldBe(1, "the commit is what runs the measurement");
+        failures.Count(entry => entry == ("parse", ParseRunRejection.Timeout)).ShouldBe(1);
+        (await ColumnAsync(world, seeded.ArtifactId, "failure_code")).ShouldBe(ParseRunRejection.Timeout);
+    }
+
+    /// <summary>
+    /// A rolled-back attempt records nothing: the verdict it wrote never became the artifact's state, so the counter
+    /// must not name it. The registration itself proves the attempt meant to measure, which is what the row's own
+    /// rollback then cancels.
+    /// </summary>
+    [Fact]
+    public async Task Parse_Rejection_RolledBack_Is_Not_Counted()
+    {
+        await using var world = await StartAsync();
+        var seeded = await SeedReadyAsync(world);
+        var runner = new StubParseRunner
+        {
+            Result = new ParseRunFailed(ParseRunFailureKind.ExitedAbnormally, 4, 1024, 3, "heap"),
+        };
+
+        using var listener = IngestTelemetryCapture.ArtifactFailures(out var failures);
+
+        var scope = await InvokeAsync(world, seeded.ArtifactId, runner, commit: false);
+
+        scope.RegisteredCount.ShouldBe(1, "the rejected attempt registered its measurement");
+        scope.ExecutedCount.ShouldBe(0, "a scope disposed without a commit runs no post-commit work");
+        failures.ShouldNotContain(("parse", ParseRunRejection.Oom), "a rolled-back verdict is not a counted failure");
+        (await ColumnAsync(world, seeded.ArtifactId, "state")).ShouldNotBe(ArtifactState.Rejected);
+    }
 }

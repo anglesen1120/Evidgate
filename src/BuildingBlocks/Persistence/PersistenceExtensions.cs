@@ -20,6 +20,14 @@ namespace Evidgate.BuildingBlocks.Persistence;
 /// </summary>
 public static class PersistenceExtensions
 {
+    /// <summary>
+    /// The <see cref="NpgsqlDataSource.Name"/> of the app-role pool (S1): Npgsql puts it on every
+    /// <c>db.client.*</c> instrument as <c>db.client.connection.pool.name</c>, so it must be a fixed
+    /// token — the driver's default is the connection string without its password, which would make
+    /// the host, user and database a metric label.
+    /// </summary>
+    public const string AppDataSourceName = "evidgate_app";
+
     /// <summary>Binds <c>EVIDGATE__DATABASE__*</c>, validates it at boot and registers the app-role data source.</summary>
     public static IServiceCollection AddEvidgatePersistence(
         this IServiceCollection services,
@@ -71,7 +79,13 @@ public static class PersistenceExtensions
                     + "in the system (00 §5.4.3).");
             }
 
-            return NpgsqlDataSource.Create(builder);
+            // The name is what Npgsql exports as db.client.connection.pool.name; the driver's default
+            // would export this connection string (host, user, database) as a label value. The name lives
+            // on the data-source builder, not on the connection-string builder above.
+            return new NpgsqlDataSourceBuilder(builder.ConnectionString)
+            {
+                Name = AppDataSourceName,
+            }.Build();
         });
 
         services.AddSingleton<Resolve.IMemberOrgResolver, Resolve.NpgsqlMemberOrgResolver>();

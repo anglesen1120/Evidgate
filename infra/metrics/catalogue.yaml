@@ -11,7 +11,15 @@
 #     tenant identifier (`org_id`, `run_id`, `job_id`, `trace_id`, `request_id`, a token, a
 #     secret, an artifact or project id). Labels are series, and a series is a bill.
 #   - `kind` is the OTel instrument kind the exporter sees: counter, histogram,
-#     observable_gauge or observable_updowncounter.
+#     observable_counter, observable_updowncounter or observable_gauge. .NET's
+#     observable counters export as monotonic sums, so `counter` and
+#     `observable_counter` differ only in which side records them.
+#   - a counter counts committed work only: it is recorded after the transaction that
+#     causes it commits, so a rolled-back attempt contributes nothing.
+#   - a `source` names the code that publishes the instrument, and the entry states the
+#     labels the application chooses. A library instrument may carry further labels of
+#     its own (Npgsql adds `server.address`/`server.port` to db.client.operation.duration);
+#     those are the library's, not a vocabulary this file can bound.
 # Every source entry is exported per environment: the resource attribute named by
 # `environment_attribute` separates staging from production on one backend.
 
@@ -40,7 +48,7 @@ entries:
     meter: evidgate
     kind: observable_gauge
     unit: '{row}'
-    description: Task rows currently parked in dead_letter, the queue an operator drains.
+    description: Task rows currently parked in dead_letter, the queue an operator drains. The gauge saturates at a fixed cap (the cap bounds the scrape the queue-age read does), so a reading at the cap means "at least this many", not an exact depth.
     labels: []
     source: src/BuildingBlocks/Persistence/Tasks/TaskQueueStateGauge.cs
 
@@ -86,7 +94,7 @@ entries:
     meter: evidgate
     kind: counter
     unit: '{run}'
-    description: Runs a reconcile settled as incomplete (a planned shard or required result never arrived). The rate over settled runs is the incomplete rate.
+    description: Runs a reconcile settled as incomplete (a planned shard or required result never arrived), counted after the revision it writes commits. Only a settlement that decides the run counts — an append of late or reprocessed evidence settles no state and adds nothing — so the rate over settled runs is the incomplete rate.
     labels: []
     source: src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileRunTask.cs
 
@@ -104,7 +112,7 @@ entries:
     meter: evidgate
     kind: counter
     unit: '{artifact}'
-    description: The parser's share of the artifact-failure counter, selected by stage="parse". Parser errors are artifact verdicts in this build; no separate parser-internal counter exists.
+    description: The parser's share of the artifact-failure counter, selected by stage="parse". It counts one thing only — the rejections ParseArtifactTask writes — so a report the raw-report parser refuses (ParseRawReport/ReprocessReport, which store a raw_report row and no artifact verdict) is not in this rate; read those from the raw_report outcome instead.
     selection: 'stage="parse"'
     labels: [stage, reason]
     source: src/Modules/Evidgate.Modules.Evidence/Application/ParseArtifactTask.cs
@@ -205,7 +213,7 @@ entries:
     meter: runtime
     kind: observable_counter
     unit: '{thread}'
-    description: Thread pool threads that currently exist.
+    description: Thread pool threads that currently exist. The runtime publishes it as an observable counter, so a Prometheus name carries a _total suffix while the value is still the current count; read it as a level, not as a cumulative total.
     labels: []
     source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
 
@@ -214,7 +222,7 @@ entries:
     meter: runtime
     kind: observable_counter
     unit: '{work_item}'
-    description: Work items currently queued to the thread pool. A rising queue against flat completed items is how starvation is alerted; no separate starvation metric is needed.
+    description: Work items currently queued to the thread pool. An observable counter whose value is the current depth (the Prometheus name carries a _total suffix); a rising level against flat completed items is how starvation is alerted, and no separate starvation metric is needed.
     labels: []
     source: the runtime's own System.Runtime meter, subscribed by AddRuntimeInstrumentation in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
 
@@ -303,9 +311,9 @@ entries:
   - id: npgsql_pool_connections
     instrument: db.client.connection.count
     meter: npgsql
-    kind: observable_gauge
+    kind: observable_updowncounter
     unit: '{connection}'
-    description: Connections in each state of the pool (idle, used), by data source.
+    description: Connections in each state of the pool (idle, used), by data source. One observable up/down counter reports a measurement per state; it is not a gauge whose value rises and falls.
     labels: [db.client.connection.state, db.client.connection.pool.name]
     source: Npgsql 10.0.3 subscription in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
 
@@ -314,8 +322,8 @@ entries:
     meter: npgsql
     kind: counter
     unit: '{timeout}'
-    description: Pool waits that gave up — the pool was exhausted long enough for the timeout to fire.
-    labels: []
+    description: Pool waits that gave up — the pool was exhausted long enough for the timeout to fire, by data source.
+    labels: [db.client.connection.pool.name]
     source: Npgsql 10.0.3 subscription in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
 
   - id: npgsql_operation_duration
@@ -323,8 +331,8 @@ entries:
     meter: npgsql
     kind: histogram
     unit: s
-    description: Duration of PostgreSQL operations, the command-level latency the ORM does not report.
-    labels: [db.system, db.operation.name]
+    description: Duration of PostgreSQL operations, the command-level latency the ORM does not report, by data source. Npgsql also attaches server.address and server.port (the library's own labels, outside this file's vocabulary); they identify an endpoint, never a credential.
+    labels: [db.system.name, db.client.connection.pool.name]
     source: Npgsql 10.0.3 subscription in src/BuildingBlocks/Observability/ObservabilityExtensions.cs
 
   # --- not reportable in this build (T60: absent, never 0) -------------------------------

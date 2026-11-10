@@ -45,8 +45,10 @@ public sealed class TaskQueueStateGaugeTests
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(Token);
         var refresher = gauge.RunRefreshAsync(stop.Token);
 
+        // The two callbacks read the snapshot separately, so a scrape only has the full pair once each
+        // has reported; waiting on one would let the other assert an empty list.
         var snapshot = await collector.WaitForAsync(
-            values => values.DeadLetters.Length == 1 || values.OldestAge.Length == 1, Token);
+            values => values.DeadLetters.Length == 1 && values.OldestAge.Length == 1, Token);
         snapshot.DeadLetters.ShouldBe(new long[] { 1 });
         snapshot.OldestAge.Single().ShouldBeGreaterThanOrEqualTo(30);
 
@@ -55,7 +57,8 @@ public sealed class TaskQueueStateGaugeTests
         collector.Collect().DeadLetters.ShouldBe(new long[] { 1 });
 
         time.Advance(TaskQueueStateGauge.RefreshInterval);
-        var next = await collector.WaitForAsync(values => values.DeadLetters.SequenceEqual(new long[] { 3 }), Token);
+        var next = await collector.WaitForAsync(
+            values => values.OldestAge.Length == 1 && values.DeadLetters.SequenceEqual(new long[] { 3 }), Token);
         next.DeadLetters.ShouldBe(new long[] { 3 });
 
         await stop.CancelAsync();
@@ -74,7 +77,8 @@ public sealed class TaskQueueStateGaugeTests
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(Token);
         var refresher = gauge.RunRefreshAsync(stop.Token);
 
-        var snapshot = await collector.WaitForAsync(values => values.OldestAge.Length == 1, Token);
+        var snapshot = await collector.WaitForAsync(
+            values => values.OldestAge.Length == 1 && values.DeadLetters.Length == 1, Token);
         snapshot.OldestAge.ShouldBe(new double[] { 0 });
         snapshot.DeadLetters.ShouldBe(new long[] { 0 });
 
@@ -94,7 +98,7 @@ public sealed class TaskQueueStateGaugeTests
 
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(Token);
         var refresher = gauge.RunRefreshAsync(stop.Token);
-        await collector.WaitForAsync(values => values.DeadLetters.Length == 1, Token);
+        await collector.WaitForAsync(values => values.OldestAge.Length == 1 && values.DeadLetters.Length == 1, Token);
 
         await dataSource.DisposeAsync();
 
@@ -112,6 +116,72 @@ public sealed class TaskQueueStateGaugeTests
 
         await stop.CancelAsync();
         await refresher;
+    }
+
+    /// <summary>
+    /// The snapshot walks the live-backlog index for the age and the dead-letter index for the depth, with
+    /// sequential scans disabled so a small table cannot hide a plan that would scan all task history.
+    /// </summary>
+    [Fact]
+    public async Task Snapshot_WalksTheQueueIndexes_NotTheTaskTable()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        await SeedDueAsync(database, 2, TimeSpan.FromSeconds(30));
+        await SeedDeadLettersAsync(database, 2);
+
+        await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
+        await connection.OpenAsync(Token);
+        await connection.ExecuteAsync("set enable_seqscan = off");
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"explain (format json) {TaskQueueSql.QueueStateSnapshot}";
+            command.Parameters.Add(new NpgsqlParameter("dead_letter_cap", TaskQueueSql.DeadLetterGaugeCap));
+
+            var plan = (string)(await command.ExecuteScalarAsync(Token))!;
+            plan.ShouldContain("task_claim_idx");
+            plan.ShouldContain("task_dead_idx");
+            plan.ShouldNotContain("Seq Scan");
+        }
+        finally
+        {
+            await connection.ExecuteAsync("set enable_seqscan = on");
+        }
+    }
+
+    /// <summary>
+    /// The depth is capped inside the statement, so a large dead-letter backlog costs the cap and not the
+    /// whole backlog. The cap is the parameter the refresher binds; a small one asserts the saturation
+    /// without seeding 100 000 rows.
+    /// </summary>
+    [Fact]
+    public async Task Snapshot_DeadLetterDepth_SaturatesAtTheCap()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        await SeedDeadLettersAsync(database, 3);
+
+        await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
+        await connection.OpenAsync(Token);
+
+        var belowCap = await ReadSnapshotAsync(connection, cap: 10);
+        belowCap.DeadLetters.ShouldBe(3L, "below the cap the depth is the real count");
+
+        var atCap = await ReadSnapshotAsync(connection, cap: 2);
+        atCap.DeadLetters.ShouldBe(2L, "above the cap the depth saturates instead of counting the backlog");
+    }
+
+    private static async Task<(double OldestAgeSeconds, long DeadLetters)> ReadSnapshotAsync(
+        NpgsqlConnection connection,
+        int cap)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = TaskQueueSql.QueueStateSnapshot;
+        command.Parameters.Add(new NpgsqlParameter("dead_letter_cap", cap));
+
+        await using var reader = await command.ExecuteReaderAsync(Token);
+        await reader.ReadAsync(Token);
+        return (reader.GetDouble(0), reader.GetInt64(1));
     }
 
     private async Task SeedDueAsync(string database, int count, TimeSpan waited)

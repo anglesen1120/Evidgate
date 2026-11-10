@@ -295,21 +295,38 @@ filtered by route template.
 
 Labels are bounded token vocabularies. No label carries an organization, tenant, run, job,
 request, trace, artifact or project id, a billing key, a token or a secret — a label is a
-series, and a series is a bill. Two of them are worth knowing about when writing a query:
-`evidgate_artifact_failure_total` carries `stage` and the artifact failure `code`, and the
-usage counter carries the ledger's closed `metric` vocabulary.
+series, and a series is a bill. Three of them are worth knowing about when writing a query:
+`evidgate_artifact_failure_total` carries `stage` and the failure `reason` (a bounded code word;
+the column is `reason`, not `code`), and its `stage="parse"` series counts only the rejections
+`ParseArtifactTask` writes — a report the raw-report parser refuses is a `raw_report` row with
+`malformed`/`unsupported`, not an artifact verdict, and is absent from this counter; the usage
+counter carries the ledger's closed `metric` vocabulary; and Npgsql's `db.client.*` series carry
+`db.client.connection.pool.name`, which is a fixed pool name (`evidgate_app`,
+`evidgate_worker_sched`) — never a connection string.
+
+Counters describe committed work. Every counter in the catalogue is recorded after the
+transaction that causes it commits, so a rolled-back attempt contributes nothing, and the
+`incomplete` counter counts only a reconcile that settles the run: an append of late or
+reprocessed evidence writes a revision and adds no sample. Read a counter's rate against the
+same window as the denominator it divides into.
 
 The gauges that need a database — `task_queue_oldest_age_seconds` and
 `task_dead_letter_depth` — are refreshed by a single Worker loop every 10 s with one bounded
 aggregate query; a scrape runs no SQL, a failed refresh keeps the last value, and a value not
-renewed within two intervals is not reported at all. Alerts that read these series are
-10.3.1-T5's rules; the thresholds are not in this file.
+renewed within two intervals is not reported at all. `task_dead_letter_depth` saturates at a
+fixed cap, so a reading at the cap means "at least this deep" and the operator drains from the
+`dead_letter` table itself. Alerts that read these series are 10.3.1-T5's rules; the thresholds
+are not in this file.
 
 The catalogue is pinned by `tests/Hosts.IntegrationTests/MetricCatalogueTests.cs`: the
 committed YAML is parsed, every entry must name exactly one of a source or a reason, every
 declared source instrument must actually be published by the real registration (a
 `MeterListener` over the four meter names, fed by the application's own recording methods, a
-real PostgreSQL connection and the runtime instrumentation), and a banned label fails the
-test. `scripts/dev/observability-smoke.sh` additionally asserts that a runtime metric
-(`dotnet_thread_pool_thread_count`) reaches Prometheus through the collector in the dev
-profile.
+real PostgreSQL connection and the runtime instrumentation), and a banned label fails the test.
+Npgsql's `db.client.*` labels are bounded by the fixed data-source names the persistence wiring
+sets — `evidgate_app` for the app role and `evidgate_worker_sched` for the sweep role — so a pool
+name is a token, never the connection string the driver would otherwise report.
+`scripts/dev/observability-smoke.sh` additionally asserts that a runtime metric
+(`dotnet_thread_pool_thread_count_total` — a monotonic sum from an observable counter, so the
+collector's translation appends `_total`; its `{thread}` annotation unit yields no suffix)
+reaches Prometheus through the collector in the dev profile.
