@@ -14,7 +14,9 @@ internal static class MigratorHarness
         string migrationsPath,
         string connectionString,
         MigrationCommand command = MigrationCommand.Apply,
-        int commandTimeoutSeconds = MigratorOptions.DefaultCommandTimeoutSeconds)
+        int commandTimeoutSeconds = MigratorOptions.DefaultCommandTimeoutSeconds,
+        int lockTimeoutSeconds = MigratorOptions.DefaultLockTimeoutSeconds,
+        int statementTimeoutSeconds = MigratorOptions.DefaultStatementTimeoutSeconds)
     {
         var writer = new StringWriter(CultureInfo.InvariantCulture);
         var result = MigratorRunner.Run(
@@ -23,6 +25,8 @@ internal static class MigratorHarness
                 MigrationsPath = migrationsPath,
                 ConnectionString = connectionString,
                 CommandTimeoutSeconds = commandTimeoutSeconds,
+                LockTimeoutSeconds = lockTimeoutSeconds,
+                StatementTimeoutSeconds = statementTimeoutSeconds,
             },
             command,
             writer);
