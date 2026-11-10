@@ -15,6 +15,11 @@
 -- `artifact_set_updated_at_and_version`, so a refused update never bumps `version` or `updated_at`.
 --
 -- Rollback: drop the trigger and the function; no data is transformed, the guard only ever refuses writes.
+--
+-- Deploy: any order, one transaction. The runner applies one file in one transaction (`WithTransactionPerScript`), so
+-- the function and the trigger land together or not at all.
+
+set local lock_timeout = '5s';
 
 create or replace function evidgate.artifact_guard_transition() returns trigger
   language plpgsql
