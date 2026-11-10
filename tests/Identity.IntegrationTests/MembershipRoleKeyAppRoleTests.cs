@@ -130,7 +130,7 @@ public sealed class MembershipRoleKeyAppRoleTests : CatalogueTestBase
         return await command.ExecuteNonQueryAsync(Token);
     }
 
-    private async Task InsertAsync(TenantTestScope scope, (string Name, object Value)[] values)
+    private static async Task InsertAsync(TenantTestScope scope, (string Name, object Value)[] values)
     {
         await using var command = Command(scope, InsertGrant, values);
 
