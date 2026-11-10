@@ -99,6 +99,8 @@ fallback to `locator` (dual-write) → backfill, `set not null`, drop `locator`
 | `2` | Checksum drift: an applied file was edited or deleted, or `--status` found one | Never edit history — restore the file and add a new migration |
 | `3` | A migration failed; its transaction rolled back and nothing was journalled | Fix the file (or add a new one), re-run; the journal is still at the previous head |
 | `4` | The database could not be reached or the journal could not be prepared | Check connectivity and the owner credential, then re-run |
+| `5` | A script could not take a lock within `lock_timeout` (SQLSTATE `55P03`); its transaction rolled back and nothing was journalled | Find the blocker, end it or wait for it, then re-run — see the [Migrator timeouts runbook](runbooks/migrator-timeouts.md) |
+| `6` | A statement exceeded `statement_timeout` (SQLSTATE `57014`); its transaction rolled back and nothing was journalled | Raise the limit for that deploy or split the statement — see the [Migrator timeouts runbook](runbooks/migrator-timeouts.md) |
 
 Order in a deploy: the Migrator runs **before** `Evidgate.Api`/`Evidgate.Worker`,
 which compare the journal head with the head they were built against and refuse
@@ -106,11 +108,17 @@ to start on a mismatch (01 §4).
 
 Two properties an operator should know before the first long migration:
 
-- **A statement has no command timeout by default.** A backfill or index build is
-  not cut off half-way; the deploy job's own timeout is what bounds the run. Set
-  `EVIDGATE_MIGRATOR__COMMANDTIMEOUTSECONDS=<n>` when a statement must be bounded
-  — it then fails as a timeout (exit `3`), its transaction rolls back and nothing
-  is journalled.
+- **A statement has no driver command timeout by default, but it does have a
+  server-side `statement_timeout`.** Every script runs in its own transaction
+  under `set local lock_timeout` (default 5 s) and `set local statement_timeout`
+  (default 900 s), set from `EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS` and
+  `EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS` (`0` disables either). A backfill
+  or index build is not cut off by the client — `EVIDGATE_MIGRATOR__COMMANDTIMEOUTSECONDS`
+  stays `0` unless set — but a statement that outruns 900 s fails as exit `6`.
+  A script that legitimately needs longer takes the variable for that deploy job.
+  A lock wait is bounded separately and fails as exit `5`; both roll the file
+  back and journal nothing, and the [runbook](runbooks/migrator-timeouts.md)
+  covers the rerun.
 - **Applies serialise per database.** The apply path holds a session advisory lock,
   so a second runner waits (printing that it is waiting) and then re-reads the
   journal, which is why a rerun never applies the same file twice. `--status` and
