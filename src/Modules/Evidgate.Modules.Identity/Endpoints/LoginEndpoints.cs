@@ -178,7 +178,7 @@ public static partial class LoginEndpoints
 
         // First, before any other work: the per-client budget is what keeps one anonymous caller from
         // spending the platform's login capacity (see the class remarks).
-        if (Throttle(context, limiter, StartLimiterPrefix + ExchangeRateLimiter.ClientKey(context.Connection.RemoteIpAddress), StartCost) is { } throttled)
+        if (Throttle(context, limiter, StartLimiterPrefix + ClientIp.LimiterKey(context), StartCost) is { } throttled)
         {
             return Result.Failure(throttled);
         }

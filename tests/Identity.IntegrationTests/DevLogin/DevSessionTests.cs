@@ -30,7 +30,7 @@ namespace Identity.IntegrationTests.DevLogin;
 /// </para>
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class DevSessionTests : CatalogueTestBase
+public sealed partial class DevSessionTests : CatalogueTestBase
 {
     /// <summary>The constructor the harness's assembly fixture flows into.</summary>
     /// <param name="fixture">The shared container; this class gets a private database dropped after each test.</param>

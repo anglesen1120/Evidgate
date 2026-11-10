@@ -702,7 +702,7 @@ internal static class LinkEndpoints
     /// </summary>
     private static Error? Throttle(HttpContext context, ExchangeRateLimiter limiter, string prefix, int cost)
     {
-        var key = prefix + ExchangeRateLimiter.ClientKey(context.Connection.RemoteIpAddress);
+        var key = prefix + ClientIp.LimiterKey(context);
 
         if (!limiter.TryAcquire(key, out var retryAfter))
         {

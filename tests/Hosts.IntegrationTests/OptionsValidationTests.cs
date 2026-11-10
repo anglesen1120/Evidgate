@@ -1,4 +1,5 @@
 using System.Globalization;
+using Evidgate.Testing;
 using Xunit;
 
 namespace Hosts.IntegrationTests;
@@ -8,7 +9,7 @@ namespace Hosts.IntegrationTests;
 /// key when required <c>EVIDGATE__*</c> configuration is missing <em>or invalid</em>
 /// — the invalid value must take the same clean, stack-trace-free path (D4).
 /// </summary>
-public sealed class OptionsValidationTests
+public sealed partial class OptionsValidationTests
 {
     private const string DeadConnectionString =
         "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2";
@@ -175,12 +176,21 @@ public sealed class OptionsValidationTests
         string fileName,
         IReadOnlyDictionary<string, string> env)
     {
+        // The Api materialises the proxy stance while building the pipeline, before the option
+        // groups blanked below are validated, so that stance is a boot baseline here and not the
+        // subject: keep it in place while every other EVIDGATE__ key is removed.
+        var scopedEnv = new Dictionary<string, string>(env, StringComparer.Ordinal)
+        {
+            [NoForwardedProxy.Variable] = "none",
+        };
+
         var allEvidgateKeys = Environment.GetEnvironmentVariables().Keys
             .Cast<string>()
             .Where(key => key.StartsWith("EVIDGATE__", StringComparison.Ordinal))
+            .Where(key => !string.Equals(key, NoForwardedProxy.Variable, StringComparison.Ordinal))
             .ToArray();
 
-        using var process = ProcessRunner.Start(fileName, env, allEvidgateKeys);
+        using var process = ProcessRunner.Start(fileName, scopedEnv, allEvidgateKeys);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         try
         {

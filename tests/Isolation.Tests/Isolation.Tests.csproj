@@ -51,5 +51,6 @@
     <Compile Include="..\Shared\RespawnCheckpoint.cs" Link="Shared/RespawnCheckpoint.cs" />
     <Compile Include="..\Shared\TenantTestScope.cs" Link="Shared/TenantTestScope.cs" />
     <Compile Include="..\Shared\HarnessTest.cs" Link="Shared/HarnessTest.cs" />
+    <Compile Include="..\Shared\NoForwardedProxy.cs" Link="NoForwardedProxy.cs" />
   </ItemGroup>
 </Project>

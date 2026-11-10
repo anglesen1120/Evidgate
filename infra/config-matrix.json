@@ -2850,6 +2850,46 @@
         "prod": "default"
       },
       "note": "`EVIDGATE:Retention:DefaultMetadataDays` (06.4.1-T1, `RetentionLimits`): the `metadata_days` a project with no `retention_policy` row reads (90 per 06-O1), returned without creating a row and required by the boot validator to sit inside this section's bounds; no environment provides it."
+    },
+    {
+      "key": "EVIDGATE__FORWARDEDHEADERS__KNOWNPROXIES",
+      "scope": "runtime",
+      "consumers": ["api"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "comma-separated IP addresses of the reverse proxies or load balancers allowed to set `X-Forwarded-For` for the Api, or the single value `none` when the Api is not behind a proxy. Outside Development the Api refuses to start unless this or KNOWNNETWORKS names a proxy or this is `none`; `none` together with KNOWNNETWORKS is refused. Unlisted senders cannot spoof the client address: the header is ignored and the socket address keys the limiters, sessions and audit rows (docs/runbooks/forwarded-headers.md)."
+    },
+    {
+      "key": "EVIDGATE__FORWARDEDHEADERS__KNOWNNETWORKS",
+      "scope": "runtime",
+      "consumers": ["api"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "comma-separated CIDR networks (e.g. `10.0.0.0/8`) of the reverse proxies or load balancers allowed to set `X-Forwarded-For` for the Api; read with KNOWNPROXIES. Every hop of a multi-proxy chain must be listed: the client is the right-most hop that is not (docs/runbooks/forwarded-headers.md)."
     }
   ]
 }
