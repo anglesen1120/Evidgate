@@ -427,10 +427,11 @@ session is an ordinary row: the logout and revoke routes end it, and signing in 
 replaces the previous one. If the web app reports a stale session after a reseed, rerun
 the curl above.
 
-Behind a TLS-terminating proxy (a tunnel or a load balancer) the Api sees plaintext unless
-forwarded headers are trusted, and then this route refuses with the same `503`: the
-deployment has to terminate TLS at the Api or enable and trust `X-Forwarded-Proto`. It is
-never solved by relaxing the cookie flags.
+Behind a TLS-terminating proxy (a tunnel or a load balancer) the Api sees plaintext unless the
+proxy is listed (`EVIDGATE__FORWARDEDHEADERS__KNOWNPROXIES`, see `docs/runbooks/forwarded-headers.md`)
+and sends `X-Forwarded-Proto: https`, otherwise this route refuses with the same `503`: the
+deployment has to terminate TLS at the Api or trust the proxy that does. It is never solved by
+relaxing the cookie flags.
 
 The route is throttled per client address: 30 attempts per 60-second window by default
 (`EVIDGATE__CI__EXCHANGEBURSTLIMIT` and `EVIDGATE__CI__EXCHANGEWINDOWSECONDS`), counted

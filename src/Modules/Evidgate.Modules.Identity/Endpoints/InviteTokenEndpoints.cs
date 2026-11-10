@@ -154,7 +154,7 @@ internal static class InviteTokenEndpoints
     /// <param name="limiter">The shared CI exchange limiter.</param>
     private static Error? Throttle(HttpContext context, ExchangeRateLimiter limiter)
     {
-        var key = LimiterPrefix + ExchangeRateLimiter.ClientKey(context.Connection.RemoteIpAddress);
+        var key = LimiterPrefix + ClientIp.LimiterKey(context);
 
         if (limiter.TryAcquire(key, out var retryAfter))
         {
