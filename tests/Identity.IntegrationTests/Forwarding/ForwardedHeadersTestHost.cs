@@ -27,6 +27,9 @@ internal static class ForwardedHeadersTestHost
     /// <summary>The header a proxy appends the client's address to.</summary>
     internal const string ForwardedForHeader = "X-Forwarded-For";
 
+    /// <summary>The header a proxy that terminates TLS sets to <c>https</c>.</summary>
+    internal const string ForwardedProtoHeader = "X-Forwarded-Proto";
+
     /// <summary>
     /// States the case's <c>EVIDGATE:ForwardedHeaders</c> trust and sets the sender address from
     /// <see cref="SocketAddressHeader"/>. Both keys are always written, so no ambient stance reaches a case.
@@ -50,13 +53,14 @@ internal static class ForwardedHeadersTestHost
 
     /// <summary>The client these cases use: TLS as the deployment is, no redirects and no cookie jar.</summary>
     /// <param name="host">The variant host.</param>
-    internal static HttpClient CreateClient(WebApplicationFactory<Program> host)
+    /// <param name="baseAddress">The address the client connects to; plain HTTP for the scheme cases.</param>
+    internal static HttpClient CreateClient(WebApplicationFactory<Program> host, string baseAddress = "https://localhost")
     {
         ArgumentNullException.ThrowIfNull(host);
 
         return host.CreateClient(new WebApplicationFactoryClientOptions
         {
-            BaseAddress = new Uri("https://localhost"),
+            BaseAddress = new Uri(baseAddress),
             AllowAutoRedirect = false,
             HandleCookies = false,
         });

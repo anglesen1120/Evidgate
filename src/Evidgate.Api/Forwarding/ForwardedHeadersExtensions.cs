@@ -20,9 +20,11 @@ public static class ForwardedHeadersExtensions
                 return;
             }
 
-            // Only the client address is taken: the scheme and host stay the socket's own. The framework
-            // ships loopback as trusted, which would let a local process set the client address.
-            middleware.ForwardedHeaders = ForwardedHeaders.XForwardedFor;
+            // The client address and the scheme are taken, never the host; a proxy that terminates TLS is what
+            // makes Request.IsHttps true for the Secure cookies. Both come from the same listed hops only. Header
+            // symmetry stays off (the framework default), so a proxy that sets one header and not the other is fine.
+            // The framework ships loopback as trusted, which would let a local process set either value.
+            middleware.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
             middleware.KnownProxies.Clear();
             middleware.KnownIPNetworks.Clear();
 

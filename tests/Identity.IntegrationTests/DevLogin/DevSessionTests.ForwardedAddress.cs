@@ -58,6 +58,53 @@ public sealed partial class DevSessionTests
             "a sender that is not listed cannot choose the address the session records");
     }
 
+    [Fact]
+    public async Task A_Listed_Proxys_Forwarded_Proto_Https_Lets_The_Secure_Cookie_Path_Complete()
+    {
+        await SeedDevAccountAsync(withMembership: true);
+
+        using var plain = DevSessionTestHost.Start(Fixture, DevSessionTestHost.Development);
+        using var host = plain.WithWebHostBuilder(builder =>
+            ForwardedHeadersTestHost.Configure(builder, proxies: Proxy));
+        using var client = ForwardedHeadersTestHost.CreateClient(host, "http://localhost");
+
+        using var response = await SignInAsync(client, plain.Secret, Proxy, proto: "https");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        response.Headers.GetValues("Set-Cookie").ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public async Task An_Unlisted_Senders_Forwarded_Proto_Is_Ignored_And_The_Plaintext_Sign_In_Is_Refused()
+    {
+        await SeedDevAccountAsync(withMembership: true);
+
+        using var plain = DevSessionTestHost.Start(Fixture, DevSessionTestHost.Development);
+        using var host = plain.WithWebHostBuilder(builder =>
+            ForwardedHeadersTestHost.Configure(builder, proxies: Proxy));
+        using var client = ForwardedHeadersTestHost.CreateClient(host, "http://localhost");
+
+        using var response = await SignInAsync(client, plain.Secret, UnlistedSender, proto: "https");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+        (await DevSessionTestHost.OwnerScalarAsync<long>(Fixture, "select count(*) from public.session", [])).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_Direct_Api_Ignores_Forwarded_Proto()
+    {
+        await SeedDevAccountAsync(withMembership: true);
+
+        using var plain = DevSessionTestHost.Start(Fixture, DevSessionTestHost.Development);
+        using var host = plain.WithWebHostBuilder(builder =>
+            ForwardedHeadersTestHost.Configure(builder, proxies: "none"));
+        using var client = ForwardedHeadersTestHost.CreateClient(host, "http://localhost");
+
+        using var response = await SignInAsync(client, plain.Secret, Proxy, proto: "https");
+
+        response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+    }
+
     /// <summary>The <c>host(ip)</c> of the one session row: the literal the column holds.</summary>
     private Task<string> SessionAddressAsync() =>
         DevSessionTestHost.OwnerScalarAsync<string>(Fixture, "select host(ip) from public.session", []);
@@ -66,7 +113,8 @@ public sealed partial class DevSessionTests
     /// <param name="client">The host's client.</param>
     /// <param name="secret">The deployment's dev-login secret.</param>
     /// <param name="sender">The socket address the host's filter places on the connection.</param>
-    private static async Task<HttpResponseMessage> SignInAsync(HttpClient client, string secret, string sender)
+    /// <param name="proto">The <c>X-Forwarded-Proto</c> value, or null for none.</param>
+    private static async Task<HttpResponseMessage> SignInAsync(HttpClient client, string secret, string sender, string? proto = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, DevSessionTestHost.Route)
         {
@@ -74,6 +122,11 @@ public sealed partial class DevSessionTests
         };
         request.Headers.Add(ForwardedHeadersTestHost.SocketAddressHeader, sender);
         request.Headers.TryAddWithoutValidation(ForwardedHeadersTestHost.ForwardedForHeader, Client);
+
+        if (proto is not null)
+        {
+            request.Headers.TryAddWithoutValidation(ForwardedHeadersTestHost.ForwardedProtoHeader, proto);
+        }
 
         return await client.SendAsync(request, DevSessionTestHost.Token);
     }
