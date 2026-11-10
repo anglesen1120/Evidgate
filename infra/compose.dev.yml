@@ -101,6 +101,9 @@ services:
       # The whole collector config, exported by up.sh from
       # infra/observability/otel-collector.yaml (no bind mount, see above).
       EVIDGATE_OTEL_COLLECTOR_CONFIG: ${EVIDGATE_OTEL_COLLECTOR_CONFIG:-}
+      # Go heap target below the 128m cgroup: the limiter bounds pipeline
+      # buffering, this bounds the runtime's own heap before the cgroup does.
+      GOMEMLIMIT: 96MiB
     command: ['--config=env:EVIDGATE_OTEL_COLLECTOR_CONFIG']
     ports:
       - '127.0.0.1:${EVIDGATE_OBS_OTLP_GRPC_PORT:-4317}:4317'
