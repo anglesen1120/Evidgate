@@ -465,7 +465,11 @@ public sealed class CiProducerScopeTests(DatabaseFixture fixture) : CatalogueTes
     /// Mints a real <c>ci_producer</c> JWT for <paramref name="project"/>: an ingest token
     /// created on the admin route, then exchanged at <c>POST /v1/ci/token</c>.
     /// </summary>
-    private static async Task<string> MintAsync(HttpClient client, Guid project)
+    internal static async Task<string> MintAsync(HttpClient client, Guid project) =>
+        await ExchangeAsync(client, await CreateIngestTokenAsync(client, project)).ConfigureAwait(false);
+
+    /// <summary>Creates an ingest token on the admin route and returns its plaintext secret.</summary>
+    internal static async Task<string> CreateIngestTokenAsync(HttpClient client, Guid project)
     {
         using var created = await client.PostAsync(
             $"/v1/projects/{project}/ingest-tokens",
@@ -475,6 +479,12 @@ public sealed class CiProducerScopeTests(DatabaseFixture fixture) : CatalogueTes
         var secret = (await created.Content.ReadFromJsonAsync<JsonElement>(Token)).GetProperty("secret").GetString();
         secret.ShouldNotBeNullOrWhiteSpace();
 
+        return secret!;
+    }
+
+    /// <summary>Exchanges an ingest token secret at <c>POST /v1/ci/token</c> and returns the minted JWT.</summary>
+    internal static async Task<string> ExchangeAsync(HttpClient client, string secret)
+    {
         using var exchanged = await client.PostAsync(
             "/v1/ci/token",
             new StringContent($$"""{"ingest_token":"{{secret}}"}""", Encoding.UTF8, "application/json"),
