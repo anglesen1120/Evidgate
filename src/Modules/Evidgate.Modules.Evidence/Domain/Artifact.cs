@@ -122,44 +122,6 @@ internal static class ArtifactScanState
             : throw new ArgumentOutOfRangeException(nameof(value), value, "scan_state is outside the 00 §7 closed list (06.1.1 §4)");
 }
 
-/// <summary>The closed list of <c>artifact.state</c> (00 §7, §8.4): <c>pending_upload</c> is the only initial state.</summary>
-internal static class ArtifactState
-{
-    /// <summary>Minted, not yet uploaded; the only state 06.1.1 creates (00 §8.4).</summary>
-    public const string PendingUpload = "pending_upload";
-
-    /// <summary>The object is in storage, not yet verified.</summary>
-    public const string Uploaded = "uploaded";
-
-    /// <summary>Verified and servable.</summary>
-    public const string Ready = "ready";
-
-    /// <summary>Refused by a scan or a size/type check; terminal.</summary>
-    public const string Rejected = "rejected";
-
-    /// <summary>Marked for deletion by the retention job (06.4.x).</summary>
-    public const string PendingDelete = "pending_delete";
-
-    /// <summary>The object is gone; terminal.</summary>
-    public const string Deleted = "deleted";
-
-    /// <summary>The six states of the 00 §8.4 state machine.</summary>
-    public static readonly IReadOnlyList<string> All =
-        [PendingUpload, Uploaded, Ready, Rejected, PendingDelete, Deleted];
-
-    /// <summary>True when <paramref name="value"/> is one of the six contract states.</summary>
-    public static bool IsKnown(string? value) => value is not null && All.Contains(value, StringComparer.Ordinal);
-
-    /// <summary>
-    /// The state, or an <see cref="ArgumentOutOfRangeException"/> when it is outside the closed list (C6).
-    /// Null is allowed: the column carries the <c>pending_upload</c> default and the database fills it (06.1.1 §6).
-    /// </summary>
-    public static string? EnsureIfSet(string? value) =>
-        value is null || IsKnown(value)
-            ? value
-            : throw new ArgumentOutOfRangeException(nameof(value), value, "state is outside the 00 §8.4 closed list (06.1.1 §4)");
-}
-
 /// <summary>
 /// The reason codes 06.1.2's <c>complete</c> writes into <c>artifact.failure_code</c> when it refuses an upload
 /// (06.1.2 §2 AC3/AC5, §5): the object never became evidence. The column's CHECK only bounds the length
@@ -286,13 +248,38 @@ internal sealed class Artifact
     /// final key (06.1.2-T1 decision 7), and it is the one column migration 0028 does not grant the app role.
     /// </summary>
     /// <param name="verifiedBytes">The stored length <c>HEAD</c> reported for the verified object.</param>
-    public Artifact MarkReady(long? verifiedBytes) => Copy(
-        Sensitivity,
-        verifiedBytes,
-        ArtifactScanState.Pending,
-        ArtifactState.Ready,
-        ExpiresAt,
-        failureCode: null);
+    public Artifact MarkReady(long? verifiedBytes)
+    {
+        EnsureTransition(ArtifactState.Ready);
+
+        return Copy(Sensitivity, verifiedBytes, ArtifactScanState.Pending, ArtifactState.Ready, ExpiresAt, failureCode: null);
+    }
+
+    /// <summary>
+    /// Moves the row to <paramref name="next"/> along the 00 §8.4 allow-list (<see cref="ArtifactState.IsAllowedMove"/>),
+    /// keeping every other column. The named transitions below add their own columns and use the same check, so there
+    /// is one allow-list in the aggregate and the same one in the <c>artifact_guard_transition</c> trigger (0095).
+    /// </summary>
+    /// <param name="next">One of <see cref="ArtifactState.All"/>.</param>
+    /// <exception cref="ArgumentOutOfRangeException">The value is outside the closed list.</exception>
+    /// <exception cref="InvalidOperationException">The move is not an edge of the state machine.</exception>
+    public Artifact TransitionTo(string next)
+    {
+        ArtifactState.Ensure(next);
+        EnsureTransition(next);
+
+        return Copy(Sensitivity, Bytes, ScanState, next, ExpiresAt, FailureCode);
+    }
+
+    /// <summary>Throws when <paramref name="next"/> is not a legal move from the row's current state.</summary>
+    /// <param name="next">The state the caller is about to write.</param>
+    private void EnsureTransition(string next)
+    {
+        if (!ArtifactState.IsAllowedMove(State, next))
+        {
+            throw new InvalidOperationException($"artifact state {State} cannot move to {next}");
+        }
+    }
 
     /// <summary>
     /// The <c>pending_upload|uploaded → rejected</c> transition of 06.1.2 §6 (AC3): the object never became
@@ -311,6 +298,7 @@ internal sealed class Artifact
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(failureCode);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(failureCode.Length, 128);
+        EnsureTransition(ArtifactState.Rejected);
 
         return Copy(Sensitivity, Bytes, ScanState, ArtifactState.Rejected, ExpiresAt, failureCode);
     }
