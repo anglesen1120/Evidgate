@@ -229,7 +229,7 @@ public sealed class MembershipRoleKeyConcurrencyTests : CatalogueTestBase
         var id = Guid.CreateVersion7();
         await Fixture.SeedAsync(
             "insert into public.role (id, org_id, code, name, is_builtin, kind) values (@id, @org, @code, 'Custom', false, @kind)",
-            [("id", id), ("org", org), ("code", "c_" + id.ToString("N")[..12]), ("kind", kind)],
+            [("id", id), ("org", org), ("code", "c_" + id.ToString("N")), ("kind", kind)],
             Token);
         return id;
     }
