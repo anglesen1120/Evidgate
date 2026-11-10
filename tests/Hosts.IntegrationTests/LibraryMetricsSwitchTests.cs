@@ -1,8 +1,8 @@
 using System.Diagnostics.Metrics;
 using Evidgate.BuildingBlocks.Observability;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using OpenTelemetry.Metrics;
 using Xunit;
 
@@ -25,7 +25,7 @@ public sealed class LibraryMetricsSwitchTests
         using var npgsql = new Meter(TelemetryMeters.Npgsql);
         var commands = npgsql.CreateCounter<long>(ProbeName);
 
-        var builder = WebApplication.CreateBuilder();
+        var builder = Host.CreateApplicationBuilder();
         if (value is not null)
         {
             builder.Configuration.AddInMemoryCollection(
@@ -36,7 +36,7 @@ public sealed class LibraryMetricsSwitchTests
         builder.AddEvidgateTelemetry("evidgate-switch-test")
             .WithMetrics(metrics => metrics.AddInMemoryExporter(collected));
 
-        await using var app = builder.Build();
+        using var app = builder.Build();
         await app.StartAsync(TestContext.Current.CancellationToken);
         commands.Add(1);
         app.Services.GetRequiredService<MeterProvider>().ForceFlush();
