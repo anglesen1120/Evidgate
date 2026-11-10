@@ -121,6 +121,26 @@ public sealed partial class OptionsValidationTests
             "EVIDGATE__FORWARDEDHEADERS__KNOWNNETWORKS: '203.0.113.0/33' is not a CIDR network");
     }
 
+    [Theory]
+    [InlineData("0.0.0.0/0")]
+    [InlineData("::/0")]
+    public void A_Zero_Length_Network_Is_Refused_Because_It_Trusts_Every_Sender(string network)
+    {
+        using var factory = Boot(Production, proxies: string.Empty, networks: network);
+
+        Refusal(factory).Message.ShouldContain($"'{network}' is not a CIDR network");
+    }
+
+    [Theory]
+    [InlineData("10.1")]
+    [InlineData("127.1")]
+    public void A_Short_Form_Proxy_Address_Is_Refused(string proxy)
+    {
+        using var factory = Boot(Production, proxies: proxy);
+
+        Refusal(factory).Message.ShouldContain($"'{proxy}' is not an IP address");
+    }
+
     [Fact]
     public void None_Mixed_With_Other_Entries_Is_Refused()
     {

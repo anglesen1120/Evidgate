@@ -2869,7 +2869,7 @@
         "staging": "environment",
         "prod": "environment"
       },
-      "note": "comma-separated IP addresses of the reverse proxies or load balancers allowed to set `X-Forwarded-For` for the Api, or the single value `none` when the Api is not behind a proxy. Outside Development the Api refuses to start unless this or KNOWNNETWORKS names a proxy or this is `none`; `none` together with KNOWNNETWORKS is refused. Unlisted senders cannot spoof the client address: the header is ignored and the socket address keys the limiters, sessions and audit rows (docs/runbooks/forwarded-headers.md)."
+      "note": "comma-separated IP addresses of the reverse proxies or load balancers allowed to set `X-Forwarded-For` for the Api, or the single value `none` when the Api is not behind a proxy. Outside Development the Api refuses to start unless this or KNOWNNETWORKS names a proxy or this is `none`; `none` together with KNOWNNETWORKS is refused. Unlisted senders cannot spoof the client address: the header is ignored and the socket address keys the limiters and session rows (docs/runbooks/forwarded-headers.md)."
     },
     {
       "key": "EVIDGATE__FORWARDEDHEADERS__KNOWNNETWORKS",

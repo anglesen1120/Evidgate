@@ -1,6 +1,6 @@
 # Forwarded headers and the client address
 
-The Api keys its rate limits (login, account link, invite, CI token exchange) and writes the `ip` of session and audit rows from one value: the client's address. Behind a reverse proxy or load balancer the socket address is the proxy's, so the Api must be told which senders may speak for a client.
+The Api keys its rate limits (login, account link, invite, CI token exchange) and writes the `ip` of session rows (`session.ip`) from one value: the client's address. Behind a reverse proxy or load balancer the socket address is the proxy's, so the Api must be told which senders may speak for a client.
 
 ## Configuration
 
@@ -14,6 +14,10 @@ The Api keys its rate limits (login, account link, invite, CI token exchange) an
 - A request from a sender that is not listed has its `X-Forwarded-For` ignored, so a client cannot choose its own bucket.
 - With a chain of proxies, list every one of them: the middleware reads the header from the right and stops at the first hop that is not listed; that hop is the client. A proxy missing from the list makes that proxy the client for every request.
 - Loopback is not trusted unless listed.
+- Every listed proxy must overwrite or append the peer address in `X-Forwarded-For`; a proxy that passes the header through unchanged lets a client choose its own address and bucket.
+- `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` makes the framework trust any sender. Outside Development the Api refuses to start with it set; in Development it is tolerated and keeps the framework's behaviour when no proxy is listed (the review stack relies on it), so spoofing resistance holds only where a proxy is listed.
+- `X-Forwarded-Proto` and `X-Forwarded-Host` are not processed: the scheme and host stay the socket's own, so behind a TLS-terminating proxy `Request.IsHttps` is false. Nothing in the Api reads the scheme for a security decision except the Development-only dev-session route.
+- The client address is stored in `session.ip` and keys the limiters; the identity audit events carry no address today.
 
 ## Check
 

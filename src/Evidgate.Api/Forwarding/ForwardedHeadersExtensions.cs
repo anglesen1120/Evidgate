@@ -14,6 +14,12 @@ public static class ForwardedHeadersExtensions
 
         services.AddOptions<ForwardedHeadersOptions>().Configure<IOptions<TrustedProxyOptions>>((middleware, trusted) =>
         {
+            // Without a trusted proxy the framework's own switch (Development only) keeps its defaults.
+            if (!trusted.Value.HasTrust)
+            {
+                return;
+            }
+
             // Only the client address is taken: the scheme and host stay the socket's own. The framework
             // ships loopback as trusted, which would let a local process set the client address.
             middleware.ForwardedHeaders = ForwardedHeaders.XForwardedFor;

@@ -14,10 +14,14 @@ public sealed class NoForwardedProxy
     /// <summary>The setting whose <c>none</c> value states that no proxy sits in front of the Api.</summary>
     public const string Variable = "EVIDGATE__FORWARDEDHEADERS__KNOWNPROXIES";
 
+    /// <summary>The network list; when a run sets it the direct default must not be added next to it.</summary>
+    public const string NetworksVariable = "EVIDGATE__FORWARDEDHEADERS__KNOWNNETWORKS";
+
     /// <summary>Arms the stance for the lifetime of the test process.</summary>
     public NoForwardedProxy()
     {
-        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(Variable)))
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(Variable))
+            && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(NetworksVariable)))
         {
             Environment.SetEnvironmentVariable(Variable, "none");
         }

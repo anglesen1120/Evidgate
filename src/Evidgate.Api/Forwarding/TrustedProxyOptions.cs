@@ -29,28 +29,36 @@ public sealed class TrustedProxyOptions
 
     /// <summary>The parsed proxy addresses; a malformed entry is reported by <see cref="Problems"/>.</summary>
     public IReadOnlyList<IPAddress> ParseProxies() =>
-        DeclaredDirect ? [] : [.. Split(KnownProxies).Select(s => IPAddress.TryParse(s, out var ip) ? ip : null).OfType<IPAddress>()];
+        DeclaredDirect ? [] : [.. Split(KnownProxies).Select(s => TryAddress(s, out var ip) ? ip : null).OfType<IPAddress>()];
 
     /// <summary>The parsed proxy networks; a malformed entry is reported by <see cref="Problems"/>.</summary>
     public IReadOnlyList<IPNetwork> ParseNetworks() =>
-        [.. Split(KnownNetworks).Select(s => IPNetwork.TryParse(s, out var net) ? net : (IPNetwork?)null).OfType<IPNetwork>()];
+        [.. Split(KnownNetworks).Select(s => TryNetwork(s, out var net) ? net : (IPNetwork?)null).OfType<IPNetwork>()];
 
     /// <summary>Entries that do not parse, as <c>key: value</c> lines for the start-up message.</summary>
     public IEnumerable<string> Problems()
     {
         if (!DeclaredDirect)
         {
-            foreach (var entry in Split(KnownProxies).Where(s => !IPAddress.TryParse(s, out _)))
+            foreach (var entry in Split(KnownProxies).Where(s => !TryAddress(s, out _)))
             {
                 yield return $"EVIDGATE__FORWARDEDHEADERS__KNOWNPROXIES: '{entry}' is not an IP address";
             }
         }
 
-        foreach (var entry in Split(KnownNetworks).Where(s => !IPNetwork.TryParse(s, out _)))
+        foreach (var entry in Split(KnownNetworks).Where(s => !TryNetwork(s, out _)))
         {
-            yield return $"EVIDGATE__FORWARDEDHEADERS__KNOWNNETWORKS: '{entry}' is not a CIDR network such as 10.0.0.0/8";
+            yield return $"EVIDGATE__FORWARDEDHEADERS__KNOWNNETWORKS: '{entry}' is not a CIDR network such as 10.0.0.0/8 (a /0 network would trust every sender)";
         }
     }
+
+    // The framework parser also takes short forms ("10.1" is 10.0.0.1), which would trust a host nobody named.
+    private static bool TryAddress(string value, out IPAddress address) =>
+        IPAddress.TryParse(value, out address!) && (value.Contains(':') || value.Count(c => c == '.') == 3);
+
+    // A zero-length prefix matches every sender, so it can only be a typo.
+    private static bool TryNetwork(string value, out IPNetwork network) =>
+        IPNetwork.TryParse(value, out network) && network.PrefixLength > 0;
 
     private static List<string> Split(string? value) =>
         [.. (value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
