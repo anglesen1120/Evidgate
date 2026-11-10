@@ -121,11 +121,36 @@ public sealed partial class OptionsValidationTests
             "EVIDGATE__FORWARDEDHEADERS__KNOWNNETWORKS: '203.0.113.0/33' is not a CIDR network");
     }
 
+    [Fact]
+    public void None_Mixed_With_Other_Entries_Is_Refused()
+    {
+        using var factory = Boot(Production, proxies: "none, 203.0.113.10");
+
+        Refusal(factory).Message.ShouldContain("'none' must stand alone");
+    }
+
+    [Fact]
+    public void The_Framework_Forwarded_Headers_Switch_Is_Refused_Outside_Development()
+    {
+        using var factory = Boot(Production, proxies: "203.0.113.10", frameworkSwitch: true);
+
+        Refusal(factory).Message.ShouldContain("ASPNETCORE_FORWARDEDHEADERS_ENABLED=true");
+    }
+
+    [Fact]
+    public void The_Framework_Forwarded_Headers_Switch_Is_Tolerated_In_Development()
+    {
+        using var factory = Boot(Development, proxies: "203.0.113.10", frameworkSwitch: true);
+
+        Stance(factory).HasTrust.ShouldBeTrue();
+    }
+
     /// <summary>An Api host in <paramref name="environment"/> stating the proxy stance the case tests.</summary>
     /// <param name="environment">The host environment the validator reads.</param>
     /// <param name="proxies">The <c>KnownProxies</c> value; blank states no proxy, <c>none</c> a direct Api.</param>
     /// <param name="networks">The <c>KnownNetworks</c> value; blank states no network.</param>
-    private static WebApplicationFactory<Program> Boot(string environment, string proxies = "", string networks = "")
+    /// <param name="frameworkSwitch">Whether the framework's own forwarded-headers switch is on.</param>
+    private static WebApplicationFactory<Program> Boot(string environment, string proxies = "", string networks = "", bool frameworkSwitch = false)
     {
         // Both keys are always written: the suite's own `none` default must never combine with a case's
         // network and be refused for a contradiction the case does not test.
@@ -134,6 +159,12 @@ public sealed partial class OptionsValidationTests
             ["EVIDGATE:ForwardedHeaders:KnownProxies"] = proxies,
             ["EVIDGATE:ForwardedHeaders:KnownNetworks"] = networks,
         };
+
+        if (frameworkSwitch)
+        {
+            // The key the ASPNETCORE_ environment variable reads as once its prefix is stripped.
+            settings["FORWARDEDHEADERS_ENABLED"] = "true";
+        }
 
         return new EvidgateApiFactory(DeadConnectionString).WithWebHostBuilder(builder =>
         {
