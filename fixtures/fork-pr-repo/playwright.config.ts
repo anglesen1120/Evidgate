@@ -6,6 +6,7 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   outputDir: './test-results',
+  globalSetup: './suite-env.global-setup.ts',
   fullyParallel: true,
   workers: 1,
   retries: 0,
