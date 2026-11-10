@@ -576,6 +576,9 @@ public sealed class EvidenceCompleteTests(PostgresTenancyFixture fixture, Seawee
 
         return result;
     }
+
+    [Fact]
+    public async Task Complete_MissingObject_Rejects()
     {
         await using var world = await StartAsync(Writer());
         var runId = await SeedRunAsync(world);

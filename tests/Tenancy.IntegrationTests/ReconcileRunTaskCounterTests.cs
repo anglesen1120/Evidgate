@@ -78,7 +78,7 @@ public sealed class ReconcileRunTaskCounterTests
     public async Task LateAppend_Of_An_Incomplete_Revision_Is_Not_Counted()
     {
         var scope = new TestTenantScope();
-        var finisher = new StubFinisher(IncompleteFinalization(revisionNo: 2));
+        var finisher = IncompleteFinalization(revisionNo: 2);
         var handler = Handler(
             new ReconcileOutcome(ReconcileDisposition.ComparedLate, Comparison()),
             finisher);
