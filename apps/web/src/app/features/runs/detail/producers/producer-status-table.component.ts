@@ -86,7 +86,7 @@ export class ProducerStatusTableComponent {
     mismatch: $localize`:@@runs.detail.producers.mismatch:Count does not match expected`,
     events: $localize`:@@runs.detail.producers.events:Informational events`,
     noEvents: $localize`:@@runs.detail.producers.no-events:No informational events`,
-    eventNote: $localize`:@@runs.detail.producers.event-note:Stale-epoch and after-cancel event counts are informational and do not affect completeness.`,
+    eventNote: $localize`:@@runs.detail.producers.event-note:After-cancel event counts are informational only; a stale-epoch event on a closed shard makes the evidence incomplete.`,
     previous: $localize`:@@runs.detail.producers.previous:Previous producers`,
     next: $localize`:@@runs.detail.producers.next:Next producers`,
     pagination: $localize`:@@runs.detail.producers.pagination:Producer pages`,

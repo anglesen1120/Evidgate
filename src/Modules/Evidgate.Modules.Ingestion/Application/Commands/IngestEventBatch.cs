@@ -701,20 +701,27 @@ internal sealed class IngestEventBatchHandler(
         select state from public.run where org_id = @org_id and id = @run_id
         """;
 
-    /// <summary>One statement for the whole batch; the parameter is the batch as a JSON array (S1).</summary>
+    /// <summary>
+    /// One statement for the whole batch; the parameter is the batch as a JSON array (S1). The run's CI attempt is the
+    /// current epoch, so a declared epoch that differs marks the row stale; null on either side never does.
+    /// </summary>
     private const string InsertEventsSql = """
         insert into public.event (
             id, org_id, run_id, event_id, producer_id, sequence, job_id, epoch, execution_key,
             attempt_no, type, raw_status, normalized_status, duration_ms, occurred_at, payload_hash,
-            payload, artifact_ids, after_cancel, late)
+            payload, artifact_ids, after_cancel, late, stale)
         select
             x.id, @org_id, @run_id, x.event_id, x.producer_id, x.sequence, x.job_id, x.epoch,
             x.execution_key, x.attempt_no, x.type, x.raw_status, x.normalized_status, x.duration_ms,
-            x.occurred_at, x.payload_hash, x.payload::jsonb, x.artifact_ids, @after_cancel, @late
+            x.occurred_at, x.payload_hash, x.payload::jsonb, x.artifact_ids, @after_cancel, @late,
+            (x.epoch is not null
+             and coalesce(pg_input_is_valid(r.ci_run_ref->>'run_attempt', 'bigint'), false)
+             and x.epoch <> (r.ci_run_ref->>'run_attempt')::bigint)
         from jsonb_to_recordset(@events::jsonb) as x (
             id uuid, event_id uuid, producer_id text, sequence bigint, job_id uuid, epoch bigint,
             execution_key text, attempt_no integer, type text, raw_status text, normalized_status text,
             duration_ms bigint, occurred_at timestamptz, payload_hash text, payload text, artifact_ids uuid[])
+        join public.run r on r.org_id = @org_id and r.id = @run_id
         on conflict do nothing
         returning event_id
         """;

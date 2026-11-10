@@ -134,13 +134,16 @@ describe('ProducerStatusTableComponent', () => {
     expect(root.querySelector('[data-count-mismatch]')).toBeNull();
   });
 
-  it('shows stale-epoch events as informational badges', async () => {
+  it('shows stale-epoch events as a badge and says they leave the evidence incomplete', async () => {
     const { root } = await render([{ ...FINALIZED, staleEpochEvents: 4 }]);
     expect(root.querySelector('[data-badge="stale-epoch"]')?.textContent).toContain(
       '4 stale-epoch events',
     );
     expect(root.querySelector('[data-badge="after-cancel"]')).toBeNull();
-    expect(root.textContent).toContain('do not affect completeness');
+    expect(root.textContent).toContain('After-cancel event counts are informational only');
+    expect(root.textContent).toContain(
+      'a stale-epoch event on a closed shard makes the evidence incomplete',
+    );
   });
 
   it('shows after-cancel events as informational badges', async () => {

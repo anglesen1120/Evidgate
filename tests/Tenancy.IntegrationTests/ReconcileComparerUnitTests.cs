@@ -9,7 +9,7 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// 05.3.2-T2.2/T2.3 without a database: the pure declared-versus-observed comparer — every 00 §8.5 code it can name from
-/// event evidence and from the event flag (<c>setup_error</c>), the open-shard short circuit, the
+/// event evidence and from the event flags (<c>setup_error</c>, <c>stale_epoch</c>), the open-shard short circuit, the
 /// fail-closed missing declaration, the three bounds a closed shard's declaration is checked against (count, end and the
 /// contiguity rule of <c>contracts/events/ordering.md</c> §3), the ordinal reason order, the planned/closed shard counts
 /// and the stored-event watermark — plus the pin that every literal is one of the closed list <c>migrations/0049</c>
@@ -357,6 +357,64 @@ public sealed class ReconcileComparerUnitTests
     }
 
     [Fact]
+    public void A_Stale_Event_On_A_Closed_Shard_Is_StaleEpoch()
+    {
+        // Foreign-epoch evidence is stored, never dropped, and it cannot leave the shard complete: one entry however
+        // many of its events are stale, and the shard's own counts may still agree.
+        var result = ReconcileComparer.CompareEvents(
+            [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
+            [Observed("producer-1", upTo: 3, max: 2, stale: 2)]);
+
+        var reason = result.Missing.ShouldHaveSingleItem();
+        reason.Code.ShouldBe(ReconcileMissingCodes.StaleEpoch);
+        reason.ProducerId.ShouldBe("producer-1");
+        reason.Detail.ShouldBe("stale=2");
+        result.EventsMatch.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void An_Open_Shard_Is_Not_Compared_For_Stale_Events()
+    {
+        // The open shard is reported once and its events stay unexamined, so the stale count adds no second reason.
+        var result = ReconcileComparer.CompareEvents(
+            [Planned("producer-1", shardIndex: 4, closed: false)],
+            [Observed("producer-1", upTo: 3, beyond: 3, stale: 3)]);
+
+        var reason = result.Missing.ShouldHaveSingleItem();
+        reason.Code.ShouldBe(ReconcileMissingCodes.MissingShard);
+        reason.Detail.ShouldBe("shard_index=4");
+    }
+
+    [Fact]
+    public void A_Closed_Shard_Without_Stale_Events_Names_No_EpochReason()
+    {
+        var result = ReconcileComparer.CompareEvents(
+            [Planned("producer-1")],
+            [Observed("producer-1")]);
+
+        result.Missing.ShouldBeEmpty();
+        result.Missing.Any(reason => reason.Code == ReconcileMissingCodes.StaleEpoch)
+            .ShouldBeFalse("zero stale events name no epoch reason");
+    }
+
+    [Fact]
+    public void Stale_Evidence_Does_Not_Hide_The_Count_Mismatch()
+    {
+        var result = ReconcileComparer.CompareEvents(
+            [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)],
+            [Observed("producer-1", upTo: 2, max: 1, blocked: 1, stale: 1)]);
+
+        result.Missing.Select(missing => missing.Code).ShouldBe(
+            [
+                ReconcileMissingCodes.CountMismatch,
+                ReconcileMissingCodes.SetupError,
+                ReconcileMissingCodes.StaleEpoch,
+            ]);
+        result.Missing[1].Detail.ShouldBe("blocked=1");
+        result.Missing[2].Detail.ShouldBe("stale=1");
+    }
+
+    [Fact]
     public void The_Setup_Reason_Does_Not_Hide_The_Count_Mismatch()
     {
         // One closed shard can break every bound at once: each reason is its own entry, and the count mismatch keeps its
@@ -612,6 +670,7 @@ public sealed class ReconcileComparerUnitTests
             ReconcileMissingCodes.CountMismatch,
             ReconcileMissingCodes.UnknownStatus,
             ReconcileMissingCodes.SetupError,
+            ReconcileMissingCodes.StaleEpoch,
             ReconcileMissingCodes.ArtifactMissing,
             ReconcileMissingCodes.MissingResult,
         ];
@@ -619,10 +678,8 @@ public sealed class ReconcileComparerUnitTests
         codeLiterals.Where(code => !migrationCodes.Contains(code, StringComparer.Ordinal)).ShouldBeEmpty(
             "every reconciler code must be a literal of the migration CHECK");
         codeLiterals.Order(StringComparer.Ordinal).ToArray().ShouldBe(
-            ["artifact_missing", "count_mismatch", "missing_result", "missing_shard", "setup_error", "unknown_status"],
+            ["artifact_missing", "count_mismatch", "missing_result", "missing_shard", "setup_error", "stale_epoch", "unknown_status"],
             "the codes the reconciler names");
-        migrationCodes.ShouldContain("stale_epoch");
-        codeLiterals.ShouldNotContain("stale_epoch", "nothing writes event.stale, so no attempt can name it");
 
         // Each code the comparer itself emits leaves Missing non-empty, so the reconciler can never report matching
         // evidence (EventsMatch) while a shard or a planned execution is incomplete.
@@ -632,6 +689,7 @@ public sealed class ReconcileComparerUnitTests
             (ReconcileMissingCodes.CountMismatch, [Planned("producer-1", declaredLastSequence: 2, declaredCount: 3)], [Observed("producer-1", upTo: 2, min: 1, max: 2)], ExecutionCoverage.Complete),
             (ReconcileMissingCodes.UnknownStatus, [Planned("producer-1")], [Observed("producer-1", unknown: 1)], ExecutionCoverage.Complete),
             (ReconcileMissingCodes.SetupError, [Planned("producer-1")], [Observed("producer-1", blocked: 1)], ExecutionCoverage.Complete),
+            (ReconcileMissingCodes.StaleEpoch, [Planned("producer-1")], [Observed("producer-1", stale: 1)], ExecutionCoverage.Complete),
             (ReconcileMissingCodes.MissingResult, [Planned("producer-1")], [Observed("producer-1")], new ExecutionCoverage([new PlannedExecution(Key(9), "producer-1")], 1)),
         ];
 
@@ -766,8 +824,9 @@ public sealed class ReconcileComparerUnitTests
         long unfinished = 0,
         long? min = 0,
         long? max = 0,
-        long blocked = 0) =>
-        new(producerId, upTo, beyond, min, max, unknown, unfinished, blocked);
+        long blocked = 0,
+        long stale = 0) =>
+        new(producerId, upTo, beyond, min, max, unknown, unfinished, blocked, stale);
 
     /// <summary>
     /// The closed code list of the CHECK as the latest migration leaves it —

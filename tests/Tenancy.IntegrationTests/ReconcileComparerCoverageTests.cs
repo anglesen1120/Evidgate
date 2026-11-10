@@ -167,6 +167,7 @@ public sealed class ReconcileComparerCoverageTests
         long unfinished = 0,
         long? min = 0,
         long? max = 0,
-        long blocked = 0) =>
-        new(producerId, upTo, beyond, min, max, unknown, unfinished, blocked);
+        long blocked = 0,
+        long stale = 0) =>
+        new(producerId, upTo, beyond, min, max, unknown, unfinished, blocked, stale);
 }
