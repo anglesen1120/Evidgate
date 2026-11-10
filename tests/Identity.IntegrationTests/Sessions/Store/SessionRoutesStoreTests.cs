@@ -281,12 +281,10 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
     }
 
     /// <summary>
-    /// Sec F1: <c>membership_role.role_id</c> carries no foreign key (0011:116-134), so a row written around
-    /// the commands can point an org-A membership at ANOTHER org's custom role. The app path leans on role
-    /// RLS, which this definer does not run under, so the grant join scopes the role itself: a custom role
-    /// is only ever an authority inside its own org. The same-org custom role in the same arrangement DOES
-    /// authorize (the positive control), so the only difference between the two halves is the org of the
-    /// role.
+    /// A custom role is an authority only inside its own org: the same-org role holding <c>membership:write</c>
+    /// authorizes the revoke (the control, so the only difference is the role's org), and the row that used to
+    /// point an org-A membership at another org's role is refused by the database itself, so the definer never
+    /// sees a foreign grant to ignore.
     /// </summary>
     [Fact]
     public async Task Only_A_Custom_Role_Of_The_Same_Org_Authorizes_A_Revoke()
@@ -297,33 +295,39 @@ public sealed class SessionRoutesStoreTests : SessionHardeningTestBase
 
         var localActor = await SeedMemberWithRoleAsync(
             org, await SeedCustomRoleAsync(org, "session_writer_local"), Unique.Email("custom-role-local"));
-        var foreignActor = await SeedMemberWithRoleAsync(
-            org, await SeedCustomRoleAsync(otherOrg, "session_writer_foreign"), Unique.Email("custom-role-foreign"));
+        var foreignRole = await SeedCustomRoleAsync(otherOrg, "session_writer_foreign");
 
         var localTarget = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
-        var refusedTarget = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
-
         var localTicket = await CreateSessionAsync(localActor, clock);
-        var foreignTicket = await CreateSessionAsync(foreignActor, clock);
         var localTargetTicket = await CreateSessionAsync(localTarget, clock);
-        var refusedTargetTicket = await CreateSessionAsync(refusedTarget, clock);
         var routes = CreateRoutes(clock);
 
         (await routes.RevokeOneAsync(ProofOf(localTicket), localTargetTicket.SessionId, org, requestId: null, traceId: null, Token))
             .ShouldBe(SessionRouteStatus.Done,
                 "a custom role of THIS org carrying membership:write authorizes the revoke");
 
-        (await routes.RevokeOneAsync(ProofOf(foreignTicket), refusedTargetTicket.SessionId, org, requestId: null, traceId: null, Token))
-            .ShouldBe(SessionRouteStatus.NotFound,
-                "one org's custom role grants nothing in another org, whatever the membership_role row says");
-
         (await OwnerScalarAsync<bool>(
             "select revoked_at is not null from public.session where id = @id",
             ("id", localTargetTicket.SessionId))).ShouldBeTrue();
 
-        (await OwnerScalarAsync<bool>(
-            "select revoked_at is null from public.session where id = @id",
-            ("id", refusedTargetTicket.SessionId))).ShouldBeTrue("the refused revoke writes nothing");
+        // The role key refuses the foreign grant, so the definer's org scope is a second line of defence:
+        // the row that used to make the foreign role an authority cannot be written at all.
+        var membershipId = await OwnerScalarAsync<Guid>(
+            "select id from public.membership where org_id = @org and user_id = @user",
+            ("org", org),
+            ("user", localActor));
+        var refusal = await OwnerRefusalAsync(
+            "insert into public.membership_role (id, org_id, membership_id, role_id) values (@id, @org, @membership, @role)",
+            ("id", Guid.CreateVersion7()),
+            ("org", org),
+            ("membership", membershipId),
+            ("role", foreignRole));
+        refusal.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
+        refusal.ConstraintName.ShouldBe("membership_role_role_guard");
+        (await OwnerScalarAsync<long>(
+            "select count(*) from public.membership_role where org_id = @org and role_id = @role",
+            ("org", org),
+            ("role", foreignRole))).ShouldBe(0L, "no row points an org-A membership at another org's role");
     }
 
     /// <summary>

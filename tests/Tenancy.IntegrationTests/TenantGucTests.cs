@@ -490,12 +490,15 @@ public sealed class TenantGucTests
             ("id", membershipId),
             ("org_id", orgId),
             ("invited_email", "dev@acme.test"));
+        // The role key requires a member role that exists; the built-in viewer is read on the owner connection.
+        var viewerRoleId = await scope.ScalarAsync<Guid>(
+            "select id from public.role where org_id is null and code = 'viewer'");
         await scope.ExecuteAsync(
             "insert into public.membership_role (id, org_id, membership_id, role_id) values (@id, @org_id, @membership_id, @role_id)",
             ("id", Guid.CreateVersion7()),
             ("org_id", orgId),
             ("membership_id", membershipId),
-            ("role_id", Guid.CreateVersion7()));
+            ("role_id", viewerRoleId));
         await scope.ExecuteAsync(
             """
             insert into public.quarantine_entry (id, org_id, project_id, case_id, owner, reason, expires_at)

@@ -288,6 +288,7 @@ internal static class TenantFkScan
         ("public.usage_ledger_entry", "usage_ledger_entry_price_fk", [TenantKeyColumn], true),
         ("public.raw_report", "raw_report_parser_fk", ["parser_id", "version"], true),
         ("public.raw_report_reprocess", "raw_report_reprocess_parser_fk", ["parser_id", "version"], true),
+        ("public.membership_role", "membership_role_role_fk", [TenantKeyColumn], false),
     ];
 
     /// <summary>True when one of these allowances names a guard that refuses another org's catalogue row.</summary>
