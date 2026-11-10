@@ -159,7 +159,7 @@ public sealed class HealingLlmGatewayRefusalTests
     {
         var resolver = Substitute.For<IHealingAvailabilityResolver>();
         resolver.ResolveAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(HealingAvailability.Shadow));
+            .Returns(new ValueTask<HealingAvailability>(HealingAvailability.Shadow));
         return resolver;
     }
 

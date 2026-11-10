@@ -48,9 +48,8 @@ public sealed partial class HealingLlmApiKeyHandlerTests
 
         // The capture is live: a line written through the host's own logger reaches it, so the absence of the key below
         // is a fact about every line the call wrote, not an empty list.
-        Log.CaptureProbe(
-            provider.GetRequiredService<ILoggerFactory>().CreateLogger("HealingProviderKeyTests"),
-            "healing-provider-capture-live");
+        var probeLogger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("HealingProviderKeyTests");
+        Log.CaptureProbe(probeLogger, "healing-provider-capture-live");
         capture.Logs.ShouldContain(log => log.Text.Contains("healing-provider-capture-live", StringComparison.Ordinal));
         capture.Logs.ShouldNotContain(log => log.Text.Contains(key, StringComparison.Ordinal));
         result.ToString().ShouldNotContain(key);

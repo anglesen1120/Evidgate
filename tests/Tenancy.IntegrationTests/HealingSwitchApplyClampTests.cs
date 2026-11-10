@@ -114,7 +114,7 @@ public sealed class HealingSwitchApplyClampTests
             string sql,
             object? parameters = null,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult((IReadOnlyList<T>)rows);
+            Task.FromResult((IReadOnlyList<T>)(object)rows);
 
         public Task<T?> QuerySingleOrDefaultAsync<T>(
             string sql,
