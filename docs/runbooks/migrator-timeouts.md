@@ -99,7 +99,7 @@ The apply path takes a session-level advisory lock (`pg_advisory_lock`, key `0x6
 ## 6a. Connection poolers and the journal
 
 - The limits travel as the PostgreSQL startup parameter `options`. PgBouncer rejects it unless `ignore_startup_parameters` lists `options`, and a transaction-mode pooler would not keep a session setting anyway: **run the Migrator on a direct connection to the primary**, never through a pooler.
-- Because the limits are session-wide, they also cover the runner's own journal statements (read of the applied list, the journal insert, the schema bootstrap). Those are short single-row statements; a journal statement that hits 5 s or 900 s is a symptom of the same blockage and fails the run with the same exit `5` or `6`.
+- Because the limits are session-wide, they also cover the runner's own journal statements (read of the applied list, the journal insert, the schema bootstrap). Those are short single-row statements; a journal statement that hits 5 s or 900 s is a symptom of the same blockage. A timeout on the first read or the bootstrap, before any script runs, is reported as exit `4` (database unavailable); one during an apply of a script is exit `5` or `6`.
 
 ## 7. Prior art
 

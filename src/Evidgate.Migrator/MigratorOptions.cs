@@ -68,7 +68,8 @@ public sealed class MigratorOptions
     /// <summary>
     /// <see cref="ConnectionString"/> with <c>lock_timeout</c> and <c>statement_timeout</c> as startup
     /// options, so every session the run opens carries both limits. An operator-supplied
-    /// <c>Options</c> value is kept and ours is appended; PostgreSQL applies the last duplicate,
+    /// <c>Options</c> value (or, when the string has none, <c>PGOPTIONS</c>, which Npgsql would
+    /// otherwise use) is kept and ours is appended; PostgreSQL applies the last duplicate,
     /// so the configured limits win. A script's own <c>set local</c> still overrides them.
     /// </summary>
     internal string SessionConnectionString
@@ -79,7 +80,10 @@ public sealed class MigratorOptions
             var limits = string.Create(
                 CultureInfo.InvariantCulture,
                 $"-c lock_timeout={LockTimeoutSeconds * 1000L}ms -c statement_timeout={StatementTimeoutSeconds * 1000L}ms");
-            builder.Options = string.IsNullOrWhiteSpace(builder.Options) ? limits : $"{builder.Options} {limits}";
+            var inherited = string.IsNullOrWhiteSpace(builder.Options)
+                ? Environment.GetEnvironmentVariable("PGOPTIONS")
+                : builder.Options;
+            builder.Options = string.IsNullOrWhiteSpace(inherited) ? limits : $"{inherited} {limits}";
             return builder.ConnectionString;
         }
     }

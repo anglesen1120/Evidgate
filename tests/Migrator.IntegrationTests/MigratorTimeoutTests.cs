@@ -9,7 +9,7 @@ namespace Migrator.IntegrationTests;
 
 /// <summary>
 /// The server-side timeouts a script runs under: <c>lock_timeout</c> and
-/// <c>statement_timeout</c> are set inside the script's own transaction, a
+/// <c>statement_timeout</c> are sent as connection startup options, a
 /// timeout fails the run with its own exit code without journalling anything,
 /// and a script may override the value for its own transaction.
 /// </summary>
