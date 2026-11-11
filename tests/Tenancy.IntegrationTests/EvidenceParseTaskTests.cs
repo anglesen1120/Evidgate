@@ -24,8 +24,8 @@ namespace Tenancy.IntegrationTests;
 /// the object storage adapter.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed partial class EvidenceParseTaskTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed partial class EvidenceParseTaskTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>The task's wire name (06.3.6 §5).</summary>
     private const string ParseTask = "artifact_parse";
@@ -46,6 +46,8 @@ public sealed partial class EvidenceParseTaskTests(PostgresTenancyFixture fixtur
     private readonly PostgresTenancyFixture _fixture = fixture;
 
     private readonly SeaweedFsStore _store = store;
+
+    private readonly TenancyHostPool _hosts = hosts;
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 

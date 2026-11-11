@@ -10,7 +10,7 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
-public sealed class RetentionPolicyQaTests(PostgresTenancyFixture fixture)
+public sealed class RetentionPolicyQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
     private const string ValidBody = """{"artifact_days":14,"metadata_days":90}""";
 
@@ -298,7 +298,7 @@ public sealed class RetentionPolicyQaTests(PostgresTenancyFixture fixture)
     private async Task<World> StartAsync()
     {
         var database = await fixture.SharedDatabaseAsync();
-        var host = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
+        var host = hosts.RealResolver(database);
         var client = host.CreateClient();
         var founder = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, founder, Unique.Slug("retention-boundary"));

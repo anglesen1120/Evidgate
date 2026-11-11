@@ -22,7 +22,7 @@ namespace Tenancy.IntegrationTests;
 /// <c>not_found</c> of <c>GET /v1/runs/{r}</c> (00 §5.4: no existence oracle).
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class ListEvidenceRevisionsTests
+public sealed partial class ListEvidenceRevisionsTests : IClassFixture<TenancyHostPool>
 {
     private const string PolicyHash = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -31,8 +31,9 @@ public sealed partial class ListEvidenceRevisionsTests
     private const string ManifestHash = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public ListEvidenceRevisionsTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public ListEvidenceRevisionsTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project)
         : IAsyncDisposable
@@ -344,7 +345,7 @@ public sealed partial class ListEvidenceRevisionsTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

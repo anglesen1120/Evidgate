@@ -17,13 +17,13 @@ namespace Tenancy.IntegrationTests;
 /// DAG, secret-free validation, concurrent numbering, publishing, diff, ETag and the preview.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class CatalogSuiteTests
+public sealed class CatalogSuiteTests : IClassFixture<TenancyHostPool>
 {
     private const string Commit1 = "aaaaaaa1111111";
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public CatalogSuiteTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public CatalogSuiteTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project, Guid Suite, Guid[] Revisions)
         : IAsyncDisposable
@@ -41,7 +41,7 @@ public sealed class CatalogSuiteTests
     private async Task<World> StartAsync(int cases = 4)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
