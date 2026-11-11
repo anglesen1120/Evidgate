@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Reflection;
 using Xunit;
 
 [assembly: AssemblyFixture(typeof(Tenancy.IntegrationTests.TenancyHostLeakGuard))]
@@ -10,9 +11,8 @@ namespace Tenancy.IntegrationTests;
 /// Fails the run when an API host that was started is still running after every test class finished.
 /// </summary>
 /// <remarks>
-/// A started <see cref="TenancyApiFactory"/> keeps its entry-point task pending until the factory is disposed,
-/// and that pending task roots the whole host (service provider, options, meter provider, data source). An
-/// undisposed host therefore stays in memory for the rest of the process, however early the test dropped it.
+/// A started factory keeps its entry-point task pending until it is disposed, and that task roots the whole host,
+/// so an undisposed host stays in memory for the rest of the process.
 /// </remarks>
 public sealed class TenancyHostLeakGuard : IAsyncDisposable
 {
@@ -24,10 +24,22 @@ public sealed class TenancyHostLeakGuard : IAsyncDisposable
         var frames = new StackTrace(skipFrames: 1, fNeedFileInfo: false).GetFrames()
             .Select(frame => frame.GetMethod())
             .Where(method => method?.DeclaringType is { Namespace: nameof(Tenancy) + ".IntegrationTests" } type
-                && type.Name is not (nameof(TenancyApiFactory) or nameof(TenancyHostPool) or nameof(TenancyHostLeakGuard)))
+                && (type.DeclaringType ?? type).Name is not (nameof(TenancyApiFactory) or nameof(TenancyHostPool) or nameof(TenancyHostLeakGuard)))
             .Take(3)
-            .Select(method => $"{method!.DeclaringType!.Name}.{method.Name}");
+            .Select(Describe);
         return string.Join(" < ", frames);
+    }
+
+    // An async method runs in a nested state machine named <Method>d__N; report the method that was written.
+    private static string Describe(MethodBase? method)
+    {
+        var type = method!.DeclaringType!;
+        if (type.DeclaringType is { } owner && type.Name.StartsWith('<'))
+        {
+            return $"{owner.Name}.{type.Name[1..type.Name.IndexOf('>')]}";
+        }
+
+        return $"{type.Name}.{method.Name}";
     }
 
     internal static void Started(TenancyApiFactory factory, string site) => Running[factory] = site;
