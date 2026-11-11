@@ -115,7 +115,7 @@ public sealed class FinalizeEndpointTests
 
     /// <summary>Moves any run of the world's tenant to another state (the concurrency cases seed extra runs).</summary>
     private Task SetRunStateAsync(IngestTestWorld world, Guid runId, string state) =>
-        _fixture.ExecuteAsync(world.Database, $"update public.run set state = '{state}' where id = '{runId:D}'");
+        RunStateWalk.MoveAsync(_fixture, world.Database, runId, state);
 
     private static Task<bool> SlotClosedInRunAsync(IngestTestWorld world, Guid runId, string producerId = Producer) =>
         world.ScalarAsync<bool>(

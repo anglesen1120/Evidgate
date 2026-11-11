@@ -442,8 +442,7 @@ public sealed class IngestDedupeTests
         // no state transition to perform.
         var (otherOrg, otherProject) = await world.CreateOtherOrgAsync(Unique.Slug("globex"));
         var otherRun = await world.SeedOtherRunAsync(otherOrg);
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.run set state = 'running' where id = '{otherRun.RunId:D}'");
+        await RunStateWalk.MoveAsync(_fixture, world.Database, otherRun.RunId, "running");
         await IngestTestWorld.SeedSlotsAsync(_fixture, world.Database, otherOrg, otherRun.RunId, count: 1, boundJti: null);
 
         await using var otherHost = TenancyApiFactory.WithPrincipal(

@@ -61,9 +61,7 @@ public sealed partial class ReprocessReportTaskTests
         var artifactId = await SeedArtifactAsync(world, ReportBody);
         var sourceReportId = await SeedSourceReportAsync(world, artifactId);
         var parsingId = await SeedRequestAsync(world, artifactId, sourceReportId, PinVersion);
-        await _fixture.ExecuteAsync(
-            world.Database,
-            $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
+        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
 
         // A complete run is terminal, so intake refuses every new producer; a re-reading of its own stored report is the
         // one evidence the plan keeps open for it, and the task must not strand the request the route accepted.

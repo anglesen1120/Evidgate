@@ -83,15 +83,15 @@ public sealed partial class ReprocessReportTaskTests
         long Transitions);
 
     /// <summary>
-    /// The run is queued past its collection deadline, so the attempt closes it incomplete: a finished run a reprocess
-    /// may still re-read its own bytes for, and the one the late append answers. The reconcile that closes it freezes
-    /// revision 1, and this reads back everything the reprocess must leave alone.
+    /// The run is still executing past its collection deadline, so the attempt is an overdue close and settles the run
+    /// incomplete: a finished run a reprocess may still re-read its own bytes for, and the one the late append answers.
+    /// The reconcile that closes it freezes revision 1, and this reads back everything the reprocess must leave alone.
     /// </summary>
     private async Task<FirstRevision> FreezeFirstRevisionAsync(World world, Guid artifactId, Guid sourceReportId)
     {
         await _fixture.ExecuteAsync(
             world.Database,
-            $"update public.run set state = 'queued', collection_deadline_at = now() - interval '1 minute', "
+            $"update public.run set collection_deadline_at = now() - interval '1 minute', "
             + $"late_window_minutes = 60 where id = '{world.RunId:D}'");
 
         await ConsumeEnqueuedReconcileAsync(world, producerId: null);

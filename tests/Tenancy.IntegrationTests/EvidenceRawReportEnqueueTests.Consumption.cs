@@ -257,7 +257,7 @@ public sealed partial class EvidenceRawReportEnqueueTests
         await using var world = await StartAsync(outOfProcess: true);
         var runId = await SeedRunAsync(world, ProducerKind);
         var artifactId = await MintAndUploadAsync(world, runId, "raw_report", XmlType, MappableUploadBody);
-        await _fixture.ExecuteAsync(world.Database, $"update public.run set state = '{state}' where id = '{runId:D}'");
+        await RunStateWalk.MoveAsync(_fixture, world.Database, runId, state);
 
         await CompleteSucceedsAsync(world, artifactId);
         (await OutboxCountAsync(world, ReportParseTask, artifactId)).ShouldBe(1);

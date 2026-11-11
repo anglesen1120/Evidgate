@@ -121,31 +121,31 @@ public sealed partial class RunStateEventTests
     }
 
     /// <summary>
-    /// Ten transitions in one transaction — the fastest sequential writer there is — so every row is one sequence
-    /// higher than the last and the allocation neither skips nor repeats: the aggregate reads its own uncommitted rows,
-    /// which is what lets one statement allocate and insert.
+    /// Every edge one run can take, sequentially in one transaction — the fastest sequential writer there is — so every
+    /// row is one sequence higher than the last and the allocation neither skips nor repeats: the aggregate reads its
+    /// own uncommitted rows, which is what lets one statement allocate and insert. Those three edges are the whole
+    /// chain the state machine declares (<c>queued → running → collecting → complete</c>), so a run cannot carry more.
     /// </summary>
     [Fact]
-    public async Task TenSequentialStateWrites_KeepTheSequenceGapless()
+    public async Task SequentialStateWrites_KeepTheSequenceGapless()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var runId = await CreateQueuedRunAsync(world);
+        var chain = new[] { "running", "collecting", "complete" };
 
         await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
         {
-            for (var write = 0; write < 10; write++)
+            foreach (var state in chain)
             {
-                var state = write % 2 == 0 ? "running" : "collecting";
-
                 (await scope.ExecuteAsync($"update public.run set state = '{state}' where id = '{runId:D}'"))
-                    .ShouldBe(1, $"write {write}");
+                    .ShouldBe(1, $"write {state}");
             }
 
             await scope.CommitAsync();
         }
 
-        (await SequencesAsync(world, runId)).ShouldBe([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-        (await RowCountAsync(world, runId)).ShouldBe(11, "the creation row plus one row per applied change");
+        (await SequencesAsync(world, runId)).ShouldBe([1, 2, 3, 4]);
+        (await RowCountAsync(world, runId)).ShouldBe(4, "the creation row plus one row per applied change");
     }
 
     /// <summary>
