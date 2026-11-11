@@ -30,8 +30,7 @@ public sealed class UsageRollupJobSchemaTests
     [Fact]
     public async Task DuplicateAttempt_CarriesTheTenantShape_AndTheRecountGrants()
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        var database = dedicated.Name;
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.TableExistsAsync(database, Table)).ShouldBeTrue();
         var constraints = await _fixture.ConstraintNamesAsync(database, Table);
@@ -101,6 +100,7 @@ public sealed class UsageRollupJobSchemaTests
     [Fact]
     public async Task UsageRollup_RefusesTheAppRolesDelete()
     {
+        // Dedicated: it counts the whole roll-up table after a refused delete.
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
         var database = dedicated.Name;
         var org = Guid.CreateVersion7();
@@ -127,6 +127,7 @@ public sealed class UsageRollupJobSchemaTests
     [Fact]
     public async Task OrgScanDefiner_IsOwnerOwned_Restricted_AndReturnsOrgIdsOnly()
     {
+        // Dedicated: the definer scans every org's ledger and roll-up rows.
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
         var database = dedicated.Name;
         var org = Guid.CreateVersion7();
@@ -191,6 +192,7 @@ public sealed class UsageRollupJobSchemaTests
     [Fact]
     public async Task ReplayedKey_CountsOneAttemptPerReplay_AndAnInBatchRepeatCountsToo()
     {
+        // Dedicated: it reads the tally table whole and counts its rows.
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
         var database = dedicated.Name;
         await using var world = await StartWorldAsync(database);
@@ -219,6 +221,7 @@ public sealed class UsageRollupJobSchemaTests
     [Fact]
     public async Task RolledBackBatch_LeavesNeitherALedgerRowNorAnAttempt()
     {
+        // Dedicated: it reads the tally table whole and counts its rows.
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
         var database = dedicated.Name;
         await using var world = await StartWorldAsync(database);

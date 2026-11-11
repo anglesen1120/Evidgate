@@ -25,7 +25,7 @@ public sealed class UsageRollupRecomputeTests
 
     public UsageRollupRecomputeTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    /// <summary>One dedicated database, one org, one project, and the app-role scope factory over it.</summary>
+    /// <summary>One org, one project, and the app-role scope factory over the run's shared database.</summary>
     private sealed record World(
         string Database,
         Guid Org,
@@ -38,17 +38,17 @@ public sealed class UsageRollupRecomputeTests
 
     private async Task<World> StartAsync()
     {
-        var database = await _fixture.CreateDedicatedDatabaseAsync();
-        var name = database.Name;
+        var name = await _fixture.SharedDatabaseAsync();
         var org = Guid.CreateVersion7();
         var project = Guid.CreateVersion7();
-        var slug = org.ToString("N")[..8];
+        var orgSlug = Unique.Slug("acme");
+        var projectSlug = Unique.Slug("pp");
 
         await _fixture.ExecuteAsync(
             name,
             $"""
-            insert into public.organization (id, name, slug) values ('{org:D}', 'acme', 'acme-{slug}');
-            insert into public.project (id, org_id, name, slug) values ('{project:D}', '{org:D}', 'pp', 'pp-{slug}');
+            insert into public.organization (id, name, slug) values ('{org:D}', 'acme', '{orgSlug}');
+            insert into public.project (id, org_id, name, slug) values ('{project:D}', '{org:D}', 'pp', '{projectSlug}');
             """);
 
         var app = NpgsqlDataSource.Create(_fixture.AppConnectionString(name));
@@ -322,12 +322,13 @@ public sealed class UsageRollupRecomputeTests
         await using var world = await StartAsync();
         var otherOrg = Guid.CreateVersion7();
         var otherProject = Guid.CreateVersion7();
-        var slug = otherOrg.ToString("N")[..8];
+        var orgSlug = Unique.Slug("other");
+        var projectSlug = Unique.Slug("op");
         await _fixture.ExecuteAsync(
             world.Database,
             $"""
-            insert into public.organization (id, name, slug) values ('{otherOrg:D}', 'other', 'other-{slug}');
-            insert into public.project (id, org_id, name, slug) values ('{otherProject:D}', '{otherOrg:D}', 'op', 'op-{slug}');
+            insert into public.organization (id, name, slug) values ('{otherOrg:D}', 'other', '{orgSlug}');
+            insert into public.project (id, org_id, name, slug) values ('{otherProject:D}', '{otherOrg:D}', 'op', '{projectSlug}');
             insert into public.usage_ledger_entry
                 (id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at)
             values ('{Guid.CreateVersion7():D}', '{otherOrg:D}', '{otherProject:D}', 'results', 9, 'batch',

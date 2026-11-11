@@ -386,14 +386,14 @@ public sealed class QuarantineExploratoryTests
     [Fact]
     public async Task Remove_ByAServicePrincipalWithoutUserId_Is403()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
         using var client = api.CreateClient();
 
         var user = Guid.CreateVersion7();
         var slug = Unique.Slug("acme");
         var orgAnswer = await client.SendAsync(
-            HttpMethod.Post, "/v1/orgs", TenancyApiFactory.Caller(user: user, email: "acme@example.test"), new { name = slug, slug }, NewKey());
+            HttpMethod.Post, "/v1/orgs", TenancyApiFactory.Caller(user: user, email: $"owner-{user:N}@example.test"), new { name = slug, slug }, NewKey());
         orgAnswer.Status.ShouldBe(HttpStatusCode.Created, orgAnswer.ErrorMessage);
         var org = orgAnswer.Id();
 

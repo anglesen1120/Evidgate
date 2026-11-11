@@ -8,6 +8,7 @@ using Xunit;
 
 namespace Tenancy.IntegrationTests;
 
+// Dedicated database: the cases that count the whole raw_report table need one of their own.
 /// <summary>
 /// A parse record is written once per report artifact and parser release, is never rewritten, and is readable
 /// only inside its own org — so the database has to refuse a row naming another org's run or artifact, a refusal
@@ -29,7 +30,7 @@ public sealed partial class RawReportSchemaTests
     [Fact]
     public async Task RawReport_Rls_HidesOtherOrgsAndRefusesAForeignTenantWrite()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var own = await SeedTenantAsync(database);
         var other = await SeedTenantAsync(database);
         var owner = _fixture.OwnerConnectionString(database);
@@ -72,7 +73,7 @@ public sealed partial class RawReportSchemaTests
     [Fact]
     public async Task AppRole_HoldsSelectAndInsert_ButNoUpdateDeleteOrTruncate()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var tenant = await SeedTenantAsync(database);
         (await InsertAsync(_fixture.OwnerConnectionString(database), null, Baseline(tenant))).ShouldBe(1);
 

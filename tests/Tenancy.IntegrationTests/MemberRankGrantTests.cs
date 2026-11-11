@@ -26,7 +26,7 @@ public sealed class MemberRankGrantTests
     [Fact]
     public async Task The_Rank_Is_The_Scoped_Orgs_And_Another_Orgs_Owner_Ranks_Zero()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (orgA, ownerA) = await SeedTenantAdminAsync(database, "rank-a");
         var (orgB, ownerB) = await SeedTenantAdminAsync(database, "rank-b");
         var customA = await SeedCustomAdminAsync(database, orgA, "rank-a");
@@ -65,7 +65,7 @@ public sealed class MemberRankGrantTests
     [Fact]
     public async Task Without_A_Tenant_Scope_Every_Rank_Is_Zero()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, owner) = await SeedTenantAdminAsync(database, "rank-none");
         var app = _fixture.AppConnectionString(database);
 
@@ -76,16 +76,17 @@ public sealed class MemberRankGrantTests
     }
 
     /// <summary>A new org whose owner holds the built-in <c>tenant_admin</c>: rank 2 inside it.</summary>
-    private async Task<(Guid Org, Guid User)> SeedTenantAdminAsync(DedicatedDatabase database, string stem)
+    private async Task<(Guid Org, Guid User)> SeedTenantAdminAsync(string database, string stem)
     {
         var org = Guid.CreateVersion7();
         var user = Guid.CreateVersion7();
-        var email = $"{stem}-owner@example.test";
+        var unique = Unique.Slug(stem);
+        var email = $"{unique}-owner@example.test";
 
         await _fixture.ExecuteAsync(
             database,
             $"""
-            insert into public.organization (id, name, slug) values ('{org}', '{stem} org', '{Unique.Slug(stem)}');
+            insert into public.organization (id, name, slug) values ('{org}', '{unique} org', '{unique}');
             insert into public."user" (id, email) values ('{user}', '{email}');
             insert into public.membership (id, org_id, user_id, invited_email, status)
             values (gen_random_uuid(), '{org}', '{user}', '{email}', 'active');
@@ -100,11 +101,11 @@ public sealed class MemberRankGrantTests
     }
 
     /// <summary>A member of an existing org whose custom role carries <c>membership:write</c>: rank 1.</summary>
-    private async Task<Guid> SeedCustomAdminAsync(DedicatedDatabase database, Guid orgId, string stem)
+    private async Task<Guid> SeedCustomAdminAsync(string database, Guid orgId, string stem)
     {
         var user = Guid.CreateVersion7();
         var role = Guid.CreateVersion7();
-        var email = $"{stem}-custom@example.test";
+        var email = $"{Unique.Slug(stem)}-custom@example.test";
 
         await _fixture.ExecuteAsync(
             database,
@@ -126,10 +127,10 @@ public sealed class MemberRankGrantTests
     }
 
     /// <summary>A member of an existing org with no role at all: rank 0.</summary>
-    private async Task<Guid> SeedPlainMemberAsync(DedicatedDatabase database, Guid orgId, string stem)
+    private async Task<Guid> SeedPlainMemberAsync(string database, Guid orgId, string stem)
     {
         var user = Guid.CreateVersion7();
-        var email = $"{stem}-member@example.test";
+        var email = $"{Unique.Slug(stem)}-member@example.test";
 
         await _fixture.ExecuteAsync(
             database,
