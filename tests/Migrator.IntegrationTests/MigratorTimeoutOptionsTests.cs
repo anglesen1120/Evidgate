@@ -62,6 +62,25 @@ public sealed partial class MigratorTimeoutOptionsTests
     }
 
     [Fact]
+    public void Inherited_Pgoptions_Are_Kept_When_The_Connection_String_Has_No_Options()
+    {
+        // Process-wide, but this class's tests run one after another and the value is inert to the server.
+        var previous = Environment.GetEnvironmentVariable("PGOPTIONS");
+        Environment.SetEnvironmentVariable("PGOPTIONS", "-c application_name=pgoptions_probe");
+        try
+        {
+            var options = new MigratorOptions { MigrationsPath = AppContext.BaseDirectory, ConnectionString = ValidConnectionString };
+
+            new NpgsqlConnectionStringBuilder(options.SessionConnectionString).Options
+                .ShouldBe("-c application_name=pgoptions_probe -c lock_timeout=5000ms -c statement_timeout=900000ms");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PGOPTIONS", previous);
+        }
+    }
+
+    [Fact]
     public void Unset_Variables_Take_The_Defaults()
     {
         var options = MigratorOptions.FromEnvironment(Env());
