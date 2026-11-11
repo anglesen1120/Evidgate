@@ -642,3 +642,30 @@ public sealed class HealingLlmGatewayTests
             ValueTask.FromResult<string?>("test-key-not-a-secret");
     }
 }
+
+/// <summary>One <c>healing_llm_call</c> row, as the recorder wrote it.</summary>
+/// <param name="Id">The row id (the value a generation stores as <c>ai_run_id</c>).</param>
+/// <param name="OrgId">The tenant the RLS scope resolved to.</param>
+/// <param name="ProjectId">The project the call was attributed to.</param>
+/// <param name="IncidentId">The incident, or null for an authoring generation.</param>
+/// <param name="CandidateId">The candidate, when the call names one.</param>
+/// <param name="Purpose">One of <see cref="HealingLlmPurposes"/>.</param>
+/// <param name="Model">The model the adapter was asked for.</param>
+/// <param name="PromptVersion">The prompt version the call used.</param>
+/// <param name="Tokens">Tokens this attempt spent.</param>
+/// <param name="Cost">Cost this attempt incurred.</param>
+/// <param name="Status">One of <see cref="HealingLlmStatuses"/>.</param>
+/// <param name="Attempt">The 1-based attempt number.</param>
+internal sealed record HealingLlmCallRow(
+    Guid Id,
+    Guid OrgId,
+    Guid ProjectId,
+    Guid? IncidentId,
+    Guid? CandidateId,
+    string Purpose,
+    string Model,
+    string PromptVersion,
+    int Tokens,
+    decimal Cost,
+    string Status,
+    int Attempt);
