@@ -12,14 +12,14 @@ namespace Tenancy.IntegrationTests;
 /// validation boundaries, and a mixed batch that writes one row and still refuses.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class CaseAttemptWriterQaTests
+public sealed class CaseAttemptWriterQaTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key that matches no plan: 64 lowercase hex.</summary>
     private const string UnplannedKey = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public CaseAttemptWriterQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public CaseAttemptWriterQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project)
         : IAsyncDisposable
@@ -34,7 +34,7 @@ public sealed class CaseAttemptWriterQaTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

@@ -17,11 +17,11 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class QuarantineSchemaTests
+public sealed class QuarantineSchemaTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
-
-    public QuarantineSchemaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public QuarantineSchemaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(
         TenancyApiFactory Api,
@@ -41,7 +41,7 @@ public sealed class QuarantineSchemaTests
     private async Task<World> StartAsync(DedicatedDatabase? dedicated = null)
     {
         var database = dedicated?.Name ?? await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
