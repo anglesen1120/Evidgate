@@ -17,6 +17,7 @@ public sealed class CancelKillTaskHandlerTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelKillTask_EarlyClaim_RetainsRequestThenKillsOnceAtDeadline()
     {
+        // Dedicated database: a poll claims every due task row, not only the row this test enqueued.
         await using var database = await fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(database, "00:00:02");
         var run = await CancelRunTestData.RunInStateAsync(fixture, world, "running");
@@ -41,9 +42,8 @@ public sealed class CancelKillTaskHandlerTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelKillTask_InvisibleOrMissingRequest_NoOpWithOwnerPositiveControl()
     {
-        await using var database = await fixture.CreateDedicatedDatabaseAsync();
-        await using var owner = await StartAsync(database, "00:00:01");
-        await using var other = await StartAsync(database, "00:00:01");
+        await using var owner = await StartAsync(null, "00:00:01");
+        await using var other = await StartAsync(null, "00:00:01");
         var run = await CancelRunTestData.RunInStateAsync(fixture, owner, "running");
         (await CancelRunTestData.CancelAsync(owner, run)).Status.ShouldBe(HttpStatusCode.Accepted);
         var request = await RequestAsync(owner, run);
@@ -61,6 +61,7 @@ public sealed class CancelKillTaskHandlerTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelKillTask_QueueClaimsBeforeRequestDeadline_RetriesWithoutKilling()
     {
+        // Dedicated database: the poll sees every due task row of every tenant.
         await using var database = await fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(database, "01:00:00");
         var run = await CancelRunTestData.RunInStateAsync(fixture, world, "running");
@@ -81,6 +82,7 @@ public sealed class CancelKillTaskHandlerTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelKillTask_RestartWithActiveLease_ReclaimsPersistedRowOnlyOnce()
     {
+        // Dedicated database: the poll claims any due row, so only a private one proves this row is reclaimed.
         await using var database = await fixture.CreateDedicatedDatabaseAsync();
         Guid run;
         Guid org;
@@ -116,13 +118,12 @@ public sealed class CancelKillTaskHandlerTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelKillTask_DeletedOrganization_CompletesScopedCleanupWithoutReopeningRun()
     {
-        await using var database = await fixture.CreateDedicatedDatabaseAsync();
-        await using var owner = await StartAsync(database, "00:00:01");
-        await using var other = await StartAsync(database, "00:00:01");
+        await using var owner = await StartAsync(null, "00:00:01");
+        await using var other = await StartAsync(null, "00:00:01");
         var run = await CancelRunTestData.RunInStateAsync(fixture, owner, "running");
         (await CancelRunTestData.CancelAsync(owner, run)).Status.ShouldBe(HttpStatusCode.Accepted);
         var request = await RequestAsync(owner, run);
-        await fixture.ExecuteAsync(database,
+        await fixture.ExecuteAsync(owner.Database,
             $"update public.organization set status = 'deleted' where id = '{owner.Org:D}'");
         await WaitDueAsync(owner, request);
         await InvokeAsync(owner, other.Org, run, request);
@@ -132,7 +133,7 @@ public sealed class CancelKillTaskHandlerTests(PostgresTenancyFixture fixture)
         (await CancelRunTestData.StateAsync(fixture, owner, run)).ShouldBe("canceled");
     }
 
-    private Task<RunCreationTests.World> StartAsync(string database, string kill) => RunCreationTests.StartAsync(
+    private Task<RunCreationTests.World> StartAsync(string? database, string kill) => RunCreationTests.StartAsync(
         fixture, database: database,
         configuration: CancelRunKillScheduleTests.Windows("00:00:00.001", kill),
         services: services => services.AddEvidgateTasks(new ConfigurationBuilder().Build()));

@@ -7,9 +7,10 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// The UPDATE/DELETE guards of an issued billing period against a real PostgreSQL. The app role holds neither
-/// privilege, so each case that speaks as it first grants them in a private database: the refusal under test is
-/// then the trigger, not the ACL. The owner needs no grant. Positive controls (an open period, another tenant)
-/// sit next to every refusal so a refusal cannot be a missing row or a broken statement.
+/// privilege, so the two cases that speak as it first grant them in a private database (a grant would leak into
+/// the run's shared one): the refusal under test is then the trigger, not the ACL. The owner needs no grant.
+/// Positive controls (an open period, another tenant) sit next to every refusal so a refusal cannot be a missing
+/// row or a broken statement.
 /// </summary>
 [Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
@@ -59,8 +60,8 @@ public sealed class UsageIssuedPeriodMutationTests
     [Fact]
     public async Task Ledger_OwnerUpdateAndDelete_RefusedWhenIssued_AllowedWhenOpen()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        var database = world.Database;
         var (issuedRow, openRow) = await SeedIssuedAndOpenAsync(world, OwnerString(database));
 
         await using (var owner = await TenantScope.BeginAsync(OwnerString(database), world.Org))
@@ -91,6 +92,7 @@ public sealed class UsageIssuedPeriodMutationTests
     [Fact]
     public async Task Ledger_AppRoleUpdateAndDelete_RefusedByTriggerWhenIssued_AllowedWhenOpen()
     {
+        // Dedicated: the UPDATE/DELETE grant it needs would leak into the shared database.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
         var (issuedRow, openRow) = await SeedIssuedAndOpenAsync(world, OwnerString(database));
@@ -120,8 +122,8 @@ public sealed class UsageIssuedPeriodMutationTests
     [Fact]
     public async Task Ledger_MoveIntoIssuedPeriod_Refused_MoveBetweenOpenPeriodsAllowed()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        var database = world.Database;
         var (_, openRow) = await SeedIssuedAndOpenAsync(world, OwnerString(database));
 
         await using (var owner = await TenantScope.BeginAsync(OwnerString(database), world.Org))
@@ -143,10 +145,9 @@ public sealed class UsageIssuedPeriodMutationTests
     [Fact]
     public async Task Ledger_OtherTenantsIssuedPeriod_DoesNotGuardThisTenant()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
         var (otherOrg, otherProject) = await world.AddOtherOrgAsync();
-        var owner = OwnerString(database);
+        var owner = OwnerString(world.Database);
         var id = Guid.CreateVersion7();
 
         await InsertLedgerAsync(owner, otherOrg, otherProject, Issued, id);
@@ -161,6 +162,7 @@ public sealed class UsageIssuedPeriodMutationTests
     [Fact]
     public async Task Statement_UpdateAndDelete_RefusedForOwnerAndAppRole()
     {
+        // Dedicated: the UPDATE/DELETE grant it needs would leak into the shared database.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
         var owner = OwnerString(database);
@@ -193,8 +195,8 @@ public sealed class UsageIssuedPeriodMutationTests
     [Fact]
     public async Task StatementReplayInsert_StillPasses()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        var database = world.Database;
         await SeedIssuedAndOpenAsync(world, OwnerString(database));
 
         // The issue flow's idempotent insert: a second issue of the same period collides and writes nothing, and the
@@ -217,8 +219,8 @@ public sealed class UsageIssuedPeriodMutationTests
     [Fact]
     public async Task Ledger_IssuedRowMovedOut_OrMovedToIssuedTenant_Refused_MixedBulkRefusedWhole()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        var database = world.Database;
         var (otherOrg, _) = await world.AddOtherOrgAsync();
         var (issuedRow, openRow) = await SeedIssuedAndOpenAsync(world, OwnerString(database));
         await InsertStatementAsync(OwnerString(database), otherOrg, Open);
@@ -249,8 +251,8 @@ public sealed class UsageIssuedPeriodMutationTests
     [Fact]
     public async Task Ledger_UpdateOrDeleteUnderRepeatableRead_Refused()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        var database = world.Database;
         var (_, openRow) = await SeedIssuedAndOpenAsync(world, OwnerString(database));
 
         foreach (var sql in new[]
@@ -273,8 +275,8 @@ public sealed class UsageIssuedPeriodMutationTests
     [Fact]
     public async Task Issue_WhileLedgerUpdateIsInFlight_WaitsForIt()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        var database = world.Database;
         var (_, openRow) = await SeedIssuedAndOpenAsync(world, OwnerString(database));
 
         await using var mover = await TenantScope.BeginAsync(OwnerString(database), world.Org);
@@ -305,6 +307,7 @@ public sealed class UsageIssuedPeriodMutationTests
     [Fact]
     public async Task Mutation_DroppingTheTriggers_LetsIssuedPeriodBeChanged()
     {
+        // Dedicated: dropping the triggers is schema DDL.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await UsageQuotaWorld.StartAsync(_fixture, database: database);
         var (issuedRow, _) = await SeedIssuedAndOpenAsync(world, OwnerString(database));
@@ -328,6 +331,7 @@ public sealed class UsageIssuedPeriodMutationTests
     [Fact]
     public async Task Migration_Reapplied_LeavesOneTriggerEach()
     {
+        // Dedicated: it deletes the journal row and re-applies the migration.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await _fixture.ExecuteAsync(database, $"delete from public.schema_migration where name = '{MigrationFile}'");
 

@@ -10,7 +10,7 @@ public sealed partial class UsagePriceSchemaTests
     [Fact]
     public async Task Refusals_AreNamedByTheirOwnConstraint()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var org = Guid.CreateVersion7();
 
         await InsertAsync(database, org, PriceRow(Guid.CreateVersion7(), org, effectiveTo: At(2)));
@@ -60,7 +60,7 @@ public sealed partial class UsagePriceSchemaTests
     [Fact]
     public async Task DuplicateCardVersion_IsRefused_ButAnotherScopeOrMetricIsNot()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var orgA = Guid.CreateVersion7();
         var orgB = Guid.CreateVersion7();
 
@@ -96,6 +96,7 @@ public sealed partial class UsagePriceSchemaTests
     [Fact]
     public async Task OverlappingWindows_AreRefusedInOneScope_AndAdjacentAndOverridesAreNot()
     {
+        // Dedicated: it writes the platform card, which every org reads.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var org = Guid.CreateVersion7();
 

@@ -33,7 +33,8 @@ public sealed class FixtureImmutabilityTests
     [Fact]
     public async Task AppRole_HoldsSelectAndInsert_ButNoUpdateDeleteOrTruncate()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        // Seeds its own org; the counts read only through the app role's tenant scope, never as superuser or owner.
+        var database = await _fixture.SharedDatabaseAsync();
         var tenant = await FixtureSeed.TenantAsync(_fixture, database);
         await FixtureSeed.FixtureAsync(_fixture, database, tenant.Org, tenant.Project);
         await FixtureSeed.RevisionAsync(
@@ -64,6 +65,7 @@ public sealed class FixtureImmutabilityTests
     [Fact]
     public async Task AppRole_UpdateAndDelete_AreRefusedByGrantAndTheRowsSurvive()
     {
+        // Dedicated database: table-wide update/delete attempts and superuser whole-table counts.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var tenant = await FixtureSeed.TenantAsync(_fixture, database);
         var fixtureId = await FixtureSeed.FixtureAsync(_fixture, database, tenant.Org, tenant.Project);
@@ -99,6 +101,7 @@ public sealed class FixtureImmutabilityTests
     [Fact]
     public async Task OwnerRole_UpdateAndDelete_RaiseRevisionImmutable()
     {
+        // Dedicated database: table-wide owner update/delete and the owner's unfiltered whole-table counts.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var tenant = await FixtureSeed.TenantAsync(_fixture, database);
         var fixtureId = await FixtureSeed.FixtureAsync(_fixture, database, tenant.Org, tenant.Project);
@@ -138,6 +141,7 @@ public sealed class FixtureImmutabilityTests
     [Fact]
     public async Task AppRole_Truncate_IsRefusedAndNoRowIsRemoved()
     {
+        // Dedicated database: TRUNCATE probes plus superuser whole-table counts that must see this test alone.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var tenant = await FixtureSeed.TenantAsync(_fixture, database);
         var fixtureId = await FixtureSeed.FixtureAsync(_fixture, database, tenant.Org, tenant.Project);
@@ -160,6 +164,7 @@ public sealed class FixtureImmutabilityTests
     [Fact]
     public async Task AppRole_InsertOfAnotherOrgsRow_IsRefusedByTheRowPolicy()
     {
+        // Dedicated database: the refusal probes end with superuser whole-table counts.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var own = await FixtureSeed.TenantAsync(_fixture, database);
         var other = await FixtureSeed.TenantAsync(_fixture, database);

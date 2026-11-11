@@ -1,4 +1,3 @@
-using System.Globalization;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -110,7 +109,7 @@ public sealed class SchemaBoundaryTests
     public async Task EmptyTenantSettingReturnsZeroRows()
     {
         var seeded = await SeedTwoTenantsAsync();
-        await using var database = seeded.Database;
+        var database = seeded.Database;
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(database));
         await scope.SetAsync("evidgate.org_id", string.Empty);
@@ -131,7 +130,7 @@ public sealed class SchemaBoundaryTests
     public async Task CrossTenantWritesAffectNoRows()
     {
         var seeded = await SeedTwoTenantsAsync();
-        await using var database = seeded.Database;
+        var database = seeded.Database;
         var (tenantA, tenantB) = (seeded.TenantA, seeded.TenantB);
 
         await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(database), tenantA.OrgId))
@@ -180,7 +179,7 @@ public sealed class SchemaBoundaryTests
     public async Task WithCheckRejectsWritesIntoAnotherTenant()
     {
         var seeded = await SeedTwoTenantsAsync();
-        await using var database = seeded.Database;
+        var database = seeded.Database;
         var (tenantA, tenantB) = (seeded.TenantA, seeded.TenantB);
 
         // Re-parenting an own project into B: the USING side matches the row, the
@@ -233,35 +232,35 @@ public sealed class SchemaBoundaryTests
         }
     }
 
-    private Task<(DedicatedDatabase Database, TenantRow TenantA, TenantRow TenantB)> SeedTwoTenantsAsync() =>
-        _fixture.StartDedicatedAsync(async database =>
+    /// <summary>Two owner-seeded tenants on the run's shared database, each with unique slugs.</summary>
+    private async Task<(string Database, TenantRow TenantA, TenantRow TenantB)> SeedTwoTenantsAsync()
+    {
+        var database = await _fixture.SharedDatabaseAsync();
+        var tenantA = new TenantRow(Guid.CreateVersion7(), Guid.CreateVersion7());
+        var tenantB = new TenantRow(Guid.CreateVersion7(), Guid.CreateVersion7());
+
+        await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
+
+        foreach (var tenant in new[] { tenantA, tenantB })
         {
-            var tenantA = new TenantRow(Guid.CreateVersion7(), Guid.CreateVersion7());
-            var tenantB = new TenantRow(Guid.CreateVersion7(), Guid.CreateVersion7());
-            var index = 0;
+            var slug = Unique.Slug("tenant");
+            await scope.ExecuteAsync(
+                "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
+                ("id", tenant.OrgId),
+                ("name", "Tenant " + slug),
+                ("slug", slug));
+            await scope.ExecuteAsync(
+                "insert into public.project (id, org_id, name, slug) values (@id, @org_id, @name, @slug)",
+                ("id", tenant.ProjectId),
+                ("org_id", tenant.OrgId),
+                ("name", "Project " + slug),
+                ("slug", "project-" + slug));
+        }
 
-            await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
+        await scope.CommitAsync();
 
-            foreach (var tenant in new[] { tenantA, tenantB })
-            {
-                index++;
-                await scope.ExecuteAsync(
-                    "insert into public.organization (id, name, slug) values (@id, @name, @slug)",
-                    ("id", tenant.OrgId),
-                    ("name", "Tenant " + index.ToString(CultureInfo.InvariantCulture)),
-                    ("slug", "tenant-" + index.ToString(CultureInfo.InvariantCulture)));
-                await scope.ExecuteAsync(
-                    "insert into public.project (id, org_id, name, slug) values (@id, @org_id, @name, @slug)",
-                    ("id", tenant.ProjectId),
-                    ("org_id", tenant.OrgId),
-                    ("name", "Project " + index.ToString(CultureInfo.InvariantCulture)),
-                    ("slug", "project-" + index.ToString(CultureInfo.InvariantCulture)));
-            }
-
-            await scope.CommitAsync();
-
-            return (database, tenantA, tenantB);
-        });
+        return (database, tenantA, tenantB);
+    }
 
     internal sealed record TenantRow(Guid OrgId, Guid ProjectId);
 }

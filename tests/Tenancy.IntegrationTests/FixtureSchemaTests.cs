@@ -46,6 +46,7 @@ public sealed class FixtureSchemaTests
     [Fact]
     public async Task Fixture_ProjectOfAnotherOrgOrOfNone_IsRefusedByTheCompositeKey()
     {
+        // Dedicated database: the probe ends with an exact whole-table count.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var own = await FixtureSeed.TenantAsync(_fixture, database);
         var other = await FixtureSeed.TenantAsync(_fixture, database);
@@ -84,6 +85,7 @@ public sealed class FixtureSchemaTests
     [Fact]
     public async Task Revision_OrgProjectAndKey_ArePinnedTogetherByOneCompositeKey()
     {
+        // Dedicated database: the probe ends with an exact whole-table count.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var own = await FixtureSeed.TenantAsync(_fixture, database);
         var other = await FixtureSeed.TenantAsync(_fixture, database);
@@ -137,6 +139,7 @@ public sealed class FixtureSchemaTests
     [Fact]
     public async Task FixtureKey_IsUniquePerProject_AndReusableInAnotherProject()
     {
+        // Dedicated database: the probe ends with an exact whole-table count.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var own = await FixtureSeed.TenantAsync(_fixture, database);
         var sibling = await FixtureSeed.ProjectAsync(_fixture, database, own.Org);
@@ -161,6 +164,7 @@ public sealed class FixtureSchemaTests
     [Fact]
     public async Task RevisionNumberAndHash_AreUniquePerFixture_AndRepeatAcrossFixtures()
     {
+        // Dedicated database: the probe ends with an exact whole-table count.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var own = await FixtureSeed.TenantAsync(_fixture, database);
         var owner = _fixture.OwnerConnectionString(database);
@@ -211,6 +215,7 @@ public sealed class FixtureSchemaTests
     [Fact]
     public async Task FixtureKey_OutsideItsShape_IsRefused()
     {
+        // Dedicated database: the probe ends with an exact whole-table count.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var own = await FixtureSeed.TenantAsync(_fixture, database);
         var owner = _fixture.OwnerConnectionString(database);
@@ -237,6 +242,7 @@ public sealed class FixtureSchemaTests
     [Fact]
     public async Task RevisionValues_OutsideTheirChecks_AreRefused()
     {
+        // Dedicated database: the probe ends with an exact whole-table count.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var own = await FixtureSeed.TenantAsync(_fixture, database);
         var owner = _fixture.OwnerConnectionString(database);
@@ -295,7 +301,8 @@ public sealed class FixtureSchemaTests
     [Fact]
     public async Task BothTables_ForceRowSecurity_UnderPoliciesThatNameOneRoleEach()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        // Schema facts only: catalog reads are identical in every database at head.
+        var database = await _fixture.SharedDatabaseAsync();
 
         foreach (var table in new[] { FixtureTable, RevisionTable })
         {

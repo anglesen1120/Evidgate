@@ -95,6 +95,7 @@ public sealed class CancelRunKillScheduleTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelKillTask_FiresAtDeadline_MarksKilled()
     {
+        // Dedicated database: the poll claims any due task row of any tenant.
         await using var database = await fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(database, "00:00:01", "00:00:01");
 
@@ -123,8 +124,7 @@ public sealed class CancelRunKillScheduleTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelKillTask_ReplayAfterKilled_IsNoOp()
     {
-        await using var database = await fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await StartAsync(database, "00:00:01", "00:00:01");
+        await using var world = await StartAsync(null, "00:00:01", "00:00:01");
 
         var runId = await CancelRunTestData.RunInStateAsync(fixture, world, "running");
         (await CancelRunTestData.CancelAsync(world, runId)).Status.ShouldBe(HttpStatusCode.Accepted);
@@ -145,6 +145,7 @@ public sealed class CancelRunKillScheduleTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelKillTask_SoftStoppedBeforeDeadline_DoesNotKill()
     {
+        // Dedicated database: the poll claims any due task row of any tenant.
         await using var database = await fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(database, "00:00:01", "00:00:02");
 
@@ -177,6 +178,7 @@ public sealed class CancelRunKillScheduleTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelKillTask_SurvivesWorkerRestart_TaskRowResumesFromAvailableAt()
     {
+        // Dedicated database: the resumed poll claims any due task row of any tenant.
         await using var database = await fixture.CreateDedicatedDatabaseAsync();
         Guid runId;
         Guid orgId;
@@ -215,6 +217,7 @@ public sealed class CancelRunKillScheduleTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelKillTask_ForeignTenantRequest_NotKilled()
     {
+        // Dedicated database: the poll claims any due task row of any tenant, including the forged foreign one.
         await using var database = await fixture.CreateDedicatedDatabaseAsync();
         await using var owner = await StartAsync(database, "00:00:01", "01:00:00");
         var runId = await CancelRunTestData.RunInStateAsync(fixture, owner, "running");
@@ -244,7 +247,7 @@ public sealed class CancelRunKillScheduleTests(PostgresTenancyFixture fixture)
     // ----------------------------------------------------------------- harness
 
     /// <summary>One world whose host composes the queue, so the tests can drive the real consumer.</summary>
-    private Task<RunCreationTests.World> StartAsync(DedicatedDatabase database, string softStop, string kill) =>
+    private Task<RunCreationTests.World> StartAsync(string? database, string softStop, string kill) =>
         RunCreationTests.StartAsync(
             fixture,
             database: database,

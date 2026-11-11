@@ -48,37 +48,27 @@ public sealed class AuthoringImporterTests
         string Database,
         Guid User,
         Guid Org,
-        Guid Project,
-        DedicatedDatabase Dedicated) : IAsyncDisposable
+        Guid Project) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            try
-            {
-                await Api.DisposeAsync();
-            }
-            finally
-            {
-                // The database is this world's to drop even when the host's own disposal throws.
-                await Dedicated.DisposeAsync();
-            }
+            await Api.DisposeAsync();
         }
     }
 
-    // Private database: the import timings are wall-clock thresholds that a busy shared host would trip.
-    private Task<World> StartAsync() =>
-        _fixture.StartDedicatedAsync(async dedicated =>
-        {
-            var database = dedicated.Name;
-            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-            var client = api.CreateClient();
-            var user = Guid.CreateVersion7();
-            var org = await CreateOrgAsync(client, user, "acme");
-            var project = await CreateProjectAsync(client, user, org, "checkout");
+    // The run's shared database; a wall-clock test owns a private one so a busy host cannot move its bound.
+    private async Task<World> StartAsync(string? database = null)
+    {
+        database ??= await _fixture.SharedDatabaseAsync();
+        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var client = api.CreateClient();
+        var user = Guid.CreateVersion7();
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
-            return new World(api, client, database, user, org, project, dedicated);
-        });
+        return new World(api, client, database, user, org, project);
+    }
 
     /// <summary>Runs one import on the host's own object graph, inside one writable tenant scope of the world.</summary>
     /// <param name="world">The world.</param>
@@ -102,9 +92,7 @@ public sealed class AuthoringImporterTests
             services.ServiceProvider.GetRequiredService<AuthoringCodeAllocator>(),
             services.ServiceProvider.GetRequiredService<ManualCaseStepsValidator>());
 
-        var result = await importer
-            .ImportAsync(world.Org, projectId, null, rows, dryRun, cancellationToken)
-;
+        var result = await importer.ImportAsync(world.Org, projectId, null, rows, dryRun, cancellationToken);
 
         // A refusal wrote nothing, so committing it is the same as rolling it back — and committing keeps the "nothing
         // changed" assertions honest for a handler that commits whatever the answer was.
@@ -513,7 +501,9 @@ public sealed class AuthoringImporterTests
     [Fact]
     public async Task Import_5000Rows_Completes()
     {
-        await using var world = await StartAsync();
+        // A wall-clock bound that a busy shared host would move: the test owns the database it times on.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(dedicated.Name);
         var rows = File(1_000);
 
         rows.Count.ShouldBe(ImportLimits.MaxDataRows);
@@ -646,7 +636,9 @@ public sealed class AuthoringImporterTests
     [Fact]
     public async Task ParentItemHeldForShare_ImportProceeds()
     {
-        await using var world = await StartAsync();
+        // A wall-clock bound that a busy shared host would move: the test owns the database it times on.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartAsync(dedicated.Name);
 
         (await ImportAsync(world, world.Project, Single())).IsSuccess.ShouldBeTrue();
         var (_, itemId, code) = await CaseIdentityAsync(world);
