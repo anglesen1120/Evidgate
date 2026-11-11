@@ -38,6 +38,9 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
     private TemplateDatabase? _template;
     private Task<string>? _shared;
 
+    /// <summary>The shared database's name once it exists; null before the first <see cref="SharedDatabaseAsync"/>.</summary>
+    internal string? SharedName { get; private set; }
+
     /// <summary>
     /// Repository <c>migrations/</c>, resolved by the Migrator's own default-path
     /// rule (walk up to <c>Evidgate.slnx</c>), so the suite runs the real files
@@ -191,6 +194,7 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
         var database = NewDatabaseName();
         await Template.CreateDatabaseAsync(database).ConfigureAwait(false);
         SessionUserSeed.Register(database, OwnerConnectionString(database));
+        SharedName = database;
 
         return database;
     }

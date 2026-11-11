@@ -17,14 +17,10 @@ namespace Tenancy.IntegrationTests;
 /// next lease); the pool disposes it for real when the class is done. Data isolation stays what it was:
 /// every test creates its own org, project and users in the shared database.
 /// </remarks>
-public sealed class TenancyHostPool(PostgresTenancyFixture fixture) : IAsyncLifetime
+public sealed class TenancyHostPool(PostgresTenancyFixture fixture) : IAsyncDisposable
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<string, Slot> _slots = new(StringComparer.Ordinal);
-    private string? _shared;
-
-    /// <inheritdoc />
-    public async ValueTask InitializeAsync() => _shared = await fixture.SharedDatabaseAsync();
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
@@ -36,9 +32,22 @@ public sealed class TenancyHostPool(PostgresTenancyFixture fixture) : IAsyncLife
             _slots.Clear();
         }
 
+        List<Exception>? failures = null;
         foreach (var slot in slots)
         {
-            await slot.Host.TearDownAsync();
+            try
+            {
+                await slot.Host.TearDownAsync();
+            }
+            catch (Exception exception)
+            {
+                (failures ??= []).Add(exception);
+            }
+        }
+
+        if (failures is not null)
+        {
+            throw new AggregateException(failures);
         }
     }
 
@@ -96,7 +105,7 @@ public sealed class TenancyHostPool(PostgresTenancyFixture fixture) : IAsyncLife
 
     private TenancyApiFactory Lease(string variant, string database, Func<TenancyApiFactory> create)
     {
-        if (database != _shared)
+        if (database != fixture.SharedName)
         {
             return create();
         }
@@ -105,9 +114,7 @@ public sealed class TenancyHostPool(PostgresTenancyFixture fixture) : IAsyncLife
         {
             if (!_slots.TryGetValue(variant, out var slot))
             {
-                var host = create();
-                slot = new Slot(host);
-                host.Pool(slot.Release);
+                slot = new Slot(create());
                 _slots[variant] = slot;
             }
             else if (slot.Leased)
@@ -115,7 +122,7 @@ public sealed class TenancyHostPool(PostgresTenancyFixture fixture) : IAsyncLife
                 return create();
             }
 
-            slot.Leased = true;
+            slot.Begin();
             slot.Host.Statements.Clear();
 
             return slot.Host;
@@ -128,6 +135,19 @@ public sealed class TenancyHostPool(PostgresTenancyFixture fixture) : IAsyncLife
 
         public bool Leased { get; set; }
 
-        public void Release() => Leased = false;
+        public void Begin()
+        {
+            Leased = true;
+            var released = 0;
+
+            // One-shot per lease: a second dispose of the same lease must not free the slot again.
+            Host.Pool(() =>
+            {
+                if (Interlocked.Exchange(ref released, 1) == 0)
+                {
+                    Leased = false;
+                }
+            });
+        }
     }
 }
