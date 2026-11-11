@@ -8,12 +8,12 @@ Updated 2026-11-11. Source of truth for tasks: `plans/01`–`13` and `plans/feat
 - Develop: `41edd414` (#751, S367 close-out; recount base, through #751). Migrations `0001`–`0097` are contiguous; highest is `0097_identity_membership_role_fk.sql`, next free `0098` (reserved by the open S368, not counted); 08.5.1-T1.1/T1.2 merged (#306), T1 stays partial (T1.3–T1.7 open). Closed owner-review rows live in `docs/phase-review-archive.md` (a row moves there verbatim in the commit that closes it).
 - Open PRs: dependabot PRs plus the lane PRs of the S366 and S368 lanes (not counted); S369 opens its PR on this recount.
 - Wave layout (owner 2026-10-26): 1 backend + 2 web-only panels; a lane whose diff `python3 scripts/gate_scope.py` classifies `docs` or `no-dotnet` runs phase 1 (that tier's stages) + `npm run e2e -w apps/web` when `apps/web` changed, and never takes the Docker gate lock; a `full` tier needs phase 2 and the lock (`.omp/coordinator/PROJECT.md §Gate`).
-- Lanes in flight (2026-11-11): S366 MIGRATOR-TIMEOUTS, S368 USAGE-LEDGER-HASH (migration 0098) and S369 STATUS-RECOUNT (this recount); earlier lanes are merged and closed out. The S369 recount credits 04.1.2-T2 (#736), 06.1.3-T1 (#729), 09.3.1-T6 (#568, #642, #703, #715), 10.3.1-T2 (#722), 10.3.1-T3 (#732), 10.3.2-T1 (#465, #713) and 11.2.1-T2 (#726). S367 HEALING-PROVIDER fixed review row CR-20 (#750, merge d9c2304f, no migration, no task credit).
-- Fully landed on develop (recount S369 through #751, `41edd414`): 243/660 tasks (≈36.8 %); 242.5/706.75 raw person-days (≈34.3 %); remaining 417 tasks / 464.25 d. Via merged PRs: 216 tasks / 217.5 d; the other 27 tasks / 25.0 d are direct commits on develop. Method (unchanged from S189): task ranges in merged PR bodies, close-out rows and plan Notes expanded against plan_graph task ids; a parent counts only when all its sub-rows landed. The S299 recount of #612 gave 234 / 236.0, #617 (11.2.1-T7) made it 235 / 236.5, the S317 recount added 02.3.2-T3 (#628) for 236 / 237.0, and the S337 recount (through #689) added none. The S369 recount adds 7 tasks / 5.5 d from the 60 merged PRs after `fe750819` (#690–#751): 04.1.2-T2, 06.1.3-T1, 09.3.1-T6 (judgement call: T6.1 and T6.2 are both delivered, served facts #642, web wiring #703), 10.3.1-T2, 10.3.1-T3, 10.3.2-T1 and 11.2.1-T2. CR-* register fixes (#740, #741, #743, #746, #750) and the other lanes name no further plan task that landed in full; 10.7.1-T3, T5 and T6 (doc parts #696, #698) and 09.5.2-T3 stay partial; 0098 (open S368) is not counted. 33 parents are partial and carry no credit (§2). The S369 count-log carried row is appended at close-out; the recount script output is in the PR body.
-- Landed by phase (done tasks / raw d): G1 156 / 162.75; G2 70 / 63.5; G3 5 / 4.5; G4 12 / 11.75.
-- Plan totals: 660 tasks / 706.75 raw / 848.1 buffered person-days (`plan_graph.py` on `41edd414`: errors 0, 205 stories; 04.2.2-T3 manifest generator added in S186, M; the S93 canonical figures were 655 / 702.75 / 843.3). `check_features.py` still exits 1 (8 missing 13.x feature plans, 13.5.1 to 13.9.1; queue F37).
+- Lanes in flight (2026-11-11): S366 MIGRATOR-TIMEOUTS, S368 USAGE-LEDGER-HASH (migration 0098) and S369 STATUS-RECOUNT (this recount); earlier lanes are merged and closed out. The S369 recount credits 04.1.2-T2 (#736), 06.1.3-T1 (#729), 09.3.1-T6 (#568, #642, #703, #715) and 10.3.1-T3 (#732); 10.3.1-T2 (#722), 10.3.2-T1 (#465, #713) and 11.2.1-T2 (#726) landed with an explicit open Done-when and stay partial. S367 HEALING-PROVIDER fixed review row CR-20 (#750, merge d9c2304f, no migration, no task credit).
+- Fully landed on develop (recount S369 through #751, `41edd414`): 240/660 tasks (≈36.4 %); 240.0/706.75 raw person-days (≈34.0 %); remaining 420 tasks / 466.75 d. Via merged PRs: 213 tasks / 215.0 d; the other 27 tasks / 25.0 d are direct commits on develop. Method (unchanged from S189): task ranges in merged PR bodies, close-out rows and plan Notes expanded against plan_graph task ids; a parent counts only when all its sub-rows landed and its Done-when is not recorded as open. The S299 recount of #612 gave 234 / 236.0, #617 (11.2.1-T7) made it 235 / 236.5, the S317 recount added 02.3.2-T3 (#628) for 236 / 237.0, and the S337 recount (through #689) added none. The S369 recount adds 4 tasks / 3.0 d from the 60 merged PRs after `fe750819` (#690–#751): 04.1.2-T2, 06.1.3-T1, 09.3.1-T6 (judgement call: T6.1 and T6.2 are both delivered, served facts #642, web wiring #703) and 10.3.1-T3. Three parents the lanes called landed stay partial because a Done-when is recorded as open: 11.2.1-T2 (T2.2 AC3 `auth_failure` event, no emitter), 10.3.1-T2 (public browser intake and forced-sampling cap not delivered, dev profile only) and 10.3.2-T1 (T1.2 AC2/AC3 expiry and size-ceiling behaviour unexercised). CR-* register fixes (#740, #741, #743, #746, #750) and the other lanes name no further plan task that landed in full; 10.7.1-T3, T5 and T6 (doc parts #696, #698) and 09.5.2-T3 stay partial; 0098 (open S368) is not counted. 36 parents are partial and carry no credit (§2). The S369 count-log carried row is appended at close-out; the recount script output is in the PR body.
+- Landed by phase (done tasks / raw d): G1 153 / 160.25; G2 70 / 63.5; G3 5 / 4.5; G4 12 / 11.75.
+- Plan totals: 660 tasks / 706.75 raw / 848.1 buffered person-days (`plan_graph.py` on `41edd414`: errors 0, 205 stories; 04.2.2-T3 manifest generator added in S186, M; the S93 canonical figures were 655 / 702.75 / 843.3). `check_features.py` still exits 1 (203 of 205 feature files, 13.8.2 and 13.9.1 missing, 7 header/section errors; queue F37).
 - CI: `ci.yml` runs `verify.sh` stages; recent delivery records report CI refused for billing (owner treats as pass), not CI green.
-- Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 note recorded, owner confirmation pending (DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
+- Owner decisions: O1 (engine), O4, O8 and O10 decided; O3 deferred. O2 decided 2026-10-02 (one-person team; reviews by people or AI sessions against a standard plan and spec, DECISIONS §8). Open: O5, O6, O7, O9, O11, O12. B2 flow approval and product questions stay in §6.
 - Next picks: the lane order is in `.omp/coordinator/prompts/held/README.md`; the web-only lane is on G2 (§5). The owner priority override of 2026-10-29 is closed for P0: CR-01…CR-06 are `fixed` in `plans/features/REVIEW-2026-10-29.md` (#312, #313, #314, #322); P1 rows (CR-07…CR-11) precede the task named in their *Must precede* cell, by State cell.
 - Pilot-0 (SOLO-PATH §2): criteria a-d met live in #392 (run A PASS gate 0, run B FAIL gate 1); (e) sign-in is met by #395 (Development-only `POST /v1/dev/session`, merge `5a4e7b81`), the shell blocker 09.1.1-T4.2 shipped in #399 (`f0b2b47a`, `X-Evidgate-Org` on tenant-scoped calls), and the web runs list with run A PASS and run B FAIL was exercised by headless Chromium against `deploy.sh --local` (carried row 'Merge debt (#405)'; a local run, not the deployed review host); the review deployment is delivered by #401 (`a488a865`) and #403 (`755fdd71`, dev sign-in form in the review web build).
 - Next step: §5 and §6. The §5 dependency-ready headline counts (91 / 102.5 d, stricter 47 / 51.0 d) were last recomputed on `787f592` and are NOT recomputed in S189 (recorded gap); §6 non-graph blockers stay in `docs/status-carried.md`.
@@ -25,13 +25,13 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 
 | Delivery scope | Tasks | Raw person-days |
 |---|---|---|
-| Fully landed on develop | 243 | 242.5 |
-| Via merged PRs | 216 | 217.5 |
+| Fully landed on develop | 240 | 240.0 |
+| Via merged PRs | 213 | 215.0 |
 | Direct commits on develop, no PR | 27 | 25.0 |
-| Remaining | 417 | 464.25 |
+| Remaining | 420 | 466.75 |
 | Plan total | 660 | 706.75 |
 
-The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none removed); 11.2.1-T7 (#617) made it 235 / 236.5, the S317 recount added 02.3.2-T3 (G1, S, #628, one sub-row T3.1; Area 02 below) for 236 / 237.0, and the S337 recount added none. The S369 recount adds 04.1.2-T2 (G2, S, #736), 06.1.3-T1 (G2, S, #729), 09.3.1-T6 (G2, M, #568, #642, #703, #715), 10.3.1-T2 (G1, M, #722), 10.3.1-T3 (G1, M, #732), 10.3.2-T1 (G1, S, #465, #713) and 11.2.1-T2 (G1, M, #726) for 243 / 242.5. The per-phase and per-area splits below add those seven tasks to the S317 tables (G1 +4 / +3.5, G2 +3 / +2.0; areas 04, 06, 09, 11 +1 each, 10 +3); the S337 note stands that a script over the task ids named in this file does not reproduce the G2/G3 and area 09/11 base splits, because this file does not name every credited id. Parents credited by the S299 recount:
+The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none removed); 11.2.1-T7 (#617) made it 235 / 236.5, the S317 recount added 02.3.2-T3 (G1, S, #628, one sub-row T3.1; Area 02 below) for 236 / 237.0, and the S337 recount added none. The S369 recount adds 04.1.2-T2 (G2, S, #736), 06.1.3-T1 (G2, S, #729), 09.3.1-T6 (G2, M, #568, #642, #703, #715) and 10.3.1-T3 (G1, M, #732) for 240 / 240.0. 10.3.1-T2 (#722), 10.3.2-T1 (#465, #713) and 11.2.1-T2 (#726) are not credited: their plan Done-whens record an open part (see §1 Resume). The per-phase and per-area splits below add the four tasks to the S317 tables (G1 +1 / +1.0, G2 +3 / +2.0; areas 04, 06, 09, 10 +1 each); the S337 note stands that a script over the task ids named in this file does not reproduce the G2/G3 and area 09/11 base splits, because this file does not name every credited id. Parents credited by the S299 recount:
 
 | Area | New tasks credited by the S299 recount (last landing PRs) |
 |---|---|
@@ -67,11 +67,11 @@ The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none 
 | 10.1.1-T3 | T3.3, T3.4 | #558 |
 | 10.1.2-T1 | T1.1 | #516 |
 | 10.2.1-T1 | T1.4 | #12 |
+| 10.3.2-T1 | T1.2 AC2/AC3 proof (expiry, size ceiling, Worker export) | #465, #713; credit withheld by S369; 10.3.1-T2 (#722, dev profile only, public browser intake open) is partial too; 10.3.1-T3 (#732) is credited |
 | 10.7.1-T1 | T1.2 | #341 |
 | 10.7.1-T2 | T2.2 | #341 |
 | 10.7.1-T3 | T3.1 (drill) | #698 (doc part) |
 | 10.7.1-T4 | T4.2 | #222 |
-| 10.7.1-T5 | T5.2 | #696 (T5.1) |
 | 11.9.1-T2 | T2.4 | #279 |
 | 12.2.1-T2 | T2.2 | #277 |
 | 12.3.1-T2 | T2.2, T2.3, T2.4 | #440 |
@@ -79,7 +79,7 @@ The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none 
 | 12.4.1-T3 | T3.2 | #551 |
 | 13.2.1-T1 | T1.2 | #435 |
 
-The 31 partial parents above plus 09.5.2-T3 (T3.2 open; T3.1 landed in #684) and 10.7.1-T6 (T6.2 open; T6.1 landed in #696) make 33; they are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5. 09.5.2-T3 and 10.7.1-T6 have no row in the table above because a row insert would shift every STATUS.md:N cite below. This table replaces the S189 partial list: 01.8.1-T3 and 09.8.1-T1 stay credited from the S189 recount on their sub-row done-whens (their delivery rows and §5 rows were not pruned then, recorded gap), 09.3.1-T2 is now credited (T2.3 #572, T2.4 #583), and 09.1.1-T6 still waits on its T6.2. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
+The 31 partial parents above plus 09.5.2-T3 (T3.2 open; T3.1 landed in #684), 10.7.1-T5 (T5.2 open; T5.1 landed in #696), 10.7.1-T6 (T6.2 open; T6.1 landed in #696), 10.3.1-T2 (public browser intake open, #722) and 11.2.1-T2 (T2.2 `auth_failure` AC3 open, #726) make 36; they are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5. those four have no row in the table above because a row insert would shift every STATUS.md:N cite below. This table replaces the S189 partial list: 01.8.1-T3 and 09.8.1-T1 stay credited from the S189 recount on their sub-row done-whens (their delivery rows and §5 rows were not pruned then, recorded gap), 09.3.1-T2 is now credited (T2.3 #572, T2.4 #583), and 09.1.1-T6 still waits on its T6.2. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
 
 ### Done by area
 
@@ -94,21 +94,21 @@ The 31 partial parents above plus 09.5.2-T3 (T3.2 open; T3.1 landed in #684) and
 | 07 | 13 | 1 | 4 | 8 | 0 | 0 | 10.25 |
 | 08 | 1 | 0 | 0 | 1 | 0 | 0 | 1 |
 | 09 | 32 | 0 | 9 | 17 | 6 | 0 | 33.5 |
-| 10 | 8 | 0 | 3 | 4 | 1 | 0 | 7.5 |
-| 11 | 14 | 1 | 6 | 6 | 1 | 0 | 11.25 |
+| 10 | 6 | 0 | 2 | 3 | 1 | 0 | 6.0 |
+| 11 | 13 | 1 | 6 | 5 | 1 | 0 | 10.25 |
 | 12 | 5 | 0 | 1 | 2 | 2 | 0 | 6.5 |
 | 13 | 7 | 0 | 1 | 4 | 2 | 0 | 8.5 |
-| TOTAL | 243 | 4 | 73 | 128 | 37 | 1 | 242.5 |
+| TOTAL | 240 | 4 | 72 | 126 | 37 | 1 | 240.0 |
 
 ### Done by phase
 
 | Group | Tasks | XS | S | M | L | XL | Person-days |
 |---|---|---|---|---|---|---|---|
-| G1 | 156 | 3 | 42 | 82 | 28 | 1 | 162.75 |
+| G1 | 153 | 3 | 41 | 80 | 28 | 1 | 160.25 |
 | G2 | 70 | 0 | 25 | 39 | 6 | 0 | 63.5 |
 | G3 | 5 | 0 | 3 | 1 | 1 | 0 | 4.5 |
 | G4 | 12 | 1 | 3 | 6 | 2 | 0 | 11.75 |
-| TOTAL | 243 | 4 | 73 | 128 | 37 | 1 | 242.5 |
+| TOTAL | 240 | 4 | 72 | 126 | 37 | 1 | 240.0 |
 
 ### Landed task groups
 
@@ -292,7 +292,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 01.1.1-T4 | XS | .NET 12 LTS / TypeScript 7 upgrade trigger | yes | no | no | n/a | no — V3 gate: .NET 12 not GA and `@angular/build` / `typescript-eslint` peer ranges still exclude TS 7 |
 | 01.7.1-T3 | S (rem T3.1) | Partial: T3.2 shipped (`f34d01b` created CODEOWNERS, PR template and CONTRIBUTING together; `6a679d8` and `4cd9789` only revised the template/CONTRIBUTING later); T3.1 branch-protection apply is owner-blocked (403 on the free private plan). | no | no | no | n/a | no — owner-blocked: branch-protection writes return 403 on the free private repo (STATUS §6 row "Branch-protection API") |
 | 10.1.1-T4 | M | Isolated artifact-viewer origin | yes | no | no | n/a | no — needs a distinct registrable domain + DNS record + TLS certificate (registrar/DNS action) |
-| 10.3.2-T1 | S | ADR: observability backend for M1 with retention and cost limits, plus the compose profile; unblocks 10.3.1-T2 (T1 merged in #203); T1.1 landed (ADR-0012, #465, 9e81d0ec), T1.2 LANDED by S348 (#713, 1c021d7b, no migration): opt-in compose profile `observability` (collector, Prometheus, VictoriaLogs, VictoriaTraces), `scripts/dev/up.sh --observability`, `observability-smoke.sh`; both subrows landed, so the parent is complete and credited by the S369 recount; open items are carried rows titled `(S348)` | yes | no | no | n/a | no — landed |
+| 10.3.2-T1 | S | ADR: observability backend for M1 with retention and cost limits, plus the compose profile; unblocks 10.3.1-T2 (T1 merged in #203); T1.1 landed (ADR-0012, #465, 9e81d0ec), T1.2 LANDED by S348 (#713, 1c021d7b, no migration): opt-in compose profile `observability` (collector, Prometheus, VictoriaLogs, VictoriaTraces), `scripts/dev/up.sh --observability`, `observability-smoke.sh`; both subrows landed, but the S369 recount withholds the credit (T1.2 AC2/AC3 proof unexercised, AC3 expiry and size ceiling); open items are carried rows titled `(S348)` | yes | no | no | n/a | no — landed |
 | 10.8.1-T2 | L | Hands-on spike on two candidates | yes | no | no | T2.1-T2.2 (candidate A) ; T2.3-T2.4 (candidate B) | no — needs two managed-provider accounts/credentials to provision and measure |
 | 11.9.2-T2 | S | Reconcile the audit chain with deletion; LANDED by S147 (#304, a36bccf5; counted in the section 2 totals, its Landed task groups row is added at a later close-out because an insert shifts STATUS.md:N cites): T2.1 written rule, T2.2 audit payload schema plus an erasure-then-verify test | yes | no | no | n/a | yes |
 
