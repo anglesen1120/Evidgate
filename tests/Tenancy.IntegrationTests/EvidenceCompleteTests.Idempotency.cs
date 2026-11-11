@@ -151,6 +151,7 @@ public sealed partial class EvidenceCompleteTests
 
         // The caller's token identity is part of the idempotency hash (F3): another principal replaying the
         // same key is a conflict, never the first caller's stored response.
+        // Two principal hosts must be live at once, so both stay unpooled: the pool holds one host per variant.
         await using var other = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database), world.Org, world.Project, Writer(OtherJti), _store.Configuration());
         using var otherClient = other.CreateClient();

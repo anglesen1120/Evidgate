@@ -59,7 +59,7 @@ public sealed partial class EvidenceCompleteTests
         // The route names no project: a project-scoped principal (the CI producer token) is required, and an
         // org-scoped service principal is refused with project_required before any storage work (T1 decision 10).
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;

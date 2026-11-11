@@ -36,8 +36,8 @@ namespace Tenancy.IntegrationTests;
 /// <see cref="FaultInjectingObjectStorage"/> over the real store. Each test names the plan line it verifies.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex (00 §7).</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -67,7 +67,6 @@ public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixtu
     private readonly SeaweedFsStore _store = store;
 
     private sealed record World(
-        TenancyApiFactory Api,
         TenancyApiFactory BaseHost,
         WebApplicationFactory<Program> Host,
         HttpClient Client,
@@ -82,7 +81,6 @@ public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixtu
             Client.Dispose();
             await Host.DisposeAsync();
             await BaseHost.DisposeAsync();
-            await Api.DisposeAsync();
         }
     }
 
@@ -98,7 +96,7 @@ public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixtu
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -111,12 +109,13 @@ public sealed class EvidenceCompleteSniffFaultTests(PostgresTenancyFixture fixtu
         }
 
         var storage = new FaultInjectingObjectStorage();
+        // The decorated factory builds a host per test, so the base host it decorates stays private.
         var baseHost = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(database), org, project, Writer(), _store.Configuration());
         var host = baseHost.WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services => FaultInjectingObjectStorage.Decorate(services, storage)));
 
-        return new World(api, baseHost, host, host.CreateClient(), database, user, org, project, storage);
+        return new World(baseHost, host, host.CreateClient(), database, user, org, project, storage);
     }
 
     /// <summary>
