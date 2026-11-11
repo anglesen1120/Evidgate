@@ -489,6 +489,7 @@ public sealed class HealingLlmGatewayTests
 
         // The key handler resolves the configured secret per request; this world has no secret store, so one fixed value.
         services.TryAddSingleton<ISecretProvider>(new FixedSecret());
+        services.PostConfigure<HealingProviderOptions>(options => options.ApiKeySecret = SecretNames.HealingLlmApiKey);
 
         services
             .AddHttpClient<HttpHealingLlmProvider>()

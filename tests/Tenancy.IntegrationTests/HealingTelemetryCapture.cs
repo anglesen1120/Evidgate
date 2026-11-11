@@ -10,6 +10,10 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 internal static class HealingTelemetryCapture
 {
+    // The meter is process-wide and the tests run in parallel, so a measurement counts for the test whose execution
+    // context started the listener, never for a neighbour that refused a call at the same moment.
+    private static readonly AsyncLocal<ConcurrentBag<string>?> Current = new();
+
     /// <summary>
     /// Listens for <c>evidgate_healing_llm_refused_total</c> and collects the <c>reason</c> tag of every measurement
     /// taken until the returned listener is disposed.
@@ -19,6 +23,7 @@ internal static class HealingTelemetryCapture
     {
         var bag = new ConcurrentBag<string>();
         reasons = bag;
+        Current.Value = bag;
         var listener = new MeterListener
         {
             InstrumentPublished = (instrument, meterListener) =>
@@ -34,7 +39,7 @@ internal static class HealingTelemetryCapture
         {
             foreach (var tag in tags)
             {
-                if (tag.Key == "reason" && tag.Value is string reason)
+                if (ReferenceEquals(Current.Value, bag) && tag.Key == "reason" && tag.Value is string reason)
                 {
                     bag.Add(reason);
                 }
