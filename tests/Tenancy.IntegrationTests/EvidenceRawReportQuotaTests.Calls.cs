@@ -26,7 +26,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         var spy = new QuotaGateSpy();
         var world = await StartAsync(services => ReplaceQuotaGate(services, inner => new SpyQuotaGate(inner, spy)));
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world, "beta", "gamma");
         var artifactId = await SeedArtifactAsync(world, ThreeEventBody);
         await SeedCounterAsync(counters, world, used: 0m, limit: 100m);
@@ -76,7 +76,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         var clock = new FakeTimeProvider(MidMarch);
         var world = await StartAsync(services => UseClock(services, clock));
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
@@ -183,7 +183,7 @@ public sealed partial class EvidenceRawReportQuotaTests
     {
         var world = await StartAsync();
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world);
         var reportArtifact = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 0m, limit: 1m);
@@ -195,8 +195,8 @@ public sealed partial class EvidenceRawReportQuotaTests
         var ingestRun = await PlannedExecutionSeeder.SeedPlanAsync(_fixture, world.Database, world.Org, 1);
         await IngestTestWorld.SeedSlotsAsync(
             _fixture, world.Database, world.Org, ingestRun.RunId, 1, IngestTestWorld.Jti);
-        var ingestHost = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(world.Database),
+        var ingestHost = _hosts.WithPrincipal(
+            world.Database,
             world.Org,
             world.Project,
             IngestTestWorld.Writer(projectScope: world.Project));
@@ -268,7 +268,7 @@ public sealed partial class EvidenceRawReportQuotaTests
     {
         var world = await StartAsync();
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
@@ -307,7 +307,7 @@ public sealed partial class EvidenceRawReportQuotaTests
     {
         var world = await StartAsync();
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world);
         var artifact = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 1m, limit: 1m);
@@ -357,7 +357,7 @@ public sealed partial class EvidenceRawReportQuotaTests
             ReplaceQuotaGate(services, inner => gate.Wrap(inner));
         });
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         // No room for a single event and a run that has already closed: room would not admit the report, so waiting for
@@ -393,7 +393,7 @@ public sealed partial class EvidenceRawReportQuotaTests
     {
         var world = await StartAsync();
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 0m, limit: 100m);

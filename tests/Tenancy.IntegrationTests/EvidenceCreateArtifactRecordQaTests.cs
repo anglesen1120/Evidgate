@@ -22,15 +22,16 @@ namespace Tenancy.IntegrationTests;
 /// refusals of the C2 pipeline. Real pipeline and real PostgreSQL, as in the existing class.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceCreateArtifactRecordQaTests
+public sealed class EvidenceCreateArtifactRecordQaTests : IClassFixture<TenancyHostPool>
 {
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private const string Checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     private const string ZipType = "application/zip";
 
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public EvidenceCreateArtifactRecordQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public EvidenceCreateArtifactRecordQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project) : IAsyncDisposable
     {
@@ -44,7 +45,7 @@ public sealed class EvidenceCreateArtifactRecordQaTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

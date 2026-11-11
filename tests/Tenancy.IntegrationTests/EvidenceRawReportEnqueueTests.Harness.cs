@@ -38,7 +38,7 @@ public sealed partial class EvidenceRawReportEnqueueTests
     private async Task<World> StartAsync(bool outOfProcess)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         Guid org;
         Guid project;
 
@@ -52,8 +52,9 @@ public sealed partial class EvidenceRawReportEnqueueTests
         var configuration = _store.Configuration();
         configuration[OutOfProcessKey] = outOfProcess ? "true" : "false";
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database),
+        // The out-of-process switch is this test's own configuration, so the host stays private instead of pooled.
+        var host = _hosts.WithPrincipal(
+            database,
             org,
             project,
             RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-report-enqueue"),

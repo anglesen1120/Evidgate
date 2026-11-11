@@ -31,26 +31,28 @@ public sealed partial class EvidenceParseTaskTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
         Guid project;
 
-        using (var setup = api.CreateClient())
+        await using (var setupHost = _hosts.RealResolver(database))
         {
+            using var setup = setupHost.CreateClient();
             user = Guid.CreateVersion7();
             org = await CreateOrgAsync(setup, user, Unique.Slug("acme"));
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database),
+        // Seeded before the host exists, so a seeding failure cannot leave a private host undisposed.
+        var runId = await RunRowSeeder.SeedRunAsync(_fixture, database, org);
+
+        // The store configuration is this test's own, so the host stays private instead of pooled.
+        var host = _hosts.WithPrincipal(
+            database,
             org,
             project,
             RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-parse-1"),
             _store.Configuration());
-
-        var runId = await RunRowSeeder.SeedRunAsync(_fixture, database, org);
 
         return new World(host, database, org, project, runId);
     }
@@ -62,26 +64,28 @@ public sealed partial class EvidenceParseTaskTests
     private async Task<World> CreateOtherWorldAsync(string slug)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         var unique = Unique.Slug(slug);
         Guid org;
         Guid project;
 
-        using (var setup = api.CreateClient())
+        await using (var setupHost = _hosts.RealResolver(database))
         {
+            using var setup = setupHost.CreateClient();
             var user = Guid.CreateVersion7();
             org = await CreateOrgAsync(setup, user, unique);
             project = await CreateProjectAsync(setup, user, org, unique + "-project");
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database),
+        // Seeded before the host exists, so a seeding failure cannot leave a private host undisposed.
+        var runId = await RunRowSeeder.SeedRunAsync(_fixture, database, org);
+
+        // The store configuration is this test's own, so the host stays private instead of pooled.
+        var host = _hosts.WithPrincipal(
+            database,
             org,
             project,
             RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-parse-2"),
             _store.Configuration());
-
-        var runId = await RunRowSeeder.SeedRunAsync(_fixture, database, org);
 
         return new World(host, database, org, project, runId);
     }

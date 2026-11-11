@@ -37,8 +37,8 @@ namespace Tenancy.IntegrationTests;
 /// while a batch with room charges the counter exactly once.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>The registry's producer kind for a pytest JUnit XML report.</summary>
     private const string ProducerKind = "pytest-junitxml";
@@ -87,6 +87,8 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
 
     private readonly SeaweedFsStore _store = store;
 
+    private readonly TenancyHostPool _hosts = hosts;
+
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
     private sealed record World(
@@ -104,7 +106,7 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
     {
         var world = await StartAsync();
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 0m, limit: 100m);
@@ -128,7 +130,7 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
     {
         var world = await StartAsync();
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 79m, limit: 100m);
@@ -153,7 +155,7 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
     {
         var world = await StartAsync();
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world, "beta", "gamma");
         var artifactId = await SeedArtifactAsync(world, ThreeEventBody);
         await SeedCounterAsync(counters, world, used: 9m, limit: 10m);
@@ -185,7 +187,7 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
     {
         var world = await StartAsync();
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
@@ -207,7 +209,7 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
     {
         var world = await StartAsync();
         await using var _ = world;
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 0m, limit: 0m);
@@ -227,7 +229,7 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
     private async Task<World> StartAsync(Action<IServiceCollection>? services = null)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -239,8 +241,8 @@ public sealed partial class EvidenceRawReportQuotaTests(PostgresTenancyFixture f
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("quota-project"));
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database),
+        var host = _hosts.WithPrincipal(
+            database,
             org,
             project,
             RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-report-quota"),

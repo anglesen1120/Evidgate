@@ -14,14 +14,14 @@ namespace Tenancy.IntegrationTests;
 /// contract is what AC5's visibility checks pin.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class CaseAttemptWriterTests
+public sealed class CaseAttemptWriterTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key that matches no plan: 64 lowercase hex.</summary>
     private const string UnplannedKey = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public CaseAttemptWriterTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public CaseAttemptWriterTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project)
         : IAsyncDisposable
@@ -37,7 +37,7 @@ public sealed class CaseAttemptWriterTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

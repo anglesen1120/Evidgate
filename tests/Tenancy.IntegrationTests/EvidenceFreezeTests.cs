@@ -27,11 +27,11 @@ namespace Tenancy.IntegrationTests;
 /// <see cref="FreezeResult.ArtifactSetHash"/> is the canonical digest of the ready set.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceFreezeTests
+public sealed class EvidenceFreezeTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
-
-    public EvidenceFreezeTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public EvidenceFreezeTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     // ------------------------------------------------------------------ fixture
 
@@ -49,7 +49,7 @@ public sealed class EvidenceFreezeTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

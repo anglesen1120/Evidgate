@@ -17,7 +17,7 @@ namespace Tenancy.IntegrationTests;
 /// issue is 422 <c>request_invalid</c>.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class ReportComparisonTests
+public sealed partial class ReportComparisonTests : IClassFixture<TenancyHostPool>
 {
     private const string ProducerKind = "pytest-junitxml";
     private const string ParserId = "junit-pytest";
@@ -29,8 +29,8 @@ public sealed partial class ReportComparisonTests
     private const string PayloadHash = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public ReportComparisonTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public ReportComparisonTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project)
         : IAsyncDisposable

@@ -25,7 +25,7 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceUploadUrlTests
+public sealed class EvidenceUploadUrlTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex (00 §7).</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -65,8 +65,8 @@ public sealed class EvidenceUploadUrlTests
     };
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public EvidenceUploadUrlTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public EvidenceUploadUrlTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(
         TenancyApiFactory Api,
@@ -100,7 +100,7 @@ public sealed class EvidenceUploadUrlTests
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -112,8 +112,7 @@ public sealed class EvidenceUploadUrlTests
             project = await CreateProjectAsync(setup, user, org, "checkout");
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database), org, project, principal, ObjectStorage);
+        var host = _hosts.WithPrincipal(database, org, project, principal, ObjectStorage);
 
         return new World(api, host, host.CreateClient(), database, user, org, project);
     }
@@ -467,8 +466,8 @@ public sealed class EvidenceUploadUrlTests
 
         // A second principal of the same project replays the key with the same body: the token identity is part of
         // the idempotency hash (F3), so it is a conflict and never receives the first caller's presigned URL.
-        await using var other = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(world.Database), world.Org, world.Project, Writer(OtherJti), ObjectStorage);
+        await using var other = _hosts.WithPrincipal(
+            world.Database, world.Org, world.Project, Writer(OtherJti), ObjectStorage);
         using var otherClient = other.CreateClient();
         var conflict = await otherClient.SendAsync(HttpMethod.Post, "/v1/artifacts/upload-url", _ => { }, Body(runId), key);
 
