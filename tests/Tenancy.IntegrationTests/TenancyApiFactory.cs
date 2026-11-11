@@ -45,6 +45,7 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     private readonly bool _realEvaluator;
     private readonly bool _realResolver;
     private readonly bool _ci;
+    private readonly string _createdAt;
 
     private TenancyApiFactory(string connectionString, bool realEvaluator, bool realResolver = false, bool ci = false)
     {
@@ -52,6 +53,7 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
         _realEvaluator = realEvaluator;
         _realResolver = realResolver;
         _ci = ci;
+        _createdAt = TenancyHostLeakGuard.Site();
     }
 
     /// <summary>The GitHub OIDC stand-in (a local RSA keypair) when built with <see cref="Ci"/>.</summary>
@@ -115,6 +117,7 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     internal ValueTask TearDownAsync()
     {
         _release = null;
+        TenancyHostLeakGuard.Stopped(this);
         return base.DisposeAsync();
     }
 
@@ -126,6 +129,8 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
             release();
             return ValueTask.CompletedTask;
         }
+
+        TenancyHostLeakGuard.Stopped(this);
 
         return base.DisposeAsync();
     }
@@ -143,6 +148,7 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
             return;
         }
 
+        TenancyHostLeakGuard.Stopped(this);
         base.Dispose(disposing);
     }
 
@@ -251,6 +257,7 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     /// <inheritdoc />
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        TenancyHostLeakGuard.Started(this, _createdAt);
         builder.UseEnvironment("Production");
         builder.ConfigureAppConfiguration((_, configuration) =>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
