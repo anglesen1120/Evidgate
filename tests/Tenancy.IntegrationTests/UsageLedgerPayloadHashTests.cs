@@ -30,7 +30,7 @@ namespace Tenancy.IntegrationTests;
 /// </remarks>
 [Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
-public sealed partial class UsageLedgerPayloadHashTests
+public sealed partial class UsageLedgerPayloadHashTests : IClassFixture<TenancyHostPool>
 {
     private const string Period = "2026-10";
 
@@ -40,7 +40,10 @@ public sealed partial class UsageLedgerPayloadHashTests
 
     private readonly PostgresTenancyFixture _fixture;
 
-    public UsageLedgerPayloadHashTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+
+    public UsageLedgerPayloadHashTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) =>
+        (_fixture, _hosts) = (fixture, hosts);
 
     /// <summary>One database and two hosts, with a log sink on the write path's host.</summary>
     private sealed record World(
@@ -66,13 +69,14 @@ public sealed partial class UsageLedgerPayloadHashTests
         var database = await _fixture.SharedDatabaseAsync();
 
         var connectionString = _fixture.AppConnectionString(database);
-        var api = TenancyApiFactory.RealResolver(connectionString);
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
         var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
 
         // The write path's host, with a sink so a conflict's log line and level can be read back.
+        // Unpooled: the sink is per test, so the host that carries it cannot be shared.
         var log = new ConflictLogSink();
         var commands = TenancyApiFactory.GrantAll(
             connectionString,

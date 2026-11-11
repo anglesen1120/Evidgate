@@ -19,12 +19,17 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
-public sealed class SecretScanConsumerTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed class SecretScanConsumerTests(
+    PostgresTenancyFixture fixture,
+    SeaweedFsStore store,
+    TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
     private static string PlantedKey => string.Concat("AK", "IA", new string('Q', 16));
     private static byte[] FlaggedBody => Encoding.UTF8.GetBytes("<report> " + PlantedKey + " </report>");
+
+    private readonly TenancyHostPool _hosts = hosts;
 
     [Fact]
     public async Task Consumer_OutboxDerivedTask_ClaimsRegisteredHandlerAndPersistsDone()
@@ -210,12 +215,13 @@ public sealed class SecretScanConsumerTests(PostgresTenancyFixture fixture, Seaw
     private async Task<World> StartAsync()
     {
         var database = await fixture.SharedDatabaseAsync();
-        await using var setupHost = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
+        await using var setupHost = _hosts.RealResolver(database);
         using var setup = setupHost.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(setup, user, Unique.Slug("scan"));
         var project = await CreateProjectAsync(setup, user, org, Unique.Slug("scan"));
         var logs = new CaptureLogs();
+        // Unpooled: the log sink and the task consumer wiring are this test's own.
         var host = TenancyApiFactory.WithPrincipal(fixture.AppConnectionString(database), org, project,
             RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "scan-test"),
             store.Configuration(), services =>

@@ -15,14 +15,16 @@ namespace Tenancy.IntegrationTests;
 /// These cases cover the two write routes, the two read routes and the per-run data a suite revision pins.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class FixtureApiTests
+public sealed partial class FixtureApiTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>A request that publishes its own tenant; a project-scoped host needs no header at all.</summary>
     private static readonly Action<HttpRequestHeaders> NoHeaders = _ => { };
 
     private readonly PostgresTenancyFixture _fixture;
 
-    public FixtureApiTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+
+    public FixtureApiTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     /// <summary>One project of one org, its founder and the client the fixture routes are called on.</summary>
     internal sealed record World(
@@ -56,7 +58,7 @@ public sealed partial class FixtureApiTests
     private async Task<World> StartAsync(string slug = "acme")
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug(slug));
