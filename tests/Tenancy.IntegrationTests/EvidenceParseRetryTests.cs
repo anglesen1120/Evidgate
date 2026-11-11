@@ -60,6 +60,7 @@ public sealed class EvidenceParseRetryTests(PostgresTenancyFixture fixture, Seaw
     {
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
         var database = owned.Name;
+        // The retry consumer polls a dedicated database, so its setup host must stay private.
         await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid org;
         Guid project;
@@ -84,6 +85,7 @@ public sealed class EvidenceParseRetryTests(PostgresTenancyFixture fixture, Seaw
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
 
+        // The blocking runner and queue registrations carry this test's cancellation state.
         await using var host = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(database),
             org,

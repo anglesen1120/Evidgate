@@ -49,7 +49,7 @@ public sealed partial class EvidenceRawReportParseTests
     [Fact]
     public async Task No_Transaction_Is_Open_While_The_Child_Runs()
     {
-        var world = await StartAsync();
+        var world = await StartAsync(isolateConnections: true);
         await using var _ = world;
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, ReportBody);

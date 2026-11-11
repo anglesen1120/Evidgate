@@ -32,8 +32,8 @@ namespace Tenancy.IntegrationTests;
 /// migration, and the run's one planned execution is seeded as the owner seam, the way the run's other parents are.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>The registry's producer kind for a pytest JUnit XML report.</summary>
     private const string ProducerKind = "pytest-junitxml";
@@ -325,10 +325,10 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
     // Harness
     // ---------------------------------------------------------------------------------------------------------------
 
-    private async Task<World> StartAsync()
+    private async Task<World> StartAsync(bool isolateConnections = false)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -340,19 +340,17 @@ public sealed partial class EvidenceRawReportParseTests(PostgresTenancyFixture f
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        // The database is shared with sibling classes, so the host's connections carry a name only this world uses: a
-        // probe on pg_stat_activity then sees this handler's backends and not a neighbour's.
+        var principal = RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-report-1");
         var applicationName = "evidgate-raw-report-" + Guid.NewGuid().ToString("N");
         var hostConnection = new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database))
         {
             ApplicationName = applicationName,
         }.ConnectionString;
-        var host = TenancyApiFactory.WithPrincipal(
-            hostConnection,
-            org,
-            project,
-            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-report-1"),
-            _store.Configuration());
+
+        // The transaction probe counts this world's own backends, so only that case needs a private host.
+        var host = isolateConnections
+            ? TenancyApiFactory.WithPrincipal(hostConnection, org, project, principal, _store.Configuration())
+            : hosts.WithPrincipalConfigured(database, org, project, principal, _store.Configuration());
 
         var runId = await RunRowSeeder.SeedRunAsync(_fixture, database, org);
 

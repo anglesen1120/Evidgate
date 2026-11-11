@@ -42,8 +42,8 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class EvidenceCompleteTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed partial class EvidenceCompleteTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex (00 §7).</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -106,7 +106,7 @@ public sealed partial class EvidenceCompleteTests(PostgresTenancyFixture fixture
     private async Task<World> StartAsync(RequestPrincipal principal, string? database = null)
     {
         database ??= await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -118,8 +118,7 @@ public sealed partial class EvidenceCompleteTests(PostgresTenancyFixture fixture
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database), org, project, principal, _store.Configuration());
+        var host = hosts.WithPrincipalConfigured(database, org, project, principal, _store.Configuration());
 
         return new World(api, host, host.CreateClient(), database, user, org, project);
     }

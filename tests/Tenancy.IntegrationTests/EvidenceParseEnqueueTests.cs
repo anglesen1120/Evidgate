@@ -29,8 +29,8 @@ namespace Tenancy.IntegrationTests;
 /// configuration, which is exactly the switch the module binds for the completion to read.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class EvidenceParseEnqueueTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed class EvidenceParseEnqueueTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex (00 §7).</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -172,7 +172,7 @@ public sealed class EvidenceParseEnqueueTests(PostgresTenancyFixture fixture, Se
     private async Task<World> StartAsync(bool outOfProcess)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = hosts.RealResolver(database);
         Guid org;
         Guid project;
 
@@ -186,8 +186,8 @@ public sealed class EvidenceParseEnqueueTests(PostgresTenancyFixture fixture, Se
         var configuration = _store.Configuration();
         configuration[OutOfProcessKey] = outOfProcess ? "true" : "false";
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database),
+        var host = hosts.WithPrincipalConfigured(
+            database,
             org,
             project,
             RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-parse-enqueue"),

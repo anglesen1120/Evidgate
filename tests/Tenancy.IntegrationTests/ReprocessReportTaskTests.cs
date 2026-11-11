@@ -37,8 +37,11 @@ namespace Tenancy.IntegrationTests;
 /// observable without shipping a second dialect.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed partial class ReprocessReportTaskTests(
+    PostgresTenancyFixture fixture,
+    SeaweedFsStore store,
+    TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>The dialect the built-in release implements.</summary>
     private const string ParserId = "junit-pytest";
@@ -79,6 +82,8 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
     private readonly PostgresTenancyFixture _fixture = fixture;
 
     private readonly SeaweedFsStore _store = store;
+
+    private readonly TenancyHostPool _hosts = hosts;
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -251,7 +256,7 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -265,6 +270,7 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
 
         // The pinned release's mapper: the real dialect's mapper under its own version, so the pinned-release rule is
         // observable without a second production dialect (the registry row naming that pair is written with the request).
+        // Unpooled: the pinned release mapper and the object-store settings are this test's own services.
         var host = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(database),
             org,

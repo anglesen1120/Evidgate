@@ -74,6 +74,7 @@ public sealed class EvidenceCompleteRaceTests(PostgresTenancyFixture fixture, Se
         _fixture.StartDedicatedAsync(async owned =>
         {
             var database = owned.Name;
+            // Every world here runs on its own database, so its hosts are private rather than pooled.
             var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
             Guid user;
             Guid org;

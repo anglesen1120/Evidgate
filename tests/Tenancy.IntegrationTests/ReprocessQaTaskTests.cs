@@ -105,6 +105,7 @@ public sealed partial class ReprocessReportTaskTests
 
     private async Task DriveMissingBytesToDeadLetterAsync(World world, Guid parsing)
     {
+        // Unpooled: the task queue, the dispatch loop and the mapper wiring are this test's own.
         await using var host = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database), world.Org, world.Project,
             RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "reprocess-missing-bytes"),

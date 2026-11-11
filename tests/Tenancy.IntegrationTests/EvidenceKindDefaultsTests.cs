@@ -91,6 +91,7 @@ public sealed class EvidenceKindDefaultsTests(PostgresTenancyFixture fixture, Se
     private Task<World> StartAsync(RequestPrincipal? principal = null) =>
         fixture.StartDedicatedAsync(async database =>
         {
+            // Whole-database artifact counts require a dedicated database and private setup host.
             var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
             Guid user;
             Guid org;
@@ -103,6 +104,7 @@ public sealed class EvidenceKindDefaultsTests(PostgresTenancyFixture fixture, Se
                 project = await CreateProjectAsync(setup, user, org, "checkout");
             }
 
+            // The principal host must use the same dedicated database as the counted rows.
             var host = TenancyApiFactory.WithPrincipal(
                 fixture.AppConnectionString(database), org, project, principal ?? Writer(), store.Configuration());
 

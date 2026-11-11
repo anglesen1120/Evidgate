@@ -26,7 +26,8 @@ namespace Tenancy.IntegrationTests;
 /// (the counting stream trips at the byte that passes the limit).
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixture)
+public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    : IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex (00 §7).</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -64,7 +65,7 @@ public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixtu
     private async Task<World> StartAsync()
     {
         var database = await fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
+        var api = hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -76,8 +77,8 @@ public sealed class EvidenceUploadUrlBodyLimitTests(PostgresTenancyFixture fixtu
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            fixture.AppConnectionString(database), org, project, Writer(), ObjectStorage);
+        var host = hosts.WithPrincipalConfigured(
+            database, org, project, Writer(), ObjectStorage);
 
         return new World(api, host, host.CreateClient(), database, org, project);
     }
