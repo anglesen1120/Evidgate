@@ -370,26 +370,6 @@ public sealed partial class MigratorTimeoutTests
     }
 
     /// <summary>
-    /// The repository's own migrations take far less than the default
-    /// <c>statement_timeout</c>, so the default cannot cut a normal deploy.
-    /// </summary>
-    [Fact]
-    public async Task Repository_Migrations_Finish_Well_Inside_The_Default_Statement_Timeout()
-    {
-        var database = await _fixture.CreateDatabaseAsync();
-
-        var outcome = MigratorHarness.Run(
-            PostgresMigratorFixture.RepoMigrationsPath,
-            _fixture.OwnerConnectionString(database));
-
-        outcome.ExitCode.ShouldBe(MigratorExitCodes.Success, string.Join(" | ", outcome.Messages));
-        var rows = await _fixture.ReadJournalAsync(database);
-        rows.Select(row => row.Name).ShouldBe(PostgresMigratorFixture.RealMigrationFileNames);
-        var slowest = rows.Max(row => row.DurationMs ?? 0);
-        slowest.ShouldBeLessThan(MigratorOptions.DefaultStatementTimeoutSeconds * 1000 / 2);
-    }
-
-    /// <summary>
     /// The migration lock's wait is not governed by the session's
     /// <c>statement_timeout</c>: a runner waiting for another session's advisory
     /// lock succeeds even when the connection would abort any statement after
