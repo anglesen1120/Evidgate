@@ -78,7 +78,7 @@ public sealed class SharedKeyRingTests
     [Fact]
     public async Task An_Unreachable_Key_Store_Stops_The_Start_And_Never_Yields_An_Ephemeral_Ring()
     {
-        await using var closed = NpgsqlDataSource.Create("Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Timeout=1;Pooling=false");
+        await using var closed = NpgsqlDataSource.Create("Host=127.0.0.1;Port=1;Username=evidgate_app;Timeout=1;Pooling=false");
         var services = new ServiceCollection();
         services.AddDataProtection();
         services.AddSingleton(new DataProtectionKeyRepository(closed));
@@ -127,7 +127,7 @@ public sealed class SharedKeyRingTests
     public async Task The_Composed_Host_Refuses_To_Start_When_Its_Key_Store_Is_Unreachable()
     {
         await using var database = await _postgres.CreateMigratedDatabaseAsync();
-        await using var closed = NpgsqlDataSource.Create("Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Timeout=1;Pooling=false");
+        await using var closed = NpgsqlDataSource.Create("Host=127.0.0.1;Port=1;Username=evidgate_app;Timeout=1;Pooling=false");
         using var factory = new RequiredSelfCheckApiFactory(database, services =>
         {
             // The repository is the only ring source, so replacing the registration replaces the source itself.

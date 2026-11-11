@@ -169,7 +169,7 @@ public sealed class ReplayCacheTests : SessionTestBase
     [Fact]
     public async Task An_Unreachable_Database_Is_Never_Treated_As_First_Use()
     {
-        await using var closed = NpgsqlDataSource.Create("Host=127.0.0.1;Port=1;Username=x;Password=x;Timeout=1;Pooling=false");
+        await using var closed = NpgsqlDataSource.Create("Host=127.0.0.1;Port=1;Username=x;Timeout=1;Pooling=false");
         var cache = new LoginReplayCache(closed);
 
         await Should.ThrowAsync<Exception>(async () => await cache.TryConsumeAsync("fake:state-1", Lifetime, Token));
