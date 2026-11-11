@@ -53,6 +53,8 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource, TimeP
         string provider,
         string subject,
         string email,
+        string? requestId,
+        string? traceId,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(provider);
@@ -68,8 +70,8 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource, TimeP
         try
         {
             await using var command = dataSource.CreateCommand(
-                "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
-                + "cast(@cookie_hmacs as bytea[]), @now, @provider, @subject, @email, @identity_id)");
+                "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity_audited("
+                + "cast(@cookie_hmacs as bytea[]), @now, @provider, @subject, @email, @identity_id, @request_id, @trace_id)");
 
             // One element: the authenticator's proof of the live session, which after a lazy rotation is already
             // the hash of the newly issued cookie.
@@ -90,6 +92,17 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource, TimeP
             // No profile name: the function has no argument for one, because a second provider's display name must
             // not rename an account whose name the login upsert (0042) owns.
             command.Parameters.AddWithValue("identity_id", Guid.CreateVersion7());
+
+            // Explicit text type: "the request carried none" is legal and a DBNull has no CLR type to infer from.
+            // The definer nulls a value that is not a safe request id or a 32-hex trace id.
+            command.Parameters.Add(new NpgsqlParameter("request_id", NpgsqlDbType.Text)
+            {
+                Value = (object?)requestId ?? DBNull.Value,
+            });
+            command.Parameters.Add(new NpgsqlParameter("trace_id", NpgsqlDbType.Text)
+            {
+                Value = (object?)traceId ?? DBNull.Value,
+            });
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))

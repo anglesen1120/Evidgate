@@ -38,7 +38,9 @@ internal enum LinkResult
 /// <summary>The answer of one link attempt.</summary>
 /// <param name="Result">The outcome.</param>
 /// <param name="MovedFromUserId">The user the identity was taken from, set exactly when <see cref="Result"/> is
-/// <see cref="LinkResult.Moved"/>; null otherwise. It is the <c>previous_id</c> of the <c>auth.link_move</c> audit row.</param>
+/// <see cref="LinkResult.Moved"/>; null otherwise. The <c>auth.link_move</c> row's own <c>previous_id</c> is
+/// written by the definer that performs the move, in the same transaction, so this value is the outcome's
+/// description rather than something a caller audits.</param>
 internal sealed record LinkOutcome(LinkResult Result, Guid? MovedFromUserId);
 
 /// <summary>
@@ -72,7 +74,8 @@ internal interface ILinkIdentityStore
 {
     /// <summary>
     /// Attaches the provider identity to the account the authenticated session belongs to, or answers why it
-    /// cannot.
+    /// cannot. A first-time link or move also appends <c>auth.link</c> (and <c>auth.link_move</c>) to the chain of
+    /// every active org of the account in the same transaction: either all of it commits or none.
     /// </summary>
     /// <param name="sessionProof">
     /// The HMAC the deployment's session authenticator computed for the LIVE session's cookie value
@@ -83,6 +86,8 @@ internal interface ILinkIdentityStore
     /// <param name="provider">The provider's registered name.</param>
     /// <param name="subject">The provider's verified subject for this identity.</param>
     /// <param name="email">The verified address the provider reported (stored as <c>email_at_provider</c>).</param>
+    /// <param name="requestId">The 00 §9.1 request id of the call, or null; the definer nulls an unsafe value.</param>
+    /// <param name="traceId">The W3C trace id of the call, or null; the definer nulls an invalid value.</param>
     /// <param name="cancellationToken">Request abort.</param>
     /// <returns>
     /// Success with the <see cref="LinkOutcome"/> — the business answers, including the refusals — or a failure
@@ -98,5 +103,7 @@ internal interface ILinkIdentityStore
         string provider,
         string subject,
         string email,
+        string? requestId,
+        string? traceId,
         CancellationToken cancellationToken);
 }
