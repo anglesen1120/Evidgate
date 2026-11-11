@@ -20,6 +20,7 @@
          adopts it by linking these files plus ContainerImages.cs, the same way
          *.UnitTests picks up tests/Shared/NoNetworkGuard.cs (01.6.1-T2, T1.1). -->
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Compile Include="..\Shared\ContainerStart.cs" Link="ContainerStart.cs" />
     <Compile Include="..\Shared\DatabaseFixture.cs" Link="Shared/DatabaseFixture.cs" />
     <!-- 01.6.1-T3.1: the fixture-corpus loader (Fixture, FixtureMeta,
          FixtureShapeException, Load/LoadAll/TryLoad over tests/Shared). -->

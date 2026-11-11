@@ -47,27 +47,26 @@ public sealed class SeaweedFsFixture : IAsyncLifetime
     {
         var identity = ReadFirstIdentity(_configFile);
 
-        _container = new ContainerBuilder(ContainerImages.SeaweedFs)
-            .WithResourceMapping(_configFile, new FileInfo(ContainerConfigPath))
-            .WithCommand(
-                "server",
-                "-s3",
-                $"-s3.port={S3Port}",
-                $"-s3.config={ContainerConfigPath}",
-                // Each bucket that receives an object takes its own volume; the default slot count
-                // runs out after a handful of buckets and answers InternalError on the next write.
-                "-volume.max=64")
-            .WithPortBinding(S3Port, assignRandomHostPort: true)
-            .WithWaitStrategy(
-                Wait.ForUnixContainer()
-                    .UntilHttpRequestIsSucceeded(
-                        request => request
-                            .ForPort(S3Port)
-                            .ForPath("/")
-                            .ForStatusCodeMatching(_ => true)))
-            .Build();
-
-        await _container.StartAsync();
+        _container = await ContainerStart.StartAsync(
+            () => new ContainerBuilder(ContainerImages.SeaweedFs)
+                .WithResourceMapping(_configFile, new FileInfo(ContainerConfigPath))
+                .WithCommand(
+                    "server",
+                    "-s3",
+                    $"-s3.port={S3Port}",
+                    $"-s3.config={ContainerConfigPath}",
+                    // Each bucket that receives an object takes its own volume; the default slot count
+                    // runs out after a handful of buckets and answers InternalError on the next write.
+                    "-volume.max=64")
+                .WithPortBinding(S3Port, assignRandomHostPort: true)
+                .WithWaitStrategy(
+                    Wait.ForUnixContainer()
+                        .UntilHttpRequestIsSucceeded(
+                            request => request
+                                .ForPort(S3Port)
+                                .ForPath("/")
+                                .ForStatusCodeMatching(_ => true)))
+                .Build());
 
         Target = new S3ParityTarget
         {

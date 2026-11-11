@@ -239,17 +239,18 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// </summary>
     private async Task StartAsync()
     {
-        _container = new PostgreSqlBuilder(ContainerImages.Postgres)
-            .WithDatabase("evidgate")
-            .WithUsername("postgres")
-            .WithPassword("postgres")
-            // Dedicated copies open a second pool per class while the shared pools stay up; the
-            // image's default ceiling of 100 turns that into 53300 instead of the case under test.
-            .WithCommand("-c", "max_connections=200")
-            .Build();
         using var timeout = new CancellationTokenSource(StartTimeout);
         var cancellationToken = timeout.Token;
-        await _container.StartAsync(cancellationToken).ConfigureAwait(false);
+        _container = await ContainerStart.StartAsync(
+            () => new PostgreSqlBuilder(ContainerImages.Postgres)
+                .WithDatabase("evidgate")
+                .WithUsername("postgres")
+                .WithPassword("postgres")
+                // Dedicated copies open a second pool per class while the shared pools stay up; the
+                // image's default ceiling of 100 turns that into 53300 instead of the case under test.
+                .WithCommand("-c", "max_connections=200")
+                .Build(),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         await using (var connection = await OpenSuperuserCoreAsync("evidgate", cancellationToken).ConfigureAwait(false))
         {

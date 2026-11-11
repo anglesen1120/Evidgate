@@ -21,11 +21,7 @@ public sealed class PostgresPersistenceFixture : IAsyncLifetime
 {
     private const string DatabaseOwnerRole = "evidgate_owner";
 
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(ContainerImages.Postgres)
-        .WithDatabase("evidgate")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .Build();
+    private PostgreSqlContainer _container = null!;
 
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
@@ -45,7 +41,12 @@ public sealed class PostgresPersistenceFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        _container = await ContainerStart.StartAsync(
+            () => new PostgreSqlBuilder(ContainerImages.Postgres)
+                .WithDatabase("evidgate")
+                .WithUsername("postgres")
+                .WithPassword("postgres")
+                .Build());
 
         await using var connection = await OpenSuperuserAsync("postgres");
 
@@ -66,7 +67,7 @@ public sealed class PostgresPersistenceFixture : IAsyncLifetime
     public ValueTask DisposeAsync()
     {
         _template?.Dispose();
-        return _container.DisposeAsync();
+        return _container is null ? ValueTask.CompletedTask : _container.DisposeAsync();
     }
 
     /// <summary>The migrated template every per-test database is copied from.</summary>

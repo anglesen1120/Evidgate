@@ -33,11 +33,7 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
 
     private const string DatabaseOwnerRole = "evidgate_owner";
 
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(ContainerImages.Postgres)
-        .WithDatabase("evidgate")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .Build();
+    private PostgreSqlContainer? _container;
 
     /// <summary>The reused server's superuser coordinates (AC5); null starts the container instead.</summary>
     private readonly string? _externalSuperuserConnectionString =
@@ -68,7 +64,12 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
     {
         if (_externalSuperuserConnectionString is null)
         {
-            await _container.StartAsync().ConfigureAwait(false);
+            _container = await ContainerStart.StartAsync(
+                () => new PostgreSqlBuilder(ContainerImages.Postgres)
+                    .WithDatabase("evidgate")
+                    .WithUsername("postgres")
+                    .WithPassword("postgres")
+                    .Build()).ConfigureAwait(false);
         }
 
         await using var connection = await OpenSuperuserAsync("postgres").ConfigureAwait(false);
@@ -105,7 +106,11 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
     {
         if (_externalSuperuserConnectionString is null)
         {
-            await _container.DisposeAsync().ConfigureAwait(false);
+            if (_container is not null)
+            {
+                await _container.DisposeAsync().ConfigureAwait(false);
+            }
+
             _template?.Dispose();
             return;
         }
@@ -220,7 +225,7 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
 
     private string Build(string username, string password, string database)
     {
-        var builder = new NpgsqlConnectionStringBuilder(_externalSuperuserConnectionString ?? _container.GetConnectionString())
+        var builder = new NpgsqlConnectionStringBuilder(_externalSuperuserConnectionString ?? _container!.GetConnectionString())
         {
             Database = database,
             Username = username,
