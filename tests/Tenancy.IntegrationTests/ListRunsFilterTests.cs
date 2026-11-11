@@ -18,7 +18,7 @@ namespace Tenancy.IntegrationTests;
 /// <c>completeness</c> is null (never a fabricated <c>incomplete</c>) while a run has no evidence revision.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class ListRunsFilterTests
+public sealed class ListRunsFilterTests : IClassFixture<TenancyHostPool>
 {
     private const string ShaOne = "1111111111111111111111111111111111111111";
 
@@ -26,14 +26,14 @@ public sealed class ListRunsFilterTests
     private static readonly string ManifestHash = "sha256:" + new string('e', 64);
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public ListRunsFilterTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public ListRunsFilterTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     /// <summary>F43: <c>state</c> selects exactly the runs in that state and no other.</summary>
     [Fact]
     public async Task ListRunsFilter_State_MatchesExactly()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var queued = await CreateRunAsync(world);
         var complete = await CreateRunAsync(world);
         var canceled = await CreateRunAsync(world);
@@ -57,7 +57,7 @@ public sealed class ListRunsFilterTests
     [Fact]
     public async Task ListRunsFilter_DecisionPending_ReturnsEveryRun()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateRunAsync(world);
         await CreateRunAsync(world);
         await CreateRunAsync(world);
@@ -83,7 +83,7 @@ public sealed class ListRunsFilterTests
     [Fact]
     public async Task ListRunsFilter_Decision_OutOfVocabulary_422()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateRunAsync(world);
 
         foreach (var value in new[] { "PASS", "Fail", "Inconclusive", "Pending", "pendingly", "unknown", "pass ", string.Empty })
@@ -112,7 +112,7 @@ public sealed class ListRunsFilterTests
     [Fact]
     public async Task ListRunsFilter_RerunScope_MatchesExactly()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var original = await CreateRunAsync(world);
         var full = await CreateRunAsync(world);
         var failedSubset = await CreateRunAsync(world);
@@ -141,7 +141,7 @@ public sealed class ListRunsFilterTests
     [Fact]
     public async Task ListRunsFilter_ParentRunId_MatchesExactly()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var parent = await CreateRunAsync(world);
         var otherParent = await CreateRunAsync(world);
         var child = await CreateRunAsync(world);
@@ -174,7 +174,7 @@ public sealed class ListRunsFilterTests
     [Fact]
     public async Task ListRunsFilter_BadState_422()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateRunAsync(world);
 
         foreach (var value in new[] { "COMPLETE", "Complete", "unknown", "queued ", " pending", string.Empty })
@@ -201,7 +201,7 @@ public sealed class ListRunsFilterTests
     [Fact]
     public async Task ListRunsFilter_Combined_And()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var parent = await CreateRunAsync(world);
         var otherParent = await CreateRunAsync(world);
         var both = await CreateRunAsync(world);
@@ -237,7 +237,7 @@ public sealed class ListRunsFilterTests
     [Fact]
     public async Task ListRunsFilter_Completeness_FollowsTheCurrentEvidenceRevision()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var pending = await CreateRunAsync(world);
         var complete = await CreateRunAsync(world);
         var incomplete = await CreateRunAsync(world);
@@ -273,7 +273,7 @@ public sealed class ListRunsFilterTests
     [Fact]
     public async Task ListRunsFilter_Pagination_AcrossFilteredPages()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var ids = new List<Guid>();
         for (var index = 0; index < 5; index++)
         {
@@ -329,7 +329,7 @@ public sealed class ListRunsFilterTests
     [Fact]
     public async Task ListRunsFilter_OtherTenantRun_Absent()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var mine = await CreateRunAsync(world);
         await using var second = await StartSecondTenantAsync(world.Database, "rival");
         var theirs = await CreateRunAsync(second);
@@ -431,7 +431,7 @@ public sealed class ListRunsFilterTests
     /// </summary>
     private async Task<RunCreationTests.World> StartSecondTenantAsync(string database, string slug)
     {
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug(slug));

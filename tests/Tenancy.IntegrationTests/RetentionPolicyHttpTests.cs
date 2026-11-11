@@ -17,7 +17,7 @@ namespace Tenancy.IntegrationTests;
 /// outside <c>ServiceRoleCeiling</c>.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class RetentionPolicyHttpTests
+public sealed class RetentionPolicyHttpTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>The founder role of the test org: it holds <c>project:read</c> and <c>project:write</c>.</summary>
     private const string WriterRole = "tenant_admin";
@@ -37,8 +37,8 @@ public sealed class RetentionPolicyHttpTests
     };
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public RetentionPolicyHttpTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public RetentionPolicyHttpTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     /// <summary>
     /// AC1: a project with no row is served the configured platform defaults, and the read creates no row — the
@@ -354,7 +354,7 @@ public sealed class RetentionPolicyHttpTests
     private async Task<World> StartAsync(string roleCode = WriterRole)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var setup = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var setup = _hosts.RealResolver(database);
         var founder = Guid.CreateVersion7();
         Guid org;
         Guid project;
@@ -371,7 +371,7 @@ public sealed class RetentionPolicyHttpTests
             }
         }
 
-        var host = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database), ConfiguredLimits);
+        var host = _hosts.RealResolver(database, ConfiguredLimits);
 
         return new World(
             setup,

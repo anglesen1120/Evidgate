@@ -20,7 +20,7 @@ namespace Tenancy.IntegrationTests;
 /// of AC4 (a run created before a second activation keeps its pin) lives in <c>PolicyRunPinningTests</c>.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class PolicyActivationTests
+public sealed class PolicyActivationTests : IClassFixture<TenancyHostPool>
 {
     private const string BodyA = """{"flaky_budget":3,"required_suites":["smoke","regression"]}""";
 
@@ -29,8 +29,8 @@ public sealed class PolicyActivationTests
     private const string BodyC = """{"flaky_budget":5,"required_suites":["smoke","regression"]}""";
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public PolicyActivationTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public PolicyActivationTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project) : IAsyncDisposable
     {
@@ -46,7 +46,7 @@ public sealed class PolicyActivationTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
