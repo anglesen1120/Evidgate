@@ -153,7 +153,7 @@ public sealed class HealingSwitchResolutionTests
         var projectId = Guid.CreateVersion7();
         var db = new CountingTenantDb(orgId, projectId);
         var store = new HealingSwitchStore(db, new StubScopeAccessor(orgId));
-        var resolver = new HealingAvailabilityResolver(store);
+        var resolver = new HealingAvailabilityResolver(store, new ApplyOffPolicy());
 
         var resolved = await resolver.ResolveAsync(projectId, TestContext.Current.CancellationToken);
 
@@ -215,6 +215,12 @@ public sealed class HealingSwitchResolutionTests
             throw new NotSupportedException();
 
         internal Guid OrgId { get; } = orgId;
+    }
+
+    /// <summary>An apply policy that keeps the deployment at shadow, as every shipped configuration does.</summary>
+    private sealed class ApplyOffPolicy : IHealingApplyPolicy
+    {
+        public bool IsApplyEnabled => false;
     }
 
     /// <summary>A scope accessor that opens no connection: the store only needs the org id.</summary>

@@ -96,7 +96,7 @@ public static class WorkerHost
         // 12.3.1-T1.3: the usage module, so the ledger write path resolves in the Worker as well.
         builder.Services.AddUsageModule();
         // 08.6.3-T1: the healing module, so every handler the Api composes resolves here too.
-        builder.Services.AddHealingModule(builder.Configuration);
+        builder.Services.AddHealingModule(builder.Configuration, builder.Environment);
 
         // 01.5.1-T1.2/T1.4: the durable task queue — claim loops per queue and the
         // cron schedule runner. Both are registered in every worker; the unique fire
@@ -192,5 +192,9 @@ public static class WorkerHost
         _ = host.Services.GetRequiredService<IOptions<TasksOptions>>().Value;
         // The cancel windows belong to the Orchestrator module and are read through its seam.
         host.Services.ValidateOrchestratorOptions();
+
+        // The healing provider is a deployment selection: unset outside Development, a mock outside Development or an
+        // incomplete HTTP selection must refuse the boot instead of degrading to no provider at the first call.
+        host.Services.ValidateHealingOptions();
     }
 }

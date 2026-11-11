@@ -72,13 +72,15 @@ check_api_health() {
   # The two cancel windows have no option default: an Api booted without them binds 00:00:00 and
   # refuses to start, so the health check below would time out on a configuration refusal.
   # Values match the dev stack's .env.dev.template. Outside Development the Api also needs a stated proxy
-  # stance; `none` says this throwaway Api has no proxy in front of it.
+  # stance and a stated healing provider; `none` says this throwaway Api has no proxy in front of it and
+  # places no healing call.
   docker run -d --platform "$CHECK_PLATFORM" --name "$api_container" --network "$network" \
     -p 127.0.0.1::8080 \
     -e "EVIDGATE__DATABASE__CONNECTIONSTRING=Host=db;Port=5432;Database=evidgate;Username=evidgate_app;Password=$APP_PASSWORD" \
     -e "EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY=00:00:30" \
     -e "EVIDGATE__RUNS__CANCEL__KILLDELAY=00:02:00" \
     -e "EVIDGATE__FORWARDEDHEADERS__KNOWNPROXIES=none" \
+    -e "EVIDGATE__HEALING__LLM__PROVIDER=none" \
     "$reference" >/dev/null
   host_port="$(docker port "$api_container" 8080/tcp | head -1)"
   host_port="${host_port##*:}"

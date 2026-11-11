@@ -52,5 +52,6 @@
     <Compile Include="..\Shared\TenantTestScope.cs" Link="Shared/TenantTestScope.cs" />
     <Compile Include="..\Shared\HarnessTest.cs" Link="Shared/HarnessTest.cs" />
     <Compile Include="..\Shared\NoForwardedProxy.cs" Link="NoForwardedProxy.cs" />
+    <Compile Include="..\Shared\NoHealingProvider.cs" Link="NoHealingProvider.cs" />
   </ItemGroup>
 </Project>

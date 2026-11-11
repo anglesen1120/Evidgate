@@ -1,12 +1,13 @@
 using System.Collections.Concurrent;
 using System.Net;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Healing;
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Healing.Contracts;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -464,8 +465,10 @@ public sealed class HealingLlmGatewayTests
         services.AddSingleton(dataSource);
         services.AddEvidgateTenancy();
 
-        // The module's own composition: the default provider, the gateway and the typed HTTP client with its pipeline.
-        services.AddHealingModule(new ConfigurationBuilder().Build());
+        // The module's own composition: the Development adapter, the gateway and the typed HTTP client with its pipeline.
+        services.AddHealingModule(
+            HealingLlmTestConfiguration.Build(HealingProviderSelection.Mock),
+            HealingLlmTestConfiguration.Host(Environments.Development));
 
         configure?.Invoke(services);
 
@@ -484,6 +487,10 @@ public sealed class HealingLlmGatewayTests
         services.Replace(ServiceDescriptor.Singleton<IHealingLlmProvider>(provider =>
             provider.GetRequiredService<HttpHealingLlmProvider>()));
 
+        // The key handler resolves the configured secret per request; this world has no secret store, so one fixed value.
+        services.TryAddSingleton<ISecretProvider>(new FixedSecret());
+        services.PostConfigure<HealingProviderOptions>(options => options.ApiKeySecret = SecretNames.HealingLlmApiKey);
+
         services
             .AddHttpClient<HttpHealingLlmProvider>()
             .ConfigureHttpClient(client => client.BaseAddress = new Uri("http://healing.invalid/"))
@@ -491,8 +498,9 @@ public sealed class HealingLlmGatewayTests
     }
 
     /// <summary>
-    /// Invokes the gateway inside a committed-to tenant scope on the app role, which is exactly the caller's situation:
-    /// the recorder writes inside this transaction through the module's Dapper path.
+    /// Invokes the gateway inside a tenant scope on the app role, which is exactly the caller's situation: the recorder
+    /// writes inside this transaction through the module's Dapper path. Every case here asks for a call the guards allow,
+    /// so a refusal fails the case with its reason instead of surfacing later as a missing row.
     /// </summary>
     private static async Task<HealingLlmInvocation> InvokeAsync(World world, HealingLlmRequest request)
     {
@@ -505,12 +513,14 @@ public sealed class HealingLlmGatewayTests
             TestContext.Current.CancellationToken);
 
         var gateway = services.ServiceProvider.GetRequiredService<HealingLlmGateway>();
-        var invocation = await gateway.InvokeAsync(request, TestContext.Current.CancellationToken);
+        var result = await gateway.InvokeAsync(request, TestContext.Current.CancellationToken);
+
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
 
         // The caller commits: every recorded attempt rides the caller's tenant transaction (00 §5.5 C3).
         await scope.CommitAsync(TestContext.Current.CancellationToken);
 
-        return invocation;
+        return result.Value;
     }
 
     /// <summary>The rows this org recorded, in attempt order, read through the same tenant path.</summary>
@@ -625,6 +635,12 @@ public sealed class HealingLlmGatewayTests
 
             return Task.FromResult(respond(request));
         }
+    }
+
+    private sealed class FixedSecret : ISecretProvider
+    {
+        public ValueTask<string?> GetSecretAsync(string name, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<string?>("test-key-not-a-secret");
     }
 }
 

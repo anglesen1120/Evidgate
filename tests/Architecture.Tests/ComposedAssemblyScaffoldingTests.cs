@@ -22,7 +22,7 @@ public sealed class ComposedAssemblyScaffoldingTests
     private static readonly Dictionary<string, string> Allowed = new(StringComparer.Ordinal)
     {
         ["Evidgate.Modules.Healing.Application.MockHealingLlmProvider"] =
-            "the IHealingLlmProvider default while the provider/egress decision is open: no real call may run, and the HTTP adapter is composed by a host that resolves it explicitly",
+            "the offline healing adapter, registered keyed and only inside the Healing module's IsDevelopment() branch: a composed production container has no registration to resolve, and the boot validator refuses the mock outside Development",
     };
 
     /// <summary>Names of the assemblies the two hosts reach through their project references.</summary>

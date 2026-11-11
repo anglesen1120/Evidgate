@@ -1,4 +1,7 @@
+using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Healing.Contracts;
+using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Healing.Application;
 
@@ -126,29 +129,47 @@ internal sealed record HealingLlmInvocation(HealingLlmResult Result, Guid CallId
 /// tenant scope and transaction the caller already has open.
 /// </summary>
 /// <remarks>
+/// Before the schema is compiled and before any adapter is reached, three guards run in order: the deployment's provider
+/// selection, the kill switch in force for the project, and the project's daily budget. Each refusal is a failed
+/// <see cref="Result{T}"/> naming one reason of <see cref="HealingLlmRefusals"/>, counts once on
+/// <see cref="EvidgateTelemetry.HealingLlmRefusedMetricName"/> and writes no row — a refused call spends nothing.
+/// <para>
 /// <c>P5</c> is not delivered by this slice. The provider call runs in the caller's tenant scope today, and the attempt
 /// rows are written on the same connection inside the caller's transaction, so a caller rollback discards them with the
 /// rest of that unit of work. 08.5.1-T1.4 owns the two-phase shape — reserve, call the provider outside the transaction,
 /// commit — that actually moves the provider call out of the caller's database work; until it lands, nothing here may be
 /// read as claiming that isolation.
+/// </para>
 /// </remarks>
-internal sealed class HealingLlmGateway(IHealingLlmProvider provider, HealingLlmCallRecorder recorder)
+internal sealed class HealingLlmGateway(
+    IHealingLlmProvider provider,
+    HealingLlmCallRecorder recorder,
+    IHealingAvailabilityResolver availability,
+    HealingLlmBudgetReader budget,
+    IOptions<HealingProviderOptions> options)
 {
     /// <summary>Places the call and records every attempt.</summary>
     /// <param name="request">The call; its payload is already redacted by the caller.</param>
     /// <param name="cancellationToken">Cancellation of the call.</param>
-    /// <returns>The outcome, with the id of the row that reports it.</returns>
+    /// <returns>
+    /// The outcome, with the id of the row that reports it, or the failure of a guard that refused the call.
+    /// </returns>
     /// <exception cref="ArgumentException">
     /// The request cannot be attributed, or its declared schema is not a JSON Schema document. Both are refused before
     /// the provider is called, so neither spends a token nor writes a row.
     /// </exception>
-    internal async Task<HealingLlmInvocation> InvokeAsync(
+    internal async Task<Result<HealingLlmInvocation>> InvokeAsync(
         HealingLlmRequest request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         HealingLlmRequestRules.EnsureValid(request);
+
+        if (await RefusalAsync(request, cancellationToken).ConfigureAwait(false) is { } refusal)
+        {
+            return refusal;
+        }
 
         // Compiled before the first attempt: a declaration that does not compile is a caller bug, and refusing it here
         // keeps both the provider and the table out of a failure that has nothing to do with either.
@@ -189,13 +210,61 @@ internal sealed class HealingLlmGateway(IHealingLlmProvider provider, HealingLlm
                 continue;
             }
 
-            return new HealingLlmInvocation(
+            return Result.Success(new HealingLlmInvocation(
                 new HealingLlmResult(
                     status,
                     status == HealingLlmStatuses.Ok ? content : null,
                     (int)totalTokens,
                     totalCost),
-                callId);
+                callId));
         }
+    }
+
+    /// <summary>
+    /// The guard the call stops at, or null when it may proceed: no selected provider, a switch that forbids acting, or a
+    /// budget that cannot pay for the call. Shadow and enabled both proceed — shadow healing still analyses — and the
+    /// offline adapter may run without a budget row, because it spends nothing.
+    /// </summary>
+    /// <param name="request">The call about to be placed.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async Task<Result<HealingLlmInvocation>?> RefusalAsync(
+        HealingLlmRequest request,
+        CancellationToken cancellationToken)
+    {
+        var kind = options.Value.Kind;
+        if (kind == HealingProviderKind.None)
+        {
+            return Refuse(HealingLlmRefusals.ProviderDisabled);
+        }
+
+        var mode = await availability.ResolveAsync(request.ProjectId, cancellationToken).ConfigureAwait(false);
+        if (mode is not (HealingAvailability.Enabled or HealingAvailability.Shadow))
+        {
+            return Refuse(HealingLlmRefusals.HealingDisabled);
+        }
+
+        var verdict = await budget.ReadAsync(request.ProjectId, cancellationToken).ConfigureAwait(false);
+
+        if (verdict == HealingLlmBudgetVerdict.Exceeded)
+        {
+            return Refuse(HealingLlmRefusals.BudgetExceeded);
+        }
+
+        if (verdict == HealingLlmBudgetVerdict.Unreadable)
+        {
+            return Refuse(HealingLlmRefusals.BudgetUnreadable);
+        }
+
+        return verdict == HealingLlmBudgetVerdict.NotProvisioned && kind != HealingProviderKind.Mock
+            ? Refuse(HealingLlmRefusals.BudgetNotProvisioned)
+            : null;
+    }
+
+    /// <summary>The refusal of one call: counted once, then returned as the typed failure.</summary>
+    /// <param name="reason">One of <see cref="HealingLlmRefusals"/>' constants.</param>
+    private static Result<HealingLlmInvocation> Refuse(string reason)
+    {
+        EvidgateTelemetry.RecordHealingLlmRefused(reason);
+        return HealingLlmRefusals.Refuse(reason);
     }
 }

@@ -3,6 +3,8 @@ using Evidgate.Modules.Healing;
 using Evidgate.Modules.Healing.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -162,7 +164,12 @@ public sealed class HealingTokenUsageTests
         var services = new ServiceCollection();
         services.AddSingleton(dataSource);
         services.AddEvidgateTenancy();
-        services.AddHealingModule(new ConfigurationBuilder().Build());
+
+        // The provider selection is host configuration and the module needs the host environment to read it; this suite
+        // never resolves an adapter, so the Development stub only keeps the unset provider on its Development default.
+        var environment = new TestHostEnvironment();
+        services.AddSingleton<IHostEnvironment>(environment);
+        services.AddHealingModule(new ConfigurationBuilder().Build(), environment);
 
         return new World(
             org,
@@ -260,4 +267,16 @@ public sealed class HealingTokenUsageTests
         int Tokens,
         string Status,
         DateTimeOffset CreatedAt);
+
+    /// <summary>The smallest <see cref="IHostEnvironment"/> the module's provider selection reads: its name.</summary>
+    private sealed class TestHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Development;
+
+        public string ApplicationName { get; set; } = "Evidgate.Api";
+
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
 }
