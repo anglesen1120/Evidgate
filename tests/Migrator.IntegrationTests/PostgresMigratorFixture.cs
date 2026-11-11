@@ -22,11 +22,7 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
 {
     private const string DatabaseOwnerRole = "evidgate_owner";
 
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(ContainerImages.Postgres)
-        .WithDatabase("evidgate")
-        .WithUsername("postgres")
-        .WithPassword("postgres")
-        .Build();
+    private PostgreSqlContainer _container = null!;
 
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
@@ -76,7 +72,12 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync().ConfigureAwait(false);
+        _container = await ContainerStart.StartAsync(
+            () => new PostgreSqlBuilder(ContainerImages.Postgres)
+                .WithDatabase("evidgate")
+                .WithUsername("postgres")
+                .WithPassword("postgres")
+                .Build()).ConfigureAwait(false);
 
         await using var connection = await OpenSuperuserAsync("postgres").ConfigureAwait(false);
         await ExecuteAsync(
@@ -84,7 +85,13 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
             $"create role {DatabaseOwnerRole} login createrole password '{_ownerPassword}'").ConfigureAwait(false);
     }
 
-    public async ValueTask DisposeAsync() => await _container.DisposeAsync().ConfigureAwait(false);
+    public async ValueTask DisposeAsync()
+    {
+        if (_container is not null)
+        {
+            await _container.DisposeAsync().ConfigureAwait(false);
+        }
+    }
 
     /// <summary>Creates a database owned by the migration role and returns its name.</summary>
     public async Task<string> CreateDatabaseAsync()

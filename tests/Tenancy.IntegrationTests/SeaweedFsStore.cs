@@ -79,18 +79,16 @@ public sealed class SeaweedFsServer : IAsyncLifetime
     {
         var identity = ReadFirstIdentity(_configFile);
 
-        // Assigned before the start so teardown also disposes a container whose start failed.
-        _container = new ContainerBuilder(ContainerImages.SeaweedFs)
-            .WithResourceMapping(_configFile, new FileInfo(ContainerConfigPath))
-            .WithCommand("server", "-s3", $"-s3.port={S3Port}", $"-s3.config={ContainerConfigPath}")
-            .WithPortBinding(S3Port, assignRandomHostPort: true)
-            .WithWaitStrategy(
-                Wait.ForUnixContainer()
-                    .UntilHttpRequestIsSucceeded(
-                        request => request.ForPort(S3Port).ForPath("/").ForStatusCodeMatching(_ => true)))
-            .Build();
-
-        await _container.StartAsync();
+        _container = await ContainerStart.StartAsync(
+            () => new ContainerBuilder(ContainerImages.SeaweedFs)
+                .WithResourceMapping(_configFile, new FileInfo(ContainerConfigPath))
+                .WithCommand("server", "-s3", $"-s3.port={S3Port}", $"-s3.config={ContainerConfigPath}")
+                .WithPortBinding(S3Port, assignRandomHostPort: true)
+                .WithWaitStrategy(
+                    Wait.ForUnixContainer()
+                        .UntilHttpRequestIsSucceeded(
+                            request => request.ForPort(S3Port).ForPath("/").ForStatusCodeMatching(_ => true)))
+                .Build());
 
         Endpoint = $"http://{_container.Hostname}:{_container.GetMappedPublicPort(S3Port)}";
         AccessKey = identity.AccessKey;
@@ -102,7 +100,7 @@ public sealed class SeaweedFsServer : IAsyncLifetime
         Current = null;
         if (_container is not null)
         {
-            // A failed start still leaves the built container here, so teardown disposes it too.
+            // Only a started container is kept here; the shared start helper disposes failed attempts.
             await _container.DisposeAsync();
         }
     }

@@ -66,22 +66,21 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
     private async Task StartAsync()
     {
         // Cumulative statistics outgrow Docker's default 64 MB shared memory around 750 databases.
-        _container = new PostgreSqlBuilder(ContainerImages.Postgres)
-            .WithDatabase("evidgate")
-            .WithUsername("postgres")
-            .WithPassword("postgres")
-            // The quota suite's 50-caller bursts, on top of the four parallel classes' own pools, outrun the image's
-            // default ceiling of 100 connections: a non-superuser login then fails with 53300 instead of the case
-            // under test. Only these short-lived test backends use the extra slots.
-            .WithCommand("-c", "max_connections=200")
-            .WithCreateParameterModifier(parameters =>
-            {
-                ArgumentNullException.ThrowIfNull(parameters.HostConfig);
-                parameters.HostConfig.ShmSize = 512L * 1024 * 1024;
-            })
-            .Build();
-
-        await _container.StartAsync().ConfigureAwait(false);
+        _container = await ContainerStart.StartAsync(
+            () => new PostgreSqlBuilder(ContainerImages.Postgres)
+                .WithDatabase("evidgate")
+                .WithUsername("postgres")
+                .WithPassword("postgres")
+                // The quota suite's 50-caller bursts, on top of the four parallel classes' own pools, outrun the image's
+                // default ceiling of 100 connections: a non-superuser login then fails with 53300 instead of the case
+                // under test. Only these short-lived test backends use the extra slots.
+                .WithCommand("-c", "max_connections=200")
+                .WithCreateParameterModifier(parameters =>
+                {
+                    ArgumentNullException.ThrowIfNull(parameters.HostConfig);
+                    parameters.HostConfig.ShmSize = 512L * 1024 * 1024;
+                })
+                .Build()).ConfigureAwait(false);
 
         // Shared by every test: bootstrap must neither await the public connection helpers' own startup
         // task nor take the first test's cancellation token, or one cancelled test would fail the run.
