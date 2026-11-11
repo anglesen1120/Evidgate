@@ -23,7 +23,7 @@ public sealed record ContainerStartOptions(
     TimeSpan Delay,
     TimeSpan DisposeTimeout)
 {
-    /// <summary>Three attempts, none past two minutes, all inside four (below the fixtures' own five-minute start timeout).</summary>
+    /// <summary>Three attempts, none past three minutes, all inside five (a fixture token shorter than that still wins).</summary>
     public static ContainerStartOptions Default { get; } = new(
         MaxAttempts: 3,
         AttemptTimeout: TimeSpan.FromMinutes(3),
