@@ -21,8 +21,7 @@ public sealed partial class ReprocessReportTaskTests
     public async Task Reprocess_CanceledRun_AppendsRevisionWithoutBillingOrChangingOriginalEvidence()
     {
         await using var world = await StartAsync();
-        var (artifact, source) = await CreateCanceledOriginalRevisionAsync(world);
-        var originalRevision = await RevisionHashAsync(world, 1);
+        var (artifact, source) = await CreateCanceledRunWithReportAsync(world);
         var originalReport = await ReportHashAsync(world, source);
         var producer = await EventProducerAsync(world);
         var originalEvents = await EventDigestAsync(world, producer);
@@ -36,8 +35,7 @@ public sealed partial class ReprocessReportTaskTests
         (await ReprocessAsync(world, parsing)).Events.ShouldBe(1);
         await ConsumeEnqueuedReconcileAsync(world, $"reprocess-{parsing:D}");
 
-        (await RevisionCountAsync(world)).ShouldBe(2);
-        (await RevisionHashAsync(world, 1)).ShouldBe(originalRevision);
+        (await RevisionCountAsync(world)).ShouldBe(1, "the reprocess appends the run's first revision");
         (await ReportHashAsync(world, source)).ShouldBe(originalReport);
         (await EventDigestAsync(world, producer)).ShouldBe(originalEvents);
         (await StoredObjectDigestAsync(world, artifact)).ShouldBe(originalBytes);
@@ -91,23 +89,18 @@ public sealed partial class ReprocessReportTaskTests
     }
 
     /// <summary>
-    /// Revision one of a run that is already canceled. A settled run has no declared outgoing edge, so the run is canceled
-    /// first, its report is accepted as after-cancel evidence, and revision one is the production append of a first
-    /// reprocess; the run stays canceled throughout.
+    /// A run that is already canceled, with its original report parsed as after-cancel evidence. A settled run has no
+    /// declared outgoing edge, so the run is canceled first; the reprocess under test then appends the run's first
+    /// revision and the run stays canceled throughout.
     /// </summary>
-    private async Task<(Guid Artifact, Guid Source)> CreateCanceledOriginalRevisionAsync(World world)
+    private async Task<(Guid Artifact, Guid Source)> CreateCanceledRunWithReportAsync(World world)
     {
         await SeedPlanAsync(world);
         var artifact = await SeedArtifactAsync(world, ReportBody);
         await _fixture.ExecuteAsync(world.Database,
             $"update public.run set state = 'canceled' where id = '{world.RunId:D}'");
         (await ParseOriginalReportAsync(world, artifact)).Events.ShouldBe(1);
-        var source = await SourceReportIdAsync(world, artifact);
-        var baseline = await SeedRequestAsync(world, artifact, source, PinVersion);
-        (await ReprocessAsync(world, baseline)).Events.ShouldBe(1);
-        await ConsumeEnqueuedReconcileAsync(world, $"reprocess-{baseline:D}");
-        (await RevisionCountAsync(world)).ShouldBe(1);
-        return (artifact, source);
+        return (artifact, await SourceReportIdAsync(world, artifact));
     }
 
     private async Task DriveMissingBytesToDeadLetterAsync(World world, Guid parsing)
