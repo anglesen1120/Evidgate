@@ -72,17 +72,13 @@ internal sealed class RecordUsageBatchHandler(
     {
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Usage, nameof(RecordUsageBatch));
 
-        // (a) The whole batch is validated before any statement runs, so a refused call writes nothing and answers one
-        // 00 §9.2 detail per offending entry, indexed by position (plan §5, 12.3.1-T1.4).
-        var violations = UsageBatchRules.Validate(command.Entries);
-        if (violations.Count > 0)
+        // (a) The whole batch is validated before any statement runs, so a refused call writes nothing.
+        if (RefuseInvalidEntries(command.Entries) is { } rejected)
         {
-            return Result.Failure<UsageBatchResult>(Error.Invalid(
-                "the usage batch was rejected",
-                [.. violations.Select(violation => new ErrorDetail(violation.Path, violation.Reason, violation.Index))]));
+            return rejected;
         }
 
-        // (b) An empty batch is a well-formed no-op: no statement, no audit row, two empty lists.
+        // (b) An empty batch is a well-formed no-op: no statement, no audit row, three empty lists.
         if (command.Entries.Count == 0)
         {
             audit.Suppress();
@@ -92,29 +88,21 @@ internal sealed class RecordUsageBatchHandler(
         // (c) The tenant comes from the open scope only (00 §5.4 rule: never from the request).
         var orgId = scopes.Require().OrgId;
 
-        // (c.1) The projects are checked in one read in this same transaction before anything is written: a foreign-key
-        // violation would abort the caller's transaction, so an unknown (or other-org) project is refused per entry instead.
-        var projectViolations = await store.ValidateProjectsAsync(orgId, command.Entries, cancellationToken)
-            .ConfigureAwait(false);
-        if (projectViolations.Count > 0)
+        if (await RefuseUnknownProjectsAsync(orgId, command.Entries, cancellationToken).ConfigureAwait(false)
+            is { } unknown)
         {
-            return Result.Failure<UsageBatchResult>(Error.Invalid(
-                "the usage batch was rejected",
-                [.. projectViolations.Select(violation => new ErrorDetail(violation.Path, violation.Reason, violation.Index))]));
+            return unknown;
         }
 
         var batch = UsageBatchRules.Prepare(command.Entries);
 
-        // (d) One statement for the batch (plan §8 P2); the returning set is the inserted half of the answer. The
-        // duplicate keys of the same call are counted in this transaction, so a refusal never leaves a tally behind.
-        // A row the insert guard re-dated is billed in its new month, and there is nowhere to bill one whose month and
-        // every month after it are issued: that refusal is the command's conflict.
+        // (d) One statement for the batch; the returning set is the inserted half of the answer. The duplicate keys of
+        // the same call are counted in this transaction, so a refusal never leaves a tally behind. A row the insert guard
+        // re-dated is billed in its new month, and a month with no open period after it refuses the whole insert.
         UsageLedgerWrite write;
         try
         {
-            write = await store
-                .RecordBatchAsync(orgId, batch, cancellationToken)
-                .ConfigureAwait(false);
+            write = await store.RecordBatchAsync(orgId, batch, cancellationToken).ConfigureAwait(false);
         }
         catch (LedgerNoOpenPeriodException refused)
         {
@@ -126,47 +114,101 @@ internal sealed class RecordUsageBatchHandler(
         // the re-date audit and the command's own audit object must not run either.
         if (write.Conflicts.Count > 0)
         {
-            var billingKeys = write.Conflicts.Count == 1
-                ? "1 billing key"
-                : $"{write.Conflicts.Count.ToString(CultureInfo.InvariantCulture)} billing keys";
-
-            return Result.Failure<UsageBatchResult>(Error.Conflict(
-                BillingKeyConflictCode,
-                $"the usage batch has {billingKeys} already holding a different payload; the batch wrote nothing"));
+            return ConflictRefusal(write.Conflicts.Count);
         }
 
         var result = UsageBatchOutcome.Merge(batch, write.Inserted);
 
         UsageMetering.Schedule(scopes.Require(), batch.Rows, result.Inserted);
 
-        // (e) Audit: the rows this call wrote, or nothing at all when every key was already on file. A re-dated row is
-        // audited before the batch object is described, because the last description is the one the command's own
-        // audit entry carries and that entry must name the rows, not the move.
-        if (result.Inserted.Count == 0)
-        {
-            audit.Suppress();
-        }
-        else
-        {
-            await redateAudit.RecordAsync(orgId, write.Redated, cancellationToken).ConfigureAwait(false);
-
-            var insertedKeys = write.Inserted.ToHashSet(StringComparer.Ordinal);
-            var firstInserted = batch.Rows.First(row => insertedKeys.Contains(row.BillingKey));
-
-            audit.Describe(new AuditObject(
-                "usage_ledger",
-                firstInserted.Id.ToString("D"),
-                Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["count"] = result.Inserted.Count.ToString(CultureInfo.InvariantCulture),
-                    ["outcome"] = "recorded",
-                }));
-        }
+        await DescribeAuditAsync(orgId, batch, write, result, cancellationToken).ConfigureAwait(false);
 
         // Counters only: the span carries the shape of the batch, the ledger rows carry the detail.
         activity?.SetTag("usage.batch.inserted", result.Inserted.Count);
         activity?.SetTag("usage.batch.duplicates", result.Duplicates.Count);
 
         return Result.Success(result);
+    }
+
+    /// <summary>Validates the batch, or answers null when it may be prepared.</summary>
+    /// <param name="entries">The entries of the batch, or null when the caller sent none at all.</param>
+    private static Result<UsageBatchResult>? RefuseInvalidEntries(IReadOnlyList<UsageEntryInput>? entries)
+    {
+        var violations = UsageBatchRules.Validate(entries);
+        return violations.Count == 0 ? null : Rejected(violations);
+    }
+
+    /// <summary>
+    /// Checks the projects in one read inside this same transaction before anything is written: a foreign-key violation
+    /// would abort the caller's transaction, so an unknown (or other-org) project is refused per entry instead.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope (never a value from the request).</param>
+    /// <param name="entries">The entries whose projects to check.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async Task<Result<UsageBatchResult>?> RefuseUnknownProjectsAsync(
+        Guid orgId,
+        IReadOnlyList<UsageEntryInput> entries,
+        CancellationToken cancellationToken)
+    {
+        var violations = await store.ValidateProjectsAsync(orgId, entries, cancellationToken).ConfigureAwait(false);
+        return violations.Count == 0 ? null : Rejected(violations);
+    }
+
+    /// <summary>The 422 a batch answers: one detail per violation, indexed by entry position.</summary>
+    /// <param name="violations">The violations of the batch, in request order.</param>
+    private static Result<UsageBatchResult> Rejected(IReadOnlyList<UsageViolation> violations) =>
+        Result.Failure<UsageBatchResult>(Error.Invalid(
+            "the usage batch was rejected",
+            [.. violations.Select(violation => new ErrorDetail(violation.Path, violation.Reason, violation.Index))]));
+
+    /// <summary>The conflict a batch answers when any of its keys already claims another payload.</summary>
+    /// <param name="conflictingKeys">How many keys conflict, as the message words it.</param>
+    private static Result<UsageBatchResult> ConflictRefusal(int conflictingKeys)
+    {
+        var keys = conflictingKeys == 1
+            ? "1 billing key"
+            : $"{conflictingKeys.ToString(CultureInfo.InvariantCulture)} billing keys";
+
+        return Result.Failure<UsageBatchResult>(Error.Conflict(
+            BillingKeyConflictCode,
+            $"the usage batch has {keys} already holding a different payload; the batch wrote nothing"));
+    }
+
+    /// <summary>
+    /// The command's audit object: the rows this call wrote, or a suppressed entry when every key was already on file. A
+    /// re-dated row is audited before the batch object is described, because the last description is the one the command's
+    /// own audit entry carries and that entry must name the rows, not the move.
+    /// </summary>
+    /// <param name="orgId">The tenant of the open scope.</param>
+    /// <param name="batch">The prepared batch the store just ran.</param>
+    /// <param name="write">What the store wrote.</param>
+    /// <param name="result">The answer the command is about to return.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private async Task DescribeAuditAsync(
+        Guid orgId,
+        UsageBatch batch,
+        UsageLedgerWrite write,
+        UsageBatchResult result,
+        CancellationToken cancellationToken)
+    {
+        if (result.Inserted.Count == 0)
+        {
+            audit.Suppress();
+            return;
+        }
+
+        await redateAudit.RecordAsync(orgId, write.Redated, cancellationToken).ConfigureAwait(false);
+
+        var insertedKeys = write.Inserted.ToHashSet(StringComparer.Ordinal);
+        var firstInserted = batch.Rows.First(row => insertedKeys.Contains(row.BillingKey));
+
+        audit.Describe(new AuditObject(
+            "usage_ledger",
+            firstInserted.Id.ToString("D"),
+            Metadata: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["count"] = result.Inserted.Count.ToString(CultureInfo.InvariantCulture),
+                ["outcome"] = "recorded",
+            }));
     }
 }

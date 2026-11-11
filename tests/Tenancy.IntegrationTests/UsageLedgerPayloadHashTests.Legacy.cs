@@ -10,8 +10,8 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The legacy half of CR-21: a row with no stored hash is compared by recomputing the hash from what the row bills, and
-/// a re-dated row is compared on the period it was metered for, not the open month it was moved to.
+/// The legacy half of the payload comparison: a row with no stored hash is compared by recomputing the hash from what
+/// the row bills, and a re-dated row is compared on the period it was metered for, not the open month it was moved to.
 /// </summary>
 public sealed partial class UsageLedgerPayloadHashTests
 {

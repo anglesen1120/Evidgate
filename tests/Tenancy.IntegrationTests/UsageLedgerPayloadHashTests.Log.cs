@@ -49,6 +49,36 @@ public sealed partial class UsageLedgerPayloadHashTests
     }
 
     /// <summary>
+    /// A request that names the stored payload after a new one still reports the claim that differs: the log's incoming
+    /// digest is the first occurrence's, not the repeat that happens to equal what the ledger holds.
+    /// </summary>
+    [Fact]
+    public async Task Conflict_LoggedIncomingHash_IsTheClaimThatDiffers()
+    {
+        await using var world = await StartAsync();
+        var key = Unique.Slug("logged-order");
+        var stored = Entry(key, world.Project, quantity: 1.5m);
+        (await RecordAsync(world, [stored])).Inserted.ShouldBe([key]);
+
+        world.Log.Clear();
+
+        // The first occurrence claims another payload; the repeat claims the stored one.
+        var other = stored with { Quantity = 9.5m };
+        var attempt = await RecordAsync(world, [other, stored]);
+
+        attempt.Conflicts.ShouldBe([key]);
+
+        var text = world.Log.Lines
+            .Single(captured => captured.Text.Contains(key, StringComparison.Ordinal))
+            .Text;
+
+        text.Contains($"holds {HashOf(stored)}", StringComparison.Ordinal)
+            .ShouldBeTrue("the stored digest is the payload on file");
+        text.Contains($"claims {HashOf(other)}", StringComparison.Ordinal)
+            .ShouldBeTrue("the incoming digest is the first occurrence, which is the claim that differs");
+    }
+
+    /// <summary>
     /// The counter is the operator's signal that keys are being reused: one measurement per conflicting key of the batch,
     /// so a batch that reuses two keys moves it twice.
     /// </summary>

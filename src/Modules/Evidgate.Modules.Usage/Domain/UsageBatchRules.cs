@@ -115,7 +115,6 @@ internal static class UsageBatchRules
         var firstHashes = new Dictionary<string, string>(StringComparer.Ordinal);
         var conflictingHashes = new Dictionary<string, string>(StringComparer.Ordinal);
         List<string>? repeatedKeys = null;
-        List<string>? conflictingKeys = null;
 
         foreach (var entry in entries)
         {
@@ -130,10 +129,9 @@ internal static class UsageBatchRules
                     (repeatedKeys ??= []).Add(entry.BillingKey);
                 }
 
-                if (!string.Equals(firstHashes[entry.BillingKey], payloadHash, StringComparison.Ordinal)
-                    && conflictingHashes.TryAdd(entry.BillingKey, payloadHash))
+                if (!string.Equals(firstHashes[entry.BillingKey], payloadHash, StringComparison.Ordinal))
                 {
-                    (conflictingKeys ??= []).Add(entry.BillingKey);
+                    conflictingHashes.TryAdd(entry.BillingKey, payloadHash);
                 }
 
                 continue;
@@ -155,7 +153,6 @@ internal static class UsageBatchRules
         return new UsageBatch(
             rows,
             repeatedKeys ?? [],
-            conflictingKeys ?? [],
             conflictingHashes);
     }
 }
@@ -166,12 +163,10 @@ internal static class UsageBatchRules
 /// </summary>
 /// <param name="Rows">The rows this batch will insert; empty when every entry repeated an earlier key.</param>
 /// <param name="RepeatedBillingKeys">The distinct billing keys the request repeated.</param>
-/// <param name="ConflictingBillingKeys">The repeated keys whose repeated entry hashes differently from the first one.</param>
 /// <param name="ConflictingPayloadHashes">The differing payload hash of each conflicting repeat, by billing key.</param>
 internal sealed record UsageBatch(
     IReadOnlyList<PendingUsageEntry> Rows,
     IReadOnlyList<string> RepeatedBillingKeys,
-    IReadOnlyList<string> ConflictingBillingKeys,
     IReadOnlyDictionary<string, string> ConflictingPayloadHashes)
 {
     /// <summary>

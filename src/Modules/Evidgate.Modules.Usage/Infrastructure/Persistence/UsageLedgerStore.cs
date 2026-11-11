@@ -42,8 +42,8 @@ internal sealed partial class UsageLedgerStore(
     /// <summary>
     /// The batch as a single statement. <c>payload_hash</c> is the canonical digest of what the row bills, so a later
     /// request under the same key can be compared with the stored row rather than assumed to replay it. <c>price_ref</c>,
-    /// <c>amount</c> and <c>currency</c> are written as null: 12.3.1-T1 stores unpriced rows (DECISIONS O5, ruling T60),
-    /// and 12.3.1-T3 resolves the price inside the same transaction. <c>occurred_at</c> travels as UTC
+    /// <c>amount</c> and <c>currency</c> are written as null: this path stores unpriced rows, and the price is resolved
+    /// inside the same transaction. <c>occurred_at</c> travels as UTC
     /// <c>timestamptz[]</c>, preserving PostgreSQL microsecond precision without floating-point arithmetic or
     /// session-time-zone conversion. The returning set carries what the row became, not what was asked for: the insert
     /// guard may have moved <c>period</c> and set <c>original_period</c>.
@@ -222,7 +222,8 @@ internal sealed partial class UsageLedgerStore(
     {
         ArgumentNullException.ThrowIfNull(batch);
 
-        var transaction = (NpgsqlTransaction)scopes.Require().Transaction;
+        var scope = scopes.Require();
+        var transaction = scope.Transaction;
         await transaction.SaveAsync(BatchSavepoint, cancellationToken).ConfigureAwait(false);
 
         var recorded = await InsertAsync(orgId, batch.Rows, cancellationToken).ConfigureAwait(false);
@@ -232,7 +233,7 @@ internal sealed partial class UsageLedgerStore(
         if (conflicts.Count > 0)
         {
             await transaction.RollbackAsync(BatchSavepoint, cancellationToken).ConfigureAwait(false);
-            await transaction.ReleaseAsync(BatchSavepoint, cancellationToken).ConfigureAwait(false);
+            await ReleaseBatchSavepointAsync(scope.Connection, transaction, cancellationToken).ConfigureAwait(false);
             ReportConflicts(orgId, conflicts);
             return new UsageLedgerWrite([], [], [.. conflicts.Select(conflict => conflict.BillingKey)]);
         }
@@ -244,12 +245,31 @@ internal sealed partial class UsageLedgerStore(
             await RecordDuplicateAttemptsAsync(orgId, duplicates, cancellationToken).ConfigureAwait(false);
         }
 
-        await transaction.ReleaseAsync(BatchSavepoint, cancellationToken).ConfigureAwait(false);
+        await ReleaseBatchSavepointAsync(scope.Connection, transaction, cancellationToken).ConfigureAwait(false);
 
         return new UsageLedgerWrite(
             inserted,
             [.. recorded.Where(row => row.OriginalPeriod is not null)],
             []);
+    }
+
+    /// <summary>
+    /// Releases <see cref="BatchSavepoint"/> with an asynchronous command. The provider's savepoint helper performs
+    /// synchronous I/O, which would block a request thread, so the fixed statement runs on the scope's own connection and
+    /// transaction instead.
+    /// </summary>
+    /// <param name="connection">The scope's connection, which owns the savepoint.</param>
+    /// <param name="transaction">The scope's open transaction.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private static async Task ReleaseBatchSavepointAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "release savepoint " + BatchSavepoint;
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task RecordDuplicateAttemptsAsync(

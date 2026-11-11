@@ -154,7 +154,7 @@ public sealed record RecordUsageBatchRequest(
     IReadOnlyList<UsageEntryInput> Entries);
 
 /// <summary>
-/// What one batch recorded (12.3.1 §5): the billing keys of the rows this call inserted, the ones it did not, and the
+/// What one batch recorded: the billing keys of the rows this call inserted, the ones it did not, and the
 /// ones whose payload disagreed with the key, all in request order and never containing a key twice.
 /// </summary>
 /// <param name="Inserted">The billing keys of the rows inserted by this call.</param>

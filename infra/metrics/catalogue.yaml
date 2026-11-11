@@ -158,7 +158,7 @@ entries:
     meter: evidgate
     kind: counter
     unit: '{key}'
-    description: 'Billing keys whose usage-ledger payload conflicted, because a stored row holds another payload or the request repeated a key with a different payload. The batch is rolled back and nothing is billed, so this counts a refusal. Alert on any increase: a producer is reusing a billing key for new work and that usage is not being recorded.'
+    description: 'Billing keys whose usage-ledger payload conflicted, because a stored row holds another payload or the request repeated a key with a different payload. There is no alert rule for this counter yet. An increase means a batch was refused: its usage is not billed, the task that recorded it completed instead of retrying, and the only recovery is to re-enqueue the batch once the producer stops reusing the key for new work.'
     labels: []
     source: src/Modules/Evidgate.Modules.Usage/Infrastructure/Persistence/UsageLedgerStore.cs
 

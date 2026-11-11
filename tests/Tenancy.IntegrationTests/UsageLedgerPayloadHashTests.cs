@@ -1,4 +1,4 @@
-// CR-21: the ledger's payload hash on a real tenant. A resend of the same billable payload stays a verified replay (one
+// The ledger's payload hash on a real tenant. A resend of the same billable payload stays a verified replay (one
 // row, a duplicate tally, nothing billed twice), while a reused billing key claiming another payload is a conflict that
 // writes nothing at all — not the conflicting row, not the new key beside it, not a duplicate tally. Real pipeline, real
 // transaction and real RLS, as in the sibling suites: the in-process half goes through the registered IUsageLedger
@@ -18,7 +18,7 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// CR-21: what a billing key claims. The ledger stores the canonical hash of the billable payload (<c>payload_hash</c>),
+/// What a billing key claims. The ledger stores the canonical hash of the billable payload (<c>payload_hash</c>),
 /// so a key already on file with the same hash is idempotent and a key already on file with another hash is a conflict
 /// that rolls the whole batch back. <c>occurred_at</c> is not part of the claim, and the key itself is the identity.
 /// </summary>
@@ -28,6 +28,7 @@ namespace Tenancy.IntegrationTests;
 /// off through <c>LeanLibraryMetrics</c>; the one Evidgate counter a case asserts is captured by a listener the case
 /// installs for its own duration.
 /// </remarks>
+[Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
 public sealed partial class UsageLedgerPayloadHashTests
 {
@@ -91,8 +92,20 @@ public sealed partial class UsageLedgerPayloadHashTests
         new(billingKey, metric, project, quantity, unit, period, occurredAt ?? OccurredAt);
 
     /// <summary>Records a batch through the registered <see cref="IUsageLedger"/> inside an explicit tenant scope.</summary>
+    /// <param name="world">The world.</param>
+    /// <param name="entries">The batch.</param>
+    private static Task<UsageBatchResult> RecordAsync(World world, IReadOnlyList<UsageEntryInput> entries) =>
+        RecordAsync(world, world.Org, entries);
+
+    /// <summary>
+    /// Records a batch for <paramref name="org"/>, so the same key can be written in two tenants in one case.
+    /// </summary>
+    /// <param name="world">The world.</param>
+    /// <param name="org">The tenant scope to open.</param>
+    /// <param name="entries">The batch.</param>
     private static async Task<UsageBatchResult> RecordAsync(
         World world,
+        Guid org,
         IReadOnlyList<UsageEntryInput> entries)
     {
         var token = TestContext.Current.CancellationToken;
@@ -100,7 +113,7 @@ public sealed partial class UsageLedgerPayloadHashTests
         await using var services = world.Commands.Services.CreateAsyncScope();
         var provider = services.ServiceProvider;
         var scopes = provider.GetRequiredService<ITenantScopeFactory>();
-        await using var scope = await scopes.BeginAsync(world.Org, null, false, token);
+        await using var scope = await scopes.BeginAsync(org, null, false, token);
 
         var result = await provider.GetRequiredService<IUsageLedger>()
             .RecordAsync(new RecordUsageBatchRequest(entries), token);

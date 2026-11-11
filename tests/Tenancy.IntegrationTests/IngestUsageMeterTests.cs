@@ -116,8 +116,8 @@ public sealed partial class IngestUsageMeterTests
         _fixture.ScalarAsync<string>(database, $"select state from public.task where task_type = '{MeteringTask}'");
 
     /// <summary>How many attempts the one metering row has had: one means the queue never retried it.</summary>
-    private Task<long> AttemptsAsync(string database) =>
-        _fixture.ScalarAsync<long>(database, $"select attempts from public.task where task_type = '{MeteringTask}'");
+    private Task<int> AttemptsAsync(string database) =>
+        _fixture.ScalarAsync<int>(database, $"select attempts from public.task where task_type = '{MeteringTask}'");
 
     /// <summary>Metering rows that would run again (any state but <c>done</c>), so "not requeued" is assertable.</summary>
     private Task<long> PendingTaskRowsAsync(string database) =>

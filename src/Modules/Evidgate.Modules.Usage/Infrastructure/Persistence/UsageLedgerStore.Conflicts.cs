@@ -75,24 +75,49 @@ internal sealed partial class UsageLedgerStore
                     $"the usage ledger holds no row under a billing key the batch just wrote or skipped: {row.BillingKey}");
             }
 
-            var storedHash = storedRow.PayloadHash ?? UsagePayloadHash.Compute(
-                storedRow.Metric,
-                storedRow.ProjectId,
-                storedRow.Quantity,
-                storedRow.Unit,
-                storedRow.RequestedPeriod);
-
-            if (repeatedHash is not null)
+            if (ConflictOf(row, storedRow, repeatedHash) is { } conflict)
             {
-                conflicts.Add(new LedgerKeyConflict(row.BillingKey, row.ProjectId, storedHash, repeatedHash));
-            }
-            else if (!string.Equals(storedHash, row.PayloadHash, StringComparison.Ordinal))
-            {
-                conflicts.Add(new LedgerKeyConflict(row.BillingKey, row.ProjectId, storedHash, row.PayloadHash));
+                conflicts.Add(conflict);
             }
         }
 
         return conflicts;
+    }
+
+    /// <summary>
+    /// The conflict one key reports, or null when the payloads agree. The two digests it carries must really disagree: a
+    /// repeat can carry the payload already on file, so when the request's first occurrence already differs from the
+    /// stored row, that occurrence is the claim reported.
+    /// </summary>
+    /// <param name="row">The row the batch claims for the key.</param>
+    /// <param name="storedRow">The row on file under that key.</param>
+    /// <param name="repeatedHash">The differing hash of the request's repeat of the key, or null when it did not repeat.</param>
+    private static LedgerKeyConflict? ConflictOf(
+        PendingUsageEntry row,
+        StoredLedgerPayload storedRow,
+        string? repeatedHash)
+    {
+        var storedHash = storedRow.PayloadHash ?? UsagePayloadHash.Compute(
+            storedRow.Metric,
+            storedRow.ProjectId,
+            storedRow.Quantity,
+            storedRow.Unit,
+            storedRow.RequestedPeriod);
+
+        var firstOccurrenceDiffers = !string.Equals(storedHash, row.PayloadHash, StringComparison.Ordinal);
+
+        if (repeatedHash is null)
+        {
+            return firstOccurrenceDiffers
+                ? new LedgerKeyConflict(row.BillingKey, row.ProjectId, storedHash, row.PayloadHash)
+                : null;
+        }
+
+        return new LedgerKeyConflict(
+            row.BillingKey,
+            row.ProjectId,
+            storedHash,
+            firstOccurrenceDiffers ? row.PayloadHash : repeatedHash);
     }
 
     /// <summary>Reads the stored billable payload of <paramref name="billingKeys"/> in one statement.</summary>

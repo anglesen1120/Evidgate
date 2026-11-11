@@ -133,7 +133,7 @@ public sealed class UsagePayloadHashTests
         batch.Rows[0].PayloadHash.ShouldBe(batch.Rows[1].PayloadHash);
         batch.Rows[0].PayloadHash.ShouldStartWith("sha256:");
         batch.Rows[0].PayloadHash.Length.ShouldBe(71);
-        batch.ConflictingBillingKeys.ShouldBeEmpty();
+        batch.ConflictingPayloadHashes.ShouldBeEmpty();
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class UsagePayloadHashTests
 
         batch.Rows.Count.ShouldBe(1);
         batch.RepeatedBillingKeys.ShouldBe(["batch:1:results"]);
-        batch.ConflictingBillingKeys.ShouldBe(["batch:1:results"]);
+        batch.ConflictingPayloadHashes.Keys.ShouldBe(["batch:1:results"]);
         batch.ConflictingPayloadHashes["batch:1:results"].ShouldNotBe(batch.Rows[0].PayloadHash);
     }
 
@@ -161,7 +161,6 @@ public sealed class UsagePayloadHashTests
         ]);
 
         batch.RepeatedBillingKeys.ShouldBe(["batch:1:results"]);
-        batch.ConflictingBillingKeys.ShouldBeEmpty();
         batch.ConflictingPayloadHashes.ShouldBeEmpty();
     }
 

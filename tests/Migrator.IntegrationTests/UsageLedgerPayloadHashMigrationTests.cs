@@ -1,6 +1,6 @@
 // 0098's upgrade path on a fresh Testcontainers database: a ledger that already holds rows at 0097 (all with no hash)
 // must keep every row and its NULL hash when the column and its CHECK arrive, and the CHECK must be live afterwards.
-// S366 owns the rest of this project's migration surface; this file only adds 0098.
+// The rest of this project's migration surface lives in its own files; this one only adds 0098.
 using Evidgate.Migrator;
 using Npgsql;
 using Shouldly;
@@ -31,8 +31,34 @@ public sealed class UsageLedgerPayloadHashMigrationTests
         var token = TestContext.Current.CancellationToken;
         var database = await _fixture.CreateDatabaseAsync();
 
-        // Head at 0097: every real file but this one, applied by the real runner.
         using var migrations = TempMigrations.Create();
+        var firstLedgerId = await SeedAtHeadMinusOneAsync(database, migrations, token);
+
+        migrations.CopyReal(HashFile);
+        var applied = MigratorHarness.Run(migrations.Path, _fixture.OwnerConnectionString(database));
+
+        applied.ExitCode.ShouldBe(MigratorExitCodes.Success, applied.Transcript);
+        applied.Result.AppliedNow.ShouldContain(HashFile);
+        applied.Result.AppliedNow.ShouldBe([HashFile], "nothing before it is re-applied");
+
+        await AssertLegacyRowsKeptAsync(database, token);
+        await AssertColumnShapeAsync(database, token);
+        await AssertCheckRefusesNonCanonicalAsync(database, firstLedgerId, token);
+    }
+
+    /// <summary>
+    /// Applies every real file but this one with the real runner, asserts the column is still absent, and writes the two
+    /// legacy ledger rows the migration must survive.
+    /// </summary>
+    /// <param name="database">The database to migrate and seed.</param>
+    /// <param name="migrations">The temp migration directory the real files are copied into.</param>
+    /// <param name="token">Cancellation.</param>
+    /// <returns>The id of the first legacy row, the one the check is probed on.</returns>
+    private async Task<Guid> SeedAtHeadMinusOneAsync(
+        string database,
+        TempMigrations migrations,
+        CancellationToken token)
+    {
         migrations.CopyReal([.. PostgresMigratorFixture.RealMigrationFileNames.Where(name => name != HashFile)]);
         MigratorHarness.Run(migrations.Path, _fixture.OwnerConnectionString(database))
             .ExitCode.ShouldBe(MigratorExitCodes.Success);
@@ -63,13 +89,14 @@ public sealed class UsageLedgerPayloadHashMigrationTests
             [],
             token)).ShouldBe(0L, "the column arrives with 0098, so this database is at head-minus-one");
 
-        migrations.CopyReal(HashFile);
-        var applied = MigratorHarness.Run(migrations.Path, _fixture.OwnerConnectionString(database));
+        return firstLedgerId;
+    }
 
-        applied.ExitCode.ShouldBe(MigratorExitCodes.Success, applied.Transcript);
-        applied.Result.AppliedNow.ShouldContain(HashFile);
-        applied.Result.AppliedNow.ShouldBe([HashFile], "nothing before it is re-applied");
-
+    /// <summary>Every legacy row survives the upgrade, at a NULL hash: no backfill and no invented constant.</summary>
+    /// <param name="database">The migrated database.</param>
+    /// <param name="token">Cancellation.</param>
+    private async Task AssertLegacyRowsKeptAsync(string database, CancellationToken token)
+    {
         (await ScalarAsync(
             database,
             "select count(*) from public.usage_ledger_entry",
@@ -85,7 +112,13 @@ public sealed class UsageLedgerPayloadHashMigrationTests
             "select count(*) from public.usage_ledger_entry where payload_hash is not null",
             [],
             token)).ShouldBe(0L);
+    }
 
+    /// <summary>The new column is nullable text and its validated CHECK arrived in the same file.</summary>
+    /// <param name="database">The migrated database.</param>
+    /// <param name="token">Cancellation.</param>
+    private async Task AssertColumnShapeAsync(string database, CancellationToken token)
+    {
         (await ScalarAsync(
             database,
             "select count(*) from information_schema.columns "
@@ -100,13 +133,20 @@ public sealed class UsageLedgerPayloadHashMigrationTests
             + $"where conname = '{Constraint}' and convalidated",
             [],
             token)).ShouldBe(1L, "the digest CHECK exists and is validated in the same file");
+    }
 
-        // The CHECK is live for the rows this database will write from now on.
+    /// <summary>The CHECK is live for the rows this database will write from now on.</summary>
+    /// <param name="database">The migrated database.</param>
+    /// <param name="ledgerId">A row the probe tries to give a non-canonical digest.</param>
+    /// <param name="token">Cancellation.</param>
+    private async Task AssertCheckRefusesNonCanonicalAsync(string database, Guid ledgerId, CancellationToken token)
+    {
         var refused = await CaptureErrorAsync(
             database,
             "update public.usage_ledger_entry set payload_hash = 'sha256:abc' where id = @id",
-            [("id", firstLedgerId)],
+            [("id", ledgerId)],
             token);
+
         refused.SqlState.ShouldBe("23514");
         refused.ConstraintName.ShouldBe(Constraint);
     }
