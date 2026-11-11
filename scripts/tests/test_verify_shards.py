@@ -25,6 +25,7 @@ FAKE_DOTNET = textwrap.dedent("""\
       for c in "${classes[@]}"; do echo "  $c.First"; echo "  $c.Second(value: 1.5)"; done
       exit 0
     fi
+    if [[ "${1:-}" == build-server ]]; then echo SHUTDOWN >>"${FAKE_CALLS:-/dev/null}"; exit "${FAKE_SHUTDOWN_RC:-0}"; fi
     if [[ -n "${FAKE_HANG_PIDS:-}" ]]; then echo $$ >>"$FAKE_HANG_PIDS"; exec sleep 60; fi
     ran=0 rc=0 picked=()
     if [[ " $* " == *" --filter-class "* ]]; then

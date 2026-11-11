@@ -284,15 +284,54 @@ test_log_total() {
   sed -n 's/^  total: \([0-9][0-9]*\)$/\1/p' "$1" | tail -n 1 | grep . || echo 0
 }
 
-# Background runs of this stage: parallel arrays of pid, name and log file.
-PT_PIDS=() PT_NAMES=() PT_FILES=() PT_LOGS=
+# Background runs of this stage: parallel arrays of pid, name, log file and start
+# second. A reaped run's pid is cleared; PT_CAP is the most runs alive at once
+# (0 = no cap).
+PT_PIDS=() PT_NAMES=() PT_FILES=() PT_STARTS=() PT_LOGS= PT_CAP=0 PT_FAILED=0
 
-# `start_test_run <name> <log> <dotnet test args...>`: one background run.
+# `format_duration <seconds>`: "<m>m<ss>s".
+format_duration() { printf '%dm%02ds' "$(($1 / 60))" "$(($1 % 60))"; }
+
+# `reap_test_runs`: reports every run that has finished (a pid no longer alive is
+# already reaped by bash, so `wait` returns its saved status at once) and sets
+# PT_FAILED when one failed. Echoes nothing else.
+reap_test_runs() {
+  local i status elapsed
+  for i in "${!PT_PIDS[@]}"; do
+    [[ -n "${PT_PIDS[$i]}" ]] || continue
+    kill -0 "${PT_PIDS[$i]}" 2>/dev/null && continue
+    status=0
+    wait "${PT_PIDS[$i]}" || status=$?
+    elapsed="$(format_duration "$((SECONDS - PT_STARTS[i]))")"
+    if [[ "$status" -eq 0 ]]; then
+      echo "== ${PT_NAMES[$i]}: passed ($(test_log_total "${PT_FILES[$i]}") tests, $elapsed)"
+    else
+      echo "== ${PT_NAMES[$i]}: FAILED (exit $status, $elapsed)"
+      PT_FAILED=1
+      cat "${PT_FILES[$i]}"
+    fi
+    PT_PIDS[$i]=""
+  done
+}
+
+# `running_test_runs`: how many background runs are still alive.
+running_test_runs() {
+  local pid n=0
+  for pid in ${PT_PIDS[@]+"${PT_PIDS[@]}"}; do [[ -z "$pid" ]] || n=$((n + 1)); done
+  echo "$n"
+}
+
+# `start_test_run <name> <log> <dotnet test args...>`: one background run. With a
+# cap it first waits, polling (no `wait -n` in macOS bash 3.2), for a free slot.
 start_test_run() {
   local name="$1" log="$2"
   shift 2
+  while [[ "$PT_CAP" -gt 0 && "$(running_test_runs)" -ge "$PT_CAP" ]]; do
+    sleep 0.2
+    reap_test_runs
+  done
   dotnet test --no-build -c Release --no-progress "$@" >"$log" 2>&1 &
-  PT_PIDS+=("$!") PT_NAMES+=("$name") PT_FILES+=("$log")
+  PT_PIDS+=("$!") PT_NAMES+=("$name") PT_FILES+=("$log") PT_STARTS+=("$SECONDS")
 }
 
 # `start_tenancy_shards <shards> <logs dir> <classes>`: one run per non-empty shard.
@@ -326,12 +365,17 @@ stop_parallel_tests() {
 
 run_parallel_tests() {
   local shards="${EVIDGATE_TENANCY_SHARDS:-3}" logs listing discovered classes project name
-  local total=0 failed=0 i saved_traps wait_pid
-  PT_PIDS=() PT_NAMES=() PT_FILES=()
+  local total=0 failed=0 i saved_traps cap="${EVIDGATE_TEST_PARALLEL:-0}"
+  PT_PIDS=() PT_NAMES=() PT_FILES=() PT_STARTS=() PT_FAILED=0
   if ! [[ "$shards" =~ ^[1-9][0-9]?$ ]] || [[ "$shards" -gt 16 ]]; then
     echo "verify: EVIDGATE_TENANCY_SHARDS must be an integer from 1 to 16, got '$shards'" >&2
     return 2
   fi
+  if [[ -n "${EVIDGATE_TEST_PARALLEL:-}" ]] && { ! [[ "$cap" =~ ^[1-9][0-9]?$ ]] || [[ "$cap" -gt 16 ]]; }; then
+    echo "verify: EVIDGATE_TEST_PARALLEL must be an integer from 1 to 16, got '$cap'" >&2
+    return 2
+  fi
+  PT_CAP="$cap"
   listing="$(dotnet test --no-build -c Release --project "$TENANCY_PROJECT" --list-tests 2>&1)" || {
     printf '%s\n' "$listing" >&2
     return 1
@@ -347,23 +391,25 @@ run_parallel_tests() {
   saved_traps="$(trap -p EXIT INT TERM)"
   trap stop_parallel_tests EXIT
   trap 'exit 143' INT TERM
+  # The compiler server and MSBuild nodes outlive the build stage and would hold
+  # memory next to the test processes; a failed shutdown only costs that memory.
+  if dotnet build-server shutdown >/dev/null 2>&1; then
+    echo "   build servers stopped before the tests"
+  else
+    echo "   build-server shutdown failed; continuing"
+  fi
   start_tenancy_shards "$shards" "$logs" "$classes"
   for project in tests/*/*.csproj; do
     [[ "$project" == "$TENANCY_PROJECT"/* ]] && continue
     name="$(basename "$(dirname "$project")")"
     start_test_run "$name" "$logs/$name.log" --project "$project" --minimum-expected-tests 1
   done
-  for i in "${!PT_PIDS[@]}"; do
-    wait_pid="${PT_PIDS[$i]}"
-    if wait "$wait_pid"; then
-      echo "== ${PT_NAMES[$i]}: passed ($(test_log_total "${PT_FILES[$i]}") tests)"
-    else
-      echo "== ${PT_NAMES[$i]}: FAILED (exit $?)"
-      failed=1
-      cat "${PT_FILES[$i]}"
-    fi
-    # Cleared only once reaped: an interrupt during the wait must still kill it.
-    PT_PIDS[$i]=""
+  while [[ "$(running_test_runs)" -gt 0 ]]; do
+    sleep 0.2
+    reap_test_runs
+  done
+  failed="$PT_FAILED"
+  for i in "${!PT_NAMES[@]}"; do
     if [[ "${PT_NAMES[$i]}" == tenancy-* ]]; then
       total=$((total + $(test_log_total "${PT_FILES[$i]}")))
     fi
