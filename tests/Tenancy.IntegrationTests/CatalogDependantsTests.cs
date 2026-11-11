@@ -17,13 +17,13 @@ namespace Tenancy.IntegrationTests;
 /// however large the graph.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class CatalogDependantsTests
+public sealed class CatalogDependantsTests : IClassFixture<TenancyHostPool>
 {
     private const string Commit1 = "aaaaaaa1111111";
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public CatalogDependantsTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public CatalogDependantsTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project, Guid Suite, Guid[] Revisions)
         : IAsyncDisposable
@@ -41,7 +41,7 @@ public sealed class CatalogDependantsTests
     private async Task<World> StartAsync(int cases = 6)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

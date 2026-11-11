@@ -14,7 +14,7 @@ namespace Tenancy.IntegrationTests;
 /// renames and re-syncs, immutability at the database, the store contract and the revisions route.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class CatalogRevisionTests
+public sealed class CatalogRevisionTests : IClassFixture<TenancyHostPool>
 {
     private const string IdA = "018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f";
     private const string IdB = "018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e60";
@@ -24,8 +24,8 @@ public sealed class CatalogRevisionTests
     private const string Commit4 = "ddddddd4444444";
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public CatalogRevisionTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public CatalogRevisionTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project) : IAsyncDisposable
     {
@@ -41,7 +41,7 @@ public sealed class CatalogRevisionTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
