@@ -298,7 +298,7 @@ public sealed partial class EvidenceSecretScanTaskTests(PostgresTenancyFixture f
     private async Task<World> StartAsync(string? database = null, Action<IServiceCollection>? services = null)
     {
         database ??= await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
         Guid project;

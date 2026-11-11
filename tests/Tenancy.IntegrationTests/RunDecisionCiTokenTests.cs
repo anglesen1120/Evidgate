@@ -38,7 +38,7 @@ public sealed class RunDecisionCiTokenTests
     [Fact]
     public async Task MintedCiToken_SeesItsOwnRun_AndEveryOtherRunIsTheSameUnknownId()
     {
-        var world = await StartAsync();
+        await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
         var evaluationId = await InsertEvaluationAsync(world, runId, await SeedPolicyRevisionAsync(world), "PASS");
         var token = await MintAsync(world.Client, world);
@@ -79,7 +79,7 @@ public sealed class RunDecisionCiTokenTests
     [Fact]
     public async Task TokenWithoutDecisionRead_IsForbiddenBeforeTheRunIsRead()
     {
-        var world = await StartAsync();
+        await using var world = await StartAsync();
         var runId = await SeedRunAsync(world);
 
         var narrow = await MintAsync(world.Client, world, scopes: ["event:write"]);
@@ -243,9 +243,15 @@ public sealed class RunDecisionCiTokenTests
         string Database,
         Guid User,
         Guid Org,
-        Guid Project)
+        Guid Project) : IAsyncDisposable
     {
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
+
+        public async ValueTask DisposeAsync()
+        {
+            Client.Dispose();
+            await Api.DisposeAsync();
+        }
     }
 
     /// <summary>
