@@ -197,9 +197,9 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         return plan;
     }
 
-    /// <summary>Moves the seeded run to another state (the canceled/complete cases).</summary>
+    /// <summary>Moves the seeded run to another state along the guard's declared edges (the canceled/complete cases).</summary>
     internal Task SetRunStateAsync(string state) =>
-        Fixture.ExecuteAsync(Database, $"update public.run set state = '{state}' where id = '{RunId:D}'");
+        RunStateWalk.MoveAsync(Fixture, Database, RunId, state);
 
     internal Task<long> CountAsync(string table, string? where = null) =>
         Fixture.ScalarAsync<long>(

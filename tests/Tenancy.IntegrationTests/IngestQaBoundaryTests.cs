@@ -235,17 +235,20 @@ public sealed class IngestQaBoundaryTests
         closed.Status.ShouldBe(HttpStatusCode.Conflict, closed.ErrorMessage);
         closed.ErrorCode.ShouldBe("run_closed");
 
-        // canceled still accepts and marks (T12).
-        await world.SetRunStateAsync("canceled");
+        // canceled still accepts and marks (T12). The run above is terminal (incomplete has no outgoing edge), so a
+        // second world carries the canceled half: its run is seeded `created`, and created -> canceled is one edge.
+        await using var canceledWorld = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await canceledWorld.SetRunStateAsync("canceled");
         var canceled = await IngestQaRequests.PostEventsAsync(
-            world.Client,
-            world.RunId,
-            IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: sequence)));
+            canceledWorld.Client,
+            canceledWorld.RunId,
+            IngestQaRequests.Batch(IngestQaRequests.Event(
+                Guid.CreateVersion7(), IngestQaRequests.KeyOf(canceledWorld, 0), sequence: 1)));
 
         canceled.Status.ShouldBe(HttpStatusCode.OK, canceled.ErrorMessage);
         canceled.Body.GetProperty("accepted").GetInt32().ShouldBe(1);
-        (await world.ScalarAsync<bool>(
-            $"select after_cancel from public.event where run_id = '{world.RunId:D}' and sequence = {sequence}")).ShouldBeTrue();
+        (await canceledWorld.ScalarAsync<bool>(
+            $"select after_cancel from public.event where run_id = '{canceledWorld.RunId:D}' and sequence = 1")).ShouldBeTrue();
     }
 
     [Fact]

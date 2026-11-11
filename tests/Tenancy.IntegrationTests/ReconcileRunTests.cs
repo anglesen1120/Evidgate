@@ -198,9 +198,9 @@ public sealed partial class ReconcileRunTests
         }
     }
 
-    /// <summary>Moves a run to <paramref name="state"/> (the migration role: a case seeds states the routes cannot reach).</summary>
+    /// <summary>Moves a run to <paramref name="state"/> along the guard's declared edges.</summary>
     private Task SetRunStateAsync(IngestTestWorld world, Guid runId, string state) =>
-        _fixture.ExecuteAsync(world.Database, $"update public.run set state = '{state}' where id = '{runId:D}'");
+        RunStateWalk.MoveAsync(_fixture, world.Database, runId, state);
 
     /// <summary>
     /// Moves the run's collection deadline into the past (the migration role, on a column no route moves). The deadline is
@@ -2457,6 +2457,33 @@ public sealed partial class ReconcileRunTests
         world.CountAsync(
             "task",
             $"org_id = '{world.Org:D}' and task_type = '{RunReconcileContract.OutboxTaskType}' and state = 'done'");
+
+    /// <summary>
+    /// A run that finished as <c>complete</c> and holds revision one: every planned execution of the world answered, one
+    /// shard that closes with a matching three-event declaration, and the attempt that settles it. The settle is the
+    /// production path, so the case never writes a terminal state the guard refuses.
+    /// </summary>
+    /// <param name="world">The queued world, whose plan is fully answered.</param>
+    private async Task<(Guid RunId, string RevisionOne)> StartCompleteRunAsync(IngestTestWorld world)
+    {
+        var runId = world.RunId;
+        var executionKey = world.Plan.Executions[0].ExecutionKey;
+        await SetRunStateAsync(world, runId, "collecting");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 3, declaredCount: 3);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.finished", "passed", ExecutionKey: executionKey),
+            new StoredEvent(Producer, 2, "test.finished", "passed", ExecutionKey: executionKey),
+            new StoredEvent(Producer, 3, "test.finished", "passed", ExecutionKey: executionKey));
+
+        var (outcome, finalization) = await ReconcileAndFinishAsync(world, runId);
+        outcome.Disposition.ShouldBe(ReconcileDisposition.Compared, Describe(outcome));
+        finalization.ShouldNotBeNull().Completeness.ShouldBe(ReconcileFinisher.Complete, Describe(outcome));
+        (await StateAsync(world, runId)).ShouldBe("complete");
+
+        return (runId, await RevisionRowAsync(world, runId, 1));
+    }
 
     /// <summary>
     /// A run that finished as <c>incomplete</c> with one planned execution unanswered and one declared event missing:

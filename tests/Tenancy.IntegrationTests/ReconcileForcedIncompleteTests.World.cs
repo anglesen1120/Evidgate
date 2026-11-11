@@ -192,7 +192,7 @@ public sealed partial class ReconcileForcedIncompleteTests
             + $"and object_id = '{runId:D}' and actor_type = 'system'");
 
     private Task SetRunStateAsync(IngestTestWorld world, Guid runId, string state) =>
-        _fixture.ExecuteAsync(world.Database, $"update public.run set state = '{state}' where id = '{runId:D}'");
+        RunStateWalk.MoveAsync(_fixture, world.Database, runId, state);
 
     /// <summary>
     /// Closes every slot of the run with a matching zero declaration, so the comparison names nothing. The update

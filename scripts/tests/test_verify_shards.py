@@ -1,4 +1,4 @@
-"""The parallel test stage in scripts/verify-guards.sh (`run_parallel_tests`).
+"""The parallel test stage in scripts/verify-parallel-tests.sh (`run_parallel_tests`).
 
 The real function runs against a scratch tree and a fake `dotnet`: the shell
 logic under test is the sharding, the exit codes and the count check, none of
@@ -14,7 +14,9 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-GUARDS = ROOT / "scripts" / "verify-guards.sh"
+# An inherited cap would change what these fixtures measure.
+BASE_ENV = {k: v for k, v in os.environ.items() if k != "EVIDGATE_TEST_PARALLEL"}
+GUARDS = ROOT / "scripts" / "verify-parallel-tests.sh"
 
 FAKE_DOTNET = textwrap.dedent("""\
     #!/usr/bin/env bash
@@ -25,6 +27,7 @@ FAKE_DOTNET = textwrap.dedent("""\
       for c in "${classes[@]}"; do echo "  $c.First"; echo "  $c.Second(value: 1.5)"; done
       exit 0
     fi
+    if [[ "${1:-}" == build-server ]]; then echo SHUTDOWN >>"${FAKE_CALLS:-/dev/null}"; exit "${FAKE_SHUTDOWN_RC:-0}"; fi
     if [[ -n "${FAKE_HANG_PIDS:-}" ]]; then echo $$ >>"$FAKE_HANG_PIDS"; exec sleep 60; fi
     ran=0 rc=0 picked=()
     if [[ " $* " == *" --filter-class "* ]]; then
@@ -65,7 +68,7 @@ class ParallelTests(unittest.TestCase):
             return subprocess.run(
                 ["bash", "-c", script],
                 cwd=tmp,
-                env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", **env},
+                env={**BASE_ENV, "PATH": f"{bin_dir}:{os.environ['PATH']}", **env},
                 capture_output=True,
                 text=True,
             )
@@ -120,7 +123,7 @@ class ParallelTests(unittest.TestCase):
                 ["bash", "-c", f'set -euo pipefail; source "{GUARDS}"; run_parallel_tests'],
                 cwd=tmp,
                 env={
-                    **os.environ,
+                    **BASE_ENV,
                     "PATH": f"{bin_dir}:{os.environ['PATH']}",
                     "EVIDGATE_TENANCY_SHARDS": "1",
                     "FAKE_HANG_PIDS": str(pids),

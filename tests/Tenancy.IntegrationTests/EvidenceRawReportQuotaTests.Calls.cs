@@ -289,8 +289,7 @@ public sealed partial class EvidenceRawReportQuotaTests
             "insert into public.task (id, org_id, queue, task_type, payload, idempotency_key, state, last_error) values "
             + $"('{Guid.CreateVersion7():D}', '{world.Org:D}', 'tasks', '{EvidenceTaskTypes.ReportParse}', {payload}, "
             + $"'outbox:{outboxId:D}', 'retry', '{persistedError}')");
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
+        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
 
         var log = new CapturedLog();
         var outcome = await ParseAsync(world, artifactId, log);
@@ -338,8 +337,7 @@ public sealed partial class EvidenceRawReportQuotaTests
 
         // The run closes while the row still carries its deferral: the retry is refused by the admission, which is the
         // loss this case names. The deferral stays on the task row either way.
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
+        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
         var log = new CapturedLog();
         var outcome = await ParseAsync(world, artifact, log);
 
@@ -366,8 +364,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         // it only postpones a refusal the operator must see now.
         await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
         var taskId = await SeedDeferredTaskAsync(world, artifactId, queue);
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
+        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
 
         var log = new CapturedLog();
         var outcome = await ParseAsync(world, artifactId, log);
@@ -400,8 +397,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 0m, limit: 100m);
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
+        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
 
         var log = new CapturedLog();
         var outcome = await ParseAsync(world, artifactId, log);

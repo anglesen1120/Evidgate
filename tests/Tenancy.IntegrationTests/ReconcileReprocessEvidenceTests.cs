@@ -164,12 +164,12 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Reprocess_On_Complete_Run_Appends_Its_Revision_And_Leaves_The_Run_Complete()
     {
-        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own.
+        // The dispatcher and consumer claim rows of every tenant, so these tests keep a database of their own. Every
+        // planned execution is answered here: the complete arrangement below must not inherit a missing_result.
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
+        await using var world = await StartWithQueueAsync(database: dedicated.Name);
 
-        var (runId, revisionOne) = await StartIncompleteRunAsync(world);
-        await SetRunStateAsync(world, runId, "complete");
+        var (runId, revisionOne) = await StartCompleteRunAsync(world);
 
         // The evidence the first revision missed, under a synthetic producer of its own: the same shape the reprocess
         // task writes.
@@ -211,8 +211,13 @@ public sealed partial class ReconcileRunTests
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartWithQueueAsync(attemptsSkip: 1, database: dedicated.Name);
 
-        var (runId, revisionOne) = await StartIncompleteRunAsync(world);
+        var runId = world.RunId;
         await SetRunStateAsync(world, runId, "collecting");
+
+        // No declared edge leaves a settled run, so a revision beside a run that is still collecting has no producing
+        // path: the fixture writes revision one itself, and the append this case asserts is the production one.
+        await SeedRevisionOneAsync(world, runId, eventWatermark: 0);
+        var revisionOne = await RevisionRowAsync(world, runId, 1);
 
         var producerId = "reprocess-" + Guid.CreateVersion7().ToString("D");
         await InsertSyntheticSlotAsync(world, runId, producerId, shardIndex: 2, declaredLastSequence: 1, declaredCount: 1);
@@ -263,16 +268,33 @@ public sealed partial class ReconcileRunTests
     // ------------------------------------------------------------------ world and driving
 
     /// <summary>
-    /// A run that finished as <c>incomplete</c> (so it holds revision one) and was then canceled, plus the rows a
-    /// reprocess of its stored report leaves: the synthetic producer's slot, written closed and declared, and one event
-    /// under it, which is what the reconciler's aggregate reads and what moves the evidence watermark.
+    /// A canceled run that already holds revision one, plus the rows a reprocess of its stored report leaves: the
+    /// synthetic producer's slot, written closed and declared, and one event under it, which is what the reconciler's
+    /// aggregate reads and what moves the evidence watermark.
+    /// <para>
+    /// The run is canceled first, because a settled run has no declared outgoing edge: moving <c>incomplete</c> to
+    /// <c>canceled</c> afterwards is an edge the state machine refuses. Revision one is therefore the production append
+    /// of a reprocess attempt on the canceled run — the same settlement path the cases below assert again with the re-read
+    /// evidence — and the run stays canceled throughout.
+    /// </para>
     /// </summary>
     /// <param name="world">The queued world, whose plan keeps one execution unattempted.</param>
     /// <returns>The run, revision one as a row, the synthetic producer and the row/audit state before the attempt.</returns>
     private async Task<ArrangedReprocess> ArrangeCanceledReprocessAsync(IngestTestWorld world)
     {
-        var (runId, revisionOne) = await StartIncompleteRunAsync(world);
+        var runId = world.RunId;
         await SetRunStateAsync(world, runId, "canceled");
+        await CloseSlotAsync(world, runId, Producer, declaredLastSequence: 2, declaredCount: 2);
+        await StoreEventsAsync(
+            world,
+            runId,
+            new StoredEvent(Producer, 1, "test.step", null, ExecutionKey: world.Plan.Executions[0].ExecutionKey));
+
+        var (arrangeOutcome, arranged) = await ReconcileAndFinishOnHostAsync(world, runId, reprocessTrigger: true);
+        arrangeOutcome.Disposition.ShouldBe(ReconcileDisposition.ComparedReprocess, Describe(arrangeOutcome));
+        arranged.ShouldNotBeNull().RevisionNo.ShouldBe(1, "the first reprocess append is revision one");
+        (await StateAsync(world, runId)).ShouldBe("canceled", "an appended revision never moves the run");
+        var revisionOne = await RevisionRowAsync(world, runId, 1);
 
         // The synthetic producer of a reprocess never collides with a shard that delivered the original report, and its
         // slot is written closed and declared: no producer will finalize it, so an open slot would hold the reconciler
@@ -309,6 +331,39 @@ public sealed partial class ReconcileRunTests
         string ProducerId,
         int Version,
         long StateChangeAuditRows);
+
+    /// <summary>
+    /// Writes revision one of a live run and moves the run's pointer onto it, in one transaction. No declared edge leaves
+    /// a settled run, so a revision beside a run that is still collecting has no producing path — the finisher appends a
+    /// revision and then settles the run. The fixture writes the row (and the pointer the reconciler reads as "this run
+    /// already holds a verdict") so the append this case asserts stays the production one.
+    /// </summary>
+    /// <param name="world">The world whose database holds the run.</param>
+    /// <param name="runId">The live run that must already hold a revision.</param>
+    /// <param name="eventWatermark">The event count the revision counts.</param>
+    private async Task SeedRevisionOneAsync(IngestTestWorld world, Guid runId, long eventWatermark)
+    {
+        var revisionId = Guid.CreateVersion7();
+        await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
+        (await scope.ExecuteAsync(
+            """
+            insert into public.evidence_revision
+              (id, org_id, run_id, revision_no, completeness, missing, outcome, artifact_set_hash, event_watermark,
+               manifest_hash)
+            values (@id, @org_id, @run_id, 1, 'incomplete', '{}'::text[], null, null, @watermark, @manifest_hash)
+            """,
+            ("id", revisionId),
+            ("org_id", world.Org),
+            ("run_id", runId),
+            ("watermark", eventWatermark),
+            ("manifest_hash", ManifestHashOf(runId)))).ShouldBe(1);
+        (await scope.ExecuteAsync(
+            "update public.run set current_evidence_revision_id = @id where org_id = @org_id and id = @run_id",
+            ("id", revisionId),
+            ("org_id", world.Org),
+            ("run_id", runId))).ShouldBe(1);
+        await scope.CommitAsync();
+    }
 
     /// <summary>
     /// The synthetic producer's slot exactly as the reprocess writer leaves it: closed, declared and bound to no

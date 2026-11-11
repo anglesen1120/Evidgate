@@ -351,7 +351,7 @@ public sealed partial class EvidenceRawReportParseTests
         await using var _ = world;
         await SeedPlanAsync(world);
         var artifactId = await SeedArtifactAsync(world, MappedBody);
-        await SetRunStateAsync(world, "update public.run set state = 'complete'");
+        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
 
         var outcome = await ParseAsync(world, artifactId, ProducerKind);
 

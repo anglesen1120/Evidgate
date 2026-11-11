@@ -21,14 +21,11 @@ public sealed partial class ReprocessReportTaskTests
     public async Task Reprocess_CanceledRun_AppendsRevisionWithoutBillingOrChangingOriginalEvidence()
     {
         await using var world = await StartAsync();
-        var (artifact, source) = await CreateOriginalRevisionAsync(world);
-        var originalRevision = await RevisionHashAsync(world, 1);
+        var (artifact, source) = await CreateCanceledRunWithReportAsync(world);
         var originalReport = await ReportHashAsync(world, source);
         var producer = await EventProducerAsync(world);
         var originalEvents = await EventDigestAsync(world, producer);
         var originalBytes = await StoredObjectDigestAsync(world, artifact);
-        await _fixture.ExecuteAsync(world.Database,
-            $"update public.run set state = 'canceled' where id = '{world.RunId:D}'");
         var transitions = await TransitionCountAsync(world);
         var ledger = await CountAsync(world, "usage_ledger_entry");
         var batches = await CountAsync(world, "event_batch");
@@ -38,8 +35,7 @@ public sealed partial class ReprocessReportTaskTests
         (await ReprocessAsync(world, parsing)).Events.ShouldBe(1);
         await ConsumeEnqueuedReconcileAsync(world, $"reprocess-{parsing:D}");
 
-        (await RevisionCountAsync(world)).ShouldBe(2);
-        (await RevisionHashAsync(world, 1)).ShouldBe(originalRevision);
+        (await RevisionCountAsync(world)).ShouldBe(1, "the reprocess appends the run's first revision");
         (await ReportHashAsync(world, source)).ShouldBe(originalReport);
         (await EventDigestAsync(world, producer)).ShouldBe(originalEvents);
         (await StoredObjectDigestAsync(world, artifact)).ShouldBe(originalBytes);
@@ -85,11 +81,26 @@ public sealed partial class ReprocessReportTaskTests
         (await ParseOriginalReportAsync(world, artifact)).Events.ShouldBe(1);
         var source = await SourceReportIdAsync(world, artifact);
         await _fixture.ExecuteAsync(world.Database,
-            $"update public.run set state = 'queued', collection_deadline_at = now() - interval '1 minute', "
+            $"update public.run set collection_deadline_at = now() - interval '1 minute', "
             + $"late_window_minutes = 60 where id = '{world.RunId:D}'");
         await ConsumeEnqueuedReconcileAsync(world, producerId: null);
         (await RevisionCountAsync(world)).ShouldBe(1);
         return (artifact, source);
+    }
+
+    /// <summary>
+    /// A run that is already canceled, with its original report parsed as after-cancel evidence. A settled run has no
+    /// declared outgoing edge, so the run is canceled first; the reprocess under test then appends the run's first
+    /// revision and the run stays canceled throughout.
+    /// </summary>
+    private async Task<(Guid Artifact, Guid Source)> CreateCanceledRunWithReportAsync(World world)
+    {
+        await SeedPlanAsync(world);
+        var artifact = await SeedArtifactAsync(world, ReportBody);
+        await _fixture.ExecuteAsync(world.Database,
+            $"update public.run set state = 'canceled' where id = '{world.RunId:D}'");
+        (await ParseOriginalReportAsync(world, artifact)).Events.ShouldBe(1);
+        return (artifact, await SourceReportIdAsync(world, artifact));
     }
 
     private async Task DriveMissingBytesToDeadLetterAsync(World world, Guid parsing)

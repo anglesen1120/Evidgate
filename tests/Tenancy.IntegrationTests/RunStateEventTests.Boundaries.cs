@@ -8,16 +8,20 @@ namespace Tenancy.IntegrationTests;
 
 public sealed partial class RunStateEventTests
 {
+    /// <summary>
+    /// Each edge of the one chain the state machine declares, committed one transaction at a time, so the history names
+    /// every applied edge in order with no sequence gap. One run can take at most three further edges
+    /// (<c>queued → running → collecting → complete</c>); the creation row plus those three is its whole history.
+    /// </summary>
     [Fact]
-    public async Task TenCommittedStateChanges_RecordEveryEdgeWithoutSequenceGaps()
+    public async Task CommittedStateChanges_RecordEveryEdgeWithoutSequenceGaps()
     {
         await using var world = await RunCreationTests.StartAsync(_fixture);
         var runId = await CreateQueuedRunAsync(world);
         var expected = new List<string> { "(insert)->queued" };
         var previous = "queued";
-        for (var index = 0; index < 10; index++)
+        foreach (var target in new[] { "running", "collecting", "complete" })
         {
-            var target = index % 2 == 0 ? "running" : "collecting";
             await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
             (await scope.ExecuteAsync($"update public.run set state = '{target}' where id = '{runId:D}'")).ShouldBe(1);
             await scope.CommitAsync();
@@ -25,7 +29,7 @@ public sealed partial class RunStateEventTests
             previous = target;
         }
 
-        (await SequencesAsync(world, runId)).ShouldBe(Enumerable.Range(1, 11));
+        (await SequencesAsync(world, runId)).ShouldBe(Enumerable.Range(1, expected.Count));
         (await HistoryAsync(world, runId)).ShouldBe(string.Join(',', expected));
     }
 

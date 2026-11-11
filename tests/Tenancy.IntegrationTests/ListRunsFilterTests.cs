@@ -367,9 +367,9 @@ public sealed class ListRunsFilterTests
         return created.Id("run_id");
     }
 
-    /// <summary>The run's state, written as the migration role: nothing served drives a rerun or a transition here.</summary>
+    /// <summary>The run's state, walked through the edges the state machine allows as the migration role: nothing served drives it here.</summary>
     private Task SetStateAsync(RunCreationTests.World world, Guid runId, string state) =>
-        _fixture.ExecuteAsync(world.Database, $"update public.run set state = '{state}' where id = '{runId:D}'");
+        RunStateWalk.MoveAsync(_fixture, world.Database, runId, state);
 
     /// <summary>The rerun link (0031's nullable <c>parent_run_id</c>/<c>rerun_scope</c>); 05.5.1 writes it in production.</summary>
     private Task SetRerunAsync(RunCreationTests.World world, Guid runId, Guid parentRunId, string scope) =>

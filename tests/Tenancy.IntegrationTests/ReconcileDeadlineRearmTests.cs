@@ -498,10 +498,12 @@ public sealed class ReconcileDeadlineRearmTests
 
     private static Task<long> RevisionCountAsync(IngestTestWorld world) => world.CountAsync("evidence_revision");
 
-    /// <summary>Puts one run in the state the scan names — collectable and past its deadline — in one statement.</summary>
-    private Task MarkOverdueAsync(IngestTestWorld world, Guid runId) =>
-        _fixture.ExecuteAsync(
+    /// <summary>Puts one run in the state the scan names — collectable and past its deadline — in two statements.</summary>
+    private async Task MarkOverdueAsync(IngestTestWorld world, Guid runId)
+    {
+        await RunStateWalk.MoveAsync(_fixture, world.Database, runId, "collecting");
+        await _fixture.ExecuteAsync(
             world.Database,
-            "update public.run set state = 'collecting', collection_deadline_at = now() - interval '1 minute' "
-            + $"where id = '{runId:D}'");
+            $"update public.run set collection_deadline_at = now() - interval '1 minute' where id = '{runId:D}'");
+    }
 }

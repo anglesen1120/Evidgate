@@ -414,7 +414,7 @@ run_stage() {
       scripts/tests/test_gate_scope.py scripts/tests/test_gate_scope_reasons.py \
       scripts/tests/test_verify_scope.py \
       scripts/tests/test_verify_refusal.py scripts/tests/test_verify_shards.py \
-      scripts/tests/test_smoke_mktemp.py
+      scripts/tests/test_verify_test_parallel.py scripts/tests/test_smoke_mktemp.py
     ;;
   image-pins)
     # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three
