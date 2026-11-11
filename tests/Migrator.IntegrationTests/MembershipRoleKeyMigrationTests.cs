@@ -27,7 +27,7 @@ public sealed class MembershipRoleKeyMigrationTests
         var database = await _fixture.CreateDatabaseAsync();
 
         using var migrations = TempMigrations.Create();
-        migrations.CopyReal([.. PostgresMigratorFixture.RealMigrationFileNames.Where(name => name != KeyFile)]);
+        migrations.CopyReal([.. PostgresMigratorFixture.RealMigrationFileNames.Where(name => string.CompareOrdinal(name, KeyFile) < 0)]);
         MigratorHarness.Run(migrations.Path, _fixture.OwnerConnectionString(database))
             .ExitCode.ShouldBe(MigratorExitCodes.Success);
 

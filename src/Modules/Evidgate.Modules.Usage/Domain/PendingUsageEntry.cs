@@ -14,6 +14,7 @@ namespace Evidgate.Modules.Usage.Domain;
 /// <param name="Period">The <c>YYYY-MM</c> billing period.</param>
 /// <param name="BillingKey">The per-org dedupe key.</param>
 /// <param name="OccurredAt">When the metered work happened.</param>
+/// <param name="PayloadHash">The canonical hash of the billable payload this key claims.</param>
 internal sealed record PendingUsageEntry(
     Guid Id,
     Guid? ProjectId,
@@ -22,4 +23,5 @@ internal sealed record PendingUsageEntry(
     string Unit,
     string Period,
     string BillingKey,
-    DateTimeOffset OccurredAt);
+    DateTimeOffset OccurredAt,
+    string PayloadHash);

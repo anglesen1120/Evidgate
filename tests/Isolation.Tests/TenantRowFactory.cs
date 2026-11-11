@@ -744,6 +744,9 @@ internal sealed class TenantRowFactory
             // so the corrupt row never trips the dedupe key before the composite FK under test.
             ("public.usage_ledger_entry" or "public.usage_rollup" or "public.quota_counter", "metric") => "results",
             ("public.usage_ledger_entry" or "public.usage_rollup" or "public.quota_counter", "period") => "2026-10",
+            // 0098 closes `payload_hash` to the 00 §7 content address, which the generic text candidate fails; no
+            // unique key covers it, so one constant digest serves every generated ledger row.
+            ("public.usage_ledger_entry", "payload_hash") => "sha256:" + new string('a', 64),
             // usage_price (0073) closes `metric` to the same list and its `currency` to three uppercase
             // letters, which the generic text candidate (13 chars) fails; every other constrained member is
             // either nullable (`effective_to`, `included_quota`) or satisfied by the generic candidate

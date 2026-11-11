@@ -9,6 +9,7 @@ using Evidgate.Modules.Ingestion.Application;
 using Evidgate.Modules.Ingestion.Application.Commands;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Xunit;
 
@@ -149,7 +150,9 @@ public sealed partial class IngestQuotaTests
         await using var scope = await provider.GetRequiredService<ITenantScopeFactory>()
             .BeginAsync(world.Org, null, false, token);
 
-        await new MeterEventBatchTaskHandler(provider.GetRequiredService<IServiceScopeFactory>())
+        await new MeterEventBatchTaskHandler(
+                provider.GetRequiredService<IServiceScopeFactory>(),
+                NullLogger<MeterEventBatchTaskHandler>.Instance)
             .HandleAsync(new MeterEventBatchPayload(batchId, IngestEventBatchHandler.UsageMetric, accepted), scope, token);
 
         await scope.CommitAsync(token);

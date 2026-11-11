@@ -64,6 +64,20 @@ public static partial class EvidgateTelemetry
             quantity,
             new KeyValuePair<string, object?>("metric", UsageMetricToken(metric)));
 
+    /// <summary>Counter of billing keys a ledger batch refused because each already claims another payload.</summary>
+    public const string UsageBillingKeyConflictMetricName = "evidgate_usage_billing_key_conflicts_total";
+
+    private static readonly Counter<long> UsageBillingKeyConflicts = Meter.CreateCounter<long>(
+        UsageBillingKeyConflictMetricName,
+        unit: "{key}",
+        description: "Billing keys whose ledger payload conflicted (a stored row with another payload, or a request repeating a key with a different payload). The batch is rolled back and nothing is billed: any sustained rate means a producer reuses a key for new work. No labels: the error log names the key and the digests.");
+
+    /// <summary>
+    /// Counts one conflicting billing key. The batch it belongs to wrote nothing, so this counts a refusal, not billed
+    /// work; the key and the two digests are only in the error log.
+    /// </summary>
+    public static void RecordUsageBillingKeyConflict() => UsageBillingKeyConflicts.Add(1);
+
     /// <summary>Bounds the metric label to the table's seven declared values.</summary>
     private static string UsageMetricToken(string? metric) => metric switch
     {
