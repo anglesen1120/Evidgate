@@ -13,11 +13,11 @@ namespace Tenancy.IntegrationTests;
 /// refuse a cycle; the walk itself must still terminate over one.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class BlockedAttemptTests
+public sealed class BlockedAttemptTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
-
-    public BlockedAttemptTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public BlockedAttemptTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project)
         : IAsyncDisposable
@@ -32,7 +32,7 @@ public sealed class BlockedAttemptTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

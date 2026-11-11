@@ -29,7 +29,7 @@ namespace Tenancy.IntegrationTests;
 /// <see cref="IPolicyContracts"/>, so both halves are the production ones.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed partial class PolicyContractsTests
+public sealed partial class PolicyContractsTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>The kinds the ordinal read orders <c>["trace","junit_xml","log"]</c> into (CA1861: no literal arrays as arguments).</summary>
     private static readonly string[] OrdinalKinds = ["junit_xml", "log", "trace"];
@@ -41,8 +41,8 @@ public sealed partial class PolicyContractsTests
     private static readonly string[] TraceOnly = ["trace"];
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public PolicyContractsTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public PolicyContractsTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project) : IAsyncDisposable
     {
@@ -58,7 +58,7 @@ public sealed partial class PolicyContractsTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

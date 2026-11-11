@@ -19,7 +19,7 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class CaseAttemptSchemaTests
+public sealed partial class CaseAttemptSchemaTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>The migration under test, re-run by the existing-row-safety cases.</summary>
     private const string MigrationFile = "0032_orchestration_case_attempt.sql";
@@ -34,8 +34,8 @@ public sealed partial class CaseAttemptSchemaTests
     private const string VariantHash = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public CaseAttemptSchemaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public CaseAttemptSchemaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(
         TenancyApiFactory Api,
@@ -57,7 +57,7 @@ public sealed partial class CaseAttemptSchemaTests
     private async Task<World> StartAsync(DedicatedDatabase? dedicated = null)
     {
         var database = dedicated?.Name ?? await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
