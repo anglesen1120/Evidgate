@@ -103,6 +103,49 @@ public sealed class TenancyHostPool(PostgresTenancyFixture fixture) : IAsyncDisp
         return host;
     }
 
+    /// <summary>
+    /// A pooled <see cref="TenancyApiFactory.RealResolver"/> host with in-memory <paramref name="configuration"/>;
+    /// one host per distinct configuration content, so a class that always passes the same object-store settings
+    /// shares one. Only for configuration a host reads at start: a host that holds per-test state (a rate
+    /// limiter, a clock, a spy) stays private.
+    /// </summary>
+    internal TenancyApiFactory RealResolverConfigured(string database, IReadOnlyDictionary<string, string?> configuration)
+    {
+        var connectionString = fixture.AppConnectionString(database);
+
+        return Lease(
+            "real-resolver|" + Fingerprint(configuration),
+            database,
+            () => TenancyApiFactory.RealResolver(connectionString, configuration));
+    }
+
+    /// <summary>
+    /// A pooled <see cref="TenancyApiFactory.WithPrincipal"/> host with in-memory <paramref name="configuration"/>
+    /// (same rules as <see cref="RealResolverConfigured"/>) that publishes <paramref name="principal"/> for
+    /// <paramref name="org"/>/<paramref name="project"/> until it is given back.
+    /// </summary>
+    internal TenancyApiFactory WithPrincipalConfigured(
+        string database,
+        Guid org,
+        Guid project,
+        IRequestPrincipal principal,
+        IReadOnlyDictionary<string, string?> configuration)
+    {
+        var connectionString = fixture.AppConnectionString(database);
+        var host = Lease(
+            "with-principal|" + Fingerprint(configuration),
+            database,
+            () => TenancyApiFactory.WithPrincipal(connectionString, org, project, principal, configuration));
+        host.Republish(org, project, principal);
+
+        return host;
+    }
+
+    // Hashed so a secret in the configuration never appears in a slot key, a log line or a failure message.
+    private static string Fingerprint(IReadOnlyDictionary<string, string?> configuration) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
+            string.Join('\n', configuration.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}")))));
+
     private TenancyApiFactory Lease(string variant, string database, Func<TenancyApiFactory> create)
     {
         if (database != fixture.SharedName)
