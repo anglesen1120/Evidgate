@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Healing;
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Healing.Contracts;
@@ -486,6 +487,9 @@ public sealed class HealingLlmGatewayTests
         services.Replace(ServiceDescriptor.Singleton<IHealingLlmProvider>(provider =>
             provider.GetRequiredService<HttpHealingLlmProvider>()));
 
+        // The key handler resolves the configured secret per request; this world has no secret store, so one fixed value.
+        services.TryAddSingleton<ISecretProvider>(new FixedSecret());
+
         services
             .AddHttpClient<HttpHealingLlmProvider>()
             .ConfigureHttpClient(client => client.BaseAddress = new Uri("http://healing.invalid/"))
@@ -631,31 +635,10 @@ public sealed class HealingLlmGatewayTests
             return Task.FromResult(respond(request));
         }
     }
-}
 
-/// <summary>One <c>healing_llm_call</c> row, as the recorder wrote it.</summary>
-/// <param name="Id">The row id (the value a generation stores as <c>ai_run_id</c>).</param>
-/// <param name="OrgId">The tenant the RLS scope resolved to.</param>
-/// <param name="ProjectId">The project the call was attributed to.</param>
-/// <param name="IncidentId">The incident, or null for an authoring generation.</param>
-/// <param name="CandidateId">The candidate, when the call names one.</param>
-/// <param name="Purpose">One of <see cref="HealingLlmPurposes"/>.</param>
-/// <param name="Model">The model the adapter was asked for.</param>
-/// <param name="PromptVersion">The prompt version the call used.</param>
-/// <param name="Tokens">Tokens this attempt spent.</param>
-/// <param name="Cost">Cost this attempt incurred.</param>
-/// <param name="Status">One of <see cref="HealingLlmStatuses"/>.</param>
-/// <param name="Attempt">The 1-based attempt number.</param>
-internal sealed record HealingLlmCallRow(
-    Guid Id,
-    Guid OrgId,
-    Guid ProjectId,
-    Guid? IncidentId,
-    Guid? CandidateId,
-    string Purpose,
-    string Model,
-    string PromptVersion,
-    int Tokens,
-    decimal Cost,
-    string Status,
-    int Attempt);
+    private sealed class FixedSecret : ISecretProvider
+    {
+        public ValueTask<string?> GetSecretAsync(string name, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<string?>("test-key-not-a-secret");
+    }
+}

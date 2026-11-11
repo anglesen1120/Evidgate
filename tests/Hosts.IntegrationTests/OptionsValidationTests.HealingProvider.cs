@@ -1,10 +1,12 @@
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
+using Evidgate.Modules.Healing;
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Testing;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Shouldly;
 using Xunit;
@@ -92,85 +94,95 @@ public sealed partial class OptionsValidationTests
         string? apiKeySecret,
         string? named)
     {
-        using var factory = BootProvider(environment, provider, baseAddress, apiKeySecret);
+        using var services = BootProvider(environment, provider, baseAddress, apiKeySecret);
 
         if (named is null)
         {
-            _ = ProviderOptions(factory);
+            _ = ProviderOptions(services);
             return;
         }
 
-        ProviderRefusal(factory).Message.ShouldContain(named);
+        ProviderRefusal(services).Message.ShouldContain(named);
     }
 
     [Fact]
     public void A_Development_Host_With_No_Provider_Runs_The_Offline_Adapter()
     {
-        using var factory = BootProvider("Development", provider: null);
+        using var services = BootProvider("Development", provider: null);
 
-        ProviderOptions(factory).Kind.ShouldBe(HealingProviderKind.Mock);
+        ProviderOptions(services).Kind.ShouldBe(HealingProviderKind.Mock);
     }
 
     [Fact]
     public void A_Production_Host_Stating_None_Runs_No_Adapter()
     {
-        using var factory = BootProvider("Production", provider: "none");
+        using var services = BootProvider("Production", provider: "none");
 
-        ProviderOptions(factory).Kind.ShouldBe(HealingProviderKind.None);
+        ProviderOptions(services).Kind.ShouldBe(HealingProviderKind.None);
     }
 
     [Fact]
     public void A_Production_Host_With_A_Complete_Http_Selection_Runs_The_Http_Adapter()
     {
-        using var factory = BootProvider("Production", "http", "https://provider.invalid/v1/", SecretNames.HealingLlmApiKey);
+        using var services = BootProvider("Production", "http", "https://provider.invalid/v1/", SecretNames.HealingLlmApiKey);
 
-        var selection = ProviderOptions(factory);
+        var selection = ProviderOptions(services);
 
         selection.Kind.ShouldBe(HealingProviderKind.Http);
         selection.ApiKeySecret.ShouldBe(SecretNames.HealingLlmApiKey);
     }
 
-    /// <summary>An Api host in <paramref name="environment"/> stating the provider selection a case tests.</summary>
+    /// <summary>The healing module composed for <paramref name="environment"/> with the provider selection a case tests.</summary>
+    /// <remarks>
+    /// The module is composed on its own: a host's boot check reads the group before it starts and exits, which a test
+    /// factory reports as a disposed provider instead of the refusal. The subprocess case above covers the host's exit.
+    /// </remarks>
     /// <param name="environment">The host environment the validator reads.</param>
     /// <param name="provider">The <c>Provider</c> value, or null to leave it unset.</param>
     /// <param name="baseAddress">The <c>BaseAddress</c> value, or null to leave it unset.</param>
     /// <param name="apiKeySecret">The <c>ApiKeySecret</c> value, or null to leave it unset.</param>
-    private static WebApplicationFactory<Program> BootProvider(
+    private static ServiceProvider BootProvider(
         string environment,
         string? provider,
         string? baseAddress = null,
         string? apiKeySecret = null)
     {
-        // Every key is written, so neither the suite's `none` baseline nor a case's leftover decides another case: an
-        // empty value is what an unset key looks like once it is overridden.
         var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             ["EVIDGATE:Healing:Llm:Provider"] = provider ?? string.Empty,
             ["EVIDGATE:Healing:Llm:BaseAddress"] = baseAddress ?? string.Empty,
             ["EVIDGATE:Healing:Llm:ApiKeySecret"] = apiKeySecret ?? string.Empty,
         };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
 
-        return new EvidgateApiFactory(DeadConnectionString).WithWebHostBuilder(builder =>
-        {
-            builder.UseEnvironment(environment);
-            builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(settings));
-        });
+        return new ServiceCollection()
+            .AddLogging()
+            .AddHealingModule(configuration, new NamedEnvironment(environment))
+            .BuildServiceProvider();
     }
 
-    /// <summary>
-    /// The selection the boot judges. Resolving it runs the same validators <c>ValidateOnStart</c> runs, without a
-    /// listening port or a database.
-    /// </summary>
-    /// <param name="factory">The host under test.</param>
-    private static HealingProviderOptions ProviderOptions(WebApplicationFactory<Program> factory) =>
-        factory.Services.GetRequiredService<IOptions<HealingProviderOptions>>().Value;
+    /// <summary>The selection the boot judges; reading it runs the validators.</summary>
+    /// <param name="provider">The composed module.</param>
+    private static HealingProviderOptions ProviderOptions(IServiceProvider provider) =>
+        provider.GetRequiredService<IOptions<HealingProviderOptions>>().Value;
 
-    /// <summary>The refusal the boot validator makes for <paramref name="factory"/>'s selection.</summary>
-    /// <param name="factory">The host under test.</param>
-    private static OptionsValidationException ProviderRefusal(WebApplicationFactory<Program> factory)
+    /// <summary>The refusal the boot validator makes for <paramref name="provider"/>'s selection.</summary>
+    /// <param name="provider">The composed module.</param>
+    private static OptionsValidationException ProviderRefusal(IServiceProvider provider)
     {
-        void Read() => _ = ProviderOptions(factory);
+        void Read() => _ = ProviderOptions(provider);
 
         return Should.Throw<OptionsValidationException>(Read);
+    }
+
+    private sealed class NamedEnvironment(string name) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = name;
+
+        public string ApplicationName { get; set; } = "Evidgate.Tests";
+
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }
