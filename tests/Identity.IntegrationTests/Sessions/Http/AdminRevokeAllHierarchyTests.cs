@@ -1,6 +1,7 @@
 using System.Net;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.Testing;
+using Npgsql;
 using Shouldly;
 using Xunit;
 
@@ -127,11 +128,12 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
     }
 
     /// <summary>
-    /// A <c>membership_role</c> row that points at ANOTHER org's custom administrator role grants nothing here
-    /// (the table has no foreign key on the role, so only the query scopes it): the caller ranks 0 and is refused.
+    /// A <c>membership_role</c> row that points at ANOTHER org's custom administrator role is refused by the
+    /// database itself, and a custom administrator of the acting org still ends the member's sessions: the rank
+    /// query scopes roles to the acting org, and the key makes the foreign row unwritable in the first place.
     /// </summary>
     [Fact]
-    public async Task A_Foreign_Orgs_Custom_Role_Grants_No_Rank()
+    public async Task A_Foreign_Orgs_Custom_Role_Cannot_Be_Granted()
     {
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
@@ -144,15 +146,20 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
             [("org", foreignOrg), ("user", foreignAdmin.UserId)])).ShouldNotBeNull();
 
         var caller = await host.SignInMemberInOrgAsync(client, member.OrgId, roleCode: null);
-        await host.ArrangeAsync(
-            "insert into public.membership_role (id, org_id, membership_id, role_id) "
-            + "select @id, @org, m.id, @role from public.membership m where m.org_id = @org and m.user_id = @user",
-            ("id", Guid.CreateVersion7()),
-            ("org", member.OrgId),
-            ("role", roleId),
-            ("user", caller.UserId));
+        var refusal = await Should.ThrowAsync<PostgresException>(async () =>
+            await host.ArrangeAsync(
+                "insert into public.membership_role (id, org_id, membership_id, role_id) "
+                + "select @id, @org, m.id, @role from public.membership m where m.org_id = @org and m.user_id = @user",
+                ("id", Guid.CreateVersion7()),
+                ("org", member.OrgId),
+                ("role", roleId),
+                ("user", caller.UserId)));
 
-        await AssertRefusedAsync(host, client, caller, member);
+        refusal.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
+        refusal.ConstraintName.ShouldBe("membership_role_role_guard");
+
+        var localAdmin = await SignInCustomAdminAsync(host, client, member.OrgId);
+        await AssertRevokedAsync(host, client, localAdmin, member);
     }
 
     /// <summary>

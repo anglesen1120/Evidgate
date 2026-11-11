@@ -359,8 +359,9 @@ public abstract class SessionRevokeAllAdminTestBase : SessionHardeningTestBase
     }
 
     /// <summary>
-    /// A membership in <paramref name="org"/> whose single role is named by id — the arrangement that can point at
-    /// a role of another org, which no command would ever write because <c>membership_role.role_id</c> has no FK.
+    /// A membership in <paramref name="org"/> whose single role is named by id — the arrangement the commands
+    /// do not expose directly. The role key refuses a missing, non-member or other-org role, so the id must be
+    /// one <paramref name="org"/> may hold.
     /// </summary>
     /// <param name="org">The org the membership belongs to.</param>
     /// <param name="roleId">The role the membership holds.</param>
