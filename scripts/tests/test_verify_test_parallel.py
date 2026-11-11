@@ -11,7 +11,9 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-GUARDS = ROOT / "scripts" / "verify-guards.sh"
+# An inherited cap would change what these fixtures measure.
+BASE_ENV = {k: v for k, v in os.environ.items() if k != "EVIDGATE_TEST_PARALLEL"}
+GUARDS = ROOT / "scripts" / "verify-parallel-tests.sh"
 PROJECTS = ("Tenancy.IntegrationTests", "A.Tests", "B.Tests", "C.Tests", "D.Tests")
 
 FAKE_DOTNET = textwrap.dedent("""\
@@ -52,7 +54,7 @@ class TestParallelCap(unittest.TestCase):
                 ["bash", "-c", f'set -euo pipefail; source "{GUARDS}"; run_parallel_tests'],
                 cwd=tmp,
                 env={
-                    **os.environ,
+                    **BASE_ENV,
                     "PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}",
                     "FAKE_DIR": str(tmp_path / "state"),
                     "EVIDGATE_TENANCY_SHARDS": "1",
@@ -90,6 +92,10 @@ class TestParallelCap(unittest.TestCase):
                 self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
                 self.assertIn("EVIDGATE_TEST_PARALLEL must be an integer from 1 to 16", done.stderr)
                 self.assertEqual(calls, [])
+
+    def test_an_empty_cap_means_unset(self):
+        done, calls, conc = self.run_stage(EVIDGATE_TEST_PARALLEL="", FAKE_SLEEP="1.5")
+        self.assertEqual(max(conc), 5, done.stdout + done.stderr)
 
     def test_build_servers_stop_once_before_the_first_test_process(self):
         done, calls, _ = self.run_stage()
