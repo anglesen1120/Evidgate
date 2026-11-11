@@ -38,6 +38,14 @@ internal sealed class HealingLlmApiKeyHandler(ISecretProvider secrets, HealingPr
                 $"the secret named in {HealingProviderKeys.ApiKeySecret} resolved to no value, so no request may leave");
         }
 
+        // A header value cannot carry CR, LF or NUL: the serializer would throw a FormatException no caller maps, so the
+        // refusal happens here, names the configuration key and keeps the value out of the message.
+        if (key.AsSpan().IndexOfAny('\r', '\n', '\0') >= 0)
+        {
+            throw new InvalidOperationException(
+                $"the secret named in {HealingProviderKeys.ApiKeySecret} carries a control character, so no request may leave");
+        }
+
         request.Headers.Authorization = new AuthenticationHeaderValue(Scheme, key);
 
         return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);

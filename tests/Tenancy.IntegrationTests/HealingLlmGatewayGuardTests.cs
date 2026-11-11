@@ -201,6 +201,32 @@ public sealed class HealingLlmGatewayGuardTests
     }
 
     /// <summary>
+    /// A host outside Development whose project has room under both caps places the call: an HTTP deployment is stopped by
+    /// a budget row that is missing or spent, never by the row's presence — the positive control of
+    /// <see cref="InvokeHealingLlm_BudgetAbsentWithHttpProvider_RefusesWithoutProviderCall"/>.
+    /// </summary>
+    [Fact]
+    public async Task InvokeHealingLlm_BudgetWithRoomWithHttpProvider_PlacesTheCall()
+    {
+        var spy = new SpyProvider();
+        await using var world = await StartAsync(
+            HealingProviderSelection.Http,
+            Environments.Production,
+            spy,
+            baseAddress: "https://llm.example.test/",
+            apiKeySecret: SecretNames.HealingLlmApiKey);
+        await world.SeedBudgetAsync(1.0m, 100, 0.4m, 40);
+
+        using var listener = HealingTelemetryCapture.RefusedCalls(out var reasons);
+        var result = await InvokeAsync(world, AuthoringRequest(world.Project));
+
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+        spy.Calls.ShouldBe(1);
+        (await ReadCallsAsync(world)).ShouldHaveSingleItem().Status.ShouldBe(HealingLlmStatuses.Ok);
+        reasons.ShouldBeEmpty();
+    }
+
+    /// <summary>
     /// The Development adapter spends nothing, so an absent budget row does not stop it — the positive control of
     /// <see cref="InvokeHealingLlm_BudgetAbsentWithHttpProvider_RefusesWithoutProviderCall"/>.
     /// </summary>

@@ -76,6 +76,12 @@ internal sealed class HealingProviderOptionsValidator(IHostEnvironment environme
             problems.Add(
                 $"{HealingProviderKeys.BaseAddress}: must be an https URI outside Development, and http or https in Development");
         }
+        else if (address.UserInfo.Length > 0)
+        {
+            // Credentials in the base address would travel on every request and be readable in a log or a proxy trace;
+            // the key belongs in the secret the handler resolves, so a userinfo part is refused instead of stripped.
+            problems.Add($"{HealingProviderKeys.BaseAddress}: must not carry user information");
+        }
         else if (!address.AbsolutePath.EndsWith('/'))
         {
             problems.Add(
@@ -92,11 +98,12 @@ internal sealed class HealingProviderOptionsValidator(IHostEnvironment environme
         {
             problems.Add($"{HealingProviderKeys.ApiKeySecret}: is required when the provider is '{HealingProviderSelection.Http}'");
         }
-        else if (!SecretNames.All.Contains(secret, StringComparer.Ordinal))
+        else if (!string.Equals(secret, SecretNames.HealingLlmApiKey, StringComparison.Ordinal))
         {
-            // The name is looked up through the secret provider, which refuses a name it does not declare; the message
-            // names the key and the registry, never the configured value.
-            problems.Add($"{HealingProviderKeys.ApiKeySecret}: is not a secret name; use one declared in {nameof(SecretNames)}");
+            // One name only: any other platform secret (the database connection, a session pepper) would be presented to
+            // the provider as a bearer key. The message names the key and the permitted name, never the configured value.
+            problems.Add(
+                $"{HealingProviderKeys.ApiKeySecret}: must name {SecretNames.HealingLlmApiKey}, the only secret this adapter presents");
         }
     }
 }

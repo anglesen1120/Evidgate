@@ -238,7 +238,7 @@ internal sealed class HealingLlmGateway(
         }
 
         var mode = await availability.ResolveAsync(request.ProjectId, cancellationToken).ConfigureAwait(false);
-        if (mode is HealingAvailability.Disabled or HealingAvailability.Unavailable)
+        if (mode is not (HealingAvailability.Enabled or HealingAvailability.Shadow))
         {
             return Refuse(HealingLlmRefusals.HealingDisabled);
         }
@@ -255,7 +255,7 @@ internal sealed class HealingLlmGateway(
             return Refuse(HealingLlmRefusals.BudgetUnreadable);
         }
 
-        return verdict == HealingLlmBudgetVerdict.NotProvisioned && kind == HealingProviderKind.Http
+        return verdict == HealingLlmBudgetVerdict.NotProvisioned && kind != HealingProviderKind.Mock
             ? Refuse(HealingLlmRefusals.BudgetNotProvisioned)
             : null;
     }

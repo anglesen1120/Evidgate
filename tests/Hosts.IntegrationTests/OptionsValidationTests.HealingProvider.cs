@@ -14,8 +14,8 @@ namespace Hosts.IntegrationTests;
 
 /// <summary>
 /// The provider a deployment selects. Outside Development it must be stated and may not be the mock; an HTTP selection
-/// needs a base address the adapter can post under and a secret name the secret provider declares. A Development host may
-/// run on the unset default, which is the offline adapter, and an unset provider anywhere else refuses the boot.
+/// needs a base address the adapter can post under and the one secret name it may present. A Development host may run on
+/// the unset default, which is the offline adapter, and an unset provider anywhere else refuses the boot.
 /// </summary>
 public sealed partial class OptionsValidationTests
 {
@@ -35,10 +35,13 @@ public sealed partial class OptionsValidationTests
             [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
             [NoForwardedProxy.Variable] = "none",
         };
+        // The runner applies the overrides first and then removes the inherited keys, so a key this case states itself
+        // must stay out of the removal list: a parent environment that already set it would otherwise lose the value.
+        var stated = new HashSet<string>(environment.Keys, StringComparer.OrdinalIgnoreCase);
         var inherited = Environment.GetEnvironmentVariables().Keys
             .Cast<string>()
             .Where(key => key.StartsWith("EVIDGATE__", StringComparison.Ordinal))
-            .Where(key => !string.Equals(key, NoForwardedProxy.Variable, StringComparison.Ordinal))
+            .Where(key => !stated.Contains(key))
             .ToArray();
 
         using var process = ProcessRunner.Start(HostLocator.AppHost("Evidgate.Api"), environment, inherited);
@@ -63,7 +66,7 @@ public sealed partial class OptionsValidationTests
 
     /// <summary>
     /// A selection is judged at boot: the environment decides whether the word may run, and the HTTP adapter refuses a
-    /// base address it cannot post under or a secret name the secret provider does not declare.
+    /// base address it cannot post under — including one carrying user information — or any key secret but its own.
     /// </summary>
     /// <param name="environment">The host environment the selection is judged in.</param>
     /// <param name="provider">The <c>Provider</c> value, or null to leave it unset.</param>
@@ -83,6 +86,9 @@ public sealed partial class OptionsValidationTests
     [InlineData("Production", "http", "https://provider.invalid/v1/?tenant=a", null, "EVIDGATE__HEALING__LLM__BASEADDRESS")]
     [InlineData("Production", "http", "https://provider.invalid/v1/", null, "EVIDGATE__HEALING__LLM__APIKEYSECRET")]
     [InlineData("Production", "http", "https://provider.invalid/v1/", "not-a-secret-name", "EVIDGATE__HEALING__LLM__APIKEYSECRET")]
+    [InlineData("Production", "http", "https://provider.invalid/v1/", SecretNames.SessionPepper, "EVIDGATE__HEALING__LLM__APIKEYSECRET")]
+    [InlineData("Production", "http", "https://provider.invalid/v1/", SecretNames.HealingLlmApiKey, null)]
+    [InlineData("Production", "http", "https://user:pass@provider.invalid/v1/", SecretNames.HealingLlmApiKey, "EVIDGATE__HEALING__LLM__BASEADDRESS")]
     [InlineData("Development", null, null, null, null)]
     [InlineData("Development", "none", null, null, null)]
     [InlineData("Development", "http", "http://provider.invalid/", SecretNames.HealingLlmApiKey, null)]

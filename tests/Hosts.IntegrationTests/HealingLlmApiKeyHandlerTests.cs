@@ -26,10 +26,12 @@ public sealed partial class HealingLlmApiKeyHandlerTests
     {
         // Built at run time, so the test file carries no key-shaped literal.
         var key = "provider-key-" + Guid.NewGuid().ToString("N");
+        // Stated at the key's own configuration slot: binding must still leave the member unbound.
+        var configuredKey = "configured-key-" + Guid.NewGuid().ToString("N");
         var endpoint = new RecordingHandler(HttpStatusCode.OK, """{"content":"{}","tokens":2,"cost":0.5}""");
         var capture = new CaptureLoggerProvider();
 
-        await using var provider = Compose(capture, new FixedSecrets(key), endpoint).BuildServiceProvider();
+        await using var provider = Compose(capture, new FixedSecrets(key), endpoint, configuredKey).BuildServiceProvider();
 
         var result = await provider
             .GetRequiredService<HttpHealingLlmProvider>()
@@ -54,8 +56,12 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         capture.Logs.ShouldNotContain(log => log.Text.Contains(key, StringComparison.Ordinal));
         result.ToString().ShouldNotContain(key);
 
-        // The key is read per request: the options snapshot holds the secret's name and never its value.
-        provider.GetRequiredService<IOptions<HealingProviderOptions>>().Value.ApiKey.ShouldBeNull();
+        // The key is read per request: the options snapshot holds the secret's name, and the value stated at its own
+        // configuration slot stays unbound because only the secret provider may supply it.
+        var selection = provider.GetRequiredService<IOptions<HealingProviderOptions>>().Value;
+        selection.ApiKeySecret.ShouldBe(SecretNames.HealingLlmApiKey);
+        selection.ApiKey.ShouldBeNull();
+        selection.ToString().ShouldNotContain(configuredKey);
     }
 
     [Fact]
@@ -97,14 +103,52 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         failure.Message.ShouldNotContain("Bearer");
     }
 
+    /// <summary>
+    /// A header value cannot carry CR, LF or NUL, so a key holding one is refused through the unset-secret path: no
+    /// request leaves and the value never reaches the message.
+    /// </summary>
+    /// <param name="codeUnit">
+    /// The UTF-16 code unit of the control character the resolved key carries, so no test name holds a raw control
+    /// character.
+    /// </param>
+    [Theory]
+    [InlineData(0x0D)]
+    [InlineData(0x0A)]
+    [InlineData(0x00)]
+    public async Task A_Key_Carrying_A_Control_Character_Refuses_And_Sends_Nothing(int codeUnit)
+    {
+        // Built at run time, so the canary is absent from this file and the assertion below can only pass if the
+        // refusal leaves it out of the message.
+        var canary = "provider-key-" + Guid.NewGuid().ToString("N");
+        var endpoint = new RecordingHandler(HttpStatusCode.OK, "{}");
+        var handler = new HealingLlmApiKeyHandler(
+            new FixedSecrets(canary + (char)codeUnit + "X-Injected: 1"),
+            new HealingProviderOptions { Provider = "http", ApiKeySecret = SecretNames.HealingLlmApiKey })
+        {
+            InnerHandler = endpoint,
+        };
+        using var invoker = new HttpMessageInvoker(handler);
+
+        var failure = await Should.ThrowAsync<InvalidOperationException>(() => invoker.SendAsync(
+            new HttpRequestMessage(HttpMethod.Post, "https://provider.invalid/v1/llm/generate"),
+            TestContext.Current.CancellationToken));
+
+        failure.Message.ShouldContain(HealingProviderKeys.ApiKeySecret);
+        failure.Message.ShouldNotContain(canary);
+        failure.Message.ShouldNotContain("X-Injected");
+        endpoint.Requests.ShouldBeEmpty();
+    }
+
     /// <summary>The module's composition with the HTTP adapter selected and the recorded endpoint as the transport.</summary>
     /// <param name="capture">The capture the host's logging is routed through.</param>
     /// <param name="secrets">The secret provider the handler resolves the key from.</param>
     /// <param name="endpoint">The handler that stands in for the provider's endpoint.</param>
+    /// <param name="configuredKey">The value stated at the key's own configuration slot, or null to leave it unset.</param>
     private static ServiceCollection Compose(
         CaptureLoggerProvider capture,
         ISecretProvider secrets,
-        HttpMessageHandler endpoint)
+        HttpMessageHandler endpoint,
+        string? configuredKey = null)
     {
         var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -112,6 +156,12 @@ public sealed partial class HealingLlmApiKeyHandlerTests
             ["EVIDGATE:Healing:Llm:BaseAddress"] = "https://provider.invalid/v1/",
             ["EVIDGATE:Healing:Llm:ApiKeySecret"] = SecretNames.HealingLlmApiKey,
         };
+
+        if (configuredKey is not null)
+        {
+            // The slot exists only so a host can state it; binding must leave it unbound.
+            settings["EVIDGATE:Healing:Llm:ApiKey"] = configuredKey;
+        }
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         var environment = new TestHostEnvironment();
