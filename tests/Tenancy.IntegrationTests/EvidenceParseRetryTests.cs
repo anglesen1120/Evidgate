@@ -60,7 +60,7 @@ public sealed class EvidenceParseRetryTests(PostgresTenancyFixture fixture, Seaw
     {
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
         var database = owned.Name;
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid org;
         Guid project;
 

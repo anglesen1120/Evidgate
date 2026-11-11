@@ -8,6 +8,7 @@ using Evidgate.Modules.Identity.Login;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace Evidgate.Modules.Identity.Endpoints;
 
@@ -30,7 +31,7 @@ public static partial class LoginEndpoints
         IEnumerable<ILoginProvider> providers,
         LoginStateCookie cookie,
         InviteTokenCookie inviteCookie,
-        LoginReplayCache replay,
+        ILoginReplayCache replay,
         ILoginCompletion completion,
         ExchangeRateLimiter limiter,
         IOptions<LoginOptions> options,
@@ -69,9 +70,18 @@ public static partial class LoginEndpoints
             return Result.Failure(LoginErrors.UnknownProvider);
         }
 
-        if (CheckPending(context, selected, cookie, presented, login, replay, out var input) is { } refused)
+        if (CheckPending(context, selected, cookie, presented, login, out var input) is { } refused)
         {
             return refused;
+        }
+
+        // Recorded before the provider call: a replayed callback must be refused even if the first attempt
+        // failed, and two concurrent replays (on any replica) must not both reach the provider. A store that
+        // cannot answer is the completion's own 503, and the provider is never called on it.
+        if (await ConsumeReplayAsync(context, selected, input, login, replay, cancellationToken).ConfigureAwait(false)
+            is { } replayRefusal)
+        {
+            return replayRefusal;
         }
 
         var verified = await VerifyAsync(context, selected, input, login, cancellationToken).ConfigureAwait(false);
@@ -86,9 +96,43 @@ public static partial class LoginEndpoints
     }
 
     /// <summary>
+    /// Spends the one-time <c>state</c>: null when this is its first use, or the refusal to answer — 401 for a
+    /// replay, and the completion's own 503 for a store outage (on which the provider is never called). A
+    /// cancellation that did not come from the request token is a database timeout, not a client that left.
+    /// </summary>
+    private static async Task<Result?> ConsumeReplayAsync(
+        HttpContext context,
+        ILoginProvider selected,
+        CallbackInput input,
+        LoginOptions login,
+        ILoginReplayCache replay,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var firstUse = await replay
+                .TryConsumeAsync(selected.Name + ":" + input.Pending.State, login.StateLifetime, cancellationToken)
+                .ConfigureAwait(false);
+
+            return firstUse ? null : LoginErrors.Invalid(selected.Name);
+        }
+        catch (NpgsqlException)
+        {
+            return LoginErrors.Unavailable(context, selected.Name, login);
+        }
+        catch (TimeoutException)
+        {
+            return LoginErrors.Unavailable(context, selected.Name, login);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return LoginErrors.Unavailable(context, selected.Name, login);
+        }
+    }
+
+    /// <summary>
     /// The pre-provider checks of a callback, in order: the pending login names this provider, the one-time
-    /// <c>state</c> matches, no provider <c>error</c>, a bounded <c>code</c>, a configured provider, and the
-    /// replay record. Returns the refusal, or null with <paramref name="input"/> set.
+    /// <c>state</c> matches, no provider <c>error</c>, a bounded <c>code</c>, and a configured provider. Returns the refusal, or null with <paramref name="input"/> set.
     /// </summary>
     private static Result? CheckPending(
         HttpContext context,
@@ -96,7 +140,6 @@ public static partial class LoginEndpoints
         LoginStateCookie cookie,
         string? presented,
         LoginOptions login,
-        LoginReplayCache replay,
         out CallbackInput input)
     {
         input = default;
@@ -128,13 +171,6 @@ public static partial class LoginEndpoints
         if (!selected.IsConfigured || callbackUri is null)
         {
             return LoginErrors.Unavailable(context, selected.Name, login);
-        }
-
-        // Recorded before the provider call: a replayed callback must be refused even if the first attempt
-        // failed, and two concurrent replays must not both reach the provider.
-        if (!replay.TryConsume(selected.Name + ":" + pending.State, login.StateLifetime))
-        {
-            return LoginErrors.Invalid(selected.Name);
         }
 
         input = new CallbackInput(pending, code, callbackUri);

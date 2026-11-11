@@ -61,6 +61,9 @@ public sealed class ResolverTests : HarnessTest
             ["status", "user_id", "email", "display_name", "preferred_locale", "version"],
         ["evidgate_resolve.user_profile_update"] =
             ["status", "user_id", "email", "display_name", "preferred_locale", "version"],
+        ["evidgate_resolve.data_protection_key_list"] = ["friendly_name", "key_xml"],
+        ["evidgate_resolve.data_protection_key_store"] = [],
+        ["evidgate_resolve.login_state_replay_consume"] = [],
     };
 
     /// <summary>
@@ -75,25 +78,21 @@ public sealed class ResolverTests : HarnessTest
     /// the one cross-tenant act, an admin ending a member's session, is authorized INSIDE
     /// <c>session_revoke_one</c> against <c>p_org_id</c> and still answers a status, not a tenant tuple. Their
     /// documented tuple above is still pinned exactly, and every other resolver keeps the rule. The own-profile
-    /// pair (migration 0061) is the same shape: the caller is the presented cookie, so the answer is
-    /// a status plus that account's own row, never a tenant tuple.
+    /// pair (0061), the shared key ring and the login replay set (0100) share the shape: the caller is the
+    /// presented cookie, no table read has an <c>org_id</c>, and the answers carry no tenant — a status plus the
+    /// caller's own row, the framework's <c>key_xml</c> element per row, an insert-if-absent no-row, one boolean.
     /// </summary>
     private static readonly HashSet<string> PlatformScopeResolvers = new(StringComparer.Ordinal)
     {
-        "evidgate_resolve.login_upsert_identity",
-        "evidgate_resolve.session_create",
-        "evidgate_resolve.session_authenticate",
-        "evidgate_resolve.session_rotate",
-        "evidgate_resolve.session_revoke_all_for_user",
-        "evidgate_resolve.session_require_rotation",
-        "evidgate_resolve.session_list",
-        "evidgate_resolve.session_revoke_current",
-        "evidgate_resolve.session_revoke_one",
-        "evidgate_resolve.session_revoke_others",
-        "evidgate_resolve.session_revoke_all_admin",
-        "evidgate_resolve.login_link_identity",
-        "evidgate_resolve.user_profile_read",
-        "evidgate_resolve.user_profile_update",
+        "evidgate_resolve.login_upsert_identity", "evidgate_resolve.session_create",
+        "evidgate_resolve.session_authenticate", "evidgate_resolve.session_rotate",
+        "evidgate_resolve.session_revoke_all_for_user", "evidgate_resolve.session_require_rotation",
+        "evidgate_resolve.session_list", "evidgate_resolve.session_revoke_current",
+        "evidgate_resolve.session_revoke_one", "evidgate_resolve.session_revoke_others",
+        "evidgate_resolve.session_revoke_all_admin", "evidgate_resolve.login_link_identity",
+        "evidgate_resolve.user_profile_read", "evidgate_resolve.user_profile_update",
+        "evidgate_resolve.data_protection_key_list", "evidgate_resolve.data_protection_key_store",
+        "evidgate_resolve.login_state_replay_consume",
     };
 
     /// <summary>

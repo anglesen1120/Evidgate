@@ -3,6 +3,7 @@ using Evidgate.Modules.Identity.Login.Completion;
 using Evidgate.Modules.Identity.Login.Linking;
 using Evidgate.Modules.Identity.Sessions;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -47,16 +48,16 @@ internal static class FederatedLoginServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<LoginOptions>, LoginOptionsValidator>());
 
         // The pending-login cookie is protected with ASP.NET Core Data Protection rather than a hand-rolled
-        // HMAC/AEAD: it is the framework's own mechanism, it needs no new secret in ISecretProvider (so
-        // nothing has to be provisioned before the first login), it gives confidentiality AND integrity in
-        // one step, and it is already available through this module's Microsoft.AspNetCore.App framework
-        // reference. The application name is fixed so every host of the deployment derives the same
-        // purposes. No ring is configured here (no PersistKeysTo…), so the key ring is the default one:
-        // persisted only where the key directory is writable, and in-memory (thus lost on every restart)
-        // where it is not. Either way replicas do not share a ring, so a persisted, shared ring is a deploy
-        // requirement tracked as its own item in STATUS (10.x deployment work), not a setting of this
-        // composition.
+        // HMAC/AEAD: confidentiality and integrity in one step, already in this module's framework reference.
+        // The ring is shared through PostgreSQL (00 §5.7 S8): every replica reads the same keys and a restart
+        // keeps them. The repository is the only ring source, so an unreachable database fails the call and
+        // never falls back to an ephemeral or file ring. The application name is fixed so every host derives
+        // the same purposes.
         services.AddDataProtection().SetApplicationName(LoginStateCookie.ApplicationName);
+        services.TryAddSingleton<DataProtectionKeyRepository>();
+        services.AddOptions<KeyManagementOptions>()
+            .Configure<DataProtectionKeyRepository>((keys, repository) => keys.XmlRepository = repository);
+        services.AddHostedService<DataProtectionKeyRingStartupCheck>();
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<LoginStateCookie>();
@@ -64,7 +65,7 @@ internal static class FederatedLoginServiceCollectionExtensions
         // 02.3.1-T2 (Q1): the staged-invite cookie of POST /v1/auth/invite-token. Same Data Protection ring and
         // a purpose of its own, so a login cookie can never be read as an invite one (or the reverse).
         services.TryAddSingleton<InviteTokenCookie>();
-        services.TryAddSingleton<LoginReplayCache>();
+        services.TryAddSingleton<ILoginReplayCache, LoginReplayCache>();
 
         // 02.3.1-T1.4: the real completion — the user/identity upsert, the active-membership check, the
         // session row and the __Host- session cookie — composed with the session store 02.3.2-T1 ships

@@ -310,7 +310,7 @@ public sealed partial class AuthoringChangeTests(PostgresTenancyFixture fixture)
     public async Task Get_ForeignUnknownAndCrossProjectIds_AreOne404()
     {
         await using var world = await StartAsync(1);
-        var other = await StartAsync(1);
+        await using var other = await StartAsync(1);
         var mine = (await QueueAsync(world, world.Items[0], "comment", """{"body":"mine"}""")).Id("change_id");
         var theirs = (await QueueAsync(other, other.Items[0], "comment", """{"body":"theirs"}""")).Id("change_id");
 
