@@ -38,13 +38,19 @@ public sealed class UsageMeteringTests
         recorded.Quantity.ShouldBe((double)decimal.MaxValue + (double)decimal.MaxValue);
     }
 
-    private static PendingUsageEntry Entry(string billingKey) => new(
-        Guid.CreateVersion7(),
-        ProjectId: Guid.CreateVersion7(),
-        Metric,
-        Quantity: decimal.MaxValue,
-        Unit: "count",
-        Period: "2026-11",
-        BillingKey: billingKey,
-        OccurredAt: DateTimeOffset.UnixEpoch);
+    private static PendingUsageEntry Entry(string billingKey)
+    {
+        var projectId = Guid.CreateVersion7();
+
+        return new PendingUsageEntry(
+            Guid.CreateVersion7(),
+            ProjectId: projectId,
+            Metric,
+            Quantity: decimal.MaxValue,
+            Unit: "count",
+            Period: "2026-11",
+            BillingKey: billingKey,
+            OccurredAt: DateTimeOffset.UnixEpoch,
+            PayloadHash: UsagePayloadHash.Compute(Metric, projectId, decimal.MaxValue, "count", "2026-11"));
+    }
 }

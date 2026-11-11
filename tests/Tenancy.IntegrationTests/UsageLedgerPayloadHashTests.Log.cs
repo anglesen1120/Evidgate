@@ -36,11 +36,16 @@ public sealed partial class UsageLedgerPayloadHashTests
             .Single(captured => captured.Text.Contains(key, StringComparison.Ordinal));
 
         line.Level.ShouldBe(LogLevel.Error);
-        line.Text.ShouldContain(world.Org.ToString("D"));
-        line.Text.ShouldContain(HashOf(stored), "the stored hash names the first payload");
-        line.Text.ShouldContain(HashOf(incoming), "the incoming hash names the payload that was refused");
-        line.Text.ShouldNotContain("furlong", "the payload's unit never reaches a log line");
-        line.Text.ShouldNotContain("9.5", "the payload's quantity never reaches a log line");
+
+        // Plain string probes: no Shouldly string extension, so the overload is never in question.
+        var text = line.Text;
+        text.Contains(world.Org.ToString("D"), StringComparison.Ordinal).ShouldBeTrue("the log names the tenant");
+        text.Contains(HashOf(stored), StringComparison.Ordinal)
+            .ShouldBeTrue("the stored hash names the first payload");
+        text.Contains(HashOf(incoming), StringComparison.Ordinal)
+            .ShouldBeTrue("the incoming hash names the payload that was refused");
+        text.Contains("furlong", StringComparison.Ordinal).ShouldBeFalse("the payload's unit never reaches a log line");
+        text.Contains("9.5", StringComparison.Ordinal).ShouldBeFalse("the payload's quantity never reaches a log line");
     }
 
     /// <summary>
