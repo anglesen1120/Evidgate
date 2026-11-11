@@ -418,6 +418,7 @@ internal sealed class LoginTestHost : WebApplicationFactory<Program>
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<TimeProvider>(_clock);
+            InMemoryLoginSeams.Apply(services, _clock);
 
             foreach (var provider in _providers)
             {

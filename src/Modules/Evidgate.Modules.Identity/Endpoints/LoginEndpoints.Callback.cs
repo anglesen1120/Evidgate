@@ -30,7 +30,7 @@ public static partial class LoginEndpoints
         IEnumerable<ILoginProvider> providers,
         LoginStateCookie cookie,
         InviteTokenCookie inviteCookie,
-        LoginReplayCache replay,
+        ILoginReplayCache replay,
         ILoginCompletion completion,
         ExchangeRateLimiter limiter,
         IOptions<LoginOptions> options,
@@ -69,9 +69,17 @@ public static partial class LoginEndpoints
             return Result.Failure(LoginErrors.UnknownProvider);
         }
 
-        if (CheckPending(context, selected, cookie, presented, login, replay, out var input) is { } refused)
+        if (CheckPending(context, selected, cookie, presented, login, out var input) is { } refused)
         {
             return refused;
+        }
+
+        // Recorded before the provider call: a replayed callback must be refused even if the first attempt
+        // failed, and two concurrent replays (on any replica) must not both reach the provider.
+        if (!await replay.TryConsumeAsync(selected.Name + ":" + input.Pending.State, login.StateLifetime, cancellationToken)
+                .ConfigureAwait(false))
+        {
+            return LoginErrors.Invalid(selected.Name);
         }
 
         var verified = await VerifyAsync(context, selected, input, login, cancellationToken).ConfigureAwait(false);
@@ -87,8 +95,7 @@ public static partial class LoginEndpoints
 
     /// <summary>
     /// The pre-provider checks of a callback, in order: the pending login names this provider, the one-time
-    /// <c>state</c> matches, no provider <c>error</c>, a bounded <c>code</c>, a configured provider, and the
-    /// replay record. Returns the refusal, or null with <paramref name="input"/> set.
+    /// <c>state</c> matches, no provider <c>error</c>, a bounded <c>code</c>, and a configured provider. Returns the refusal, or null with <paramref name="input"/> set.
     /// </summary>
     private static Result? CheckPending(
         HttpContext context,
@@ -96,7 +103,6 @@ public static partial class LoginEndpoints
         LoginStateCookie cookie,
         string? presented,
         LoginOptions login,
-        LoginReplayCache replay,
         out CallbackInput input)
     {
         input = default;
@@ -128,13 +134,6 @@ public static partial class LoginEndpoints
         if (!selected.IsConfigured || callbackUri is null)
         {
             return LoginErrors.Unavailable(context, selected.Name, login);
-        }
-
-        // Recorded before the provider call: a replayed callback must be refused even if the first attempt
-        // failed, and two concurrent replays must not both reach the provider.
-        if (!replay.TryConsume(selected.Name + ":" + pending.State, login.StateLifetime))
-        {
-            return LoginErrors.Invalid(selected.Name);
         }
 
         input = new CallbackInput(pending, code, callbackUri);

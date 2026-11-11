@@ -163,6 +163,16 @@ procedure instead of copying it. That is the stub's documented procedure, not ye
 
 **Audit event.** None emitted today for provider-key or secret-store changes [OPEN O-G]. Login or exchange events are not evidence of a credential rotation.
 
+### 2.7 Data Protection key ring
+
+**Where it lives.** `public.data_protection_key` (migration 0100), read and written only through `evidgate_resolve.data_protection_key_list/store`; the Api hosts share one ring through it. It protects the login, link and antiforgery cookies, not sessions (those are peppered HMACs, §3.2).
+
+**Storage encryption (00 §5.7 S8).** Keys are stored as the framework writes them; at-rest protection is the database provider's storage encryption. The operator MUST run PostgreSQL (and its backups and snapshots) with storage encryption, and treat `data_protection_key` as secret-grade: restrict who can read a dump, and never copy the table to a lower environment. Application-level protection (`ProtectKeysWith*`) is an open item until 10.1.1 provisions a certificate or KMS key.
+
+**Rotation.** The framework rolls the ring itself (90-day key lifetime, new key created before expiry). Nothing to do on a schedule. After a suspected leak, delete the rows as the owner role and restart the Api: existing pending-login, link and antiforgery cookies fail once and users sign in again; sessions are unaffected.
+
+**Fail closed.** A host whose key table is unreachable at start refuses to start; it never falls back to an ephemeral or file ring.
+
 ## 3. Pepper rotation — T4.2 written half
 
 T5 [DECISION] requires new tokens to use the new pepper version while older versions verify until their last token expires (`plans/features/README.md:49`). This is a requirement, not proof that AC5 has been achieved. The shipped code supports **at most two live versions per class**: one current and one previous pepper for CI/ingest (`src/Modules/Evidgate.Modules.Identity/Ci/CiSecrets.cs:21-23,53-63`) and sessions (`src/Modules/Evidgate.Modules.Identity/Sessions/SessionSecrets.cs:22-23,64-85`); invites have the current pepper only (`src/Modules/Evidgate.Modules.Identity/Invites/InviteSecrets.cs:24,56-68`). There is no `pepper_vN` ring beyond that, and `HashWithVersion` returns `null` for any version that is neither current nor previous (`CiSecrets.cs:53-63`), so a second rotation before the first window drains strands the older version. [OPEN O-D] Receiver for a wider CI window: 02.4.2 (no task exists today); sessions' two-candidate limit is [DECISION D-S85-D4] (`plans/features/02-identity-tenancy/02.3.2-sessions-and-revocation.md:130`), so drain it before rotating again. Project API tokens use the same CI pepper; their verifier is not shipped (§3.4).
