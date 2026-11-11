@@ -59,7 +59,7 @@ public sealed class UsageLedgerPayloadHashMigrationTests
         TempMigrations migrations,
         CancellationToken token)
     {
-        migrations.CopyReal([.. PostgresMigratorFixture.RealMigrationFileNames.Where(name => name != HashFile)]);
+        migrations.CopyReal([.. PostgresMigratorFixture.RealMigrationFileNames.Where(name => string.CompareOrdinal(name, HashFile) < 0)]);
         MigratorHarness.Run(migrations.Path, _fixture.OwnerConnectionString(database))
             .ExitCode.ShouldBe(MigratorExitCodes.Success);
 
