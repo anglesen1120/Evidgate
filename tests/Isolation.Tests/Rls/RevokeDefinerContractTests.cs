@@ -195,6 +195,42 @@ public sealed class RevokeDefinerContractTests : HarnessTest
         append.ShouldContain("v_request_id, v_trace_id", Case.Sensitive);
     }
 
+    /// <summary>
+    /// The audited definer is the app role's only link entry point: the inner writer is granted to nobody but its
+    /// owner, so the role cannot link without the audit rows the same transaction owes.
+    /// </summary>
+    [Fact]
+    public async Task The_Inner_Link_Writer_Is_Reachable_Only_Through_The_Audited_Definer()
+    {
+        await using var connection = new NpgsqlConnection(Fixture.OwnerConnectionString);
+        await connection.OpenAsync(Token);
+
+        (await HasExecuteAsync(connection, "evidgate_app", "evidgate_resolve", "login_link_identity"))
+            .ShouldBeFalse("the app role calls the audited definer, which runs the inner writer as its owner");
+        (await HasExecuteAsync(connection, "evidgate_app", "evidgate_resolve", "login_link_identity_audited"))
+            .ShouldBeTrue("the audited definer is the app role's link entry point");
+
+        foreach (var role in new[] { "evidgate_operator", "evidgate_worker_sched" })
+        {
+            (await HasExecuteAsync(connection, role, "evidgate_resolve", "login_link_identity"))
+                .ShouldBeFalse($"{role} must not call the inner link writer either");
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            select count(*)
+              from pg_catalog.pg_proc p
+              cross join lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'evidgate_resolve' and p.proname = 'login_link_identity'
+               and a.grantee <> p.proowner
+            """;
+
+        ((long)(await command.ExecuteScalarAsync(Token))!).ShouldBe(
+            0L, "no role and not PUBLIC holds EXECUTE on the inner link writer");
+    }
+
     /// <summary>Whether a role holds EXECUTE on one function, read from the catalogue.</summary>
     private static async Task<bool> HasExecuteAsync(
         NpgsqlConnection connection,

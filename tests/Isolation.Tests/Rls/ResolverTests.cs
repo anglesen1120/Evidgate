@@ -10,7 +10,9 @@ namespace Isolation.Tests;
 /// resolvers of <c>evidgate_resolve</c> are the one sanctioned way across the tenant boundary —
 /// and they must be exactly that: owner-owned, <c>SECURITY DEFINER</c>, pinned to an empty
 /// <c>search_path</c>, executable by <c>evidgate_app</c> and nobody else, returning only the
-/// documented tuple, while the tables they read stay org-scoped for a direct read.
+/// documented tuple, while the tables they read stay org-scoped for a direct read. The inner
+/// identity-link writer is the one registered exception: its audited definer calls it as the
+/// owner, so the app role reaches it only through that definer.
 /// <para>
 /// The function set is read from <c>pg_proc</c> across every non-system schema, so a definer
 /// added by a later migration is covered the moment it lands; the documented tuple per function
@@ -23,7 +25,7 @@ namespace Isolation.Tests;
 /// </summary>
 [Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class ResolverTests : HarnessTest
+public sealed partial class ResolverTests : HarnessTest
 {
     /// <summary>
     /// The documented result tuple of every resolver, keyed by <c>schema.name</c>. A resolver is
@@ -246,6 +248,11 @@ public sealed class ResolverTests : HarnessTest
                 + $"unregistered [{string.Join(", ", unregistered)}]: register a new resolver with its documented tuple");
         }
 
+        if (OwnerOnlyRegistrationFailure(documented) is { } registrationFailure)
+        {
+            failures.Add(registrationFailure);
+        }
+
         foreach (var resolver in resolvers)
         {
             var key = $"{resolver.Schema}.{resolver.Name}";
@@ -255,9 +262,9 @@ public sealed class ResolverTests : HarnessTest
                 failures.Add($"{resolver.Signature}: a resolver must live in evidgate_resolve (00 §5.4.8)");
             }
 
-            if (!resolver.AppCanExecute)
+            if (AppGrantFailure(resolver, key) is { } grantFailure)
             {
-                failures.Add($"{resolver.Signature}: evidgate_app has no EXECUTE — the pre-tenant path cannot resolve a tenant");
+                failures.Add(grantFailure);
             }
 
             if (!PlatformScopeResolvers.Contains(key)

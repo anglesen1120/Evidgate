@@ -22,7 +22,7 @@ namespace Identity.IntegrationTests.Sessions.Store;
 /// assertions pin what the migration decided, because a regression there is invisible in the store tests.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class MigrationTests : SessionHardeningTestBase
+public sealed partial class MigrationTests : SessionHardeningTestBase
 {
     /// <summary>The resolvers 0045 created or redefined, with the one that must be gone.</summary>
     private static readonly string[] SessionWriters =
@@ -34,6 +34,9 @@ public sealed class MigrationTests : SessionHardeningTestBase
         "session_create",
         "login_link_identity",
     ];
+
+    /// <summary>The one session writer the app role no longer executes: the audited link definer calls it as owner.</summary>
+    private const string AuditedOnlySessionWriter = "login_link_identity";
 
     /// <summary>0048's four route definers, which the app role and only the app role may call.</summary>
     private static readonly string[] SessionRouteWriters =
@@ -143,7 +146,8 @@ public sealed class MigrationTests : SessionHardeningTestBase
 
     /// <summary>
     /// Every session writer is an owner definer with an empty <c>search_path</c> and EXECUTE for
-    /// <c>evidgate_app</c> alone — never PUBLIC, never the operator or sweep role (TL T80).
+    /// <c>evidgate_app</c> alone — never PUBLIC, never the operator or sweep role (TL T80). The inner link writer
+    /// is the exception the audited link definer owns: the app role reaches it only through that definer.
     /// </summary>
     [Fact]
     public async Task Every_Session_Writer_Is_A_Hardened_Definer_Granted_To_The_Api_Role_Only()
@@ -169,7 +173,9 @@ public sealed class MigrationTests : SessionHardeningTestBase
                   join pg_catalog.pg_namespace n on n.oid = p.pronamespace
                  where n.nspname = 'evidgate_resolve' and p.proname = @name
                 """,
-                ("name", name))).ShouldBeTrue($"evidgate_app calls {name}");
+                ("name", name))).ShouldBe(
+                !string.Equals(name, AuditedOnlySessionWriter, StringComparison.Ordinal),
+                $"evidgate_app calls {name} unless the audited link definer owns the call");
 
             foreach (var role in new[] { "evidgate_operator", "evidgate_worker_sched" })
             {
@@ -377,32 +383,12 @@ public sealed class MigrationTests : SessionHardeningTestBase
              where oid = 'public.audit_log'::regclass
             """)).ShouldBeTrue("the definer appends under FORCE row level security");
 
-        // At head the definer asks the rank hierarchy of 0101 and appends through the shared helpers; the revoke
-        // wrapper only names its action, and the chain append lives in `audit_append_user_event`.
-        var headBody = await OwnerScalarAsync<string>(RevokeBodySql);
-        headBody.ShouldContain("evidgate.session_admin_may_revoke_all", Case.Sensitive,
-            "the single-session path asks the same rank question as revoke-all");
-        headBody.ShouldContain("evidgate.session_revoke_audit_append", Case.Sensitive);
-
-        var helperBody = await OwnerScalarAsync<string>(
-            """
-            select p.prosrc
-              from pg_catalog.pg_proc p
-              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-             where n.nspname = 'evidgate' and p.proname = 'session_revoke_audit_append'
-            """);
-
-        helperBody.ShouldContain("evidgate.audit_append_user_event(", Case.Sensitive);
-        helperBody.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive);
-        helperBody.ShouldNotContain("insert into public.audit_log", Case.Sensitive,
-            "one copy of the chain append: the revoke wrapper delegates");
-
         var migration = await File.ReadAllTextAsync(Path.Combine(DatabaseFixture.MigrationsPath, MigrationFile), Token);
 
         await Fixture.SeedAsync(migration, [], Token);
         await Fixture.SeedAsync(migration, [], Token);
 
-        // 0051 alone re-states the inline body; the head state is 0090's delegating one.
+        // 0051 alone re-states the inline body; the helper migrations put the head bodies back.
         await ApplyHelperMigrationAsync();
 
         await AssertRevokeDefinerAsync("a re-apply keeps the definer hygiene and its bounded wait");
@@ -592,30 +578,6 @@ public sealed class MigrationTests : SessionHardeningTestBase
 
     /// <summary>0051, the file this case re-applies; it is the correlation-id half of F58.</summary>
     private const string MigrationFile = "0051_identity_session_revoke_audit_ids.sql";
-
-    /// <summary>
-    /// 0090 re-points the revoke definers at the shared helpers; 0091 re-states the revoke-all definer and the helper
-    /// it asks; 0101 gives the single-session path the same rank question and delegates its append. Together they are
-    /// the head state of these functions.
-    /// </summary>
-    private static readonly string[] HelperMigrationFiles =
-    [
-        "0090_identity_session_revoke_helpers.sql",
-        "0091_identity_session_revoke_all_hierarchy.sql",
-        "0101_identity_revoke_rank_and_atomic_link_audit.sql",
-    ];
-
-    /// <summary>Re-applies 0090, 0091 and 0101 so a case that re-stated an older body leaves the database at head.</summary>
-    private async Task ApplyHelperMigrationAsync()
-    {
-        foreach (var file in HelperMigrationFiles)
-        {
-            await Fixture.SeedAsync(
-                await File.ReadAllTextAsync(Path.Combine(DatabaseFixture.MigrationsPath, file), Token),
-                [],
-                Token);
-        }
-    }
 
     /// <summary>The migration 0051 supersedes for this one function: the body a database at 0050 runs.</summary>
     private const string PredecessorMigrationFile = "0050_identity_session_revoke_audit.sql";

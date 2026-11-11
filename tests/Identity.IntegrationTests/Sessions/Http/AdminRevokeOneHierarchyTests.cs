@@ -23,6 +23,12 @@ namespace Identity.IntegrationTests.Sessions.Http;
 [Trait("Category", "Docker")]
 public sealed class AdminRevokeOneHierarchyTests : TenantTest
 {
+    /// <summary>
+    /// One request id, sent with every probe of the parity case: the edge echoes it into the envelope, so the
+    /// two refusal bodies can be compared byte for byte without touching the JSON.
+    /// </summary>
+    private const string FixedRequestId = "req-hierarchy-parity";
+
     /// <summary>Shares the assembly database: every case creates its own org and reads only its own rows.</summary>
     public AdminRevokeOneHierarchyTests(DatabaseFixture fixture)
         : base(fixture)
@@ -39,6 +45,7 @@ public sealed class AdminRevokeOneHierarchyTests : TenantTest
     {
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
+        client.DefaultRequestHeaders.Add("X-Request-Id", FixedRequestId);
 
         var member = await host.SignInMemberAsync(client);
         var secondOrg = await host.SeedOrganizationAsync();

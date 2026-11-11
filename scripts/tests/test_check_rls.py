@@ -233,10 +233,28 @@ class DefinerRules(unittest.TestCase):
         self.assertEqual(run(sql), [])
 
     def test_only_that_exact_helper_counts_as_the_audit_row(self):
-        for name in ("evidgate.session_revoke_audit_append_other", "evidgate.session_revoke_audit", "evidgate.audit_append"):
+        for name in (
+            "evidgate.session_revoke_audit_append_other",
+            "evidgate.session_revoke_audit",
+            "evidgate.audit_append",
+            "evidgate.audit_append_user_event_other",
+            "evidgate.audit_append_user",
+            "public.audit_append_user_event",
+            "evidgate_resolve.audit_append_user_event",
+        ):
             call = f"perform {name}(p_org_id);"
             sql = GOOD_DEFINER.replace("insert into public.audit_log (k) values (p_key);", call)
             self.assertEqual(rules(run(sql)), {"definer_audit"}, name)
+
+    def test_the_user_event_audit_helper_call_is_the_audit_row(self):
+        call = "perform evidgate.audit_append_user_event('auth.link', p_org_id, v_actor, 'user', 'x', '{\"k\":\"v\"}'::jsonb, null, null);"
+        sql = GOOD_DEFINER.replace("insert into public.audit_log (k) values (p_key);", call)
+        self.assertEqual(run(sql), [])
+
+    def test_a_selected_or_quoted_user_event_helper_is_not_the_audit_row(self):
+        for call in ("select evidgate.audit_append_user_event(p_org_id);", "v_note := 'audit_append_user_event(';"):
+            sql = GOOD_DEFINER.replace("insert into public.audit_log (k) values (p_key);", call)
+            self.assertEqual(rules(run(sql)), {"definer_audit"}, call)
 
     def test_documented_deferral_excuses_the_audit_row(self):
         sql = "-- lint: audit-deferred 02.7.1-T2.2 evidgate_resolve.lookup\n" + GOOD_DEFINER.replace(

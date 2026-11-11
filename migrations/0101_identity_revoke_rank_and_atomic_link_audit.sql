@@ -1,36 +1,11 @@
--- 0101_identity_revoke_rank_and_atomic_link_audit.sql
---
--- WHY (two defects of the CR-22 register row):
---
---   (a) `evidgate_resolve.session_revoke_one` (0051, 0090) let any active `membership:write` holder of the acting
---       org end ONE session of any active member, including a `tenant_admin`'s, while `session_revoke_all_admin`
---       (0091) refuses a target that outranks the caller. The single-session path now asks
---       `evidgate.session_admin_may_revoke_all` (membership:write + active target + rank(actor) >= rank(target)),
---       so both admin routes answer the same question. A refusal is the same `not_found` as an unknown id.
---       A self revoke keeps its own branch and writes no audit row. Sessions stay user-wide (0041, platform
---       scoped): an administrator of an org the target belongs to at a lower rank can still end the target's
---       sessions everywhere; that residual is the accepted owner decision recorded in 0091.
---
---   (b) Identity linking committed in `login_link_identity`, and the `auth.link` / `auth.link_move` audit rows
---       were written afterwards by the application, one transaction per org, so a failed audit left a committed
---       link without its row. `evidgate_resolve.login_link_identity_audited` calls `login_link_identity` and, in
---       the same transaction, appends the rows to the chain of every active org of the acting user through the
---       new helper `evidgate.audit_append_user_event`; a failing append (lock timeout, chain guard) aborts the
---       call and the link rolls back with it. Only a first-time `linked` or `moved` outcome owes rows: an
---       `already_linked` retry belongs to a link whose rows committed with it.
---
--- HELPER: `evidgate.audit_append_user_event` is the 0090 chain append with the action as an argument.
--- `session_revoke_audit_append` keeps its signature and delegates to it with `auth.session_revoke_admin`, so the
--- canonical bytes of every existing row are unchanged and there is ONE copy of the chain-append logic.
---
--- GRANTS: both helpers are invoker-rights and owner-only (EXECUTE revoked from PUBLIC and every platform role),
--- as in 0090. The new definer is `security definer`, `search_path = ''`, `lock_timeout = 2000`, EXECUTE to
--- `evidgate_app` only.
---
--- DEPLOY ORDER: migrate before the application (the new application calls the new definer).
--- Rollback: application first, then `drop function evidgate_resolve.login_link_identity_audited(bytea[],
--- timestamptz, text, text, text, uuid, text, text)`, re-state the 0090 bodies of `session_revoke_one` and
--- `session_revoke_audit_append`, then drop `evidgate.audit_append_user_event`. No table or row changes.
+-- Administrative single-session revocation must honor the same rank hierarchy as revoke-all.
+-- Sessions remain user-wide; the acting organization's hierarchy controls the administrative decision.
+-- Identity linking and its active-organization audit rows must commit together.
+-- The audited definer is the app entry point; its owner alone may call the inner link writer.
+-- Shared audit appending preserves the existing chain format for non-empty string-valued metadata.
+-- Migration must precede application deployment because the application calls the audited definer.
+-- Roll back the application before restoring the preceding revoke bodies and link execute grant,
+-- then dropping the audited link definer and shared append helper.
 create or replace function evidgate.audit_append_user_event(
   p_action text,
   p_org_id uuid,
@@ -62,6 +37,18 @@ declare
   v_id uuid;
   v_canonical text;
 begin
+  if p_metadata is null or p_metadata = '{}'::jsonb
+     or pg_catalog.jsonb_typeof(p_metadata) <> 'object'
+  then
+    raise exception 'audit metadata must be a non-empty object of strings';
+  end if;
+  if exists (
+    select 1 from pg_catalog.jsonb_each(p_metadata) as e
+     where pg_catalog.jsonb_typeof(e.value) <> 'string')
+  then
+    raise exception 'audit metadata values must be strings';
+  end if;
+
   -- Untrusted input (CorrelationNames.IsSafeRequestId): an unacceptable value becomes an absent one.
   v_request_id := case when p_request_id ~ '^[!-~]{1,128}$' then p_request_id end;
   v_trace_id := case
@@ -208,8 +195,13 @@ begin
       return;
     end if;
 
-    -- Every refusal is behind us: this call ends ANOTHER member's session, which is the one
-    -- shape that owes an audit row.
+    -- Session writers serialize on the target before the audit-chain lock.
+    perform evidgate.session_user_lock(v_target_user);
+    if evidgate.session_admin_may_revoke_all(v_actor, p_org_id, v_target_user) is not true then
+      return query select 'not_found'::text;
+      return;
+    end if;
+
     v_admin_revoke := true;
   end if;
 
@@ -263,20 +255,24 @@ declare
   v_actor uuid;
   v_org uuid;
 begin
+  -- Preserve the accepted credential's actor even if another transaction revokes it during the link.
+  select s.user_id
+    into v_actor
+    from public.session s
+   where s.cookie_hmac = any (p_cookie_hmacs)
+     and s.revoked_at is null
+     and s.expires_at > p_now
+     and s.absolute_expires_at > p_now;
+
   select l.outcome, l.moved_from_user_id
     into v_outcome, v_moved
     from evidgate_resolve.login_link_identity(
            p_cookie_hmacs, p_now, p_provider, p_subject, p_email, p_identity_id) as l;
 
   if v_outcome in ('linked', 'moved') then
-    -- The same credential the link just accepted, so the acting user is the one it linked.
-    select s.user_id
-      into v_actor
-      from public.session s
-     where s.cookie_hmac = any (p_cookie_hmacs)
-       and s.revoked_at is null
-       and s.expires_at > p_now
-       and s.absolute_expires_at > p_now;
+    if v_actor is null then
+      raise exception 'identity link has no audit actor' using errcode = 'P0001';
+    end if;
 
     -- One chain per active org of the user, in org-id order (the application writer's order), so two
     -- concurrent links of one user take the chain locks in the same sequence.
@@ -309,3 +305,5 @@ revoke all on function evidgate_resolve.session_revoke_one(bytea[], uuid, uuid, 
 grant execute on function evidgate_resolve.session_revoke_one(bytea[], uuid, uuid, timestamptz, text, text) to evidgate_app;
 revoke all on function evidgate_resolve.login_link_identity_audited(bytea[], timestamptz, text, text, text, uuid, text, text) from public;
 grant execute on function evidgate_resolve.login_link_identity_audited(bytea[], timestamptz, text, text, text, uuid, text, text) to evidgate_app;
+revoke execute on function evidgate_resolve.login_link_identity(bytea[], timestamptz, text, text, text, uuid)
+  from evidgate_app;

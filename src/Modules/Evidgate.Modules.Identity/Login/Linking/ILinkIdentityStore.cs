@@ -86,7 +86,8 @@ internal interface ILinkIdentityStore
     /// <param name="provider">The provider's registered name.</param>
     /// <param name="subject">The provider's verified subject for this identity.</param>
     /// <param name="email">The verified address the provider reported (stored as <c>email_at_provider</c>).</param>
-    /// <param name="requestId">The 00 §9.1 request id of the call, or null; the definer nulls an unsafe value.</param>
+    /// <param name="requestId">The caller's correlation request id, or null; the definer keeps it only when it is
+    /// 1–128 visible ASCII characters, so the audit row never carries unvalidated text.</param>
     /// <param name="traceId">The W3C trace id of the call, or null; the definer nulls an invalid value.</param>
     /// <param name="cancellationToken">Request abort.</param>
     /// <returns>
