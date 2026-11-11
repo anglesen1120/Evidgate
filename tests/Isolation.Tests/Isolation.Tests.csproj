@@ -43,6 +43,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Compile Include="..\Shared\ContainerStart.cs" Link="ContainerStart.cs" />
     <Compile Include="..\Shared\ContractSchemaWarmup.cs" Link="ContractSchemaWarmup.cs" />
     <Compile Include="..\Shared\TemplateDatabase.cs" Link="TemplateDatabase.cs" />
     <!-- 01.6.1-T2: the shared harness is linked source, exactly as

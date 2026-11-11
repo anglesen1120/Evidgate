@@ -25,6 +25,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Compile Include="..\Shared\ContainerStart.cs" Link="ContainerStart.cs" />
     <Content Include="Fixtures\*.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

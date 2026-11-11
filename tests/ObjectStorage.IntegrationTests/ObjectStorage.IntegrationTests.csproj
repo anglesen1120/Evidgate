@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
+    <Compile Include="..\Shared\ContainerStart.cs" Link="ContainerStart.cs" />
     <Compile Include="..\Shared\TransientS3Retry.cs" Link="TransientS3Retry.cs" />
   </ItemGroup>
   <!-- 06.1.2-T1: the adapter, its options, the lazy validator and the secret

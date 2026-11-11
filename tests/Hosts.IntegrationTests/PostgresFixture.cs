@@ -91,13 +91,12 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     private async Task StartAsync()
     {
-        _container = new PostgreSqlBuilder(ContainerImages.Postgres)
-            .WithDatabase("evidgate")
-            .WithUsername("postgres")
-            .WithPassword("postgres")
-            .Build();
-
-        await _container.StartAsync();
+        _container = await ContainerStart.StartAsync(
+            () => new PostgreSqlBuilder(ContainerImages.Postgres)
+                .WithDatabase("evidgate")
+                .WithUsername("postgres")
+                .WithPassword("postgres")
+                .Build());
 
         // One bootstrap for the whole run: these statements never take the first test's token,
         // or one cancelled test would fail every later database test.
