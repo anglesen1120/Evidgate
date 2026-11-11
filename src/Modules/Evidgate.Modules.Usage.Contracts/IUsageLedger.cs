@@ -29,13 +29,16 @@ public interface IUsageLedger
     /// <see cref="UsageBatchResult.Duplicates"/> instead of writing a second row (ruling T43). The rows themselves are one
     /// <c>INSERT … SELECT FROM unnest(…)</c> statement with <c>ON CONFLICT (org_id, billing_key) DO NOTHING</c>
     /// (ruling T50, plan §8 P2) whatever the batch size, and the projects it names are read once before it, so a batch
-    /// costs at most three statements — the project read, the insert, and the duplicate tally only when the batch has
-    /// duplicates — never one per entry. The rows are written in billing-key order, so two concurrent batches with
+    /// costs a bounded number of statements — the project read, the insert, one read of the stored payloads only when the
+    /// insert skipped a key or the request repeated one, and the duplicate tally only when the batch has duplicates —
+    /// never one per entry. The rows are written in billing-key order, so two concurrent batches with
     /// overlapping keys lock in one order and cannot deadlock.
     /// <para>
     /// An entry that repeats an earlier entry's billing key inside the same request is reported under
     /// <see cref="UsageBatchResult.Duplicates"/> as well: the first occurrence is the one recorded. A key already on
-    /// file is a duplicate whatever its payload — the first write wins and a later payload is ignored, not compared.
+    /// file with the same payload is a duplicate — a verified replay. A key that holds a different payload, or that the
+    /// request repeats with a different payload, is reported under <see cref="UsageBatchResult.Conflicts"/> instead: the
+    /// batch is rolled back and nothing of it is written, metered or audited, and the key is never rewritten.
     /// Price and amount stay null until 12.3.1-T3 resolves prices (DECISIONS O5, ruling T60). Before the insert the
     /// distinct <see cref="UsageEntryInput.ProjectId"/> values are checked in one read inside the caller's transaction,
     /// so an unknown project — or one of another org, which row security hides — is a refused entry instead of a
@@ -44,9 +47,9 @@ public interface IUsageLedger
     /// <see cref="UsageEntryRecord.OriginalPeriod"/>, and the move is audited in the caller's transaction.
     /// </para>
     /// </summary>
-    /// <param name="request">The entries to record; an empty batch writes nothing and answers two empty lists.</param>
+    /// <param name="request">The entries to record; an empty batch writes nothing and answers three empty lists.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    /// <returns>The inserted and the duplicate billing keys, in request order.</returns>
+    /// <returns>The inserted, duplicate and conflicting billing keys, in request order.</returns>
     /// <exception cref="ArgumentException">
     /// The batch breaks the entry rules: a null or longer-than-1000 entry list, a null entry, an undeclared metric, a
     /// negative <c>quantity</c> (a correction is an adjustment row, never a negative plain row), a <c>period</c> that is
@@ -68,8 +71,8 @@ public interface IUsageLedger
     /// Reads the row <paramref name="billingKey"/> recorded for the caller's org, or null when this org has none: another
     /// org's key is invisible under row security, so a cross-org lookup is an absence, never a row. The same rules as
     /// <see cref="RecordAsync"/> apply — one statement inside the caller's tenant transaction, no connection or
-    /// transaction of its own, no commit — because a caller that is about to treat a duplicate key as its own replay
-    /// reads what the first write stored.
+    /// transaction of its own, no commit, and no lock on the row — so a caller can read what the first write stored while
+    /// the write path keeps comparing payloads itself.
     /// </summary>
     /// <param name="billingKey">The key whose stored row to read.</param>
     /// <param name="cancellationToken">Cancellation.</param>

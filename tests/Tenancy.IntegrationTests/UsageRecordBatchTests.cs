@@ -255,11 +255,13 @@ public sealed partial class UsageRecordBatchTests
     {
         await using var world = await StartAsync();
 
+        // The repeat carries the same payload: a repeat with another payload is a conflict (see the payload-hash
+        // suite), because one key cannot claim two bills.
         var result = await RecordAsync(
             world,
             [
                 Entry("support:2026-10", null, 1m, metric: UsageMetric.SupportHours, unit: "hour"),
-                Entry("support:2026-10", null, 9m, metric: UsageMetric.SupportHours, unit: "hour"),
+                Entry("support:2026-10", null, 1m, metric: UsageMetric.SupportHours, unit: "hour"),
                 Entry("runner:2026-10", world.Project, 30m, metric: UsageMetric.RunnerMinutes, unit: "minute"),
                 Entry(
                     "device:2026-10",

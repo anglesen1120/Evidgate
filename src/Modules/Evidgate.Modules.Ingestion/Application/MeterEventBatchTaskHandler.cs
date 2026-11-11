@@ -5,6 +5,7 @@ using Evidgate.Modules.Ingestion.Application.Commands;
 using Evidgate.Modules.Orchestrator.Contracts;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Evidgate.Modules.Ingestion.Application;
 
@@ -36,10 +37,14 @@ internal interface IMeterEventBatchReader
 /// the batch is re-read on the claim's scope and its own accepted count is the quantity, so a payload cannot inflate
 /// a bill. A batch metered for a month that is already billed is recorded in the next open period and audited, so late
 /// metering is billed rather than dead-lettered. Every other failure throws and the queue's retry cap dead-letters the
-/// row; a duplicate key is a success.
+/// row; a duplicate key is a success, and a key that already holds a different payload is logged at Error and also
+/// completes the task, because the ledger's conflict is permanent and a throw would only requeue it.
 /// </summary>
 /// <param name="scopeFactory">Creates the per-attempt scope the scoped reader, run lookup and ledger are resolved from.</param>
-internal sealed class MeterEventBatchTaskHandler(IServiceScopeFactory scopeFactory)
+/// <param name="logger">Records a billing-key conflict, which the ledger reports instead of billing.</param>
+internal sealed partial class MeterEventBatchTaskHandler(
+    IServiceScopeFactory scopeFactory,
+    ILogger<MeterEventBatchTaskHandler> logger)
     : ITaskHandler<MeterEventBatchPayload>
 {
     /// <summary>The ledger unit of one metered batch (<c>results</c>, one per accepted batch).</summary>
@@ -99,69 +104,22 @@ internal sealed class MeterEventBatchTaskHandler(IServiceScopeFactory scopeFacto
 
         var ledger = attempt.ServiceProvider.GetRequiredService<IUsageLedger>();
 
-        // One call per metric (V1 has one). A key the ledger reports as a duplicate is either this task's own replay —
-        // the stored row equals the one built here — or a row this batch never wrote, which must never be rewritten.
+        // One call per metric (V1 has one). A duplicate key is this task's own replay — the ledger compared the stored
+        // payload with the one built here — so it is a silent success. A conflicting key is permanent: the ledger wrote
+        // nothing, so this attempt is logged and completes instead of being requeued for the same refusal.
         var result = await ledger
             .RecordAsync(new RecordUsageBatchRequest([entry]), cancellationToken)
             .ConfigureAwait(false);
 
-        if (result.Duplicates.Contains(entry.BillingKey, StringComparer.Ordinal))
+        if (result.Conflicts.Contains(entry.BillingKey, StringComparer.Ordinal))
         {
-            await EnsureDuplicateIsThisBatchAsync(ledger, payload.EventBatchId, entry, cancellationToken)
-                .ConfigureAwait(false);
+            LogBillingKeyConflict(payload.EventBatchId, scope.OrgId);
         }
     }
 
-    /// <summary>
-    /// Compares the stored row of a duplicate key with the entry this attempt built. A missing row (the ledger just
-    /// reported it, so this is a contract failure) or a different metric, project, quantity or unit means the batch was
-    /// billed as something else: the attempt throws, so the queue retries and dead-letters the row instead of accepting
-    /// a wrong bill. The period is compared through the row's provenance: an entry metered for a month already billed
-    /// was re-dated, so its stored <c>period</c> is the open month it moved to — but only when its <c>original_period</c>
-    /// is exactly the entry's month. The message names the batch and the differing fields, never their values.
-    /// </summary>
-    private static async Task EnsureDuplicateIsThisBatchAsync(
-        IUsageLedger ledger,
-        Guid eventBatchId,
-        UsageEntryInput entry,
-        CancellationToken cancellationToken)
-    {
-        var stored = await ledger.FindAsync(entry.BillingKey, cancellationToken).ConfigureAwait(false)
-            ?? throw new InvalidOperationException(
-                $"the usage ledger reported the billing key of batch {eventBatchId} as a duplicate but holds no such row");
-
-        var differ = new List<string>(5);
-        if (!string.Equals(stored.Metric, UsageLedgerMetricNames.Results, StringComparison.Ordinal))
-        {
-            differ.Add("metric");
-        }
-
-        if (stored.ProjectId != entry.ProjectId)
-        {
-            differ.Add("project_id");
-        }
-
-        if (stored.Quantity != entry.Quantity)
-        {
-            differ.Add("quantity");
-        }
-
-        if (!string.Equals(stored.Unit, entry.Unit, StringComparison.Ordinal))
-        {
-            differ.Add("unit");
-        }
-
-        // A row that moved names the month it was metered for; one that did not names the month it was asked for.
-        var storedMetered = stored.OriginalPeriod ?? stored.Period;
-        if (!string.Equals(storedMetered, entry.Period, StringComparison.Ordinal))
-        {
-            differ.Add("period");
-        }
-
-        if (differ.Count > 0)
-        {
-            throw new InvalidOperationException(
-                $"the usage ledger row of batch {eventBatchId} differs in {string.Join(", ", differ)}: a recorded bill is never rewritten");
-        }
-    }
+    [LoggerMessage(
+        EventId = 4112,
+        Level = LogLevel.Error,
+        Message = "Usage ledger billing key conflict for event batch {EventBatchId} in org {Org}: the key already holds a different payload, so the batch was not billed and this task completes")]
+    private partial void LogBillingKeyConflict(Guid eventBatchId, Guid org);
 }

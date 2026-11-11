@@ -32,7 +32,7 @@ internal static class UsageBatchOutcome
         }
 
         // The duplicate list comes from the batch's own classification so the recorded attempts and this answer can
-        // never name different keys.
-        return new UsageBatchResult(kept ?? [], batch.DuplicateBillingKeys(insertedKeys));
+        // never name different keys. A batch with conflicts never reaches this merge: it wrote nothing.
+        return new UsageBatchResult(kept ?? [], batch.DuplicateBillingKeys(insertedKeys), []);
     }
 }

@@ -8,6 +8,7 @@ using Evidgate.Modules.Ingestion.Contracts;
 using Evidgate.Modules.Usage.Application.Quota;
 using Evidgate.Modules.Usage.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 using Xunit;
@@ -95,8 +96,11 @@ public sealed partial class EvidenceRawReportQuotaTests
             {
                 var provider = services.ServiceProvider;
                 await using var scope = await provider.GetRequiredService<ITenantScopeFactory>().BeginAsync(world.Org, null, false, Token);
-                await new MeterEventBatchTaskHandler(provider.GetRequiredService<IServiceScopeFactory>()).HandleAsync(
-                    new MeterEventBatchPayload(batch, IngestEventBatchHandler.UsageMetric, 1), scope, Token);
+                await new MeterEventBatchTaskHandler(
+                        provider.GetRequiredService<IServiceScopeFactory>(),
+                        NullLogger<MeterEventBatchTaskHandler>.Instance)
+                    .HandleAsync(
+                        new MeterEventBatchPayload(batch, IngestEventBatchHandler.UsageMetric, 1), scope, Token);
                 await scope.CommitAsync(Token);
             }
 

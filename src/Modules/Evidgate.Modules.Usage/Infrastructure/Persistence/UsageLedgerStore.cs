@@ -3,6 +3,7 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Usage.Contracts;
 using Evidgate.Modules.Usage.Domain;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using NpgsqlTypes;
 
@@ -23,9 +24,10 @@ namespace Evidgate.Modules.Usage.Infrastructure.Persistence;
 /// the parameters are Npgsql parameters all the same, as <c>ProducerRegistry</c>'s one-statement insert does.
 /// </para>
 /// </summary>
-internal sealed class UsageLedgerStore(
+internal sealed partial class UsageLedgerStore(
     ITenantDbContextFactory<UsageDbContext> contexts,
-    ITenantScopeAccessor scopes)
+    ITenantScopeAccessor scopes,
+    ILogger<UsageLedgerStore> logger)
 {
     /// <summary>
     /// The stored row of one key, on the unique index <c>(org_id, billing_key)</c>: the columns a caller compares before
@@ -38,19 +40,21 @@ internal sealed class UsageLedgerStore(
         """;
 
     /// <summary>
-    /// The batch as a single statement. <c>price_ref</c>, <c>amount</c> and <c>currency</c> are written as null: 12.3.1-T1
-    /// stores unpriced rows (DECISIONS O5, ruling T60), and 12.3.1-T3 resolves the price inside the same transaction.
-    /// <c>occurred_at</c> travels as UTC <c>timestamptz[]</c>, preserving PostgreSQL microsecond precision without
-    /// floating-point arithmetic or session-time-zone conversion. The returning set carries what the row became, not
-    /// what was asked for: the insert guard may have moved <c>period</c> and set <c>original_period</c>.
+    /// The batch as a single statement. <c>payload_hash</c> is the canonical digest of what the row bills, so a later
+    /// request under the same key can be compared with the stored row rather than assumed to replay it. <c>price_ref</c>,
+    /// <c>amount</c> and <c>currency</c> are written as null: this path stores unpriced rows, and the price is resolved
+    /// inside the same transaction. <c>occurred_at</c> travels as UTC
+    /// <c>timestamptz[]</c>, preserving PostgreSQL microsecond precision without floating-point arithmetic or
+    /// session-time-zone conversion. The returning set carries what the row became, not what was asked for: the insert
+    /// guard may have moved <c>period</c> and set <c>original_period</c>.
     /// </summary>
     private const string InsertSql = """
         insert into public.usage_ledger_entry (
-            id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at,
+            id, org_id, project_id, metric, quantity, unit, period, billing_key, occurred_at, payload_hash,
             price_ref, amount, currency)
         select
             x.id, @org_id, x.project_id, x.metric, x.quantity, x.unit, x.period, x.billing_key,
-            x.occurred_at,
+            x.occurred_at, x.payload_hash,
             null, null, null
         from unnest(
             @ids::uuid[],
@@ -60,8 +64,9 @@ internal sealed class UsageLedgerStore(
             @units::text[],
             @periods::text[],
             @billing_keys::text[],
-            @occurred_at::timestamptz[])
-            with ordinality as x (id, project_id, metric, quantity, unit, period, billing_key, occurred_at, position)
+            @occurred_at::timestamptz[],
+            @payload_hashes::text[])
+            with ordinality as x (id, project_id, metric, quantity, unit, period, billing_key, occurred_at, payload_hash, position)
         order by x.position
         on conflict (org_id, billing_key) do nothing
         returning id, billing_key, period, original_period
@@ -96,7 +101,7 @@ internal sealed class UsageLedgerStore(
     /// <summary>
     /// Reads the row <paramref name="orgId"/>'s tenant holds under <paramref name="billingKey"/>, or null when it holds
     /// none. One indexed read on the caller's tenant transaction: row security makes another org's key an absence, and the
-    /// read takes no lock, so a caller comparing a duplicate key never blocks the writer that created it.
+    /// read takes no lock, so reading a key never blocks the writer that created it.
     /// </summary>
     /// <param name="orgId">The tenant of the open scope (never a value from the caller's key).</param>
     /// <param name="billingKey">The key to read; the unique index on <c>(org_id, billing_key)</c> answers it.</param>
@@ -192,6 +197,12 @@ internal sealed class UsageLedgerStore(
     /// leaves neither a ledger row nor an attempt — the reconciliation cannot report a duplicate that was never
     /// accepted. A batch with no duplicate writes nothing beyond its insert.
     /// <para>
+    /// Every skipped key is compared with the row on file before the batch is accepted: a key that holds a different
+    /// payload, or that the request repeated with a different payload, is a conflict. The insert sits behind a
+    /// savepoint, so a conflict rolls the whole batch back — no row of any key survives — and answers the conflicting
+    /// keys instead of writing a tally. A conflict is permanent: the stored payload is never rewritten.
+    /// </para>
+    /// <para>
     /// A period an issued statement froze is not refused any more: the insert guard re-dates that row into the next
     /// open period and names the original one in <c>original_period</c>, so late usage is billed instead of dropped.
     /// The returned redated rows are what the caller audits; a period with no open month after it refuses the whole
@@ -202,7 +213,7 @@ internal sealed class UsageLedgerStore(
     /// <param name="orgId">The tenant of the open scope (never a value from the batch).</param>
     /// <param name="batch">The prepared batch to record.</param>
     /// <param name="cancellationToken">Cancellation.</param>
-    /// <returns>The inserted keys and the inserted rows the guard moved, for <c>UsageBatchOutcome.Merge</c> and the audit.</returns>
+    /// <returns>The inserted keys, the inserted rows the guard moved, and the keys that conflict.</returns>
     /// <exception cref="LedgerNoOpenPeriodException">A row's period and every period after it are issued.</exception>
     internal async Task<UsageLedgerWrite> RecordBatchAsync(
         Guid orgId,
@@ -211,8 +222,22 @@ internal sealed class UsageLedgerStore(
     {
         ArgumentNullException.ThrowIfNull(batch);
 
+        var scope = scopes.Require();
+        var transaction = scope.Transaction;
+        await transaction.SaveAsync(BatchSavepoint, cancellationToken).ConfigureAwait(false);
+
         var recorded = await InsertAsync(orgId, batch.Rows, cancellationToken).ConfigureAwait(false);
         var inserted = recorded.Select(row => row.BillingKey).ToArray();
+        var conflicts = await FindConflictsAsync(orgId, batch, inserted, cancellationToken).ConfigureAwait(false);
+
+        if (conflicts.Count > 0)
+        {
+            await transaction.RollbackAsync(BatchSavepoint, cancellationToken).ConfigureAwait(false);
+            await ReleaseBatchSavepointAsync(scope.Connection, transaction, cancellationToken).ConfigureAwait(false);
+            ReportConflicts(orgId, conflicts);
+            return new UsageLedgerWrite([], [], [.. conflicts.Select(conflict => conflict.BillingKey)]);
+        }
+
         var duplicates = batch.DuplicateBillingKeys(inserted.ToHashSet(StringComparer.Ordinal));
 
         if (duplicates.Count > 0)
@@ -220,9 +245,31 @@ internal sealed class UsageLedgerStore(
             await RecordDuplicateAttemptsAsync(orgId, duplicates, cancellationToken).ConfigureAwait(false);
         }
 
+        await ReleaseBatchSavepointAsync(scope.Connection, transaction, cancellationToken).ConfigureAwait(false);
+
         return new UsageLedgerWrite(
             inserted,
-            [.. recorded.Where(row => row.OriginalPeriod is not null)]);
+            [.. recorded.Where(row => row.OriginalPeriod is not null)],
+            []);
+    }
+
+    /// <summary>
+    /// Releases <see cref="BatchSavepoint"/> with an asynchronous command. The provider's savepoint helper performs
+    /// synchronous I/O, which would block a request thread, so the fixed statement runs on the scope's own connection and
+    /// transaction instead.
+    /// </summary>
+    /// <param name="connection">The scope's connection, which owns the savepoint.</param>
+    /// <param name="transaction">The scope's open transaction.</param>
+    /// <param name="cancellationToken">Cancellation.</param>
+    private static async Task ReleaseBatchSavepointAsync(
+        NpgsqlConnection connection,
+        NpgsqlTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "release savepoint " + BatchSavepoint;
+        await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task RecordDuplicateAttemptsAsync(
@@ -282,6 +329,7 @@ internal sealed class UsageLedgerStore(
         var periods = new string[rows.Count];
         var billingKeys = new string[rows.Count];
         var occurredAt = new DateTime[rows.Count];
+        var payloadHashes = new string[rows.Count];
         // Every transaction acquires unique-key locks in the same ordinal order, regardless of request order.
         var orderedRows = rows.OrderBy(row => row.BillingKey, StringComparer.Ordinal).ToArray();
 
@@ -296,6 +344,7 @@ internal sealed class UsageLedgerStore(
             periods[index] = row.Period;
             billingKeys[index] = row.BillingKey;
             occurredAt[index] = row.OccurredAt.UtcDateTime;
+            payloadHashes[index] = row.PayloadHash;
         }
 
         // The connection comes from the module's write model (00 §5.5 C4) and the transaction from the tenant scope it is
@@ -315,6 +364,7 @@ internal sealed class UsageLedgerStore(
         command.Parameters.Add(new NpgsqlParameter("periods", NpgsqlDbType.Array | NpgsqlDbType.Text) { Value = periods });
         command.Parameters.Add(new NpgsqlParameter("billing_keys", NpgsqlDbType.Array | NpgsqlDbType.Text) { Value = billingKeys });
         command.Parameters.Add(new NpgsqlParameter("occurred_at", NpgsqlDbType.Array | NpgsqlDbType.TimestampTz) { Value = occurredAt });
+        command.Parameters.Add(new NpgsqlParameter("payload_hashes", NpgsqlDbType.Array | NpgsqlDbType.Text) { Value = payloadHashes });
 
         return await ExecuteInsertAsync(command, rows, cancellationToken).ConfigureAwait(false);
     }
