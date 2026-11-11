@@ -54,6 +54,7 @@ CANONICAL_STAGES = (
     "isolation",
     "fixtures-hostile",
     "fixtures-fuzz",
+    "parser-no-egress",
     "tsc-build",
     "tsc-spec",
     "vitest",
@@ -91,7 +92,8 @@ CANONICAL_STAGES = (
 DOTNET_STAGES = frozenset(
     {"restore", "build", "format", "test", "isolation", "fixtures-hostile", "fixtures-fuzz"}
 )
-DOCKER_STAGES = frozenset({"images"})
+# `parser-no-egress` needs a Docker daemon and the Release output of the build.
+DOCKER_STAGES = frozenset({"images", "parser-no-egress"})
 SKIPPED_WHEN_NARROWED = DOTNET_STAGES | DOCKER_STAGES
 
 # Ordered narrowest first: a requested scope may only move up this scale.

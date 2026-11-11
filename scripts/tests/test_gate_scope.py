@@ -215,6 +215,12 @@ class StageSelection(unittest.TestCase):
         for tier in ("docs", "review-infra"):
             self.assertNotIn("e2e-a11y", gate_scope.stages_for(tier))
 
+    def test_the_parser_no_egress_stage_runs_in_full_only(self):
+        # It needs the Release output of `build` and a Docker daemon, so every narrowed tier drops it.
+        self.assertIn("parser-no-egress", gate_scope.stages_for("full"))
+        for tier in ("docs", "review-infra", "no-dotnet"):
+            self.assertNotIn("parser-no-egress", gate_scope.stages_for(tier))
+
     def test_docs_is_the_formatter_plus_every_check_stage_but_the_review_one(self):
         stages = gate_scope.stages_for("docs")
         expected = [

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
@@ -40,6 +41,13 @@ namespace Parser.Tests;
 /// </summary>
 public sealed class ChildNetworkTests(ITestOutputHelper output)
 {
+    /// <summary>
+    /// Set to <c>1</c> by the gate stage that runs this class inside a container started with
+    /// <c>--network none</c>: there the no-egress assertions are the point of the run, so a precondition that would
+    /// skip the test fails it instead. A plain developer or CI test run leaves it unset and still skips.
+    /// </summary>
+    private const string RequireNoEgressVariable = "EVIDGATE_REQUIRE_NO_EGRESS";
+
     /// <summary>The public address the egress probe tries when it is allowed to: DNS-resolved, port 443.</summary>
     private const string EgressHost = "example.com";
 
@@ -233,7 +241,7 @@ public sealed class ChildNetworkTests(ITestOutputHelper output)
 
         if (!OperatingSystem.IsLinux())
         {
-            Assert.Skip(
+            SkipOrFail(
                 "the child's runtime is the Linux chiseled image (DECISIONS F14), and the no-egress property is a "
                 + $"property of the container that runs it; this host is '{Environment.OSVersion.Platform}'. "
                 + "Probe result: skipped, not passed.");
@@ -242,7 +250,7 @@ public sealed class ChildNetworkTests(ITestOutputHelper output)
         var bash = FindExecutable("/bin/bash", "/usr/bin/bash") ?? string.Empty;
         if (bash.Length == 0)
         {
-            Assert.Skip("'bash' is not at /bin/bash or /usr/bin/bash, so the /dev/tcp connect probe cannot run");
+            SkipOrFail("'bash' is not at /bin/bash or /usr/bin/bash, so the /dev/tcp connect probe cannot run");
         }
 
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
@@ -252,7 +260,7 @@ public sealed class ChildNetworkTests(ITestOutputHelper output)
 
         if (canConnect)
         {
-            Assert.Skip(
+            SkipOrFail(
                 $"this environment has an egress path (a TCP connect to {EgressAddress}:{EgressPort} succeeded), so a "
                 + "successful connect from a spawned child would prove nothing about the deny. The no-network "
                 + "guarantee is the deployment's egress deny (receiver 10.2.1-T1.1) and is asserted only in a "
@@ -401,6 +409,17 @@ public sealed class ChildNetworkTests(ITestOutputHelper output)
     /// <summary>The first existing path of the candidates, or <see langword="null"/> when none exists.</summary>
     /// <param name="candidates">Absolute paths to check.</param>
     /// <returns>The first path that exists.</returns>
+    [DoesNotReturn]
+    private static void SkipOrFail(string reason)
+    {
+        if (Environment.GetEnvironmentVariable(RequireNoEgressVariable) == "1")
+        {
+            Assert.Fail($"{RequireNoEgressVariable}=1 requires this test to run, but it would skip: {reason}");
+        }
+
+        Assert.Skip(reason);
+    }
+
     private static string? FindExecutable(params string[] candidates) =>
         candidates.FirstOrDefault(File.Exists);
 }
