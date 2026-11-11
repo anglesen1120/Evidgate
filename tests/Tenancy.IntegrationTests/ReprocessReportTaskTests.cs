@@ -251,7 +251,7 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
         Guid user;
         Guid org;
         Guid project;

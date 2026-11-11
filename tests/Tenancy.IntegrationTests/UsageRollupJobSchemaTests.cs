@@ -193,7 +193,7 @@ public sealed class UsageRollupJobSchemaTests
     {
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
         var database = dedicated.Name;
-        var world = await StartWorldAsync(database);
+        await using var world = await StartWorldAsync(database);
 
         var first = await RecordAsync(world, ["batch:a:results", "batch:b:results"]);
         first.Inserted.Count.ShouldBe(2);
@@ -221,7 +221,7 @@ public sealed class UsageRollupJobSchemaTests
     {
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
         var database = dedicated.Name;
-        var world = await StartWorldAsync(database);
+        await using var world = await StartWorldAsync(database);
 
         await RecordAsync(world, ["batch:keep:results"]);
         // A refused unit of work: the scope is disposed uncommitted, as a caller's exception does.
