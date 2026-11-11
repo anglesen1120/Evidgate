@@ -33,8 +33,8 @@ namespace Tenancy.IntegrationTests;
 /// handler is the consumer's own half, in <c>EvidenceSecretScanTaskTests.Consumer.cs</c>.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed partial class EvidenceSecretScanTaskTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed partial class EvidenceSecretScanTaskTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>The task's wire name (06.2.3 §4).</summary>
     private const string ScanTask = "artifact_secret_scan";
@@ -298,7 +298,8 @@ public sealed partial class EvidenceSecretScanTaskTests(PostgresTenancyFixture f
     private async Task<World> StartAsync(string? database = null, Action<IServiceCollection>? services = null)
     {
         database ??= await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        // Dedicated consumer databases deliberately receive private leases.
+        await using var api = hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -310,13 +311,12 @@ public sealed partial class EvidenceSecretScanTaskTests(PostgresTenancyFixture f
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database),
-            org,
-            project,
-            RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-scan-1"),
-            _store.Configuration(),
-            services);
+        var principal = RequestPrincipal.Service(projectScope: null, [Permissions.Artifact.Write], credentialId: "jti-scan-1");
+        // Queue consumers carry per-test registrations and poll their dedicated database.
+        var host = services is null
+            ? hosts.WithPrincipalConfigured(database, org, project, principal, _store.Configuration())
+            : TenancyApiFactory.WithPrincipal(
+                _fixture.AppConnectionString(database), org, project, principal, _store.Configuration(), services);
 
         var runId = await RunRowSeeder.SeedRunAsync(_fixture, database, org);
 

@@ -13,8 +13,8 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
-public sealed class EvidenceKindDefaultsExploratoryTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed class EvidenceKindDefaultsExploratoryTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private const string Checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -44,7 +44,7 @@ public sealed class EvidenceKindDefaultsExploratoryTests(PostgresTenancyFixture 
     private async Task<World> StartAsync()
     {
         var database = await fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
+        var api = hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -56,8 +56,8 @@ public sealed class EvidenceKindDefaultsExploratoryTests(PostgresTenancyFixture 
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            fixture.AppConnectionString(database), org, project, Writer(), store.Configuration());
+        var host = hosts.WithPrincipalConfigured(
+            database, org, project, Writer(), store.Configuration());
 
         return new World(api, host, host.CreateClient(), database, user, org, project);
     }

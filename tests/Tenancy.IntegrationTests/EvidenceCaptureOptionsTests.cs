@@ -23,7 +23,7 @@ namespace Tenancy.IntegrationTests;
 /// existed and is asserted end-to-end here.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class EvidenceCaptureOptionsTests
+public sealed partial class EvidenceCaptureOptionsTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex.</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -49,14 +49,16 @@ public sealed partial class EvidenceCaptureOptionsTests
     private static readonly Action<HttpRequestHeaders> NoCaller = _ => { };
 
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public EvidenceCaptureOptionsTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public EvidenceCaptureOptionsTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
     /// <summary>One test's tenant, its hosts and the database every assertion reads.</summary>
     private sealed class World(
         TenancyApiFactory api,
+        TenancyHostPool pool,
         string connectionString,
         string database,
         Guid founder,
@@ -81,8 +83,9 @@ public sealed partial class EvidenceCaptureOptionsTests
         /// <summary>A client of a host that publishes <paramref name="principal"/> for every request.</summary>
         internal HttpClient ClientFor(RequestPrincipal principal)
         {
-            var host = TenancyApiFactory.WithPrincipal(
-                ConnectionString, Org, Project, principal, ObjectStorage);
+            // A simultaneous principal lease stays private until this world releases all its hosts.
+            var host = pool.WithPrincipalConfigured(
+                Database, Org, Project, principal, ObjectStorage);
             _hosts.Add(host);
             var client = host.CreateClient();
             _clients.Add(client);
@@ -118,7 +121,7 @@ public sealed partial class EvidenceCaptureOptionsTests
     {
         var database = await _fixture.SharedDatabaseAsync();
         var connectionString = _fixture.AppConnectionString(database);
-        var api = TenancyApiFactory.RealResolver(connectionString, ObjectStorage);
+        var api = _hosts.RealResolverConfigured(database, ObjectStorage);
         Guid founder;
         Guid org;
         Guid project;
@@ -130,7 +133,7 @@ public sealed partial class EvidenceCaptureOptionsTests
             project = await CreateProjectAsync(setup, founder, org, Unique.Slug("capture-project"));
         }
 
-        return new World(api, connectionString, database, founder, org, project);
+        return new World(api, _hosts, connectionString, database, founder, org, project);
     }
 
     /// <summary>The read route's URL for one project.</summary>
