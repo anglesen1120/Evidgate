@@ -32,14 +32,17 @@ PT_PIDS=() PT_NAMES=() PT_FILES=() PT_STARTS=() PT_LOGS= PT_CAP=0 PT_FAILED=0
 # `format_duration <seconds>`: "<m>m<ss>s".
 format_duration() { printf '%dm%02ds' "$(($1 / 60))" "$(($1 % 60))"; }
 
-# `reap_test_runs`: reports every run that has finished (a pid no longer alive is
-# already reaped by bash, so `wait` returns its saved status at once) and sets
+# `reap_test_runs`: reports every run that has finished (one the shell no longer
+# lists as running is already reaped, so `wait` returns its saved status at once) and sets
 # PT_FAILED when one failed. Echoes nothing else.
 reap_test_runs() {
-  local i status elapsed
+  local i status elapsed alive
+  # The shell's own list of running children: a recycled pid of a reaped child
+  # never matches, which `kill -0` alone could not tell.
+  alive=" $(jobs -pr | tr '\n' ' ') "
   for i in "${!PT_PIDS[@]}"; do
     [[ -n "${PT_PIDS[$i]}" ]] || continue
-    kill -0 "${PT_PIDS[$i]}" 2>/dev/null && continue
+    [[ "$alive" == *" ${PT_PIDS[$i]} "* ]] && continue
     status=0
     wait "${PT_PIDS[$i]}" || status=$?
     elapsed="$(format_duration "$((SECONDS - PT_STARTS[i]))")"
