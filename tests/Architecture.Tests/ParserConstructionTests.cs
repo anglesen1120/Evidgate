@@ -8,7 +8,9 @@ namespace Architecture.Tests;
 /// 06.3.1-T1.1 (plan §11, 00 §5.7 S4/S5): no production parse path bypasses the profile. The rule is exercised
 /// twice — once against synthetic files that must produce a violation, and once against the real solution
 /// (which must be clean). Only <c>src/**/*.cs</c> is scanned: a test may build its own reader to prove the
-/// profile's behaviour, and no test is shipped.
+/// profile's behaviour, and no test is shipped. The one reviewed trusted site
+/// (<see cref="ParserConstructionRules.TrustedKeyXmlRepository"/>) is exempt for one construct only, and a stale
+/// entry fails the suite.
 /// </summary>
 public class ParserConstructionTests
 {
@@ -383,6 +385,58 @@ public class ParserConstructionTests
             ParserConstructionRules.ArtifactModuleDirectory);
 
         violations.ShouldBeEmpty(string.Join(Environment.NewLine, violations));
+    }
+
+    /// <summary>
+    /// The one reviewed trusted-XML site (<see cref="ParserConstructionRules.TrustedKeyXmlRepository"/>): the Data
+    /// Protection key repository may make the one call it is listed with, because the text it reads back is the text
+    /// its own <c>StoreElement</c> wrote through the definers. A second construct in that file, or the same call in
+    /// another shipped file, is still a violation, and a site that stops parsing fails — the exemption cannot outlive
+    /// its reason.
+    /// </summary>
+    [Fact]
+    public void Reviewed_Key_Repository_Is_One_File_With_One_Construct()
+    {
+        var exempt = ParserConstructionRules.TrustedKeyXmlRepository;
+
+        ParserConstructionRules.TrustedKeyXmlRepositoryConstructs.ShouldNotBeEmpty();
+
+        foreach (var construct in ParserConstructionRules.TrustedKeyXmlRepositoryConstructs)
+        {
+            ParserConstructionRules.RepositoryWideConstructs.ShouldContain(construct);
+        }
+
+        var synthetic = new (string Path, string Text)[]
+        {
+            (exempt, "elements.Add(XElement.Parse(reader.GetString(0)));"),
+            // The same file may not gain a second reader …
+            (exempt, "using var reader = XmlReader.Create(stream);"),
+            // … and no other shipped file may make the same call.
+            ("src/Modules/Evidgate.Modules.Identity/Login/LoginStateCookie.cs", "var element = XElement.Parse(text);"),
+        };
+
+        var violations = ParserConstructionRules.FindViolations(
+            synthetic,
+            ParserConstructionRules.ProfileDirectory,
+            ParserConstructionRules.ArtifactModuleDirectory);
+
+        violations.Count.ShouldBe(2, string.Join(Environment.NewLine, violations));
+        violations.ShouldContain(violation => violation.Contains(exempt, StringComparison.Ordinal)
+            && violation.Contains("XmlReader.Create(", StringComparison.Ordinal));
+        violations.ShouldContain(violation => violation.Contains("LoginStateCookie.cs", StringComparison.Ordinal)
+            && violation.Contains("XElement.Parse(", StringComparison.Ordinal));
+
+        // Anti-stale: the exemption names a real file, and that file still makes the call it exempts.
+        var path = Path.Combine(SolutionLayout.RepoRoot, exempt);
+        File.Exists(path).ShouldBeTrue(
+            $"{exempt} no longer exists — remove the exemption from {nameof(ParserConstructionRules)}");
+
+        var text = File.ReadAllText(path);
+        foreach (var construct in ParserConstructionRules.TrustedKeyXmlRepositoryConstructs)
+        {
+            text.Contains(construct, StringComparison.Ordinal).ShouldBeTrue(
+                $"{exempt} no longer calls {construct} — the reviewed exemption is stale and must be removed");
+        }
     }
 
     /// <summary>Every hand-written <c>src/**/*.cs</c> file, repo-relative with '/'.</summary>

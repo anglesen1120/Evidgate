@@ -1,114 +1,194 @@
+using System.Security.Cryptography;
+using System.Text;
 using Evidgate.Modules.Identity.Login;
+using Evidgate.Testing;
+using Identity.IntegrationTests.Login.Persistence;
+using Npgsql;
 using Shouldly;
 using Xunit;
 
 namespace Identity.IntegrationTests.Login;
 
 /// <summary>
-/// 02.3.1-T1.1 (F1/M1/CR4): the one-time <c>state</c> record's cap, its expiry and its recovery. The set
-/// fails closed at <see cref="LoginReplayCache.MaxEntries"/>, a live record is never dropped by a sweep (that
-/// would readmit a replay) and an expired one is purged, so a set that filled up recovers on its own.
+/// The one-time <c>state</c> record against the real server: first use wins, a replay inside the lifetime is
+/// refused (also from a second cache instance, which is what a second replica is), an expired record can be
+/// used again, and expired rows are deleted by later calls. Both timestamps of a record are the database's,
+/// so a case arranges an expiry by moving the stored <c>expires_at</c> through the owner connection; nothing
+/// in the process decides when a record dies.
 /// </summary>
-// The assembly fixture of this project (DatabaseFixture) needs Docker, so the smoke build, which has none, skips Category=Docker.
 [Trait("Category", "Docker")]
-public sealed class ReplayCacheTests
+public sealed class ReplayCacheTests : SessionTestBase
 {
-    private static readonly DateTimeOffset Now = new(2026, 10, 25, 9, 0, 0, TimeSpan.Zero);
-
     private static readonly TimeSpan Lifetime = TimeSpan.FromSeconds(600);
 
-    [Fact]
-    public void A_Replay_Inside_The_Lifetime_Is_Refused()
-    {
-        var cache = new LoginReplayCache(new MutableClock(Now));
+    /// <summary>The retention the function adds beyond the cookie's lifetime, so a still-valid cookie never loses its record.</summary>
+    private const double RetentionMarginSeconds = 120;
 
-        cache.TryConsume("fake:state-1", Lifetime).ShouldBeTrue();
-        cache.TryConsume("fake:state-1", Lifetime).ShouldBeFalse();
+    public ReplayCacheTests(DatabaseFixture fixture)
+        : base(fixture, DatabaseIsolation.Dedicated)
+    {
     }
 
     [Fact]
-    public void An_Expired_Record_Is_Purged_So_The_Same_State_Can_Be_Used_Again()
+    public async Task A_Replay_Inside_The_Lifetime_Is_Refused_Even_From_Another_Instance()
     {
-        var clock = new MutableClock(Now);
-        var cache = new LoginReplayCache(clock);
+        var first = new LoginReplayCache(AppDataSource);
+        var second = new LoginReplayCache(AppDataSource);
 
-        cache.TryConsume("fake:state-1", Lifetime).ShouldBeTrue();
-
-        // An expired record must not readmit the state, but it must also not stay in the set forever: the
-        // cookie it belongs to has expired with it, so the key may be recorded again.
-        clock.Advance(Lifetime + TimeSpan.FromSeconds(1));
-        cache.TryConsume("fake:state-1", Lifetime).ShouldBeTrue();
+        (await first.TryConsumeAsync("fake:state-1", Lifetime, Token)).ShouldBeTrue();
+        (await first.TryConsumeAsync("fake:state-1", Lifetime, Token)).ShouldBeFalse();
+        (await second.TryConsumeAsync("fake:state-1", Lifetime, Token)).ShouldBeFalse();
+        (await second.TryConsumeAsync("fake:state-2", Lifetime, Token)).ShouldBeTrue();
     }
 
     [Fact]
-    public void A_Full_Set_Refuses_And_Recovers_Once_Its_Records_Expire()
+    public async Task An_Expired_Record_Can_Be_Used_Again()
     {
-        var clock = new MutableClock(Now);
-        var cache = new LoginReplayCache(clock);
+        var cache = new LoginReplayCache(AppDataSource);
 
-        for (var index = 0; index < LoginReplayCache.MaxEntries; index++)
+        (await cache.TryConsumeAsync("fake:state-1", Lifetime, Token)).ShouldBeTrue();
+        await ExpireAsync("fake:state-1");
+
+        (await cache.TryConsumeAsync("fake:state-1", Lifetime, Token)).ShouldBeTrue();
+        (await cache.TryConsumeAsync("fake:state-1", Lifetime, Token)).ShouldBeFalse();
+    }
+
+    /// <summary>A record is live until the database's own instant reaches <c>expires_at</c>: a row still in the future is refused.</summary>
+    [Fact]
+    public async Task A_Live_Record_Is_Still_Refused_Before_Its_Expiry()
+    {
+        var cache = new LoginReplayCache(AppDataSource);
+
+        (await cache.TryConsumeAsync("fake:live", Lifetime, Token)).ShouldBeTrue();
+
+        await OwnerExecuteAsync(
+            "update public.login_state_replay set expires_at = clock_timestamp() + interval '30 seconds' where state_hash = @hash",
+            ("hash", Hash("fake:live")));
+
+        (await cache.TryConsumeAsync("fake:live", Lifetime, Token)).ShouldBeFalse();
+    }
+
+    /// <summary>The stored expiry is <c>now + lifetime + 120 s</c>, so a cookie accepted at the end of its life still finds its record.</summary>
+    [Fact]
+    public async Task A_Record_Outlives_The_Cookie_By_The_Retention_Margin()
+    {
+        var cache = new LoginReplayCache(AppDataSource);
+
+        (await cache.TryConsumeAsync("fake:margin", Lifetime, Token)).ShouldBeTrue();
+
+        var remaining = await OwnerScalarAsync<double>(
+            "select (extract(epoch from (expires_at - clock_timestamp())))::double precision "
+            + "from public.login_state_replay where state_hash = @hash",
+            ("hash", Hash("fake:margin")));
+
+        remaining.ShouldBe(Lifetime.TotalSeconds + RetentionMarginSeconds, tolerance: 30);
+    }
+
+    [Fact]
+    public async Task Expired_Rows_Are_Deleted_By_Later_Calls_And_Live_Rows_Stay()
+    {
+        var cache = new LoginReplayCache(AppDataSource);
+
+        for (var index = 0; index < 5; index++)
         {
-            cache.TryConsume("fake:state-" + index, Lifetime).ShouldBeTrue();
+            (await cache.TryConsumeAsync("fake:old-" + index, Lifetime, Token)).ShouldBeTrue();
         }
 
-        // At the cap the set fails closed: a state that cannot be recorded is refused, never trusted.
-        cache.TryConsume("fake:state-overflow", Lifetime).ShouldBeFalse();
+        await ExpireAsync([.. Enumerable.Range(0, 5).Select(index => "fake:old-" + index)]);
+        (await cache.TryConsumeAsync("fake:fresh", Lifetime, Token)).ShouldBeTrue();
 
-        // Past the lifetime every record is expired, so the next attempt sweeps them and is recorded.
-        clock.Advance(Lifetime + TimeSpan.FromSeconds(1));
-        cache.TryConsume("fake:state-overflow", Lifetime).ShouldBeTrue();
+        (await OwnerRowAsync("select count(*) from public.login_state_replay"))[0].ShouldBe(1L);
+        (await cache.TryConsumeAsync("fake:fresh", Lifetime, Token)).ShouldBeFalse();
+    }
 
-        // And the set is a working set again, not one that keeps refusing.
-        cache.TryConsume("fake:state-after-recovery", Lifetime).ShouldBeTrue();
-        cache.TryConsume("fake:state-after-recovery", Lifetime).ShouldBeFalse();
+    /// <summary>One call sweeps at most 100 expired rows of other hashes: that bound is the whole cleanup path.</summary>
+    [Fact]
+    public async Task A_Sweep_Removes_At_Most_One_Hundred_Expired_Rows_Per_Call()
+    {
+        var cache = new LoginReplayCache(AppDataSource);
+
+        await OwnerExecuteAsync(
+            "insert into public.login_state_replay (state_hash, expires_at) "
+            + "select sha256(convert_to('fake:sweep-' || g, 'UTF8')), now() - interval '1 second' "
+            + "from generate_series(1, 101) g");
+
+        (await cache.TryConsumeAsync("fake:sweep-fresh", Lifetime, Token)).ShouldBeTrue();
+
+        var expiredLeft = await OwnerScalarAsync<long>(
+            "select count(*) from public.login_state_replay where expires_at <= now()");
+        expiredLeft.ShouldBe(1L, "a call deletes up to 100 expired rows and no more");
+
+        (await cache.TryConsumeAsync("fake:sweep-fresh", Lifetime, Token)).ShouldBeFalse();
     }
 
     [Fact]
-    public void A_Sweep_Never_Drops_A_Live_Record()
+    public async Task Parallel_Consumers_Of_One_State_Admit_Exactly_One()
     {
-        var clock = new MutableClock(Now);
-        var cache = new LoginReplayCache(clock);
+        var caches = Enumerable.Range(0, 8).Select(_ => new LoginReplayCache(AppDataSource)).ToArray();
 
-        cache.TryConsume("fake:state-1", Lifetime).ShouldBeTrue();
+        var results = await Task.WhenAll(caches.Select(async cache =>
+            await cache.TryConsumeAsync("fake:race", Lifetime, Token)));
 
-        // Past the sweep interval, an unrelated success runs the opportunity sweep — which must stop at the
-        // live record at the head of the queue instead of evicting it.
-        clock.Advance(LoginReplayCache.SweepInterval + TimeSpan.FromSeconds(1));
-        cache.TryConsume("fake:state-2", Lifetime).ShouldBeTrue();
+        results.Count(accepted => accepted).ShouldBe(1);
+    }
 
-        cache.TryConsume("fake:state-1", Lifetime).ShouldBeFalse();
-        cache.TryConsume("fake:state-2", Lifetime).ShouldBeFalse();
+    /// <summary>
+    /// Two consumers that each replace an expired record of their own hash, in parallel and repeatedly: the
+    /// bounded sweep runs after the write and skips locked rows, so neither call can wait on the other's hash.
+    /// A deadlock would surface here as a <c>40P01</c> <see cref="PostgresException"/> instead of a result.
+    /// </summary>
+    [Fact]
+    public async Task Concurrent_Consumers_Of_Two_Expired_Records_Each_Get_The_First_Use()
+    {
+        var first = new LoginReplayCache(AppDataSource);
+        var second = new LoginReplayCache(AppDataSource);
+
+        for (var round = 0; round < 20; round++)
+        {
+            var left = "fake:cycle-left-" + round;
+            var right = "fake:cycle-right-" + round;
+            await InsertExpiredAsync(left);
+            await InsertExpiredAsync(right);
+
+            var results = await Task.WhenAll(
+                Task.Run(() => first.TryConsumeAsync(left, Lifetime, Token).AsTask(), Token),
+                Task.Run(() => second.TryConsumeAsync(right, Lifetime, Token).AsTask(), Token));
+
+            results.ShouldAllBe(consumed => consumed, $"round {round}: each expired hash is a first use again");
+        }
     }
 
     [Fact]
-    public void The_Cap_Is_Strict_Under_Parallel_TryConsume()
+    public async Task An_Empty_Key_Is_Refused()
     {
-        var cache = new LoginReplayCache(new MutableClock(Now));
-        var attempts = LoginReplayCache.MaxEntries + 5_000;
-        var accepted = 0;
+        var cache = new LoginReplayCache(AppDataSource);
 
-        // Every record has the same (live) lifetime, so the set can never make room: exactly the cap is
-        // accepted, never one more, whatever the interleaving of the reservations.
-        Parallel.For(
-            0,
-            attempts,
-            index =>
-            {
-                if (cache.TryConsume("fake:state-" + index, Lifetime))
-                {
-                    Interlocked.Increment(ref accepted);
-                }
-            });
-
-        accepted.ShouldBe(LoginReplayCache.MaxEntries);
-        cache.TryConsume("fake:state-after-the-flood", Lifetime).ShouldBeFalse();
+        await Should.ThrowAsync<ArgumentException>(async () => await cache.TryConsumeAsync(string.Empty, Lifetime, Token));
     }
 
     [Fact]
-    public void An_Empty_Key_Is_Rejected()
+    public async Task An_Unreachable_Database_Is_Never_Treated_As_First_Use()
     {
-        var cache = new LoginReplayCache(new MutableClock(Now));
+        await using var closed = NpgsqlDataSource.Create("Host=127.0.0.1;Port=1;Username=x;Timeout=1;Pooling=false");
+        var cache = new LoginReplayCache(closed);
 
-        Should.Throw<ArgumentException>(() => cache.TryConsume(string.Empty, Lifetime));
+        await Should.ThrowAsync<Exception>(async () => await cache.TryConsumeAsync("fake:state-1", Lifetime, Token));
     }
+
+    /// <summary>What the reader must refuse: the SHA-256 of the key the cache writes (never the key itself).</summary>
+    private static byte[] Hash(string key) => SHA256.HashData(Encoding.UTF8.GetBytes(key));
+
+    /// <summary>Moves a stored record one second past expiry, the state later calls must clean up.</summary>
+    private Task ExpireAsync(params string[] keys) =>
+        OwnerExecuteAsync(
+            "update public.login_state_replay set expires_at = now() - interval '1 second' "
+            + "where state_hash = any(@hashes)",
+            ("hashes", keys.Select(Hash).ToArray()));
+
+    /// <summary>A row that an earlier consume already left behind, now expired.</summary>
+    private Task InsertExpiredAsync(string key) =>
+        OwnerExecuteAsync(
+            "insert into public.login_state_replay (state_hash, expires_at) values (@hash, now() - interval '1 second') "
+            + "on conflict (state_hash) do update set expires_at = excluded.expires_at",
+            ("hash", Hash(key)));
 }

@@ -51,6 +51,9 @@ internal sealed record LoginHostSettings
 
     /// <summary>Exactly the providers the case scripted (the host's real ones would shadow a fake name).</summary>
     internal ILoginProvider[] Providers { get; init; } = [];
+
+    /// <summary>Extra service registrations for a host with no database (the in-memory ring and replay set).</summary>
+    internal Action<IServiceCollection>? Seams { get; init; }
 }
 
 /// <summary>
@@ -72,7 +75,7 @@ internal sealed record LoginHostSettings
 /// because the app role holds no privilege on the platform identity tables at all (0041).
 /// </para>
 /// </remarks>
-internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
+internal sealed partial class LoginCompletionTestHost : WebApplicationFactory<Program>
 {
     /// <summary>The <c>EVIDGATE:Login:PublicBaseUrl</c> the redirect URIs are built from.</summary>
     internal const string PublicBaseUrl = "https://app.evidgate.test";
@@ -201,33 +204,11 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
     /// port, so the completion's own database fault is produced by the real Npgsql path.
     /// </summary>
     internal static LoginCompletionTestHost StartWithoutDatabase(params ILoginProvider[] providers) =>
-        new(UnreachableDatabase, new LoginHostSettings { Providers = providers });
+        new(UnreachableDatabase, new LoginHostSettings { Providers = providers, Seams = s => InMemoryLoginSeams.Apply(s, TimeProvider.System) });
 
     /// <summary>A <c>google</c> provider that verifies <paramref name="subject"/>'s identity.</summary>
     internal static FakeLoginProvider GoogleProvider(string subject = GoogleSubject) =>
         new(Google) { Result = LoginProviderResult.Ok(FakeLoginProvider.VerifiedIdentity(Google, subject)) };
-
-    /// <summary>
-    /// A <c>github</c> provider that verifies <paramref name="subject"/>'s identity, exactly as
-    /// <c>GitHubLoginProvider</c> answers after <c>GET /user</c> and <c>GET /user/emails</c>.
-    /// </summary>
-    /// <param name="subject">The GitHub account's numeric id.</param>
-    /// <param name="email">The address the provider selected.</param>
-    /// <param name="emailVerified">
-    /// Whether the provider marks that address verified. The real provider only ever answers <c>true</c>
-    /// (<c>GitHubLoginProvider</c>: an account without a verified address is a token failure, AC4), so
-    /// <c>false</c> is a shape only a fake can produce — and what the completion does with it is asserted
-    /// rather than assumed.
-    /// </param>
-    internal static FakeLoginProvider GitHubProvider(
-        string subject = GitHubSubject,
-        string email = GitHubEmail,
-        bool emailVerified = true) =>
-        new(GitHub)
-        {
-            Result = LoginProviderResult.Ok(
-                new VerifiedIdentity(GitHub, subject, email, emailVerified, "Test Member")),
-        };
 
     /// <summary>
     /// A provider that verifies exactly the identity a case names, including the address it reports, whether
@@ -763,6 +744,8 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
             // The two seams the login calls: a case substitutes one only to prove HOW it is called (the
             // ambient tenant of the bind, the fail-closed audit of 02.3.1-T2.2); the deployment's own stay
             // registered otherwise, so every other case asserts on the real path.
+            _settings.Seams?.Invoke(services);
+
             if (_settings.Binder is { } binder)
             {
                 services.RemoveAll<IMembershipBinder>();

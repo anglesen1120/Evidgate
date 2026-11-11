@@ -17,6 +17,22 @@ internal static class ProcessRunner
         string Stderr,
         TimeSpan ShutdownElapsed);
 
+    /// <summary>The two redirected streams of a started process, read while it runs.</summary>
+    /// <param name="Stdout">The child's standard output, completed when the pipe closes.</param>
+    /// <param name="Stderr">The child's standard error, completed when the pipe closes.</param>
+    public sealed record Output(Task<string> Stdout, Task<string> Stderr);
+
+    /// <summary>
+    /// Starts reading both redirected pipes of <paramref name="process"/> and returns the two reads. Every caller
+    /// of <see cref="Start"/> that waits on a host without reading its output must call this: the pipes are
+    /// redirected (<c>RedirectStandardOutput</c>/<c>RedirectStandardError</c>) and a child that fills one blocks on
+    /// the write, so an undrained host can stop answering for reasons the test would otherwise never see. On failure
+    /// a caller reports the captured text.
+    /// </summary>
+    /// <param name="process">A process returned by <see cref="Start"/>.</param>
+    public static Output Drain(Process process) =>
+        new(process.StandardOutput.ReadToEndAsync(), process.StandardError.ReadToEndAsync());
+
     /// <summary>Starts a host process with env overrides applied and removals honoured.</summary>
     public static Process Start(
         string fileName,
