@@ -51,6 +51,15 @@ internal sealed record LoginHostSettings
 
     /// <summary>Exactly the providers the case scripted (the host's real ones would shadow a fake name).</summary>
     internal ILoginProvider[] Providers { get; init; } = [];
+
+    /// <summary>
+    /// Compose the in-memory key ring and replay set (see <c>InMemoryLoginSeams</c>): only for a host that
+    /// deliberately has no database, so its real stores — the completion's target — still fail there.
+    /// </summary>
+    internal bool UseInMemoryLoginSeams { get; init; }
+
+    /// <summary>Keep the real replay store even with <see cref="UseInMemoryLoginSeams"/>: its outage is then the subject.</summary>
+    internal bool KeepRealReplayStore { get; init; }
 }
 
 /// <summary>
@@ -201,7 +210,21 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
     /// port, so the completion's own database fault is produced by the real Npgsql path.
     /// </summary>
     internal static LoginCompletionTestHost StartWithoutDatabase(params ILoginProvider[] providers) =>
-        new(UnreachableDatabase, new LoginHostSettings { Providers = providers });
+        new(UnreachableDatabase, new LoginHostSettings { Providers = providers, UseInMemoryLoginSeams = true });
+
+    /// <summary>
+    /// A deployment whose cookie ring is usable but whose replay store is not: the real store over the closed
+    /// port, so the callback's own outage answer is the subject and the completion is never reached.
+    /// </summary>
+    internal static LoginCompletionTestHost StartWithReplayStoreOutage(params ILoginProvider[] providers) =>
+        new(
+            UnreachableDatabase,
+            new LoginHostSettings
+            {
+                Providers = providers,
+                UseInMemoryLoginSeams = true,
+                KeepRealReplayStore = true,
+            });
 
     /// <summary>A <c>google</c> provider that verifies <paramref name="subject"/>'s identity.</summary>
     internal static FakeLoginProvider GoogleProvider(string subject = GoogleSubject) =>
@@ -763,6 +786,13 @@ internal sealed class LoginCompletionTestHost : WebApplicationFactory<Program>
             // The two seams the login calls: a case substitutes one only to prove HOW it is called (the
             // ambient tenant of the bind, the fail-closed audit of 02.3.1-T2.2); the deployment's own stay
             // registered otherwise, so every other case asserts on the real path.
+            if (_settings.UseInMemoryLoginSeams)
+            {
+                // A host with no database: the ring and the replay set are the only pre-completion stores the
+                // callback needs, so the case reaches the completion's own store outage instead of failing earlier.
+                InMemoryLoginSeams.Apply(services, TimeProvider.System, includeReplay: !_settings.KeepRealReplayStore);
+            }
+
             if (_settings.Binder is { } binder)
             {
                 services.RemoveAll<IMembershipBinder>();

@@ -8,6 +8,7 @@ using Evidgate.Modules.Identity.Login;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace Evidgate.Modules.Identity.Endpoints;
 
@@ -75,11 +76,12 @@ public static partial class LoginEndpoints
         }
 
         // Recorded before the provider call: a replayed callback must be refused even if the first attempt
-        // failed, and two concurrent replays (on any replica) must not both reach the provider.
-        if (!await replay.TryConsumeAsync(selected.Name + ":" + input.Pending.State, login.StateLifetime, cancellationToken)
-                .ConfigureAwait(false))
+        // failed, and two concurrent replays (on any replica) must not both reach the provider. A store that
+        // cannot answer is the completion's own 503, and the provider is never called on it.
+        if (await ConsumeReplayAsync(context, selected, input, login, replay, cancellationToken).ConfigureAwait(false)
+            is { } replayRefusal)
         {
-            return LoginErrors.Invalid(selected.Name);
+            return replayRefusal;
         }
 
         var verified = await VerifyAsync(context, selected, input, login, cancellationToken).ConfigureAwait(false);
@@ -91,6 +93,41 @@ public static partial class LoginEndpoints
         return await CompleteAsync(
             context, selected, input.Pending, verified.Identity!, inviteCookie.Read(stagedInvite), completion, login, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Spends the one-time <c>state</c>: null when this is its first use, or the refusal to answer — 401 for a
+    /// replay, and the completion's own 503 for a store outage (on which the provider is never called). A
+    /// cancellation that did not come from the request token is a database timeout, not a client that left.
+    /// </summary>
+    private static async Task<Result?> ConsumeReplayAsync(
+        HttpContext context,
+        ILoginProvider selected,
+        CallbackInput input,
+        LoginOptions login,
+        ILoginReplayCache replay,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var firstUse = await replay
+                .TryConsumeAsync(selected.Name + ":" + input.Pending.State, login.StateLifetime, cancellationToken)
+                .ConfigureAwait(false);
+
+            return firstUse ? null : LoginErrors.Invalid(selected.Name);
+        }
+        catch (NpgsqlException)
+        {
+            return LoginErrors.Unavailable(context, selected.Name, login);
+        }
+        catch (TimeoutException)
+        {
+            return LoginErrors.Unavailable(context, selected.Name, login);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return LoginErrors.Unavailable(context, selected.Name, login);
+        }
     }
 
     /// <summary>

@@ -15,10 +15,19 @@ namespace Identity.IntegrationTests.Login;
 /// </summary>
 internal static class InMemoryLoginSeams
 {
-    internal static void Apply(IServiceCollection services, TimeProvider clock)
+    /// <summary>Composes the in-memory seams.</summary>
+    /// <param name="services">The host's collection.</param>
+    /// <param name="clock">The clock the in-memory replay set judges its own records by.</param>
+    /// <param name="includeReplay">False keeps the deployment's real replay store, for a case whose subject is
+    /// that store's outage.</param>
+    internal static void Apply(IServiceCollection services, TimeProvider clock, bool includeReplay = true)
     {
-        services.RemoveAll<ILoginReplayCache>();
-        services.AddSingleton<ILoginReplayCache>(new InMemoryReplay(clock));
+        if (includeReplay)
+        {
+            services.RemoveAll<ILoginReplayCache>();
+            services.AddSingleton<ILoginReplayCache>(new InMemoryReplay(clock));
+        }
+
         services.Configure<KeyManagementOptions>(keys => keys.XmlRepository = new InMemoryKeys());
     }
 

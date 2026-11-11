@@ -2,7 +2,12 @@ using Evidgate.BuildingBlocks.Persistence.Isolation;
 using Evidgate.Modules.Identity.Login;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using Shouldly;
@@ -111,5 +116,64 @@ public sealed class SharedKeyRingTests
         await new DataProtectionKeyRingStartupCheck(Manager(), options).StartAsync(TestContext.Current.CancellationToken);
 
         Manager().GetAllKeys().Count.ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The same refusal through the composed host, with the isolation self-check at its production
+    /// <c>Required</c> default: the host starts, its real registration is pointed at a closed port, and the
+    /// start is what fails — not the first login.
+    /// </summary>
+    [Fact]
+    public async Task The_Composed_Host_Refuses_To_Start_When_Its_Key_Store_Is_Unreachable()
+    {
+        await using var database = await _postgres.CreateMigratedDatabaseAsync();
+        await using var closed = NpgsqlDataSource.Create("Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Timeout=1;Pooling=false");
+        using var factory = new RequiredSelfCheckApiFactory(database, services =>
+        {
+            // The repository is the only ring source, so replacing the registration replaces the source itself.
+            services.RemoveAll<DataProtectionKeyRepository>();
+            services.AddSingleton(new DataProtectionKeyRepository(closed));
+        });
+
+        Should.Throw<Exception>(() => factory.StartServer());
+    }
+
+    /// <summary>The control: the same composition with the real repository and a passing isolation check boots and holds a ring.</summary>
+    [Fact]
+    public async Task The_Composed_Host_Boots_When_Isolation_And_The_Key_Store_Pass()
+    {
+        await using var database = await _postgres.CreateMigratedDatabaseAsync();
+        using var factory = new RequiredSelfCheckApiFactory(database);
+
+        factory.StartServer();
+
+        factory.Services.GetRequiredService<IKeyManager>().GetAllKeys().ShouldNotBeEmpty();
+    }
+}
+
+/// <summary>
+/// The Api composition with the production boot policy: the isolation self-check stays at its <c>Required</c>
+/// default, unlike <see cref="EvidgateApiFactory"/>, which disables it for hosts that deliberately boot without
+/// a database.
+/// </summary>
+internal sealed class RequiredSelfCheckApiFactory(
+    string connectionString,
+    Action<IServiceCollection>? configureTestServices = null) : WebApplicationFactory<Program>
+{
+    /// <inheritdoc />
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.UseEnvironment("Production");
+        builder.ConfigureAppConfiguration((_, configuration) =>
+            configuration.AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["EVIDGATE:Database:ConnectionString"] = connectionString,
+                ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
+                ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
+            }));
+
+        builder.ConfigureTestServices(services => configureTestServices?.Invoke(services));
     }
 }

@@ -169,9 +169,9 @@ procedure instead of copying it. That is the stub's documented procedure, not ye
 
 **Storage encryption (00 §5.7 S8).** Keys are stored as the framework writes them; at-rest protection is the database provider's storage encryption. The operator MUST run PostgreSQL (and its backups and snapshots) with storage encryption, and treat `data_protection_key` as secret-grade: restrict who can read a dump, and never copy the table to a lower environment. Application-level protection (`ProtectKeysWith*`) is an open item until 10.1.1 provisions a certificate or KMS key.
 
-**Rotation.** The framework rolls the ring itself (90-day key lifetime, new key created before expiry). Nothing to do on a schedule. After a suspected leak, delete the rows as the owner role and restart the Api: existing pending-login, link and antiforgery cookies fail once and users sign in again; sessions are unaffected.
+**Rotation.** The framework rolls the ring itself (90-day key lifetime, new key created before expiry). Nothing to do on a schedule. After a suspected leak, delete the rows as the owner role and restart **every** Api and Worker instance together: each process caches the ring it read, so restarting one replica leaves the retired keys in use on the others (they can hold the old ring for up to 24 hours). Existing pending-login, link and antiforgery cookies then fail once — including on a replica that never saw the cookie — and users sign in again; sessions are unaffected. The login replay set shares the same table family but is judged entirely on database time, so replicas need no clock sync for it: a replica whose clock is off can neither shorten nor extend another replica's record.
 
-**Fail closed.** A host whose key table is unreachable at start refuses to start; it never falls back to an ephemeral or file ring.
+**Fail closed.** A host whose key table is unreachable at start refuses to start; it never falls back to an ephemeral or file ring. A login callback whose replay write fails answers 503 `unavailable` + `Retry-After` and never calls the provider.
 
 ## 3. Pepper rotation — T4.2 written half
 

@@ -304,6 +304,30 @@ public sealed partial class LoginFlowTests : CatalogueTestBase
         body.ShouldNotContain("evidgate_app");
     }
 
+    /// <summary>
+    /// A replay store that cannot answer is the same 503 <c>unavailable</c> with <c>Retry-After</c>, raised
+    /// before the provider is called: a <c>state</c> that cannot be recorded is never trusted.
+    /// </summary>
+    [Fact]
+    public async Task ReplayStore_Fault_Answers_503_With_Retry_After_And_Never_Calls_The_Provider()
+    {
+        var provider = LoginCompletionTestHost.GoogleProvider();
+        using var host = LoginCompletionTestHost.StartWithReplayStoreOutage(provider);
+        using var client = host.CreateLoginClient();
+
+        using var callback = await host.SignInAsync(client);
+
+        callback.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+        (await LoginCompletionTestHost.ErrorCodeAsync(callback)).ShouldBe(ApiErrorCode.Unavailable);
+        callback.Headers.RetryAfter.ShouldNotBeNull();
+        callback.Headers.RetryAfter!.Delta!.Value.TotalSeconds.ShouldBe(30);
+        provider.Completions.ShouldBe(0, "the provider is never called when the state cannot be recorded");
+
+        var body = await LoginCompletionTestHost.BodyAsync(callback);
+        body.ShouldNotContain("Npgsql", Case.Insensitive);
+        body.ShouldNotContain("Failed to connect", Case.Insensitive);
+    }
+
     /// <summary>AC1: a second login of the same identity reuses the same user and adds a second session.</summary>
     [Fact]
     public async Task Second_Login_Of_The_Same_Identity_Reuses_The_User()

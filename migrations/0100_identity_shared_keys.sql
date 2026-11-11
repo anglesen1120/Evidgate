@@ -15,16 +15,23 @@
 --   evidgate_resolve.data_protection_key_list()                       -> every ring element
 --   evidgate_resolve.data_protection_key_store(name, xml)             -> insert-if-absent (two replicas may mint the
 --                                                                        same element name; one wins, both read it back)
---   evidgate_resolve.login_state_replay_consume(hash, now, expires)   -> true on first use; false while a live row exists.
---                                                                        An expired row of the same hash is replaced, and each call
---                                                                        deletes up to 100 expired rows first: that is the
---                                                                        cleanup path, so the table is bounded by the live
---                                                                        window without a scheduled sweep.
+--   evidgate_resolve.login_state_replay_consume(hash, lifetime_seconds) -> true on first use; false while a live row
+--                                                                        exists. The lifetime is a duration, not a
+--                                                                        timestamp: the database decides when a record
+--                                                                        expires, so a replica whose clock is off can
+--                                                                        neither shorten nor extend another replica's
+--                                                                        record. Each call then deletes up to 100 expired
+--                                                                        rows after its own write: that is the cleanup
+--                                                                        path, so the table is bounded by the live window
+--                                                                        without a scheduled sweep.
 --
 -- lint: audit-deferred 02.3.1-T1.4 evidgate_resolve.data_protection_key_list, evidgate_resolve.data_protection_key_store, evidgate_resolve.login_state_replay_consume
 --
--- Rollback: drop the three functions and the two tables. The ring is regenerated on the next start (existing login
--- cookies fail once) and the replay set is empty (a state used in the last few minutes could be replayed once).
+-- Rollback: roll the APPLICATION back first — an older build keeps its in-process ring and its own replay set and
+-- never calls these functions — then drop evidgate_resolve.login_state_replay_consume(bytea, integer),
+-- evidgate_resolve.data_protection_key_list() and evidgate_resolve.data_protection_key_store(text, text), then the
+-- two tables. The ring is regenerated on the next start (existing login cookies fail once) and the replay set is
+-- empty (a state used in the last few minutes could be replayed once).
 --
 -- Deploy: migration first, then the application; an older application keeps its in-process ring and set.
 
@@ -100,10 +107,13 @@ begin
 end
 $$;
 
+-- The earlier unreleased shape took the caller's timestamps; drop it so it cannot linger as a second overload with
+-- its own EXECUTE grant when this file is applied over a database that already ran the old text.
+drop function if exists evidgate_resolve.login_state_replay_consume(bytea, timestamptz, timestamptz);
+
 create or replace function evidgate_resolve.login_state_replay_consume(
   p_state_hash bytea,
-  p_now timestamptz,
-  p_expires_at timestamptz)
+  p_lifetime_seconds integer)
 returns boolean
 language plpgsql
 volatile
@@ -111,32 +121,39 @@ security definer
 set search_path = ''
 as $$
 declare
+  v_now timestamptz := clock_timestamp();
   v_written integer;
 begin
-  if p_state_hash is null or p_now is null or p_expires_at is null
-     or p_expires_at <= p_now or p_expires_at > p_now + interval '1 day' then
+  if p_state_hash is null or p_lifetime_seconds is null
+     or p_lifetime_seconds < 1 or p_lifetime_seconds > 86400 then
     raise exception 'login_state_replay_consume: invalid arguments' using errcode = '22023';
   end if;
 
+  -- The record outlives the cookie by 120 s: the cookie is accepted until its own lifetime, plus the 60 s
+  -- future-skew tolerance the reader allows, so a state whose cookie is still valid can never find its own
+  -- record already swept — even when a sweep ran a moment after that cookie was minted.
+  delete from public.login_state_replay r
+   where r.state_hash = p_state_hash
+     and r.expires_at <= v_now;
+
+  insert into public.login_state_replay (state_hash, expires_at)
+  values (p_state_hash, v_now + (p_lifetime_seconds * interval '1 second') + interval '120 seconds')
+  on conflict (state_hash) do nothing;
+
+  -- Immediately after the insert: this call's own outcome, never the row count of the sweep below.
+  get diagnostics v_written = row_count;
+
+  -- Only now, and never a row of this call's own hash: the sweep takes no lock another call's write needs, so two
+  -- concurrent consumers cannot close a lock cycle over each other's hashes.
   delete from public.login_state_replay r
    where r.state_hash in (
            select e.state_hash
              from public.login_state_replay e
-            where e.expires_at <= p_now
+            where e.expires_at <= v_now
               and e.state_hash <> p_state_hash
             order by e.expires_at
             limit 100
               for update skip locked);
-
-  delete from public.login_state_replay r
-   where r.state_hash = p_state_hash
-     and r.expires_at <= p_now;
-
-  insert into public.login_state_replay (state_hash, expires_at)
-  values (p_state_hash, p_expires_at)
-  on conflict (state_hash) do nothing;
-
-  get diagnostics v_written = row_count;
 
   return v_written = 1;
 end
@@ -144,7 +161,7 @@ $$;
 
 revoke all on function evidgate_resolve.data_protection_key_list() from public;
 revoke all on function evidgate_resolve.data_protection_key_store(text, text) from public;
-revoke all on function evidgate_resolve.login_state_replay_consume(bytea, timestamptz, timestamptz) from public;
+revoke all on function evidgate_resolve.login_state_replay_consume(bytea, integer) from public;
 grant execute on function evidgate_resolve.data_protection_key_list() to evidgate_app;
 grant execute on function evidgate_resolve.data_protection_key_store(text, text) to evidgate_app;
-grant execute on function evidgate_resolve.login_state_replay_consume(bytea, timestamptz, timestamptz) to evidgate_app;
+grant execute on function evidgate_resolve.login_state_replay_consume(bytea, integer) to evidgate_app;
