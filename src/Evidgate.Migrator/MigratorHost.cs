@@ -44,8 +44,10 @@ public static class MigratorHost
           {SecretNames.CiPepper}   (required by --with-token) base64 pepper, at least {CiSecrets.MinKeyBytes} bytes
           {MigratorOptions.MigrationsPathVariable}     (optional) defaults to <repo>/migrations
           {MigratorOptions.CommandTimeoutVariable} (optional) seconds per statement, default {MigratorOptions.DefaultCommandTimeoutSeconds} = no timeout
+          {MigratorOptions.LockTimeoutVariable} (optional) lock_timeout per script, default {MigratorOptions.DefaultLockTimeoutSeconds} s, 0 = disabled
+          {MigratorOptions.StatementTimeoutVariable} (optional) statement_timeout per script, default {MigratorOptions.DefaultStatementTimeoutSeconds} s, 0 = disabled
 
-        exit codes: {MigratorExitCodes.Success} ok · {MigratorExitCodes.InvalidInvocation} invalid invocation or migration set · {MigratorExitCodes.ChecksumMismatch} checksum mismatch · {MigratorExitCodes.MigrationFailed} migration failure · {MigratorExitCodes.DatabaseUnavailable} database unavailable
+        exit codes: {MigratorExitCodes.Success} ok · {MigratorExitCodes.InvalidInvocation} invalid invocation or migration set · {MigratorExitCodes.ChecksumMismatch} checksum mismatch · {MigratorExitCodes.MigrationFailed} migration failure · {MigratorExitCodes.DatabaseUnavailable} database unavailable · {MigratorExitCodes.LockTimeout} lock timeout · {MigratorExitCodes.StatementTimeout} statement timeout
         """;
 
     /// <summary>

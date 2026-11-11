@@ -182,15 +182,23 @@
     },
     "EVIDGATE_MIGRATOR__COMMANDTIMEOUTSECONDS": {
       "origin": "default",
-      "from": "option default 0 (no statement timeout)"
+      "from": "option default 0 (no driver command timeout; the per-script server timeouts are the two keys below)"
     },
     "EVIDGATE_MIGRATOR__CONNECTIONSTRING": {
       "origin": "env-file",
       "from": ".env.dev, literal in .env.dev.template with __EVIDGATE_OWNER_PASSWORD__ replaced by up.sh (Username=evidgate_owner)"
     },
+    "EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS": {
+      "origin": "default",
+      "from": "option default 5 s (lock_timeout per script), 0 = disabled"
+    },
     "EVIDGATE_MIGRATOR__MIGRATIONSPATH": {
       "origin": "default",
       "from": "not set: MigratorOptions resolves <checkout>/migrations by walking up to Evidgate.slnx"
+    },
+    "EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS": {
+      "origin": "default",
+      "from": "option default 900 s (statement_timeout per script), 0 = disabled"
     },
     "EVIDGATE_OPERATOR_PASSWORD": {
       "origin": "env-file",

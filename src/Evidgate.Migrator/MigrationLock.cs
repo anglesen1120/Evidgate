@@ -44,6 +44,14 @@ internal sealed class MigrationLock : IDisposable
         var connection = SchemaMigrationStore.Open(options);
         try
         {
+            // Waiting for another run is the point of this lock: a role- or database-level
+            // lock_timeout/statement_timeout must not turn that wait into an error.
+            using (var reset = connection.CreateCommand())
+            {
+                reset.CommandText = "set lock_timeout = 0; set statement_timeout = 0";
+                reset.ExecuteNonQuery();
+            }
+
             if (!TryAcquire(connection, options))
             {
                 log("another migration run holds the migration lock; waiting for it to finish");
@@ -79,6 +87,11 @@ internal sealed class MigrationLock : IDisposable
                 // Best effort: a failed unlock cannot be reported from Dispose, and
                 // closing the session is the authoritative release.
                 _ = Execute(_connection, _options, UnlockSql);
+
+                // The session-level zeros must not survive on a connection a pooler hands out again.
+                using var reset = _connection.CreateCommand();
+                reset.CommandText = "reset lock_timeout; reset statement_timeout";
+                reset.ExecuteNonQuery();
             }
         }
         catch (NpgsqlException)
