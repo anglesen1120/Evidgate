@@ -335,7 +335,7 @@ public sealed class MigrationTests : SessionHardeningTestBase
     /// `create or replace`, so re-applying it re-states the same body in place and the catalogue keeps exactly
     /// ONE function, never an overload. What the append depends on is still in force: `audit_log` keeps FORCE
     /// row level security (the owner INSERT policy of 0015 is what lets the definer append), PUBLIC holds no
-    /// EXECUTE, and the body carries the audit statement itself.
+    /// EXECUTE, and the body appends through the shared helper of 0101.
     /// </summary>
     [Fact]
     public async Task The_Revoke_Audit_Definer_Keeps_Its_Grant_And_Reapplies_As_A_NoOp()
@@ -377,9 +377,12 @@ public sealed class MigrationTests : SessionHardeningTestBase
              where oid = 'public.audit_log'::regclass
             """)).ShouldBeTrue("the definer appends under FORCE row level security");
 
-        // At head the append lives in the shared helper that 0090 introduced; the definer only calls it.
-        (await OwnerScalarAsync<string>(RevokeBodySql))
-            .ShouldContain("evidgate.session_revoke_audit_append", Case.Sensitive);
+        // At head the definer asks the rank hierarchy of 0101 and appends through the shared helpers; the revoke
+        // wrapper only names its action, and the chain append lives in `audit_append_user_event`.
+        var headBody = await OwnerScalarAsync<string>(RevokeBodySql);
+        headBody.ShouldContain("evidgate.session_admin_may_revoke_all", Case.Sensitive,
+            "the single-session path asks the same rank question as revoke-all");
+        headBody.ShouldContain("evidgate.session_revoke_audit_append", Case.Sensitive);
 
         var helperBody = await OwnerScalarAsync<string>(
             """
@@ -389,9 +392,10 @@ public sealed class MigrationTests : SessionHardeningTestBase
              where n.nspname = 'evidgate' and p.proname = 'session_revoke_audit_append'
             """);
 
-        helperBody.ShouldContain("insert into public.audit_log", Case.Sensitive);
+        helperBody.ShouldContain("evidgate.audit_append_user_event(", Case.Sensitive);
         helperBody.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive);
-        helperBody.ShouldContain("pg_advisory_xact_lock(pg_catalog.hashtext('audit:' || p_org_id::text))", Case.Sensitive);
+        helperBody.ShouldNotContain("insert into public.audit_log", Case.Sensitive,
+            "one copy of the chain append: the revoke wrapper delegates");
 
         var migration = await File.ReadAllTextAsync(Path.Combine(DatabaseFixture.MigrationsPath, MigrationFile), Token);
 
@@ -590,16 +594,18 @@ public sealed class MigrationTests : SessionHardeningTestBase
     private const string MigrationFile = "0051_identity_session_revoke_audit_ids.sql";
 
     /// <summary>
-    /// 0090 re-points the revoke definers at the shared helpers; 0091 then re-states the revoke-all definer and the
-    /// helper it asks. Together they are the head state of these functions.
+    /// 0090 re-points the revoke definers at the shared helpers; 0091 re-states the revoke-all definer and the helper
+    /// it asks; 0101 gives the single-session path the same rank question and delegates its append. Together they are
+    /// the head state of these functions.
     /// </summary>
     private static readonly string[] HelperMigrationFiles =
     [
         "0090_identity_session_revoke_helpers.sql",
         "0091_identity_session_revoke_all_hierarchy.sql",
+        "0101_identity_revoke_rank_and_atomic_link_audit.sql",
     ];
 
-    /// <summary>Re-applies 0090 and 0091 so a case that re-stated an older body leaves the database at head.</summary>
+    /// <summary>Re-applies 0090, 0091 and 0101 so a case that re-stated an older body leaves the database at head.</summary>
     private async Task ApplyHelperMigrationAsync()
     {
         foreach (var file in HelperMigrationFiles)
