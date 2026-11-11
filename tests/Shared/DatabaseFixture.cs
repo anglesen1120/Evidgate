@@ -241,8 +241,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
     {
         using var timeout = new CancellationTokenSource(StartTimeout);
         var cancellationToken = timeout.Token;
-        _container = await ContainerStart.StartAsync(
-            () => new PostgreSqlBuilder(ContainerImages.Postgres)
+        _container = await ContainerStart.StartAsync(() => new PostgreSqlBuilder(ContainerImages.Postgres)
                 .WithDatabase("evidgate")
                 .WithUsername("postgres")
                 .WithPassword("postgres")
