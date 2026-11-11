@@ -252,7 +252,12 @@ class DefinerRules(unittest.TestCase):
         self.assertEqual(run(sql), [])
 
     def test_a_selected_or_quoted_user_event_helper_is_not_the_audit_row(self):
-        for call in ("select evidgate.audit_append_user_event(p_org_id);", "v_note := 'audit_append_user_event(';"):
+        for call in (
+            "select evidgate.audit_append_user_event(p_org_id);",
+            "v_note := 'audit_append_user_event(';",
+            "v_note := 'perform evidgate.audit_append_user_event(p_org_id);';",
+            "v_note := 'it''s fine; perform evidgate.session_revoke_audit_append(p_org_id);';",
+        ):
             sql = GOOD_DEFINER.replace("insert into public.audit_log (k) values (p_key);", call)
             self.assertEqual(rules(run(sql)), {"definer_audit"}, call)
 

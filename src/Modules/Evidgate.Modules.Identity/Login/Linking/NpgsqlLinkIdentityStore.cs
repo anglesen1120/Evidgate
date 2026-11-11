@@ -7,7 +7,8 @@ namespace Evidgate.Modules.Identity.Login.Linking;
 
 /// <summary>
 /// The only implementation of <see cref="ILinkIdentityStore"/> (02.3.1-T2.2): one call to
-/// <c>evidgate_resolve.login_link_identity</c> (migration 0045) on the app-role data source, because the app
+/// <c>evidgate_resolve.login_link_identity_audited</c> (migration 0101, which wraps the 0045 link and writes its
+/// audit rows in the same transaction) on the app-role data source, because the app
 /// role holds no privilege on <c>public.user_identity</c> and <c>public."user"</c> (0041) — never a direct
 /// INSERT or UPDATE, which RLS and the missing grant would refuse.
 /// </summary>
@@ -20,14 +21,15 @@ namespace Evidgate.Modules.Identity.Login.Linking;
 /// the cookie to prove the request, so no raw credential and no second hashing live in this class.
 /// </para>
 /// <para>
-/// The function always returns one row and never raises for a business outcome, so an empty result means the
+/// The function always returns one row and raises only when the audit cannot be written (the link then rolls
+/// back and this class answers 503). An empty result means the
 /// stored contract moved: this class then fails closed (503) instead of guessing that the identity was
 /// attached. An outcome string this build does not know is <see cref="LinkResult.Unrecognised"/> — also a 503,
 /// never a silent success.
 /// </para>
 /// <para>
 /// Nothing here is logged: the address and the subject are personal data (02.3.1 §8), the proof is a credential
-/// hash, and the caller's audit row carries the provider name and, for a move, the previous user id only.
+/// hash, and the audit rows written by the function carry the provider name and, for a move, the previous user id only.
 /// </para>
 /// </remarks>
 /// <param name="dataSource">The app-role <see cref="NpgsqlDataSource"/> (the only role that may call the resolver).</param>

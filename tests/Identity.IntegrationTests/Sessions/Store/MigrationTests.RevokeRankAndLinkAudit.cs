@@ -117,7 +117,7 @@ public sealed partial class MigrationTests
     /// <summary>One call of the owner-only chain append; a null literal is the SQL NULL argument.</summary>
     private static string AppendSql(string? metadata) =>
         "select evidgate.audit_append_user_event("
-        + "'auth.test', @org, @actor, 'user', @actor, "
+        + "'auth.test', @org, @actor, 'user', @actor::text, "
         + (metadata is null ? "null::jsonb" : $"'{metadata}'::jsonb")
         + ", null, null)";
 }
