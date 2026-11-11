@@ -192,6 +192,30 @@ public sealed partial class MigratorTimeoutTests
     }
 
     /// <summary>
+    /// A startup <c>options</c> value already in the operator's connection string
+    /// still reaches the scripts, and the configured limits win over a duplicate key.
+    /// </summary>
+    [Fact]
+    public async Task Operator_Startup_Options_Survive_And_The_Configured_Limits_Win()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+        using var migrations = TempMigrations.Create().Add(
+            "0001_probe_options.sql",
+            "create table public.operator_options_probe as select current_setting('application_name') as app, " +
+            "current_setting('lock_timeout') as lock_timeout;");
+        var connectionString = new NpgsqlConnectionStringBuilder(_fixture.OwnerConnectionString(database))
+        {
+            Options = "-c application_name=operator_probe -c lock_timeout=1ms",
+        }.ConnectionString;
+
+        var outcome = MigratorHarness.Run(migrations.Path, connectionString, lockTimeoutSeconds: 3);
+
+        outcome.ExitCode.ShouldBe(MigratorExitCodes.Success, string.Join(" | ", outcome.Messages));
+        (await _fixture.ScalarAsync<string>(database, "select app from public.operator_options_probe")).ShouldBe("operator_probe");
+        (await _fixture.ScalarAsync<string>(database, "select lock_timeout from public.operator_options_probe")).ShouldBe("3s");
+    }
+
+    /// <summary>
     /// A script may shorten <c>lock_timeout</c> for its own transaction: the
     /// script's one second fires even though the runner setting is thirty.
     /// </summary>

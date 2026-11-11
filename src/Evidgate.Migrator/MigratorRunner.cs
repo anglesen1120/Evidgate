@@ -170,12 +170,11 @@ public static class MigratorRunner
         var journal = new SchemaMigrationJournal(run.Options, checksums, timing, line => run.Emit(line));
 
         var engine = DeployChanges.To
-            .PostgresqlDatabase(run.Options.ConnectionString)
+            .PostgresqlDatabase(run.Options.SessionConnectionString)
             .WithExecutionTimeout(TimeSpan.FromSeconds(run.Options.CommandTimeoutSeconds))
             .WithVariablesDisabled()
             .WithScripts(plan.Pending.Select(script => new SqlScript(script.Name, script.Contents)))
             .WithTransactionPerScript()
-            .WithPreprocessor(new ScriptTimeoutPreprocessor(run.Options))
             .WithPreprocessor(timing)
             .JournalTo(journal)
             .LogTo(log)

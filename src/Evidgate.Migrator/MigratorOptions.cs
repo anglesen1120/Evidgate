@@ -33,8 +33,8 @@ public sealed class MigratorOptions
     public const int DefaultCommandTimeoutSeconds = 0;
 
     /// <summary>
-    /// Default <c>lock_timeout</c> in seconds, applied with <c>SET LOCAL</c> inside every script's
-    /// transaction. DDL on a hot table queues behind any open transaction and every later query then
+    /// Default <c>lock_timeout</c> in seconds, sent as a startup option on every session of the run.
+    /// DDL on a hot table queues behind any open transaction and every later query then
     /// queues behind the DDL, so a script that cannot get its lock quickly must fail and roll back.
     /// </summary>
     public const int DefaultLockTimeoutSeconds = 5;
@@ -64,6 +64,25 @@ public sealed class MigratorOptions
     /// and the test fixtures reach it through <c>InternalsVisibleTo</c>.
     /// </summary>
     public string ConnectionString { get; internal init; } = string.Empty;
+
+    /// <summary>
+    /// <see cref="ConnectionString"/> with <c>lock_timeout</c> and <c>statement_timeout</c> as startup
+    /// options, so every session the run opens carries both limits. An operator-supplied
+    /// <c>Options</c> value is kept and ours is appended; PostgreSQL applies the last duplicate,
+    /// so the configured limits win. A script's own <c>set local</c> still overrides them.
+    /// </summary>
+    internal string SessionConnectionString
+    {
+        get
+        {
+            var builder = new NpgsqlConnectionStringBuilder(ConnectionString);
+            var limits = string.Create(
+                CultureInfo.InvariantCulture,
+                $"-c lock_timeout={LockTimeoutSeconds * 1000L}ms -c statement_timeout={StatementTimeoutSeconds * 1000L}ms");
+            builder.Options = string.IsNullOrWhiteSpace(builder.Options) ? limits : $"{builder.Options} {limits}";
+            return builder.ConnectionString;
+        }
+    }
 
     /// <summary>Directory holding the migration files.</summary>
     public required string MigrationsPath { get; init; }

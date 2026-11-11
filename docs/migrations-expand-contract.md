@@ -110,8 +110,8 @@ Two properties an operator should know before the first long migration:
 
 - **A statement has no driver command timeout by default, but it does have a
   server-side `statement_timeout`.** Every script runs in its own transaction
-  under `set local lock_timeout` (default 5 s) and `set local statement_timeout`
-  (default 900 s), set from `EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS` and
+  under a session `lock_timeout` (default 5 s) and `statement_timeout`
+  (default 900 s), sent as connection startup options and set from `EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS` and
   `EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS` (`0` disables either). A backfill
   or index build is not cut off by the client — `EVIDGATE_MIGRATOR__COMMANDTIMEOUTSECONDS`
   stays `0` unless set — but a statement that outruns 900 s fails as exit `6`.

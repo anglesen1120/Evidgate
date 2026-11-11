@@ -6,7 +6,7 @@ Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · �
 
 ## 1. What the two settings do
 
-Every migration script runs in its own transaction (`WithTransactionPerScript`, `src/Evidgate.Migrator/MigratorRunner.cs:177`). Before the script body, `ScriptTimeoutPreprocessor` prepends one line to the script's first line, so PostgreSQL line numbers stay equal to the file's: `set local lock_timeout = '<n>ms'; set local statement_timeout = '<n>ms'; ` (`src/Evidgate.Migrator/ScriptTimeoutPreprocessor.cs:15-22`). `set local` scopes both to that script's transaction: nothing leaks to the next script, to a later command on the session, or to another session.
+Every migration script runs in its own transaction (`WithTransactionPerScript`, `src/Evidgate.Migrator/MigratorRunner.cs:177`). The two limits are not written into the script: `MigratorOptions.SessionConnectionString` appends `-c lock_timeout=<n>ms -c statement_timeout=<n>ms` to the `Options` parameter of the owner connection string (`src/Evidgate.Migrator/MigratorOptions.cs:68-84`), so every session the run opens (DbUp's script sessions, the journal reads, the advisory-lock session) starts with both limits and the script text and its line numbers are untouched. A script's own `set local` / `set` still overrides the value for itself. An `Options` value already present in the operator's connection string is kept and the limits are appended after it; PostgreSQL applies the last duplicate, so the configured limits win over a duplicate `-c lock_timeout`.
 
 - `lock_timeout` bounds how long one statement **waits to acquire** a lock. It never bounds the hold: once the statement has the lock it runs to completion, and every reader or writer queued behind it waits that long. A wait that times out is SQLSTATE `55P03`.
 - `statement_timeout` bounds one **statement's** execution (PostgreSQL measures it per statement, not per transaction ⚠️ — read from the PostgreSQL documentation, not re-checked for this page). A statement that outruns it is SQLSTATE `57014`. The timeout that fires first wins, so a DDL statement in a tight lock queue usually hits `lock_timeout`.
@@ -84,7 +84,7 @@ Exit `6` prints the same shape with `statement_timeout`, the runner setting (a s
 
 ## 5. Scripts that set their own timeout
 
-The prefix is applied with `set local` inside every script's transaction, so it also overrides a role- or database-level `lock_timeout`/`statement_timeout` (set the environment variables, not the role default, to change what a deploy uses). It runs first, so a script that sets its own `set local lock_timeout` **overrides** the default for that script and keeps it. That is deliberate where the file's header documents the wait it wants:
+The startup options are session settings, so they override a role- or database-level `lock_timeout`/`statement_timeout` (set the environment variables, not the role default, to change what a deploy uses). A script that sets its own `set local lock_timeout` **overrides** the default for that script and keeps it. That is deliberate where the file's header documents the wait it wants:
 
 - `0045`, `0048`, `0095` set `set local lock_timeout = '5s'` explicitly (the 5 s equals the default, but the file states it).
 - `0050`/`0051` set `set lock_timeout = '2000'` in the `SECURITY DEFINER` function header, which bounds the waits that function takes whenever it is called, not just during the migration.
@@ -94,7 +94,12 @@ Do not remove a script's own value to "centralise" it: the value is part of that
 
 ## 6. The advisory migration lock is not bounded by these settings
 
-The apply path takes a session-level advisory lock (`pg_advisory_lock`, key `0x6576696467617465`) on a dedicated connection (`src/Evidgate.Migrator/MigrationLock.cs:20-73`). Before it waits, it resets both server timeouts **to 0 on that session** (`set lock_timeout = 0; set statement_timeout = 0`, `MigrationLock.cs:47-53`), so a role- or database-level default cannot turn "another Migrator is running" into an error. A second runner therefore waits for the first one as long as it takes, printing that it is waiting; the deploy job's own timeout is the bound. `--status` and `--dry-run` never take the lock, so a read-only probe does not queue behind a long migration.
+The apply path takes a session-level advisory lock (`pg_advisory_lock`, key `0x6576696467617465`) on a dedicated connection (`src/Evidgate.Migrator/MigrationLock.cs:20-73`). Before it waits, it sets both server timeouts **to 0 on that session** (`set lock_timeout = 0; set statement_timeout = 0`, `MigrationLock.cs:47-53`), which overrides the startup options, so "another Migrator is running" can never turn into an error. A second runner therefore waits for the first one as long as it takes, printing that it is waiting; the deploy job's own timeout is the bound. `--status` and `--dry-run` never take the lock, so a read-only probe does not queue behind a long migration.
+
+## 6a. Connection poolers and the journal
+
+- The limits travel as the PostgreSQL startup parameter `options`. PgBouncer rejects it unless `ignore_startup_parameters` lists `options`, and a transaction-mode pooler would not keep a session setting anyway: **run the Migrator on a direct connection to the primary**, never through a pooler.
+- Because the limits are session-wide, they also cover the runner's own journal statements (read of the applied list, the journal insert, the schema bootstrap). Those are short single-row statements; a journal statement that hits 5 s or 900 s is a symptom of the same blockage and fails the run with the same exit `5` or `6`.
 
 ## 7. Prior art
 
@@ -102,14 +107,14 @@ Approach taken, no text copied. ⚠️ All three external statements below are f
 
 - ⚠️ Flyway and golang-migrate expose no per-migration `lock_timeout`: their PostgreSQL support retries or waits on the migration-table lock, but does not set a server `lock_timeout` around each script's DDL.
 - ⚠️ Rails `strong_migrations` recommends a short `lock_timeout` around DDL and retrying the interrupted migration, because the DDL only waits and the retry is cheap once the blocker is gone.
-- Taken from those: a short default `lock_timeout` set **inside the same transaction** as the DDL (so it disappears with the script), a generous `statement_timeout` so a normal index build is not cut, and a distinct exit code per timeout so a deploy gate can see the difference without parsing text.
+- Taken from those: a short default `lock_timeout` on the same sessions that run the DDL, a generous `statement_timeout` so a normal index build is not cut, and a distinct exit code per timeout so a deploy gate can see the difference without parsing text.
 - Deliberately **not** followed: an automatic retry loop. A rerun here is an explicit operator/deploy-gate decision — the same session that timed out may be the one holding the lock, and a retry loop would hide a table that is permanently contended instead of failing the deploy.
 
 ## 8. Evidence
 
-- `src/Evidgate.Migrator/MigratorOptions.cs:23-49,74-78,187-203` — variables, defaults, validation (`0` disables, `2147483` ceiling, fail closed).
-- `src/Evidgate.Migrator/ScriptTimeoutPreprocessor.cs:15-22` — the prepended `set local` line.
-- `src/Evidgate.Migrator/MigratorRunner.cs:172-204,227-263` — DbUp wiring (`WithTransactionPerScript`, preprocessor), `55P03`/`57014` mapping, transcript line, rollback line.
+- `src/Evidgate.Migrator/MigratorOptions.cs:23-49,66-84,187-203` — variables, defaults, `SessionConnectionString`, validation (`0` disables, `2147483` ceiling, fail closed).
+- `src/Evidgate.Migrator/SchemaMigrationStore.cs:38-43`, `SchemaMigrationJournal.cs:84`, `MigratorRunner.cs:173` — the three places that connect with the session connection string.
+- `src/Evidgate.Migrator/MigratorRunner.cs:172-204,227-263` — DbUp wiring (`WithTransactionPerScript`), `55P03`/`57014` mapping, transcript line, rollback line.
 - `src/Evidgate.Migrator/MigrationLock.cs:38-73` — advisory lock and the reset to `0` before it waits.
 - `src/Evidgate.Migrator/MigratorExitCodes.cs:28-32` — exit `5` and `6`.
 - `infra/config-matrix.json` (`EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS`, `EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS`) and `infra/{dev,staging,prod}/environment.json` — the keys and their defaults per environment.

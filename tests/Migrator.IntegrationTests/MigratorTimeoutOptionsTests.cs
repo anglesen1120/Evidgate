@@ -34,6 +34,34 @@ public sealed partial class MigratorTimeoutOptionsTests
     }
 
     [Fact]
+    public void Session_Connection_String_Sends_Both_Limits_As_Startup_Options()
+    {
+        var options = new MigratorOptions
+        {
+            MigrationsPath = AppContext.BaseDirectory,
+            ConnectionString = ValidConnectionString,
+            LockTimeoutSeconds = 7,
+            StatementTimeoutSeconds = 0,
+        };
+
+        new NpgsqlConnectionStringBuilder(options.SessionConnectionString).Options
+            .ShouldBe("-c lock_timeout=7000ms -c statement_timeout=0ms");
+    }
+
+    [Fact]
+    public void An_Operator_Options_Value_Is_Kept_And_The_Configured_Limits_Come_Last()
+    {
+        var operatorOptions = new NpgsqlConnectionStringBuilder(ValidConnectionString)
+        {
+            Options = "-c search_path=public -c lock_timeout=1ms",
+        }.ConnectionString;
+        var options = new MigratorOptions { MigrationsPath = AppContext.BaseDirectory, ConnectionString = operatorOptions };
+
+        new NpgsqlConnectionStringBuilder(options.SessionConnectionString).Options
+            .ShouldBe("-c search_path=public -c lock_timeout=1ms -c lock_timeout=5000ms -c statement_timeout=900000ms");
+    }
+
+    [Fact]
     public void Unset_Variables_Take_The_Defaults()
     {
         var options = MigratorOptions.FromEnvironment(Env());
