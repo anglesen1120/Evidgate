@@ -138,23 +138,61 @@ public sealed class ContainerStartTests
     }
 
     [Fact]
-    public async Task TheBudgetBoundsTheRetries_EvenWhenTheAttemptCapIsHigh()
+    public async Task TheFirstAttemptIsCutOffAtTheBudget_AndNoSecondAttemptStarts()
     {
         var harness = new Harness();
-        var options = Fast with
-        {
-            MaxAttempts = 1000,
-            AttemptTimeout = TimeSpan.FromMilliseconds(40),
-            Budget = TimeSpan.FromMilliseconds(400),
-        };
+        var options = Fast with { AttemptTimeout = TimeSpan.FromHours(1), Budget = TimeSpan.FromMilliseconds(300) };
         var clock = Stopwatch.StartNew();
 
         await Should.ThrowAsync<OperationCanceledException>(() =>
             harness.RunAsync((_, token) => Task.Delay(Timeout.InfiniteTimeSpan, token), options));
 
-        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(5));
-        harness.Created.Count.ShouldBeInRange(2, 50);
-        harness.Created.ShouldAllBe(fake => fake.Disposed);
+        clock.Elapsed.ShouldBeInRange(TimeSpan.FromMilliseconds(250), TimeSpan.FromSeconds(5));
+        harness.Created.Count.ShouldBe(1);
+        harness.Created[0].Disposed.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task AnAttemptThatOverrunsTheBudget_SurfacesTheDockerFailure()
+    {
+        var harness = new Harness();
+        var options = Fast with { Budget = TimeSpan.FromMilliseconds(50), Delay = TimeSpan.FromMilliseconds(1) };
+
+        await Should.ThrowAsync<TaskCanceledException>(() => harness.RunAsync(
+            async (_, _) =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(120), TestContext.Current.CancellationToken);
+                throw DockerTimeout();
+            },
+            options));
+
+        harness.Created.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ACleanupThatStalls_CannotOutliveTheBudget()
+    {
+        var harness = new Harness();
+        var options = Fast with { Budget = TimeSpan.FromMilliseconds(300), DisposeTimeout = TimeSpan.FromMinutes(1) };
+        var clock = Stopwatch.StartNew();
+
+        await Should.ThrowAsync<TaskCanceledException>(() => harness.RunAsync(
+            (_, _) => Task.FromException(DockerTimeout()),
+            options,
+            dispose: _ => new ValueTask(new TaskCompletionSource().Task)));
+
+        clock.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task ALocalFileFault_IsNotRetried()
+    {
+        var harness = new Harness();
+
+        await Should.ThrowAsync<FileNotFoundException>(() =>
+            harness.RunAsync((_, _) => Task.FromException(new FileNotFoundException("mapped config is gone"))));
+
+        harness.Created.Count.ShouldBe(1);
     }
 
     [Fact]

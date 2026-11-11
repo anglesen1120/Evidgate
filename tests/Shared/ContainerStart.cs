@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
 using Docker.DotNet;
 using DotNet.Testcontainers.Containers;
 
@@ -25,8 +26,8 @@ public sealed record ContainerStartOptions(
     /// <summary>Three attempts, none past two minutes, all inside four (below the fixtures' own five-minute start timeout).</summary>
     public static ContainerStartOptions Default { get; } = new(
         MaxAttempts: 3,
-        AttemptTimeout: TimeSpan.FromMinutes(2),
-        Budget: TimeSpan.FromMinutes(4),
+        AttemptTimeout: TimeSpan.FromMinutes(3),
+        Budget: TimeSpan.FromMinutes(5),
         Delay: TimeSpan.FromSeconds(2),
         DisposeTimeout: TimeSpan.FromSeconds(30));
 }
@@ -71,9 +72,16 @@ public static class ContainerStart
         log ??= static message => Console.Error.WriteLine(message);
 
         var deadline = DateTime.UtcNow + options.Budget;
+        ExceptionDispatchInfo? failure = null;
         for (var attempt = 1; ; attempt++)
         {
+            // A delay that overshoots the deadline must surface the Docker failure, not a negative timeout.
             var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                failure?.Throw();
+            }
+
             using var attemptTimeout = new CancellationTokenSource(
                 remaining < options.AttemptTimeout ? remaining : options.AttemptTimeout);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, attemptTimeout.Token);
@@ -86,7 +94,13 @@ public static class ContainerStart
             }
             catch (Exception exception)
             {
-                await DisposeQuietlyAsync(container, dispose, options.DisposeTimeout, log).ConfigureAwait(false);
+                var cleanupBudget = deadline - DateTime.UtcNow;
+                var cleanupTimeout = cleanupBudget < options.DisposeTimeout ? cleanupBudget : options.DisposeTimeout;
+                await DisposeQuietlyAsync(
+                    container,
+                    dispose,
+                    cleanupTimeout > TimeSpan.Zero ? cleanupTimeout : TimeSpan.Zero,
+                    log).ConfigureAwait(false);
 
                 var last = attempt >= options.MaxAttempts || deadline - DateTime.UtcNow <= options.Delay;
                 if (last || cancellationToken.IsCancellationRequested || !IsTransient(exception))
@@ -98,6 +112,7 @@ public static class ContainerStart
                     $"[container-start] attempt {attempt}/{options.MaxAttempts} failed in "
                     + $"{FailingCall(exception)}: {exception.GetType().Name}: {exception.Message}; retrying in "
                     + $"{options.Delay.TotalSeconds:0.#}s");
+                failure = ExceptionDispatchInfo.Capture(exception);
             }
 
             await Task.Delay(options.Delay, cancellationToken).ConfigureAwait(false);
@@ -122,6 +137,8 @@ public static class ContainerStart
                 case DockerApiException api when (int)api.StatusCode >= 500 || api.StatusCode == HttpStatusCode.RequestTimeout:
                     transient = true;
                     break;
+                case FileNotFoundException or DirectoryNotFoundException:
+                    return false;
                 case OperationCanceledException or HttpRequestException or IOException or SocketException:
                     transient = true;
                     break;
