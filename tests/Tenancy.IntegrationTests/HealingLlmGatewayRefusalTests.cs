@@ -155,12 +155,12 @@ public sealed class HealingLlmGatewayRefusalTests
             .Returns<Task<HealingLlmBudgetRow?>>(_ =>
                 Task.FromException<HealingLlmBudgetRow?>(new BudgetReadFault()));
 
-    private static IHealingAvailabilityResolver Availability()
+    private static ShadowAvailability Availability() => new();
+
+    private sealed class ShadowAvailability : IHealingAvailabilityResolver
     {
-        var resolver = Substitute.For<IHealingAvailabilityResolver>();
-        resolver.ResolveAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-            .Returns(new ValueTask<HealingAvailability>(HealingAvailability.Shadow));
-        return resolver;
+        public ValueTask<HealingAvailability> ResolveAsync(Guid? projectId, CancellationToken cancellationToken) =>
+            ValueTask.FromResult(HealingAvailability.Shadow);
     }
 
     private static HealingLlmRequest Request(string? responseSchema = null) =>
