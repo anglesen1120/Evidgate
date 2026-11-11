@@ -176,6 +176,7 @@ GATE_PATHS = frozenset(
         "scripts/image-db-checks.sh",
         "scripts/image-base-layers.py",
         "scripts/smoke-clean-build.sh",
+        "scripts/parser-no-egress.sh",
         "scripts/tests/review_blockers_fixtures.py",
     }
 )
