@@ -61,7 +61,13 @@ fi
 read -r tests failures errors skipped < <(python3 - "$report" <<'PY'
 import sys, xml.etree.ElementTree as ET
 t = tf = te = ts = 0
-for s in ET.parse(sys.argv[1]).getroot().iter("testsuite"):
+tree = ET.parse(sys.argv[1]).getroot()
+# The egress test itself must be in the report and have passed: a rename or a narrowed class must not stay green.
+probe = [c for c in tree.iter("testcase") if c.get("name", "").endswith("Has_No_Egress_Path")]
+if len(probe) != 1 or any(c.find(k) is not None for c in probe for k in ("skipped", "failure", "error")):
+    print(0, 0, 0, 0)
+    sys.exit(0)
+for s in tree.iter("testsuite"):
     t += int(s.get("tests", 0)); tf += int(s.get("failures", 0))
     te += int(s.get("errors", 0)); ts += int(s.get("skipped", 0))
 print(t, tf, te, ts)

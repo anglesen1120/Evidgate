@@ -406,9 +406,8 @@ public sealed class ChildNetworkTests(ITestOutputHelper output)
             "no proxy or DOTNET_SYSTEM_NET* variable may reach the child: " + string.Join(", ", networkingSwitches));
     }
 
-    /// <summary>The first existing path of the candidates, or <see langword="null"/> when none exists.</summary>
-    /// <param name="candidates">Absolute paths to check.</param>
-    /// <returns>The first path that exists.</returns>
+    /// <summary>Skips the test, or fails it when the gate stage that needs it to run has set the variable.</summary>
+    /// <param name="reason">Why the test cannot assert the property here.</param>
     [DoesNotReturn]
     private static void SkipOrFail(string reason)
     {
@@ -420,6 +419,9 @@ public sealed class ChildNetworkTests(ITestOutputHelper output)
         Assert.Skip(reason);
     }
 
+    /// <summary>The first existing path of the candidates, or <see langword="null"/> when none exists.</summary>
+    /// <param name="candidates">Absolute paths to check.</param>
+    /// <returns>The first path that exists.</returns>
     private static string? FindExecutable(params string[] candidates) =>
         candidates.FirstOrDefault(File.Exists);
 }
