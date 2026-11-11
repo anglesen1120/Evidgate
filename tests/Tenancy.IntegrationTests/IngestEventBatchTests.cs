@@ -26,7 +26,7 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class IngestEventBatchTests
+public sealed class IngestEventBatchTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key that no seeded plan carries: 64 lowercase hex (T10).</summary>
     private const string UnplannedKey = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
@@ -34,8 +34,8 @@ public sealed class IngestEventBatchTests
     private const string OccurredAt = "2026-09-26T10:15:30Z";
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public IngestEventBatchTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public IngestEventBatchTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     // ------------------------------------------------------------------ request/response shapes
 
@@ -155,7 +155,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task valid_batch_commits_atomically_and_acks_in_order()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         var requestId = Guid.NewGuid().ToString("N");
         var first = Guid.CreateVersion7();
         var second = Guid.CreateVersion7();
@@ -202,7 +202,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task resend_is_all_duplicates_no_new_rows()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         var body = Batch(
             Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1),
             Event(Guid.CreateVersion7(), KeyOf(world, 1), sequence: 2));
@@ -228,7 +228,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task one_invalid_event_rejects_whole_batch()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         // Index 1 violates the envelope schema (attempt_no minimum is 1), so the whole batch is refused.
         var answer = await PostEventsAsync(
@@ -251,7 +251,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task unknown_execution_key_rejects_with_indices()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var answer = await PostEventsAsync(
             world,
@@ -272,7 +272,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task different_payload_duplicate_rejects_409()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         var existing = Guid.CreateVersion7();
 
         (await PostEventsAsync(world, Batch(Event(existing, KeyOf(world, 0), sequence: 1, status: "passed"))))
@@ -299,7 +299,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task reused_sequence_rejects_422()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         (await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 7))))
             .Status.ShouldBe(HttpStatusCode.OK);
@@ -319,7 +319,7 @@ public sealed class IngestEventBatchTests
     public async Task limit_boundaries_partial()
     {
         // Five planned executions: Events() spans executions 0..4 (i % 5), and a key outside the plan is 422.
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), planned: 5);
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), planned: 5, hosts: _hosts);
 
         // Exactly 500 events: accepted (AC7's lower boundary).
         var fiveHundred = await PostEventsAsync(world, Batch(Events(world, 500)));
@@ -383,7 +383,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task canceled_run_accepts_and_marks_after_cancel()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         await world.SetRunStateAsync("canceled");
 
         var answer = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
@@ -397,7 +397,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task complete_run_rejects_409_run_closed()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         await world.SetRunStateAsync("complete");
 
         var answer = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
@@ -412,7 +412,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task tenant_isolation()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         var (otherOrg, _) = await world.CreateOtherOrgAsync(Unique.Slug("globex"));
         var otherRun = await world.SeedOtherRunAsync(otherOrg);
 
@@ -432,7 +432,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task denied_permission_returns_403()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Reader());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Reader(), hosts: _hosts);
 
         var answer = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
 
@@ -444,14 +444,14 @@ public sealed class IngestEventBatchTests
     public async Task project_scope_mismatch_for_ci_producer_403()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(projectScope: null));
+            _fixture, IngestTestWorld.Writer(projectScope: null), hosts: _hosts);
         using var setup = world.Api.CreateClient();
         var otherProject = await RegistryApi.CreateProjectAsync(setup, world.User, world.Org, "other");
         var otherRun = await world.SeedRunInProjectAsync(otherProject);
 
         // A token scoped to one project may not ingest into another project's run (00 §9.1/§9.3).
-        await using var scoped = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(world.Database), world.Org, world.Project,
+        await using var scoped = _hosts.WithPrincipal(
+            world.Database, world.Org, world.Project,
             IngestTestWorld.Writer(projectScope: world.Project));
         using var scopedClient = scoped.CreateClient();
 
@@ -474,7 +474,7 @@ public sealed class IngestEventBatchTests
     public async Task slot_taken_by_other_token_403()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.OtherJti);
+            _fixture, IngestTestWorld.Writer(), boundJti: IngestTestWorld.OtherJti, hosts: _hosts);
 
         var answer = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
 
@@ -490,7 +490,7 @@ public sealed class IngestEventBatchTests
         // caller's jti, and a later batch from a different ci_producer identity is then refused 403
         // producer_slot_taken with no write (T9). Distinct from slot_taken_by_other_token_403, which pre-binds
         // the slot and never exercises the binding the first batch performs.
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var accepted = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
 
@@ -501,8 +501,8 @@ public sealed class IngestEventBatchTests
 
         // The foreign credential is scoped to the same project on purpose: this case is about the producer
         // slot, and an unscoped token would be refused by the route's budget partition before it.
-        await using var foreign = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(world.Database), world.Org, world.Project,
+        await using var foreign = _hosts.WithPrincipal(
+            world.Database, world.Org, world.Project,
             IngestTestWorld.Writer(jti: IngestTestWorld.OtherJti, projectScope: world.Project));
         using var foreignClient = foreign.CreateClient();
 
@@ -520,7 +520,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task unknown_producer_422()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var answer = await PostEventsAsync(
             world,
@@ -535,7 +535,7 @@ public sealed class IngestEventBatchTests
     public async Task mixed_producer_batch_422()
     {
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), slots: 2);
+            _fixture, IngestTestWorld.Writer(), slots: 2, hosts: _hosts);
 
         var answer = await PostEventsAsync(
             world,
@@ -556,7 +556,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task first_send_batch_with_bad_major_422_unsupported_protocol_major()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var answer = await PostEventsAsync(world, Batch(Carrier(world, major: 2)));
 
@@ -573,7 +573,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task first_send_capability_registered_with_batch()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var answer = await PostEventsAsync(
             world,
@@ -598,7 +598,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task ordinary_batch_writes_no_audit_row()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var answer = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));
 
@@ -642,7 +642,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task ext_secret_keys_never_reach_payload()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var answer = await PostEventsAsync(
             world,
@@ -671,7 +671,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task attempt_written_for_test_finished()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         // ext.xfail is the one allow-listed test.finished key the server honours (05.3.3-T1): a failed outcome the
         // producer expected flips to passed; ext.normalized (not allow-listed) is ignored.
@@ -697,7 +697,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task refused_attempt_rolls_back_events()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         // Index 1 names an attempt_no above the writer's MaxAttemptNo (100): the refusal rolls back the whole batch,
         // so the otherwise-accepted event at index 0 is not written either.
@@ -722,7 +722,7 @@ public sealed class IngestEventBatchTests
         // is not an ext key), and a non-final failed attempt of a setup that may still pass must never block its
         // dependants (ICaseAttemptWriter.cs). The blocked-dependants pass is deferred to 04.1.1-T4 / 05.3.3.
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), planned: 2, edges: [(0, 1)]);
+            _fixture, IngestTestWorld.Writer(), planned: 2, edges: [(0, 1)], hosts: _hosts);
 
         var failed = world.Plan.Executions[0];
         var dependant = world.Plan.Executions[1];
@@ -748,7 +748,7 @@ public sealed class IngestEventBatchTests
         // A flaky setup: attempt 1 failed, attempt 2 passed, both in one batch. Without a final-attempt signal the
         // route must not block the dependant, and the retry's pass is stored as its own attempt slot.
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), planned: 2, edges: [(0, 1)]);
+            _fixture, IngestTestWorld.Writer(), planned: 2, edges: [(0, 1)], hosts: _hosts);
 
         var setup = world.Plan.Executions[0];
         var dependant = world.Plan.Executions[1];
@@ -778,7 +778,7 @@ public sealed class IngestEventBatchTests
         // P2: the same batch resent is acked `duplicate`; an event already stored by an earlier batch must reach
         // neither the case-attempt writer nor the producer_slot high-water mark, and the skipped slot update
         // leaves producer_slot.version untouched (the shared trigger would bump it on a no-op update).
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var body = Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1, status: "failed"));
 
@@ -804,7 +804,7 @@ public sealed class IngestEventBatchTests
     {
         // F3: 00 §8.3 defines a normalised status only for a finished attempt's outcome; every other type carries
         // no verdict, so event.normalized_status stays NULL for it.
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var answer = await PostEventsAsync(
             world,
@@ -825,7 +825,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task log_has_no_payload()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         var sink = new IngestLogSink();
         await using var host = world.Host.WithWebHostBuilder(
             builder => builder.ConfigureTestServices(services => services.AddLogging(logging => logging.AddProvider(sink))));
@@ -851,7 +851,7 @@ public sealed class IngestEventBatchTests
     [Fact]
     public async Task statement_count_is_bounded()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         world.Host.Statements.Clear();
 
         var answer = await PostEventsAsync(world, Batch(Event(Guid.CreateVersion7(), KeyOf(world, 0), sequence: 1)));

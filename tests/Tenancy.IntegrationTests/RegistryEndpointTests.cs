@@ -12,7 +12,7 @@ namespace Tenancy.IntegrationTests;
 /// names the acceptance criterion it proves (§9 test plan).
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class RegistryEndpointTests
+public sealed class RegistryEndpointTests : IClassFixture<TenancyHostPool>
 {
     private static readonly string[] ProjectReadWrite = ["project:read", "project:write"];
     private static readonly string[] OrganizationWrite = ["organization:write"];
@@ -20,8 +20,8 @@ public sealed class RegistryEndpointTests
     private static readonly string[] NotADomain = ["not a domain"];
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public RegistryEndpointTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public RegistryEndpointTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     /// <summary>
     /// AC8 (T98): the creator of an org holds <c>tenant_admin</c> and
@@ -32,7 +32,7 @@ public sealed class RegistryEndpointTests
     public async Task CreateOrganization_GrantsCreatorBothRoles()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealEvaluator(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealEvaluator(database);
         using var client = api.CreateClient();
         var creator = Guid.CreateVersion7();
         var slug = Unique.Slug("acme");
@@ -90,7 +90,7 @@ public sealed class RegistryEndpointTests
     public async Task CreateOrganization_RefusesCallersThatAreNotSignedInUsers()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealEvaluator(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealEvaluator(database);
         using var client = api.CreateClient();
         var body = new { name = "Acme", slug = Unique.Slug("acme") };
 
@@ -123,7 +123,7 @@ public sealed class RegistryEndpointTests
     public async Task CreateOrganization_TakenSlugIs409()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
 
         var slug = Unique.Slug("acme");
@@ -144,7 +144,7 @@ public sealed class RegistryEndpointTests
     public async Task CreateOrganization_IdempotencyKeyReplaysAndConflicts()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var key = NewKey();
@@ -179,7 +179,7 @@ public sealed class RegistryEndpointTests
     public async Task Create_InvalidSlugOrNameIs422()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
 
@@ -220,7 +220,7 @@ public sealed class RegistryEndpointTests
     public async Task ProjectSlugIsUniquePerOrg()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var orgA = await SeedOrgAsync(database, "org-a");
         var orgB = await SeedOrgAsync(database, "org-b");
@@ -243,7 +243,7 @@ public sealed class RegistryEndpointTests
     public async Task ProjectCreateReadPatchWithIfMatch()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -296,7 +296,7 @@ public sealed class RegistryEndpointTests
     public async Task OrganizationPatchWithIfMatch()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
         var taken = await CreateOrgAsync(client, Unique.Slug("taken"));
@@ -346,7 +346,7 @@ public sealed class RegistryEndpointTests
     public async Task OtherOrgIdsAre404()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var orgA = await SeedOrgAsync(database, "org-a");
         var orgB = await SeedOrgAsync(database, "org-b");
@@ -383,7 +383,7 @@ public sealed class RegistryEndpointTests
         Guid projectA;
         Guid projectB;
 
-        await using (var setup = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database)))
+        await using (var setup = _hosts.GrantAll(database))
         using (var setupClient = setup.CreateClient())
         {
             var a = await CreateProjectAsync(setupClient, org, "aa");
@@ -394,7 +394,7 @@ public sealed class RegistryEndpointTests
 
         // The evaluator is bypassed on purpose: since 02.6.2 AC6 a service token can no longer
         // hold project:read/write, so this isolates the handler-side ScopeGuard (AC4).
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var token = TenancyApiFactory.Caller(
             org: org,
@@ -422,7 +422,7 @@ public sealed class RegistryEndpointTests
     public async Task CreateProject_IdempotencyKeyReplaysAndConflicts()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -451,7 +451,7 @@ public sealed class RegistryEndpointTests
     public async Task MaxProjectsReachedIs429()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme", maxProjects: 2);
 
@@ -476,7 +476,7 @@ public sealed class RegistryEndpointTests
     public async Task ConcurrentCreatesNeverExceedMaxProjects()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme", maxProjects: 3);
 
@@ -493,7 +493,7 @@ public sealed class RegistryEndpointTests
     public async Task SuspendedOrgReadsButRefusesMutations()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
         var project = (await CreateProjectAsync(client, org, "web")).Id();
@@ -520,7 +520,7 @@ public sealed class RegistryEndpointTests
     public async Task ListProjectsWalksPages()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -568,7 +568,7 @@ public sealed class RegistryEndpointTests
     public async Task ReadsStayInsideTheStatementBudget()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());

@@ -72,7 +72,8 @@ internal sealed partial class UsageQuotaWorld : IAsyncDisposable
         PostgresTenancyFixture fixture,
         OperatorGateMode gate = OperatorGateMode.Denied,
         IReadOnlyDictionary<string, string?>? configuration = null,
-        string? database = null)
+        string? database = null,
+        TenancyHostPool? hosts = null)
     {
         database ??= await fixture.SharedDatabaseAsync();
         var connectionString = fixture.AppConnectionString(database);
@@ -86,14 +87,15 @@ internal sealed partial class UsageQuotaWorld : IAsyncDisposable
             _ => null,
         };
 
-        var api = TenancyApiFactory.RealResolver(connectionString, configuration, services);
+        var api = hosts?.RealResolver(database, configuration, services)
+            ?? TenancyApiFactory.RealResolver(connectionString, configuration, services);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("quota"));
         var project = await CreateProjectAsync(client, user, org, Unique.Slug("meter"));
 
         return new UsageQuotaWorld(
-            fixture, api, TenancyApiFactory.GrantAll(connectionString), client, database, user, org, project);
+            fixture, api, hosts?.GrantAll(database) ?? TenancyApiFactory.GrantAll(connectionString), client, database, user, org, project);
     }
 
     /// <summary>A second org with a project, founded by its own user: the tenant no write may reach.</summary>

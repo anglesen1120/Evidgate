@@ -17,11 +17,12 @@ namespace Tenancy.IntegrationTests;
 /// the real host and a real PostgreSQL.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class RunCreationQaExtraTests
+public sealed class RunCreationQaExtraTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public RunCreationQaExtraTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public RunCreationQaExtraTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record RawAnswer(HttpStatusCode Status, string Text)
     {
@@ -81,7 +82,7 @@ public sealed class RunCreationQaExtraTests
     [Fact]
     public async Task QaExtra_NonJsonBody_422_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await SendRawAsync(world, "not json");
 
@@ -93,7 +94,7 @@ public sealed class RunCreationQaExtraTests
     [Fact]
     public async Task QaExtra_EmptyBody_422_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await SendRawAsync(world, string.Empty);
 
@@ -105,7 +106,7 @@ public sealed class RunCreationQaExtraTests
     [Fact]
     public async Task QaExtra_JsonArrayBody_422_NotAnObject()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await SendRawAsync(world, "[]");
 
@@ -117,7 +118,7 @@ public sealed class RunCreationQaExtraTests
     [Fact]
     public async Task QaExtra_ManifestIdNumber_422_RequiredAtPath()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await SendRawAsync(world, "{\"manifest_id\":42}");
 
@@ -130,7 +131,7 @@ public sealed class RunCreationQaExtraTests
     [Fact]
     public async Task QaExtra_ManifestIdNotAGuid_422_AtPath()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await SendRawAsync(world, "{\"manifest_id\":\"not-a-guid\"}");
 
@@ -142,7 +143,7 @@ public sealed class RunCreationQaExtraTests
     [Fact]
     public async Task QaExtra_ReleaseNumber_422_AtReleasePath()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await SendRawAsync(world, Body(world.ManifestId, ",\"release\":7"));
 
@@ -155,7 +156,7 @@ public sealed class RunCreationQaExtraTests
     [Fact]
     public async Task QaExtra_EmptyRelease_422_RequestInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await SendRawAsync(world, Body(world.ManifestId, ",\"release\":\"\""));
 
@@ -172,7 +173,7 @@ public sealed class RunCreationQaExtraTests
     {
         // 128 code points = 256 UTF-16 units. Counted as code points it is in range, so the syntactic check passes and
         // AC10 answers release_unresolvable. Counted in UTF-16 it would wrongly be request_invalid.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await SendRawAsync(world, Body(world.ManifestId, ",\"release\":\"" + Astral(128) + "\""));
 
@@ -184,7 +185,7 @@ public sealed class RunCreationQaExtraTests
     [Fact]
     public async Task QaExtra_Release129AstralRunes_422_RequestInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await SendRawAsync(world, Body(world.ManifestId, ",\"release\":\"" + Astral(129) + "\""));
 
@@ -199,7 +200,7 @@ public sealed class RunCreationQaExtraTests
     [Fact]
     public async Task QaExtra_NulInComponents_422_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await SendRawAsync(world, Body(world.ManifestId, ",\"components\":{\"a\":\"x\\u0000y\"}"));
 
@@ -211,7 +212,7 @@ public sealed class RunCreationQaExtraTests
     [Fact]
     public async Task QaExtra_LoneSurrogateInComponents_422_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await SendRawAsync(world, Body(world.ManifestId, ",\"components\":{\"a\":\"x\\ud800y\"}"));
 
@@ -226,7 +227,7 @@ public sealed class RunCreationQaExtraTests
     public async Task QaExtra_ComponentsOneByteOver8KiB_422_NoRows()
     {
         // Raw serialised form is 11 bytes of framing plus the payload: 8182 + 11 = 8193 bytes, one over the cap.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var blob = new string('x', 8182);
 
         var answer = await SendRawAsync(world, Body(world.ManifestId, ",\"components\":{\"blob\":\"" + blob + "\"}"));
@@ -241,7 +242,7 @@ public sealed class RunCreationQaExtraTests
     {
         // 8192 bytes exactly is the largest accepted object. This is a success-path case, so it depends on the run
         // INSERT path and is expected to fail while the array-write defect (D1) is present.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var blob = new string('x', 8181);
 
         var answer = await SendRawAsync(world, Body(world.ManifestId, ",\"components\":{\"blob\":\"" + blob + "\"}"));
@@ -252,7 +253,7 @@ public sealed class RunCreationQaExtraTests
     [Fact]
     public async Task QaExtra_BodyOver64KiB_413_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var blob = new string('x', 70 * 1024);
 
         var answer = await SendRawAsync(world, Body(world.ManifestId, ",\"components\":{\"blob\":\"" + blob + "\"}"));
@@ -267,7 +268,7 @@ public sealed class RunCreationQaExtraTests
     public async Task QaExtra_ManifestOfSiblingProject_404_NoRows()
     {
         // Same org, different project: the manifest belongs to project A, so a request on project B must be a 404.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, "sibling");
 
         var answer = await SendRawAsync(world, Body(world.ManifestId), project: sibling);
@@ -284,7 +285,7 @@ public sealed class RunCreationQaExtraTests
     {
         // Two creates from the same manifest are two runs, not an error: both return 201 with distinct ids, and each
         // run has its own planned executions. Expected to fail while the array-write defect (D1) is present.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answers = await Task.WhenAll(
             SendRawAsync(world, Body(world.ManifestId)),

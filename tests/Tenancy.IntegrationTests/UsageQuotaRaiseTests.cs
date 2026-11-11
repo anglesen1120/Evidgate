@@ -23,15 +23,16 @@ namespace Tenancy.IntegrationTests;
 /// move a limit under the usage a period already holds.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class UsageQuotaRaiseTests
+public sealed partial class UsageQuotaRaiseTests : IClassFixture<TenancyHostPool>
 {
     private const string Period = "2026-10";
     private const string Action = "usage.quota_raise";
     private const string Reason = "pilot extension for the onboarding week";
 
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public UsageQuotaRaiseTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public UsageQuotaRaiseTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private static RaiseQuotaLimit Raise(
         UsageQuotaWorld world,
@@ -77,7 +78,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_BlockedScope_RaisesAndClearsBlock_WritesOneAuditRow()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         var warnedAt = new DateTimeOffset(2026, 10, 11, 8, 0, 0, TimeSpan.Zero);
         var counterId = await SeedAsync(world, used: 10m, limit: 10m, warnedAt: warnedAt, blockedAt: warnedAt);
 
@@ -107,7 +108,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_NoCounter_CreatesRowWithZeroUsed()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         (await world.CounterCountAsync()).ShouldBe(0L);
 
         var raised = await SendAsync(world, Raise(world, 15m));
@@ -126,7 +127,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_BelowOrEqualCurrentLimit_422()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 10m, limit: 20m);
 
         var equal = await SendAsync(world, Raise(world, 20m));
@@ -145,7 +146,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_MissingReason_422()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         var refused = await SendAsync(world, Raise(world, 20m, reason: "   "));
 
@@ -159,7 +160,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_ReasonOfSupplementaryCharacters_422Not500()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 10m, limit: 20m);
 
         // 129 supplementary characters are 129 runes but 258 UTF-16 units: the command's own rune cap passes them and
@@ -190,7 +191,7 @@ public sealed partial class UsageQuotaRaiseTests
     [InlineData("token=abcdef")]
     public async Task RaiseQuotaLimit_UnreadableOrCredentialShapedReason_422(string reason)
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 10m, limit: 20m);
 
         var refused = await SendAsync(world, Raise(world, 30m, reason: reason));
@@ -208,7 +209,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_ValidReason_KeptTrimmedInTheAuditRow()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted, hosts: _hosts);
 
         var answer = await world.PostRaiseAsync(new
         {
@@ -232,7 +233,7 @@ public sealed partial class UsageQuotaRaiseTests
     [InlineData("9999-12")]
     public async Task RaiseQuotaLimit_PeriodOutsideSupportedYears_422(string period)
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         var refused = await SendAsync(world, Raise(world, 20m, period: period));
 
@@ -247,12 +248,12 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_WithoutBillingWrite_Refused()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 5m, limit: 10m);
 
         // `billing:write` is staff-only, so no tenant role holds it: the founder's real evaluator refuses the
         // dispatch, and the same plain member on the permissive host is the positive control.
-        await using var evaluator = TenancyApiFactory.RealEvaluator(_fixture.AppConnectionString(world.Database));
+        await using var evaluator = _hosts.RealEvaluator(world.Database);
         var refused = await SendAsync(world, Raise(world, 20m), host: evaluator, member: world.User);
 
         refused.Error.ShouldNotBeNull().Code.ShouldBe("forbidden");
@@ -269,7 +270,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_OperatorRoute_RaisesAndAuditsTheOperator()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted, hosts: _hosts);
         var counterId = await SeedAsync(world, used: 10m, limit: 10m, blockedAt: DateTimeOffset.UnixEpoch);
 
         var answer = await world.PostRaiseAsync(new
@@ -301,7 +302,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_OperatorRoute_NonOperatorRefused()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Refused);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Refused, hosts: _hosts);
         await SeedAsync(world, used: 10m, limit: 10m);
 
         // The gate answers before the body is read, so even a body that is not JSON is a 403 for this caller: a
@@ -329,7 +330,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_OperatorRoute_AnonymousMalformedBody_401()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 10m, limit: 10m);
 
         var malformed = await world.Client.SendRawAsync(
@@ -345,7 +346,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_ForOrgX_CannotTouchOrgYCounter()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted, hosts: _hosts);
         var (otherOrg, otherProject) = await world.AddOtherOrgAsync();
         await SeedAsync(world, used: 10m, limit: 10m);
         await world.SeedCounterAsync(new CounterSeed(
@@ -386,7 +387,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_UnknownOrForeignProject_404Indistinguishable()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted, hosts: _hosts);
         var (_, otherProject) = await world.AddOtherOrgAsync();
         await SeedAsync(world, used: 10m, limit: 20m);
 
@@ -425,7 +426,7 @@ public sealed partial class UsageQuotaRaiseTests
     [Fact]
     public async Task RaiseQuotaLimit_RacingACheck_LeavesUsedWithinNewLimit()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, OperatorGateMode.Permitted, hosts: _hosts);
         await SeedAsync(world, used: 10m, limit: 10m, blockedAt: DateTimeOffset.UnixEpoch);
 
         var checks = Enumerable.Range(0, 20)

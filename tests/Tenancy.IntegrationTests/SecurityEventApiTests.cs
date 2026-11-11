@@ -26,11 +26,11 @@ namespace Tenancy.IntegrationTests;
 /// — .NET compares a Guid field-wise, so the two orders disagree for real ids.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class SecurityEventApiTests
+public sealed class SecurityEventApiTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
-
-    public SecurityEventApiTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public SecurityEventApiTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     /// <summary>One seeded row; every field the API does not default is named here.</summary>
     private sealed record Seed(
@@ -48,7 +48,7 @@ public sealed class SecurityEventApiTests
     public async Task Page_Keyset_TwoPages_NoDuplicateNoGap_AndTiesKeepOrder()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -99,7 +99,7 @@ public sealed class SecurityEventApiTests
     public async Task Filters_NarrowAlone_AndCombined()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -146,7 +146,7 @@ public sealed class SecurityEventApiTests
     public async Task FromIsInclusive_AndToIsExclusive()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -184,7 +184,7 @@ public sealed class SecurityEventApiTests
     public async Task Limit_DefaultsTo50_Accepts200_AndRefusesZeroAnd201()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -234,7 +234,7 @@ public sealed class SecurityEventApiTests
     public async Task BadInput_Is422RequestInvalid_WithDetailsPath(string query, string path)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -255,7 +255,7 @@ public sealed class SecurityEventApiTests
     public async Task CursorMintedByAnotherOrg_ReturnsNoForeignRows()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var mineUser = Guid.CreateVersion7();
         var mine = await CreateOrgAsync(client, mineUser, Unique.Slug("acme"));
@@ -323,7 +323,7 @@ public sealed class SecurityEventApiTests
     public async Task MemberWithoutPermission_Is403_AndTenantAdminIs200()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var founder = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, founder, Unique.Slug("acme"));
@@ -355,7 +355,7 @@ public sealed class SecurityEventApiTests
     public async Task ForeignOrgInPath_IsRefused_AndNeverLeaksItsRows()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var mineUser = Guid.CreateVersion7();
         var mine = await CreateOrgAsync(client, mineUser, Unique.Slug("acme"));
@@ -390,7 +390,7 @@ public sealed class SecurityEventApiTests
         Guid org;
         Guid project;
 
-        await using (var setup = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database)))
+        await using (var setup = _hosts.RealResolver(database))
         {
             using var setupClient = setup.CreateClient();
             org = await CreateOrgAsync(setupClient, user, Unique.Slug("acme"));
@@ -398,8 +398,8 @@ public sealed class SecurityEventApiTests
         }
 
         var other = Guid.CreateVersion7();
-        await using var api = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database),
+        await using var api = _hosts.WithPrincipal(
+            database,
             org,
             project,
             RequestPrincipal.Member(user, "acme@example.test"));
@@ -416,7 +416,7 @@ public sealed class SecurityEventApiTests
     public async Task UnknownProjectFilter_IsEmptyPage()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -437,7 +437,7 @@ public sealed class SecurityEventApiTests
     public async Task Response_CarriesOnlyTheEightItemFields()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -488,7 +488,7 @@ public sealed class SecurityEventApiTests
     public async Task ToBeforeFrom_IsAnEmptyPage()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -521,7 +521,7 @@ public sealed class SecurityEventApiTests
     public async Task PageExactlyEqualToLimit_AnswersNullCursor()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -559,7 +559,7 @@ public sealed class SecurityEventApiTests
     public async Task NonUuidOrgInPath_IsTheFramework400()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
 
         var answer = await client.SendAsync(
@@ -579,7 +579,7 @@ public sealed class SecurityEventApiTests
     public async Task CursorReusedAfterChangingAFilter_AnswersNoErrorAndNoForeignRows()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

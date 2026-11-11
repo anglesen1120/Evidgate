@@ -102,10 +102,11 @@ internal sealed class IngestTestWorld : IAsyncDisposable
         IReadOnlyList<(int Parent, int Child)>? edges = null,
         Action<IServiceCollection>? services = null,
         IReadOnlyDictionary<string, string?>? configuration = null,
-        string? database = null)
+        string? database = null,
+        TenancyHostPool? hosts = null)
     {
         database ??= await fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
+        var api = hosts?.RealResolver(database) ?? TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         Guid user;
         Guid org;
         Guid project;
@@ -123,8 +124,10 @@ internal sealed class IngestTestWorld : IAsyncDisposable
             ? RequestPrincipal.Service(project, unscoped.ClaimedPermissions, unscoped.CredentialId, unscoped.CiRun)
             : principal;
 
-        var host = TenancyApiFactory.WithPrincipal(
-            fixture.AppConnectionString(database), org, project, principal, configuration, services);
+        var host = hosts is null
+            ? TenancyApiFactory.WithPrincipal(
+                fixture.AppConnectionString(database), org, project, principal, configuration, services)
+            : hosts.WithPrincipal(database, org, project, principal, configuration, services);
 
         try
         {
