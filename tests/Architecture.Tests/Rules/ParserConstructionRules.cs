@@ -44,6 +44,22 @@ public static class ParserConstructionRules
         "new ParsedXmlReport(",
     ];
 
+    /// <summary>
+    /// The one reviewed trusted-XML site (the named-file pattern of <see cref="ParserChildEntryPoint"/>): the Data
+    /// Protection key repository stores an <c>IXmlRepository</c> element as the <c>key_xml</c> text its own
+    /// <c>StoreElement</c> wrote, through the <c>evidgate_resolve</c> definers the app role alone may execute, and
+    /// the framework requires the <c>XElement</c> back — the same text round trip the framework's own EF Core key
+    /// store makes. Only the construct below is allowed there; every other reader in that file still fails.
+    /// </summary>
+    public const string TrustedKeyXmlRepository =
+        "src/Modules/Evidgate.Modules.Identity/Login/DataProtectionKeyRepository.cs";
+
+    /// <summary>The only construct of <see cref="RepositoryWideConstructs"/> the trusted key repository may use.</summary>
+    public static readonly IReadOnlyList<string> TrustedKeyXmlRepositoryConstructs =
+    [
+        "XElement.Parse(",
+    ];
+
     /// <summary>The module that owns artifacts: inside it, the JSON reader is the profile's too.</summary>
     public const string ArtifactModuleDirectory = "src/Modules/Evidgate.Modules.Evidence/";
 
@@ -688,6 +704,11 @@ public static class ParserConstructionRules
 
             foreach (var construct in RepositoryWideConstructs)
             {
+                if (IsTrustedKeyXmlRepositoryConstruct(path, construct))
+                {
+                    continue;
+                }
+
                 if (ContainsParse(text, construct))
                 {
                     violations.Add(
@@ -715,4 +736,15 @@ public static class ParserConstructionRules
 
         return violations;
     }
+
+    /// <summary>
+    /// True for the one reviewed trusted-XML site, and only for the constructs it is listed with: the Data Protection
+    /// repository reads back the text its own <c>StoreElement</c> wrote, and every other reader, in that file or
+    /// anywhere else, stays a violation.
+    /// </summary>
+    /// <param name="path">The repository-relative source path.</param>
+    /// <param name="construct">The construct under test.</param>
+    private static bool IsTrustedKeyXmlRepositoryConstruct(string path, string construct) =>
+        string.Equals(path, TrustedKeyXmlRepository, StringComparison.Ordinal)
+        && TrustedKeyXmlRepositoryConstructs.Contains(construct, StringComparer.Ordinal);
 }
