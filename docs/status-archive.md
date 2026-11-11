@@ -356,3 +356,143 @@ AGENTS.md:
 - Landed on `develop` (through #648, `f317114b`; recount S317 with the S189 method from the merged PRs after #612, STATUS §2 and §1 Resume): 236 of 660 planned tasks = 237.0 of 706.75 raw person-days (≈35.8 % of tasks, ≈33.5 % of effort); 424 tasks / 469.75 d remain. 31 parent tasks are partial and carry no credit (list in STATUS §2).
 - Delivered modules (S173-S314 additions after the S189 list): catalog case/suite identity and revisions (03.1.1/03.1.3/03.2.1, taxonomy 03.1.4-T1, fixture revisions 03.3.1-T1), runs manifest upload (05.1.1), the run reconciler with evidence revisions and the freeze seam (05.3.2-T1/T2/T5), run cancel (05.4.1-T1–T3) and release tables with digest binding (05.6.1-T1/T2), evidence upload + safe parsing (06.1/06.3.1–06.3.2), artifact sensitivity (06.2.1-T1), async secret scan (06.2.3-T1), retention policy (06.4.1-T1), the pytest/JUnit report path (04.4.1-T1/T3–T6), policy revisions and waiver/quarantine lifecycles (07.1.1/07.3.1), the evaluator core and handler (07.2.1, 07.2.2-T1/T3/T4), the run decision route (07.5.2-T1) and the CLI `gate` command with spool (07.6.1-T2), the usage ledger, price table, roll-up, quota gate and summary read (12.3.1-T1/T3–T6, 04.8.1-T1, 04.1.2-T1), sessions with list/revoke/revoke-all/logout, the admin end-all-sessions route and the cleanup sweep (02.3.2-T1/T2/T3), member removal guard (02.1.2-T3), project API tokens (02.4.4-T1), the definer review (11.2.1-T7), and the Angular 22 web app with scaffold, app shell, shared state components, generated-SDK data layer, run detail timeline (09.3.1-T2), quota and retention settings (09.7.1-T5/T11), API tokens screen (09.7.2-T1) and a11y/i18n QA (09.8.1-T2/T4).
 - Migrations `0001`–`0087` are contiguous; highest is `0087_usage_ledger_issued_period_guard.sql`, the next free number is `0088`.
+
+## STATUS replaced text (S369, 2026-11-11)
+
+Moved verbatim from STATUS.md (line 3, §1 Resume lines, §2 intro, delivery-scope, phase, area and partial-parent rows, the S299 paragraph and partial-table note, four §5 rows) and from AGENTS.md Current state bullets (heading date, landed counts, Delivered modules, migrations) when the S369 recount through #751 (`41edd414`) replaced them. Each block names its origin.
+
+STATUS.md line 3:
+
+Updated 2026-11-09. Source of truth for tasks: `plans/01`–`13` and `plans/features/`; this file tracks execution only. Task ids and sizes come from `scripts/plan_graph.py`.
+
+STATUS.md §1 Resume develop line:
+
+- Develop: `fe750819` (#689, S334 purge lease guard; recount base). Migrations `0001`–`0089` are contiguous; highest is `0089_identity_ci_token_purge_acl.sql`, next free `0090` (reserved by the open S336); 08.5.1-T1.1/T1.2 merged (#306), T1 stays partial (T1.3–T1.7 open). Closed owner-review rows live in `docs/phase-review-archive.md` (a row moves there verbatim in the commit that closes it).
+
+STATUS.md §1 Resume open PRs:
+
+- Open PRs: dependabot PRs only (not lanes); the S336 and S337 lanes are in flight and S337 opens its PR on this recount.
+
+STATUS.md §1 Resume lanes line:
+
+- Lanes in flight (2026-11-09): S336 SESSION-REVOKE-HELPER, S337 STATUS-RECOUNT (this recount); earlier lanes are merged and closed out. S360 STALE-EPOCH landed 04.1.2-T2 (#736, no migration); counts not recomputed for it. S358 ARTIFACT-STATE-GUARD landed 06.1.3-T1 (#729, migration 0095); the counts below are not recomputed for it. S356 FORK-PR-FIXTURE landed 11.2.1-T2 (#726); counts not recomputed for it. S357 METRICS-CATALOGUE landed 10.3.1-T3 (#732, no migration); counts not recomputed for it. S367 HEALING-PROVIDER fixed review row CR-20 (#750, merge d9c2304f, no migration, no task credit: provider from config, gateway switch and budget guards, Apply-off clamp); counts not recomputed for it.
+
+STATUS.md §1 Resume fully-landed line:
+
+- Fully landed on develop (recount S337 through #689, `fe750819`): 236/660 tasks (≈35.8 %); 237.0/706.75 raw person-days (≈33.5 %); remaining 424 tasks / 469.75 d. Via merged PRs: 209 tasks / 212.0 d; the other 27 tasks / 25.0 d are direct commits on develop. Method (unchanged from S189): task ranges in merged PR bodies, close-out rows and plan Notes expanded against plan_graph task ids; a parent counts only when all its sub-rows landed. The S299 recount of #612 gave 234 / 236.0, #617 (11.2.1-T7) made it 235 / 236.5, and the S317 recount added 02.3.2-T3 (#628) for 236 / 237.0. The S337 recount adds 0 tasks / 0 d after it: the feature PRs #650–#689 (S315–S335 and S334 lanes) are hardening, tests, gate, perf and docs without a task credit, and the only plan task they name is 09.5.2-T3.1 (#684), which leaves its parent 09.5.2-T3 partial (T3.2 open); the S189 base of 201 / 205.0 is unchanged. 32 parents are partial and carry no credit (§2). The S337 count-log carried row is appended at close-out; the recount script output is in the PR body.
+
+STATUS.md §1 Resume phase line:
+
+- Landed by phase (done tasks / raw d): G1 152 / 159.25; G2 67 / 61.5; G3 5 / 4.5; G4 12 / 11.75.
+
+STATUS.md §1 Resume plan totals line:
+
+- Plan totals: 660 tasks / 706.75 raw / 848.1 buffered person-days (`plan_graph.py` on `fe750819`: errors 0, 205 stories; 04.2.2-T3 manifest generator added in S186, M; the S93 canonical figures were 655 / 702.75 / 843.3). `check_features.py` still exits 1 (8 missing 13.x feature plans, 13.5.1 to 13.9.1; queue F37).
+
+STATUS.md §2 intro:
+
+Counted by expanding task ranges in merged PR bodies, close-out rows and plan Notes against plan_graph task ids (S337 recount through #689, `fe750819`, method unchanged from S189; the S317 recount covered #648 and the S299 recount #612); a parent task counts only when every defined sub-row has landed on develop; sizes XS .25 S .5 M 1 L 2 XL 3. detail: carried rows 'STATUS §2 count log S112-S128' (S144 F61), 'STATUS §2 count log S299' and 'STATUS §2 count log S317'.
+
+STATUS.md §2 delivery table row:
+
+| Fully landed on develop | 236 | 237.0 |
+
+STATUS.md §2 delivery table row:
+
+| Via merged PRs | 209 | 212.0 |
+
+STATUS.md §2 delivery table row:
+
+| Remaining | 424 | 469.75 |
+
+STATUS.md §2 S299 paragraph:
+
+The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none removed); 11.2.1-T7 (#617) made it 235 / 236.5, and the S317 recount adds 02.3.2-T3 (G1, S, #628, one sub-row T3.1; Area 02 below) for 236 / 237.0; the S337 recount adds none (no task landed in full after #648). The per-phase and per-area splits below are carried from the S317 tables because no credit changed: the S337 script reproduces the totals and the G1/G4 splits from the task ids named in this file, but not G2/G3 (68 / 62.5 and 4 / 3.5 against 67 / 61.5 and 5 / 4.5) nor areas 09 and 11 (one M task each), because this file does not name every credited id. Parents credited by the S299 recount:
+
+STATUS.md §2 phase row:
+
+| G1 | 152 | 3 | 41 | 79 | 28 | 1 | 159.25 |
+
+STATUS.md §2 phase row:
+
+| G2 | 67 | 0 | 23 | 38 | 6 | 0 | 61.5 |
+
+STATUS.md §2 total row:
+
+| TOTAL | 236 | 4 | 70 | 124 | 37 | 1 | 237.0 |
+
+STATUS.md §2 total row:
+
+| TOTAL | 236 | 4 | 70 | 124 | 37 | 1 | 237.0 |
+
+STATUS.md §2 area row:
+
+| 04 | 29 | 0 | 9 | 16 | 4 | 0 | 28.5 |
+
+STATUS.md §2 area row:
+
+| 06 | 15 | 0 | 5 | 10 | 0 | 0 | 12.5 |
+
+STATUS.md §2 area row:
+
+| 09 | 31 | 0 | 9 | 16 | 6 | 0 | 32.5 |
+
+STATUS.md §2 area row:
+
+| 10 | 5 | 0 | 2 | 2 | 1 | 0 | 5 |
+
+STATUS.md §2 area row:
+
+| 11 | 13 | 1 | 6 | 5 | 1 | 0 | 10.25 |
+
+STATUS.md §2 partial row:
+
+| 09.3.1-T6 | T6.1, T6.2 | #568, #642 (producer slot facts served by `GET /v1/runs/{r}`; the web wiring of `ProducerStatusTable` landed in #703 (9b0738c8); open slots show their count since #715) |
+
+STATUS.md §2 partial row:
+
+| 10.3.2-T1 | none (T1.2 landed by S348, #713, 1c021d7b; credit at the next recount) | #465, #713; 10.3.1-T2 landed by S352 (#722, dbcba3e2, dev profile only, credit at the next recount); 10.3.1-T3 landed by S357 (#732, credit at the next recount) |
+
+STATUS.md §2 partial-table note:
+
+The 31 partial parents above plus 09.5.2-T3 (T3.2 open; T3.1 landed in #684) make 32; they are excluded from done counts and dependency satisfaction; their landed subrows and remainder are recorded in the delivery table and in §5. 09.5.2-T3 has no row in the table above because a row insert would shift every STATUS.md:N cite below. This table replaces the S189 partial list: 01.8.1-T3 and 09.8.1-T1 stay credited from the S189 recount on their sub-row done-whens (their delivery rows and §5 rows were not pruned then, recorded gap), 09.3.1-T2 is now credited (T2.3 #572, T2.4 #583), and 09.1.1-T6 still waits on its T6.2. Plan-only changes and queue rows add no task credit. Tasks cells list exactly the ids in the delivery evidence; the pre-S93 table also claimed `03.1.1-T3` and `03.1.3-T2/T3`, which have no landed delivery and were removed.
+
+STATUS.md §5 row:
+
+| 04.1.2-T2 | S | LANDED (S360, #736, merge 7e610275, no migration, no contract change): the batch insert marks `stale = true` when `event.epoch` differs from `run.ci_run_ref` `run_attempt` (V1, D-S360-Q1), `stale_epoch` once per closed shard in reconciler `missing[]`; V2 lease-epoch seam in the plan Notes; credit at the next recount | yes | no | no | n/a | yes |
+
+STATUS.md §5 row:
+
+| 06.1.3-T1 | S | LANDED (S358, #729, merge 584946d3, migration 0095): `artifact_guard_transition_trg` allow-list trigger, `ArtifactState` domain guard shared with the SQL list, `complete` maps a refused move to 409 `artifact_state_conflict`; `ready → rejected` kept as the parse-verdict edge (00 §8.4 amended, 00 §15 row 2026-11-10); `rejected` and `deleted` terminal. Open items: carried rows titled `(S358)`. Not yet counted in the §1 recount. |
+
+STATUS.md §5 row:
+
+| 10.3.2-T1 | S | ADR: observability backend for M1 with retention and cost limits, plus the compose profile; unblocks 10.3.1-T2 (T1 merged in #203); T1.1 landed (ADR-0012, #465, 9e81d0ec), T1.2 LANDED by S348 (#713, 1c021d7b, no migration): opt-in compose profile `observability` (collector, Prometheus, VictoriaLogs, VictoriaTraces), `scripts/dev/up.sh --observability`, `observability-smoke.sh`; both subrows landed, so the parent is complete and credited by the next recount; open items are carried rows titled `(S348)` | yes | no | no | n/a | no — landed |
+
+STATUS.md §5 row:
+
+| 09.3.1-T6 | M | Producer/shard view: finalize status, `last_sequence`, count vs expected, stale epochs, late events. PARTIAL, S276 #568 96b4a263: `ProducerStatusTable` (one row per declared slot, 200 rows per page), informational stale/after-cancel badges that never touch completeness, run-level `after_cancel_events` on the timeline; per-slot facts are served and wired (#703, 9b0738c8); an open slot shows its count (#715, 741a548e); a fact the server omits renders unavailable | no | no | no — consumes the 03.2.1 suite-composition/slot API that S97 is building (dependency, not a shared file) | n/a | yes |
+
+AGENTS.md Current state heading line:
+
+**Current state (2026-11-09).** Stack decided in DECISIONS CR-D-1 (§4). Task-level execution state lives in `STATUS.md` (§1 snapshot, §2 done, §5 ready next) and `docs/status-carried.md` (blocked / carried items, formerly STATUS §6), not here.
+
+AGENTS.md landed bullet:
+
+- Landed on `develop` (through #689, `fe750819`; recount S337 with the S189 method from the merged PRs after #648, STATUS §2 and §1 Resume; base 236 / 237.0 unchanged, no task landed in full since the S317 recount): 236 of 660 planned tasks = 237.0 of 706.75 raw person-days (≈35.8 % of tasks, ≈33.5 % of effort); 424 tasks / 469.75 d remain. 32 parent tasks are partial and carry no credit (list in STATUS §2).
+
+AGENTS.md phase bullet:
+
+- Landed by CR-D-2 phase (tasks / landed person-days, of the phase's planned raw): G1 152 / 159.25 of 283.75 · G2 67 / 61.5 of 197 · G3 5 / 4.5 of 106.75 · G4 12 / 11.75 of 119.25.
+
+AGENTS.md area bullet:
+
+- Landed by area plan (tasks / planned): 01 49/55 · 02 33/49 · 03 10/40 · 04 29/54 · 05 25/54 · 06 15/36 · 07 13/42 · 08 1/69 · 09 31/72 · 10 5/54 · 11 13/51 · 12 5/30 · 13 7/54.
+
+AGENTS.md Delivered modules bullet:
+
+- Delivered modules (S173-S335 additions after the S189 list): catalog case/suite identity and revisions (03.1.1/03.1.3/03.2.1, taxonomy 03.1.4-T1, fixture revisions 03.3.1-T1), runs manifest upload (05.1.1), the run reconciler with evidence revisions and the freeze seam (05.3.2-T1/T2/T5), run cancel (05.4.1-T1–T3) and release tables with digest binding (05.6.1-T1/T2), evidence upload + safe parsing (06.1/06.3.1–06.3.2), artifact sensitivity (06.2.1-T1), async secret scan (06.2.3-T1), retention policy (06.4.1-T1), the pytest/JUnit report path (04.4.1-T1/T3–T6), policy revisions and waiver/quarantine lifecycles (07.1.1/07.3.1), the evaluator core and handler (07.2.1, 07.2.2-T1/T3/T4), the run decision route (07.5.2-T1) and the CLI `gate` command with spool (07.6.1-T2), the usage ledger, price table, roll-up, quota gate and summary read (12.3.1-T1/T3–T6, 04.8.1-T1, 04.1.2-T1), sessions with list/revoke/revoke-all/logout, the admin end-all-sessions route and the cleanup sweep (02.3.2-T1/T2/T3), member removal guard (02.1.2-T3), project API tokens (02.4.4-T1), the definer review (11.2.1-T7), and the Angular 22 web app with scaffold, app shell, shared state components, generated-SDK data layer, run detail timeline (09.3.1-T2), quota and retention settings (09.7.1-T5/T11), API tokens screen (09.7.2-T1) a11y/i18n QA (09.8.1-T2/T4) and the healing availability page with per-scope switch controls (09.5.2-T3.1, a partial parent, uncounted).
+
+AGENTS.md migrations bullet:
+
+- Migrations `0001`–`0089` are contiguous; highest is `0089_identity_ci_token_purge_acl.sql`, the next free number is `0090` (reserved by the open S336).
