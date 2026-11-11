@@ -48,7 +48,7 @@ internal sealed class UsageContracts(
 
         if (request.Entries.Count == 0)
         {
-            return new UsageBatchResult([], []);
+            return new UsageBatchResult([], [], []);
         }
 
         var batch = UsageBatchRules.Prepare(request.Entries);
@@ -69,6 +69,13 @@ internal sealed class UsageContracts(
         var write = await store
             .RecordBatchAsync(orgId, batch, cancellationToken)
             .ConfigureAwait(false);
+
+        // The store rolled the whole batch back on a conflict, so there is nothing to audit, meter or merge: the
+        // conflicting keys are the answer and the write is permanent, not a retryable failure.
+        if (write.Conflicts.Count > 0)
+        {
+            return new UsageBatchResult([], [], write.Conflicts);
+        }
 
         await redateAudit.RecordAsync(orgId, write.Redated, cancellationToken).ConfigureAwait(false);
 

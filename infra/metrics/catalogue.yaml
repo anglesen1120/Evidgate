@@ -153,6 +153,15 @@ entries:
     labels: [metric]
     source: src/Modules/Evidgate.Modules.Usage/Application/UsageMetering.cs
 
+  - id: usage_billing_key_conflict
+    instrument: evidgate_usage_billing_key_conflicts_total
+    meter: evidgate
+    kind: counter
+    unit: '{key}'
+    description: 'Billing keys whose usage-ledger payload conflicted, because a stored row holds another payload or the request repeated a key with a different payload. The batch is rolled back and nothing is billed, so this counts a refusal. Alert on any increase: a producer is reusing a billing key for new work and that usage is not being recorded.'
+    labels: []
+    source: src/Modules/Evidgate.Modules.Usage/Infrastructure/Persistence/UsageLedgerStore.cs
+
   # --- .NET runtime health (the built-in System.Runtime meter; .NET 9+ supplies these itself) --
   - id: gc_heap_size
     instrument: dotnet.gc.last_collection.heap.size

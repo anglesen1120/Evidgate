@@ -112,8 +112,8 @@ public sealed record UsageEntryInput(
     DateTimeOffset OccurredAt);
 
 /// <summary>
-/// One ledger row as recorded, read back by <see cref="IUsageLedger.FindAsync"/>: the content a later caller
-/// compares before it treats a duplicate billing key as its own replay. <c>occurred_at</c> is deliberately absent — a
+/// One ledger row as recorded, read back by <see cref="IUsageLedger.FindAsync"/>: the billable content the ledger holds
+/// for a key. <c>occurred_at</c> is deliberately absent — a
 /// meter that re-derives a batch's instant from a different clock still bills the same fact, so the instant is not part
 /// of the identity a replay must match.
 /// </summary>
@@ -128,7 +128,7 @@ public sealed record UsageEntryInput(
 /// </param>
 /// <param name="OriginalPeriod">
 /// The <c>YYYY-MM</c> period the row was metered for when the ledger re-dated it, or null when nothing moved. A
-/// replay compares it with the entry's own period, not with <paramref name="Period"/>.
+/// payload comparison uses it instead of <paramref name="Period"/>, because the move is not the payload's claim.
 /// </param>
 public sealed record UsageEntryRecord(
     string BillingKey,
@@ -154,16 +154,20 @@ public sealed record RecordUsageBatchRequest(
     IReadOnlyList<UsageEntryInput> Entries);
 
 /// <summary>
-/// What one batch recorded (12.3.1 §5): the billing keys of the rows this call inserted and the ones it did not,
-/// both in request order and never containing a key twice.
+/// What one batch recorded (12.3.1 §5): the billing keys of the rows this call inserted, the ones it did not, and the
+/// ones whose payload disagreed with the key, all in request order and never containing a key twice.
 /// </summary>
 /// <param name="Inserted">The billing keys of the rows inserted by this call.</param>
 /// <param name="Duplicates">
-/// The billing keys already on file (a resent metering event) or repeated inside the request. A key that is on file is a
-/// duplicate whatever its payload: the first write of a <c>(org_id, billing_key)</c> wins and the payload of a later
-/// call is ignored, never compared and never applied. Detecting a replay whose payload disagrees with the stored row is
-/// the reconciliation task's job (12.3.1-T5), not this write path's.
+/// The billing keys already on file with the same payload (a resent metering event) or repeated inside the request with
+/// the same payload. A duplicate is a verified replay: the stored row equals the one this call would have written.
+/// </param>
+/// <param name="Conflicts">
+/// The billing keys that already hold a different payload, or that the request itself repeated with a different
+/// payload. A conflict is permanent: the batch wrote nothing, the key is never rewritten, and retrying the same
+/// payload cannot succeed.
 /// </param>
 public sealed record UsageBatchResult(
     IReadOnlyList<string> Inserted,
-    IReadOnlyList<string> Duplicates);
+    IReadOnlyList<string> Duplicates,
+    IReadOnlyList<string> Conflicts);

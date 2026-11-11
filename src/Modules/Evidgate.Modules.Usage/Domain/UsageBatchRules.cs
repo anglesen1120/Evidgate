@@ -99,9 +99,10 @@ internal static class UsageBatchRules
     /// <summary>
     /// Turns a validated batch into the rows to insert. The first occurrence of a billing key wins — a repeat inside the
     /// same request is reported as a duplicate and never reaches the statement — so the insert never carries the same
-    /// <c>(org_id, billing_key)</c> twice and the duplicates of a response are decided by request order alone. Identities
-    /// are minted here (UUIDv7), once per row, so a retried call keeps the ordering properties of the ledger without reading
-    /// anything back.
+    /// <c>(org_id, billing_key)</c> twice and the duplicates of a response are decided by request order alone. A repeat
+    /// whose payload hashes differently is a conflict, not a duplicate: one key cannot claim two payloads. Identities
+    /// are minted here (UUIDv7), once per row, so a retried call keeps the ordering properties of the ledger without
+    /// reading anything back.
     /// </summary>
     /// <param name="entries">The entries of a batch that passed <see cref="Validate"/>.</param>
     internal static UsageBatch Prepare(IReadOnlyList<UsageEntryInput> entries)
@@ -111,10 +112,17 @@ internal static class UsageBatchRules
         var rows = new List<PendingUsageEntry>(entries.Count);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var repeated = new HashSet<string>(StringComparer.Ordinal);
+        var firstHashes = new Dictionary<string, string>(StringComparer.Ordinal);
+        var conflictingHashes = new Dictionary<string, string>(StringComparer.Ordinal);
         List<string>? repeatedKeys = null;
+        List<string>? conflictingKeys = null;
 
         foreach (var entry in entries)
         {
+            var metric = UsageMetricWire.ToWireValue(entry.Metric);
+            var payloadHash = UsagePayloadHash.Compute(
+                metric, entry.ProjectId, entry.Quantity, entry.Unit, entry.Period);
+
             if (!seen.Add(entry.BillingKey))
             {
                 if (repeated.Add(entry.BillingKey))
@@ -122,33 +130,49 @@ internal static class UsageBatchRules
                     (repeatedKeys ??= []).Add(entry.BillingKey);
                 }
 
+                if (!string.Equals(firstHashes[entry.BillingKey], payloadHash, StringComparison.Ordinal)
+                    && conflictingHashes.TryAdd(entry.BillingKey, payloadHash))
+                {
+                    (conflictingKeys ??= []).Add(entry.BillingKey);
+                }
+
                 continue;
             }
 
+            firstHashes[entry.BillingKey] = payloadHash;
             rows.Add(new PendingUsageEntry(
                 Guid.CreateVersion7(),
                 entry.ProjectId,
-                UsageMetricWire.ToWireValue(entry.Metric),
+                metric,
                 entry.Quantity,
                 entry.Unit,
                 entry.Period,
                 entry.BillingKey,
-                entry.OccurredAt));
+                entry.OccurredAt,
+                payloadHash));
         }
 
-        return new UsageBatch(rows, repeatedKeys ?? []);
+        return new UsageBatch(
+            rows,
+            repeatedKeys ?? [],
+            conflictingKeys ?? [],
+            conflictingHashes);
     }
 }
 
 /// <summary>
-/// A validated batch ready for the one insert: the rows to write (one per distinct billing key, in request order) and the
-/// billing keys the request repeated, also in request order.
+/// A validated batch ready for the one insert: the rows to write (one per distinct billing key, in request order), the
+/// billing keys the request repeated, and the repeats whose payload differs from their key's first occurrence.
 /// </summary>
 /// <param name="Rows">The rows this batch will insert; empty when every entry repeated an earlier key.</param>
 /// <param name="RepeatedBillingKeys">The distinct billing keys the request repeated.</param>
+/// <param name="ConflictingBillingKeys">The repeated keys whose repeated entry hashes differently from the first one.</param>
+/// <param name="ConflictingPayloadHashes">The differing payload hash of each conflicting repeat, by billing key.</param>
 internal sealed record UsageBatch(
     IReadOnlyList<PendingUsageEntry> Rows,
-    IReadOnlyList<string> RepeatedBillingKeys)
+    IReadOnlyList<string> RepeatedBillingKeys,
+    IReadOnlyList<string> ConflictingBillingKeys,
+    IReadOnlyDictionary<string, string> ConflictingPayloadHashes)
 {
     /// <summary>
     /// The billing keys of this batch a caller must report as duplicates, in request order: a key the insert skipped

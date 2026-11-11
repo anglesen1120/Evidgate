@@ -305,8 +305,13 @@ counter carries the ledger's closed `metric` vocabulary; and Npgsql's `db.client
 `db.client.connection.pool.name`, which is a fixed pool name (`evidgate_app`,
 `evidgate_worker_sched`) — never a connection string.
 
-Counters describe committed work. Every counter in the catalogue is recorded after the
-transaction that causes it commits, so a rolled-back attempt contributes nothing, and the
+`evidgate_usage_billing_key_conflicts_total` carries no labels and counts billing keys a ledger batch refused because
+the key already claims another payload (or the request repeated it with a different payload). The batch is rolled
+back, nothing is billed, and the Error log names the key, the org, the project and the two digests. Alert on any
+increase: it means a producer is reusing a billing key for new work, and that usage is not being recorded.
+
+Counters describe committed work. Every counter in the catalogue other than the billing-key conflict counter is
+recorded after the transaction that causes it commits, so a rolled-back attempt contributes nothing, and the
 `incomplete` counter counts only a reconcile that settles the run: an append of late or
 reprocessed evidence writes a revision and adds no sample. Read a counter's rate against the
 same window as the denominator it divides into.

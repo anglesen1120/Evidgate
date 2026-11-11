@@ -203,6 +203,7 @@ internal sealed class MetricCatalogueHarness : IAsyncDisposable
             EvidgateTelemetry.RecordRunIncomplete();
             EvidgateTelemetry.RecordArtifactFailure("upload", "checksum_mismatch");
             EvidgateTelemetry.RecordUsageUnits("results", 1);
+            EvidgateTelemetry.RecordUsageBillingKeyConflict();
             EvidgateTelemetry.RecordEvaluationDecisionLatency(TimeSpan.FromMilliseconds(1));
 
             // The classes that own the remaining instruments create them in a static constructor.

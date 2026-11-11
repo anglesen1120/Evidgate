@@ -41,7 +41,8 @@ internal sealed record RecordUsageBatch(
 /// file changed nothing, so it describes no audit object and suppresses its row — the same no-op rule 13.1.1's import
 /// and 04.1.1's ingest use. A batch that inserted rows audits under the first inserted row's id with the row count.
 /// A row whose period is already issued is re-dated into the next open period and audited as a move; only a period
-/// with no open month after it answers a conflict, and then nothing is written.
+/// with no open month after it answers a conflict, and then nothing is written. A billing key that already holds a
+/// different payload answers a conflict too: the store rolls the whole batch back, and nothing is metered or audited.
 /// </para>
 /// </summary>
 [AuditedAction("usage.record_batch")]
@@ -57,6 +58,12 @@ internal sealed class RecordUsageBatchHandler(
     /// the request is malformed, there is simply no open period left to bill.
     /// </summary>
     internal const string NoOpenPeriodCode = "no_open_period";
+
+    /// <summary>
+    /// The conflict code of a batch whose billing key already holds a different payload: the key is a permanent
+    /// identity, so the batch wrote nothing and a retry of the same payload cannot succeed.
+    /// </summary>
+    internal const string BillingKeyConflictCode = "billing_key_conflict";
 
     /// <summary>Runs the batch.</summary>
     /// <param name="command">The command.</param>
@@ -79,7 +86,7 @@ internal sealed class RecordUsageBatchHandler(
         if (command.Entries.Count == 0)
         {
             audit.Suppress();
-            return Result.Success(new UsageBatchResult([], []));
+            return Result.Success(new UsageBatchResult([], [], []));
         }
 
         // (c) The tenant comes from the open scope only (00 §5.4 rule: never from the request).
@@ -113,6 +120,19 @@ internal sealed class RecordUsageBatchHandler(
         {
             // A failed Result writes no audit row: the stage records only a command that succeeds.
             return Result.Failure<UsageBatchResult>(Error.Conflict(NoOpenPeriodCode, refused.Message));
+        }
+
+        // A conflict is permanent and the store already rolled the whole batch back: nothing is billed, so the metering,
+        // the re-date audit and the command's own audit object must not run either.
+        if (write.Conflicts.Count > 0)
+        {
+            var billingKeys = write.Conflicts.Count == 1
+                ? "1 billing key"
+                : $"{write.Conflicts.Count.ToString(CultureInfo.InvariantCulture)} billing keys";
+
+            return Result.Failure<UsageBatchResult>(Error.Conflict(
+                BillingKeyConflictCode,
+                $"the usage batch has {billingKeys} already holding a different payload; the batch wrote nothing"));
         }
 
         var result = UsageBatchOutcome.Merge(batch, write.Inserted);
