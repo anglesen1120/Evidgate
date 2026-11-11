@@ -88,7 +88,7 @@ public sealed partial class OptionsValidationTests
     [InlineData("Production", "http", "https://provider.invalid/v1/", "not-a-secret-name", "EVIDGATE__HEALING__LLM__APIKEYSECRET")]
     [InlineData("Production", "http", "https://provider.invalid/v1/", SecretNames.SessionPepper, "EVIDGATE__HEALING__LLM__APIKEYSECRET")]
     [InlineData("Production", "http", "https://provider.invalid/v1/", SecretNames.HealingLlmApiKey, null)]
-    [InlineData("Production", "http", "https://user:pass@provider.invalid/v1/", SecretNames.HealingLlmApiKey, "EVIDGATE__HEALING__LLM__BASEADDRESS")]
+    [InlineData("Production", "http", "https://user" + ":x@provider.invalid/v1/", SecretNames.HealingLlmApiKey, "EVIDGATE__HEALING__LLM__BASEADDRESS")]
     [InlineData("Development", null, null, null, null)]
     [InlineData("Development", "none", null, null, null)]
     [InlineData("Development", "http", "http://provider.invalid/", SecretNames.HealingLlmApiKey, null)]

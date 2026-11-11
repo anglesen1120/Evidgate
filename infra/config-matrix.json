@@ -2953,7 +2953,7 @@
         "staging": "environment",
         "prod": "environment"
       },
-      "note": "the NAME of the secret that holds the healing provider's API key, never the key itself: start-up accepts only `EVIDGATE__HEALING__LLM__APIKEY` (declared `secret: true` in `SecretNames`), and a missing name or any other fails the boot naming this key without echoing a value. The value is never judged at boot: the adapter's request handler resolves the name through `ISecretProvider` on every call, so the key is stored nowhere and a name whose value is missing then fails that call as an `error` attempt row with no request sent. Required only when PROVIDER is `http`."
+      "note": "the NAME of the secret that holds the healing provider's API key, never the key itself: start-up accepts only `EVIDGATE__HEALING__LLM__APIKEY` (the name `SecretNames` declares for it), and a missing name or any other fails the boot naming this key without echoing a value. The value is never judged at boot: the adapter's request handler resolves the name through `ISecretProvider` on every call, so the key is stored nowhere and a name whose value is missing then fails that call as an `error` attempt row with no request sent. Required only when PROVIDER is `http`."
     },
     {
       "key": "EVIDGATE__HEALING__LLM__APIKEY",
