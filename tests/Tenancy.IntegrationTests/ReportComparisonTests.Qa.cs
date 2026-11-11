@@ -137,15 +137,15 @@ public sealed partial class ReportComparisonTests
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("comparison-sibling"));
         var viewer = await AddMemberAsync(_fixture, world.Database, world.Org, "viewer");
         var caller = TenancyApiFactory.Resolved(user: viewer, orgHeader: world.Org);
-        // Two principal hosts must be live at once, so both stay unpooled: the pool holds one host per variant.
-        await using var matchingHost = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(world.Database), world.Org, world.Project, RequestPrincipal.Member(viewer));
+        // Two principal hosts must be live at once: the pool lends its slot to the first and builds the second private.
+        await using var matchingHost = _hosts.WithPrincipal(
+            world.Database, world.Org, world.Project, RequestPrincipal.Member(viewer));
         using var matching = matchingHost.CreateClient();
         var allowed = await matching.SendAsync(HttpMethod.Get, ComparisonUrl(run, report.Id), caller);
         allowed.Status.ShouldBe(HttpStatusCode.OK, allowed.ErrorMessage);
         Cases(allowed).ShouldHaveSingleItem();
-        await using var siblingHost = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(world.Database), world.Org, sibling, RequestPrincipal.Member(viewer));
+        await using var siblingHost = _hosts.WithPrincipal(
+            world.Database, world.Org, sibling, RequestPrincipal.Member(viewer));
         using var narrowed = siblingHost.CreateClient();
 
         var denied = await narrowed.SendAsync(HttpMethod.Get, ComparisonUrl(run, report.Id), caller);
