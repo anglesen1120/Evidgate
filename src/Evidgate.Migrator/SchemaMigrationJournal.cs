@@ -81,7 +81,7 @@ internal sealed class SchemaMigrationJournal : IJournal
     {
         try
         {
-            using var connection = new NpgsqlConnection(_options.ConnectionString);
+            using var connection = new NpgsqlConnection(_options.SessionConnectionString);
             connection.Open();
             using var command = connection.CreateCommand();
             command.CommandTimeout = _options.CommandTimeoutSeconds;

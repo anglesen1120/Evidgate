@@ -170,7 +170,7 @@ public static class MigratorRunner
         var journal = new SchemaMigrationJournal(run.Options, checksums, timing, line => run.Emit(line));
 
         var engine = DeployChanges.To
-            .PostgresqlDatabase(run.Options.ConnectionString)
+            .PostgresqlDatabase(run.Options.SessionConnectionString)
             .WithExecutionTimeout(TimeSpan.FromSeconds(run.Options.CommandTimeoutSeconds))
             .WithVariablesDisabled()
             .WithScripts(plan.Pending.Select(script => new SqlScript(script.Name, script.Contents)))
@@ -187,7 +187,12 @@ public static class MigratorRunner
         {
             var failed = result.ErrorScript?.Name ?? "unknown script";
             run.Emit($"migration failed in {failed}: {log.Redact(result.Error?.Message)}");
-            if (IsCommandTimeout(result.Error))
+            var timeoutExit = ServerTimeout(result.Error);
+            if (timeoutExit is { } serverTimeout)
+            {
+                EmitServerTimeout(run, log, failed, serverTimeout, result.Error);
+            }
+            else if (IsCommandTimeout(result.Error))
             {
                 run.Emit(
                     $"{failed} exceeded the configured command timeout of {DescribeTimeout(run.Options.CommandTimeoutSeconds)} " +
@@ -195,7 +200,7 @@ public static class MigratorRunner
             }
 
             run.Emit("the failed script's transaction was rolled back and it was not journalled");
-            return run.Result(MigratorExitCodes.MigrationFailed, plan, appliedNow);
+            return run.Result(timeoutExit?.ExitCode ?? MigratorExitCodes.MigrationFailed, plan, appliedNow);
         }
 
         foreach (var name in appliedNow)
@@ -217,6 +222,48 @@ public static class MigratorRunner
             run.Emit($"drifted {drift.Name}: {reason}");
         }
     }
+
+    private const string LockNotAvailable = "55P03";
+    private const string QueryCanceled = "57014";
+
+    /// <summary>Finds a server-side lock or statement timeout in the failure chain.</summary>
+    private static ServerTimeoutKind? ServerTimeout(Exception? exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is PostgresException { SqlState: LockNotAvailable })
+            {
+                return new ServerTimeoutKind(MigratorExitCodes.LockTimeout, "lock_timeout", MigratorOptions.LockTimeoutVariable);
+            }
+
+            if (current is PostgresException { SqlState: QueryCanceled })
+            {
+                return new ServerTimeoutKind(MigratorExitCodes.StatementTimeout, "statement_timeout", MigratorOptions.StatementTimeoutVariable);
+            }
+        }
+
+        return null;
+    }
+
+    private static void EmitServerTimeout(RunContext run, MigratorUpgradeLog log, string script, ServerTimeoutKind kind, Exception? error)
+    {
+        var seconds = kind.ExitCode == MigratorExitCodes.LockTimeout
+            ? run.Options.LockTimeoutSeconds
+            : run.Options.StatementTimeoutSeconds;
+        var relation = error is PostgresException { TableName: { Length: > 0 } table }
+            ? $" (relation {log.Redact(table)})"
+            : error is PostgresException { Where: { Length: > 0 } where } ? $" ({log.Redact(where.ReplaceLineEndings(" "))})" : string.Empty;
+        // The runner value is a default: a script's own `set local` may have shortened or lengthened the limit that fired.
+        var configured = seconds == 0 ? "disabled" : $"{seconds.ToString(CultureInfo.InvariantCulture)} s";
+        run.Emit(
+            $"{script} hit {kind.Setting} (runner setting {configured}; the script may set its own){relation}; " +
+            (kind.ExitCode == MigratorExitCodes.LockTimeout
+                ? "another session holds a conflicting lock: find it in pg_locks / pg_stat_activity, end or wait for it, then rerun"
+                : "the statement ran longer than allowed: raise the limit or split the migration") +
+            $" ({kind.Variable}; exit {kind.ExitCode.ToString(CultureInfo.InvariantCulture)})");
+    }
+
+    private sealed record ServerTimeoutKind(int ExitCode, string Setting, string Variable);
 
     /// <summary>True when the failure chain carries a driver timeout rather than a server error.</summary>
     private static bool IsCommandTimeout(Exception? exception)

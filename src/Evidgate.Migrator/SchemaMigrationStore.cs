@@ -37,7 +37,7 @@ internal static class SchemaMigrationStore
     /// <exception cref="NpgsqlException">The database could not be reached.</exception>
     internal static NpgsqlConnection Open(MigratorOptions options)
     {
-        var connection = new NpgsqlConnection(options.ConnectionString);
+        var connection = new NpgsqlConnection(options.SessionConnectionString);
         connection.Open();
         return connection;
     }
