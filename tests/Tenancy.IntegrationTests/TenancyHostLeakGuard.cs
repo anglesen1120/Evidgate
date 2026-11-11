@@ -34,12 +34,10 @@ public sealed class TenancyHostLeakGuard : IAsyncDisposable
     private static string Describe(MethodBase? method)
     {
         var type = method!.DeclaringType!;
-        if (type.DeclaringType is { } owner && type.Name.StartsWith('<'))
-        {
-            return $"{owner.Name}.{type.Name[1..type.Name.IndexOf('>')]}";
-        }
-
-        return $"{type.Name}.{method.Name}";
+        var owner = type.DeclaringType ?? type;
+        return type.Name.Length > 1 && type.Name[0] == '<' && type.Name[1] != '>'
+            ? $"{owner.Name}.{type.Name[1..type.Name.IndexOf('>')]}"
+            : $"{owner.Name}.{method.Name}";
     }
 
     internal static void Started(TenancyApiFactory factory, string site) => Running[factory] = site;
