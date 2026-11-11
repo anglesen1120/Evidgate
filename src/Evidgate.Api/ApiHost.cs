@@ -153,7 +153,7 @@ public static partial class ApiHost
         // 07.1.1-T1: the policy module — the append-only revision write model and store.
         builder.Services.AddPolicyModule();
         // 08.6.3-T1: the healing module — the kill switch store, its resolver and the V1 clamp (Healing:Apply).
-        builder.Services.AddHealingModule(builder.Configuration);
+        builder.Services.AddHealingModule(builder.Configuration, builder.Environment);
         // 02.2.1-T1.2/T2.2: the permission-catalogue module — reads (00 §2, 02 §4.2),
         // the flagged custom-role writes and the C2 permission evaluator, which
         // replaces the pipeline's fail-closed default.
@@ -338,5 +338,9 @@ public static partial class ApiHost
         // The cancel windows belong to the Orchestrator module and are read through its seam; the database group comes
         // first so a missing connection string is still the key a host with no configuration at all reports.
         app.Services.ValidateOrchestratorOptions();
+
+        // The healing provider is a deployment selection: unset outside Development, a mock outside Development or an
+        // incomplete HTTP selection must refuse the boot instead of degrading to no provider at the first call.
+        app.Services.ValidateHealingOptions();
     }
 }

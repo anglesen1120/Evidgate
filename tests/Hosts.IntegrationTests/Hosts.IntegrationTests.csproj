@@ -30,6 +30,7 @@
     <!-- The anonymous JSON probe the transport suites (correlation, envelope, endpoint filters) POST to. -->
     <Compile Include="..\Shared\TransportProbeStartupFilter.cs" Link="TransportProbeStartupFilter.cs" />
     <Compile Include="..\Shared\NoForwardedProxy.cs" Link="NoForwardedProxy.cs" />
+    <Compile Include="..\Shared\NoHealingProvider.cs" Link="NoHealingProvider.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- Bounded class-level parallelism, the same bound as the Tenancy suite: four workers

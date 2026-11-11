@@ -205,6 +205,7 @@ internal sealed class MetricCatalogueHarness : IAsyncDisposable
             EvidgateTelemetry.RecordUsageUnits("results", 1);
             EvidgateTelemetry.RecordUsageBillingKeyConflict();
             EvidgateTelemetry.RecordEvaluationDecisionLatency(TimeSpan.FromMilliseconds(1));
+            EvidgateTelemetry.RecordHealingLlmRefused("provider_disabled");
 
             // The classes that own the remaining instruments create them in a static constructor.
             RuntimeHelpers.RunClassConstructor(AlertNotifierType().TypeHandle);
