@@ -68,9 +68,10 @@ public sealed class RunCreationTests
         string slug = "acme",
         string? database = null,
         IReadOnlyDictionary<string, string?>? configuration = null,
-        Action<IServiceCollection>? services = null)
+        Action<IServiceCollection>? services = null,
+        TenancyHostPool? hosts = null)
     {
-        var started = await BeginAsync(fixture, slug, database, configuration, services);
+        var started = await BeginAsync(fixture, slug, database, configuration, services, hosts);
         var api = started.Api;
         var client = started.Client;
         var project = started.Project;
@@ -126,11 +127,13 @@ public sealed class RunCreationTests
         string slug,
         string? database,
         IReadOnlyDictionary<string, string?>? configuration,
-        Action<IServiceCollection>? services)
+        Action<IServiceCollection>? services,
+        TenancyHostPool? hosts)
     {
         // A suite that counts the whole database passes its own dedicated database; the rest share one under a fresh org.
         database ??= await fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database), configuration, services);
+        var api = hosts?.RealResolver(database, configuration, services)
+            ?? TenancyApiFactory.RealResolver(fixture.AppConnectionString(database), configuration, services);
         var client = api.CreateClient();
 
         try
@@ -158,9 +161,9 @@ public sealed class RunCreationTests
     /// <see cref="World.ManifestId"/> is a placeholder for that reason: a request refused on its body never resolves it,
     /// and a request that is not refused resolves it and fails loudly with 404 instead of passing quietly.
     /// </summary>
-    internal static async Task<World> StartRefusalWorldAsync(PostgresTenancyFixture fixture, string slug = "acme")
+    internal static async Task<World> StartRefusalWorldAsync(PostgresTenancyFixture fixture, string slug = "acme", TenancyHostPool? hosts = null)
     {
-        var started = await BeginAsync(fixture, slug, database: null, configuration: null, services: null);
+        var started = await BeginAsync(fixture, slug, database: null, configuration: null, services: null, hosts);
 
         return new World(
             started.Api,

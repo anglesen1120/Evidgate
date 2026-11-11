@@ -1,7 +1,5 @@
-using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
-using System.Text.RegularExpressions;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.Modules.Identity.Ci;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
@@ -103,6 +101,50 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
 
     /// <summary>Every command Npgsql executed for this host, whitespace-normalised, in order.</summary>
     public StatementLog Statements { get; } = new();
+
+    private Action? _release;
+
+    /// <summary>Re-points a pooled <see cref="WithPrincipal"/> host at the next test's caller.</summary>
+    internal void Republish(Guid org, Guid project, IRequestPrincipal principal) =>
+        _publishedPrincipal = (org, project, principal);
+
+    /// <summary>Marks this host as pooled: disposal by a test only calls <paramref name="release"/>.</summary>
+    internal void Pool(Action release) => _release = release;
+
+    /// <summary>Really disposes a pooled host, when its pool is torn down.</summary>
+    internal ValueTask TearDownAsync()
+    {
+        _release = null;
+        return base.DisposeAsync();
+    }
+
+    /// <inheritdoc />
+    public override ValueTask DisposeAsync()
+    {
+        if (_release is { } release)
+        {
+            release();
+            return ValueTask.CompletedTask;
+        }
+
+        return base.DisposeAsync();
+    }
+
+    /// <inheritdoc />
+    protected override void Dispose(bool disposing)
+    {
+        if (_release is { } release)
+        {
+            if (disposing)
+            {
+                release();
+            }
+
+            return;
+        }
+
+        base.Dispose(disposing);
+    }
 
     /// <summary>A host whose evaluator grants every permission, with optional extra service registrations.</summary>
     public static TenancyApiFactory GrantAll(string appConnectionString, Action<IServiceCollection>? services = null) =>
@@ -262,11 +304,12 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
                 services.AddSingleton<IStartupFilter>(new RequestContextStartupFilter());
             }
 
-            if (_publishedPrincipal is { } published)
+            if (_publishedPrincipal is not null)
             {
-                // Runs after RequestContextStartupFilter, so it replaces the header-derived caller.
+                // Runs after RequestContextStartupFilter, so it replaces the header-derived caller. Read per
+                // request, so a pooled host can be re-pointed at the next test's caller.
                 services.AddSingleton<IStartupFilter>(
-                    new PublishedPrincipalStartupFilter(published.Org, published.Project, published.Principal));
+                    new PublishedPrincipalStartupFilter(() => _publishedPrincipal!.Value));
             }
 
             // The same app-role data source, with a logger that records each command.
@@ -370,13 +413,15 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     /// Publishes a fixed caller and tenant for every request (06.1.2-T1): the header stand-in cannot
     /// express a service principal's <c>CredentialId</c> or its <c>CiRunReference</c>.
     /// </summary>
-    private sealed class PublishedPrincipalStartupFilter(Guid org, Guid project, IRequestPrincipal principal) : IStartupFilter
+    private sealed class PublishedPrincipalStartupFilter(
+        Func<(Guid Org, Guid Project, IRequestPrincipal Principal)> current) : IStartupFilter
     {
         /// <inheritdoc />
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
         {
             app.Use(async (context, nextMiddleware) =>
             {
+                var (org, project, principal) = current();
                 using var tenantScope = context.RequestServices
                     .GetRequiredService<IRequestTenantContextSetter>()
                     .Publish(org, project);
@@ -428,72 +473,4 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
             IRequestTenantContext context,
             CancellationToken cancellationToken) => ValueTask.FromResult(PermissionDecision.Granted);
     }
-}
-
-/// <summary>
-/// Npgsql's <c>Executing command: {CommandText}</c> log line, captured once per command
-/// before it is sent; transaction control is dropped so the log is the work itself.
-/// </summary>
-internal sealed partial class StatementLog : ILoggerFactory, ILogger
-{
-    private const string ExecutingCommandPrefix = "Executing command: ";
-
-    private readonly ConcurrentQueue<string> _statements = new();
-
-    /// <summary>Everything captured since the last <see cref="Clear"/>.</summary>
-    public IReadOnlyList<string> Snapshot() => [.. _statements];
-
-    /// <summary>Forgets every captured statement.</summary>
-    public void Clear() => _statements.Clear();
-
-    /// <inheritdoc />
-    public ILogger CreateLogger(string categoryName) => this;
-
-    /// <inheritdoc />
-    public void AddProvider(ILoggerProvider provider)
-    {
-        // One capture serves every category.
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        // Nothing to release.
-    }
-
-    /// <inheritdoc />
-    public IDisposable? BeginScope<TState>(TState state)
-        where TState : notnull => null;
-
-    /// <inheritdoc />
-    public bool IsEnabled(LogLevel logLevel) => true;
-
-    /// <inheritdoc />
-    public void Log<TState>(
-        LogLevel logLevel,
-        EventId eventId,
-        TState state,
-        Exception? exception,
-        Func<TState, Exception?, string> formatter)
-    {
-        ArgumentNullException.ThrowIfNull(formatter);
-
-        var message = formatter(state, exception);
-        if (message is null || !message.StartsWith(ExecutingCommandPrefix, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        var text = Whitespace().Replace(message[ExecutingCommandPrefix.Length..], " ").Trim();
-        if (!TransactionControl().IsMatch(text))
-        {
-            _statements.Enqueue(text);
-        }
-    }
-
-    [GeneratedRegex(@"\s+")]
-    private static partial Regex Whitespace();
-
-    [GeneratedRegex("^(BEGIN|COMMIT|ROLLBACK|START TRANSACTION|SET TRANSACTION|SAVEPOINT|RELEASE)", RegexOptions.IgnoreCase)]
-    private static partial Regex TransactionControl();
 }

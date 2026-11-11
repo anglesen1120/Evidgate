@@ -407,11 +407,11 @@ public sealed class CreateRunCommandCiBindingHashTests
 /// key that now covers the caller's CI run reference.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class CreateRunIdentityTests
+public sealed class CreateRunIdentityTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
-
-    public CreateRunIdentityTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public CreateRunIdentityTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private static readonly string Sha = new('a', 40);
     private static readonly string OtherSha = new('b', 40);
@@ -517,7 +517,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_OidcClaims_StoresIdentity()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
@@ -538,7 +538,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_VerifiedTagClaim_StoresTheTagAndItsSha()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/tags/v1.0.0", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
@@ -554,7 +554,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_VerifiedPullRequestClaim_StoresTheNumberButNotTheTestMergeSha()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/pull/12/merge", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
@@ -572,7 +572,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_VerifiedCaller_OutboxCarriesTheIdentityBlock()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
@@ -597,7 +597,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_VerifiedCaller_GetRunReportsTheIdentityBlock()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
@@ -625,7 +625,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_GetRun_RunWithoutIdentity_AllMembersNull()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
 
@@ -643,7 +643,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_NoClaims_UnverifiedRef()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: "token-inbound");
         var body = BodyWithRef(
             world,
@@ -665,7 +665,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_NoClaimNoRef_StoresNoIdentityAndIsNotUnverified()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: "token-empty");
 
         var result = await RunCreationSeams.SendDirectAsync(
@@ -683,7 +683,7 @@ public sealed class CreateRunIdentityTests
     public async Task CreateRun_ForkBodyValue_IsStoredAndUnverified()
     {
         // Only the body can set is_fork: a fork PR exchange is refused 403 by 02.4.1, so no verified caller is a fork.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var principal = RequestPrincipal.Service(world.Project, ["run:create"], credentialId: "token-fork");
 
         var result = await RunCreationSeams.SendDirectAsync(
@@ -704,7 +704,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_ClaimConflict_ClaimWins()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
         var body = BodyWithRef(
             world,
@@ -731,7 +731,7 @@ public sealed class CreateRunIdentityTests
     {
         // A token that names a CI run but has no ci_token_issue row (purged, or never written) is not verified: the
         // body is stored and labelled rather than trusted (fail toward advisory).
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var result = await RunCreationSeams.SendDirectAsync(
             world.Api,
@@ -752,7 +752,7 @@ public sealed class CreateRunIdentityTests
     {
         // The claim is read for this project (and this run attempt), so a row minted for another project of the same org
         // can never verify — even though its run reference matches this caller's.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var other = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
         await SeedClaimAsync(world.Database, world.Org, other, "refs/heads/main", Sha);
 
@@ -775,7 +775,7 @@ public sealed class CreateRunIdentityTests
         // One run attempt can exchange several tokens, so it can have several ci_token_issue rows. ref/sha are fixed
         // per attempt, so the newest row is authoritative: an older row carrying another ref must not win, and two
         // matching rows must not make the read throw (the statement takes limit 1).
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(
             world.Database, world.Org, world.Project, "refs/heads/stale", Sha, createdAt: DateTimeOffset.UtcNow.AddHours(-1));
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", OtherSha);
@@ -795,7 +795,7 @@ public sealed class CreateRunIdentityTests
     {
         // The run attempt is part of the lookup key: a row of the same repository and run but another attempt is not
         // this caller's, so the caller is unverified and its body is stored and labelled.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
 
         var result = await RunCreationSeams.SendDirectAsync(
@@ -817,7 +817,7 @@ public sealed class CreateRunIdentityTests
         // The 02.4.1 exchange mints a fresh GUID jti for the presented token and stores the GitHub OIDC jti in the
         // row, so the principal's credential id and the row's jti are unrelated (the production shape): the run
         // reference, not the jti, is what links them.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(
             world.Database, world.Org, world.Project, "refs/heads/main", Sha, jti: "github-oidc-jwt-jti-42");
 
@@ -835,7 +835,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_InvalidRef_422RequestInvalidAndNoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         (string Ref, string Path)[] cases =
         [
@@ -883,7 +883,7 @@ public sealed class CreateRunIdentityTests
         // A git ref name cannot carry a C0/C1 control or DEL, so the body's ref_name is refused invalid_value like any
         // other bad name, before any write (SEC-F3). (NUL and a lone surrogate are refused even earlier, by the
         // unstorable-text pass; see CreateRunIdentityQaTests.)
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await RunCreationTests.CreateRunAsync(world, BodyWithRef(world, JsonSerializer.Serialize(new { name })));
 
@@ -898,7 +898,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_ValidBodyRef_IsAccepted()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var body = BodyWithRef(
             world,
             $$$"""{"kind":"branch","name":"{{{new string('x', 255)}}}","pr_number":12,"head_sha":"{{{Sha}}}","base_sha":"{{{OtherSha}}}","trigger_event":"manual","is_fork":true}""");
@@ -914,7 +914,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_Replay_SameIdentity()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
         var key = NewKey();
         var body = RunCreationTests.RunBody(world.ManifestId);
@@ -937,7 +937,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_Replay_DifferentIdentity_409()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha, runAttempt: 1);
         var key = NewKey();
         var body = RunCreationTests.RunBody(world.ManifestId);
@@ -960,7 +960,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_SameKeyDifferentBodyRef_409()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
 
         var first = await RunCreationTests.CreateRunAsync(
@@ -983,7 +983,7 @@ public sealed class CreateRunIdentityTests
     [Fact]
     public async Task CreateRun_ReplayedBodyRef_ReturnsTheSameUnverifiedLabel()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
         var body = BodyWithRef(world, """{"kind":"branch","name":"main","trigger_event":"push"}""");
 

@@ -12,18 +12,19 @@ namespace Tenancy.IntegrationTests;
 /// org, and a change never rewrites an existing manual case <c>code</c>.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class ProjectCasePrefixTests
+public sealed class ProjectCasePrefixTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public ProjectCasePrefixTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public ProjectCasePrefixTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     /// <summary>A <c>tenant_admin</c> changes the prefix: 200, the DTO shows it, the version and ETag move, and the list carries it.</summary>
     [Fact]
     public async Task Patch_ChangesTheCasePrefix_AndTheProjectDtoShowsIt()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -62,7 +63,7 @@ public sealed class ProjectCasePrefixTests
     public async Task Patch_RefusesAMemberWithoutProjectWrite()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var founder = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, founder, Unique.Slug("acme"));
@@ -93,7 +94,7 @@ public sealed class ProjectCasePrefixTests
     public async Task Patch_RefusesABadGrammarAs422()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -122,7 +123,7 @@ public sealed class ProjectCasePrefixTests
     public async Task Patch_RefusesAPrefixAnotherProjectOfTheOrgHolds()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -144,7 +145,7 @@ public sealed class ProjectCasePrefixTests
     public async Task Patch_AcceptsAPrefixAnotherOrgHolds()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var orgA = await SeedOrgAsync(database, "acme");
         var orgB = await SeedOrgAsync(database, "rival");
@@ -180,7 +181,7 @@ public sealed class ProjectCasePrefixTests
     public async Task Patch_DoesNotRewriteAnExistingManualCaseCode()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var org = await SeedOrgAsync(database, "acme");
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());

@@ -17,7 +17,7 @@ public sealed partial class AuthoringManualCaseTests
     public async Task StateMatrix_AllowsOnlyTheFourEdges()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -90,7 +90,7 @@ public sealed partial class AuthoringManualCaseTests
     public async Task RetireWithoutReason_422()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -124,7 +124,7 @@ public sealed partial class AuthoringManualCaseTests
     public async Task RetiredCase_RefusesEveryEdit()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -171,7 +171,7 @@ public sealed partial class AuthoringManualCaseTests
     public async Task Delete_SoftDeletesAndAnswers204()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());

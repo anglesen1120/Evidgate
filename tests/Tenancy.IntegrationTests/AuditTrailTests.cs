@@ -15,17 +15,18 @@ namespace Tenancy.IntegrationTests;
 /// the app role cannot rewrite history (AC2), concurrent writers leave one dense chain (AC3).
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class AuditTrailTests
+public sealed class AuditTrailTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AuditTrailTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AuditTrailTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     [Fact]
     public async Task AuditWriter_Commit_WritesBoth_AndRecordsTheActor()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
 
@@ -50,7 +51,7 @@ public sealed class AuditTrailTests
     public async Task AuditWriter_BusinessRollback_LeavesNoAuditRow()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -83,7 +84,7 @@ public sealed class AuditTrailTests
     public async Task IdempotentReplay_DoesNotAuditTwice()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -108,7 +109,7 @@ public sealed class AuditTrailTests
     public async Task EveryAuditedMutation_EmitsExactlyOneRow()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var founder = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, founder, Unique.Slug("acme"));
@@ -148,7 +149,7 @@ public sealed class AuditTrailTests
     public async Task AuditChain_ConcurrentWriters_SingleUnbrokenSeq()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
@@ -171,7 +172,7 @@ public sealed class AuditTrailTests
     public async Task AppRole_CannotUpdateOrDelete_AuditLog()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var org = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("acme"));
 
@@ -205,7 +206,7 @@ public sealed class AuditTrailTests
     public async Task AppRole_CanOnlyExtendTheChainHonestly()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var org = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("acme"));
 
@@ -240,7 +241,7 @@ public sealed class AuditTrailTests
     public async Task OtherOrgsRows_AreInvisible()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var first = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("first-org"));
         var second = await CreateOrgAsync(client, Guid.CreateVersion7(), Unique.Slug("second-org"));
@@ -260,7 +261,7 @@ public sealed class AuditTrailTests
     public async Task Verifier_DetectsModifiedDeletedAndRelinkedRows()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

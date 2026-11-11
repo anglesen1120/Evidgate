@@ -18,22 +18,23 @@ namespace Tenancy.IntegrationTests;
 /// domain rules that need no host (the steps corpus) live in the existing partial file.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed partial class AuthoringManualCaseTests
+public sealed partial class AuthoringManualCaseTests : IClassFixture<TenancyHostPool>
 {
     private const string Route = "/authoring/manual-cases";
 
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
     /// <summary>One fixture per test class instance (xUnit's collection fixture).</summary>
     /// <param name="fixture">The PostgreSQL fixture of the collection.</param>
-    public AuthoringManualCaseTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AuthoringManualCaseTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     /// <summary>AC4: eight concurrent creates get eight distinct codes, and no route can change one afterwards.</summary>
     [Fact]
     public async Task CaseCode_IsAllocatedUniqueAndImmutable()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -96,7 +97,7 @@ public sealed partial class AuthoringManualCaseTests
     public async Task CaseList_IsOrderedByCodePagesByKeyset_AndFilters()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var (org, project, item, other) = await SeedTreeAsync(database);
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -177,7 +178,7 @@ public sealed partial class AuthoringManualCaseTests
     public async Task CaseDetail_CarriesStepsAndVersionETag()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -208,7 +209,7 @@ public sealed partial class AuthoringManualCaseTests
     public async Task CasePatch_WritesOneVersion_AndANoOpWritesNone()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -261,7 +262,7 @@ public sealed partial class AuthoringManualCaseTests
     public async Task StepsSchema_RejectsInvalidDocuments_AndBurnsNoCode()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -323,7 +324,7 @@ public sealed partial class AuthoringManualCaseTests
     public async Task CasePatch_RequiresIfMatch_AndAnswersAStaleOneWith412()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        await using var api = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(database));
+        await using var api = _hosts.GrantAll(database);
         using var client = api.CreateClient();
         var (org, project, item, _) = await SeedTreeAsync(database);
         var caller = TenancyApiFactory.Caller(org: org, user: Guid.CreateVersion7());
@@ -361,7 +362,6 @@ public sealed partial class AuthoringManualCaseTests
     public async Task CaseRoutes_RefuseAViewerAndHideAnotherTenantsCase()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var connectionString = _fixture.AppConnectionString(database);
         var (org, project, item, _) = await SeedTreeAsync(database);
         var caseId = await SeedCaseAsync(database, org, project, item, "SHOP-001", "Pay with a card");
         var detailPath = CasePath(project) + "/" + caseId.ToString("D");
@@ -376,7 +376,7 @@ public sealed partial class AuthoringManualCaseTests
             values ('{Guid.CreateVersion7()}', '{org}', '{viewer}', 'viewer-{viewer:N}@example.test', 'active')
             """);
 
-        await using (var real = TenancyApiFactory.RealResolver(connectionString))
+        await using (var real = _hosts.RealResolver(database))
         {
             using var client = real.CreateClient();
             var refused = await client.SendAsync(
@@ -387,7 +387,7 @@ public sealed partial class AuthoringManualCaseTests
         }
 
         // Another tenant's granted caller sees the same 404 a missing id produces: RLS decides, the URL does not.
-        await using var granted = TenancyApiFactory.GrantAll(connectionString);
+        await using var granted = _hosts.GrantAll(database);
         using var grantedClient = granted.CreateClient();
         var rival = await SeedOrgAsync(database, Unique.Slug("rival"));
         var foreign = await grantedClient.SendAsync(
