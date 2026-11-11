@@ -11,11 +11,12 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>Independent 06.1.1-T1 regression checks against the migrated database and app-role write path.</summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceArtifactQaTests
+public sealed class EvidenceArtifactQaTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public EvidenceArtifactQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public EvidenceArtifactQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project, Guid RowId)
         : IAsyncDisposable
@@ -30,7 +31,7 @@ public sealed class EvidenceArtifactQaTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("qa-org"));

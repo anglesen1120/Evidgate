@@ -23,7 +23,7 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceArtifactSchemaTests
+public sealed class EvidenceArtifactSchemaTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex (00 §7).</summary>
     private const string ExecutionKey = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -32,8 +32,8 @@ public sealed class EvidenceArtifactSchemaTests
     private const string Checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public EvidenceArtifactSchemaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public EvidenceArtifactSchemaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(
         TenancyApiFactory Api,
@@ -54,7 +54,7 @@ public sealed class EvidenceArtifactSchemaTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
