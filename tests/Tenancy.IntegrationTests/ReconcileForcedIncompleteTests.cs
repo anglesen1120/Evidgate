@@ -125,10 +125,8 @@ public sealed partial class ReconcileForcedIncompleteTests
 
         foreach (var (state, runId) in runs)
         {
-            await _fixture.ExecuteAsync(
-                world.Database,
-                $"update public.run set state = '{state}', collection_deadline_at = now() - interval '1 second' "
-                + $"where id = '{runId:D}'");
+            await SetRunStateAsync(world, runId, state);
+            await PassCollectionDeadlineAsync(world, runId);
         }
 
         var scanned = ((await world.ScalarAsync<string?>(

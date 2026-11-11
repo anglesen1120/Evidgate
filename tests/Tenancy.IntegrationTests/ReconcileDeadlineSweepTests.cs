@@ -185,10 +185,7 @@ public sealed class ReconcileDeadlineSweepTests
         // one scope — so this case is what proves the write does not.
         await SetRunStateAsync(world, world.RunId, "collecting");
         await PassCollectionDeadlineAsync(world, world.RunId);
-        await _fixture.ExecuteAsync(
-            world.Database,
-            "update public.run set state = 'collecting', collection_deadline_at = now() - interval '1 second' "
-            + $"where id = '{otherRun.RunId:D}'");
+        await MarkOverdueAsync(world, otherRun.RunId);
 
         await SweepAsync(world, clock);
 
@@ -606,7 +603,7 @@ public sealed class ReconcileDeadlineSweepTests
         world.CountAsync("evidence_revision", where: $"org_id = '{orgId:D}'");
 
     private Task SetRunStateAsync(IngestTestWorld world, Guid runId, string state) =>
-        _fixture.ExecuteAsync(world.Database, $"update public.run set state = '{state}' where id = '{runId:D}'");
+        RunStateWalk.MoveAsync(_fixture, world.Database, runId, state);
 
     /// <summary>
     /// Moves the deadline into the DB past. The scan compares it with <c>now()</c> in the database, so this column is
@@ -617,12 +614,12 @@ public sealed class ReconcileDeadlineSweepTests
             world.Database,
             $"update public.run set collection_deadline_at = now() - interval '1 second' where id = '{runId:D}'");
 
-    /// <summary>Puts one run in the state the scan names — collectable and past its deadline — in one statement.</summary>
-    private Task MarkOverdueAsync(IngestTestWorld world, Guid runId) =>
-        _fixture.ExecuteAsync(
-            world.Database,
-            "update public.run set state = 'collecting', collection_deadline_at = now() - interval '1 minute' "
-            + $"where id = '{runId:D}'");
+    /// <summary>Puts one run in the state the scan names — collectable and past its deadline — in two statements.</summary>
+    private async Task MarkOverdueAsync(IngestTestWorld world, Guid runId)
+    {
+        await RunStateWalk.MoveAsync(_fixture, world.Database, runId, "collecting");
+        await PassCollectionDeadlineAsync(world, runId);
+    }
 
     /// <summary>Moves the deadline a day ahead, for the case that must stay before it.</summary>
     private Task FutureDeadlineAsync(IngestTestWorld world, Guid runId) =>

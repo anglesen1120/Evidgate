@@ -85,7 +85,7 @@ public sealed partial class ReprocessReportTaskTests
         (await ParseOriginalReportAsync(world, artifact)).Events.ShouldBe(1);
         var source = await SourceReportIdAsync(world, artifact);
         await _fixture.ExecuteAsync(world.Database,
-            $"update public.run set state = 'queued', collection_deadline_at = now() - interval '1 minute', "
+            $"update public.run set collection_deadline_at = now() - interval '1 minute', "
             + $"late_window_minutes = 60 where id = '{world.RunId:D}'");
         await ConsumeEnqueuedReconcileAsync(world, producerId: null);
         (await RevisionCountAsync(world)).ShouldBe(1);

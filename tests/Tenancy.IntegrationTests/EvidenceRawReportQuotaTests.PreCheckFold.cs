@@ -79,8 +79,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         var artifactId = await SeedArtifactAsync(world, OneEventBody);
         await SeedCounterAsync(counters, world, used: 10m, limit: 10m);
         await SeedDeferredTaskAsync(world, artifactId);
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.run set state = 'complete' where id = '{world.RunId:D}'");
+        await RunStateWalk.MoveAsync(_fixture, world.Database, world.RunId, "complete");
         var log = new CapturedLog();
 
         var outcome = await ParseAsync(world, artifactId, log);

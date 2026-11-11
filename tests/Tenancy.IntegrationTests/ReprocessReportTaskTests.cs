@@ -183,7 +183,7 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
         (await CountAsync(world, "event_batch")).ShouldBe(0);
         (await _fixture.ScalarAsync<string>(
             world.Database,
-            $"select state from public.run where id = '{world.RunId:D}'")).ShouldBe("collecting");
+            $"select state from public.run where id = '{world.RunId:D}'")).ShouldBe("running");
     }
 
     [Fact]
@@ -277,10 +277,9 @@ public sealed partial class ReprocessReportTaskTests(PostgresTenancyFixture fixt
 
         var runId = await RunRowSeeder.SeedRunAsync(_fixture, database, org);
 
-        // The run waits for collection: a reprocess must not move it, so the state a test starts from is the one it keeps.
-        await _fixture.ExecuteAsync(
-            database,
-            $"update public.run set state = 'collecting' where id = '{runId:D}'");
+        // The run is executing and has not reached collection: a reprocess must not move it, so the state a test starts
+        // from is the one it keeps.
+        await RunStateWalk.MoveAsync(_fixture, database, runId, "running");
 
         return new World(host, database, org, project, runId);
     }
