@@ -91,7 +91,9 @@ public sealed partial class HealingLlmApiKeyHandlerTests
             TestContext.Current.CancellationToken));
 
         failure.Message.ShouldContain(HealingProviderKeys.ApiKeySecret);
-        failure.Message.ShouldNotContain(SecretNames.HealingLlmApiKey);
+        // The configuration key's own spelling contains the secret name as a prefix, so it is removed before the check.
+        failure.Message.Replace("EVIDGATE__HEALING__LLM__APIKEYSECRET", string.Empty, StringComparison.Ordinal)
+            .ShouldNotContain(SecretNames.HealingLlmApiKey);
         failure.Message.ShouldNotContain("Bearer");
     }
 

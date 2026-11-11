@@ -78,6 +78,9 @@ internal static class HealingModule
             .PostConfigure<IHostEnvironment>((options, host) =>
                 options.Kind = HealingProviderSelection.Resolve(options.Provider, host))
             .ValidateOnStart();
+        // The validator and the post-configuration read the environment from the container; a composition that did not
+        // register one (a test) gets the one this module was composed for.
+        services.TryAddSingleton(environment);
         services.AddSingleton<IValidateOptions<HealingProviderOptions>, HealingProviderOptionsValidator>();
 
         // The mock never ships: its registration exists only in Development, so a composed production container cannot
