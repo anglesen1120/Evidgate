@@ -13,7 +13,7 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
-public sealed class EvidenceUploadUrlQaTests
+public sealed class EvidenceUploadUrlQaTests : IClassFixture<TenancyHostPool>
 {
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
     private const string Checksum = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -34,8 +34,8 @@ public sealed class EvidenceUploadUrlQaTests
     };
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public EvidenceUploadUrlQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public EvidenceUploadUrlQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(
         TenancyApiFactory Api,
@@ -64,7 +64,7 @@ public sealed class EvidenceUploadUrlQaTests
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -76,8 +76,8 @@ public sealed class EvidenceUploadUrlQaTests
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database), org, project, principal, ObjectStorage);
+        var host = _hosts.WithPrincipal(
+            database, org, project, principal, ObjectStorage);
 
         return new World(api, host, host.CreateClient(), database, user, org, project);
     }
@@ -403,8 +403,8 @@ public sealed class EvidenceUploadUrlQaTests
         var runId = await SeedRunAsync(world, ExecutionKey);
         await InsertKindPolicyAsync(world, "trace");
 
-        await using var second = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(world.Database), world.Org, world.Project, Writer(OtherJti), ObjectStorage);
+        await using var second = _hosts.WithPrincipal(
+            world.Database, world.Org, world.Project, Writer(OtherJti), ObjectStorage);
         using var secondClient = second.CreateClient();
 
         var answers = await Task.WhenAll(
@@ -439,8 +439,8 @@ public sealed class EvidenceUploadUrlQaTests
         accepted.Status.ShouldBe(HttpStatusCode.OK, accepted.ErrorMessage);
         (await SlotBindingAsync(world, runId)).ShouldBe(Jti);
 
-        await using var second = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(world.Database), world.Org, world.Project, Writer(OtherJti), ObjectStorage);
+        await using var second = _hosts.WithPrincipal(
+            world.Database, world.Org, world.Project, Writer(OtherJti), ObjectStorage);
         using var secondClient = second.CreateClient();
 
         var foreign = await secondClient.SendAsync(

@@ -20,8 +20,8 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
-public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex (00 §7).</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -45,7 +45,7 @@ public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, Seaw
     private static readonly byte[] OtherBody = Encoding.UTF8.GetBytes(new string('B', (int)Cap));
 
     private readonly PostgresTenancyFixture _fixture = fixture;
-
+    private readonly TenancyHostPool _hosts = hosts;
     private readonly SeaweedFsStore _store = store;
 
     private sealed record World(
@@ -71,7 +71,7 @@ public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, Seaw
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -83,8 +83,8 @@ public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, Seaw
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database), org, project, principal, _store.Configuration());
+        var host = _hosts.WithPrincipal(
+            database, org, project, principal, _store.Configuration());
 
         return new World(api, host, host.CreateClient(), database, user, org, project);
     }
@@ -404,8 +404,8 @@ public sealed class EvidenceCompleteQaTests(PostgresTenancyFixture fixture, Seaw
         var (artifactId, _, finalKey) = await MintAndUploadAsync(world, runId, GoodBody);
 
         var viewer = RequestPrincipal.Service(projectScope: null, Array.Empty<string>(), credentialId: "jti-viewer-qa");
-        await using var viewerHost = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(world.Database), world.Org, world.Project, viewer, _store.Configuration());
+        await using var viewerHost = _hosts.WithPrincipal(
+            world.Database, world.Org, world.Project, viewer, _store.Configuration());
         using var viewerClient = viewerHost.CreateClient();
 
         var answer = await viewerClient.SendAsync(
