@@ -30,8 +30,8 @@ namespace Tenancy.IntegrationTests;
 /// sibling complete suites declare a real zip signature.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex (00 §7).</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -80,7 +80,7 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
     private static readonly byte[] NotZipBody = Encoding.UTF8.GetBytes(new string('A', 256));
 
     private readonly PostgresTenancyFixture _fixture = fixture;
-
+    private readonly TenancyHostPool _hosts = hosts;
     private readonly SeaweedFsStore _store = store;
 
     private sealed record World(
@@ -112,7 +112,7 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -124,8 +124,8 @@ public sealed class EvidenceCompleteSniffTests(PostgresTenancyFixture fixture, S
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database), org, project, Writer(), _store.Configuration());
+        var host = _hosts.WithPrincipal(
+            database, org, project, Writer(), _store.Configuration());
 
         return new World(api, host, host.CreateClient(), database, user, org, project);
     }

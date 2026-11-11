@@ -16,11 +16,11 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 [Trait("Category", "Docker")]
 [Collection(ExclusiveTenancySuite.Name)]
-public sealed class IngestQaBoundaryTests
+public sealed class IngestQaBoundaryTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
-
-    public IngestQaBoundaryTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public IngestQaBoundaryTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private static Task<long> EventRowsAsync(IngestTestWorld world) =>
         world.CountAsync("event", $"org_id = '{world.Org:D}' and run_id = '{world.RunId:D}'");
@@ -30,7 +30,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task duplicate_event_id_within_one_batch_is_counted_and_acked_as_a_duplicate()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         // Two identical envelopes: the same event_id, the same payload, twice in one request. AC2's rule is
         // "the same event_id with the identical canonical payload" -> duplicate; the second element must be
@@ -53,7 +53,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task duplicate_event_id_within_one_batch_different_payload_409()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         var id = Guid.CreateVersion7();
 
         var answer = await IngestQaRequests.PostEventsAsync(
@@ -75,7 +75,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task same_sequence_twice_in_one_batch_422_sequence_reused()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         // Two distinct event_ids under the same (run, producer) reuse sequence 5: AC6 refuses the whole batch.
         var answer = await IngestQaRequests.PostEventsAsync(
@@ -96,7 +96,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task concurrent_identical_batches_never_double_insert()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         // test.step envelopes (no attempt write) so the race under test is the event insert itself.
         var body = IngestQaRequests.Batch(
@@ -121,7 +121,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task chunked_body_exactly_one_mib_accepted_and_one_byte_over_refused()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var exactly = IngestQaRequests.PaddedBody(
             IngestQaRequests.Batch(IngestQaRequests.Event(Guid.CreateVersion7(), IngestQaRequests.KeyOf(world, 0), sequence: 1)),
@@ -159,7 +159,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task content_encoding_other_than_gzip_refused_422_request_invalid()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         // 04.1.1-T3 accepts a single `gzip` (and `identity`) and keeps 422 request_invalid for anything else,
         // naming the header in the detail. `deflate` is a real encoding the route does not decode.
@@ -181,7 +181,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task run_state_boundary_unknown_404_created_accepted_incomplete_closed_canceled_marked()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         // An unknown run id is the same answer as a foreign one: 404, no write.
         var missing = await IngestQaRequests.PostEventsAsync(
@@ -237,7 +237,7 @@ public sealed class IngestQaBoundaryTests
 
         // canceled still accepts and marks (T12). The run above is terminal (incomplete has no outgoing edge), so a
         // second world carries the canceled half: its run is seeded `created`, and created -> canceled is one edge.
-        await using var canceledWorld = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var canceledWorld = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         await canceledWorld.SetRunStateAsync("canceled");
         var canceled = await IngestQaRequests.PostEventsAsync(
             canceledWorld.Client,
@@ -256,7 +256,7 @@ public sealed class IngestQaBoundaryTests
     {
         // AC5/T12: a canceled run keeps accepting events, marks them after_cancel, and STAYS canceled - the
         // write never moves the run's state, so a late event cannot resurrect it.
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         await world.SetRunStateAsync("canceled");
 
         var accepted = await IngestQaRequests.PostEventsAsync(
@@ -278,7 +278,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task incomplete_run_late_events_marked_and_run_closed_after_window()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         await world.SetRunStateAsync("incomplete");
 
         // The window's end is `collection_deadline_at + late_window_minutes` (RunEventScopeReader's SQL),
@@ -322,7 +322,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task execution_key_of_another_run_422_unknown_execution_key()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         var other = await world.SeedOtherRunAsync(world.Org);
 
         var answer = await IngestQaRequests.PostEventsAsync(
@@ -340,8 +340,8 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task no_principal_401_and_writes_nothing()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
-        await using var anonymous = TenancyApiFactory.RealEvaluator(_fixture.AppConnectionString(world.Database));
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
+        await using var anonymous = _hosts.RealEvaluator(world.Database);
         using var client = anonymous.CreateClient();
 
         var answer = await IngestQaRequests.PostEventsAsync(
@@ -358,7 +358,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task attempt_no_zero_and_above_int_max_422_and_write_nothing()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var zero = await IngestQaRequests.PostEventsAsync(
             world.Client,
@@ -387,7 +387,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task all_five_event_types_accepted_and_unknown_type_422()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), planned: 5);
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), planned: 5, hosts: _hosts);
 
         var answer = await IngestQaRequests.PostEventsAsync(
             world.Client,
@@ -418,7 +418,7 @@ public sealed class IngestQaBoundaryTests
     [Fact]
     public async Task writer_refusal_leaves_no_rows_in_any_table()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         // Index 1 names attempt_no 101: the attempt writer refuses, so the whole batch rolls back - no event,
         // no event_batch, no case_attempt and no outbox row (the metering row is written last).

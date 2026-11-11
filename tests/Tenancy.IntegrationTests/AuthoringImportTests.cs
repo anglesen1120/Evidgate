@@ -22,13 +22,11 @@ namespace Tenancy.IntegrationTests;
 /// is <see cref="AuthoringImportExportTests"/>'s, because round-trip equality is the only place it is needed.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AuthoringImportTests
+public sealed class AuthoringImportTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
-
-    /// <summary>Wires the fixture.</summary>
-    /// <param name="fixture">The shared PostgreSQL fixture.</param>
-    public AuthoringImportTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public AuthoringImportTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     /// <summary>One test world: the host, one org and one project it owns.</summary>
     /// <param name="Api">The host, whose statement log the budget test reads.</param>
@@ -61,7 +59,7 @@ public sealed class AuthoringImportTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

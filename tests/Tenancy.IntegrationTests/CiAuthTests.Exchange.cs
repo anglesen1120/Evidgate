@@ -195,6 +195,7 @@ public sealed partial class CiAuthTests
     {
         _database = _dedicated!.Name;
         var overrides = new Dictionary<string, string?>(StringComparer.Ordinal) { ["EVIDGATE:Ci:AllowedEventNames"] = "schedule, pull_request, true" };
+        // A Ci-composed host with its own configuration over this test's dedicated database: private, and it starts empty.
         var api = TenancyApiFactory.Ci(_fixture.AppConnectionString(_database), overrides);
         await using var _ = api;
         var client = api.CreateClient();
@@ -310,7 +311,7 @@ public sealed partial class CiAuthTests
     public async Task Exchange_WhenCiAuthIsNotConfigured_Is503()
     {
         var database = _dedicated!.Name;
-        await using var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        await using var api = _hosts.RealResolver(database);
         using var client = api.CreateClient();
 
         var answer = await client.SendAsync(HttpMethod.Post, "/v1/ci/token", _ => { }, new { ingest_token = "egt_abcdefghijkl_" + new string('a', 43) });
@@ -321,6 +322,7 @@ public sealed partial class CiAuthTests
     public async Task Exchange_IsRateLimited_WithRetryAfter()
     {
         var database = _dedicated!.Name;
+        // The burst counter lives in memory per host, so the count must start at zero: a fresh private Ci host.
         await using var api = TenancyApiFactory.Ci(
             _fixture.AppConnectionString(database),
             new Dictionary<string, string?> { ["EVIDGATE:Ci:ExchangeBurstLimit"] = "3" });

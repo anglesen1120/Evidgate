@@ -18,11 +18,11 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>QA cases for <see cref="IEvidenceFreeze"/> beyond the primary EvidenceFreezeTests suite.</summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceFreezeQaTests
+public sealed class EvidenceFreezeQaTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
-
-    public EvidenceFreezeQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public EvidenceFreezeQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     // ------------------------------------------------------------------ fixture
 
@@ -39,7 +39,7 @@ public sealed class EvidenceFreezeQaTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

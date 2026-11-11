@@ -12,14 +12,14 @@ namespace Tenancy.IntegrationTests;
 /// <c>created_at</c>. Every test names the predicate whose removal or narrowing makes it fail.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class FrozenEvidenceTests
+public sealed class FrozenEvidenceTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>A fixed clock base so the freeze bounds are exact instead of "a few milliseconds ago".</summary>
     private static readonly DateTimeOffset Base = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public FrozenEvidenceTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public FrozenEvidenceTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(
         TenancyApiFactory Api,
@@ -39,7 +39,7 @@ public sealed class FrozenEvidenceTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

@@ -27,7 +27,7 @@ namespace Tenancy.IntegrationTests;
 /// precedent).
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class PolicyActivationReadTests
+public sealed class PolicyActivationReadTests : IClassFixture<TenancyHostPool>
 {
     private const string BodyA = """{"flaky_budget":3,"required_suites":["smoke","regression"]}""";
 
@@ -40,8 +40,8 @@ public sealed class PolicyActivationReadTests
     private const string HashShape = "^sha256:[0-9a-f]{64}$";
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public PolicyActivationReadTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public PolicyActivationReadTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project) : IAsyncDisposable
     {
@@ -57,7 +57,7 @@ public sealed class PolicyActivationReadTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

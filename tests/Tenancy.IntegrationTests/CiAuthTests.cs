@@ -14,7 +14,7 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 [Collection(ExclusiveTenancySuite.Name)]
 [Trait("Category", "Docker")]
-public sealed partial class CiAuthTests : IAsyncLifetime
+public sealed partial class CiAuthTests : IAsyncLifetime, IClassFixture<TenancyHostPool>
 {
     private const long RepoId = 4242;
     private static readonly string[] EventOnly = ["event:write"];
@@ -23,9 +23,10 @@ public sealed partial class CiAuthTests : IAsyncLifetime
     private const string Workflow = "acme/web/.github/workflows/ci.yml@refs/heads/main";
 
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
     private DedicatedDatabase? _dedicated;
 
-    public CiAuthTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public CiAuthTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     // This class asserts on unfiltered CI tables, so each test owns a migrated database.
     public async ValueTask InitializeAsync() => _dedicated = await _fixture.CreateDedicatedDatabaseAsync();
@@ -183,6 +184,7 @@ public sealed partial class CiAuthTests : IAsyncLifetime
     private async Task<(TenancyApiFactory Api, HttpClient Client, Guid User, Guid Org, Guid Project)> StartAsync()
     {
         _database = _dedicated!.Name;
+        // A Ci-composed host over this test's dedicated database: the pool has no Ci variant, so it stays private.
         var api = TenancyApiFactory.Ci(_fixture.AppConnectionString(_database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();

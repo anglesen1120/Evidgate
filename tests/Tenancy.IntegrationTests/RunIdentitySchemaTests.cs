@@ -21,7 +21,7 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class RunIdentitySchemaTests
+public sealed class RunIdentitySchemaTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>The migration under test, re-run by the idempotency case.</summary>
     private const string MigrationFile = "0037_run_identity.sql";
@@ -141,8 +141,8 @@ public sealed class RunIdentitySchemaTests
     };
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public RunIdentitySchemaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public RunIdentitySchemaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(
         TenancyApiFactory Api,
@@ -168,7 +168,7 @@ public sealed class RunIdentitySchemaTests
     private async Task<World> StartAsync(DedicatedDatabase? dedicated = null)
     {
         var database = dedicated?.Name ?? await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
