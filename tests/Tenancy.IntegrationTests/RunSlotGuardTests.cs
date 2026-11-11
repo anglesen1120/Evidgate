@@ -118,6 +118,19 @@ public sealed class RunSlotGuardTests(PostgresTenancyFixture fixture)
         error.MessageText.ShouldStartWith("producer_slot_slot_reopened");
     }
 
+    [Theory]
+    [InlineData("declared_count = 7")]
+    [InlineData("declared_last_sequence = 7")]
+    public async Task Slot_DeclaredValuesOfClosedSlot_Refused(string assignment)
+    {
+        var seeded = await SeedSlotAsync(closed: true);
+
+        var error = await CaptureSlotErrorAsync(seeded, assignment);
+
+        error.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
+        error.MessageText.ShouldStartWith("producer_slot_slot_reopened");
+    }
+
     [Fact]
     public async Task Slot_SequenceRegress_Refused_OpenAndClosed()
     {
