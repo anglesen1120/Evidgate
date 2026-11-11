@@ -29,14 +29,14 @@ public sealed partial class AuthoringVersionTests
     /// <summary>The API host, one client and the ids the restore routes need, per test.</summary>
     /// <param name="Api">The host, whose statement log proves the lock of hand-over (a) is taken.</param>
     /// <param name="Client">The caller.</param>
-    /// <param name="Database">The migrated database of this test.</param>
+    /// <param name="Database">The run's shared database, or the private one the calling test owns.</param>
     /// <param name="User">The founder, whose <c>tenant_admin</c> membership holds <c>authoring:write</c>.</param>
     /// <param name="Org">The organization.</param>
     /// <param name="Project">The project.</param>
     private sealed record RestoreWorld(
         TenancyApiFactory Api,
         HttpClient Client,
-        DedicatedDatabase Database,
+        string Database,
         Guid User,
         Guid Org,
         Guid Project) : IAsyncDisposable
@@ -78,15 +78,7 @@ public sealed partial class AuthoringVersionTests
         public async ValueTask DisposeAsync()
         {
             Client.Dispose();
-            try
-            {
-                await Api.DisposeAsync();
-            }
-            finally
-            {
-                // The database is this world's to drop even when the host's own disposal throws.
-                await Database.DisposeAsync();
-            }
+            await Api.DisposeAsync();
         }
     }
 
@@ -238,7 +230,7 @@ public sealed partial class AuthoringVersionTests
         unknownVersion.ErrorCode.ShouldBe("not_found");
 
         // A second project of the same org: its node and its version are absent from this project's routes (AC10).
-        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, "billing");
+        var otherProject = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("billing"));
         var otherNodes = $"/v1/projects/{otherProject}/authoring/nodes";
         var foreign = await world.Client.SendAsync(
             HttpMethod.Post, otherNodes, world.As, new { kind = "module", title = "Billing" }, NewKey());
@@ -259,8 +251,8 @@ public sealed partial class AuthoringVersionTests
 
         // Another org entirely: a different founder owns it, so its node and its version are invisible from here.
         var stranger = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, stranger, "other");
-        var otherOrgProject = await CreateProjectAsync(world.Client, stranger, otherOrg, "elsewhere");
+        var otherOrg = await CreateOrgAsync(world.Client, stranger, Unique.Slug("other"));
+        var otherOrgProject = await CreateProjectAsync(world.Client, stranger, otherOrg, Unique.Slug("elsewhere"));
         var strangerAs = TenancyApiFactory.Resolved(user: stranger, orgHeader: otherOrg);
         var otherOrgNodes = $"/v1/projects/{otherOrgProject}/authoring/nodes";
         var elsewhere = await world.Client.SendAsync(
@@ -428,14 +420,15 @@ public sealed partial class AuthoringVersionTests
     }
 
     /// <summary>
-    /// AC18 on the restore routes: exactly one audit row per effective mutation, none on an idempotent replay and none on
-    /// a refusal. AC17's permission gate is the same as every other write route — a viewer holding only
-    /// <c>authoring:read</c> is refused <c>403</c>.
+    /// AC18 on the restore routes: one audit row per effective mutation, none on a replay or a refusal; AC17 refuses a
+    /// viewer holding only <c>authoring:read</c>.
     /// </summary>
     [Fact]
     public async Task Restore_AuditOncePerSuccess_NoneOnReplayOrRefusal()
     {
-        await using var world = await StartRestoreAsync();
+        // Reads a built-in platform role (org_id is null), which is not this tenant's row.
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        await using var world = await StartRestoreAsync(dedicated.Name);
 
         var node = await CreateNodeAsync(world, parent: null, kind: "module", title: "Checkout");
         (await DeleteAsync(world, world.Node(node), version: 1)).Status.ShouldBe(HttpStatusCode.NoContent);
@@ -659,7 +652,7 @@ public sealed partial class AuthoringVersionTests
             world.Database,
             $"""
              insert into public.feature_node (id, org_id, project_id, parent_id, kind, title, position)
-             select cast(md5('s80-restore-cap-' || g) as uuid),
+             select gen_random_uuid(),
                     '{world.Org:D}',
                     '{world.Project:D}',
                     '{module:D}',
@@ -761,7 +754,7 @@ public sealed partial class AuthoringVersionTests
             world.Database,
             $"""
              insert into public.feature_node (id, org_id, project_id, parent_id, kind, title, position)
-             select cast(md5('s80-{tag}-' || g) as uuid),
+             select gen_random_uuid(),
                     '{world.Org:D}',
                     '{world.Project:D}',
                     '{parent:D}',
@@ -821,17 +814,16 @@ public sealed partial class AuthoringVersionTests
         [.. answer.Body.GetProperty("error").GetProperty("details").EnumerateArray()
             .Select(detail => detail.TryGetProperty("path", out var path) ? path.GetString() : null)];
 
-    private Task<RestoreWorld> StartRestoreAsync() =>
-        _fixture.StartDedicatedAsync(async database =>
-        {
-            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-            var client = api.CreateClient();
-            var user = Guid.CreateVersion7();
-            var org = await CreateOrgAsync(client, user, "acme");
-            var project = await CreateProjectAsync(client, user, org, "checkout");
-
-            return new RestoreWorld(api, client, database, user, org, project);
-        });
+    private async Task<RestoreWorld> StartRestoreAsync(string? database = null)
+    {
+        database ??= await _fixture.SharedDatabaseAsync();
+        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var client = api.CreateClient();
+        var user = Guid.CreateVersion7();
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, Unique.Slug("checkout"));
+        return new RestoreWorld(api, client, database, user, org, project);
+    }
 
     /// <summary>One restore request: <c>Idempotency-Key</c> always, <c>If-Match</c> when the route declares one.</summary>
     private static Task<ApiAnswer> SendAsync(RestoreWorld world, string url, string? ifMatch) =>

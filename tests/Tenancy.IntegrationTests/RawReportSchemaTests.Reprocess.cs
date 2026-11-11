@@ -10,6 +10,7 @@ using Xunit;
 
 namespace Tenancy.IntegrationTests;
 
+// Dedicated database: the release case counts the whole request table and seeds built-in parser rows.
 public sealed partial class RawReportSchemaTests
 {
     private const string RequestTable = "raw_report_reprocess";
@@ -69,7 +70,7 @@ public sealed partial class RawReportSchemaTests
     [Fact]
     public async Task ReprocessRequest_Guard_IsTheNamedBeforeInsertRowTrigger()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         (await _fixture.ScalarAsync<long>(
             database,

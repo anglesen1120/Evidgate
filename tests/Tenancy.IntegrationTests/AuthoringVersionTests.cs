@@ -51,9 +51,9 @@ public sealed partial class AuthoringVersionTests
     private Task<World> StartAsync() =>
         _fixture.StartDedicatedAsync(async database =>
         {
+            // Dedicated database: several assertions count whole tables, e.g. authoring_version.
             var (org, project) = await SeedAsync(database, "acme", "checkout");
             var (dataSource, provider) = Module(database);
-
             return new World(database, org, project, dataSource, provider);
         });
 

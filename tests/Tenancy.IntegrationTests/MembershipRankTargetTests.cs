@@ -11,9 +11,9 @@ namespace Tenancy.IntegrationTests;
 /// membership id ranks zero under this org's scope.
 /// </summary>
 /// <remarks>
-/// Rows are seeded as the superuser in a dedicated database and the queries run on a real <c>evidgate_app</c>
-/// login with the same <c>evidgate.org_id</c> setting a request scope carries. A missing grant would fail with
-/// 42501, and a policy that leaked the other org would fail on the value instead.
+/// Rows are seeded as the superuser in the run's shared database under ids unique to the test, and the queries run
+/// on a real <c>evidgate_app</c> login with the same <c>evidgate.org_id</c> setting a request scope carries.
+/// A missing grant would fail with 42501 and a leaking policy would fail on the value instead.
 /// </remarks>
 [Trait("Category", "Docker")]
 public sealed class MembershipRankTargetTests
@@ -30,7 +30,7 @@ public sealed class MembershipRankTargetTests
     [Fact]
     public async Task Membership_Rank_Reads_The_Target_Row_Whatever_Its_Status()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var world = await SeedRankWorldAsync(database);
         var app = _fixture.AppConnectionString(database);
 
@@ -58,7 +58,7 @@ public sealed class MembershipRankTargetTests
     [Fact]
     public async Task Another_Orgs_Membership_Id_Ranks_Zero_Under_This_Orgs_Scope()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (orgA, _, _) = await SeedTenantAdminAsync(database, "rank-scope-a");
         var (orgB, ownerB, membershipB) = await SeedTenantAdminAsync(database, "rank-scope-b");
         var app = _fixture.AppConnectionString(database);
@@ -80,7 +80,7 @@ public sealed class MembershipRankTargetTests
     }
 
     /// <summary>Every membership of the status matrix, with its grants inserted afterwards.</summary>
-    private async Task<RankWorld> SeedRankWorldAsync(DedicatedDatabase database)
+    private async Task<RankWorld> SeedRankWorldAsync(string database)
     {
         var world = new RankWorld(
             Guid.CreateVersion7(),
@@ -103,13 +103,13 @@ public sealed class MembershipRankTargetTests
     }
 
     /// <summary>The org, users, memberships and custom role of <see cref="SeedRankWorldAsync"/>.</summary>
-    private async Task SeedRankRowsAsync(DedicatedDatabase database, RankWorld world)
+    private async Task SeedRankRowsAsync(string database, RankWorld world)
     {
         await _fixture.ExecuteAsync(
             database,
             $"""
             insert into public.organization (id, name, slug)
-            values ('{world.Org}', 'rank target org', 'rank-target-{world.Org:N}');
+            values ('{world.Org}', 'rank-target-{world.Org:N}', 'rank-target-{world.Org:N}');
 
             insert into public."user" (id, email) values
               ('{world.OwnerUser}', 'owner-{world.OwnerUser:N}@example.test'),
@@ -134,7 +134,7 @@ public sealed class MembershipRankTargetTests
     }
 
     /// <summary>The grants of <see cref="SeedRankWorldAsync"/>: built-in owners and custom administrators.</summary>
-    private async Task SeedRankGrantsAsync(DedicatedDatabase database, RankWorld world)
+    private async Task SeedRankGrantsAsync(string database, RankWorld world)
     {
         await _fixture.ExecuteAsync(
             database,
@@ -157,7 +157,7 @@ public sealed class MembershipRankTargetTests
 
     /// <summary>One org whose owner holds the built-in <c>tenant_admin</c>: rank two inside it.</summary>
     private async Task<(Guid Org, Guid User, Guid Membership)> SeedTenantAdminAsync(
-        DedicatedDatabase database,
+        string database,
         string stem)
     {
         var org = Guid.CreateVersion7();

@@ -14,10 +14,9 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The gaps 03.2.1's suite diff, suite ETag and dry-run preview leave open beyond the happy paths of
-/// <see cref="CatalogSuiteTests"/>: determinism and direction, variant changes, another org's revision being
-/// indistinguishable from a missing one, the strong suite ETag and its 304s, that a preview writes no row anywhere, and
-/// that a preview needs the same <c>suite:write</c> standing as a real create.
+/// The gaps 03.2.1's suite diff, suite ETag and dry-run preview leave open beyond <see cref="CatalogSuiteTests"/>:
+/// determinism and direction, variant changes, another org's revision as a missing one, the strong ETag and its 304s,
+/// that a preview writes no row anywhere, and that it needs the same <c>suite:write</c> standing as a real create.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class SuiteDiffTests
@@ -28,7 +27,7 @@ public sealed class SuiteDiffTests
 
     public SuiteDiffTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
-    private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project, Guid Suite, Guid[] Revisions, DedicatedDatabase Dedicated)
+    private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project, Guid Suite, Guid[] Revisions, DedicatedDatabase? Dedicated)
         : IAsyncDisposable
     {
         public Action<HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
@@ -52,33 +51,32 @@ public sealed class SuiteDiffTests
 
     // ------------------------------------------------------------------ helpers
 
-    /// <summary>An org with a project, <paramref name="cases"/> registered cases (one revision each) and an empty suite.</summary>
-    /// <remarks>
-    /// Private database: the suite_revision/suite_member counts are asserted unfiltered for the whole database.
-    /// </remarks>
-    private Task<World> StartAsync(int cases = 4) =>
-        _fixture.StartDedicatedAsync(async dedicated =>
-        {
-            var database = dedicated.Name;
-            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-            var client = api.CreateClient();
-            var user = Guid.CreateVersion7();
-            var org = await CreateOrgAsync(client, user, "acme");
-            var project = await CreateProjectAsync(client, user, org, "checkout");
-            var revisions = await SeedCasesAsync(api, org, project, database, cases, 0);
+    /// <summary>An org with a project, cases and an empty suite; a private database only for the whole-table count cases.</summary>
+    private Task<World> StartAsync(int cases = 4, bool dedicated = false) =>
+        dedicated ? _fixture.StartDedicatedAsync(owned => StartAsync(owned, cases)) : StartAsync(null, cases);
 
-            var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
-            var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
-            suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
+    private async Task<World> StartAsync(DedicatedDatabase? owned, int cases)
+    {
+        var database = owned?.Name ?? await _fixture.SharedDatabaseAsync();
+        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var client = api.CreateClient();
+        var user = Guid.CreateVersion7();
+        var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(client, user, org, "checkout");
+        var revisions = await SeedCasesAsync(api, org, project, database, cases, 0);
 
-            return new World(api, client, database, user, org, project, suite.Id(), revisions, dedicated);
-        });
+        var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
+        var suite = await client.SendAsync(HttpMethod.Post, $"/v1/projects/{project}/suites", admin, new { name = "Smoke", slug = "smoke" }, NewKey());
+        suite.Status.ShouldBe(HttpStatusCode.Created, suite.ErrorMessage);
+
+        return new World(api, client, database, user, org, project, suite.Id(), revisions, owned);
+    }
 
     /// <summary>A second org on the same host and database, ready to take revisions of its own.</summary>
     private async Task<Rival> StartRivalAsync(World world, string slug = "rival")
     {
         var user = Guid.CreateVersion7();
-        var org = await CreateOrgAsync(world.Client, user, slug);
+        var org = await CreateOrgAsync(world.Client, user, Unique.Slug(slug));
         var project = await CreateProjectAsync(world.Client, user, org, "theirs");
         var revisions = await SeedCasesAsync(world.Api, org, project, world.Database, 2, 300);
         var admin = TenancyApiFactory.Resolved(user: user, orgHeader: org);
@@ -183,7 +181,7 @@ public sealed class SuiteDiffTests
 
     /// <summary>
     /// The seven row counts a preview must leave untouched: the four suite tables, the audit trail, the outbox and the
-    /// idempotency store (migration names of 0007 and 02.7.1). The database is fresh per test, so a count is this test's.
+    /// idempotency store (0007 and 02.7.1). Only the private-database cases call it, so a count is this test's.
     /// </summary>
     private async Task<long[]> CountsAsync(World world) =>
     [
@@ -505,7 +503,8 @@ public sealed class SuiteDiffTests
     [Fact]
     public async Task DryRun_WritesNoRowAnywhere()
     {
-        await using var world = await StartAsync();
+        // The counts below are whole-table, so this case owns its database.
+        await using var world = await StartAsync(dedicated: true);
         var plain = new { members = new[] { Member(world.Revisions[0], new { browser = "chromium" }, "a") } };
         var rich = new
         {
@@ -563,7 +562,7 @@ public sealed class SuiteDiffTests
     [Fact]
     public async Task DryRun_NeedsTheSameStandingAsCreate()
     {
-        await using var world = await StartAsync();
+        await using var world = await StartAsync(dedicated: true);
         var viewer = await AddMemberAsync(world, "viewer");
         var asViewer = TenancyApiFactory.Resolved(user: viewer, orgHeader: world.Org);
 

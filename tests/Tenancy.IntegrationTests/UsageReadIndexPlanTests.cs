@@ -36,6 +36,7 @@ public sealed class UsageReadIndexPlanTests
     [Fact]
     public async Task Summary_OrgWidePage_UsesThePeriodAndProjectIndexes()
     {
+        // Dedicated: it counts the whole counter table and ANALYZEs it as the planner's input.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var org = await SeedAsync(database);
 
@@ -97,7 +98,7 @@ public sealed class UsageReadIndexPlanTests
     [Fact]
     public async Task ReadIndexes_CreateTheFourIndexesAndDropTheRunPrefixIndex()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
 
         var indexes = await _fixture.ColumnAsync<string>(
             database,

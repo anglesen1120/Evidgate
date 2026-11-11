@@ -24,8 +24,8 @@ public sealed partial class ReconcileRunTests
 
     /// <summary>
     /// A world whose caller owns a verified CI run reference and whose run records the same one, so the batch handler
-    /// binds the slot and the insert can compare each declared epoch with the run's own attempt. Each test keeps a
-    /// database of its own: the dispatcher and consumer claim rows of every tenant and would race the assertions.
+    /// binds the slot and the insert can compare each declared epoch with the run's own attempt. Every assertion
+    /// filters by the world's own run, so the world shares the run's database.
     /// </summary>
     private async Task<IngestTestWorld> StartEpochWorldAsync(string database)
     {
@@ -74,8 +74,8 @@ public sealed partial class ReconcileRunTests
     [InlineData(long.MaxValue)]
     public async Task Foreign_Epoch_Batch_Is_Stored_Stale_And_Its_Shard_Is_Never_Complete(long epoch)
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await StartEpochWorldAsync(dedicated.Name);
+        var database = await _fixture.SharedDatabaseAsync();
+        await using var world = await StartEpochWorldAsync(database);
         await SetRunStateAsync(world, world.RunId, "collecting");
 
         // The event declares an epoch the run's own attempt never took, so the batch is accepted and kept, marked
@@ -111,8 +111,8 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Current_Epoch_Batch_Is_Not_Stale_And_Its_Shard_Completes()
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await StartEpochWorldAsync(dedicated.Name);
+        var database = await _fixture.SharedDatabaseAsync();
+        await using var world = await StartEpochWorldAsync(database);
         await SetRunStateAsync(world, world.RunId, "collecting");
 
         // The control of the stale case: the same shape declaring the run's own attempt is ordinary evidence.
@@ -132,8 +132,8 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Mixed_Batch_Marks_Only_The_Foreign_Epoch_Rows()
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await StartEpochWorldAsync(dedicated.Name);
+        var database = await _fixture.SharedDatabaseAsync();
+        await using var world = await StartEpochWorldAsync(database);
         await SetRunStateAsync(world, world.RunId, "collecting");
 
         var answer = await PostBatchAsync(
@@ -157,8 +157,8 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Event_Without_Epoch_Is_Never_Stale()
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await StartEpochWorldAsync(dedicated.Name);
+        var database = await _fixture.SharedDatabaseAsync();
+        await using var world = await StartEpochWorldAsync(database);
         await SetRunStateAsync(world, world.RunId, "collecting");
 
         // An absent epoch is undeclared, not a foreign one: the insert leaves the flag alone and the batch is accepted.
@@ -174,8 +174,7 @@ public sealed partial class ReconcileRunTests
     [Fact]
     public async Task Run_Without_Ci_Run_Reference_Has_No_Current_Epoch_And_Marks_Nothing_Stale()
     {
-        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await StartAsync(database: dedicated.Name);
+        await using var world = await StartAsync();
         await SetRunStateAsync(world, world.RunId, "collecting");
 
         // This world's run records no CI reference, so no attempt exists to compare a declared epoch with.

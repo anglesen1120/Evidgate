@@ -22,6 +22,7 @@ public sealed class CiResolverTests
     [Fact]
     public async Task ActiveBinding_IsUniquePerRepository_PlatformWide()
     {
+        // Dedicated database: the binding key spans every org, so the rows it clashes with must be its own.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (orgA, projectA) = await SeedOrgAsync(database, "alpha");
         var (orgB, projectB) = await SeedOrgAsync(database, "bravo");
@@ -41,6 +42,7 @@ public sealed class CiResolverTests
     [Fact]
     public async Task ResolveBinding_PrefersActive_NamesPendingOnlyWhenProven_AndLeaksNoTenantOtherwise()
     {
+        // Dedicated database: the pre-tenant resolver answers across all orgs of the database.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (orgA, projectA) = await SeedOrgAsync(database, "alpha");
         var (orgB, projectB) = await SeedOrgAsync(database, "bravo");
@@ -75,6 +77,7 @@ public sealed class CiResolverTests
     [Fact]
     public async Task ResolveIngestToken_ReportsTheDerivedStatus_AndNothingForAnUnknownPrefix()
     {
+        // Dedicated database: the token resolver answers across all orgs of the database.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedOrgAsync(database, "alpha");
 
@@ -95,6 +98,7 @@ public sealed class CiResolverTests
     [Fact]
     public async Task TheAppRole_CannotReadTheCiTablesWithoutATenant_AndCannotEditIssuedRecords()
     {
+        // Dedicated database: it reads the platform grant state of the CI tables.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var (org, project) = await SeedOrgAsync(database, "alpha");
         await SeedBindingAsync(database, org, project, 5, "active");
@@ -117,10 +121,11 @@ public sealed class CiResolverTests
     [Fact]
     public async Task IngestToken_CannotBeBothRotatedAndRevoked_AndRejectsBadShapes()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var (org, project) = await SeedOrgAsync(database, "alpha");
-        var first = await SeedTokenAsync(database, org, project, "AAAAAAAAAAAA", "");
-        var second = await SeedTokenAsync(database, org, project, "BBBBBBBBBBBB", "");
+        var prefix = TokenPrefix();
+        var first = await SeedTokenAsync(database, org, project, prefix, "");
+        var second = await SeedTokenAsync(database, org, project, TokenPrefix(), "");
 
         var both = await Should.ThrowAsync<PostgresException>(() => _fixture.ExecuteAsync(
             database, $"update public.ingest_token set rotated_to_id = '{second}', revoked_at = now() where id = '{first}'"));
@@ -128,18 +133,22 @@ public sealed class CiResolverTests
 
         (await Should.ThrowAsync<PostgresException>(() => SeedTokenAsync(database, org, project, "short", ""))).ConstraintName
             .ShouldBe("ingest_token_prefix_check");
-        (await Should.ThrowAsync<PostgresException>(() => SeedTokenAsync(database, org, project, "AAAAAAAAAAAA", ""))).ConstraintName
+        (await Should.ThrowAsync<PostgresException>(() => SeedTokenAsync(database, org, project, prefix, ""))).ConstraintName
             .ShouldBe("ingest_token_prefix_key");
     }
+
+    /// <summary>A prefix no other test of the shared database can hold: the column's uniqueness is platform-wide.</summary>
+    private static string TokenPrefix() => Guid.NewGuid().ToString("N")[..12];
 
     private async Task<(Guid Org, Guid Project)> SeedOrgAsync(string database, string slug)
     {
         var org = Guid.CreateVersion7();
         var project = Guid.CreateVersion7();
+        var unique = Unique.Slug(slug);
         await _fixture.ExecuteAsync(
             database,
             $"""
-            insert into public.organization (id, name, slug) values ('{org}', '{slug}', '{slug}');
+            insert into public.organization (id, name, slug) values ('{org}', '{unique}', '{unique}');
             insert into public.project (id, org_id, name, slug) values ('{project}', '{org}', 'pp', 'pp');
             """);
 

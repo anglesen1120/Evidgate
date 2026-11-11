@@ -10,7 +10,7 @@ public sealed partial class UsagePriceSchemaTests
     [Fact]
     public async Task AppRole_IsAppendOnly_AndCannotWriteTheGlobalCard()
     {
-        await using var database = await _fixture.CreateDedicatedDatabaseAsync();
+        var database = await _fixture.SharedDatabaseAsync();
         var org = Guid.CreateVersion7();
         var id = await InsertTenantPriceAsync(database, org, "card-own");
 
@@ -53,6 +53,7 @@ public sealed partial class UsagePriceSchemaTests
     [Fact]
     public async Task GlobalInsert_DefinerWritesTheCard_AndRefusesATenantTransaction()
     {
+        // Dedicated: it writes the platform card and counts it whole.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var org = Guid.CreateVersion7();
 
@@ -110,6 +111,7 @@ public sealed partial class UsagePriceSchemaTests
     [Fact]
     public async Task TenantReads_SeeTheGlobalCardAndTheirOwnRows_NeverAnotherOrg()
     {
+        // Dedicated: it writes the platform card and reads the table as one whole set.
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         var orgA = Guid.CreateVersion7();
         var orgB = Guid.CreateVersion7();
