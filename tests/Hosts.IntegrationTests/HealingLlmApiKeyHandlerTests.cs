@@ -61,7 +61,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         var selection = provider.GetRequiredService<IOptions<HealingProviderOptions>>().Value;
         selection.ApiKeySecret.ShouldBe(SecretNames.HealingLlmApiKey);
         selection.ApiKey.ShouldBeNull();
-        selection.ToString().ShouldNotContain(configuredKey);
+        (selection.ToString() ?? string.Empty).ShouldNotContain(configuredKey);
     }
 
     [Fact]
