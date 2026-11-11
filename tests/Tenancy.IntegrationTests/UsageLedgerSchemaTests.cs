@@ -148,6 +148,7 @@ public sealed class UsageLedgerSchemaTests
             "currency:text:text:YES:",
             "adjustment_of:uuid:uuid:YES:",
             "reason:text:text:YES:",
+            "payload_hash:text:text:YES:",
             "created_at:timestamp with time zone:timestamptz:NO:",
             "updated_at:timestamp with time zone:timestamptz:NO:",
             "version:integer:int4:NO:",

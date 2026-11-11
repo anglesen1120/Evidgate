@@ -104,8 +104,9 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     /// <summary>Every command Npgsql executed for this host, whitespace-normalised, in order.</summary>
     public StatementLog Statements { get; } = new();
 
-    /// <summary>A host whose evaluator grants every permission (the rule under test is elsewhere).</summary>
-    public static TenancyApiFactory GrantAll(string appConnectionString) => new(appConnectionString, realEvaluator: false);
+    /// <summary>A host whose evaluator grants every permission, with optional extra service registrations.</summary>
+    public static TenancyApiFactory GrantAll(string appConnectionString, Action<IServiceCollection>? services = null) =>
+        new(appConnectionString, realEvaluator: false) { _extraServices = services };
 
     /// <summary>A host with the module's real evaluator (membership rows and token claims decide).</summary>
     public static TenancyApiFactory RealEvaluator(string appConnectionString) => new(appConnectionString, realEvaluator: true);
