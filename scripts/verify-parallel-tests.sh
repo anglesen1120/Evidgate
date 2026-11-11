@@ -119,6 +119,7 @@ run_parallel_tests() {
     return 2
   fi
   PT_CAP="$cap"
+  [[ "$cap" -eq 0 ]] || echo "   test processes capped at $cap at a time"
   listing="$(dotnet test --no-build -c Release --project "$TENANCY_PROJECT" --list-tests 2>&1)" || {
     printf '%s\n' "$listing" >&2
     return 1

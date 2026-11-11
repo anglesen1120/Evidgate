@@ -73,11 +73,13 @@ class TestParallelCap(unittest.TestCase):
         self.assertEqual(calls.count("START"), 5, done.stdout + done.stderr)
         self.assertLessEqual(max(conc), 2, conc)
         self.assertEqual(max(conc), 2, conc)
+        self.assertIn("test processes capped at 2 at a time", done.stdout)
 
     def test_unset_starts_every_process_before_the_first_finishes(self):
         done, calls, conc = self.run_stage(FAKE_SLEEP="1.5")
         self.assertEqual(calls.count("START"), 5, done.stdout + done.stderr)
         self.assertEqual(max(conc), 5, conc)
+        self.assertNotIn("capped", done.stdout)
 
     def test_a_cap_of_one_runs_the_tenancy_shard_first_and_serially(self):
         done, calls, conc = self.run_stage(EVIDGATE_TEST_PARALLEL="1", FAKE_SLEEP="0.3")
