@@ -2890,6 +2890,90 @@
         "prod": "environment"
       },
       "note": "comma-separated CIDR networks (e.g. `10.0.0.0/8`) of the reverse proxies or load balancers allowed to set `X-Forwarded-For` for the Api; read with KNOWNPROXIES. Every hop of a multi-proxy chain must be listed: the client is the right-most hop that is not (docs/runbooks/forwarded-headers.md)."
+    },
+    {
+      "key": "EVIDGATE__HEALING__LLM__PROVIDER",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "forbiddenValues": {
+        "staging": ["mock"],
+        "prod": ["mock"]
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "`EVIDGATE:Healing:Llm:Provider` (08.5.1 healing adapter): `none`, `mock` or `http`, case-insensitive. Both hosts refuse to start outside Development while it is unset, and refuse `mock` there too, so no real deployment can run the offline adapter or reach a provider by silence; in Development unset means `mock`. `none` is the deliberate value for a deployment that places no healing calls (the gateway refuses before any adapter is reached), and it is what the test suites state for the hosts they boot pinned to Production (tests/Shared/NoHealingProvider.cs). `http` additionally requires BASEADDRESS and APIKEYSECRET at boot; the provider selection is judged by HealingProviderOptionsValidator at start-up, which is why this row is not requiredAtBoot (Development needs no value). docs/runbooks/healing-llm-provider.md."
+    },
+    {
+      "key": "EVIDGATE__HEALING__LLM__BASEADDRESS",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "absolute base address of the healing provider's API, required only when PROVIDER is `http`: it must be an absolute `https` URI ending in `/` with no query, fragment or user information (`http` is accepted in Development only), because the adapter posts a relative path under it and credentials in the URL would travel on every request. A missing or unusable value fails the boot naming this key, and it may never point at a redirect: the client does not follow one, so a provider behind a redirect fails its calls as `error` instead of leaving the configured endpoint."
+    },
+    {
+      "key": "EVIDGATE__HEALING__LLM__APIKEYSECRET",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "the NAME of the secret that holds the healing provider's API key, never the key itself: start-up accepts only `EVIDGATE__HEALING__LLM__APIKEY` (the name `SecretNames` declares for it), and a missing name or any other fails the boot naming this key without echoing a value. The value is never judged at boot: the adapter's request handler resolves the name through `ISecretProvider` on every call, so the key is stored nowhere and a name whose value is missing then fails that call as an `error` attempt row with no request sent. Required only when PROVIDER is `http`."
+    },
+    {
+      "key": "EVIDGATE__HEALING__LLM__APIKEY",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "the healing provider's API key, named once in `SecretNames` (`HealingLlmApiKey`) and resolved by the adapter's request handler through ISecretProvider on every call; it is never bound from configuration (the options member has an internal setter) and appears in no log, exception message or options snapshot. Used only when APIKEYSECRET names it, so no environment must hold it: a deployment that selects `http` provisions it in the secret store, and one that states `none` never needs it."
     }
   ]
 }
