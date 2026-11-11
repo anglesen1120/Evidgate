@@ -414,7 +414,8 @@ run_stage() {
       scripts/tests/test_gate_scope.py scripts/tests/test_gate_scope_reasons.py \
       scripts/tests/test_verify_scope.py \
       scripts/tests/test_verify_refusal.py scripts/tests/test_verify_shards.py \
-      scripts/tests/test_verify_test_parallel.py scripts/tests/test_smoke_mktemp.py
+      scripts/tests/test_verify_test_parallel.py scripts/tests/test_verify_stage_time.py \
+      scripts/tests/test_smoke_mktemp.py
     ;;
   image-pins)
     # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three
@@ -468,7 +469,7 @@ selected=() scope_tier="" scope_reason="" scope_changed="" scope_base=""
 scope_stages="" scope_skipped="" scope_notes=()
 
 main() {
-  local name report
+  local report
   cd "$ROOT"
   refuse_gate_flag "$@"
   parse_args "$@"
@@ -479,9 +480,7 @@ main() {
   else
     echo "== gate scope: explicit (--stage given: no path filtering, every listed stage runs)"
   fi
-  for name in "${selected[@]}"; do
-    run_stage "$name"
-  done
+  run_selected_stages
   report_result
 }
 

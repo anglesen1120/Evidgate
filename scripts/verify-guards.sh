@@ -380,3 +380,53 @@ report_result() {
   done
   echo "== verify: all stages passed"
 }
+
+# --- per-stage wall time ------------------------------------------------------
+# Where a gate's minutes go: one `== stage <name>: <rc> <wall>s` line after each
+# stage and, once the loop ends (a failed stage included), a table of them with the
+# total. Plain integers from $SECONDS, so the Mac and the LAN logs read the same.
+STAGE_TIMES=()
+
+# `record_stage_time <name> <rc> <seconds>`: prints the stage's line and keeps it.
+record_stage_time() {
+  echo "== stage $1: $2 ${3}s"
+  STAGE_TIMES+=("$1 $2 $3")
+}
+
+# `print_stage_summary`: the table of every stage that ran and their total wall
+# time. Prints nothing when no stage ran.
+print_stage_summary() {
+  local row total=0 name rc secs
+  [[ "${#STAGE_TIMES[@]}" -gt 0 ]] || return 0
+  echo "== stage timings (name rc wall-seconds)"
+  for row in "${STAGE_TIMES[@]}"; do
+    read -r name rc secs <<<"$row"
+    printf '   %-28s %3s %6ss\n' "$name" "$rc" "$secs"
+    total=$((total + secs))
+  done
+  printf '   %-28s %3s %6ss\n' "total" "-" "$total"
+}
+
+# `run_selected_stages`: runs `selected` in order and stops at the first failure,
+# timing each. The summary is printed on both paths.
+run_selected_stages() {
+  local name rc t0
+  for name in "${selected[@]}"; do
+    t0=$SECONDS
+    # A subshell, so errexit stays armed inside the stage while its status is
+    # still caught here, and a stage's own `exit` or trap cannot skip the table.
+    set +e
+    (
+      set -e
+      run_stage "$name"
+    )
+    rc=$?
+    set -e
+    record_stage_time "$name" "$rc" "$((SECONDS - t0))"
+    if [[ "$rc" -ne 0 ]]; then
+      print_stage_summary
+      exit "$rc"
+    fi
+  done
+  print_stage_summary
+}
