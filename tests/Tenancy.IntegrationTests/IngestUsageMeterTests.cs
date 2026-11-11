@@ -115,6 +115,16 @@ public sealed partial class IngestUsageMeterTests
     private Task<string> TaskStateAsync(string database) =>
         _fixture.ScalarAsync<string>(database, $"select state from public.task where task_type = '{MeteringTask}'");
 
+    /// <summary>How many attempts the one metering row has had: one means the queue never retried it.</summary>
+    private Task<long> AttemptsAsync(string database) =>
+        _fixture.ScalarAsync<long>(database, $"select attempts from public.task where task_type = '{MeteringTask}'");
+
+    /// <summary>Metering rows that would run again (any state but <c>done</c>), so "not requeued" is assertable.</summary>
+    private Task<long> PendingTaskRowsAsync(string database) =>
+        _fixture.ScalarAsync<long>(
+            database,
+            $"select count(*) from public.task where task_type = '{MeteringTask}' and state <> 'done'");
+
     /// <summary>Makes the queue's row runnable without sleeping: the backoff of a retry is cleared, as an operator's replay is.</summary>
     private Task MakeRunnableAsync(string database) =>
         _fixture.ExecuteAsync(
@@ -256,43 +266,43 @@ public sealed partial class IngestUsageMeterTests
     // ------------------------------------------------------------------ fail-closed duplicates
 
     [Fact]
-    public async Task MeterBatch_SeededDuplicateWithDifferentQuantity_FailsClosed()
+    public async Task MeterBatch_SeededDuplicateWithDifferentQuantity_CompletesAsAConflict()
     {
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(owned.Name);
         var batchId = await PostBatchAsync(world, events: 2);
 
-        // A row already on file under this batch's key but with another quantity: the batch was billed as something
-        // else, which is never "already done".
+        // A row already on file under this batch's key but with another quantity: the ledger compares the payload hash
+        // and answers a conflict, so nothing is written and the handler reports it instead of retrying a payload that can
+        // never become the stored one.
         await SeedLedgerAsync(world, await SeededEntryAsync(world, batchId, quantity: 7m));
         (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.task set max_attempts = 1 where task_type = '{MeteringTask}'");
         (await Consumer(world).PollOnceAsync(Queue, Token)).ShouldBe(1);
 
         (await TaskStateAsync(world.Database))
-            .ShouldBe("dead_letter", "a stored bill that disagrees is a failure, not a replay");
-        (await LastErrorAsync(world)).ShouldContain("quantity");
+            .ShouldBe("done", "the ledger reported the conflict, so the task itself completes");
+        (await AttemptsAsync(world.Database)).ShouldBe(1, "a conflict is not retried: the payload can never match");
+        (await PendingTaskRowsAsync(world.Database)).ShouldBe(0, "nothing is requeued");
         (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1, "the stored bill is never rewritten");
         (await LedgerColumnAsync(world.Database, world.Org, batchId, "quantity::text")).ShouldBe("7");
     }
 
     [Fact]
-    public async Task MeterBatch_SeededDuplicateWithDifferentProject_FailsClosed()
+    public async Task MeterBatch_SeededDuplicateWithDifferentProject_CompletesAsAConflict()
     {
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(owned.Name);
         var batchId = await PostBatchAsync(world, events: 2);
 
-        // Every compared field but the project matches: the batch names a project, the stored row does not.
+        // Every compared field but the project matches: the batch names a project, the stored row does not. The hash
+        // covers the project, so the ledger answers a conflict and the stored row keeps its own value.
         await SeedLedgerAsync(world, (await SeededEntryAsync(world, batchId, quantity: 2m)) with { ProjectId = null });
         (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.task set max_attempts = 1 where task_type = '{MeteringTask}'");
         (await Consumer(world).PollOnceAsync(Queue, Token)).ShouldBe(1);
 
-        (await TaskStateAsync(world.Database)).ShouldBe("dead_letter");
-        (await LastErrorAsync(world)).ShouldContain("project_id");
+        (await TaskStateAsync(world.Database)).ShouldBe("done", "the conflict is reported, not retried");
+        (await AttemptsAsync(world.Database)).ShouldBe(1);
+        (await PendingTaskRowsAsync(world.Database)).ShouldBe(0);
         (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1);
         (await LedgerColumnAsync(world.Database, world.Org, batchId, "project_id::text")).ShouldBeNull();
     }
@@ -342,7 +352,7 @@ public sealed partial class IngestUsageMeterTests
     }
 
     [Fact]
-    public async Task MeterBatch_SeededRedatedDuplicateWithDifferentQuantity_FailsClosed()
+    public async Task MeterBatch_SeededRedatedDuplicateWithDifferentQuantity_CompletesAsAConflict()
     {
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(owned.Name);
@@ -350,20 +360,19 @@ public sealed partial class IngestUsageMeterTests
         var metered = await BatchColumnAsync(
             world.Database, batchId, "to_char(created_at at time zone 'UTC', 'YYYY-MM')");
 
-        // The stored row of this batch was itself re-dated, and it bills another quantity: the period alone no longer
-        // settles whether a duplicate is this batch's own replay, so a disagreeing payload is still a failure.
+        // The stored row of this batch was itself re-dated, and it bills another quantity: the ledger hashes the period
+        // the payload claims (the stored original_period), so the differing quantity is a conflict, and the row stands.
         await IssueStatementAsync(world.Database, world.Org, metered);
         await SeedLedgerAsync(world, await SeededEntryAsync(world, batchId, quantity: 7m));
         (await LedgerColumnAsync(world.Database, world.Org, batchId, "period"))
             .ShouldBe(NextMonth(metered), "the stored row is the re-dated one this case is about");
 
         (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.task set max_attempts = 1 where task_type = '{MeteringTask}'");
         (await Consumer(world).PollOnceAsync(Queue, Token)).ShouldBe(1);
 
-        (await TaskStateAsync(world.Database)).ShouldBe("dead_letter");
-        (await LastErrorAsync(world)).ShouldContain("quantity");
+        (await TaskStateAsync(world.Database)).ShouldBe("done", "the conflict is reported, not retried");
+        (await AttemptsAsync(world.Database)).ShouldBe(1);
+        (await PendingTaskRowsAsync(world.Database)).ShouldBe(0);
         (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1, "the stored bill is never rewritten");
         (await LedgerColumnAsync(world.Database, world.Org, batchId, "quantity::text")).ShouldBe("7");
     }

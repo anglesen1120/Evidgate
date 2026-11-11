@@ -105,7 +105,15 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     public StatementLog Statements { get; } = new();
 
     /// <summary>A host whose evaluator grants every permission (the rule under test is elsewhere).</summary>
-    public static TenancyApiFactory GrantAll(string appConnectionString) => new(appConnectionString, realEvaluator: false);
+    /// <param name="appConnectionString">The app-role connection string.</param>
+    /// <param name="services">
+    /// Extra service registrations (a log sink, a switchable collaborator), applied last like
+    /// <see cref="RealResolver"/>'s.
+    /// </param>
+    public static TenancyApiFactory GrantAll(
+        string appConnectionString,
+        Action<IServiceCollection>? services = null) =>
+        new(appConnectionString, realEvaluator: false) { _extraServices = services };
 
     /// <summary>A host with the module's real evaluator (membership rows and token claims decide).</summary>
     public static TenancyApiFactory RealEvaluator(string appConnectionString) => new(appConnectionString, realEvaluator: true);

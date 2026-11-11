@@ -41,7 +41,7 @@ public sealed partial class IngestUsageMeterTests
     }
 
     [Fact]
-    public async Task MeterBatch_ReplayedRedatedDuplicateWithAnotherOriginalMonth_FailsClosed()
+    public async Task MeterBatch_ReplayedRedatedDuplicateWithAnotherOriginalMonth_CompletesAsAConflict()
     {
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(owned.Name);
@@ -57,12 +57,12 @@ public sealed partial class IngestUsageMeterTests
         (await LedgerColumnAsync(world.Database, world.Org, batchId, "original_period")).ShouldBe(previous);
 
         (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.task set max_attempts = 1 where task_type = '{MeteringTask}'");
         (await Consumer(world).PollOnceAsync(Queue, Token)).ShouldBe(1);
 
-        (await TaskStateAsync(world.Database)).ShouldBe("dead_letter");
-        (await LastErrorAsync(world)).ShouldContain("period");
+        (await TaskStateAsync(world.Database))
+            .ShouldBe("done", "the ledger compares original_period, finds another month, and answers a conflict");
+        (await AttemptsAsync(world.Database)).ShouldBe(1);
+        (await PendingTaskRowsAsync(world.Database)).ShouldBe(0, "a conflict is not retried");
         (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1);
         (await LedgerColumnAsync(world.Database, world.Org, batchId, "original_period")).ShouldBe(previous);
     }
@@ -70,7 +70,7 @@ public sealed partial class IngestUsageMeterTests
     [Theory]
     [InlineData("unit")]
     [InlineData("project_id")]
-    public async Task MeterBatch_ReplayedRedatedDuplicateWithOneDifferentField_FailsClosed(string field)
+    public async Task MeterBatch_ReplayedRedatedDuplicateWithOneDifferentField_CompletesAsAConflict(string field)
     {
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await StartAsync(owned.Name);
@@ -84,18 +84,17 @@ public sealed partial class IngestUsageMeterTests
         };
 
         // The stored row was re-dated out of the batch's month, so only its provenance matches this batch: the differing
-        // unit or project is what the comparison must catch, and no second row is written.
+        // unit or project is what the payload hash catches, and no second row is written.
         await IssueStatementAsync(world.Database, world.Org, entry.Period);
         await SeedLedgerAsync(world, different);
         (await LedgerColumnAsync(world.Database, world.Org, batchId, "original_period")).ShouldBe(entry.Period);
 
         (await Dispatcher(world).DispatchBatchAsync(Token)).Enqueued.ShouldBe(1);
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.task set max_attempts = 1 where task_type = '{MeteringTask}'");
         (await Consumer(world).PollOnceAsync(Queue, Token)).ShouldBe(1);
 
-        (await TaskStateAsync(world.Database)).ShouldBe("dead_letter");
-        (await LastErrorAsync(world)).ShouldContain(field);
+        (await TaskStateAsync(world.Database)).ShouldBe("done", "the conflict is reported, not retried");
+        (await AttemptsAsync(world.Database)).ShouldBe(1);
+        (await PendingTaskRowsAsync(world.Database)).ShouldBe(0);
         (await LedgerCountAsync(world.Database, world.Org)).ShouldBe(1);
         (await RedateAuditCountAsync(world)).ShouldBe(1L, "only the seed's move is audited");
     }
