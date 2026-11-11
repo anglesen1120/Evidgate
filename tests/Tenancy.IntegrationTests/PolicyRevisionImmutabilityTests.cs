@@ -18,11 +18,11 @@ namespace Tenancy.IntegrationTests;
 /// (app-role grants and the trigger), the append-only store's dedupe and numbering, and the tenant boundary.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class PolicyRevisionImmutabilityTests
+public sealed class PolicyRevisionImmutabilityTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
-
-    public PolicyRevisionImmutabilityTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+    public PolicyRevisionImmutabilityTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project) : IAsyncDisposable
     {
@@ -36,7 +36,7 @@ public sealed class PolicyRevisionImmutabilityTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

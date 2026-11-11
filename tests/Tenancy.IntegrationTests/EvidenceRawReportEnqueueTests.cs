@@ -24,8 +24,8 @@ namespace Tenancy.IntegrationTests;
 /// worlds is the type's other part, so neither file grows past the size bound.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed partial class EvidenceRawReportEnqueueTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed partial class EvidenceRawReportEnqueueTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex.</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -64,6 +64,8 @@ public sealed partial class EvidenceRawReportEnqueueTests(PostgresTenancyFixture
     private readonly PostgresTenancyFixture _fixture = fixture;
 
     private readonly SeaweedFsStore _store = store;
+
+    private readonly TenancyHostPool _hosts = hosts;
 
     /// <summary>
     /// One raw report of a run whose manifest declares a single hint: exactly one <c>raw_report_parse</c> row, with

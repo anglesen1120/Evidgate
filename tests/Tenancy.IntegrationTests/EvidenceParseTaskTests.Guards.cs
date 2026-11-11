@@ -252,7 +252,7 @@ public sealed partial class EvidenceParseTaskTests
     public async Task Parse_Payload_Of_Another_Tenant_Is_Unreachable()
     {
         await using var world = await StartAsync();
-        var other = await CreateOtherWorldAsync("globex");
+        await using var other = await CreateOtherWorldAsync("globex");
         var foreign = await SeedReadyAsync(other);
         var runner = new StubParseRunner
         {

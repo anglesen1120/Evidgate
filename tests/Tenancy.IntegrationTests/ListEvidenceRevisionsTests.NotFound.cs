@@ -28,7 +28,7 @@ public sealed partial class ListEvidenceRevisionsTests
         var unknownAnswer = await GetAsync(world, Guid.CreateVersion7());
         unknownAnswer.Status.ShouldBe(HttpStatusCode.NotFound);
 
-        await using var scoped = TenancyApiFactory.GrantAll(_fixture.AppConnectionString(world.Database));
+        await using var scoped = _hosts.GrantAll(world.Database);
         using var client = scoped.CreateClient();
 
         // The control: the same credential scoped to the run's own project reads the page, so the 404 below is the

@@ -18,10 +18,10 @@ namespace Tenancy.IntegrationTests;
 public sealed partial class EvidenceRawReportQuotaTests
 {
     [Trait("Category", "Docker")]
-    public sealed class QaS271ReportRegression(PostgresTenancyFixture fixture, SeaweedFsStore store)
-        : IClassFixture<SeaweedFsStore>
+    public sealed class QaS271ReportRegression(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+        : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
     {
-        private readonly EvidenceRawReportQuotaTests _subject = new(fixture, store);
+        private readonly EvidenceRawReportQuotaTests _subject = new(fixture, store, hosts);
 
         [Fact]
         public async Task Report_PeekAllowsThenCounterFills_DefersWithoutCommittingAndRecoversAfterRaise()
@@ -34,7 +34,7 @@ public sealed partial class EvidenceRawReportQuotaTests
                 ReplaceQuotaGate(services, inner => gate.Wrap(inner));
                 ReplaceObjectStorage(services, inner => storage.Wrap(inner));
             });
-            await using var counters = await UsageQuotaWorld.StartAsync(fixture);
+            await using var counters = await UsageQuotaWorld.StartAsync(fixture, hosts: hosts);
             await _subject.SeedPlanAsync(world);
             var artifact = await _subject.SeedArtifactAsync(world, OneEventBody);
             await _subject.SeedCounterAsync(counters, world, 0m, 1m);
@@ -79,7 +79,7 @@ public sealed partial class EvidenceRawReportQuotaTests
                 ReplaceQuotaGate(services, inner => new SpyQuotaGate(inner, spy));
             });
             await _subject.SeedPlanAsync(world);
-            await using var counters = await UsageQuotaWorld.StartAsync(fixture);
+            await using var counters = await UsageQuotaWorld.StartAsync(fixture, hosts: hosts);
 
             // A counter with room, so the gate's answer is a metered one and names the transaction's month: an
             // unmetered Ok carries no month by contract, and the point here is which month the gate resolved.
@@ -120,7 +120,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         {
             await using var report = await _subject.StartAsync(services =>
                 services.Configure<QuotaGateOptions>(options => options.Enabled = workerEnabled));
-            await using var counters = await UsageQuotaWorld.StartAsync(fixture);
+            await using var counters = await UsageQuotaWorld.StartAsync(fixture, hosts: hosts);
             await _subject.SeedPlanAsync(report);
             var artifact = await _subject.SeedArtifactAsync(report, OneEventBody);
             await _subject.SeedCounterAsync(counters, report, 1m, 1m);

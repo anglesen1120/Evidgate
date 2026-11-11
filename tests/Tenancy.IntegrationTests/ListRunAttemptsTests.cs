@@ -22,14 +22,14 @@ namespace Tenancy.IntegrationTests;
 /// 404 <c>not_found</c> of <c>GET /v1/runs/{r}</c> (00 §5.4: no existence oracle).
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class ListRunAttemptsTests
+public sealed class ListRunAttemptsTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
     /// <summary>A well-formed artifact checksum, <c>sha256:&lt;64 hex&gt;</c> (0028).</summary>
     private const string Checksum = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
-    public ListRunAttemptsTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public ListRunAttemptsTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project)
         : IAsyncDisposable
@@ -400,7 +400,7 @@ public sealed class ListRunAttemptsTests
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = _hosts.RealResolver(database);
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await CreateOrgAsync(client, user, Unique.Slug("acme"));

@@ -16,7 +16,7 @@ namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
 [Collection(ExclusiveTenancySuite.Name)]
-public sealed class IngestionAdmissionTests(PostgresTenancyFixture fixture)
+public sealed class IngestionAdmissionTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
     private const int WindowSeconds = 60;
     private const int TransportCap = 1_048_576;
@@ -58,8 +58,8 @@ public sealed class IngestionAdmissionTests(PostgresTenancyFixture fixture)
         await using var world = await StartAsync(clock, limiter: limiter, slots: 2);
         var body = Batch(world, Guid.CreateVersion7(), sequence: 1);
         (await IngestQaRequests.PostEventsAsync(world.Client, world.RunId, body)).Status.ShouldBe(HttpStatusCode.OK);
-        await using var otherHost = TenancyApiFactory.WithPrincipal(
-            fixture.AppConnectionString(world.Database), world.Org, world.Project,
+        await using var otherHost = hosts.WithPrincipal(
+            world.Database, world.Org, world.Project,
             IngestTestWorld.Writer(IngestTestWorld.OtherJti, world.Project),
             services: services => services.AddSingleton(limiter));
         using var otherClient = otherHost.CreateClient();
@@ -112,8 +112,8 @@ public sealed class IngestionAdmissionTests(PostgresTenancyFixture fixture)
         (await world.CountAsync("event", $"event_id = '{eventId:D}'")).ShouldBe(0);
         (await world.CountAsync("event_batch", $"run_id = '{planB.RunId:D}'")).ShouldBe(0);
 
-        await using var hostB = TenancyApiFactory.WithPrincipal(
-            fixture.AppConnectionString(world.Database), world.Org, projectB,
+        await using var hostB = hosts.WithPrincipal(
+            world.Database, world.Org, projectB,
             IngestTestWorld.Writer(projectScope: projectB), services: services => services.AddSingleton(limiter));
         using var clientB = hostB.CreateClient();
         (await IngestQaRequests.PostEventsAsync(clientB, planB.RunId, body)).Status.ShouldBe(HttpStatusCode.OK);
@@ -293,7 +293,7 @@ public sealed class IngestionAdmissionTests(PostgresTenancyFixture fixture)
     private Task<IngestTestWorld> StartAsync(
         IngestRateLimitClock clock, int permitLimit = 1, IngestionRateLimiter? limiter = null, int slots = 1) =>
         IngestTestWorld.StartAsync(fixture, IngestTestWorld.Writer(), slots: slots,
-            services: services => services.AddSingleton(limiter ?? Limiter(clock, permitLimit)));
+            services: services => services.AddSingleton(limiter ?? Limiter(clock, permitLimit)), hosts: hosts);
 
     private static IngestRateLimitClock Clock() => new(DateTimeOffset.UnixEpoch);
 

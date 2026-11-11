@@ -12,12 +12,12 @@ namespace Tenancy.IntegrationTests;
 public sealed partial class EvidenceRawReportQuotaTests
 {
     [Trait("Category", "Docker")]
-    public sealed class QaS271DeferredBacklog(PostgresTenancyFixture fixture, SeaweedFsStore store)
-        : IClassFixture<SeaweedFsStore>
+    public sealed class QaS271DeferredBacklog(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+        : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
     {
         private const int Backlog = 32;
         private const string Queue = "quota-backlog";
-        private readonly EvidenceRawReportQuotaTests _subject = new(fixture, store);
+        private readonly EvidenceRawReportQuotaTests _subject = new(fixture, store, hosts);
 
         [Fact]
         public async Task DeferredReports_OneTenantBacklog_SpreadsWithinClampAndEveryTaskCanComplete()
@@ -38,7 +38,7 @@ public sealed partial class EvidenceRawReportQuotaTests
                     ?? throw new InvalidOperationException("the report world is not ready")));
             });
             current = world;
-            await using var counters = await UsageQuotaWorld.StartAsync(fixture);
+            await using var counters = await UsageQuotaWorld.StartAsync(fixture, hosts: hosts);
             await _subject.SeedPlanAsync(world);
             await _subject.SeedCounterAsync(counters, world, 1m, 1m);
             var ids = await SeedBacklogAsync(world);
