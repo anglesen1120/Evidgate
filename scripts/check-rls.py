@@ -117,8 +117,8 @@ DEFINER_AUDIT_EXEMPT = {
     "evidgate_resolve.login_link_identity": (
         "created 0045_identity_session_hardening.sql:603 (bytea[], timestamptz, text, text, text, uuid; the 5-argument "
         "0044:222 was dropped at 0045:601): pre-tenant, no org chain to write into — linking moves identities between "
-        "users before any tenant scope exists; the org-scoped `auth.link` row is written by `IdentityAuditWriter` "
-        "(Login/Audit/IdentityAuditWriter.cs:59-95, called from Endpoints/LinkEndpoints.cs:496)"
+        "users before any tenant scope exists; the org-scoped `auth.link` rows are written in the same "
+        "transaction by its only caller, `evidgate_resolve.login_link_identity_audited` (0101)"
     ),
     "evidgate_resolve.session_authenticate": (
         "created 0045_identity_session_hardening.sql:338 (bytea[], bytea, integer, timestamptz, integer): pre-tenant, "
@@ -279,7 +279,7 @@ def lint_definers(schema, raws: dict[str, str]) -> list[Finding]:
         for relation in RELATION.findall(body):
             if relation.lower() not in SQL_WORDS and relation.lower() not in ctes and not relation.lower().startswith(("batch", "removed", "v_")):
                 findings.append(Finding(fname, short, "definer_unqualified", f"relation `{relation}` is not schema-qualified"))
-        audited = re.search(r"insert\s+into\s+\S*audit|perform\s+evidgate\.session_revoke_audit_append\s*\(", body, re.I)
+        audited = re.search(r"insert\s+into\s+\S*audit|perform\s+evidgate\.(?:session_revoke_audit_append|audit_append_user_event)\s*\(", body, re.I)
         if not audited and func not in DEFINER_AUDIT_EXEMPT and func not in deferrals.get(fname, set()):
             findings.append(
                 Finding(fname, short, "definer_audit", "no per-call audit row (TL T80); add one or name it in `-- lint: audit-deferred <task> <schema.function>[, ...]`")
