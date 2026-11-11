@@ -24,4 +24,10 @@ public static class MigratorExitCodes
     /// prepared or read (permission denied, missing schema, timeout).
     /// </summary>
     public const int DatabaseUnavailable = 4;
+
+    /// <summary>A script could not take a lock within <c>lock_timeout</c> (SQLSTATE 55P03); rolled back, not journalled, safe to rerun once the blocker is gone.</summary>
+    public const int LockTimeout = 5;
+
+    /// <summary>A statement exceeded <c>statement_timeout</c> (SQLSTATE 57014); rolled back, not journalled.</summary>
+    public const int StatementTimeout = 6;
 }

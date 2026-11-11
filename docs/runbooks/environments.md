@@ -182,8 +182,9 @@ locks the table every authenticated request touches. (2) The file runs in one tr
 `set local lock_timeout = '5s'`, because its two `alter table` statements and the `drop index` take ACCESS
 EXCLUSIVE on that table and its `create index` takes SHARE, which blocks every write (every session slide)
 until the build is done: apply it while traffic is drained or between request bursts, and treat Migrator
-exit 3 (lock timeout, file rolled back and unjournalled) as "retry when the table is quiet", not as a
-defect. The header of `migrations/0045_identity_session_hardening.sql` records both expectations.
+exit 5 (lock timeout, file rolled back and unjournalled) as "retry when the table is quiet", not as a
+defect. The header of `migrations/0045_identity_session_hardening.sql` records both expectations; the
+[Migrator timeouts runbook](migrator-timeouts.md) covers the timeouts, exit 5 and exit 6, and the rerun.
 
 `required` is the lint's per-environment rule: the environment must declare the key whatever the boot
 would do without it. That is how a security-relevant default stays visible — every environment declares
@@ -303,7 +304,11 @@ steps, run in this order because each one's evidence depends on the previous one
    and the database that role owns, then stops.
 2. The environment's deploy job runs `Evidgate.Migrator` against the owner
    connection. Migration `0001` creates `evidgate_app`, `evidgate_operator` and
-   `evidgate_worker_sched` without LOGIN.
+   `evidgate_worker_sched` without LOGIN. Each script runs in its own transaction under a
+   5 s `lock_timeout` and a 900 s `statement_timeout`
+   (`EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS`, `EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS`,
+   `0` disables); a timeout is exit `5` or `6`, the script rolls back and nothing is journalled —
+   see the [Migrator timeouts runbook](migrator-timeouts.md) before rerunning.
 3. `scripts/env/bootstrap-db.sh <env> credentials` — as superuser: LOGIN + a
    password for those three roles. It refuses, naming the missing roles, until
    step 2 has run.

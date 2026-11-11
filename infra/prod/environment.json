@@ -169,15 +169,23 @@
     },
     "EVIDGATE_MIGRATOR__COMMANDTIMEOUTSECONDS": {
       "origin": "default",
-      "from": "option default 0 (no statement timeout), so a long index build is not cut in half; the deploy gate bounds the run (10.2.2-T1)"
+      "from": "option default 0 (no driver command timeout; the per-script server timeouts are the two keys below), so a long index build is not cut in half by the client; the deploy gate also bounds the run (10.2.2-T1)"
     },
     "EVIDGATE_MIGRATOR__CONNECTIONSTRING": {
       "origin": "secret-store",
       "from": "provider secret store: the prod evidgate_owner credential, used only by the migration job (10.2.2-T1) and never by Api or Worker (00 §5.4.3); migrations never run against prod from a developer machine (area plan §6)"
     },
+    "EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS": {
+      "origin": "default",
+      "from": "option default 5 s (lock_timeout per script), 0 = disabled"
+    },
     "EVIDGATE_MIGRATOR__MIGRATIONSPATH": {
       "origin": "default",
       "from": "not set: ⚠️ what the Evidgate.Migrator image ships is settled in 10.2.1-T1; until then the process resolves <application directory>/migrations"
+    },
+    "EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS": {
+      "origin": "default",
+      "from": "option default 900 s (statement_timeout per script), 0 = disabled"
     },
     "EVIDGATE_OPERATOR_PASSWORD": {
       "origin": "default",
