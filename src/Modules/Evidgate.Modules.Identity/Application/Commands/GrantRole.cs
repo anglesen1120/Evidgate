@@ -155,6 +155,14 @@ internal sealed class GrantRoleCommandHandler(
             {
                 await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             }
+            catch (DbUpdateException exception) when (MembershipRoleRefusal.Matches(exception))
+            {
+                return Result.Failure<MembershipView>(MembershipRoleRefusal.UnknownRole);
+            }
+            catch (DbUpdateException exception) when (MembershipRoleRefusal.IsContention(exception))
+            {
+                return Result.Failure<MembershipView>(MembershipRoleRefusal.Contention);
+            }
             catch (DbUpdateException exception) when (IsUniqueViolation(exception))
             {
                 // `unique (membership_id, role_id)` is the arbiter: a concurrent grant

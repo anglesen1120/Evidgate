@@ -696,6 +696,8 @@ internal sealed class TenantRowFactory
             ("public.waiver", "state") => "requested",
             ("public.waiver", "scope") => "case",
             ("public.quarantine_entry", "state") => "active",
+            // role.kind is closed to member|service|staff, and membership_role (0097) only accepts a member role.
+            ("public.role", "kind") => "member",
             ("public.artifact", "kind") => "trace",
             ("public.artifact", "execution_key") => new string('a', 64),
             ("public.artifact", "checksum") => "sha256:" + new string('b', 64),

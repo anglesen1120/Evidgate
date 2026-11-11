@@ -4,6 +4,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Authorization;
 using Evidgate.Modules.Identity.Authorization;
 using Evidgate.Testing;
+using Npgsql;
 using Shouldly;
 using Xunit;
 
@@ -326,36 +327,25 @@ public sealed class EvaluatorTests : CatalogueTestBase
     }
 
     /// <summary>
-    /// W7-SEC-03: a staff role attached to a membership row grants nothing — the member
-    /// join requires <c>r.kind = 'member'</c>. The row is arranged as the owner because
-    /// the commands now refuse such a role (409 <c>unknown_role</c>), and the case is
-    /// about the read side: <c>platform_operator</c> is visible to every tenant and
-    /// carries <c>support:read</c>, an assignable code, so without the kind filter the
-    /// database layer would have no answer to a hand-written row. The viewer grant is
-    /// evaluated too, so the test cannot pass because the member holds nothing at all.
+    /// The database refuses a staff role on a membership: the role reference's key and its guard reject the
+    /// row itself, so no evaluator path has such a row to ignore. <c>platform_operator</c> is visible to every
+    /// tenant and carries <c>support:read</c>, an assignable code, which is what made the row worth arranging
+    /// as the owner while the table had no key.
     /// </summary>
     [Fact]
-    public async Task Staff_Role_Attached_To_A_Membership_Grants_Nothing()
+    public async Task A_Staff_Role_Cannot_Be_Attached_To_A_Membership()
     {
         var org = await Fixture.SeedOrgAsync(cancellationToken: Token);
         var userId = await IdentityTestData.SeedActiveMemberAsync(Fixture, org, "viewer", cancellationToken: Token);
         var staffRoleId = await IdentityTestData.RoleIdAsync(Fixture, org, "platform_operator", Token);
 
-        await IdentityTestData.GrantRoleToMemberAsync(Fixture, org, userId, staffRoleId, Token);
+        var refusal = await Should.ThrowAsync<PostgresException>(() =>
+            IdentityTestData.GrantRoleToMemberAsync(Fixture, org, userId, staffRoleId, Token));
 
-        (await IdentityTestData.RolePermissionsAsync(Fixture, org, staffRoleId, Token))
-            .ShouldContain(Permissions.Support.Read, "the staff role must really carry the code for this test to mean anything");
-
-        await using var scope = await Fixture.BeginTenantScopeAsync(org, cancellationToken: Token);
-        var evaluator = new PermissionEvaluator(Fixture.Db);
-
-        var staffCode = await EvaluateAsync(evaluator, org, RequestPrincipal.Member(userId), Permissions.Support.Read);
-
-        staffCode.IsGranted.ShouldBeFalse("a `staff`-kind role is not a role a membership can hold (W7-SEC-03)");
-        staffCode.DenyCode.ShouldBe(ApiErrorCode.Forbidden);
-
-        (await EvaluateAsync(evaluator, org, RequestPrincipal.Member(userId), Permissions.Project.Read))
-            .IsGranted.ShouldBeTrue("the membership's own viewer role still grants, so the refusal above is the kind filter");
+        refusal.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
+        refusal.ConstraintName.ShouldBe("membership_role_role_guard");
+        (await IdentityTestData.MemberHoldsRoleAsync(Fixture, org, userId, "platform_operator", Token))
+            .ShouldBeFalse("the refused insert left no row behind");
     }
 
     /// <summary>
