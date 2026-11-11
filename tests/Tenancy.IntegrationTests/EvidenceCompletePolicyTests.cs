@@ -27,8 +27,8 @@ namespace Tenancy.IntegrationTests;
 /// (the artifact stays <c>pending_upload</c> and nothing is promoted).
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceCompletePolicyTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed class EvidenceCompletePolicyTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex (00 §7).</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -84,7 +84,7 @@ public sealed class EvidenceCompletePolicyTests(PostgresTenancyFixture fixture, 
     private async Task<World> StartAsync()
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -96,8 +96,7 @@ public sealed class EvidenceCompletePolicyTests(PostgresTenancyFixture fixture, 
             project = await CreateProjectAsync(setup, user, org, "checkout");
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database), org, project, Writer(), _store.Configuration());
+        var host = hosts.WithPrincipalConfigured(database, org, project, Writer(), _store.Configuration());
 
         return new World(api, host, host.CreateClient(), database, user, org, project);
     }

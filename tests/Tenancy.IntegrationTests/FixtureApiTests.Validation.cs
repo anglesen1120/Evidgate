@@ -158,6 +158,7 @@ public sealed partial class FixtureApiTests
         var siblingFixture = inSibling.Id("fixture_id");
         var ownFixture = await CreateFixtureAsync(world, "carts");
 
+        // Unpooled: the class's only project-scoped host, so a pool slot would share it with nothing.
         await using var scoped = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database),
             world.Org,

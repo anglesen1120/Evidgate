@@ -24,8 +24,8 @@ namespace Tenancy.IntegrationTests;
 /// <c>project_deleting</c>.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture, SeaweedFsStore store)
-    : IClassFixture<SeaweedFsStore>
+public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture, SeaweedFsStore store, TenancyHostPool hosts)
+    : IClassFixture<SeaweedFsStore>, IClassFixture<TenancyHostPool>
 {
     /// <summary>A well-formed execution key: sha256 hex (00 §7).</summary>
     private const string ExecutionKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -82,7 +82,7 @@ public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture,
     private async Task<World> StartAsync(RequestPrincipal principal)
     {
         var database = await _fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
+        var api = hosts.RealResolver(database);
         Guid user;
         Guid org;
         Guid project;
@@ -94,8 +94,7 @@ public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture,
             project = await CreateProjectAsync(setup, user, org, "checkout");
         }
 
-        var host = TenancyApiFactory.WithPrincipal(
-            _fixture.AppConnectionString(database), org, project, principal, _store.Configuration());
+        var host = hosts.WithPrincipalConfigured(database, org, project, principal, _store.Configuration());
 
         return new World(api, host, host.CreateClient(), database, user, org, project);
     }
@@ -277,6 +276,7 @@ public sealed class EvidenceCompleteBindingTests(PostgresTenancyFixture fixture,
         // Another ci_producer token of the same project, minted for a different CI run (T88): authorized for
         // artifact:write, but not the identity the artifact's run was created from.
         var foreign = Writer("jti-binding-foreign", ForeignCiRun);
+        // Two principal hosts must be live at once, so both stay unpooled: the pool holds one host per variant.
         await using var foreignHost = TenancyApiFactory.WithPrincipal(
             _fixture.AppConnectionString(world.Database), world.Org, world.Project, foreign, _store.Configuration());
         using var foreignClient = foreignHost.CreateClient();

@@ -12,8 +12,8 @@ namespace Tenancy.IntegrationTests;
 /// <remarks>
 /// A class takes it as an <see cref="IClassFixture{TFixture}"/>. Tests of one class run one after the other,
 /// so a leased host is exclusive; a second lease while the first is still out gets a private, unpooled host,
-/// and so does any host over a database other than the run's shared one or built with its own configuration
-/// or services. A pooled host's <c>DisposeAsync</c> only gives it back (its statement log is cleared on the
+/// and so does any host over a database other than the run's shared one or built with its own services. A
+/// pooled host's <c>DisposeAsync</c> only gives it back (its statement log is cleared on the
 /// next lease); the pool disposes it for real when the class is done. Data isolation stays what it was:
 /// every test creates its own org, project and users in the shared database.
 /// </remarks>
@@ -101,6 +101,58 @@ public sealed class TenancyHostPool(PostgresTenancyFixture fixture) : IAsyncDisp
         host.Republish(org, project, principal);
 
         return host;
+    }
+
+    /// <summary>
+    /// A pooled <see cref="TenancyApiFactory.RealResolver"/> host with in-memory <paramref name="configuration"/>;
+    /// one host per distinct configuration content, so a class that always passes the same object-store settings
+    /// shares one. Only for configuration a host reads at start: a host that holds per-test state (a rate
+    /// limiter, a clock, a spy) stays private.
+    /// </summary>
+    internal TenancyApiFactory RealResolverConfigured(string database, IReadOnlyDictionary<string, string?> configuration)
+    {
+        var connectionString = fixture.AppConnectionString(database);
+
+        return Lease(
+            "real-resolver|" + Fingerprint(configuration),
+            database,
+            () => TenancyApiFactory.RealResolver(connectionString, configuration));
+    }
+
+    /// <summary>
+    /// A pooled <see cref="TenancyApiFactory.WithPrincipal"/> host with in-memory <paramref name="configuration"/>
+    /// (same rules as <see cref="RealResolverConfigured"/>) that publishes <paramref name="principal"/> for
+    /// <paramref name="org"/>/<paramref name="project"/> until it is given back.
+    /// </summary>
+    internal TenancyApiFactory WithPrincipalConfigured(
+        string database,
+        Guid org,
+        Guid project,
+        IRequestPrincipal principal,
+        IReadOnlyDictionary<string, string?> configuration)
+    {
+        var connectionString = fixture.AppConnectionString(database);
+        var host = Lease(
+            "with-principal|" + Fingerprint(configuration),
+            database,
+            () => TenancyApiFactory.WithPrincipal(connectionString, org, project, principal, configuration));
+        host.Republish(org, project, principal);
+
+        return host;
+    }
+
+    // Length-prefixed (a value may hold any character, null differs from empty) and hashed, so two different
+    // configurations never share a slot and a secret never appears in a slot key, a log line or a message.
+    private static string Fingerprint(IReadOnlyDictionary<string, string?> configuration)
+    {
+        var text = new System.Text.StringBuilder();
+        foreach (var (key, value) in configuration.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            text.Append(key.Length).Append(':').Append(key)
+                .Append(value is null ? "-" : $"{value.Length}:{value}");
+        }
+
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text.ToString())));
     }
 
     private TenancyApiFactory Lease(string variant, string database, Func<TenancyApiFactory> create)

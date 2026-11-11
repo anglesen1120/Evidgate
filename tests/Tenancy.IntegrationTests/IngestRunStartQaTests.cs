@@ -9,11 +9,14 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
-public sealed class IngestRunStartQaTests
+public sealed class IngestRunStartQaTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
 
-    public IngestRunStartQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+
+    public IngestRunStartQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) =>
+        (_fixture, _hosts) = (fixture, hosts);
 
     private static Task<long> StateChangedAuditRowsAsync(IngestTestWorld world, Guid runId) =>
         world.CountAsync("audit_log", $"object_id = '{runId:D}' and action = 'run.state_changed'");
@@ -44,7 +47,7 @@ public sealed class IngestRunStartQaTests
     [Fact]
     public async Task queued_run_unknown_producer_refusal_rolls_back_transition()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         await world.SetRunStateAsync("queued");
 
         // shard-9 has no producer slot: the refusal (unknown_producer) lands after the transition step.
@@ -66,7 +69,7 @@ public sealed class IngestRunStartQaTests
     [Fact]
     public async Task queued_run_event_invalid_refusal_never_reaches_transition()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         await world.SetRunStateAsync("queued");
 
         // An event type outside the closed set is refused at parse, before the run-start step.
@@ -86,7 +89,7 @@ public sealed class IngestRunStartQaTests
     [Fact]
     public async Task running_run_sequence_reused_refusal_keeps_single_transition()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         await world.SetRunStateAsync("queued");
 
         var first = await IngestQaRequests.PostEventsAsync(
@@ -115,7 +118,7 @@ public sealed class IngestRunStartQaTests
     [Fact]
     public async Task running_run_batch_never_retransitions()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         await world.SetRunStateAsync("running");
 
         var answer = await IngestQaRequests.PostEventsAsync(
@@ -134,7 +137,7 @@ public sealed class IngestRunStartQaTests
     public async Task created_run_is_not_transitioned_by_ingest()
     {
         // D5: only `queued` drives the transition. A `created` run stays `created` and is never a 500.
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
 
         var answer = await IngestQaRequests.PostEventsAsync(
             world.Client,
@@ -151,7 +154,7 @@ public sealed class IngestRunStartQaTests
     [Fact]
     public async Task duplicate_only_resend_emits_no_second_usage_row()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         await world.SetRunStateAsync("queued");
 
         var eventId = Guid.CreateVersion7();
@@ -176,7 +179,7 @@ public sealed class IngestRunStartQaTests
     [Fact]
     public async Task foreign_org_queued_run_is_not_transitioned_by_this_tenant()
     {
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         var (rivalOrg, _) = await world.CreateOtherOrgAsync(Unique.Slug("rival"));
         var foreign = await world.SeedOtherRunAsync(rivalOrg);
         await world.Fixture.ExecuteAsync(
@@ -202,15 +205,16 @@ public sealed class IngestRunStartQaTests
     public async Task cross_project_ci_token_refused_and_queued_run_stays_queued()
     {
         // The transition runs at step (b1), before the project-scope check. The refusal must roll it back.
-        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer());
+        await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(), hosts: _hosts);
         using var setup = world.Api.CreateClient();
         var otherProject = await RegistryApi.CreateProjectAsync(setup, world.User, world.Org, "other");
         var otherRun = await world.SeedRunInProjectAsync(otherProject);
         await world.Fixture.ExecuteAsync(
             world.Database, $"update public.run set state = 'queued' where id = '{otherRun.RunId:D}'");
 
-        await using var scoped = TenancyApiFactory.WithPrincipal(
-            world.Fixture.AppConnectionString(world.Database),
+        // The world's principal host already holds the slot for this test, so this second one comes back private.
+        await using var scoped = _hosts.WithPrincipal(
+            world.Database,
             world.Org,
             world.Project,
             IngestTestWorld.Writer(projectScope: world.Project));
@@ -241,7 +245,7 @@ public sealed class IngestRunStartQaTests
     {
         const int racers = 8;
         await using var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), planned: racers, slots: racers);
+            _fixture, IngestTestWorld.Writer(), planned: racers, slots: racers, hosts: _hosts);
         await world.SetRunStateAsync("queued");
 
         // One producer per racer (shard-1..shard-8, each with its own slot and sequence 1), so every batch is
