@@ -14,7 +14,7 @@ namespace Hosts.IntegrationTests;
 public sealed class RequestBodyLimitTests
 {
     private const string DeadConnectionString =
-        "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2";
+        "Host=127.0.0.1;Port=1;Username=evidgate_app;Database=evidgate;Timeout=2";
 
     /// <summary>Route → contract schema, for every route whose cap the contract declares.</summary>
     private static readonly (string Method, string Pattern, string SchemaKey)[] ContractRoutes =
