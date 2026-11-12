@@ -190,6 +190,10 @@ internal static class SchemaConventionScan
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "Append-only run history (05.3.1; migration 0082): the rows are written only by the trigger on public.run, the app role holds SELECT only, and `run_state_event_immutable` raises 23514 for every role, so an event is written once and keeps its own `occurred_at` (the database clock that ordered it) — no created_at/updated_at/version and no version trigger. Its tenant key, composite run FK, closed state CHECKs, per-run sequence key and RLS are NOT exempt."),
         new SchemaExemption(
+            "public.platform_operator_audit",
+            SchemaRule.VersionTrigger,
+            "Append-only platform trail (migration 0105): `platform_operator_audit_append_only` refuses every UPDATE and DELETE and no runtime role holds a write privilege, so the `version` column is the switch version the call produced, not a concurrency token, and a before-update trigger would never fire. Its primary key, closed CHECKs and FORCE RLS posture are NOT exempt."),
+        new SchemaExemption(
             "public.webhook_delivery",
             SchemaRule.AuditColumns | SchemaRule.VersionTrigger,
             "A received payload is a fact (migration 0106): the row is written once with the delivery's own `created_at`, the app role holds SELECT + INSERT and a column-scoped `UPDATE (state)`, and `webhook_delivery_guard` raises 23514 when anything but the informational state changes — so there is no updated_at/version and no version trigger. Its tenant key, the global delivery identity, the closed state CHECK and RLS are NOT exempt."),
