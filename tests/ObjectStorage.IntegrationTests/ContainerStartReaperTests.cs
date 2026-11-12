@@ -263,6 +263,22 @@ public sealed class ContainerStartReaperTests
     }
 
     [Fact]
+    public async Task Conflict_keeps_removing_while_dockerd_still_registers_the_container()
+    {
+        var containers = Substitute.For<IContainerOperations>();
+        var removes = 0;
+        containers.RemoveContainerAsync(Arg.Any<string>(), Arg.Any<ContainerRemoveParameters>(), Arg.Any<CancellationToken>())
+            .Returns(_ => ++removes <= 4 ? Task.FromException(NotFound()) : Task.CompletedTask);
+        containers.InspectContainerAsync(Own, Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<ContainerInspectResponse>(NotFound()));
+
+        await ContainerStart.RemoveReaperContainerAsync(
+            containers, Own, FakeId, _ => { }, TestContext.Current.CancellationToken, TimeSpan.FromMilliseconds(1));
+
+        removes.ShouldBe(6);
+    }
+
+    [Fact]
     public async Task Name_that_stays_taken_ends_with_the_callers_token()
     {
         var containers = Substitute.For<IContainerOperations>();

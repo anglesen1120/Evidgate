@@ -169,21 +169,35 @@ public static partial class ContainerStart
     {
         ArgumentNullException.ThrowIfNull(containers);
         ArgumentNullException.ThrowIfNull(log);
-        foreach (var target in new[] { conflictingId, name }.Where(t => !string.IsNullOrEmpty(t)).Distinct())
+        var interval = pollInterval ?? TimeSpan.FromMilliseconds(250);
+        // A 409 proves the name is reserved. While dockerd still registers that container both the id and the
+        // name answer 404 to a remove, so a conflict keeps removing until one call lands; a plain timeout has
+        // nothing proven to wait for and removes once.
+        var removed = false;
+        do
         {
-            try
+            foreach (var target in new[] { conflictingId, name }.Where(t => !string.IsNullOrEmpty(t)).Distinct())
             {
-                await containers.RemoveContainerAsync(
-                    target!, new ContainerRemoveParameters { Force = true }, cancellationToken).ConfigureAwait(false);
-                log($"[container-start] removed stale reaper container by {(target == name ? "name" : "id")} {target}");
+                try
+                {
+                    await containers.RemoveContainerAsync(
+                        target!, new ContainerRemoveParameters { Force = true }, cancellationToken).ConfigureAwait(false);
+                    log($"[container-start] removed stale reaper container by {(target == name ? "name" : "id")} {target}");
+                    removed = true;
+                }
+                catch (DockerContainerNotFoundException)
+                {
+                    log($"[container-start] stale reaper container {target} not found by remove (404)");
+                }
             }
-            catch (DockerContainerNotFoundException)
+
+            if (!removed && conflictingId is not null)
             {
-                log($"[container-start] stale reaper container {target} not found by remove (404)");
+                await Task.Delay(interval, cancellationToken).ConfigureAwait(false);
             }
         }
+        while (!removed && conflictingId is not null);
 
-        var interval = pollInterval ?? TimeSpan.FromMilliseconds(250);
         while (true)
         {
             try
