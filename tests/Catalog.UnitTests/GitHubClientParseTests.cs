@@ -75,6 +75,7 @@ public sealed class GitHubClientParseTests
     }
 
     [Theory]
+    [InlineData(16)]
     [InlineData(60)]
     [InlineData(61)]
     public async Task Blob_WrappedBase64AtTheDecodedCap_IsAccepted(int wrapWidth)
