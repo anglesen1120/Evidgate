@@ -118,7 +118,8 @@ public sealed partial class ResolverTests : HarnessTest
             "0017_identity_ci_token_issue.sql:67 (redefined 0019_identity_ci_review_fixes.sql:8)",
         ["evidgate.expire_pending_invites"] = "0043_identity_invite_flow.sql:177",
         ["evidgate.session_cleanup"] = "0048_identity_session_routes.sql:479",
-        ["evidgate.healing_switch_set_system"] = "0052_healing_switch.sql:211",
+        ["evidgate.healing_switch_set_system"] =
+            "0105_platform_operator_role.sql:244 (first created 0052_healing_switch.sql:211)",
         ["evidgate.reconcile_overdue_runs"] = "0058_reconcile_overdue_running.sql:65",
         ["evidgate.purge_expired_authoring_changes"] = "0067_authoring_authoring_change.sql:283",
         ["evidgate.usage_price_insert_global"] = "0073_usage_price.sql:185",

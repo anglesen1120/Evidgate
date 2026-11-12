@@ -8,29 +8,18 @@ using Npgsql;
 namespace Evidgate.Modules.Healing.Application;
 
 /// <summary>
-/// The operator's write path to the platform-wide <c>system</c> row (08.6.3 §3/§5, ruling T72): it calls
-/// <c>evidgate.healing_switch_set_system</c> on a connection of its own, outside any tenant transaction, because the
-/// row carries no <c>org_id</c> and the tenant write policy can never reach it. This file is the only place in
-/// <c>src/</c> that names the function (the architecture suite pins that), and the definer itself refuses to run
-/// inside a tenant transaction.
+/// The operator route's call of <c>evidgate.healing_switch_set_system</c> on a connection of its own, outside any
+/// tenant transaction: the platform row carries no <c>org_id</c>, so the tenant write policy can never reach it.
+/// This file is the only place in <c>src/</c> that names the function (the architecture suite pins that).
 /// <para>
-/// The V1 clamp applies here exactly as on the tenant route (08.6.3 AC7): <c>enabled</c> is 422
-/// <c>mode_not_available</c> while <c>Healing:Apply</c> is off, whatever the scope, so the operator cannot switch on
-/// healing the deployment was not configured to run.
-/// </para>
-/// <para>
-/// <b>Why there is no audit row and no outbox event here.</b> Both of those chains are per-org: <c>audit_log</c> and
-/// <c>outbox</c> carry a non-null <c>org_id</c> and their writers run inside the caller's tenant transaction, and this
-/// row deliberately has no org (it is the row every org inherits). There is therefore no chain a row could join
-/// without inventing an owning tenant. The change is recorded instead by a structured log event (mode, operator,
-/// resulting version — never the reason text, which may name a customer) and by the row itself
-/// (<c>set_by</c>/<c>at</c>/<c>version</c>); the platform-wide audit chain for operator actions is 11.5.1-T5's and the
-/// authenticated operator principal is 02.8.1's.
+/// The API role holds no EXECUTE on that definer: it is granted to the platform operator login alone, which records
+/// every change in the platform operator audit table. A call from here is refused by the database (42501) and
+/// answered as a 403-class failure — the platform switch is never writable from an API role.
 /// </para>
 /// </summary>
 /// <param name="dataSource">The non-tenant data source (the operator ingress pattern).</param>
 /// <param name="apply">The V1 clamp.</param>
-/// <param name="logger">The structured event that stands in for an org-scoped audit row on this path.</param>
+/// <param name="logger">The structured event that records the attempt and the refusal.</param>
 internal sealed partial class HealingSystemSwitchWriter(
     NpgsqlDataSource dataSource,
     IHealingApplyPolicy apply,
@@ -45,7 +34,10 @@ internal sealed partial class HealingSystemSwitchWriter(
           from evidgate.healing_switch_set_system(@mode::text, @reason::text, @set_by::uuid)
         """;
 
-    /// <summary>Upserts the single system row and answers what the database now stores.</summary>
+    /// <summary>
+    /// Judges the pair with the shared V1 gate, then calls the definer — which the API role may not execute, so the
+    /// answer is a 403-class failure naming neither the connection nor the reason text.
+    /// </summary>
     /// <param name="mode">The requested mode token.</param>
     /// <param name="reason">The optional reason, 1–2000 Unicode code points.</param>
     /// <param name="setBy">The authenticated operator principal's user id.</param>
@@ -63,15 +55,31 @@ internal sealed partial class HealingSystemSwitchWriter(
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
 
-        var row = await connection.QuerySingleOrDefaultAsync<SystemSwitchRow>(
-            new CommandDefinition(
-                SetSystem,
-                new { mode, reason, set_by = setBy },
-                cancellationToken: cancellationToken)).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("evidgate.healing_switch_set_system returned no row");
+        SystemSwitchRow? row;
+        try
+        {
+            row = await connection.QuerySingleOrDefaultAsync<SystemSwitchRow>(
+                new CommandDefinition(
+                    SetSystem,
+                    new { mode, reason, set_by = setBy },
+                    cancellationToken: cancellationToken)).ConfigureAwait(false);
+        }
+        catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.InsufficientPrivilege)
+        {
+            // The definer belongs to the platform operator login, so this role cannot write the platform row: the
+            // refusal is a deployment fact, not a server fault, and must never surface as a 500.
+            LogSystemSwitchNotWritable(mode);
+            return Result.Failure<HealingSwitchView>(Error.Forbidden(
+                "the platform healing switch is not writable from the API role"));
+        }
 
-        // The record this path has instead of an org-scoped audit row: who set the platform row, to what, and the
-        // version the trigger bumped. The reason text stays out of the log (00 §5.7 S3).
+        if (row is null)
+        {
+            throw new InvalidOperationException("evidgate.healing_switch_set_system returned no row");
+        }
+
+        // The record this path keeps when the call is allowed: who set the platform row, to what, and the version
+        // the trigger bumped. The reason text stays out of the log (00 §5.7 S3).
         LogSystemSwitchSet(row.Mode, setBy, row.Version);
 
         return Result.Success(new HealingSwitchView(
@@ -83,6 +91,14 @@ internal sealed partial class HealingSystemSwitchWriter(
             row.At,
             row.Version));
     }
+
+    /// <summary>The structured record of one refused platform-wide switch write (the attempted mode only).</summary>
+    /// <param name="mode">The mode the caller asked for.</param>
+    [LoggerMessage(
+        EventId = 8604,
+        Level = LogLevel.Warning,
+        Message = "Platform healing switch write refused: the API role holds no EXECUTE on the definer (mode={Mode})")]
+    private partial void LogSystemSwitchNotWritable(string? mode);
 
     /// <summary>The structured record of one platform-wide switch write (mode, operator and version only).</summary>
     /// <param name="mode">The mode now stored.</param>

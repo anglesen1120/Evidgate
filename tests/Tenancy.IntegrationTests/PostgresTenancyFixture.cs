@@ -35,6 +35,7 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _taskWorkerPassword = "task-worker-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _operatorPassword = "operator-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+    private readonly string _platformOperatorPassword = "platform-operator-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
     private TemplateDatabase? _template;
     private Task<string>? _shared;
@@ -99,6 +100,8 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
                 $"alter role evidgate_app login password '{_appPassword}'",
                 $"alter role evidgate_worker login password '{_taskWorkerPassword}'",
                 $"alter role evidgate_operator login password '{_operatorPassword}'",
+                // 0105 creates this role NOLOGIN, like the others: the bootstrap owns the credential.
+                $"alter role evidgate_platform_operator login password '{_platformOperatorPassword}'",
             ]);
     }
 
@@ -235,6 +238,14 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
     public string WorkerConnectionString(string database) => Build("evidgate_worker", _taskWorkerPassword, database);
 
     public string OperatorConnectionString(string database) => Build("evidgate_operator", _operatorPassword, database);
+
+    /// <summary>
+    /// The 0105 platform-operator login: the only role that may execute the platform healing-switch
+    /// definer. It holds no table privilege, so a test that needs the switch set calls the definer on
+    /// this connection and reads the tables as the owner.
+    /// </summary>
+    public string PlatformOperatorConnectionString(string database) =>
+        Build("evidgate_platform_operator", _platformOperatorPassword, database);
 
     /// <summary>Opens a superuser connection (bootstrap and catalog assertions only).</summary>
     public async Task<NpgsqlConnection> OpenSuperuserAsync(string database)

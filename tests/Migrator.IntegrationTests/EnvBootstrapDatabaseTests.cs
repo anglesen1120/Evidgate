@@ -98,6 +98,7 @@ public sealed class EnvBootstrapDatabaseTests
         run.Output.ShouldNotContain(_fixture.OperatorPassword);
         run.Output.ShouldNotContain(_fixture.WorkerSchedPassword);
         run.Output.ShouldNotContain(_fixture.WorkerPassword);
+        run.Output.ShouldNotContain(_fixture.PlatformOperatorPassword);
     }
 
     [Fact]
@@ -247,6 +248,7 @@ public sealed class EnvBootstrapDatabaseTests
         environment["EVIDGATE_OPERATOR_PASSWORD"] = tricky + "1";
         environment["EVIDGATE_WORKER_SCHED_PASSWORD"] = tricky + "2";
         environment["EVIDGATE_WORKER_PASSWORD"] = tricky + "3";
+        environment["EVIDGATE_PLATFORM_OPERATOR_PASSWORD"] = tricky + "4";
         try
         {
             AssertSucceeded(await RunBootstrapAsync("dev", "credentials", environment));
@@ -349,6 +351,7 @@ public sealed class EnvBootstrapDatabaseTests
         ["EVIDGATE_OPERATOR_PASSWORD"] = _fixture.OperatorPassword,
         ["EVIDGATE_WORKER_SCHED_PASSWORD"] = _fixture.WorkerSchedPassword,
         ["EVIDGATE_WORKER_PASSWORD"] = _fixture.WorkerPassword,
+        ["EVIDGATE_PLATFORM_OPERATOR_PASSWORD"] = _fixture.PlatformOperatorPassword,
     };
 
     /// <summary>Staging or prod values at a closed port: a run past the guards fails at the connection.</summary>

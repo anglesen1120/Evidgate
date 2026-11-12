@@ -12,10 +12,10 @@ namespace Migrator.IntegrationTests;
 /// schema or grant created by one test can never bleed into another.
 /// </summary>
 /// <remarks>
-/// Cluster-level objects (the five roles) are created once per container; the
+/// Cluster-level objects (the six roles) are created once per container; the
 /// bootstrap deliberately creates <em>only</em> <c>evidgate_owner</c> — with
-/// LOGIN + CREATEROLE and no other attribute — because migrations 0001 and 0104
-/// create the four application roles with their least-privilege attributes.
+/// LOGIN + CREATEROLE and no other attribute — because migrations 0001, 0104 and
+/// 0105 create the five application roles with their least-privilege attributes.
 /// Passwords are random per run and never written to a file (00 §5.7 S3).
 /// </remarks>
 public sealed class PostgresMigratorFixture : IAsyncLifetime
@@ -29,6 +29,7 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
     private readonly string _taskWorkerPassword = "task-worker-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _operatorPassword = "operator-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _workerPassword = "worker-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+    private readonly string _platformOperatorPassword = "platform-operator-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
     /// <summary>Repository <c>migrations/</c> directory, resolved from the test output directory.</summary>
     public static string RepoMigrationsPath { get; } = ResolveRepoMigrationsPath();
@@ -74,6 +75,9 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
     public string WorkerSchedPassword => _workerPassword;
 
     public string WorkerPassword => _taskWorkerPassword;
+
+    /// <summary>The psql-only platform-operator role's password (the system healing-switch definer grantee).</summary>
+    public string PlatformOperatorPassword => _platformOperatorPassword;
 
     public async ValueTask InitializeAsync()
     {
@@ -124,6 +128,7 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
         await ExecuteAsync(connection, $"alter role evidgate_operator login password '{_operatorPassword}'").ConfigureAwait(false);
         await ExecuteAsync(connection, $"alter role evidgate_worker_sched login password '{_workerPassword}'").ConfigureAwait(false);
         await ExecuteAsync(connection, $"alter role evidgate_worker login password '{_taskWorkerPassword}'").ConfigureAwait(false);
+        await ExecuteAsync(connection, $"alter role evidgate_platform_operator login password '{_platformOperatorPassword}'").ConfigureAwait(false);
     }
 
     /// <summary>Runs a scalar query as the superuser.</summary>
