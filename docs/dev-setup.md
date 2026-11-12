@@ -82,7 +82,8 @@ image's own convention), which is the path `db-init.sh` uses as superuser.
 
 | Surface | Default endpoint | Notes |
 | --- | --- | --- |
-| `Evidgate.Api` | `http://127.0.0.1:8080` | readiness: `/internal/health/ready`, liveness: `/internal/health/live`, metrics: `/metrics` |
+| `Evidgate.Api` | `http://127.0.0.1:8080` | readiness: `/internal/health/ready`, liveness: `/internal/health/live` (the readiness body here is status-only) |
+| `Evidgate.Api` management | `http://127.0.0.1:8082` (`EVIDGATE__API__MANAGEMENTPORT` in `.env.dev`) | metrics: `/metrics`, detailed readiness: `/internal/health/ready`; nothing else is served on it |
 | `Evidgate.Worker` | readiness `http://127.0.0.1:8081/internal/health/ready` | the worker serves only the probe listener; its work happens in the database-backed queue |
 | PostgreSQL 18 | `127.0.0.1:5432`, database `evidgate` | roles `evidgate_owner` (migrations), `evidgate_app` (Api/Worker, INSERT-only on the queue tables), `evidgate_operator`, `evidgate_worker` (the queue's claim/ack/dispatch/prune), `evidgate_worker_sched` (owner definer sweeps) |
 | SeaweedFS S3 | `http://127.0.0.1:8333`, bucket `evidgate-dev` | static local-only identity, same one the 01.8.1-T1 parity suite uses |

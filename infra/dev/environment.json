@@ -159,6 +159,11 @@
       "origin": "default",
       "from": "not set: the OTLP exporter stays off, because the dev stack runs no collector (10.3.1-T2 lands one; 00 §11 forbids a hard dependency on the backend)"
     },
+    "EVIDGATE__API__MANAGEMENTPORT": {
+      "origin": "env-file",
+      "value": "8082",
+      "from": ".env.dev, literal in .env.dev.template — the Api's management listener (/metrics, detailed readiness) beside ASPNETCORE_URLS; bound to 127.0.0.1 because EVIDGATE__API__MANAGEMENTADDRESS is unset"
+    },
     "EVIDGATE__WORKER__HEALTHADDRESS": {
       "origin": "env-file",
       "value": "127.0.0.1",
