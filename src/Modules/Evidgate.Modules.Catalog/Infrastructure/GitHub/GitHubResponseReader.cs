@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -47,6 +48,7 @@ internal static class GitHubResponseReader
 {
     private const int ChunkBytes = 8192;
     private const int MaxJsonDepth = 64;
+    private const long FallbackDelaySeconds = 60;
 
     /// <summary>
     /// Reads <paramref name="response"/>'s body with at most <paramref name="maxBytes"/> bytes and
@@ -76,7 +78,14 @@ internal static class GitHubResponseReader
 
         try
         {
-            return Result.Success(JsonDocument.Parse(body, new JsonDocumentOptions { MaxDepth = MaxJsonDepth }));
+            var document = JsonDocument.Parse(body, new JsonDocumentOptions { MaxDepth = MaxJsonDepth });
+            if (document.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                return Result.Success(document);
+            }
+
+            document.Dispose();
+            return Result.Failure<JsonDocument>(Invalid());
         }
         catch (JsonException)
         {
@@ -105,8 +114,8 @@ internal static class GitHubResponseReader
         new(GitHubErrorCodes.Unavailable, "GitHub could not be reached; the call may be retried later.", 503, Retryable: true);
 
     /// <summary>
-    /// Maps one non-success status to a typed failure. A rate limit keeps the delay GitHub asked for
-    /// in a detail, so the caller (or the pipeline above it) retries no earlier than that.
+    /// Maps one non-success status to a typed failure. Rate limits carry GitHub's delay so the caller
+    /// can schedule a later call; the HTTP pipeline does not retry rate-limit responses.
     /// </summary>
     /// <param name="response">The answer to map.</param>
     /// <param name="now">The current instant, for an absolute <c>Retry-After</c> date.</param>
@@ -165,16 +174,29 @@ internal static class GitHubResponseReader
         var header = response.Headers.RetryAfter;
         if (header?.Delta is { } delta)
         {
-            return (long)Math.Clamp(delta.TotalSeconds, 0, 3600);
+            return Bound(delta.TotalSeconds);
         }
 
         if (header?.Date is { } date)
         {
-            return (long)Math.Clamp((date - now).TotalSeconds, 0, 3600);
+            return Bound((date - now).TotalSeconds);
         }
 
-        return 60;
+        if (response.Headers.TryGetValues("X-RateLimit-Reset", out var reset)
+            && long.TryParse(reset.FirstOrDefault(), NumberStyles.None, CultureInfo.InvariantCulture, out var unixSeconds))
+        {
+            return Bound(unixSeconds - now.ToUnixTimeSeconds());
+        }
+
+        return FallbackDelaySeconds;
     }
+
+    /// <summary>
+    /// Reports the delay the server asked for, never rounded down to zero: a caller is told to retry
+    /// no earlier than that, and shortening it would retry into the same limit.
+    /// </summary>
+    private static long Bound(double seconds) =>
+        (long)Math.Max(Math.Ceiling(seconds), 1);
 
     private static async Task<byte[]?> ReadBytesAsync(
         HttpContent content,

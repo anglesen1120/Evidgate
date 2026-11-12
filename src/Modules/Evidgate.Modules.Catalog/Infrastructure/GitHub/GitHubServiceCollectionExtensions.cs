@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -99,8 +100,10 @@ internal static class GitHubServiceCollectionExtensions
                 builder.AddTimeout(GitHubHttpClients.TotalTimeout(options));
                 builder.AddRetry(new HttpRetryStrategyOptions
                 {
-                    // HttpRetryStrategyOptions already treats 429/503 as transient and waits for the
-                    // Retry-After delay GitHub sends, which is what keeps a rate-limited sync honest.
+                    // Rate-limit responses belong to the caller's scheduler, not this bounded call.
+                    ShouldHandle = args => ValueTask.FromResult(
+                        args.Outcome.Result?.StatusCode != HttpStatusCode.TooManyRequests
+                        && HttpClientResiliencePredicates.IsTransient(args.Outcome)),
                     MaxRetryAttempts = GitHubHttpClients.MaxAttempts - 1,
                     Delay = TimeSpan.FromMilliseconds(200),
                     BackoffType = DelayBackoffType.Exponential,
@@ -110,7 +113,8 @@ internal static class GitHubServiceCollectionExtensions
 
         services.TryAddSingleton(provider => new GitHubAppTokenSource(
             provider.GetRequiredService<IOptions<GitHubOptions>>(),
-            provider.GetRequiredService<TimeProvider>()));
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<ILogger<GitHubAppTokenSource>>()));
         services.TryAddSingleton(provider => new GitHubInstallationTokenSource(
             provider.GetRequiredService<IHttpClientFactory>(),
             provider.GetRequiredService<GitHubAppTokenSource>(),

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Microsoft.Extensions.Logging;
@@ -90,13 +91,16 @@ internal sealed class GitHubInstallationTokenSource
         return await exchange.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Drops the cached token of one installation after GitHub refused it.</summary>
-    /// <param name="installationId">The installation whose token is stale.</param>
-    public void Invalidate(long installationId)
+    /// <summary>Drops a rejected token only if it is still the cached token.</summary>
+    /// <param name="installationId">The installation whose token was rejected.</param>
+    /// <param name="rejectedToken">The bearer value GitHub actually refused.</param>
+    public bool Invalidate(long installationId, string rejectedToken)
     {
         lock (_gate)
         {
-            _cache.Remove(installationId);
+            return _cache.TryGetValue(installationId, out var cached)
+                && string.Equals(cached.Token, rejectedToken, StringComparison.Ordinal)
+                && _cache.Remove(installationId);
         }
     }
 
@@ -170,6 +174,7 @@ internal sealed class GitHubInstallationTokenSource
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
             new Uri(baseUri, string.Create(CultureInfo.InvariantCulture, $"app/installations/{installationId}/access_tokens")));
+        request.Content = JsonContent.Create(new { permissions = new { contents = "read", metadata = "read" } });
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jwt.Value);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(GitHubEndpoints.ApiMediaType));
         request.Headers.Add("X-GitHub-Api-Version", GitHubEndpoints.ApiVersion);
@@ -219,24 +224,25 @@ internal sealed class GitHubInstallationTokenSource
         }
 
         using var parsed = document.Value;
-        if (!GitHubJson.TryGetString(parsed.RootElement, "token", 4096, out var token))
+        if (!GitHubJson.TryGetString(parsed.RootElement, "token", 4096, out var token)
+            || !TryReadExpiry(parsed.RootElement, out var expiresAt))
         {
             return Result.Failure<GitHubInstallationToken>(GitHubResponseReader.Unusable());
         }
 
-        var expiresAt = ReadExpiry(parsed.RootElement);
         GitHubLog.TokenMinted(_logger, installationId, expiresAt);
 
         return Result.Success(new GitHubInstallationToken(token, expiresAt));
     }
 
-    private DateTimeOffset ReadExpiry(JsonElement root) =>
-        root.TryGetProperty("expires_at", out var value)
-        && value.ValueKind == JsonValueKind.String
-        && value.TryGetDateTimeOffset(out var expiresAt)
-        && expiresAt > _time.GetUtcNow()
-            ? expiresAt
-            : _time.GetUtcNow() + TimeSpan.FromHours(1);
+    private bool TryReadExpiry(JsonElement root, out DateTimeOffset expiresAt)
+    {
+        expiresAt = default;
+        return root.TryGetProperty("expires_at", out var value)
+            && value.ValueKind == JsonValueKind.String
+            && value.TryGetDateTimeOffset(out expiresAt)
+            && expiresAt > _time.GetUtcNow();
+    }
 
     private void Store(long installationId, GitHubInstallationToken token)
     {

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -13,9 +14,8 @@ namespace Evidgate.Modules.Catalog.Infrastructure.GitHub;
 /// repeats either.
 /// </summary>
 /// <remarks>
-/// The JWT is minted per call rather than cached: signing is cheap, and a call that follows a key
-/// rotation must not present the previous key. Lifetime is ten minutes from <c>iat</c> — GitHub's
-/// maximum — with <c>iat</c> backdated so a small clock difference at GitHub does not refuse it.
+/// The JWT is minted per call with a ten-minute lifetime from <c>iat</c>, backdated for clock skew.
+/// The private key is resolved into startup-bound options; rotating it requires a host restart.
 /// </remarks>
 internal sealed class GitHubAppTokenSource : IDisposable
 {
@@ -26,18 +26,25 @@ internal sealed class GitHubAppTokenSource : IDisposable
 
     private readonly IOptions<GitHubOptions> _options;
     private readonly TimeProvider _time;
+    private readonly ILogger<GitHubAppTokenSource> _logger;
     private readonly Lock _keyGate = new();
     private RSA? _key;
     private string? _keyPem;
+    private string? _reportedKeyPem;
 
     /// <summary>Creates the source over the configured App id and the resolved private key.</summary>
-    public GitHubAppTokenSource(IOptions<GitHubOptions> options, TimeProvider time)
+    public GitHubAppTokenSource(
+        IOptions<GitHubOptions> options,
+        TimeProvider time,
+        ILogger<GitHubAppTokenSource> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(logger);
 
         _options = options;
         _time = time;
+        _logger = logger;
     }
 
     /// <summary>
@@ -54,22 +61,30 @@ internal sealed class GitHubAppTokenSource : IDisposable
 
         lock (_keyGate)
         {
-            var key = LoadKey(options);
-            if (key is null)
+            try
             {
+                var key = LoadKey(options);
+                if (key is null)
+                {
+                    return Result.Failure<string>(NotConfigured());
+                }
+
+                var issuedAt = _time.GetUtcNow() - TimeSpan.FromSeconds(options.AppJwtBackdateSeconds);
+                var descriptor = new SecurityTokenDescriptor
+                {
+                    Issuer = options.AppId,
+                    IssuedAt = issuedAt.UtcDateTime,
+                    Expires = (issuedAt + Lifetime).UtcDateTime,
+                    SigningCredentials = new SigningCredentials(new RsaSecurityKey(key), SecurityAlgorithms.RsaSha256),
+                };
+
+                return Result.Success(Handler.CreateToken(descriptor));
+            }
+            catch (Exception exception) when (exception is CryptographicException or ArgumentException or InvalidOperationException)
+            {
+                ReportSigningFailure(options.PrivateKey, exception);
                 return Result.Failure<string>(NotConfigured());
             }
-
-            var issuedAt = _time.GetUtcNow() - TimeSpan.FromSeconds(options.AppJwtBackdateSeconds);
-            var descriptor = new SecurityTokenDescriptor
-            {
-                Issuer = options.AppId,
-                IssuedAt = issuedAt.UtcDateTime,
-                Expires = (issuedAt + Lifetime).UtcDateTime,
-                SigningCredentials = new SigningCredentials(new RsaSecurityKey(key), SecurityAlgorithms.RsaSha256),
-            };
-
-            return Result.Success(Handler.CreateToken(descriptor));
         }
     }
 
@@ -82,6 +97,17 @@ internal sealed class GitHubAppTokenSource : IDisposable
             _key = null;
             _keyPem = null;
         }
+    }
+
+    private void ReportSigningFailure(string? pem, Exception exception)
+    {
+        if (string.Equals(_reportedKeyPem, pem, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _reportedKeyPem = pem;
+        GitHubLog.TokenSigningFailed(_logger, exception.GetType().Name);
     }
 
     /// <summary>The one "no App is configured" failure, used for a missing id and a missing key alike.</summary>
@@ -109,6 +135,7 @@ internal sealed class GitHubAppTokenSource : IDisposable
         catch (Exception exception) when (exception is ArgumentException or CryptographicException)
         {
             replacement.Dispose();
+            ReportSigningFailure(pem, exception);
             return null;
         }
 

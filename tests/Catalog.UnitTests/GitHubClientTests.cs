@@ -1,5 +1,5 @@
+using System.Globalization;
 using System.Net;
-using System.Text;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Shouldly;
 using Xunit;
@@ -7,15 +7,12 @@ using Xunit;
 namespace Catalog.UnitTests;
 
 /// <summary>
-/// The typed reads of the App client against a stub handler: required headers, the tree's truncated
-/// flag, size and path caps, the status mapping, and the one retry after a refused installation
+/// The typed reads of the App client against a stub handler: required headers, the status mapping
+/// and rate-limit delays, the response-size cap, and the single retry after a refused installation
 /// token. No test opens a socket.
 /// </summary>
 public sealed class GitHubClientTests
 {
-    private static readonly string ObjectSha = new('c', 40);
-    private static readonly DateTimeOffset TokenExpiry = new(2026, 1, 1, 1, 0, 0, TimeSpan.Zero);
-
     [Fact]
     public async Task Installation_Call_SendsVersionedHeadersAndTheAppJwt()
     {
@@ -39,7 +36,7 @@ public sealed class GitHubClientTests
     [Fact]
     public async Task Repository_NotFound_IsANotFoundFailure()
     {
-        var bench = new GitHubTestBench(Reads(_ => GitHubResponses.Status(HttpStatusCode.NotFound)));
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Status(HttpStatusCode.NotFound)));
 
         var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
 
@@ -51,7 +48,7 @@ public sealed class GitHubClientTests
     [Fact]
     public async Task RateLimited_429_CarriesRetryAfterSeconds()
     {
-        var bench = new GitHubTestBench(Reads(_ => GitHubResponses.Status(HttpStatusCode.TooManyRequests, retryAfterSeconds: 7)));
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Status(HttpStatusCode.TooManyRequests, retryAfterSeconds: 7)));
 
         var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
 
@@ -63,9 +60,9 @@ public sealed class GitHubClientTests
     [Fact]
     public async Task ServerError_IsARetryableUnavailableFailure()
     {
-        var bench = new GitHubTestBench(Reads(_ => GitHubResponses.Status(HttpStatusCode.BadGateway)));
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Status(HttpStatusCode.BadGateway)));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.Unavailable);
         result.Error.Retryable.ShouldBeTrue();
@@ -84,73 +81,145 @@ public sealed class GitHubClientTests
         bench.Handler.Requests.Count.ShouldBe(1);
     }
 
-    [Fact]
-    public async Task Tree_TruncatedFlag_IsSurfaced()
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("42")]
+    [InlineData("\"text\"")]
+    public async Task Reads_WithANonObjectRoot_AreRefused(string json)
     {
-        var bench = new GitHubTestBench(Reads(_ => GitHubResponses.Json(
-            $$"""{"sha":"{{ObjectSha}}","truncated":true,"tree":[{{Entry("src/a.ts")}}]}""")));
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json(json)));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, ObjectSha, CancellationToken.None);
+        var repository = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var installation = await bench.Client.GetInstallationAsync(7, CancellationToken.None);
+
+        repository.IsSuccess.ShouldBeFalse();
+        repository.Error!.Code.ShouldBe(GitHubErrorCodes.ResponseInvalid);
+        installation.IsSuccess.ShouldBeFalse();
+        installation.Error!.Code.ShouldBe(GitHubErrorCodes.ResponseInvalid);
+    }
+
+    [Fact]
+    public async Task Unauthorized_WithAStaleBearer_KeepsTheNewerCachedToken()
+    {
+        var posts = 0;
+        var gets = 0;
+        var handler = new StubHandler((_, _) => throw new InvalidOperationException("replaced below"));
+        var bench = new GitHubTestBench(handler);
+        handler.Respond = async (request, _) =>
+        {
+            if (request.Method == HttpMethod.Post)
+            {
+                posts++;
+                return GitHubResponses.AccessToken($"ghs_{posts}", GitHubReadStubs.TokenExpiry);
+            }
+
+            gets++;
+            if (gets > 1)
+            {
+                return GitHubResponses.Json(GitHubResponses.RepositoryJson);
+            }
+
+            // A concurrent call replaced the cached token while the refused call was in flight.
+            bench.Tokens.Invalidate(7, "ghs_1").ShouldBeTrue();
+            var refreshed = await bench.Tokens.GetAsync(7, CancellationToken.None);
+            refreshed.Value.Token.ShouldBe("ghs_2");
+
+            return GitHubResponses.Status(HttpStatusCode.Unauthorized);
+        };
+
+        var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
-        result.Value.Truncated.ShouldBeTrue();
-        result.Value.Entries.Single().Path.ShouldBe("src/a.ts");
+        posts.ShouldBe(2);
+        bench.Handler.Requests[^1].Bearer.ShouldBe("ghs_2");
     }
 
     [Fact]
-    public async Task Tree_OverEntryCap_IsRefusedInsteadOfBuffered()
+    public async Task Forbidden_403_PrimaryRateLimit_DerivesTheDelayFromTheResetHeader()
     {
-        var bench = new GitHubTestBench(
-            Reads(_ => GitHubResponses.Json(
-                $$"""{"sha":"{{ObjectSha}}","truncated":false,"tree":[{{Entry("a")}},{{Entry("b")}},{{Entry("c")}}]}""")),
-            new GitHubOptions { AppId = "12345", MaxTreeEntries = 2 });
+        const long ResetUnix = 1_767_225_690; // 90 s after the bench clock, 2026-01-01T00:00:00Z
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ =>
+        {
+            var response = GitHubResponses.Status(HttpStatusCode.Forbidden);
+            response.Headers.Add("X-RateLimit-Remaining", "0");
+            response.Headers.Add("X-RateLimit-Reset", ResetUnix.ToString(CultureInfo.InvariantCulture));
+            return response;
+        }));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
-        result.Error!.Code.ShouldBe(GitHubErrorCodes.ResponseTooLarge);
+        result.Error!.Code.ShouldBe(GitHubErrorCodes.RateLimited);
+        result.Error.Details!.Single().Actual.ShouldBe(90L);
+    }
+
+    [Theory]
+    [InlineData("retry-after")]
+    [InlineData("reset")]
+    public async Task RateLimited_WithALargeReportedDelay_PreservesIt(string source)
+    {
+        const long ResetUnix = 1_767_225_600 + 200_000; // 200 000 s past the bench clock
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ =>
+        {
+            if (string.Equals(source, "retry-after", StringComparison.Ordinal))
+            {
+                return GitHubResponses.Status(HttpStatusCode.TooManyRequests, retryAfterSeconds: 200_000);
+            }
+
+            var response = GitHubResponses.Status(HttpStatusCode.Forbidden);
+            response.Headers.Add("X-RateLimit-Remaining", "0");
+            response.Headers.Add("X-RateLimit-Reset", ResetUnix.ToString(CultureInfo.InvariantCulture));
+            return response;
+        }));
+
+        var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+
+        result.Error!.Code.ShouldBe(GitHubErrorCodes.RateLimited);
+        result.Error.Details!.Single().Actual.ShouldBe(200_000L);
     }
 
     [Fact]
-    public async Task Tree_UnsafePath_IsRefused()
+    public async Task RateLimited_WithAStaleReset_ReportsADelayOfAtLeastOneSecond()
     {
-        var bench = new GitHubTestBench(Reads(_ => GitHubResponses.Json(
-            $$"""{"sha":"{{ObjectSha}}","truncated":false,"tree":[{{Entry("../../etc/passwd")}}]}""")));
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ =>
+        {
+            var response = GitHubResponses.Status(HttpStatusCode.Forbidden);
+            response.Headers.Add("X-RateLimit-Remaining", "0");
+            response.Headers.Add("X-RateLimit-Reset", "1767225590"); // ten seconds before the bench clock
+            return response;
+        }));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
 
-        result.Error!.Code.ShouldBe(GitHubErrorCodes.ResponseInvalid);
+        result.Error!.Code.ShouldBe(GitHubErrorCodes.RateLimited);
+        result.Error.Details!.Single().Actual.ShouldBe(1L);
     }
 
     [Fact]
-    public async Task Blob_IsBase64Decoded()
+    public async Task PersistentUnauthorized_IsNotReusedByTheNextCall()
     {
-        var content = Convert.ToBase64String(Encoding.UTF8.GetBytes("hello"));
-        var bench = new GitHubTestBench(Reads(_ => GitHubResponses.Json(
-            $$"""{"sha":"{{ObjectSha}}","encoding":"base64","size":5,"content":"{{content}}"}""")));
+        var posts = 0;
+        var handler = new StubHandler(request => request.Method == HttpMethod.Post
+            ? GitHubResponses.AccessToken($"ghs_{++posts}", GitHubReadStubs.TokenExpiry)
+            : GitHubResponses.Status(HttpStatusCode.Unauthorized));
+        var bench = new GitHubTestBench(handler);
 
-        var result = await bench.Client.GetBlobAsync(7, 5, ObjectSha, CancellationToken.None);
+        await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
 
-        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
-        result.Value.Size.ShouldBe(5);
-        Encoding.UTF8.GetString(result.Value.Content).ShouldBe("hello");
-    }
-
-    [Fact]
-    public async Task Blob_OverCap_IsRefused()
-    {
-        var oversized = Convert.ToBase64String(new byte[100]);
-        var bench = new GitHubTestBench(Reads(_ => GitHubResponses.Json(
-            $$"""{"sha":"{{ObjectSha}}","encoding":"base64","size":100,"content":"{{oversized}}"}""")));
-
-        var result = await bench.Client.GetBlobAsync(7, 5, ObjectSha, CancellationToken.None);
-
-        result.Error!.Code.ShouldBe(GitHubErrorCodes.ResponseTooLarge);
+        // A refused bearer is never sent again: each call mints its own token and spends it once.
+        var bearers = bench.Handler.Requests
+            .Where(request => request.Method == HttpMethod.Get)
+            .Select(request => request.Bearer)
+            .ToList();
+        bearers.Count.ShouldBe(4);
+        bearers.Distinct().Count().ShouldBe(bearers.Count);
     }
 
     [Fact]
     public async Task InvalidObjectId_IsRefusedWithoutARequest()
     {
-        var bench = new GitHubTestBench(Reads(_ => GitHubResponses.Json("{}")));
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json("{}")));
 
         var result = await bench.Client.GetTreeAsync(7, 5, "not-a-sha", CancellationToken.None);
 
@@ -162,7 +231,7 @@ public sealed class GitHubClientTests
     public async Task BaseAddressOutsideTheAllowlist_IsRefusedWithoutARequest()
     {
         var bench = new GitHubTestBench(
-            Reads(_ => GitHubResponses.Json(GitHubResponses.RepositoryJson)),
+            GitHubReadStubs.Handler(_ => GitHubResponses.Json(GitHubResponses.RepositoryJson)),
             new GitHubOptions { AppId = "12345", ApiBaseUrl = "https://evil.example.com" });
 
         var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
@@ -181,7 +250,7 @@ public sealed class GitHubClientTests
             if (request.Method == HttpMethod.Post)
             {
                 posts++;
-                return GitHubResponses.AccessToken($"ghs_{posts}", TokenExpiry);
+                return GitHubResponses.AccessToken($"ghs_{posts}", GitHubReadStubs.TokenExpiry);
             }
 
             gets++;
@@ -202,26 +271,27 @@ public sealed class GitHubClientTests
     [Fact]
     public async Task Forbidden_403_WithNoRateLimitRemaining_IsRateLimited()
     {
-        var bench = new GitHubTestBench(Reads(_ =>
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ =>
         {
             var response = GitHubResponses.Status(HttpStatusCode.Forbidden);
             response.Headers.Add("X-RateLimit-Remaining", "0");
             return response;
         }));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.RateLimited);
         result.Error.Status.ShouldBe(429);
         result.Error.Retryable.ShouldBeTrue();
+        result.Error.Details!.Single().Actual.ShouldBe(60L);
     }
 
     [Fact]
     public async Task Forbidden_403_IsNotRetryable()
     {
-        var bench = new GitHubTestBench(Reads(_ => GitHubResponses.Status(HttpStatusCode.Forbidden)));
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Status(HttpStatusCode.Forbidden)));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.Forbidden);
         result.Error.Status.ShouldBe(403);
@@ -231,7 +301,7 @@ public sealed class GitHubClientTests
     [Fact]
     public async Task UnmappedStatus_IsAFailedFailure()
     {
-        var bench = new GitHubTestBench(Reads(_ => GitHubResponses.Status((HttpStatusCode)418)));
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Status((HttpStatusCode)418)));
 
         var result = await bench.Client.GetInstallationAsync(7, CancellationToken.None);
 
@@ -243,7 +313,7 @@ public sealed class GitHubClientTests
     {
         var posts = 0;
         var handler = new StubHandler(request => request.Method == HttpMethod.Post
-            ? GitHubResponses.AccessToken($"ghs_{++posts}", TokenExpiry)
+            ? GitHubResponses.AccessToken($"ghs_{++posts}", GitHubReadStubs.TokenExpiry)
             : GitHubResponses.Status(HttpStatusCode.Unauthorized));
         var bench = new GitHubTestBench(handler);
 
@@ -258,7 +328,7 @@ public sealed class GitHubClientTests
     public async Task BodyRead_AbortedByTheDeadline_IsAnUnavailableFailure()
     {
         var bench = new GitHubTestBench(
-            Reads(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new AbortingStream()) }));
+            GitHubReadStubs.Handler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new AbortingStream()) }));
 
         var result = await bench.Client.GetInstallationAsync(7, CancellationToken.None);
 
@@ -274,7 +344,7 @@ public sealed class GitHubClientTests
         var options = new GitHubOptions { AppId = "12345", HttpTimeoutSeconds = 1 };
         var bench = new GitHubTestBench(
             new StubHandler((request, cancellationToken) => request.Method == HttpMethod.Post
-                ? Task.FromResult(GitHubResponses.AccessToken("ghs_stalled", TokenExpiry))
+                ? Task.FromResult(GitHubResponses.AccessToken("ghs_stalled", GitHubReadStubs.TokenExpiry))
                 : StallAsync(cancellationToken)),
             options);
 
@@ -291,7 +361,7 @@ public sealed class GitHubClientTests
         // yields must be cut off there instead of waiting forever.
         var options = new GitHubOptions { AppId = "12345", HttpTimeoutSeconds = 1 };
         var bench = new GitHubTestBench(
-            Reads(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new StalledStream()) }),
+            GitHubReadStubs.Handler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new StalledStream()) }),
             options);
 
         var result = await bench.Client.GetInstallationAsync(7, CancellationToken.None);
@@ -307,7 +377,7 @@ public sealed class GitHubClientTests
         var stream = new GeneratedStream(DeclaredlessTotal);
         var options = new GitHubOptions { AppId = "12345", MaxResponseBytes = 1024 };
         var bench = new GitHubTestBench(
-            Reads(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(stream) }),
+            GitHubReadStubs.Handler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(stream) }),
             options);
 
         var result = await bench.Client.GetInstallationAsync(7, CancellationToken.None);
@@ -319,7 +389,7 @@ public sealed class GitHubClientTests
     [Fact]
     public async Task Logs_NeverContainTheTokenOrThePrivateKey()
     {
-        var bench = new GitHubTestBench(Reads(_ => GitHubResponses.Status(HttpStatusCode.InternalServerError)));
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Status(HttpStatusCode.InternalServerError)));
 
         await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
 
@@ -334,13 +404,6 @@ public sealed class GitHubClientTests
         }
     }
 
-    private static StubHandler Reads(Func<HttpRequestMessage, HttpResponseMessage> respond) =>
-        new(request => request.Method == HttpMethod.Post
-            ? GitHubResponses.AccessToken("ghs_test", TokenExpiry)
-            : respond(request));
-
-    private static string Entry(string path) =>
-        $$"""{"path":"{{path}}","type":"blob","sha":"{{ObjectSha}}","size":12}""";
 
     private static async Task<HttpResponseMessage> StallAsync(CancellationToken cancellationToken)
     {

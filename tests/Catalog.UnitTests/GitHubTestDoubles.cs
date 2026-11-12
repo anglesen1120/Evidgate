@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -14,10 +15,18 @@ namespace Catalog.UnitTests;
 /// <param name="Bearer">The bearer value, or null when the request carried none.</param>
 /// <param name="ApiVersion">The <c>X-GitHub-Api-Version</c> header, or null.</param>
 /// <param name="Accept">The <c>Accept</c> header GitHub was asked for.</param>
-internal sealed record RequestSnapshot(HttpMethod Method, Uri Uri, string? Bearer, string? ApiVersion, string? Accept)
+/// <param name="Body">The request body as sent, or null when the request carried none.</param>
+internal sealed record RequestSnapshot(
+    HttpMethod Method,
+    Uri Uri,
+    string? Bearer,
+    string? ApiVersion,
+    string? Accept,
+    string? Body)
 {
     /// <inheritdoc />
-    public override string ToString() => $"{Method} {Uri} api={ApiVersion} accept={Accept} bearer={Bearer is null}";
+    public override string ToString() =>
+        $"{Method} {Uri} api={ApiVersion} accept={Accept} bearer={Bearer is null} body={Body is null}";
 }
 
 /// <summary>
@@ -33,7 +42,6 @@ internal sealed class StubClientFactory(HttpClient client) : IHttpClientFactory
 
 internal sealed class StubHandler : HttpMessageHandler
 {
-    private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _respond;
     private readonly List<RequestSnapshot> _requests = [];
 
     /// <summary>Creates a handler that answers synchronously.</summary>
@@ -46,7 +54,10 @@ internal sealed class StubHandler : HttpMessageHandler
     /// <summary>Creates a handler that answers asynchronously, for concurrency tests.</summary>
     /// <param name="respond">Builds the response for one request.</param>
     internal StubHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond) =>
-        _respond = respond;
+        Respond = respond;
+
+    /// <summary>The answer for one request; a test may replace it once the client under test exists.</summary>
+    internal Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> Respond { get; set; }
 
     /// <summary>Every request seen, in order.</summary>
     internal IReadOnlyList<RequestSnapshot> Requests
@@ -64,20 +75,41 @@ internal sealed class StubHandler : HttpMessageHandler
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
+        var body = request.Content is null
+            ? null
+            : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         var snapshot = new RequestSnapshot(
             request.Method,
             request.RequestUri!,
             request.Headers.Authorization?.Parameter,
             request.Headers.TryGetValues("X-GitHub-Api-Version", out var version) ? version.FirstOrDefault() : null,
-            request.Headers.Accept.ToString());
+            request.Headers.Accept.ToString(),
+            body);
 
         lock (_requests)
         {
             _requests.Add(snapshot);
         }
 
-        return await _respond(request, cancellationToken).ConfigureAwait(false);
+        return await Respond(request, cancellationToken).ConfigureAwait(false);
     }
+}
+
+/// <summary>
+/// Replaces the primary handler of one named client, so a composed pipeline can run over a stub:
+/// filters apply after the client's own configuration, so the swap is the last writer.
+/// </summary>
+internal sealed class StubPrimaryHandlerFilter(HttpMessageHandler primary, string clientName)
+    : IHttpMessageHandlerBuilderFilter
+{
+    public Action<HttpMessageHandlerBuilder> Configure(Action<HttpMessageHandlerBuilder> next) => builder =>
+    {
+        next(builder);
+        if (string.Equals(builder.Name, clientName, StringComparison.Ordinal))
+        {
+            builder.PrimaryHandler = primary;
+        }
+    };
 }
 
 /// <summary>An <see cref="ISecretProvider"/> over one private-key value; every other name is unset.</summary>
@@ -143,10 +175,11 @@ internal sealed class GitHubTestBench
         Time = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
         ClientLogs = new ListLogger<GitHubClient>();
         TokenLogs = new ListLogger<GitHubInstallationTokenSource>();
+        AppTokenLogs = new ListLogger<GitHubAppTokenSource>();
 
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com") };
         var clients = new StubClientFactory(http);
-        AppTokens = new GitHubAppTokenSource(Microsoft.Extensions.Options.Options.Create(Options), Time);
+        AppTokens = new GitHubAppTokenSource(Microsoft.Extensions.Options.Options.Create(Options), Time, AppTokenLogs);
         Tokens = new GitHubInstallationTokenSource(clients, AppTokens, Microsoft.Extensions.Options.Options.Create(Options), Time, TokenLogs);
         Client = new GitHubClient(http, Tokens, AppTokens, Microsoft.Extensions.Options.Options.Create(Options), Time, ClientLogs);
     }
@@ -167,6 +200,8 @@ internal sealed class GitHubTestBench
 
     internal ListLogger<GitHubInstallationTokenSource> TokenLogs { get; }
 
+    internal ListLogger<GitHubAppTokenSource> AppTokenLogs { get; }
+
     /// <summary>The default options: configured App, short tree cap so a capped tree is cheap to build.</summary>
     internal static GitHubOptions DefaultOptions(string? appId = AppId, string? pem = null) => new()
     {
@@ -181,6 +216,30 @@ internal sealed class GitHubTestBench
         using var rsa = System.Security.Cryptography.RSA.Create(2048);
         return rsa.ExportPkcs8PrivateKeyPem();
     }
+}
+
+/// <summary>Builders the reading tests share: the object id and token expiry they echo, and answer bodies.</summary>
+internal static class GitHubReadStubs
+{
+    /// <summary>A 40-character object id every tree and blob answer echoes back.</summary>
+    internal static readonly string ObjectSha = new('c', 40);
+
+    /// <summary>The expiry the stub token exchange reports; the bench clock is 2026-01-01T00:00:00Z.</summary>
+    internal static readonly DateTimeOffset TokenExpiry = new(2026, 1, 1, 1, 0, 0, TimeSpan.Zero);
+
+    /// <summary>A handler that mints a stub token for the exchange POST and delegates every read.</summary>
+    internal static StubHandler Handler(Func<HttpRequestMessage, HttpResponseMessage> respond) =>
+        new(request => request.Method == HttpMethod.Post
+            ? GitHubResponses.AccessToken("ghs_test", TokenExpiry)
+            : respond(request));
+
+    /// <summary>One tree entry naming <paramref name="path"/>.</summary>
+    internal static string Entry(string path) =>
+        $$"""{"path":"{{path}}","type":"blob","sha":"{{ObjectSha}}","size":12}""";
+
+    /// <summary>The base64 <paramref name="text"/> broken into lines of <paramref name="width"/>.</summary>
+    internal static string Wrapped(string text, int width) =>
+        string.Join("\n", text.Chunk(width).Select(chunk => new string(chunk)));
 }
 
 /// <summary>A stalled body: every read waits until the token it is given fires.</summary>

@@ -24,7 +24,8 @@ internal sealed class GitHubOptions
 
     /// <summary>
     /// App private key in PEM form, resolved through <c>ISecretProvider</c>
-    /// (<c>SecretNames.GitHubAppPrivateKey</c>) and never bound from configuration.
+    /// (<c>SecretNames.GitHubAppPrivateKey</c>) into startup-bound options, never from configuration.
+    /// Rotation takes effect after a host restart.
     /// </summary>
     public string? PrivateKey { get; internal set; }
 
@@ -51,7 +52,11 @@ internal sealed class GitHubOptions
     [Range(1024, 4_194_304)]
     public int MaxBlobBytes { get; init; } = 1_048_576;
 
-    /// <summary>Largest tree the client accepts; GitHub itself refuses a recursive tree past 100 000 entries.</summary>
+    /// <summary>
+    /// Largest accepted tree entry count (GitHub truncates recursive trees past 100 000 entries).
+    /// <see cref="MaxResponseBytes"/> also caps the serialized tree: the default 2 MiB response limit
+    /// usually refuses a recursive tree well before this count, depending on path lengths.
+    /// </summary>
     [Range(1, 1_000_000)]
     public int MaxTreeEntries { get; init; } = 100_000;
 

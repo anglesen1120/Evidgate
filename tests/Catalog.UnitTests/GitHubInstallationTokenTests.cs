@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
+using System.Text.Json;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Shouldly;
 using Xunit;
@@ -104,6 +105,80 @@ public sealed class GitHubInstallationTokenTests
         post.Method.ShouldBe(HttpMethod.Post);
         post.Uri.AbsolutePath.ShouldBe("/app/installations/7/access_tokens");
         post.Bearer!.Split('.').Length.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task Token_Exchange_SendsReadOnlyPermissionsWithNoRepositoryIds()
+    {
+        var bench = new GitHubTestBench(TokenHandler("ghs_first", OneHour));
+
+        await bench.Tokens.GetAsync(7, CancellationToken.None);
+
+        var post = bench.Handler.Requests.Single();
+        post.Body.ShouldNotBeNull();
+        using var body = JsonDocument.Parse(post.Body);
+        var permissions = body.RootElement.GetProperty("permissions");
+        permissions.GetProperty("contents").GetString().ShouldBe("read");
+        permissions.GetProperty("metadata").GetString().ShouldBe("read");
+        body.RootElement.TryGetProperty("repository_ids", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Token_InvalidateWithAStaleValue_KeepsTheCachedToken()
+    {
+        var bench = new GitHubTestBench(TokenHandler("ghs_first", OneHour));
+        await bench.Tokens.GetAsync(7, CancellationToken.None);
+
+        bench.Tokens.Invalidate(7, "ghs_stale").ShouldBeFalse();
+        var second = await bench.Tokens.GetAsync(7, CancellationToken.None);
+
+        second.Value.Token.ShouldBe("ghs_first");
+        bench.Handler.Requests.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Token_InvalidateWithTheCachedValue_ForcesANewExchange()
+    {
+        var bench = new GitHubTestBench(TokenHandler("ghs_first", OneHour));
+        await bench.Tokens.GetAsync(7, CancellationToken.None);
+
+        bench.Tokens.Invalidate(7, "ghs_first").ShouldBeTrue();
+        var second = await bench.Tokens.GetAsync(7, CancellationToken.None);
+
+        second.Value.Token.ShouldBe("ghs_first");
+        bench.Handler.Requests.Count.ShouldBe(2);
+    }
+
+    [Theory]
+    [InlineData("""{"token":"ghs_x"}""")]
+    [InlineData("""{"token":"ghs_x","expires_at":"not-a-date"}""")]
+    [InlineData("""{"token":"ghs_x","expires_at":1767225600}""")]
+    [InlineData("""{"token":"ghs_x","expires_at":"2025-12-31T23:59:59Z"}""")]
+    public async Task Token_ExchangeWithAnUnusableExpiry_IsRefusedAndNotCached(string json)
+    {
+        var bench = new GitHubTestBench(new StubHandler(_ => GitHubResponses.Json(json)));
+
+        var first = await bench.Tokens.GetAsync(7, CancellationToken.None);
+        var second = await bench.Tokens.GetAsync(7, CancellationToken.None);
+
+        first.Error!.Code.ShouldBe(GitHubErrorCodes.ResponseInvalid);
+        second.IsSuccess.ShouldBeFalse();
+        bench.Handler.Requests.Count.ShouldBe(2);
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("42")]
+    [InlineData("\"text\"")]
+    public async Task Token_ExchangeWithANonObjectRoot_IsRefused(string json)
+    {
+        var bench = new GitHubTestBench(new StubHandler(_ => GitHubResponses.Json(json)));
+
+        var result = await bench.Tokens.GetAsync(7, CancellationToken.None);
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe(GitHubErrorCodes.ResponseInvalid);
     }
 
     private static StubHandler TokenHandler(string token, TimeSpan lifetime) =>

@@ -32,4 +32,10 @@ internal static partial class GitHubLog
         Level = LogLevel.Information,
         Message = "GitHub refused the installation token of installation {InstallationId}; the cached token was evicted and the call retried once.")]
     internal static partial void TokenEvicted(ILogger logger, long installationId);
+
+    [LoggerMessage(
+        EventId = 4405,
+        Level = LogLevel.Warning,
+        Message = "The configured GitHub App private key cannot sign an App JWT ({ExceptionType}); every call reports github_not_configured.")]
+    internal static partial void TokenSigningFailed(ILogger logger, string exceptionType);
 }

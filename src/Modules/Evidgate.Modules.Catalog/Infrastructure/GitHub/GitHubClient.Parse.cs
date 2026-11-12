@@ -114,7 +114,7 @@ internal sealed partial class GitHubClient
         }
 
         var maxBytes = _options.Value.MaxBlobBytes;
-        if (size > maxBytes || content.Length > ((maxBytes + 2) / 3 * 4) + 4)
+        if (size > maxBytes || content.Count(static character => !char.IsWhiteSpace(character)) > ((maxBytes + 2) / 3 * 4))
         {
             return Result.Failure<GitHubBlob>(GitHubResponseReader.TooLarge());
         }

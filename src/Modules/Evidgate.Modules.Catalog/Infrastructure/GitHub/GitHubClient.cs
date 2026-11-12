@@ -190,13 +190,26 @@ internal sealed partial class GitHubClient
             return first;
         }
 
-        _tokens.Invalidate(installationId);
-        GitHubLog.TokenEvicted(_logger, installationId);
+        if (_tokens.Invalidate(installationId, token.Value.Token))
+        {
+            GitHubLog.TokenEvicted(_logger, installationId);
+        }
 
         var refreshed = await _tokens.GetAsync(installationId, cancellationToken).ConfigureAwait(false);
-        return refreshed.IsSuccess
-            ? await SendAsync(path, refreshed.Value.Token, operation, cancellationToken).ConfigureAwait(false)
-            : Result.Failure<JsonDocument>(refreshed.Error!);
+        if (!refreshed.IsSuccess)
+        {
+            return Result.Failure<JsonDocument>(refreshed.Error!);
+        }
+
+        var retried = await SendAsync(path, refreshed.Value.Token, operation, cancellationToken).ConfigureAwait(false);
+        if (retried.Error?.Code == GitHubErrorCodes.Unauthorized)
+        {
+            // A fresh token that GitHub refuses again is not kept: the next call mints once instead of
+            // spending a refused request on it first.
+            _tokens.Invalidate(installationId, refreshed.Value.Token);
+        }
+
+        return retried;
     }
 
     private async Task<Result<JsonDocument>> SendAsync(
