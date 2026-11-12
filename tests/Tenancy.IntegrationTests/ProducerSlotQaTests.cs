@@ -18,11 +18,12 @@ namespace Tenancy.IntegrationTests;
 /// T9/T54/T88 in plans/features/README.md), not against the implementation's internals.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class ProducerSlotQaTests
+public sealed class ProducerSlotQaTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public ProducerSlotQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public ProducerSlotQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(
         TenancyApiFactory Api,

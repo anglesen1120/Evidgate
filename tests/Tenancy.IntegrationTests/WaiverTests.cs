@@ -16,11 +16,12 @@ namespace Tenancy.IntegrationTests;
 /// tests pin the HTTP/DB contract, never internals.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class WaiverTests
+public sealed class WaiverTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public WaiverTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public WaiverTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private sealed record World(TenancyApiFactory Api, HttpClient Client, DedicatedDatabase Owned, Guid User, Guid Org, Guid Project) : IAsyncDisposable
     {

@@ -10,7 +10,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task GetRun_ClosedBindingWindow_PreservesEachPreviouslyBoundComponent()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "read-closed", "active", ("web", 'a'), ("api", 'b'));
         var laterRelease = await ReleaseWithAsync(world, "read-too-late", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a'), ("api", 'b')));

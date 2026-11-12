@@ -24,7 +24,7 @@ namespace Tenancy.IntegrationTests;
 /// table as the owner, because the document must outlive whatever the routes answer afterwards.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class UsageStatementIssueTests
+public sealed class UsageStatementIssueTests : IClassFixture<TenancyHostPool>
 {
     private const string Period = "2026-10";
     private const string CurrentPeriod = "2026-11";
@@ -36,7 +36,9 @@ public sealed class UsageStatementIssueTests
 
     private readonly PostgresTenancyFixture _fixture;
 
-    public UsageStatementIssueTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+
+    public UsageStatementIssueTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     [Fact]
     public async Task Statement_PricedPeriod_StoresTheDocumentAndItsAuditRow()

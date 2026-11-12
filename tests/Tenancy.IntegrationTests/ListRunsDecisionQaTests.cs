@@ -14,7 +14,7 @@ public sealed partial class ListRunsTests
     [InlineData(true)]
     public async Task ListRuns_Decision_CustomRoleWithoutDecisionReadCannotReadOrInferVerdict(bool filtered)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var run = await CreateBranchAsync(world, "main", ShaOne);
         var policy = await SeedPolicyAsync(world);
         await InsertEvaluationAsync(world, run, policy, 1, "live", "PASS");
@@ -63,7 +63,7 @@ public sealed partial class ListRunsTests
     [InlineData(200)]
     public async Task ListRuns_DecisionFilter_TiedTimestampsRetainEveryMatchingId(int limit)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runs = await SeedOrderedDecisionRunsAsync(world, limit == 1 ? 51 : 201, tied: true);
         var policy = await SeedPolicyAsync(world);
         var matching = new[] { runs[0], runs[19], runs[20], runs[^2], runs[^1] };
@@ -81,7 +81,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_DecisionFilter_NonemptyBudgetPageResumesAfterLastScannedRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runs = await SeedOrderedDecisionRunsAsync(world, 1003);
         var policy = await SeedPolicyAsync(world);
         foreach (var index in new[] { 10, 999, 1001, 1002 })
@@ -106,7 +106,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_DecisionFilter_LimitOneRetainsMatchesOnBothSidesOfScanBudget()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runs = await SeedOrderedDecisionRunsAsync(world, 1001);
         var policy = await SeedPolicyAsync(world);
         await InsertEvaluationAsync(world, runs[999], policy, 1, "live", "PASS");
@@ -131,7 +131,7 @@ public sealed partial class ListRunsTests
     [InlineData(1001)]
     public async Task ListRuns_DecisionFilter_NoMatchesTerminatesAndLastRunCanBecomeAMatch(int count)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runs = await SeedOrderedDecisionRunsAsync(world, count);
         world.Api.Statements.Clear();
         var first = await ListAsync(world, "decision=pass&limit=1");
@@ -163,7 +163,7 @@ public sealed partial class ListRunsTests
     [InlineData("pending")]
     public async Task ListRuns_DecisionFilter_ForeignTenantCannotReadOrProbeEvaluatedProject(string filter)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runs = await SeedOrderedDecisionRunsAsync(world, 2);
         var policy = await SeedPolicyAsync(world);
         await InsertEvaluationAsync(world, runs[0], policy, 1, "live", "PASS");
@@ -190,7 +190,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_DecisionDecoration_MaximumPageUsesOneEvaluationStatement()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runs = await SeedOrderedDecisionRunsAsync(world, 201);
         var policy = await SeedPolicyAsync(world);
         await InsertEvaluationAsync(world, runs[0], policy, 1, "live", "PASS");
@@ -216,7 +216,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_DecisionFilter_HigherLiveRevisionWinsOverLaterInsertedOlderAndShadowRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var run = await CreateBranchAsync(world, "main", ShaOne);
         var policy = await SeedPolicyAsync(world);
         await InsertEvaluationAsync(world, run, policy, 3, "live", "FAIL");
@@ -232,7 +232,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_DecisionFilter_ShadowOnlyPassRemainsPending()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var run = await CreateBranchAsync(world, "main", ShaOne);
         var policy = await SeedPolicyAsync(world);
         await InsertEvaluationAsync(world, run, policy, 1, "shadow", "PASS");
@@ -247,7 +247,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_DecisionFilter_RevisionFlipBetweenPagesUsesLatestUnseenVerdicts()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runs = await SeedOrderedDecisionRunsAsync(world, 4);
         var policy = await SeedPolicyAsync(world);
         for (var index = 0; index < runs.Length; index++)
@@ -278,7 +278,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_Decision_NewerUnevaluatedEvidenceKeepsStoredVerdictUntilEvaluationArrives()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var run = await CreateBranchAsync(world, "main", ShaOne);
         var policy = await SeedPolicyAsync(world);
         await AppendDecisionEvidenceAsync(world, run, 1, "complete", "all_passed");

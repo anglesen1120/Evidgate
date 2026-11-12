@@ -10,7 +10,7 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
-public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture)
+public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
     /// <summary>
     /// §5: the limit counts Unicode code points, the unit PostgreSQL's <c>char_length</c> and the contract's
@@ -24,7 +24,7 @@ public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture)
     [InlineData("🙂", 1000)]
     public async Task CancelRun_ReasonWithinCodePointLimit_AcceptedAndPreserved(string character, int count)
     {
-        await using var world = await RunCreationTests.StartAsync(fixture);
+        await using var world = await RunCreationTests.StartAsync(fixture, hosts: hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
         var reason = string.Concat(Enumerable.Repeat(character, count));
         var body = $$"""{"reason":"{{reason}}"}""";
@@ -45,7 +45,7 @@ public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelRun_ReasonOverCodePointLimit_422TooLong()
     {
-        await using var world = await RunCreationTests.StartAsync(fixture);
+        await using var world = await RunCreationTests.StartAsync(fixture, hosts: hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
         var overLimit = string.Concat(Enumerable.Repeat("🙂", 1001));
 
@@ -88,7 +88,7 @@ public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture)
     [InlineData("{} trailing")]
     public async Task CancelRun_InvalidReasonOrJson_422WithoutSideEffects(string body)
     {
-        await using var world = await RunCreationTests.StartAsync(fixture);
+        await using var world = await RunCreationTests.StartAsync(fixture, hosts: hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
         var before = await SnapshotAsync(world, runId);
 
@@ -111,7 +111,7 @@ public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture)
     [InlineData(4097, HttpStatusCode.RequestEntityTooLarge)]
     public async Task CancelRun_JsonAtTransportBoundary_EnforcesExactByteCap(int bytes, HttpStatusCode expected)
     {
-        await using var world = await RunCreationTests.StartAsync(fixture);
+        await using var world = await RunCreationTests.StartAsync(fixture, hosts: hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
         var body = "{}" + new string(' ', bytes - 2);
         Encoding.UTF8.GetByteCount(body).ShouldBe(bytes);
@@ -138,7 +138,7 @@ public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelRun_SameKeyAndBody_ReplaysWithoutSideEffects()
     {
-        await using var world = await RunCreationTests.StartAsync(fixture);
+        await using var world = await RunCreationTests.StartAsync(fixture, hosts: hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
         var key = NewKey();
         const string body = """{"reason":"stop"}""";
@@ -162,7 +162,7 @@ public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelRun_SameKeyAndEquivalentJson_ReplaysCanonicalRequest()
     {
-        await using var world = await RunCreationTests.StartAsync(fixture);
+        await using var world = await RunCreationTests.StartAsync(fixture, hosts: hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
         var key = NewKey();
         var first = await CancelRunTestData.CancelRawAsync(
@@ -182,7 +182,7 @@ public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelRun_SameKeyAndDifferentReason_409WithoutChangingRequest()
     {
-        await using var world = await RunCreationTests.StartAsync(fixture);
+        await using var world = await RunCreationTests.StartAsync(fixture, hosts: hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
         var key = NewKey();
         var first = await CancelRunTestData.CancelRawAsync(
@@ -202,7 +202,7 @@ public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelRun_SameKeyAndDifferentRun_409LeavesSecondRunQueued()
     {
-        await using var world = await RunCreationTests.StartAsync(fixture);
+        await using var world = await RunCreationTests.StartAsync(fixture, hosts: hosts);
         var firstRun = await CancelRunTestData.CreateQueuedRunAsync(world);
         var secondRun = await CancelRunTestData.CreateQueuedRunAsync(world);
         var key = NewKey();
@@ -228,7 +228,7 @@ public sealed class CancelRunEdgeCaseTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CancelRun_RolelessMember_403BeforeAnyStateChange()
     {
-        await using var world = await RunCreationTests.StartAsync(fixture);
+        await using var world = await RunCreationTests.StartAsync(fixture, hosts: hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
         var member = await AddMemberAsync(fixture, world.Database, world.Org, roleCode: null);
         var before = await SnapshotAsync(world, runId);

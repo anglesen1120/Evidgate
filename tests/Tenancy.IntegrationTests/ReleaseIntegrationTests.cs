@@ -19,11 +19,12 @@ namespace Tenancy.IntegrationTests;
 /// and the read returns the same components plus the runs bound to them by digest match.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class ReleaseIntegrationTests
+public sealed partial class ReleaseIntegrationTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public ReleaseIntegrationTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public ReleaseIntegrationTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     /// <summary>A well-formed content address of the requested fill character.</summary>
     private static string Digest(char fill) => "sha256:" + new string(fill, 64);

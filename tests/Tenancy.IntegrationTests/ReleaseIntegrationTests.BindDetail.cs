@@ -37,7 +37,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReleaseDetail_BoundRuns_AreOrderedByCreatedAtThenId()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "detail-bound-runs", "active", ("web", 'a'), ("api", 'b'), ("worker", 'c'));
         var runId = await RunWithAsync(world, Components(("web", 'a'), ("api", 'b'), ("worker", 'c')));
 
@@ -67,7 +67,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReleaseDetail_BoundRunsSection_IsOneStatementWhateverTheBindingCount()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "detail-statement-budget", "active", ("web", 'a'), ("api", 'b'), ("worker", 'c'));
         var runId = await RunWithAsync(world, Components(("web", 'a'), ("api", 'b'), ("worker", 'c')));
         var boundAt = DateTimeOffset.UtcNow;
@@ -89,7 +89,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReleaseDetail_CarriesTheBoundRunOfEachExplicitAndRunCreateBind()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "detail-after-bind", "active", ("web", 'a'));
         var explicitRun = await RunWithAsync(world, Components(("web", 'a')));
         var created = await RunCreationTests.CreateRunAsync(

@@ -30,7 +30,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_Decision_IsTheNewestLiveVerdict_AndNullWhilePending()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var policy = await SeedPolicyAsync(world);
         var revised = await CreateBranchAsync(world, "main", ShaOne);
         var failed = await CreateBranchAsync(world, "feature", ShaOne);
@@ -67,7 +67,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_DecisionFilter_PagesWithoutSkipOrRepeat()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var policy = await SeedPolicyAsync(world);
         var verdicts = new List<string?> { "PASS", "FAIL", "PASS", null, "INCONCLUSIVE", "FAIL", null, "PASS", "FAIL", "INCONCLUSIVE", null, "PASS" };
         var runs = new List<Guid>(verdicts.Count);
@@ -101,7 +101,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_DecisionFilter_TokenMapsToTheStoredVerdict()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var policy = await SeedPolicyAsync(world);
         var passing = await CreateBranchAsync(world, "main", ShaOne);
         var failing = await CreateBranchAsync(world, "next", ShaOne);
@@ -122,7 +122,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_DecisionFilter_CombinedWithState()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var policy = await SeedPolicyAsync(world);
         var queued = await CreateBranchAsync(world, "main", ShaOne);
         var canceled = await CreateBranchAsync(world, "feature", ShaOne);
@@ -145,7 +145,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_DecisionScan_IsBounded_AndShortPageAdvances()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var policy = await SeedPolicyAsync(world);
         var template = await CreateBranchAsync(world, "main", ShaOne);
 
@@ -191,7 +191,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_Decision_AnotherProjectsRunNeverMatches()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var policy = await SeedPolicyAsync(world);
         var mine = await CreateBranchAsync(world, "main", ShaOne);
         await InsertEvaluationAsync(world, mine, policy, 1, "live", "PASS");
@@ -229,7 +229,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_DecisionDecoration_IsOneBatchStatement()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var policy = await SeedPolicyAsync(world);
         var first = await CreateBranchAsync(world, "main", ShaOne);
         var second = await CreateBranchAsync(world, "feature", ShaOne);

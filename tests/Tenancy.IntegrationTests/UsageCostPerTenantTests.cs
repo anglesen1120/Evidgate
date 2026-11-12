@@ -19,7 +19,7 @@ namespace Tenancy.IntegrationTests;
 /// and assert the read never counts them.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class UsageCostPerTenantTests
+public sealed class UsageCostPerTenantTests : IClassFixture<TenancyHostPool>
 {
     private const string Period = "2026-10";
     private const string CurrentPeriod = "2026-11";
@@ -33,7 +33,9 @@ public sealed class UsageCostPerTenantTests
 
     private readonly PostgresTenancyFixture _fixture;
 
-    public UsageCostPerTenantTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+
+    public UsageCostPerTenantTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     [Fact]
     public async Task CostPerTenant_AvailableLines_EqualSeededSourceRows()

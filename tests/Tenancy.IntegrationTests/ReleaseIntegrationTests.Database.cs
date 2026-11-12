@@ -63,7 +63,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReleaseComponent_AppRoleIsInsertSelectOnly_AndRefusesUpdateAndDelete()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "release-component-grants", state: null, OneComponent(world));
         var componentId = await ComponentIdAsync(world, releaseId, "web");
 
@@ -82,7 +82,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReleaseComponent_TriggerRefusesUpdateAndDeleteForEveryRole()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "release-component-trigger", state: null, OneComponent(world));
         var componentId = await ComponentIdAsync(world, releaseId, "web");
 
@@ -101,7 +101,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReleaseComponent_InsertIntoActiveParentIsRefused_DraftAccepted()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var active = await CreateReleaseAsync(world, "release-active-parent", "active", OneComponent(world));
         var draft = await CreateReleaseAsync(world, "release-draft-parent", state: null, OneComponent(world));
 
@@ -118,7 +118,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Release_IdentityColumnsAreImmutable_ForOwnerAndApp()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "release-identity", state: null, OneComponent(world));
 
         var ownerName = await OwnerErrorAsync(world, $"update public.release set name = 'hijacked' where id = '{releaseId:D}'");
@@ -138,7 +138,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Release_StateTransition_OnlyDraftToActive()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "release-state-machine", state: null, OneComponent(world));
 
         (await AppExecuteAsync(world, $"update public.release set state = 'active' where id = '{releaseId:D}'")).ShouldBe(1);
@@ -190,8 +190,8 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReleaseRun_RejectsCrossOrgParents_WithSameOrgPositiveControl()
     {
-        await using var worldA = await RunCreationTests.StartAsync(_fixture, slug: "alpha");
-        await using var worldB = await RunCreationTests.StartAsync(_fixture, slug: "beta");
+        await using var worldA = await RunCreationTests.StartAsync(_fixture, slug: "alpha", hosts: _hosts);
+        await using var worldB = await RunCreationTests.StartAsync(_fixture, slug: "beta", hosts: _hosts);
         var releaseA = await CreateReleaseAsync(worldA, "release-fk-alpha", "active", OneComponent(worldA));
         var releaseB = await CreateReleaseAsync(worldB, "release-fk-beta", "active", OneComponent(worldB));
         var runA = await CancelRunTestData.CreateQueuedRunAsync(worldA);
@@ -212,7 +212,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReleaseRun_RejectsDuplicateTuple_WithDistinctComponentAndReleasePositiveControls()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseOne = await CreateReleaseAsync(world, "release-tuple-one", "active", OneComponent(world));
         var releaseTwo = await CreateReleaseAsync(world, "release-tuple-two", "active", OneComponent(world, fill: 'b'));
         var run = await CancelRunTestData.CreateQueuedRunAsync(world);
@@ -243,7 +243,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReleaseComponent_ConcurrentActivationBlocksTheInsert_ThenRefusesIt()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "release-race", null, OneComponent(world)[0]);
 
         // Transaction 1 activates the release and stays open, so its UPDATE holds the parent row.
@@ -280,7 +280,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReleaseComponent_RefusesASiblingProjectRevision_WithSameProjectControl()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "release-project-scope", null, OneComponent(world)[0]);
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("sibling"));
         var siblingRevision = await SeedRevisionAsync(world, sibling);
@@ -304,7 +304,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Release_ActivationWithoutComponents_IsRefused()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = Guid.CreateVersion7();
         await OwnerExecuteAsync(
             world,
