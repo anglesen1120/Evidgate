@@ -428,12 +428,18 @@ export function selfTestSecretsInventory(root, now = new Date()) {
       'runbook heading #hidden not found',
     ],
     [
-      'runbook-anchor-hidden-by-cr-fence-or-nbsp-closer',
+      'runbook-anchor-hidden-by-cr-fence-opener',
       (c) => {
-        useFixture(c, '~~~\rtext\n## Hidden\n~~~\n```\n```\u00a0\n## Nbsp\n', 'hidden');
-        c.inventory.secrets[1].runbook = 'docs/runbooks/fixture.md#nbsp';
+        useFixture(c, '~~~\rtext\n## Hidden\n~~~\n', 'hidden');
       },
       'runbook heading #hidden not found',
+    ],
+    [
+      'runbook-anchor-hidden-by-nbsp-fence-closer',
+      (c) => {
+        useFixture(c, '```\n```\u00a0\n## Nbsp\n', 'nbsp');
+      },
+      'runbook heading #nbsp not found',
     ],
     [
       'runbook-anchor-after-closed-fence',
