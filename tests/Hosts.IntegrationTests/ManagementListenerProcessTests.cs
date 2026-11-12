@@ -13,6 +13,8 @@ namespace Hosts.IntegrationTests;
 /// </summary>
 public sealed class ManagementListenerProcessTests
 {
+    private const long DefaultLimit = 1024 * 1024;
+
     private const string DeadConnectionString =
         "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2";
 
@@ -31,12 +33,14 @@ public sealed class ManagementListenerProcessTests
             var managementBase = $"http://127.0.0.1:{managementPort}";
 
             using var publicMetrics = await client.GetAsync($"{publicBase}/metrics", TestContext.Current.CancellationToken);
+            using var publicMetricsSlash = await client.GetAsync($"{publicBase}/metrics/", TestContext.Current.CancellationToken);
             using var managementMetrics = await client.GetAsync($"{managementBase}/metrics", TestContext.Current.CancellationToken);
             using var managementV1 = await client.GetAsync($"{managementBase}/v1/permissions", TestContext.Current.CancellationToken);
             using var publicReady = await client.GetAsync($"{publicBase}/internal/health/ready", TestContext.Current.CancellationToken);
             using var managementReady = await client.GetAsync($"{managementBase}/internal/health/ready", TestContext.Current.CancellationToken);
 
             Assert.Equal(HttpStatusCode.NotFound, publicMetrics.StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, publicMetricsSlash.StatusCode);
             Assert.Equal(HttpStatusCode.OK, managementMetrics.StatusCode);
             Assert.Equal(HttpStatusCode.NotFound, managementV1.StatusCode);
             Assert.Equal(HttpStatusCode.ServiceUnavailable, publicReady.StatusCode);
@@ -65,23 +69,41 @@ public sealed class ManagementListenerProcessTests
         {
             await WaitForLiveAsync(publicPort);
 
-            using var socket = new TcpClient();
-            await socket.ConnectAsync(IPAddress.Loopback, publicPort, TestContext.Current.CancellationToken);
-            await using var stream = socket.GetStream();
+            // A route with no limit of its own, so the 413 can only come from the host default. Headers only: the
+            // client never sends a body byte, so an answer proves the refusal did not wait for one.
+            var oversize = await SendHeadersOnlyAsync(publicPort, DefaultLimit + 1);
+            var atLimit = await SendHeadersOnlyAsync(publicPort, DefaultLimit);
 
-            // Headers only: the client never sends a body byte, so a 413 proves the refusal did not wait for one.
-            var head = string.Create(
-                CultureInfo.InvariantCulture,
-                $"POST /v1/ci/token HTTP/1.1\r\nHost: probe\r\nContent-Type: application/json\r\nContent-Length: {2 * 1024 * 1024}\r\nConnection: close\r\n\r\n");
-            await stream.WriteAsync(Encoding.ASCII.GetBytes(head), TestContext.Current.CancellationToken);
+            Assert.StartsWith("HTTP/1.1 413", oversize, StringComparison.Ordinal);
+            Assert.DoesNotContain(" 413 ", atLimit, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await ProcessRunner.StopAsync(process);
+        }
+    }
 
-            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-            deadline.CancelAfter(TimeSpan.FromSeconds(20));
-            var buffer = new byte[4096];
-            var read = await stream.ReadAsync(buffer, deadline.Token);
-            var response = Encoding.UTF8.GetString(buffer, 0, read);
+    [Fact]
+    public async Task Management_Listener_Is_Added_Next_To_HTTP_PORTS()
+    {
+        var publicPort = HostLocator.FreePort();
+        var managementPort = HostLocator.FreePort();
+        using var process = StartApi(publicPort, managementPort, httpPorts: true);
 
-            Assert.StartsWith("HTTP/1.1 413", response, StringComparison.Ordinal);
+        try
+        {
+            await WaitForLiveAsync(publicPort);
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+
+            using var managementMetrics = await client.GetAsync(
+                $"http://127.0.0.1:{managementPort}/metrics",
+                TestContext.Current.CancellationToken);
+            using var publicMetrics = await client.GetAsync(
+                $"http://127.0.0.1:{publicPort}/metrics/",
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, managementMetrics.StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, publicMetrics.StatusCode);
         }
         finally
         {
@@ -104,11 +126,28 @@ public sealed class ManagementListenerProcessTests
         Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
     }
 
-    private static System.Diagnostics.Process StartApi(int publicPort, int? managementPort)
+    private static async Task<string> SendHeadersOnlyAsync(int port, long contentLength)
+    {
+        using var socket = new TcpClient();
+        await socket.ConnectAsync(IPAddress.Loopback, port, TestContext.Current.CancellationToken);
+        await using var stream = socket.GetStream();
+
+        var head = string.Create(
+            CultureInfo.InvariantCulture,
+            $"POST /v1/projects/{Guid.NewGuid()}/suites HTTP/1.1\r\nHost: probe\r\nContent-Type: application/json\r\nContent-Length: {contentLength}\r\nConnection: close\r\n\r\n");
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(head), TestContext.Current.CancellationToken);
+
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(20));
+        var buffer = new byte[4096];
+        var read = await stream.ReadAsync(buffer, deadline.Token);
+        return Encoding.UTF8.GetString(buffer, 0, read);
+    }
+
+    private static System.Diagnostics.Process StartApi(int publicPort, int? managementPort, bool httpPorts = false)
     {
         var environment = new Dictionary<string, string>
         {
-            ["ASPNETCORE_URLS"] = $"http://127.0.0.1:{publicPort}",
             ["DOTNET_ENVIRONMENT"] = "Production",
             ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
             ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
@@ -118,6 +157,15 @@ public sealed class ManagementListenerProcessTests
             ["EVIDGATE__CI__PEPPERVERSION"] = "1",
             [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
         };
+
+        if (httpPorts)
+        {
+            environment["ASPNETCORE_HTTP_PORTS"] = publicPort.ToString(CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            environment["ASPNETCORE_URLS"] = $"http://127.0.0.1:{publicPort}";
+        }
 
         if (managementPort is { } port)
         {

@@ -47,65 +47,39 @@ public sealed class RequestBodyLimitTests
     }
 
     [Fact]
-    public async Task Event_Batch_Over_The_Contract_Limit_Is_Refused_Without_Reading_The_Body()
+    public async Task Handler_Refusing_Routes_Are_Backstopped_One_Byte_Past_Their_Cap()
     {
         await using var factory = new EvidgateApiFactory(DeadConnectionString);
         using var client = factory.CreateClient();
         var limit = factory.Services.GetRequiredService<ContractSchemaSet>().MaxBytes(ContractSchemaKeys.EventEnvelope)!.Value;
 
-        var body = new CountingStream(limit + 1);
-        using var content = new StreamContent(body);
+        // The event handler answers an over-cap batch with batch_too_large and its own counter; the host must not
+        // pre-empt it, so a declared length over the cap passes the host (the anonymous caller is then a 401).
+        using var content = new ByteArrayContent([]);
         content.Headers.ContentType = new("application/json");
         content.Headers.ContentLength = limit + 1;
-
         using var response = await client.PostAsync($"/v1/runs/{Guid.NewGuid()}/events", content, TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Environment_Revision_Over_The_Contract_Limit_Is_Refused_413()
+    {
+        await using var factory = new EvidgateApiFactory(DeadConnectionString);
+        using var client = factory.CreateClient();
+        var limit = factory.Services.GetRequiredService<ContractSchemaSet>().MaxBytes(ContractSchemaKeys.EnvironmentRevision)!.Value;
+
+        using var content = new StringContent(new string(' ', checked((int)limit + 1)), Encoding.UTF8, "application/json");
+        using var response = await client.PostAsync(
+            $"/v1/projects/{Guid.NewGuid()}/environments/{Guid.NewGuid()}/revisions",
+            content,
+            TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
         Assert.Contains(
             "\"code\":\"payload_too_large\"",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken),
             StringComparison.Ordinal);
-        Assert.Equal(0, body.BytesRead);
-    }
-
-    /// <summary>A body of <paramref name="length"/> zero bytes that records how much of it was read.</summary>
-    private sealed class CountingStream(long length) : Stream
-    {
-        private long _position;
-
-        public long BytesRead { get; private set; }
-
-        public override bool CanRead => true;
-
-        public override bool CanSeek => false;
-
-        public override bool CanWrite => false;
-
-        public override long Length => length;
-
-        public override long Position
-        {
-            get => _position;
-            set => throw new NotSupportedException();
-        }
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            var take = (int)Math.Min(count, length - _position);
-            Array.Clear(buffer, offset, take);
-            _position += take;
-            BytesRead += take;
-            return take;
-        }
-
-        public override void Flush()
-        {
-        }
-
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-
-        public override void SetLength(long value) => throw new NotSupportedException();
-
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

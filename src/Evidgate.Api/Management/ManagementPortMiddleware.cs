@@ -13,10 +13,6 @@ public sealed class ManagementPortMiddleware(RequestDelegate next, IOptions<Mana
     /// <summary>Items key set to true on a request that arrived on the management listener.</summary>
     public const string ItemsKey = "evidgate.management_request";
 
-    private static readonly string[] ManagementOnlyPaths = ["/metrics"];
-
-    private static readonly string[] SharedPaths = ["/internal/health/live", "/internal/health/ready"];
-
     /// <summary>True when the request arrived on the management listener.</summary>
     public static bool IsManagement(HttpContext context) =>
         context.Items.TryGetValue(ItemsKey, out var flag) && flag is true;
@@ -27,36 +23,26 @@ public sealed class ManagementPortMiddleware(RequestDelegate next, IOptions<Mana
         ArgumentNullException.ThrowIfNull(context);
 
         var onManagementPort = options.Value.ManagementPort is { } port && context.Connection.LocalPort == port;
-        var path = context.Request.Path;
+
+        // Routing has already matched the endpoint, so the decision follows what will run, not the spelling of
+        // the path (a trailing slash or a case variant reaches the same endpoint).
+        var surface = context.GetEndpoint()?.Metadata.GetMetadata<ManagementSurfaceMetadata>();
 
         if (onManagementPort)
         {
             context.Items[ItemsKey] = true;
-            if (!Matches(path, ManagementOnlyPaths) && !Matches(path, SharedPaths))
+            if (surface is null)
             {
                 return Refuse(context);
             }
         }
-        else if (Matches(path, ManagementOnlyPaths))
+        else if (surface is { PublicToo: false })
         {
+            // Also taken when no management port is configured: the surface is off, not public.
             return Refuse(context);
         }
 
-        // /metrics is also refused when no management port is configured: the surface is off, not public.
         return next(context);
-    }
-
-    private static bool Matches(PathString path, string[] candidates)
-    {
-        foreach (var candidate in candidates)
-        {
-            if (path.Equals(candidate, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static Task Refuse(HttpContext context) =>

@@ -21,21 +21,21 @@ public static class InternalEndpoints
         ArgumentNullException.ThrowIfNull(app);
 
         // 00 §9.1: live means only "the process is up" — no checks run.
-        app.MapHealthChecks(
+        ManagementSurfaceMetadata.AsProbe(app.MapHealthChecks(
                 "/internal/health/live",
-                new() { Predicate = _ => false, ResponseWriter = WriteHealthReport })
+                new() { Predicate = _ => false, ResponseWriter = WriteHealthReport }))
             .ExcludeFromDescription();
 
-        app.MapHealthChecks(
+        ManagementSurfaceMetadata.AsProbe(app.MapHealthChecks(
                 "/internal/health/ready",
                 new()
                 {
                     Predicate = check => check.Name == ReadinessHealthCheck.Name,
                     ResponseWriter = WriteHealthReport,
-                })
+                }))
             .ExcludeFromDescription();
 
-        app.MapPrometheusScrapingEndpoint()
+        ManagementSurfaceMetadata.AsManagementOnly(app.MapPrometheusScrapingEndpoint())
             .ExcludeFromDescription();
     }
 

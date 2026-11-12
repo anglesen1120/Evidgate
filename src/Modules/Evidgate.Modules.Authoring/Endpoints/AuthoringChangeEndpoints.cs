@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using System.Globalization;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
@@ -47,6 +48,7 @@ internal static class AuthoringChangeEndpoints
             .WithSummary("Keyset page of a project's queued authoring changes");
 
         authoring.MapPost("/changes", QueueAsync)
+            .WithBodyLimit(QueueBodyCap, handlerRefusesFirst: true)
             .Produces<QueuedAuthoringChangeResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)

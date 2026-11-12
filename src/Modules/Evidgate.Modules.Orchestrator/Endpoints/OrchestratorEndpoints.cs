@@ -73,6 +73,7 @@ public static class OrchestratorEndpoints
             .WithSummary("Upload and verify a run manifest (05.1.1)");
 
         group.MapPost("/projects/{p}/runs", CreateRunAsync)
+            .WithHandlerOwnedBodyLimit()
             .Accepts<CreateRunRequest>("application/json")
             .Produces<RunCreated>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status200OK)

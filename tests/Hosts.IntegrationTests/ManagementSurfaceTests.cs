@@ -26,6 +26,36 @@ public sealed class ManagementSurfaceTests
         Assert.Contains("\"code\":\"not_found\"", body, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("/metrics/")]
+    [InlineData("/METRICS")]
+    [InlineData("/Metrics/")]
+    public async Task Metrics_Path_Variants_Are_Not_Served_On_The_Public_Port(string path)
+    {
+        await using var factory = new EvidgateApiFactory(DeadConnectionString, managementPort: EvidgateApiFactory.TestManagementPort);
+        using var publicClient = factory.CreateClient();
+        await using var unset = new EvidgateApiFactory(DeadConnectionString);
+        using var unsetClient = unset.CreateClient();
+
+        using var onPublic = await publicClient.GetAsync(path, TestContext.Current.CancellationToken);
+        using var whenOff = await unsetClient.GetAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, onPublic.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, whenOff.StatusCode);
+    }
+
+    [Fact]
+    public async Task Readiness_Trailing_Slash_Carries_The_Detail_On_The_Management_Port()
+    {
+        await using var factory = new EvidgateApiFactory(DeadConnectionString, managementPort: EvidgateApiFactory.TestManagementPort);
+        using var management = factory.CreateManagementClient();
+
+        var body = await (await management.GetAsync("/internal/health/ready/", TestContext.Current.CancellationToken))
+            .Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        Assert.Contains("database_unreachable", body, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Metrics_Is_Served_On_The_Management_Port()
     {

@@ -54,7 +54,7 @@ public static partial class IngestionEndpoints
 
         group.MapPost("/runs/{r}/events", IngestEventBatchAsync)
             .Accepts<object>("application/json")
-            .WithContractBodyLimit(ContractSchemaKeys.EventEnvelope)
+            .WithContractBodyLimit(ContractSchemaKeys.EventEnvelope, handlerRefusesFirst: true)
             .Produces<BatchAckResult>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status413PayloadTooLarge)
             .WithSummary("Atomically ingest an event batch of ≤ 500 events and ≤ 1 MiB (04.1.1)");

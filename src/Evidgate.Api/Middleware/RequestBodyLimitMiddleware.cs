@@ -22,6 +22,7 @@ public sealed class RequestBodyLimitMiddleware(RequestDelegate next)
 
         var feature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
         long? limit = feature?.MaxRequestBodySize;
+        var handlerRefusesFirst = false;
 
         if (context.GetEndpoint()?.Metadata.GetMetadata<RequestBodyLimitMetadata>() is { } metadata)
         {
@@ -31,6 +32,7 @@ public sealed class RequestBodyLimitMiddleware(RequestDelegate next)
             }
 
             limit = metadata.Resolve(context.RequestServices.GetRequiredService<ContractSchemaSet>());
+            handlerRefusesFirst = metadata.HandlerRefusesFirst;
         }
 
         if (limit is not { } bytes)
@@ -40,10 +42,11 @@ public sealed class RequestBodyLimitMiddleware(RequestDelegate next)
 
         if (feature is { IsReadOnly: false })
         {
-            feature.MaxRequestBodySize = bytes;
+            // One byte of slack lets the handler's own "cap + 1" probe read and refuse with its own error.
+            feature.MaxRequestBodySize = handlerRefusesFirst ? bytes + 1 : bytes;
         }
 
-        return context.Request.ContentLength > bytes
+        return !handlerRefusesFirst && context.Request.ContentLength > bytes
             ? ErrorEnvelopeWriter.WriteAsync(
                 context,
                 StatusCodes.Status413PayloadTooLarge,
