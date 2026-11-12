@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
@@ -53,6 +54,7 @@ public static partial class IngestionEndpoints
 
         group.MapPost("/runs/{r}/events", IngestEventBatchAsync)
             .Accepts<object>("application/json")
+            .WithContractBodyLimit(ContractSchemaKeys.EventEnvelope)
             .Produces<BatchAckResult>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status413PayloadTooLarge)
             .WithSummary("Atomically ingest an event batch of ≤ 500 events and ≤ 1 MiB (04.1.1)");

@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Authoring.Application.Import;
@@ -49,6 +50,7 @@ internal static class AuthoringImportEndpoints
         // the header a spreadsheet or browser upload actually sends and the accepted list is matched literally. The
         // other two are declared bare, which matches any charset.
         authoring.MapPost("/import", ImportAsync)
+            .WithBodyLimit(ImportLimits.MaxBodyBytes)
             .WithMetadata(new AcceptsMetadata(
                 [
                     ImportFormats.CsvMediaType,

@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Healing.Application;
@@ -33,6 +34,7 @@ public static class HealingEndpoints
             .WithSummary("Resolved healing availability per scope (most restrictive wins; 08.6.3)");
 
         group.MapPut("/healing/switch", SetHealingSwitchAsync)
+            .WithContractBodyLimit(ContractSchemaKeys.HealingSwitchSet)
             .Produces<HealingSwitchView>(StatusCodes.Status200OK)
             .WithSummary("Set the healing switch of the tenant or a project (enabled|shadow|disabled only; 08.6.3)");
 

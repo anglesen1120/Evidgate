@@ -67,6 +67,7 @@ public static class OrchestratorEndpoints
         var group = routes.MapGroup("/v1").WithTags("runs");
 
         group.MapPost("/projects/{p}/manifests", UploadManifestAsync)
+            .WithHandlerOwnedBodyLimit()
             .Produces<ManifestAccepted>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status200OK)
             .WithSummary("Upload and verify a run manifest (05.1.1)");
@@ -78,6 +79,7 @@ public static class OrchestratorEndpoints
             .WithSummary("Create a run from a verified manifest in one transaction (05.2.1)");
 
         group.MapPost("/projects/{p}/environments/{e}/revisions", CreateEnvironmentRevisionAsync)
+            .WithContractBodyLimit(ContractSchemaKeys.EnvironmentRevision)
             .Produces<EnvironmentRevisionCreated>(StatusCodes.Status201Created)
             .Produces<EnvironmentRevisionCreated>(StatusCodes.Status200OK)
             .WithSummary("Create an immutable, secret-free, hashed environment revision (05.1.2)");

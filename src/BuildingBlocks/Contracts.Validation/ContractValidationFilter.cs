@@ -16,7 +16,9 @@ namespace Evidgate.BuildingBlocks.Contracts.Validation;
 /// runs, for a body the schema would reject.
 /// </summary>
 /// <remarks>
-/// The <c>x-max-bytes</c> transport cap (00 §9.3) is answered 413
+/// The first line of defence is the host's <see cref="RequestBodyLimitMetadata"/>, which refuses before any byte is
+/// read; this filter's check is the second line for a route that did not declare one (it sees a body that is already
+/// parsed, so it bounds nothing by itself). The <c>x-max-bytes</c> transport cap (00 §9.3) is answered 413
 /// <c>payload_too_large</c> against the declared content length (a chunked body
 /// falls back to the bound document's raw-text byte count); schema violations
 /// are 422 <c>request_invalid</c> with the mapped
