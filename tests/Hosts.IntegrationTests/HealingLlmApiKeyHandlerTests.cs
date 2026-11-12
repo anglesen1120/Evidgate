@@ -207,7 +207,6 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         Payload: "Design the checkout checklist for the shop.",
         ResponseSchema: null);
 
-    /// <summary>A secret provider that answers every name with the same value.</summary>
     private static partial class Log
     {
         [LoggerMessage(EventId = 1, Level = LogLevel.Information, Message = "capture probe {Probe}")]
@@ -225,6 +224,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         }
     }
 
+    /// <summary>A secret provider that answers every name with the same value.</summary>
     private sealed class FixedSecrets(string? value) : ISecretProvider
     {
         public ValueTask<string?> GetSecretAsync(string name, CancellationToken cancellationToken = default) =>
