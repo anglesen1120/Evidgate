@@ -361,15 +361,15 @@ public static class ContainerStart
         ArgumentNullException.ThrowIfNull(dispose);
         ArgumentNullException.ThrowIfNull(reaperRunning);
         log ??= static message => Console.Error.WriteLine(message);
-        var pending = dispose(container).AsTask();
-        // A dispose still running after the wait must not surface as an unobserved fault later.
-        _ = pending.ContinueWith(
-            static t => _ = t.Exception,
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted,
-            TaskScheduler.Default);
         try
         {
+            var pending = dispose(container).AsTask();
+            // A dispose still running after the wait must not surface as an unobserved fault later.
+            _ = pending.ContinueWith(
+                static t => _ = t.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
             await pending.WaitAsync(timeout ?? DisposeBudget).ConfigureAwait(false);
         }
         catch (Exception exception) when (reaperRunning() && (exception is TimeoutException || IsTransient(exception)))

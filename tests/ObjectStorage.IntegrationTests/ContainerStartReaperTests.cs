@@ -204,11 +204,31 @@ public sealed class ContainerStartReaperTests
     }
 
     [Fact]
-    public async Task Docker_timeout_from_dispose_is_logged_and_left_for_ryuk()
+    public async Task Docker_client_timeout_from_dispose_is_logged_and_left_for_ryuk()
     {
         var log = new List<string>();
 
-        await ContainerStart.DisposeAsync(new object(), _ => ValueTask.FromException(new HttpRequestException("reset")), () => true, Short, log.Add);
+        await ContainerStart.DisposeAsync(
+            new object(),
+            async _ =>
+            {
+                await Task.Yield();
+                throw new TaskCanceledException("The operation was canceled.", new HttpRequestException("timeout"));
+            },
+            () => true,
+            Short,
+            log.Add);
+
+        log.ShouldHaveSingleItem().ShouldContain("left for Ryuk");
+    }
+
+    [Fact]
+    public async Task Synchronous_transient_dispose_failure_is_left_for_ryuk()
+    {
+        var log = new List<string>();
+
+        await ContainerStart.DisposeAsync(
+            new object(), _ => throw new HttpRequestException("reset"), () => true, Short, log.Add);
 
         log.ShouldHaveSingleItem().ShouldContain("left for Ryuk");
     }
