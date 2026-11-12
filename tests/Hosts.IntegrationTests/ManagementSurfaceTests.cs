@@ -11,7 +11,7 @@ namespace Hosts.IntegrationTests;
 public sealed class ManagementSurfaceTests
 {
     private const string DeadConnectionString =
-        "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2";
+        "Host=127.0.0.1;Port=1;Username=evidgate_app;Database=evidgate;Timeout=2";
 
     [Fact]
     public async Task Metrics_Is_Not_Served_On_The_Public_Port()

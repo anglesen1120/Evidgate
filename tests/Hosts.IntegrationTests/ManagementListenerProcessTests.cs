@@ -16,7 +16,7 @@ public sealed class ManagementListenerProcessTests
     private const long DefaultLimit = 1024 * 1024;
 
     private const string DeadConnectionString =
-        "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2";
+        "Host=127.0.0.1;Port=1;Username=evidgate_app;Database=evidgate;Timeout=2";
 
     [Fact]
     public async Task Listeners_Split_The_Management_Surface_From_The_Public_One()
