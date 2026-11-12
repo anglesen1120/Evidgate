@@ -145,10 +145,14 @@ function generateDev(root, rules, file, template) {
   for (const rule of rules) {
     if (rule.kind !== 'connection-string' || !missing(rule.name)) continue;
     const owner = rules.find((r) => r.kind === 'random-hex' && r.role === rule.role);
-    append(
-      rule.name,
-      `'Host=127.0.0.1;Port=${port};Database=evidgate;Username=${rule.role};Password=${valueOf(content, owner.name)}'`,
-    );
+    const pairs = [
+      ['Host', '127.0.0.1'],
+      ['Port', port],
+      ['Database', 'evidgate'],
+      ['Username', rule.role],
+      ['Password', valueOf(content, owner.name)],
+    ];
+    append(rule.name, `'${pairs.map(([key, value]) => `${key}=${value}`).join(';')}'`);
   }
   const absent = rules
     .filter((r) => r.kind === 'template-provided' && missing(r.name))

@@ -111,7 +111,8 @@ public sealed class SecretPlaceholderGeneratorTests : IDisposable
         var values = ReadEnvFile(EnvFile);
         values["EVIDGATE_APP_PASSWORD"].ShouldBe("kept-by-the-developer");
         values["EVIDGATE__CI__PEPPER"].ShouldNotBeNullOrWhiteSpace();
-        values["EVIDGATE__DATABASE__CONNECTIONSTRING"].ShouldContain("Password=kept-by-the-developer");
+        values["EVIDGATE__DATABASE__CONNECTIONSTRING"].Split(';').Select(part => part.Split('=', 2))
+            .First(part => part[0] == "Password")[1].ShouldBe(values["EVIDGATE_APP_PASSWORD"]);
     }
 
     [Fact]
