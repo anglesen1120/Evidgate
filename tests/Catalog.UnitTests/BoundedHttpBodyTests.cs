@@ -1,4 +1,3 @@
-using System.Net;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Shouldly;
 using Xunit;
@@ -17,6 +16,49 @@ public sealed class BoundedHttpBodyTests
 
         bytes.ShouldNotBeNull();
         bytes.Length.ShouldBe(Cap);
+    }
+
+    [Fact]
+    public async Task Json_Body_Exactly_At_The_Cap_Parses()
+    {
+        using var content = new StreamContent(new MemoryStream(Json(Cap)));
+        content.Headers.ContentLength = null;
+
+        var result = await BoundedHttpBody.ReadJsonAsync(content, Cap, requireObject: true, TestContext.Current.CancellationToken);
+
+        result.Status.ShouldBe(BoundedBodyStatus.Ok);
+        result.Document!.Dispose();
+    }
+
+    [Fact]
+    public async Task Invalid_Utf8_Json_Is_Refused_Not_Deferred_To_A_Later_GetString()
+    {
+        byte[] body = [.. "{\"name\":\"a"u8, 0xFF, .. "b\"}"u8];
+        using var content = new ByteArrayContent(body);
+
+        var result = await BoundedHttpBody.ReadJsonAsync(content, Cap, requireObject: true, TestContext.Current.CancellationToken);
+
+        result.Status.ShouldBe(BoundedBodyStatus.Invalid);
+    }
+
+    [Fact]
+    public async Task Text_Is_Read_Under_The_Cap_And_Refused_Over_It()
+    {
+        using var ok = new StringContent("héllo");
+        (await BoundedHttpBody.ReadTextAsync(ok, Cap, TestContext.Current.CancellationToken)).ShouldBe("héllo");
+
+        using var over = new StreamContent(new TrickleStream(Cap + 1, chunk: 9));
+        (await BoundedHttpBody.ReadTextAsync(over, Cap, TestContext.Current.CancellationToken)).ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Cancellation_During_An_Active_Read_Is_Honoured()
+    {
+        using var cts = new CancellationTokenSource();
+        using var content = new StreamContent(new TrickleStream(Cap, chunk: 1, onRead: cts.Cancel));
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => BoundedHttpBody.ReadBytesAsync(content, Cap, cts.Token));
     }
 
     [Fact]
@@ -139,7 +181,7 @@ public sealed class BoundedHttpBodyTests
     }
 
     /// <summary>A forward-only stream with no length that hands out at most <c>chunk</c> bytes per read.</summary>
-    private sealed class TrickleStream(int total, int chunk) : Stream
+    private sealed class TrickleStream(int total, int chunk, Action? onRead = null) : Stream
     {
         private int _left = total;
 
@@ -180,6 +222,7 @@ public sealed class BoundedHttpBodyTests
         private int Fill(Span<byte> target)
         {
             Reads++;
+            onRead?.Invoke();
             var n = Math.Min(Math.Min(_left, chunk), target.Length);
             target[..n].Fill((byte)' ');
             _left -= n;

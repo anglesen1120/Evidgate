@@ -1,4 +1,6 @@
+using System.Text;
 using System.Text.Json;
+using System.Text.Unicode;
 
 namespace Evidgate.BuildingBlocks.SharedKernel.Serialization;
 
@@ -23,7 +25,7 @@ public readonly record struct BoundedJsonBody(BoundedBodyStatus Status, JsonDocu
 /// <summary>
 /// Reads an outbound HTTP client's response body under a byte cap. The cap is checked against
 /// <c>Content-Length</c> before any read and again while streaming, so a chunked body or a header that
-/// lies is refused at the first byte past the cap instead of being buffered.
+/// lies is refused once a read crosses the cap instead of being buffered.
 /// </summary>
 public static class BoundedHttpBody
 {
@@ -38,6 +40,24 @@ public static class BoundedHttpBody
     {
         var buffer = await ReadBufferAsync(content, maxBytes, cancellationToken).ConfigureAwait(false);
         return buffer?.ToArray();
+    }
+
+    /// <summary>Reads at most <paramref name="maxBytes"/> bytes as UTF-8 text (invalid bytes become U+FFFD); null when longer.</summary>
+    /// <param name="content">The body. Its stream is disposed.</param>
+    /// <param name="maxBytes">Largest accepted body, in bytes.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    public static async Task<string?> ReadTextAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
+    {
+        var buffer = await ReadBufferAsync(content, maxBytes, cancellationToken).ConfigureAwait(false);
+        if (buffer is null)
+        {
+            return null;
+        }
+
+        await using (buffer.ConfigureAwait(false))
+        {
+            return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
+        }
     }
 
     /// <summary>
@@ -61,10 +81,19 @@ public static class BoundedHttpBody
 
         await using (buffer.ConfigureAwait(false))
         {
+            var bytes = new ReadOnlyMemory<byte>(buffer.GetBuffer(), 0, (int)buffer.Length);
+
+            // The parser defers string transcoding, so a later GetString on invalid UTF-8 would throw
+            // outside the caller's refusal path; refuse the body here instead.
+            if (!Utf8.IsValid(bytes.Span))
+            {
+                return new BoundedJsonBody(BoundedBodyStatus.Invalid, null);
+            }
+
             try
             {
                 var document = JsonDocument.Parse(
-                    new ReadOnlyMemory<byte>(buffer.GetBuffer(), 0, (int)buffer.Length),
+                    bytes,
                     new JsonDocumentOptions { MaxDepth = MaxJsonDepth });
 
                 if (!requireObject || document.RootElement.ValueKind == JsonValueKind.Object)
@@ -82,6 +111,11 @@ public static class BoundedHttpBody
         }
     }
 
+    private static int InitialCapacity(HttpContent content, int maxBytes) =>
+        content.Headers.ContentLength is { } declared
+            ? (int)Math.Min(declared, maxBytes)
+            : Math.Min(maxBytes, 4096);
+
     private static async Task<MemoryStream?> ReadBufferAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(content);
@@ -95,7 +129,7 @@ public static class BoundedHttpBody
         var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         await using (stream.ConfigureAwait(false))
         {
-            var buffer = new MemoryStream(Math.Min(maxBytes, 65536));
+            var buffer = new MemoryStream(InitialCapacity(content, maxBytes));
             var chunk = new byte[ChunkBytes];
             try
             {

@@ -319,9 +319,8 @@ internal sealed class HttpGitHubJwksProvider(
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
-        var body = await BoundedHttpBody.ReadBytesAsync(response.Content, MaxDocumentBytes, timeout.Token).ConfigureAwait(false)
+        var json = await BoundedHttpBody.ReadTextAsync(response.Content, MaxDocumentBytes, timeout.Token).ConfigureAwait(false)
                    ?? throw new HttpRequestException("the JWKS document is unreasonably large");
-        var json = System.Text.Encoding.UTF8.GetString(body);
         var set = new JsonWebKeySet(json);
         var keys = new Dictionary<string, SecurityKey>(StringComparer.Ordinal);
         foreach (var key in set.GetSigningKeys())

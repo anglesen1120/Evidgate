@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.Text;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Microsoft.Extensions.Logging;
@@ -272,9 +271,8 @@ internal sealed partial class HttpGoogleJwksCache : IGoogleJwksProvider, IDispos
             throw new HttpRequestException("the Google OIDC JWKS document could not be fetched");
         }
 
-        var body = await BoundedHttpBody.ReadBytesAsync(response.Content, _options.MaxResponseBytes, timeout.Token).ConfigureAwait(false)
+        var json = await BoundedHttpBody.ReadTextAsync(response.Content, _options.MaxResponseBytes, timeout.Token).ConfigureAwait(false)
                    ?? throw new HttpRequestException("the Google OIDC JWKS document is unreasonably large");
-        var json = Encoding.UTF8.GetString(body);
 
         var keys = Parse(json);
         var at = _clock.GetUtcNow();
