@@ -67,7 +67,7 @@ public sealed class PostgresPersistenceFixture : IAsyncLifetime
     public ValueTask DisposeAsync()
     {
         _template?.Dispose();
-        return _container is null ? ValueTask.CompletedTask : _container.DisposeAsync();
+        return new ValueTask(ContainerStart.DisposeAsync(_container));
     }
 
     /// <summary>The migrated template every per-test database is copied from.</summary>
