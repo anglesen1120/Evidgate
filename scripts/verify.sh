@@ -201,16 +201,11 @@ run_stage() {
     run_trait_stage Hostile "${HOSTILE_ASSEMBLIES[@]}"
     ;;
   fixtures-fuzz)
-    # 06.3.2-T2.1 (AC4): the seeded-mutation fuzz harness (HostileFuzzTests, FuzzPromotionTests) over
-    # IParsing.ParseXmlReport/EnumerateArchive, selected by [Trait("Category","Fuzz")] and run on the built
-    # assembly, so the stage needs no Docker daemon. The ten-minute budget is set HERE, so the `test` stage — the
-    # only other stage that selects the Fuzz trait — runs the harness's few-second smoke default (a caller that
-    # already exported EVIDGATE_FUZZ_BUDGET_SECONDS keeps its value); the `fixtures-hostile` stage filters
-    # Category=Hostile only and never runs this harness. The seed is set HERE too: one per run, from the CI run id
-    # (or the clock outside CI), so consecutive nights do not replay one PRNG stream. `run_fuzz_shards`
-    # (verify-parallel-tests.sh) splits the budget over concurrent shards, prints each shard's own seed and
-    # says how to replay one. Findings go under artifacts/fuzz-findings/shard-N, which the nightly job uploads.
-    # Only the trait-bearing assemblies run: a trait that selects nothing fails the stage instead of passing it.
+    # Seeded-mutation fuzz harness over IParsing.ParseXmlReport/EnumerateArchive, selected by
+    # [Trait("Category","Fuzz")] on the built assembly (no Docker). The ten-minute budget is set HERE so the `test`
+    # stage keeps the few-second smoke default (a caller's exported budget wins); the seed is one per run (CI run
+    # id, else the clock). `run_fuzz_shards` (verify-parallel-tests.sh) splits the work over concurrent shards and
+    # prints each shard's seed and how to replay it; findings go under artifacts/fuzz-findings/shard-N (uploaded).
     export EVIDGATE_FUZZ_BUDGET_SECONDS="${EVIDGATE_FUZZ_BUDGET_SECONDS:-600}"
     export EVIDGATE_FUZZ_FINDINGS_DIR="${EVIDGATE_FUZZ_FINDINGS_DIR:-$ROOT/artifacts/fuzz-findings}"
     export EVIDGATE_FUZZ_SEED="${EVIDGATE_FUZZ_SEED:-${GITHUB_RUN_ID:-$(date +%s)}}"
