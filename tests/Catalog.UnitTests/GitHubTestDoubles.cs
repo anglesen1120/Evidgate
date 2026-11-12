@@ -138,14 +138,15 @@ internal sealed class GitHubTestBench
     internal GitHubTestBench(StubHandler handler, GitHubOptions? options = null, string? pem = null)
     {
         Handler = handler;
-        Options = options ?? DefaultOptions();
+        Options = options ?? DefaultOptions(pem: pem ?? TestPem);
+        Options.PrivateKey ??= pem ?? TestPem;
         Time = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
         ClientLogs = new ListLogger<GitHubClient>();
         TokenLogs = new ListLogger<GitHubInstallationTokenSource>();
 
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com") };
         var clients = new StubClientFactory(http);
-        AppTokens = new GitHubAppTokenSource(new MapSecretProvider(pem ?? TestPem), Microsoft.Extensions.Options.Options.Create(Options), Time);
+        AppTokens = new GitHubAppTokenSource(Microsoft.Extensions.Options.Options.Create(Options), Time);
         Tokens = new GitHubInstallationTokenSource(clients, AppTokens, Microsoft.Extensions.Options.Options.Create(Options), Time, TokenLogs);
         Client = new GitHubClient(http, Tokens, AppTokens, Microsoft.Extensions.Options.Options.Create(Options), Time, ClientLogs);
     }
@@ -167,9 +168,10 @@ internal sealed class GitHubTestBench
     internal ListLogger<GitHubInstallationTokenSource> TokenLogs { get; }
 
     /// <summary>The default options: configured App, short tree cap so a capped tree is cheap to build.</summary>
-    internal static GitHubOptions DefaultOptions(string? appId = AppId) => new()
+    internal static GitHubOptions DefaultOptions(string? appId = AppId, string? pem = null) => new()
     {
         AppId = appId,
+        PrivateKey = pem,
         MaxTreeEntries = 4,
         MaxBlobBytes = 64,
     };

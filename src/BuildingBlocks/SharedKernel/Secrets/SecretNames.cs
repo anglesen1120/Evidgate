@@ -54,7 +54,7 @@ public static class SecretNames
     /// client through <see cref="ISecretProvider"/>; the value is never bound, logged or stored, and a
     /// deployment may map a versioned secret-store name onto this key at injection time.
     /// </summary>
-    public const string GitHubAppPrivateKey = "EVIDGATE__GITHUB__APP__PRIVATEKEY";
+    public const string GitHubAppPrivateKey = "EVIDGATE__GITHUB__PRIVATEKEY";
 
     /// <summary>
     /// API key the healing adapter presents to its provider. Deployments name it in

@@ -151,7 +151,7 @@ internal sealed class GitHubInstallationTokenSource
 
     private async Task<Result<GitHubInstallationToken>> ExchangeCoreAsync(long installationId)
     {
-        var jwt = await _appTokens.CreateAsync(CancellationToken.None).ConfigureAwait(false);
+        var jwt = _appTokens.Create();
         if (!jwt.IsSuccess)
         {
             return Result.Failure<GitHubInstallationToken>(jwt.Error!);

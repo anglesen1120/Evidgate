@@ -66,7 +66,7 @@ internal sealed partial class GitHubClient
             return Result.Failure<GitHubInstallation>(InvalidParameters());
         }
 
-        var jwt = await _appTokens.CreateAsync(cancellationToken).ConfigureAwait(false);
+        var jwt = _appTokens.Create();
         if (!jwt.IsSuccess)
         {
             return Result.Failure<GitHubInstallation>(jwt.Error!);
@@ -222,7 +222,7 @@ internal sealed partial class GitHubClient
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(GitHubHttpClients.TotalTimeout(_options.Value));
 
-        using var response = await SendCoreAsync(request, deadline.Token).ConfigureAwait(false);
+        using var response = await SendCoreAsync(request, deadline.Token, cancellationToken).ConfigureAwait(false);
         if (response is null)
         {
             return Result.Failure<JsonDocument>(GitHubResponseReader.Unavailable());
@@ -253,14 +253,15 @@ internal sealed partial class GitHubClient
 
     private async Task<HttpResponseMessage?> SendCoreAsync(
         HttpRequestMessage request,
-        CancellationToken cancellationToken)
+        CancellationToken sendToken,
+        CancellationToken callerToken)
     {
         try
         {
             // Headers only: the reader enforces the body cap while streaming, so an oversized or endless
             // body is refused without first being buffered into memory.
             return await _api
-                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, sendToken)
                 .ConfigureAwait(false);
         }
         catch (HttpRequestException)
@@ -276,7 +277,7 @@ internal sealed partial class GitHubClient
             // A pipeline timeout rejects the call instead of throwing TimeoutException.
             return null;
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (!callerToken.IsCancellationRequested)
         {
             return null;
         }

@@ -36,6 +36,7 @@ public sealed class GitHubCompositionTests
         provider.GetRequiredService<GitHubClient>().ShouldNotBeNull();
         var options = provider.GetRequiredService<IOptions<GitHubOptions>>().Value;
         options.AppId.ShouldBe("12345");
+        options.PrivateKey.ShouldBe(GitHubTestBench.TestPem);
         options.MaxTreeEntries.ShouldBe(10);
         new GitHubOptionsValidator().Validate(null, options).Succeeded.ShouldBeTrue();
     }

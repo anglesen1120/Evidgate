@@ -63,6 +63,8 @@ internal static class GitHubServiceCollectionExtensions
 
         services.TryAddEnumerable(
             ServiceDescriptor.Singleton<IValidateOptions<GitHubOptions>, GitHubOptionsValidator>());
+        services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IPostConfigureOptions<GitHubOptions>, GitHubOptionsSecretPostConfigure>());
         services.TryAddSingleton(TimeProvider.System);
 
         // The token exchange client: a hard timeout and no retry — the request is a POST.
@@ -106,7 +108,9 @@ internal static class GitHubServiceCollectionExtensions
                 builder.AddTimeout(GitHubHttpClients.AttemptTimeout(options));
             });
 
-        services.TryAddSingleton<GitHubAppTokenSource>();
+        services.TryAddSingleton(provider => new GitHubAppTokenSource(
+            provider.GetRequiredService<IOptions<GitHubOptions>>(),
+            provider.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton(provider => new GitHubInstallationTokenSource(
             provider.GetRequiredService<IHttpClientFactory>(),
             provider.GetRequiredService<GitHubAppTokenSource>(),

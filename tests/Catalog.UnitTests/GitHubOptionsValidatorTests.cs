@@ -56,15 +56,6 @@ public sealed class GitHubOptionsValidatorTests
         result.Failures!.Single().ShouldNotContain("12x3");
     }
 
-    [Fact]
-    public void Validator_RefusesAnUnknownSecretName()
-    {
-        var result = Validate(new GitHubOptions { AppId = "12345", PrivateKeySecretName = "NOT_A_REGISTERED_NAME" });
-
-        result.Failed.ShouldBeTrue();
-        result.Failures!.Single().ShouldContain(nameof(GitHubOptions.PrivateKeySecretName));
-        result.Failures!.Single().ShouldNotContain("NOT_A_REGISTERED_NAME");
-    }
 
     [Fact]
     public void Validator_RefusesASafetyMarginAtHalfTheTokenLifetime()

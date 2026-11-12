@@ -1,5 +1,4 @@
 using System.Globalization;
-using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Microsoft.Extensions.Options;
 
 namespace Evidgate.Modules.Catalog.Infrastructure.GitHub;
@@ -27,7 +26,6 @@ internal sealed class GitHubOptionsValidator : IValidateOptions<GitHubOptions>
 
         CheckBaseUrl(failures, options.ApiBaseUrl);
         CheckAppId(failures, options.AppId);
-        CheckSecretName(failures, options.PrivateKeySecretName);
 
         if (options.InstallationTokenSafetyMarginSeconds * 2 >= 3600)
         {
@@ -63,11 +61,4 @@ internal sealed class GitHubOptionsValidator : IValidateOptions<GitHubOptions>
         }
     }
 
-    private static void CheckSecretName(List<string> failures, string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value) || !SecretNames.All.Contains(value, StringComparer.Ordinal))
-        {
-            failures.Add($"{GitHubOptions.SectionName}:{nameof(GitHubOptions.PrivateKeySecretName)} must be a registered secret name");
-        }
-    }
 }

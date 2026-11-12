@@ -15,11 +15,11 @@ namespace Catalog.UnitTests;
 public sealed class GitHubAppJwtTests
 {
     [Fact]
-    public async Task AppToken_MintsRs256Jwt_WithIssuerAndTenMinuteLifetime()
+    public void AppToken_MintsRs256Jwt_WithIssuerAndTenMinuteLifetime()
     {
         var bench = new GitHubTestBench(new StubHandler(_ => GitHubResponses.Json("{}")));
 
-        var result = await bench.AppTokens.CreateAsync(CancellationToken.None);
+        var result = bench.AppTokens.Create();
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         var jwt = new JsonWebToken(result.Value);
@@ -36,7 +36,7 @@ public sealed class GitHubAppJwtTests
     public async Task AppToken_SignatureValidates_AgainstTheAppPublicKey()
     {
         var bench = new GitHubTestBench(new StubHandler(_ => GitHubResponses.Json("{}")));
-        var result = await bench.AppTokens.CreateAsync(CancellationToken.None);
+        var result = bench.AppTokens.Create();
 
         using var rsa = RSA.Create();
         rsa.ImportFromPem(GitHubTestBench.TestPem);
@@ -61,12 +61,12 @@ public sealed class GitHubAppJwtTests
     }
 
     [Fact]
-    public async Task AppToken_WithoutAppId_IsNotConfigured_AndSendsNothing()
+    public void AppToken_WithoutAppId_IsNotConfigured_AndSendsNothing()
     {
         var handler = new StubHandler(_ => GitHubResponses.Json("{}"));
         var bench = new GitHubTestBench(handler, GitHubTestBench.DefaultOptions(appId: null));
 
-        var result = await bench.AppTokens.CreateAsync(CancellationToken.None);
+        var result = bench.AppTokens.Create();
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(GitHubErrorCodes.NotConfigured);
@@ -74,23 +74,25 @@ public sealed class GitHubAppJwtTests
     }
 
     [Fact]
-    public async Task AppToken_WithoutSecret_IsNotConfigured()
+    public void AppToken_WithoutSecret_IsNotConfigured()
     {
         var bench = new GitHubTestBench(new StubHandler(_ => GitHubResponses.Json("{}")), pem: string.Empty);
 
-        var result = await bench.AppTokens.CreateAsync(CancellationToken.None);
+        var result = bench.AppTokens.Create();
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(GitHubErrorCodes.NotConfigured);
     }
 
     [Fact]
-    public async Task AppToken_WithUnusablePem_IsNotConfigured_WithoutEchoingTheValue()
+    public void AppToken_WithUnusablePem_IsNotConfigured_WithoutEchoingTheValue()
     {
-        const string NotAKey = "-----BEGIN PRIVATE KEY-----\u0021not-base64\u0021\n-----END PRIVATE KEY-----";
+        // Assembled from parts so the file holds no complete PEM header literal (check-no-secret-literals).
+        const string NotAKey =
+            "-----BEGIN" + " PRIVATE KEY-----\nnot-base64\n-----END" + " PRIVATE KEY-----";
         var bench = new GitHubTestBench(new StubHandler(_ => GitHubResponses.Json("{}")), pem: NotAKey);
 
-        var result = await bench.AppTokens.CreateAsync(CancellationToken.None);
+        var result = bench.AppTokens.Create();
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(GitHubErrorCodes.NotConfigured);

@@ -267,6 +267,24 @@ public sealed class GitHubClientTests
     }
 
     [Fact]
+    public async Task StalledHeaders_EndAtTheCallsDeadline()
+    {
+        // The token exchange answers at once; the read call stalls before its headers. The call's own
+        // deadline must turn that into github_unavailable instead of letting a cancellation escape.
+        var options = new GitHubOptions { AppId = "12345", HttpTimeoutSeconds = 1 };
+        var bench = new GitHubTestBench(
+            new StubHandler((request, cancellationToken) => request.Method == HttpMethod.Post
+                ? Task.FromResult(GitHubResponses.AccessToken("ghs_stalled", TokenExpiry))
+                : StallAsync(cancellationToken)),
+            options);
+
+        var result = await bench.Client.GetInstallationAsync(7, CancellationToken.None);
+
+        result.Error!.Code.ShouldBe(GitHubErrorCodes.Unavailable);
+        result.Error.Retryable.ShouldBeTrue();
+    }
+
+    [Fact]
     public async Task StalledBodyRead_EndsAtTheCallsDeadline()
     {
         // HttpTimeoutSeconds = 1 → the whole call is 3 attempts + 2 s of slack, so a body that never
@@ -323,4 +341,10 @@ public sealed class GitHubClientTests
 
     private static string Entry(string path) =>
         $$"""{"path":"{{path}}","type":"blob","sha":"{{ObjectSha}}","size":12}""";
+
+    private static async Task<HttpResponseMessage> StallAsync(CancellationToken cancellationToken)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        return new HttpResponseMessage(HttpStatusCode.OK);
+    }
 }

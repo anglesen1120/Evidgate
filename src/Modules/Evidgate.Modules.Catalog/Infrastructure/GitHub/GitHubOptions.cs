@@ -1,12 +1,12 @@
 using System.ComponentModel.DataAnnotations;
-using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 
 namespace Evidgate.Modules.Catalog.Infrastructure.GitHub;
 
 /// <summary>
 /// Configuration of the platform's GitHub App client, bound from <c>EVIDGATE:GITHUB</c>. The App
-/// id is plain configuration; the private key is only ever a reference to a secret name, resolved
-/// per mint through <see cref="ISecretProvider"/> and never held in this object.
+/// id is plain configuration; <see cref="PrivateKey"/> has an internal setter, so the binder never
+/// reads it from configuration — it is resolved through <c>ISecretProvider</c> by
+/// <see cref="GitHubOptionsSecretPostConfigure"/> and never logged or put in an exception message.
 /// </summary>
 /// <remarks>
 /// An absent App id leaves the client unconfigured: every call returns
@@ -23,10 +23,10 @@ internal sealed class GitHubOptions
     public string? AppId { get; init; }
 
     /// <summary>
-    /// Name of the secret holding the App private key in PEM form. The default is the registered
-    /// <see cref="SecretNames.GitHubAppPrivateKey"/>; the value is a name, never the key.
+    /// App private key in PEM form, resolved through <c>ISecretProvider</c>
+    /// (<c>SecretNames.GitHubAppPrivateKey</c>) and never bound from configuration.
     /// </summary>
-    public string PrivateKeySecretName { get; init; } = SecretNames.GitHubAppPrivateKey;
+    public string? PrivateKey { get; internal set; }
 
     /// <summary>Base address of the REST API; the validator pins it to <c>https://api.github.com</c> (S4).</summary>
     public string ApiBaseUrl { get; init; } = "https://api.github.com";
