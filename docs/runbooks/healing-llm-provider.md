@@ -25,6 +25,8 @@ Start-up refusals name the key and never the configured value:
 | `http` | no base address, a relative one, plain HTTP outside Development, a base that does not end in `/`, or one carrying a query, a fragment or user information | `EVIDGATE__HEALING__LLM__BASEADDRESS` |
 | `http` | no key name, or one other than `EVIDGATE__HEALING__LLM__APIKEY` | `EVIDGATE__HEALING__LLM__APIKEYSECRET` |
 
+Outside Development `BASEADDRESS` must also name a public host: a loopback, private, link-local or unique-local IP literal (cloud metadata included), `localhost` and unqualified or `.local`/`.internal` names are refused at boot. At run time the adapter's egress handler refuses any request whose scheme, host, port or path prefix differs from `BASEADDRESS` before a key is resolved for it, and every request carries `max_tokens` equal to the output ceiling held in the budget. Name resolution is not judged: a public name that resolves to an internal address is not stopped here.
+
 `BASEADDRESS` must end with `/` because the adapter posts a relative path under it, and it may not point at a redirect: the client does not follow one, so a provider behind a redirect fails its calls as `error` instead of leaving the configured endpoint. It may not carry user information either, because credentials in the URL would travel on every request and surface in a proxy trace; the key belongs in the secret the handler resolves. Plain `http` is accepted in Development only, because the key travels in an `Authorization` header.
 
 ## The provider key
