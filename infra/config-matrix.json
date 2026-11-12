@@ -1920,6 +1920,27 @@
       "note": "command-\"evidgate_worker_sched\" string — the only role with EXECUTE on the owner SECURITY DEFINER sweeps (TL T80, e.g. the scheduled idempotency purge). Optional at boot: a Worker without it still consumes ordinary tasks and the sweep task fails loudly naming this key."
     },
     {
+      "key": "EVIDGATE__TASKS__WORKERCONNECTIONSTRING",
+      "scope": "runtime",
+      "consumers": ["api", "dev-stack", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": true,
+      "requiredBy": "src/BuildingBlocks/Persistence/Tasks/TaskWorkerDataSource.cs",
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": true,
+        "prod": true
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "command-\"evidgate_worker\" string — the queue's service role: it claims, acknowledges, dispatches and prunes public.task and public.outbox across tenants. The app role keeps INSERT only on both tables, so a request handler enqueues work but can never read, rewrite or delete the queue; its operator dead-letter route reaches the queue through owner SECURITY DEFINER functions instead. Only the Worker resolves the keyed evidgate_worker data source and holds a value: the Api composes the task options but never resolves it, so the Api never gets this credential, and the Migrator never binds EVIDGATE:Tasks. `consumers` names every process whose assembly references the options type — scripts/check-env-matrix.mjs derives it from the reference graph, and the type lives in Evidgate.BuildingBlocks.Persistence, which Api, Worker and Migrator all reference — so it lists the same four processes as the task settings beside it, not four credentials. Required at boot by the Worker: the keyed data source is resolved during startup validation and the boot fails naming this key."
+    },
+    {
       "key": "EVIDGATE__TASKS__VISIBILITYTIMEOUTSECONDS",
       "scope": "runtime",
       "consumers": ["api", "migrator", "worker"],
@@ -2732,6 +2753,26 @@
         "prod": "default"
       },
       "note": "dev-stack only, profile `observability`: the whole collector configuration (receivers, the redaction transform, batch and the three exporters), exported by scripts/dev/up.sh from infra/observability/otel-collector.yaml and read by the container as `--config=env:` (a host bind mount is unusable under colima/virtiofs). Holds no secret."
+    },
+    {
+      "key": "EVIDGATE_WORKER_PASSWORD",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: password of the evidgate_worker role, which owns the queue's claim/ack/dispatch/prune statements while evidgate_app keeps INSERT only; it is what makes EVIDGATE__TASKS__WORKERCONNECTIONSTRING concrete in dev."
     },
     {
       "key": "EVIDGATE_WORKER_SCHED_PASSWORD",

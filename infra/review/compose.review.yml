@@ -223,7 +223,8 @@ services:
 
   # One-shot role bootstrap in two commands, run around the migrations:
   #   docker compose ... run --rm db-init bootstrap   (evidgate_owner + database)
-  #   <migrator applies migrations; migration 0001 creates the three app roles>
+  #   <migrator applies migrations; 0001 creates the three app roles and 0104
+  #    creates evidgate_worker, the queue's service role>
   #   docker compose ... run --rm db-init grants      (LOGIN + passwords)
   # The script is inlined as a compose config rather than bind-mounted, and runs
   # in the pinned postgres image because that image already carries psql.
@@ -236,6 +237,7 @@ services:
       EVIDGATE_OWNER_PASSWORD: ${EVIDGATE_OWNER_PASSWORD:?missing from .env.review}
       EVIDGATE_APP_PASSWORD: ${EVIDGATE_APP_PASSWORD:?missing from .env.review}
       EVIDGATE_OPERATOR_PASSWORD: ${EVIDGATE_OPERATOR_PASSWORD:?missing from .env.review}
+      EVIDGATE_WORKER_PASSWORD: ${EVIDGATE_WORKER_PASSWORD:?missing from .env.review}
       EVIDGATE_WORKER_SCHED_PASSWORD: ${EVIDGATE_WORKER_SCHED_PASSWORD:?missing from .env.review}
     configs:
       - source: db-init-script
@@ -415,6 +417,9 @@ services:
     environment:
       <<: *review-runtime-environment
       EVIDGATE__TASKS__SWEEPCONNECTIONSTRING: ${EVIDGATE__TASKS__SWEEPCONNECTIONSTRING:?missing from .env.review}
+      # The queue's service role. Not on the Api: it enqueues as evidgate_app
+      # (INSERT only) and lists/replays through owner SECURITY DEFINER functions.
+      EVIDGATE__TASKS__WORKERCONNECTIONSTRING: ${EVIDGATE__TASKS__WORKERCONNECTIONSTRING:?missing from .env.review}
       # 192m heap under the 384m limit: the Worker runs one sweep at a time.
       DOTNET_GCHeapHardLimit: '0x0C000000'
     mem_limit: 384m
@@ -633,12 +638,14 @@ configs:
       run_sql <<'SQL'
       \getenv app_password EVIDGATE_APP_PASSWORD
       \getenv operator_password EVIDGATE_OPERATOR_PASSWORD
+      \getenv worker_password EVIDGATE_WORKER_PASSWORD
       \getenv worker_sched_password EVIDGATE_WORKER_SCHED_PASSWORD
       alter role evidgate_app login password :'app_password';
       alter role evidgate_operator login password :'operator_password';
+      alter role evidgate_worker login password :'worker_password';
       alter role evidgate_worker_sched login password :'worker_sched_password';
       SQL
-      echo "db-init: evidgate_app, evidgate_operator and evidgate_worker_sched may log in"
+      echo "db-init: evidgate_app, evidgate_operator, evidgate_worker and evidgate_worker_sched may log in"
 
   # Copied verbatim from infra/seaweedfs/pending-lifecycle.xml;
   # check-inlined-files.sh fails when the two drift apart.

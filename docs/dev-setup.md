@@ -84,7 +84,7 @@ image's own convention), which is the path `db-init.sh` uses as superuser.
 | --- | --- | --- |
 | `Evidgate.Api` | `http://127.0.0.1:8080` | readiness: `/internal/health/ready`, liveness: `/internal/health/live`, metrics: `/metrics` |
 | `Evidgate.Worker` | readiness `http://127.0.0.1:8081/internal/health/ready` | the worker serves only the probe listener; its work happens in the database-backed queue |
-| PostgreSQL 18 | `127.0.0.1:5432`, database `evidgate` | roles `evidgate_owner` (migrations), `evidgate_app` (Api/Worker), `evidgate_operator`, `evidgate_worker_sched` |
+| PostgreSQL 18 | `127.0.0.1:5432`, database `evidgate` | roles `evidgate_owner` (migrations), `evidgate_app` (Api/Worker, INSERT-only on the queue tables), `evidgate_operator`, `evidgate_worker` (the queue's claim/ack/dispatch/prune), `evidgate_worker_sched` (owner definer sweeps) |
 | SeaweedFS S3 | `http://127.0.0.1:8333`, bucket `evidgate-dev` | static local-only identity, same one the 01.8.1-T1 parity suite uses |
 | web (`ng serve`) | `http://127.0.0.1:4200` | the Angular 22 app from `apps/web`; the `development` configuration localizes to `vi` only and the dev server serves that single locale flat, so the app answers on `/` (no `/vi/` prefix). It imports `@evidgate/sdk` from `packages/sdk/dist` |
 
@@ -115,8 +115,9 @@ the Worker and the Migrator:
 | `EVIDGATE_DB_PORT`, `EVIDGATE_S3_PORT` | compose | host ports published on `127.0.0.1` |
 | `EVIDGATE_WEB_PORT` | `up.sh` (`ng serve`) | port of the Angular dev server on `127.0.0.1`; not in `.env.dev.template`, `up.sh` defaults it to `4200` |
 | `EVIDGATE_DB_SUPERUSER_PASSWORD` | compose, `db-init.sh` | bootstrap-only superuser password |
-| `EVIDGATE_OWNER_PASSWORD`, `EVIDGATE_APP_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD`, `EVIDGATE_WORKER_SCHED_PASSWORD` | `db-init.sh` | the four role passwords |
-| `EVIDGATE__DATABASE__CONNECTIONSTRING` | Api, Worker; `db-init.sh --with-token` builds the same value from the role password and port for the seed | `evidgate_app` — subject to RLS |
+| `EVIDGATE_OWNER_PASSWORD`, `EVIDGATE_APP_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD`, `EVIDGATE_WORKER_PASSWORD`, `EVIDGATE_WORKER_SCHED_PASSWORD` | `db-init.sh` | the five role passwords |
+| `EVIDGATE__DATABASE__CONNECTIONSTRING` | Api, Worker; `db-init.sh --with-token` builds the same value from the role password and port for the seed | `evidgate_app` — subject to RLS; INSERT only on `public.task` and `public.outbox` |
+| `EVIDGATE__TASKS__WORKERCONNECTIONSTRING` | Worker | `evidgate_worker` — the queue's service role: it claims, acknowledges, dispatches and prunes `public.task` and `public.outbox`. The Api never holds it: the dead-letter list and replay go through owner `SECURITY DEFINER` functions on the app role, scoped to `evidgate.current_org_id()` |
 | `EVIDGATE__TASKS__SWEEPCONNECTIONSTRING` | Worker | `evidgate_worker_sched` — the scheduled owner `SECURITY DEFINER` sweeps (01.5.1-T6.2, TL T80) |
 | `EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY`, `EVIDGATE__RUNS__CANCEL__KILLDELAY` | Api, Worker | the two windows of an accepted run cancel, as `TimeSpan` literals, measured from the request; the kill deadline is also the `available_at` of the durable kill task. Both are required at boot — there is no option default — and `KILLDELAY` must be at least `SOFTSTOPDELAY`. The `db-init.sh --with-token` seed does not read them |
 | `EVIDGATE_MIGRATOR__CONNECTIONSTRING` | `Evidgate.Migrator` | `evidgate_owner` — the only writer of `public.schema_migration` |
@@ -151,8 +152,9 @@ It then creates one scratch database per test on that server, migrates each with
 the real Migrator and runs the RLS assertions as `evidgate_app` — i.e. against the
 same image and the same role split the dev stack uses. Two things to know:
 
-- it rotates the `evidgate_owner`, `evidgate_app`, `evidgate_operator` and
-  `evidgate_worker_sched` passwords (roles are global to a server), so restart the
+- it rotates the `evidgate_owner`, `evidgate_app`, `evidgate_operator`,
+  `evidgate_worker` and `evidgate_worker_sched` passwords (roles are global to a
+  server), so restart the
   stack afterwards — `scripts/dev/down.sh && scripts/dev/up.sh`, which re-grants
   the `.env.dev` passwords through `db-init.sh`;
 - it leaves the scratch databases behind only if the run is aborted; a normal run
