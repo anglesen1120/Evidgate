@@ -597,7 +597,7 @@ The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none 
  (T2.1 merged #216, 1742764; T2.2 S146 #302 fbb2fe91; T2.3 + T2.4 PARTIAL, S272 #564 fd230b78: release panel and run-state timeline built, release id, state history and after_cancel count render unavailable until GET /v1/runs/{r} serves them, D-S272-Q1; T2 stays partial. Update S276 #568: the run read now serves `after_cancel_events` (#566) and the timeline shows it; release id and state history still unavailable; S278 #572: T2.3 landed, the panel reads `releases[]`, T2.4 still waits for state history, S277; S283 #583: T2.4 landed, timeline reads `state_history`; all four sub-rows landed, parent credited by the S299 recount, nothing left to build)
 ```
 
-## Moved from status-carried.md and STATUS.md by S401 (2026-11-13)
+## Moved from status-carried.md and replaced in STATUS.md by S401 (2026-11-13)
 
 Closed carried row, verbatim (closed by #811, c932d98c; decision D-S401-A: the 409 is documented as a defensive refusal on `createRun`, proven at registry level by `ProducerSlotTests`, wire-unreachable while run create issues a fresh run id; a future idempotent create path owns the wire test):
 

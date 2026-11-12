@@ -50,7 +50,7 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 | 01.10.1-T1 | T1.2 | #510 |
 | 01.7.1-T3 | T3.1 | #11 (T3.2) |
 | 03.1.4-T2 | T2.2 | #458 |
-| 04.1.2-T3 | T3.1 | none |
+| 04.1.2-T3 | T3.1 | none (T3.1 landed #811 c932d98c; T3 complete, leaves this list at the next recount) |
 | 04.1.3-T1 | T1.2 | #520 |
 | 04.4.2-T1 | T1.3 | #556, #601, #609 |
 | 04.6.1-T1 | T1.4 | #523, #525 |
