@@ -32,7 +32,7 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
         var target = await host.SignInMemberAsync(client);
-        var admin = await SignInCustomAdminAsync(host, client, target.OrgId);
+        var admin = await AdminRevokeAllTestData.SignInCustomAdminAsync(host, client, target.OrgId);
 
         await AssertRevokedAsync(host, client, admin, target);
     }
@@ -45,7 +45,7 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
         var owner = await host.SignInMemberInOrgAsync(client, member.OrgId, "tenant_admin");
-        var admin = await SignInCustomAdminAsync(host, client, member.OrgId);
+        var admin = await AdminRevokeAllTestData.SignInCustomAdminAsync(host, client, member.OrgId);
 
         await AssertRefusedAsync(host, client, admin, owner);
     }
@@ -57,8 +57,8 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
         using var host = SessionTestHost.Start(Fixture);
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
-        var admin = await SignInCustomAdminAsync(host, client, member.OrgId);
-        var peer = await SignInCustomAdminAsync(host, client, member.OrgId);
+        var admin = await AdminRevokeAllTestData.SignInCustomAdminAsync(host, client, member.OrgId);
+        var peer = await AdminRevokeAllTestData.SignInCustomAdminAsync(host, client, member.OrgId);
 
         await AssertRevokedAsync(host, client, admin, peer);
     }
@@ -72,7 +72,7 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
         var member = await host.SignInMemberAsync(client);
         var owner = await host.SignInMemberInOrgAsync(client, member.OrgId, "tenant_admin");
         var otherOwner = await host.SignInMemberInOrgAsync(client, member.OrgId, "tenant_admin");
-        var admin = await SignInCustomAdminAsync(host, client, member.OrgId);
+        var admin = await AdminRevokeAllTestData.SignInCustomAdminAsync(host, client, member.OrgId);
 
         await AssertRevokedAsync(host, client, owner, otherOwner);
         await AssertRevokedAsync(host, client, owner, admin);
@@ -104,8 +104,8 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
         var target = await host.SignInMemberInOrgAsync(client, inA.OrgId, "tenant_admin");
         await host.SeedMembershipAsync(orgB, target.UserId);
 
-        var adminA = await SignInCustomAdminAsync(host, client, inA.OrgId);
-        var adminB = await SignInCustomAdminAsync(host, client, orgB);
+        var adminA = await AdminRevokeAllTestData.SignInCustomAdminAsync(host, client, inA.OrgId);
+        var adminB = await AdminRevokeAllTestData.SignInCustomAdminAsync(host, client, orgB);
 
         await AssertRefusedAsync(host, client, adminA, target, inA.OrgId);
         await AssertRevokedAsync(host, client, adminB, target, orgB);
@@ -122,7 +122,7 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
         var owner = await host.SignInMemberInOrgAsync(client, member.OrgId, "tenant_admin");
-        var impostor = await SignInCustomAdminAsync(host, client, member.OrgId, roleCode: "tenant_admin");
+        var impostor = await AdminRevokeAllTestData.SignInCustomAdminAsync(host, client, member.OrgId, roleCode: "tenant_admin");
 
         await AssertRefusedAsync(host, client, impostor, owner);
     }
@@ -139,7 +139,7 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
         var foreignOrg = await host.SeedOrganizationAsync();
-        var foreignAdmin = await SignInCustomAdminAsync(host, client, foreignOrg);
+        var foreignAdmin = await AdminRevokeAllTestData.SignInCustomAdminAsync(host, client, foreignOrg);
         var roleId = (Guid)(await host.ScalarAsync(
             "select mr.role_id from public.membership_role mr join public.membership m on m.id = mr.membership_id "
             + "where m.org_id = @org and m.user_id = @user",
@@ -158,7 +158,7 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
         refusal.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation);
         refusal.ConstraintName.ShouldBe("membership_role_role_guard");
 
-        var localAdmin = await SignInCustomAdminAsync(host, client, member.OrgId);
+        var localAdmin = await AdminRevokeAllTestData.SignInCustomAdminAsync(host, client, member.OrgId);
         await AssertRevokedAsync(host, client, localAdmin, member);
     }
 
@@ -173,7 +173,7 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
         using var client = host.CreateSessionClient();
         var member = await host.SignInMemberAsync(client);
         var owner = await host.SignInMemberInOrgAsync(client, member.OrgId, "tenant_admin");
-        var admin = await SignInCustomAdminAsync(host, client, member.OrgId);
+        var admin = await AdminRevokeAllTestData.SignInCustomAdminAsync(host, client, member.OrgId);
 
         await AssertRefusedAsync(host, client, admin, owner);
 
@@ -182,38 +182,6 @@ public sealed class AdminRevokeAllHierarchyTests : TenantTest
             + "returns integer language sql set search_path = '' as $$ select 0 $$");
 
         await AssertRevokedAsync(host, client, admin, owner);
-    }
-
-    private static async Task<SignedInMember> SignInCustomAdminAsync(
-        SessionTestHost host,
-        HttpClient client,
-        Guid orgId,
-        string? roleCode = null)
-    {
-        var signedIn = await host.SignInMemberInOrgAsync(client, orgId, roleCode: null);
-        var roleId = Guid.CreateVersion7();
-
-        await host.ArrangeAsync(
-            "insert into public.role (id, org_id, code, name, is_builtin, kind) "
-            + "values (@id, @org, @code, 'Member administrator', false, 'member')",
-            ("id", roleId),
-            ("org", orgId),
-            ("code", roleCode ?? "member_admin_" + roleId.ToString("N")));
-        await host.ArrangeAsync(
-            "insert into public.role_permission (id, org_id, role_id, permission_code) "
-            + "values (@id, @org, @role, 'membership:write')",
-            ("id", Guid.CreateVersion7()),
-            ("org", orgId),
-            ("role", roleId));
-        await host.ArrangeAsync(
-            "insert into public.membership_role (id, org_id, membership_id, role_id) "
-            + "select @id, @org, m.id, @role from public.membership m where m.org_id = @org and m.user_id = @user",
-            ("id", Guid.CreateVersion7()),
-            ("org", orgId),
-            ("role", roleId),
-            ("user", signedIn.UserId));
-
-        return signedIn;
     }
 
     private static async Task AssertRevokedAsync(

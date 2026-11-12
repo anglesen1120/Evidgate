@@ -11,15 +11,15 @@ namespace Identity.IntegrationTests.Login.Persistence;
 /// writer of a second-provider link.
 /// </summary>
 /// <remarks>
-/// Both are called as <c>evidgate_app</c> on the real server, with no tenant setting: that is the
-/// pre-tenant situation they exist for, and the app role holds no privilege on <c>user</c>,
+/// The link is called as <c>evidgate_app</c> on the real server through its audited definer, with no tenant
+/// setting: that is the pre-tenant situation it exists for, and the app role holds no privilege on <c>user</c>,
 /// <c>user_identity</c> or <c>session</c> (0041), so every assertion about a stored row reads it back
 /// through the owner seam. The link cases pin the "never auto-merge" rule of AC6 at the database: an
 /// identity is taken from another account only when that account has no membership and no live
 /// session, and a refusal changes nothing.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class LinkResolverTests : SessionTestBase
+public sealed partial class LinkResolverTests : SessionTestBase
 {
     private const string Provider = "github";
 
@@ -119,9 +119,10 @@ public sealed class LinkResolverTests : SessionTestBase
     }
 
     /// <summary>
-    /// The privilege posture of 0044, the 02.9.1 §8 T1 rule the login resolvers follow: EXECUTE is the
-    /// app role's only way in. A direct read of <c>session</c> is <c>permission denied</c> (not zero
-    /// rows), and a runtime role that was not granted the functions cannot call them either.
+    /// The privilege posture of the login resolvers, the 02.9.1 §8 T1 rule they follow: EXECUTE is the app
+    /// role's only way in. A direct read of <c>session</c> is <c>permission denied</c> (not zero rows), a
+    /// runtime role that was not granted the functions cannot call them either, and the app role itself reaches
+    /// the link only through the audited definer that owns the rows.
     /// </summary>
     [Fact]
     public async Task Link_IsTheAppRolesOnlyWayIn()
@@ -154,6 +155,28 @@ public sealed class LinkResolverTests : SessionTestBase
 
         var operatorRefusal = await Should.ThrowAsync<PostgresException>(() => command.ExecuteNonQueryAsync(Token));
         operatorRefusal.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege, "login_link_identity");
+
+        // The app role is no exception to that: the inner writer is reachable only from the audited definer, so a
+        // direct call is refused instead of committing a link whose audit rows nobody wrote.
+        (await HasExecuteAsync(
+            "evidgate_app", "evidgate_resolve.login_link_identity(bytea[],timestamptz,text,text,text,uuid)"))
+            .ShouldBeFalse("the audited definer is the app role's link entry point");
+        (await HasExecuteAsync(
+            "evidgate_app",
+            "evidgate_resolve.login_link_identity_audited(bytea[],timestamptz,text,text,text,uuid,text,text)"))
+            .ShouldBeTrue("the app role calls the audited definer");
+
+        var appRefusal = await AppRefusalAsync(
+            "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
+            + "@cookie_hmacs, @now, @provider, @subject, @email, @identity_id)",
+            ("cookie_hmacs", new[] { cookie }),
+            ("now", DateTimeOffset.UtcNow),
+            ("provider", Provider),
+            ("subject", $"direct-{Guid.NewGuid():N}"),
+            ("email", "direct@example.test"),
+            ("identity_id", Guid.CreateVersion7()));
+
+        appRefusal.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege, "login_link_identity");
     }
 
     // ------------------------------------------------------------------ login_link_identity (AC6)
@@ -378,153 +401,4 @@ public sealed class LinkResolverTests : SessionTestBase
             ("subject", subject))).ShouldBe(1);
     }
 
-    // ------------------------------------------------------------------ arrangement
-
-    /// <summary>A disabled account, seeded through the owner seam (the status column has no writer yet).</summary>
-    private async Task<Guid> SeedDisabledUserAsync(string email)
-    {
-        var id = Guid.CreateVersion7();
-
-        await Fixture.SeedAsync(
-            "insert into public.\"user\" (id, email, status) values (@id, @email, 'disabled')",
-            [("id", id), ("email", email)],
-            Token);
-
-        return id;
-    }
-
-    /// <summary>
-    /// One session row, live by default. The two expiries respect 0041's
-    /// <c>session_expiry_check</c> (<c>expires_at &lt;= absolute_expires_at</c>) in every case.
-    /// </summary>
-    private Task<int> SeedSessionAsync(
-        Guid userId,
-        byte[] cookieHmac,
-        int pepperVersion = PepperVersion,
-        DateTimeOffset? expiresAt = null,
-        DateTimeOffset? absoluteExpiresAt = null,
-        DateTimeOffset? revokedAt = null)
-    {
-        var now = DateTimeOffset.UtcNow;
-
-        return Fixture.SeedAsync(
-            """
-            insert into public.session
-                (id, user_id, cookie_hmac, pepper_version, expires_at, absolute_expires_at, revoked_at)
-            values
-                (@id, @user_id, @cookie_hmac, @pepper_version, @expires_at, @absolute_expires_at, @revoked_at)
-            """,
-            [
-                ("id", Guid.CreateVersion7()),
-                ("user_id", userId),
-                ("cookie_hmac", cookieHmac),
-                ("pepper_version", pepperVersion),
-                ("expires_at", expiresAt ?? now.AddHours(1)),
-                ("absolute_expires_at", absoluteExpiresAt ?? now.AddDays(7)),
-                ("revoked_at", (object?)revokedAt ?? DBNull.Value),
-            ],
-            Token);
-    }
-
-    /// <summary>One identity row on a user, as 0042's login upsert would have written it.</summary>
-    private Task<int> SeedIdentityAsync(Guid userId, string provider, string subject, string? email) =>
-        Fixture.SeedAsync(
-            """
-            insert into public.user_identity (id, user_id, provider, subject, email_at_provider)
-            values (@id, @user_id, @provider, @subject, @email)
-            """,
-            [
-                ("id", Guid.CreateVersion7()),
-                ("user_id", userId),
-                ("provider", provider),
-                ("subject", subject),
-                ("email", (object?)email ?? DBNull.Value),
-            ],
-            Token);
-
-    /// <summary>
-    /// One membership row. 0044's foreign key needs a real user row, and the seeded user is the one the
-    /// caller names — this is the fixture shape the key makes mandatory.
-    /// </summary>
-    private Task<int> SeedMembershipAsync(Guid orgId, Guid userId, string status)
-    {
-        var id = Guid.CreateVersion7();
-
-        return Fixture.SeedAsync(
-            """
-            insert into public.membership (id, org_id, user_id, invited_email, status)
-            values (@id, @org_id, @user_id, @email, @status)
-            """,
-            [
-                ("id", id),
-                ("org_id", orgId),
-                ("user_id", userId),
-                ("email", $"m-{id:N}@example.test"),
-                ("status", status),
-            ],
-            Token);
-    }
-
-    /// <summary>
-    /// One live session for <paramref name="userId"/>, returned as the candidate hashes a link call presents. The
-    /// caller holds the cookie, never the user id, so every link is made through a session.
-    /// </summary>
-    private async Task<byte[][]> SignedInAsync(Guid userId, string label)
-    {
-        var cookieHmac = ExpectedHmac(label);
-
-        await SeedSessionAsync(userId, cookieHmac);
-
-        return [cookieHmac];
-    }
-
-    /// <summary>
-    /// <c>evidgate_resolve.login_link_identity(...)</c> as the app role, no tenant setting. The function takes the
-    /// candidate cookie hashes, never a user id: it resolves the live session and its account from them. There is
-    /// no profile-name argument: the function has none, so the signature this call builds is the whole contract.
-    /// </summary>
-    private async Task<(string Outcome, Guid? MovedFrom)> LinkAsync(
-        byte[][] cookieHmacs,
-        string provider,
-        string subject,
-        string email)
-    {
-        await using var command = AppDataSource.CreateCommand(
-            "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
-            + "@cookie_hmacs, @now, @provider, @subject, @email, @identity_id)");
-        command.Parameters.AddWithValue("cookie_hmacs", cookieHmacs);
-        command.Parameters.AddWithValue("now", DateTimeOffset.UtcNow);
-        command.Parameters.AddWithValue("provider", provider);
-        command.Parameters.AddWithValue("subject", subject);
-        command.Parameters.AddWithValue("email", email);
-        command.Parameters.AddWithValue("identity_id", Guid.CreateVersion7());
-
-        await using var reader = await command.ExecuteReaderAsync(Token);
-        (await reader.ReadAsync(Token)).ShouldBeTrue();
-
-        var outcome = reader.GetString(0);
-        var movedFrom = await reader.IsDBNullAsync(1, Token) ? (Guid?)null : reader.GetGuid(1);
-
-        return (outcome, movedFrom);
-    }
-
-    /// <summary>The identity row's <c>user_id</c> and <c>email_at_provider</c>, read as the owner.</summary>
-    private Task<object?[]> IdentityRowAsync(string provider, string subject) =>
-        OwnerRowAsync(
-            "select user_id, email_at_provider from public.user_identity where provider = @provider and subject = @subject",
-            ("provider", provider),
-            ("subject", subject));
-
-    /// <summary>Opens a superuser connection switched to <paramref name="role"/> (the harness has no password for it).</summary>
-    private async Task<NpgsqlConnection> OpenAsRoleAsync(string role)
-    {
-        var database = new NpgsqlConnectionStringBuilder(Fixture.AppConnectionString).Database!;
-        var connection = await Fixture.OpenSuperuserAsync(database, Token);
-
-        await using var switchRole = connection.CreateCommand();
-        switchRole.CommandText = $"set role {role}";
-        await switchRole.ExecuteNonQueryAsync(Token);
-
-        return connection;
-    }
 }

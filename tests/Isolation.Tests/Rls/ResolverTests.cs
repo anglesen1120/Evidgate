@@ -10,7 +10,9 @@ namespace Isolation.Tests;
 /// resolvers of <c>evidgate_resolve</c> are the one sanctioned way across the tenant boundary —
 /// and they must be exactly that: owner-owned, <c>SECURITY DEFINER</c>, pinned to an empty
 /// <c>search_path</c>, executable by <c>evidgate_app</c> and nobody else, returning only the
-/// documented tuple, while the tables they read stay org-scoped for a direct read.
+/// documented tuple, while the tables they read stay org-scoped for a direct read. The inner
+/// identity-link writer is the one registered exception: its audited definer calls it as the
+/// owner, so the app role reaches it only through that definer.
 /// <para>
 /// The function set is read from <c>pg_proc</c> across every non-system schema, so a definer
 /// added by a later migration is covered the moment it lands; the documented tuple per function
@@ -23,7 +25,7 @@ namespace Isolation.Tests;
 /// </summary>
 [Collection(HarnessSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class ResolverTests : HarnessTest
+public sealed partial class ResolverTests : HarnessTest
 {
     /// <summary>
     /// The documented result tuple of every resolver, keyed by <c>schema.name</c>. A resolver is
@@ -57,6 +59,7 @@ public sealed class ResolverTests : HarnessTest
         ["evidgate_resolve.session_revoke_others"] = ["status", "revoked_count"],
         ["evidgate_resolve.session_revoke_all_admin"] = ["status", "revoked_count"],
         ["evidgate_resolve.login_link_identity"] = ["outcome", "moved_from_user_id"],
+        ["evidgate_resolve.login_link_identity_audited"] = ["outcome", "moved_from_user_id"],
         ["evidgate_resolve.user_profile_read"] =
             ["status", "user_id", "email", "display_name", "preferred_locale", "version"],
         ["evidgate_resolve.user_profile_update"] =
@@ -90,6 +93,7 @@ public sealed class ResolverTests : HarnessTest
         "evidgate_resolve.session_list", "evidgate_resolve.session_revoke_current",
         "evidgate_resolve.session_revoke_one", "evidgate_resolve.session_revoke_others",
         "evidgate_resolve.session_revoke_all_admin", "evidgate_resolve.login_link_identity",
+        "evidgate_resolve.login_link_identity_audited",
         "evidgate_resolve.user_profile_read", "evidgate_resolve.user_profile_update",
         "evidgate_resolve.data_protection_key_list", "evidgate_resolve.data_protection_key_store",
         "evidgate_resolve.login_state_replay_consume",
@@ -244,6 +248,11 @@ public sealed class ResolverTests : HarnessTest
                 + $"unregistered [{string.Join(", ", unregistered)}]: register a new resolver with its documented tuple");
         }
 
+        if (OwnerOnlyRegistrationFailure(documented) is { } registrationFailure)
+        {
+            failures.Add(registrationFailure);
+        }
+
         foreach (var resolver in resolvers)
         {
             var key = $"{resolver.Schema}.{resolver.Name}";
@@ -253,9 +262,9 @@ public sealed class ResolverTests : HarnessTest
                 failures.Add($"{resolver.Signature}: a resolver must live in evidgate_resolve (00 §5.4.8)");
             }
 
-            if (!resolver.AppCanExecute)
+            if (AppGrantFailure(resolver, key) is { } grantFailure)
             {
-                failures.Add($"{resolver.Signature}: evidgate_app has no EXECUTE — the pre-tenant path cannot resolve a tenant");
+                failures.Add(grantFailure);
             }
 
             if (!PlatformScopeResolvers.Contains(key)
@@ -437,8 +446,8 @@ public sealed class ResolverTests : HarnessTest
 
         body.ShouldContain("perform evidgate.session_revoke_audit_append(", Case.Sensitive,
             "the row is written inside the definer through the shared helper, so it commits or rolls back with the revoke");
-        body.ShouldContain("evidgate.session_admin_may_revoke(", Case.Sensitive,
-            "the membership:write join is the shared helper's, not a second copy");
+        body.ShouldContain("evidgate.session_admin_may_revoke_all(", Case.Sensitive,
+            "the membership:write join and the rank comparison are the shared helper's, not a second copy");
         body.ShouldContain("v_target_user <> v_actor", Case.Sensitive,
             "the row is the administrative act only: a self revoke writes nothing");
         body.ShouldNotContain("insert into public.audit_log", Case.Sensitive,
@@ -465,24 +474,6 @@ public sealed class ResolverTests : HarnessTest
 
         grantees.ShouldBe("evidgate_app:EXECUTE",
             "EXECUTE is held by evidgate_app alone among non-owner roles — never PUBLIC, never the operator or sweep role");
-
-        await using var helper = connection.CreateCommand();
-        helper.CommandText =
-            """
-            select p.prosrc
-              from pg_catalog.pg_proc p
-              join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-             where n.nspname = 'evidgate' and p.proname = 'session_revoke_audit_append'
-            """;
-        var helperBody = (string)(await helper.ExecuteScalarAsync(Token))!;
-        // Insert, action, chain lock, id shapes and escaped canonical spelling live in the helper.
-        helperBody.ShouldContain("insert into public.audit_log", Case.Sensitive);
-        helperBody.ShouldContain("'auth.session_revoke_admin'", Case.Sensitive);
-        helperBody.ShouldContain("pg_advisory_xact_lock(pg_catalog.hashtext('audit:' || p_org_id::text))", Case.Sensitive);
-        helperBody.ShouldContain("p_request_id ~ '^[!-~]{1,128}$'", Case.Sensitive);
-        helperBody.ShouldContain("p_trace_id ~ '^[0-9a-f]{32}$'", Case.Sensitive);
-        helperBody.ShouldContain("coalesce(pg_catalog.to_jsonb(v_request_id)::text, 'null')", Case.Sensitive);
-        helperBody.ShouldContain("v_request_id, v_trace_id", Case.Sensitive);
 
         await using var count = connection.CreateCommand();
         count.CommandText =

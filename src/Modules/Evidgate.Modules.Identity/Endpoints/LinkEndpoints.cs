@@ -1,11 +1,11 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
-using Evidgate.BuildingBlocks.Persistence.Resolve;
+using Evidgate.BuildingBlocks.Persistence.Audit;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Identity.Ci;
 using Evidgate.Modules.Identity.Login;
-using Evidgate.Modules.Identity.Login.Audit;
 using Evidgate.Modules.Identity.Login.Linking;
 using Evidgate.Modules.Identity.Sessions;
 using Evidgate.Modules.Identity.Sessions.Http;
@@ -69,15 +69,6 @@ internal static class LinkEndpoints
 
     /// <summary>Largest body accepted by <c>start</c>: one optional <c>return_url</c> plus envelope slack.</summary>
     internal const int MaxBodyBytes = 4096;
-
-    /// <summary>
-    /// The <c>organization.status</c> whose chain a link is recorded in: a suspended org's row would be
-    /// refused by its own scope, so only the active ones are asked for.
-    /// </summary>
-    private const string ActiveOrgStatus = "active";
-
-    /// <summary>The audit metadata key carrying the account an identity was moved from (on the writer's allowlist).</summary>
-    private const string PreviousIdMetadataKey = "previous_id";
 
     /// <summary>The limiter key prefix of <c>start</c>, under the CI exchange limiter's per-client key.</summary>
     private const string StartLimiterPrefix = "login-link-start:";
@@ -299,23 +290,15 @@ internal static class LinkEndpoints
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The order is the story's: the identity row first (<see cref="ILinkIdentityStore"/>, one call, the
-    /// database's own decision), then the audit rows of every ACTIVE org of the confirming user. A 503 from the
-    /// audit leaves the staged link in place, so the retry converges on <c>already_linked</c> and writes the rows
-    /// again — including <c>auth.link_move</c> when the first attempt moved the identity, because that attempt
-    /// re-issues the staging carrying the account it came from; every other outcome deletes the cookie.
-    /// </para>
-    /// <para>
-    /// A retry therefore audits AT LEAST once per org, not exactly once: an org whose row committed before
-    /// another org faulted keeps that row and gains a second one. <see cref="AuditAsync"/> records why that trade
-    /// is the one this route takes.
+    /// One database call (<see cref="ILinkIdentityStore"/>) writes the identity row AND the audit rows of every
+    /// ACTIVE org of the confirming user in one transaction, so a failure of either leaves nothing behind and the
+    /// retry starts from the same state. An <c>already_linked</c> answer is a link whose rows committed with it.
     /// </para>
     /// <para>
     /// What the deletion ends is the BROWSER's staging, not a server-side single use: the payload is a protected
     /// cookie and Q4 ruled out a table for its ten minutes, so there is no spent marker to consult. A client that
     /// kept the deleted value can present it again; the database then answers <c>already_linked</c> (or completes
-    /// the same link once), no second identity row is written, and the audit rows are appended again (the
-    /// at-least-once rule above).
+    /// the same link once) and writes no second identity row and no second audit row.
     /// </para>
     /// </remarks>
     private static async Task<Result> ConfirmAsync(
@@ -323,8 +306,6 @@ internal static class LinkEndpoints
         ISessionRequestAuthenticator authenticator,
         LinkConfirmCookie cookie,
         ILinkIdentityStore identities,
-        IMemberOrgResolver memberOrgs,
-        IIdentityAuditWriter audit,
         ExchangeRateLimiter limiter,
         IOptions<LoginOptions> options,
         CancellationToken cancellationToken)
@@ -333,8 +314,6 @@ internal static class LinkEndpoints
         ArgumentNullException.ThrowIfNull(authenticator);
         ArgumentNullException.ThrowIfNull(cookie);
         ArgumentNullException.ThrowIfNull(identities);
-        ArgumentNullException.ThrowIfNull(memberOrgs);
-        ArgumentNullException.ThrowIfNull(audit);
         ArgumentNullException.ThrowIfNull(limiter);
         ArgumentNullException.ThrowIfNull(options);
 
@@ -376,7 +355,14 @@ internal static class LinkEndpoints
         // HTTP layer and nothing is re-resolved from the presented value.
         var proof = await SessionProofAsync(context, authenticator, cancellationToken).ConfigureAwait(false);
         var linked = await identities
-            .LinkAsync(proof, pending.Provider, pending.Subject, pending.Email, cancellationToken)
+            .LinkAsync(
+                proof,
+                pending.Provider,
+                pending.Subject,
+                pending.Email,
+                Activity.Current?.GetBaggageItem(AuditTrail.RequestIdBaggage),
+                Activity.Current?.TraceId.ToString(),
+                cancellationToken)
             .ConfigureAwait(false);
 
         if (!linked.IsSuccess)
@@ -418,116 +404,9 @@ internal static class LinkEndpoints
                 return Result.Failure(LinkErrors.UnavailableWithRetryAfter(context, login));
         }
 
-        // Which account the identity came FROM, when this confirm moved it. A first attempt reports that
-        // itself; a retry answers already_linked and reports nothing, so the fact comes from the staging the
-        // failed audit re-issued (F1, D-S81-Q5). Without it a move whose audit rows never committed would keep
-        // its `auth.link_move` row forever. No other outcome reads the carried fact: a carried move plus a
-        // `linked` answer is not the same link, and inventing a move row for it would be worse than the gap.
-        var movedFrom = outcome.Result switch
-        {
-            LinkResult.Moved => outcome.MovedFromUserId,
-            LinkResult.AlreadyLinked => pending.MovedFromUserId,
-            _ => null,
-        };
-
-        var audited = await AuditAsync(audit, memberOrgs, userId, pending.Provider, movedFrom, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (!audited)
-        {
-            // The link is committed and the audit is not: fail closed (503) and KEEP the staging, so the retry
-            // converges on already_linked and writes the rows this attempt could not. A move needs one thing
-            // more than keeping it — the retry would no longer know the identity was moved — so the staging is
-            // re-issued carrying the account it came from, with its original expiry and binding.
-            if (movedFrom is { } previous)
-            {
-                cookie.Restage(context, pending with { MovedFromUserId = previous });
-            }
-
-            return Result.Failure(LinkErrors.UnavailableWithRetryAfter(context, login));
-        }
-
         LinkConfirmCookie.Delete(context);
 
         return Result.Success(new LinkConfirmResponse(pending.Provider, OutcomeName(outcome.Result)));
-    }
-
-    /// <summary>
-    /// The audit rows of one confirmed link: <c>auth.link</c> in the chain of every active org of the
-    /// confirming user, and — when the identity was moved — <c>auth.link_move</c> with the account it came
-    /// from. Both are written through <see cref="IIdentityAuditWriter"/>, which opens and commits one tenant
-    /// transaction per org and propagates a fault (fail closed).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>A retry can repeat <c>auth.link</c>.</b> Each org commits its own transaction, so an audit that faulted
-    /// on the third of four orgs leaves the first two rows written; the retry that converges on
-    /// <c>already_linked</c> writes them again, and the chains of those orgs then hold the row twice. The
-    /// alternative would be to read each org's chain back before appending and to skip the orgs that already
-    /// hold this row — a per-org read plus a "was it this link or another one of the same provider" judgement on
-    /// a pre-tenant path, for an at-least-once audit that a hash chain is designed to tolerate (a duplicate row
-    /// is visible and verifiable; a missing one is not). Duplicates are therefore accepted, and only the
-    /// move — which the retry could not record at all without the staging carrying it — is carried forward.
-    /// </para>
-    /// <para>
-    /// <b>The move row is subject to the same rule.</b> It is a second write over the same org list, so a fault in
-    /// the middle of it leaves the earlier orgs' <c>auth.link_move</c> rows committed and the retry — which still
-    /// carries the account the identity came from — appends them again. Identical <c>previous_id</c>, identical
-    /// verifiability argument, same acceptance: the move is at least once per org, never exactly once.
-    /// </para>
-    /// </remarks>
-    /// <returns>True when every row committed, false when one did not (the route answers 503).</returns>
-    private static async Task<bool> AuditAsync(
-        IIdentityAuditWriter audit,
-        IMemberOrgResolver memberOrgs,
-        Guid userId,
-        string provider,
-        Guid? movedFrom,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var orgIds = (await memberOrgs.MemberOrgsAsync(userId, cancellationToken).ConfigureAwait(false))
-                .Where(org => string.Equals(org.Status, ActiveOrgStatus, StringComparison.Ordinal))
-                .Select(org => org.OrgId)
-                .ToArray();
-
-            await audit
-                .WriteAsync(new IdentityAuditEvent(IdentityAuditActions.Link, userId, provider), orgIds, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (movedFrom is { } previous)
-            {
-                await audit
-                    .WriteAsync(
-                        new IdentityAuditEvent(
-                            IdentityAuditActions.LinkMove,
-                            userId,
-                            provider,
-                            new Dictionary<string, string>(StringComparer.Ordinal)
-                            {
-                                [PreviousIdMetadataKey] = previous.ToString("D"),
-                            }),
-                        orgIds,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            return true;
-        }
-        catch (Npgsql.NpgsqlException)
-        {
-            return false;
-        }
-        catch (TimeoutException)
-        {
-            return false;
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            // A database timeout that surfaced as cancellation is an outage, not the caller leaving.
-            return false;
-        }
     }
 
     /// <summary>The wire name of a successful confirm outcome.</summary>

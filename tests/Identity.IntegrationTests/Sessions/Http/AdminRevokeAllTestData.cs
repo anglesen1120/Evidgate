@@ -4,8 +4,9 @@ using Xunit;
 namespace Identity.IntegrationTests.Sessions.Http;
 
 /// <summary>
-/// The administrative revoke-all route and the reads its cases assert with: the one request each case sends,
-/// the pinned audit action, and the owner-seam counts of the rows a call may change.
+/// The two administrative revoke routes and the reads their cases assert with: the one request each case sends,
+/// the pinned audit action, the custom administrator both routes are refused or allowed by rank for, and the
+/// owner-seam counts of the rows a call may change.
 /// </summary>
 /// <remarks>
 /// The writes go over the real host as the app role; every row is then read as the owner, because
@@ -38,6 +39,68 @@ internal static class AdminRevokeAllTestData
     /// <summary>The path of one addressed user.</summary>
     /// <param name="userId">The user id the route addresses.</param>
     internal static string PathFor(Guid userId) => Prefix + userId.ToString("D") + Suffix;
+
+    /// <summary>The path of one session row.</summary>
+    /// <param name="sessionId">The row the single-session route addresses.</param>
+    internal static string SessionPath(Guid sessionId) => SingleSessionPath + "/" + sessionId.ToString("D");
+
+    /// <summary>One administrative single-session revoke as <paramref name="caller"/>'s browser sends it.</summary>
+    /// <param name="client">A client of the host.</param>
+    /// <param name="caller">The signed-in account.</param>
+    /// <param name="sessionId">The row addressed.</param>
+    /// <param name="orgId">The <c>X-Evidgate-Org</c> value, or null for none.</param>
+    internal static Task<HttpResponseMessage> RevokeOneAsync(
+        HttpClient client,
+        SignedInMember caller,
+        Guid sessionId,
+        Guid? orgId) =>
+        SessionTestHost.SendAsync(
+            client,
+            HttpMethod.Delete,
+            SessionPath(sessionId),
+            SessionTestHost.CookieHeaderFor(caller.SessionCookie, caller.Xsrf),
+            xsrfToken: caller.Xsrf.RequestToken,
+            orgHeader: orgId?.ToString("D"));
+
+    /// <summary>
+    /// A member of <paramref name="orgId"/> holding a CUSTOM role that carries <c>membership:write</c> — rank 1 of
+    /// the revoke hierarchy (0091/0096), as opposed to the built-in <c>tenant_admin</c> at rank 2.
+    /// </summary>
+    /// <param name="host">The host whose owner seam writes the role rows.</param>
+    /// <param name="client">A client of the host.</param>
+    /// <param name="orgId">The org the role and the membership belong to.</param>
+    /// <param name="roleCode">The role's code, or a unique one when null.</param>
+    internal static async Task<SignedInMember> SignInCustomAdminAsync(
+        SessionTestHost host,
+        HttpClient client,
+        Guid orgId,
+        string? roleCode = null)
+    {
+        var signedIn = await host.SignInMemberInOrgAsync(client, orgId, roleCode: null);
+        var roleId = Guid.CreateVersion7();
+
+        await host.ArrangeAsync(
+            "insert into public.role (id, org_id, code, name, is_builtin, kind) "
+            + "values (@id, @org, @code, 'Member administrator', false, 'member')",
+            ("id", roleId),
+            ("org", orgId),
+            ("code", roleCode ?? "member_admin_" + roleId.ToString("N")));
+        await host.ArrangeAsync(
+            "insert into public.role_permission (id, org_id, role_id, permission_code) "
+            + "values (@id, @org, @role, 'membership:write')",
+            ("id", Guid.CreateVersion7()),
+            ("org", orgId),
+            ("role", roleId));
+        await host.ArrangeAsync(
+            "insert into public.membership_role (id, org_id, membership_id, role_id) "
+            + "select @id, @org, m.id, @role from public.membership m where m.org_id = @org and m.user_id = @user",
+            ("id", Guid.CreateVersion7()),
+            ("org", orgId),
+            ("role", roleId),
+            ("user", signedIn.UserId));
+
+        return signedIn;
+    }
 
     /// <summary>One administrative revoke-all as <paramref name="caller"/>'s browser sends it.</summary>
     /// <param name="client">A client of the host.</param>
