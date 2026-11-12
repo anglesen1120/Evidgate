@@ -1401,10 +1401,11 @@ paths:
         or short `Content-Length` cannot raise them. The 64 KiB run-body cap is
         fixed, not configurable; `x-evidgate-limits` publishes the configurable
         ingestion caps.
-        A run that already carries a different number of producer slots than the
-        manifest's shard count cannot register a second set, so it is 409
-        `producer_slots_conflict` (a same-count repeat is a no-op, never a conflict);
-        the refusal rolls the whole transaction back and writes no row.
+        The producer-slot registration that runs inside this transaction has a defensive
+        409 `producer_slots_conflict` (the run already holds a different number of slots than
+        the manifest's shard count). The run id is generated per request, so a well-formed
+        create does not reach it today; a client treats it as non-retryable, and the refusal
+        rolls the whole transaction back and writes no row.
       x-permission: run:create
       x-version: v1
       x-evidgate-limits:
