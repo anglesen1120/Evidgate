@@ -596,3 +596,13 @@ The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none 
 ```text
  (T2.1 merged #216, 1742764; T2.2 S146 #302 fbb2fe91; T2.3 + T2.4 PARTIAL, S272 #564 fd230b78: release panel and run-state timeline built, release id, state history and after_cancel count render unavailable until GET /v1/runs/{r} serves them, D-S272-Q1; T2 stays partial. Update S276 #568: the run read now serves `after_cancel_events` (#566) and the timeline shows it; release id and state history still unavailable; S278 #572: T2.3 landed, the panel reads `releases[]`, T2.4 still waits for state history, S277; S283 #583: T2.4 landed, timeline reads `state_history`; all four sub-rows landed, parent credited by the S299 recount, nothing left to build)
 ```
+
+## Moved from status-carried.md and STATUS.md by S401 (2026-11-13)
+
+Closed carried row, verbatim (closed by #811, c932d98c; decision D-S401-A: the 409 is documented as a defensive refusal on `createRun`, proven at registry level by `ProducerSlotTests`, wire-unreachable while run create issues a fresh run id; a future idempotent create path owns the wire test):
+
+| `producer_slot` write path wiring (04.1.2-T4 hand-over, from S22) | Run-create registration and finalize slot-close wiring have landed. Remaining: document producer_slots_conflict (409) on the run-create contract; the original combined delivery claim is not reopened. | receiver: 04.1.2-T3; hand-over Notes: `plans/features/04-ingestion-adapters/04.1.2-quota-epochs-and-observability.md:191` |
+
+STATUS §5 row replaced text (04.1.2-T3):
+
+| 04.1.2-T3 | M | OpenAPI + integration tests for both stories. Partial: events operation documented (`contracts/openapi.yaml:1009,6848,7182`) and the 04.1.1+04.1.2 suite is on develop; the run-create 409 `producer_slots_conflict` still needs documenting. | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes — remainder only |
