@@ -206,8 +206,11 @@ DEFINER_AUDIT_EXEMPT = {
     ),
 }
 
-# Roles a definer function may be granted EXECUTE to.
-ALLOWED_GRANTEES = {"evidgate_app", "evidgate_worker_sched", "evidgate_operator"}
+# Roles a definer function may be granted EXECUTE to: the four runtime roles of the matrix
+# 0104 and 0001 establish (tenant traffic, support reads, platform sweeps, the outbox and task
+# queue machinery). Membership here says the role is one the system grants to on purpose; it
+# does not say a particular function should hand it anything.
+ALLOWED_GRANTEES = {"evidgate_app", "evidgate_worker_sched", "evidgate_operator", "evidgate_worker"}
 
 # Tenant policies that shipped without a `TO` clause and were replaced later. The key is the
 # EXACT statement (file, policy, table) and it counts only while a later statement re-creates the

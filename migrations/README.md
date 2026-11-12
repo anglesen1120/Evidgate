@@ -161,7 +161,13 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   `(org_id, run_id, evidence_revision, policy_revision_id, evaluator_version, mode)`, at most one `live` row
   per frozen evidence revision), its closed token CHECKs, the composite tenant keys to `run` and
   `policy_revision`, the immutability trigger and SELECT/INSERT-only app grant (notes at the end of this
-  file); the next free number is one above the highest file in this folder (`ls migrations/*.sql`), and this README does not
+  file); and `0104` is CR-16 decision B's worker role — `evidgate_worker` owns the outbox dispatcher
+  and the whole task queue (`SELECT`, `INSERT`, `UPDATE`, `DELETE` on `public.task`, `SELECT` plus
+  `UPDATE (dispatched_at)` on `public.outbox`), while `evidgate_app` keeps `INSERT` on both, reads
+  the queue only through the owner-owned `security_barrier` views `public.task_in_scope` /
+  `public.outbox_in_scope`, and reaches the operator dead-letter page and its replay through two
+  `evidgate` definers it alone may execute (notes at the end of this file);
+  the next free number is one above the highest file in this folder (`ls migrations/*.sql`), and this README does not
   track it; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
   DDL is atomic with the journal row: a failed file leaves nothing behind and
@@ -198,23 +204,25 @@ privileges granted by `0001` (DML for `evidgate_app`, `SELECT` for
 
 ## Roles and credentials
 
-`0001_foundation_roles.sql` creates the four roles **without LOGIN** and without
+`0001_foundation_roles.sql` creates the four application roles **without LOGIN** and without
 passwords: a credential is environment state, and a password in a committed file
 would stay in git history forever. The split is:
 
 | Role                    | Created by                                               | LOGIN + password granted by                                            | Needs                                                                                                                       |
 | ----------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `evidgate_owner`        | the superuser bootstrap, before the first migration runs | the superuser bootstrap (`scripts/dev/db-init.sh`, deploy gate 10.2.2) | LOGIN (it connects to migrate), CREATEROLE (it creates the other three roles in `0001`), never SUPERUSER/BYPASSRLS/CREATEDB |
-| `evidgate_app`          | `0001`                                                   | the superuser bootstrap                                                | DML on business tables, `EXECUTE` on the `evidgate` helpers, not the owner, no `BYPASSRLS`                                  |
+| `evidgate_app`          | `0001`                                                   | the superuser bootstrap                                                | DML on business tables (`INSERT` only on `public.task`/`public.outbox`, whose tenant reads are the scoped views), `EXECUTE` on the `evidgate` helpers, not the owner, no `BYPASSRLS` |
 | `evidgate_operator`     | `0001`                                                   | the superuser bootstrap                                                | `SELECT` only (audited read path, TL T76)                                                                                   |
 | `evidgate_worker_sched` | `0001`                                                   | the superuser bootstrap                                                | `EXECUTE` per function on owner `SECURITY DEFINER` sweeps (TL T80); no table privileges                                     |
+| `evidgate_worker`       | `0104`                                                   | the superuser bootstrap                                                | `SELECT, INSERT, UPDATE, DELETE` on `public.task`; `SELECT` + `UPDATE (dispatched_at)` on `public.outbox`; no other table and no `EXECUTE` |
 
 Two consequences worth knowing before writing a new migration:
 
 - A non-superuser role cannot grant or revoke `SUPERUSER`/`BYPASSRLS`, so the
   migration role **re-asserts nothing** on an existing role; the bootstrap owns
-  those attributes. `0001` does fail loudly when one of the four roles carries an
-  attribute that would break isolation.
+  those attributes. `0001` does fail loudly when one of its roles carries an
+  attribute that would break isolation, and `0104` repeats that check for
+  `evidgate_worker`.
 - `ALTER DEFAULT PRIVILEGES` entries are **additive** to the built-in defaults, so
   a per-schema `revoke execute on functions from public` does nothing. `0001`
   revokes it with the schema-less form, which is why a new function created by
@@ -1137,3 +1145,12 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 
 - `0103` closes the three run references `0102` left on org-only keys. A manifest's suite revision must belong to a suite of the manifest's project: `manifest_suite_revision_project_guard` (BEFORE INSERT, invoker rights, fails closed, SQLSTATE `23503`; a manifest is append-only, so there is no update case). A run's `suite_revision_id` must EQUAL its manifest's: `run_manifest_suite_revision_fk (org_id, manifest_id, suite_revision_id) -> manifest`, against the new unique key `manifest_org_id_suite_revision_key`. `run_parent_run_fk` becomes `(org_id, project_id, parent_run_id) -> run (org_id, project_id, id)` against `run_org_project_id_key`, so a rerun's parent is of the same project. Constraint names are kept or named after the check, so callers see `23503` with a stable name.
 - A pre-check counts the violating rows per rule and raises `23503` with the counts; it never repairs data. Keys are added `NOT VALID` then validated in the same transaction. Lock order is the same as `0102` (`manifest`, then `run`); the header lists each statement's lock. Deploy: any order. Rollback: drop the trigger and function, then `run_parent_run_fk` and `run_manifest_suite_revision_fk` (the parent key depends on `run_org_project_id_key`), then the two unique keys, and re-add the 2-column `run_parent_run_fk`. The `run` lock is `NOWAIT` (SQLSTATE `55P03` when a reader or writer holds it): rerun at a quiet moment.
+
+## Notes on the worker role split (`0104`)
+
+- `0104` gives the outbox dispatcher and the task queue machinery their own role. `evidgate_worker` holds `SELECT`, `INSERT`, `UPDATE` and `DELETE` on `public.task` (claim, lease transitions, the dispatcher's enqueue, the queue-state gauge, the retention delete) and `SELECT` plus column-scoped `UPDATE (dispatched_at)` on `public.outbox` (the 0009 posture, kept), and nothing else: no other table, no sequence, no `EXECUTE` (nothing the machinery issues calls an `evidgate` function, and a trigger's `EXECUTE` is checked at `CREATE TRIGGER`, not at fire time). It is created `nologin noinherit` in 0001's shape, with the same fail-loud unsafe-attribute check.
+- `evidgate_app` keeps `INSERT` on both tables and nothing else: `SELECT`, `UPDATE`, `DELETE` and `TRUNCATE` are revoked, plus the column-scoped `UPDATE (dispatched_at)` 0009 granted, which a table-level `REVOKE` of `UPDATE` does not remove. A producer statement may therefore not use `RETURNING` on either table (PostgreSQL requires `SELECT` on every column a `RETURNING` list names); the dispatcher enqueue reports its inserted id from the affected row count instead.
+- The tenant path to the queue is two owner-owned `security_barrier` views, `public.task_in_scope` and `public.outbox_in_scope`, filtered by `org_id = evidgate.current_org_id()` and exposing only the columns `FreezeSql.SelectReadyArtifacts`, the `ParseRawReportTask` deferred probe and `ReconcileDeadlineSql.AttemptStates` name. `SELECT` goes to `evidgate_app` alone; the views are relations, so 0001's default privileges would otherwise hand the app role DML and the operator a standing `SELECT` on them — both are revoked here (0088's precedent).
+- The operator dead-letter page and replay are two owner `SECURITY DEFINER` functions in `evidgate` (`search_path = ''`, `EXECUTE` revoked from `PUBLIC` and granted to `evidgate_app` only, so the Api needs no worker credential): `list_dead_letter_tasks(text, timestamptz, uuid, integer)` is a `stable` keyset page over `task_dead_idx` clamped to 201 rows, and `replay_dead_letter_task(uuid, uuid)` is the guarded `dead_letter → queued` transition (`attempts` reset to 0, `locked_until` cleared, `last_error` kept) that appends one `task.dead_letter_replay` row to the org's audit chain through `evidgate.audit_append_user_event` in the same transaction. Both take the org from `evidgate.current_org_id()` and never from an argument: a row of another org answers `not_found`, a missing tenant scope raises `23514`, a half cursor `22023` and a missing actor `22004`. The listing writes no audit row because it writes nothing; the replay refuses an unattributed call instead of writing one.
+- Locks: `GRANT`/`REVOKE` take a brief ACCESS EXCLUSIVE on each table, which is a catalog write only — no row is read, rewritten or scanned, and the lock ends with this file's transaction. `lock_timeout = 5s` bounds the wait, so a busy queue fails the file with `55P03` (rerun at a quieter moment) instead of stalling dispatchers behind a queued DDL lock.
+- Deploy: the migrator first (it creates the role), then the bootstrap's `credentials` step (LOGIN + `EVIDGATE_WORKER_PASSWORD`), then the Worker with `EVIDGATE__TASKS__WORKERCONNECTIONSTRING`; the Api takes no worker string. Rollback: the application first, then drop the two functions, the two views, re-grant `SELECT`/`UPDATE`/`DELETE` on `public.task` and `SELECT` plus `UPDATE (dispatched_at)` on `public.outbox` to `evidgate_app`, revoke the worker's privileges and schema `USAGE`, and only then `drop role evidgate_worker` (PostgreSQL refuses to drop a role that still holds a privilege). No row is transformed either way.

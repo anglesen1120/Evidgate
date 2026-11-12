@@ -7,8 +7,9 @@
 # The steps are separate because the migrator runs between the two halves: the
 # superuser creates evidgate_owner and the database, the deploy's migration job
 # runs Evidgate.Migrator as that owner (migration 0001 creates evidgate_app,
-# evidgate_operator and evidgate_worker_sched without LOGIN), and only then can
-# the superuser grant those three LOGIN + a password.
+# evidgate_operator and evidgate_worker_sched without LOGIN, and 0104 adds
+# evidgate_worker), and only then can the superuser grant those four LOGIN and a
+# password.
 #
 # No credential is passed on a command line and none is printed: the passwords
 # are read from the environment by name, exported to the psql child, and read
@@ -36,12 +37,13 @@ steps, one per run, in this order:
   database      as superuser: create evidgate_owner (LOGIN + CREATEROLE, never
                 SUPERUSER/BYPASSRLS/CREATEDB) and the database it owns. Then run
                 Evidgate.Migrator against the owner connection: migration 0001
-                creates the three application roles.
+                creates the three application roles, 0104 evidgate_worker.
   credentials   as superuser: LOGIN + a password for evidgate_app,
-                evidgate_operator and evidgate_worker_sched. Refuses, naming the
-                missing roles, until the migrator has created them.
+                evidgate_operator, evidgate_worker_sched and evidgate_worker.
+                Refuses, naming the missing roles, until the migrator created
+                them.
   verify        read-only assertions as superuser against the database:
-                * the non-built-in roles are exactly the four evidgate_* roles
+                * the non-built-in roles are exactly the five evidgate_* roles
                   (anything else is named; pg_* and the bootstrap superuser are
                   allowed);
                 * all four may log in, and none carries SUPERUSER, BYPASSRLS,
@@ -59,7 +61,7 @@ steps, one per run, in this order:
 required environment, per step (values are never printed):
   database     EVIDGATE_OWNER_PASSWORD
   credentials  EVIDGATE_APP_PASSWORD, EVIDGATE_OPERATOR_PASSWORD,
-               EVIDGATE_WORKER_SCHED_PASSWORD
+               EVIDGATE_WORKER_SCHED_PASSWORD, EVIDGATE_WORKER_PASSWORD
   verify       none (the superuser connection only)
 
 per-environment variables (a bracketed value is the dev-only default; staging
@@ -186,9 +188,10 @@ case "$STEP" in
     evg_db_export_passwords EVIDGATE_OWNER_PASSWORD
     ;;
   credentials)
-    evg_db_require_env EVIDGATE_APP_PASSWORD EVIDGATE_OPERATOR_PASSWORD EVIDGATE_WORKER_SCHED_PASSWORD
+    evg_db_require_env EVIDGATE_APP_PASSWORD EVIDGATE_OPERATOR_PASSWORD EVIDGATE_WORKER_SCHED_PASSWORD \
+      EVIDGATE_WORKER_PASSWORD
     evg_db_export_passwords \
-      EVIDGATE_APP_PASSWORD EVIDGATE_OPERATOR_PASSWORD EVIDGATE_WORKER_SCHED_PASSWORD
+      EVIDGATE_APP_PASSWORD EVIDGATE_OPERATOR_PASSWORD EVIDGATE_WORKER_SCHED_PASSWORD EVIDGATE_WORKER_PASSWORD
     ;;
   verify)
     # The superuser connection is the only credential verify needs.
@@ -215,10 +218,10 @@ verify_fail() {
 
 # The role catalogue is cluster-wide, so this reads it through the target
 # database and holds every role that is neither PostgreSQL's own (pg_*) nor the
-# bootstrap superuser to the four Evidgate roles.
+# bootstrap superuser to the five Evidgate roles.
 evg_db_verify_roles() {
   local before="$verify_failures" rows name extra="" missing="" seen=""
-  local expected="evidgate_owner evidgate_app evidgate_operator evidgate_worker_sched"
+  local expected="evidgate_owner evidgate_app evidgate_operator evidgate_worker_sched evidgate_worker"
 
   rows="$(evg_db_psql "$DB_NAME" -t -A <<'SQL'
 select rolname from pg_catalog.pg_roles order by rolname
@@ -265,7 +268,8 @@ evg_db_verify_role_attributes() {
   rows="$(evg_db_psql "$DB_NAME" -t -A -F '|' <<'SQL'
 select rolname, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole, rolreplication, rolcanlogin
   from pg_catalog.pg_roles
- where rolname in ('evidgate_owner', 'evidgate_app', 'evidgate_operator', 'evidgate_worker_sched')
+ where rolname in ('evidgate_owner', 'evidgate_app', 'evidgate_operator', 'evidgate_worker_sched',
+                   'evidgate_worker')
  order by rolname
 SQL
 )"
@@ -300,18 +304,18 @@ SQL
     fi
   done <<<"$rows"
 
-  if [[ "$count" -ne 4 ]]; then
-    verify_fail "attributes" "found $count of the four roles, so their attributes cannot all be checked (see the roles check)"
+  if [[ "$count" -ne 5 ]]; then
+    verify_fail "attributes" "found $count of the five roles, so their attributes cannot all be checked (see the roles check)"
     return 0
   fi
   if [[ "$verify_failures" == "$before" ]]; then
-    verify_pass "attributes" "all four may log in; no SUPERUSER, BYPASSRLS, REPLICATION or CREATEDB on any role; CREATEROLE only on evidgate_owner"
+    verify_pass "attributes" "all five may log in; no SUPERUSER, BYPASSRLS, REPLICATION or CREATEDB on any role; CREATEROLE only on evidgate_owner"
   fi
 }
 
 # Any membership of an application role in another role makes the app role that
 # role through SET ROLE, so every such edge fails except the admin-only record
-# PostgreSQL writes when evidgate_owner creates the three application roles.
+# PostgreSQL writes when evidgate_owner creates the application roles.
 evg_db_verify_role_memberships() {
   local before="$verify_failures" offenders
 
@@ -319,7 +323,8 @@ evg_db_verify_role_memberships() {
 with recursive members(oid, rolname) as (
   select oid, rolname
     from pg_catalog.pg_roles
-   where rolname in ('evidgate_owner', 'evidgate_app', 'evidgate_operator', 'evidgate_worker_sched')
+   where rolname in ('evidgate_owner', 'evidgate_app', 'evidgate_operator', 'evidgate_worker_sched',
+                     'evidgate_worker')
 ), walk(origin, reached) as (
   select oid, oid from members
   union
@@ -332,11 +337,12 @@ with recursive members(oid, rolname) as (
     from pg_catalog.pg_auth_members am
    where am.member in (select oid from members)
      and not (
-       -- The owner created the three application roles, and PG records that as an
+       -- The owner created the application roles, and PG records that as an
        -- admin-only edge: it lets the owner administer them, not act as them.
        am.member = (select oid from pg_catalog.pg_roles where rolname = 'evidgate_owner')
        and am.roleid in (select oid from pg_catalog.pg_roles
-                          where rolname in ('evidgate_app', 'evidgate_operator', 'evidgate_worker_sched'))
+                          where rolname in ('evidgate_app', 'evidgate_operator', 'evidgate_worker_sched',
+                                            'evidgate_worker'))
        and am.admin_option
        and not am.inherit_option
        and not am.set_option
@@ -485,7 +491,7 @@ case "$STEP" in
   credentials)
     evg_db_require_application_roles
     evg_db_grant_application_logins
-    printf 'bootstrap-db: evidgate_app, evidgate_operator and evidgate_worker_sched may log in to %s\n' "$DB_NAME"
+    printf 'bootstrap-db: evidgate_app, evidgate_operator, evidgate_worker_sched and evidgate_worker may log in to %s\n' "$DB_NAME"
     ;;
   verify)
     evg_db_verify

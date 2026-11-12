@@ -110,8 +110,8 @@ ensure_env_file() {
 
   local content name
   content="$(<"$EVG_ENV_TEMPLATE")"
-  for name in EVIDGATE_DB_SUPERUSER_PASSWORD EVIDGATE_OWNER_PASSWORD \
-    EVIDGATE_APP_PASSWORD EVIDGATE_OPERATOR_PASSWORD EVIDGATE_WORKER_SCHED_PASSWORD; do
+  for name in EVIDGATE_DB_SUPERUSER_PASSWORD EVIDGATE_OWNER_PASSWORD EVIDGATE_APP_PASSWORD \
+    EVIDGATE_OPERATOR_PASSWORD EVIDGATE_WORKER_SCHED_PASSWORD EVIDGATE_WORKER_PASSWORD; do
     content="${content//__${name}__/$(random_secret)}"
   done
 
@@ -462,7 +462,7 @@ cat <<EOF
   Api                 ${ASPNETCORE_URLS}   (GET ${ASPNETCORE_URLS}/internal/health/ready)
   Worker              readiness http://127.0.0.1:${EVIDGATE__WORKER__HEALTHPORT}/internal/health/ready
   web (ng serve)      http://127.0.0.1:${EVIDGATE_WEB_PORT}/
-  PostgreSQL 18       127.0.0.1:${EVIDGATE_DB_PORT}   database evidgate (roles: owner/app/operator/worker_sched)
+  PostgreSQL 18       127.0.0.1:${EVIDGATE_DB_PORT}   database evidgate (roles: owner/app/operator/worker_sched/worker)
   SeaweedFS S3        ${EVIDGATE_S3_ENDPOINT}   bucket ${EVIDGATE_S3_BUCKET}
 
   logs   scripts/dev/logs.sh        stop   scripts/dev/down.sh
