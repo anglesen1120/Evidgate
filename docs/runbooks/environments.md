@@ -295,6 +295,22 @@ where the edge is what keeps the path off the public ingress; the Api serves the
 `ASPNETCORE_URLS` endpoint. `ready` is 200 only with a reachable database and the
 migration journal at the expected head, and 503 otherwise (01.1.2-T1's checks).
 
+**Management listener (N9).** The public `ASPNETCORE_URLS` endpoint answers `/internal/health/live` and a
+status-only `/internal/health/ready` (`{"status":"ready"|"unready"}`, reason and journal heads `null`) and
+answers 404 for `/metrics`. `/metrics` and the detailed readiness body are served on a second listener the Api
+adds when `EVIDGATE__API__MANAGEMENTPORT` is set (dev: 8082), bound to `EVIDGATE__API__MANAGEMENTADDRESS`
+(default `127.0.0.1`). The management listener answers only those three paths and 404 for everything else, so
+`/v1/*` is unreachable on it. Unset, the management surface is off: `/metrics` is not served on any port. Which
+listener a request used comes from the connection's local port, not from a header. A deployment that scrapes from
+another host sets the address to the instance's own interface and keeps the port off the published ports and the
+public ingress; a port equal to a public port fails the boot naming the key. The listener has no authentication
+of its own: the network boundary is the control (open item: authentication on the management port).
+
+**Body limits (N9).** The Api refuses a request body over the route's limit before the handler reads it: a route
+declares its limit in its endpoint metadata (contract-capped routes take it from the schema's `x-max-bytes`), and
+a route that declares none is held to 1 MiB by Kestrel. A declared `Content-Length` over the limit is answered 413
+`payload_too_large` without reading a byte; a chunked body is refused at the limit while it is read.
+
 ### Database bootstrap
 
 Each environment gets its database and its roles from
