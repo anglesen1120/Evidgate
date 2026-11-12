@@ -51,6 +51,20 @@ public sealed class BoundedHttpBodyTests
         (await BoundedHttpBody.ReadTextAsync(over, Cap, TestContext.Current.CancellationToken)).ShouldBeNull();
     }
 
+    [Theory]
+    [InlineData(-1L)]
+    [InlineData(-2147483649L)]
+    public async Task Negative_Content_Length_Does_Not_Size_The_Buffer_And_Body_Is_Still_Read(long declared)
+    {
+        using var content = new ByteArrayContent("{}"u8.ToArray());
+        content.Headers.ContentLength = declared;
+
+        var result = await BoundedHttpBody.ReadJsonAsync(content, Cap, requireObject: true, TestContext.Current.CancellationToken);
+
+        result.Status.ShouldBe(BoundedBodyStatus.Ok);
+        result.Document!.Dispose();
+    }
+
     [Fact]
     public async Task Cancellation_During_An_Active_Read_Is_Honoured()
     {

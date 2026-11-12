@@ -112,7 +112,7 @@ public static class BoundedHttpBody
     }
 
     private static int InitialCapacity(HttpContent content, int maxBytes) =>
-        content.Headers.ContentLength is { } declared
+        content.Headers.ContentLength is >= 0 and var declared
             ? (int)Math.Min(declared, maxBytes)
             : Math.Min(maxBytes, 4096);
 
