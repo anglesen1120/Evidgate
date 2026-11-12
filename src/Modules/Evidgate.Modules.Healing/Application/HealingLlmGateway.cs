@@ -142,8 +142,9 @@ internal sealed record HealingLlmInvocation(HealingLlmResult Result, Guid CallId
 /// <para>
 /// A reservation is released in a fresh scope when the provider throws, the call is cancelled or the settlement fails.
 /// A hard process kill between the phases, or a settlement whose outcome is unknown (connection lost at COMMIT), cannot
-/// be released safely, so the estimate of one call stays counted until the period resets; the counters can then only over-count, which makes the next reservation refuse sooner and never lets
-/// spend exceed a cap. The reset (and any sweep) belongs to the reset schedule, not to this class.
+/// be released safely, so the estimate of one call stays counted until the period resets; that leak can only over-count,
+/// which makes the next reservation refuse sooner. Real usage above an estimate is charged at settlement, so a call can
+/// overshoot a cap by its excess until the provider enforces an output ceiling. The reset belongs to the reset schedule.
 /// </para>
 /// </remarks>
 internal sealed partial class HealingLlmGateway(
@@ -241,7 +242,7 @@ internal sealed partial class HealingLlmGateway(
 
     /// <summary>
     /// One two-phase attempt: the reservation is already committed, the provider runs outside any transaction, and the
-    /// settlement commits usage and the row together. Whatever fails between the phases releases the reservation.
+    /// settlement commits usage and the row together. A provider failure or a refused settlement releases the reservation.
     /// </summary>
     private async Task<(string Status, string? Content, int Tokens, decimal Cost, Guid CallId)> RunAttemptAsync(
         Guid orgId,
@@ -276,6 +277,22 @@ internal sealed partial class HealingLlmGateway(
             content = null;
         }
 
+        var callId = await SettleAttemptAsync(orgId, request, attempt, status, result, reservation).ConfigureAwait(false);
+        return (status, content, result.Tokens, result.Cost, callId);
+    }
+
+    /// <summary>
+    /// Commits the attempt row and the real usage together. A settlement the server refused rolled back whole, so the
+    /// hold is released; one whose outcome is unknown keeps it (it may have landed, and a second release would under-count).
+    /// </summary>
+    private async Task<Guid> SettleAttemptAsync(
+        Guid orgId,
+        HealingLlmRequest request,
+        int attempt,
+        string status,
+        HealingLlmResult result,
+        HealingLlmReservation? reservation)
+    {
         try
         {
             // The provider was paid whether or not the caller is still listening, so the settlement ignores cancellation.
@@ -300,7 +317,7 @@ internal sealed partial class HealingLlmGateway(
                     CancellationToken.None)
                 .ConfigureAwait(false);
 
-            return (status, content, result.Tokens, result.Cost, callId);
+            return callId;
         }
         catch (PostgresException)
         {
