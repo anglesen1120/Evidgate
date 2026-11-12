@@ -24,7 +24,7 @@ internal static class SiblingProjectParents
             insert into public.suite (id, org_id, project_id, name, slug) values ('{{suite:D}}', '{{org:D}}', '{{project:D}}', 'probe', 'probe-suite');
             insert into public.suite_revision (id, org_id, suite_id, revision_no, revision_hash, shard_strategy, retry_policy)
               values ('{{suiteRevision:D}}', '{{org:D}}', '{{suite:D}}', 1, 'sha256:' || repeat('a', 64), '{"kind":"none"}', '{"max_retries":0}');
-            insert into public.environment (id, org_id, project_id, environment_key, name) values ('{{environment:D}}', '{{org:D}}', '{{project:D}}', 'staging', 'Staging');
+            insert into public.environment (id, org_id, project_id, environment_key, name) values ('{{environment:D}}', '{{org:D}}', '{{project:D}}', 'sibling-' || substr('{{environment:D}}', 1, 8), 'Sibling');
             insert into public.environment_revision (id, org_id, project_id, environment_id, revision_no, base_urls, dependency_versions, revision_hash, created_by)
               values ('{{environmentRevision:D}}', '{{org:D}}', '{{project:D}}', '{{environment:D}}', 1, '{}', '{}', 'sha256:' || repeat('c', 64), 'probe');
             insert into public.manifest (id, org_id, project_id, manifest_hash, schema_version, suite_revision_id, environment_revision_id, shard_plan, matrix, env_needs, planned_count, document, verified_by)

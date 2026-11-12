@@ -35,7 +35,7 @@
 --   * `add constraint ... foreign key ... not valid`: SHARE ROW EXCLUSIVE on `run` and the referenced table, no scan;
 --   * `validate constraint`: SHARE UPDATE EXCLUSIVE on `run`, ROW SHARE on the referenced table; one indexed pass
 --     over `run` (the pre-check above already proved it passes). `planned_execution`, the large table, is untouched;
---   * `lock table public.run in share row exclusive mode` before the pre-check: reads continue, run writes wait;
+--   * `lock table public.run in share row exclusive mode`, after the parent keys and before the pre-check: reads continue, run writes wait;
 --   * `create trigger`: SHARE ROW EXCLUSIVE on `run`.
 -- The `run` table holds one row per run (not per execution), so the pass is short; the first deploy window is the
 -- only exposure.
@@ -50,7 +50,29 @@
 -- re-add the old 2-column keys; no data is transformed.
 set local lock_timeout = '5s';
 
--- Taken before the pre-check and held to commit: no run is written or moved between the check and the keys and trigger
+-- Unique keys the 3-column references need, first: attaching them holds ACCESS EXCLUSIVE on the three parent tables to
+-- commit, so every later step needs no lock upgrade on them. A run creation holds a read lock on `manifest` before it writes
+-- `run`; taking the `run` lock before the parents' would let that request and this file wait for each other.
+-- The index is built first (SHARE), then attached as a constraint (no scan). Ids are primary keys, so no pre-check is needed.
+create unique index if not exists manifest_org_project_id_key on public.manifest (org_id, project_id, id);
+create unique index if not exists environment_revision_org_project_id_key on public.environment_revision (org_id, project_id, id);
+create unique index if not exists policy_revision_org_project_id_key on public.policy_revision (org_id, project_id, id);
+
+do $$
+begin
+  if not exists (select 1 from pg_catalog.pg_constraint where conrelid = 'public.manifest'::regclass and conname = 'manifest_org_project_id_key') then
+    alter table public.manifest add constraint manifest_org_project_id_key unique using index manifest_org_project_id_key;
+  end if;
+  if not exists (select 1 from pg_catalog.pg_constraint where conrelid = 'public.environment_revision'::regclass and conname = 'environment_revision_org_project_id_key') then
+    alter table public.environment_revision add constraint environment_revision_org_project_id_key unique using index environment_revision_org_project_id_key;
+  end if;
+  if not exists (select 1 from pg_catalog.pg_constraint where conrelid = 'public.policy_revision'::regclass and conname = 'policy_revision_org_project_id_key') then
+    alter table public.policy_revision add constraint policy_revision_org_project_id_key unique using index policy_revision_org_project_id_key;
+  end if;
+end
+$$;
+
+-- Taken after the parents' locks and before the pre-check and held to commit: no run is written or moved between the check and the keys and trigger
 -- below, so a row that passes the check cannot be changed to violate a rule the trigger (which does not re-check old
 -- rows) would then miss. Reads continue.
 lock table public.run in share row exclusive mode;
@@ -90,25 +112,6 @@ begin
     raise exception 'run: existing row(s) break the one-project rule (missing project %, manifest of another project %, environment revision of another project %, policy revision of another project %, suite revision of another project %); repair them before 0102',
       v_project, v_manifest, v_environment, v_policy, v_suite
       using errcode = '23503';
-  end if;
-end
-$$;
-
--- Unique keys the 3-column references need. The index is built first (SHARE), then attached as a constraint (no scan).
-create unique index if not exists manifest_org_project_id_key on public.manifest (org_id, project_id, id);
-create unique index if not exists environment_revision_org_project_id_key on public.environment_revision (org_id, project_id, id);
-create unique index if not exists policy_revision_org_project_id_key on public.policy_revision (org_id, project_id, id);
-
-do $$
-begin
-  if not exists (select 1 from pg_catalog.pg_constraint where conrelid = 'public.manifest'::regclass and conname = 'manifest_org_project_id_key') then
-    alter table public.manifest add constraint manifest_org_project_id_key unique using index manifest_org_project_id_key;
-  end if;
-  if not exists (select 1 from pg_catalog.pg_constraint where conrelid = 'public.environment_revision'::regclass and conname = 'environment_revision_org_project_id_key') then
-    alter table public.environment_revision add constraint environment_revision_org_project_id_key unique using index environment_revision_org_project_id_key;
-  end if;
-  if not exists (select 1 from pg_catalog.pg_constraint where conrelid = 'public.policy_revision'::regclass and conname = 'policy_revision_org_project_id_key') then
-    alter table public.policy_revision add constraint policy_revision_org_project_id_key unique using index policy_revision_org_project_id_key;
   end if;
 end
 $$;
