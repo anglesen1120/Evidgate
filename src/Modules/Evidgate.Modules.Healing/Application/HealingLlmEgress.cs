@@ -93,7 +93,7 @@ internal sealed class HealingLlmEgressHandler(HealingProviderOptions options) : 
             || !HealingLlmEgress.IsAllowed(baseAddress, request.RequestUri))
         {
             // The message names the configuration key only: neither the target nor the payload may reach a log.
-            throw new InvalidOperationException(
+            throw new HealingLlmNotSentException(
                 $"the request target is not under {HealingProviderKeys.BaseAddress}, so it may not leave");
         }
 

@@ -73,7 +73,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
 
         using var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(HttpHealingLlmProvider));
 
-        await Should.ThrowAsync<InvalidOperationException>(() => client.PostAsync(
+        await Should.ThrowAsync<HealingLlmNotSentException>(() => client.PostAsync(
             "https://elsewhere.invalid/v1/llm/generate",
             new StringContent("{}"),
             TestContext.Current.CancellationToken));
@@ -90,11 +90,12 @@ public sealed partial class HealingLlmApiKeyHandlerTests
 
         await using var provider = Compose(capture, new FixedSecrets(null), endpoint).BuildServiceProvider();
 
-        var result = await provider
+        // A refusal before the send is not a provider outcome: it reaches the gateway as a not-sent failure, which gives
+        // the budget hold back.
+        await Should.ThrowAsync<HealingLlmNotSentException>(() => provider
             .GetRequiredService<HttpHealingLlmProvider>()
-            .InvokeAsync(Request(), TestContext.Current.CancellationToken);
+            .InvokeAsync(Request(), TestContext.Current.CancellationToken));
 
-        result.Status.ShouldBe(HealingLlmStatuses.Error);
         endpoint.Requests.ShouldBeEmpty();
         capture.Logs.ShouldNotContain(log => log.Text.Contains("Bearer", StringComparison.Ordinal));
     }
@@ -110,7 +111,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         };
         using var invoker = new HttpMessageInvoker(handler);
 
-        var failure = await Should.ThrowAsync<InvalidOperationException>(() => invoker.SendAsync(
+        var failure = await Should.ThrowAsync<HealingLlmNotSentException>(() => invoker.SendAsync(
             new HttpRequestMessage(HttpMethod.Post, "https://provider.invalid/v1/llm/generate"),
             TestContext.Current.CancellationToken));
 
@@ -147,7 +148,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         };
         using var invoker = new HttpMessageInvoker(handler);
 
-        var failure = await Should.ThrowAsync<InvalidOperationException>(() => invoker.SendAsync(
+        var failure = await Should.ThrowAsync<HealingLlmNotSentException>(() => invoker.SendAsync(
             new HttpRequestMessage(HttpMethod.Post, "https://provider.invalid/v1/llm/generate"),
             TestContext.Current.CancellationToken));
 

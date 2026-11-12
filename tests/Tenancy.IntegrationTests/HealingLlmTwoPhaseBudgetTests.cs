@@ -142,6 +142,26 @@ public sealed class HealingLlmTwoPhaseBudgetTests
     }
 
     /// <summary>
+    /// A refusal by the provider's own handlers happens before any byte is sent, so nothing can have been billed: the
+    /// hold goes back whole and one zero-usage error row records the attempt.
+    /// </summary>
+    [Fact]
+    public async Task InvokeHealingLlm_RefusedBeforeSend_ReleasesTheHold()
+    {
+        var provider = new ScriptedProvider(_ => throw new HealingLlmNotSentException("refused before the send"));
+        await using var world = await StartAsync(provider);
+        await world.SeedBudgetAsync(1.0m, 5000, 0.1m, 10);
+
+        var invocation = await InvokeAsync(world, Request(world), TestContext.Current.CancellationToken);
+
+        invocation.IsSuccess.ShouldBeTrue();
+        invocation.Value.Result.Status.ShouldBe(HealingLlmStatuses.Error);
+        (await world.UsedAsync()).ShouldBe((0.1m, 10));
+        (await world.CallCountAsync()).ShouldBe(1);
+        (await world.LastCallAsync()).ShouldBe((HealingLlmStatuses.Error, 0, 0m));
+    }
+
+    /// <summary>
     /// A provider that reports an extreme token count cannot abort the settlement: the paid attempt is recorded and the
     /// counter is clamped to its column range instead of overflowing.
     /// </summary>
@@ -387,6 +407,19 @@ public sealed class HealingLlmTwoPhaseBudgetTests
                 connection);
             _ = command.Parameters.AddWithValue("p", Project);
             return (long)(await command.ExecuteScalarAsync())!;
+        }
+
+        internal async Task<(string Status, int Tokens, decimal Cost)> LastCallAsync()
+        {
+            await using var connection = new NpgsqlConnection(OwnerConnectionString);
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand(
+                "select status, tokens, cost from public.healing_llm_call where project_id = @p order by created_at desc limit 1",
+                connection);
+            _ = command.Parameters.AddWithValue("p", Project);
+            await using var reader = await command.ExecuteReaderAsync();
+            (await reader.ReadAsync()).ShouldBeTrue();
+            return (reader.GetString(0), reader.GetInt32(1), reader.GetDecimal(2));
         }
 
         public async ValueTask DisposeAsync()

@@ -126,6 +126,7 @@ public sealed partial class ResolverTests : HarnessTest
         ["evidgate.usage_ledger_org_ids"] = "0076_usage_rollup_job.sql:126",
         ["evidgate.orchestration_run_state_event_append"] = "0082_orchestration_run_state_event.sql:120",
         ["evidgate.record_sweep_audit"] = "0088_platform_sweep_audit.sql:138",
+        ["evidgate.roll_healing_llm_budget"] = "0107_healing_llm_budget_roll.sql",
         ["evidgate.list_dead_letter_tasks"] = "0104_platform_worker_role.sql:291",
         ["evidgate.replay_dead_letter_task"] = "0104_platform_worker_role.sql:352",
     };

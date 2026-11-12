@@ -24,7 +24,7 @@ internal sealed class HealingLlmApiKeyHandler(ISecretProvider secrets, HealingPr
         if (string.IsNullOrEmpty(secret))
         {
             // Unreachable once the boot validator has run; refusing here keeps a composition that skipped it fail-closed.
-            throw new InvalidOperationException(
+            throw new HealingLlmNotSentException(
                 $"{HealingProviderKeys.ApiKeySecret} is unset, so no request may leave without a key");
         }
 
@@ -34,7 +34,7 @@ internal sealed class HealingLlmApiKeyHandler(ISecretProvider secrets, HealingPr
         {
             // Nothing is sent without a key: an unauthenticated request would leave the configured endpoint and be
             // recorded as a provider attempt. The message names the configuration key, never the secret.
-            throw new InvalidOperationException(
+            throw new HealingLlmNotSentException(
                 $"the secret named in {HealingProviderKeys.ApiKeySecret} resolved to no value, so no request may leave");
         }
 
@@ -42,7 +42,7 @@ internal sealed class HealingLlmApiKeyHandler(ISecretProvider secrets, HealingPr
         // refusal happens here, names the configuration key and keeps the value out of the message.
         if (key.AsSpan().IndexOfAny('\r', '\n', '\0') >= 0)
         {
-            throw new InvalidOperationException(
+            throw new HealingLlmNotSentException(
                 $"the secret named in {HealingProviderKeys.ApiKeySecret} carries a control character, so no request may leave");
         }
 

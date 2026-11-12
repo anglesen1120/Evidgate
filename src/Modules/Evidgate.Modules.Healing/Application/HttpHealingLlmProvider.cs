@@ -135,6 +135,11 @@ internal sealed class HttpHealingLlmProvider(HttpClient client, IOptions<Healing
             // A transport fault, or the response buffer ceiling the client enforces: nothing to validate, nothing spent.
             return Failure(HealingLlmStatuses.Error);
         }
+        catch (HealingLlmNotSentException)
+        {
+            // Refused by a handler before the send: the gateway gives the hold back, so this is not an error result.
+            throw;
+        }
         catch (InvalidOperationException)
         {
             // HttpClient refuses a request it cannot send or a body it cannot hand over the same way; the gateway must

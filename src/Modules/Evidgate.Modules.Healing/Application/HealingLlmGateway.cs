@@ -87,33 +87,6 @@ internal static class HealingLlmRequestRules
 }
 
 /// <summary>
-/// 08.5.1-T1: the bounds the ledger puts on a provider's own numbers, applied before the first row is written, so a
-/// provider that reports nonsense cannot fail the INSERT (<c>tokens</c> CHECK, <c>numeric(12,6)</c> overflow) or write a
-/// <c>status</c> the CHECK refuses.
-/// </summary>
-internal static class HealingLlmResultRules
-{
-    /// <summary>The largest cost <c>healing_llm_call.cost numeric(12,6)</c> can hold.</summary>
-    internal const decimal MaxRecordableCost = 999_999.999999m;
-
-    /// <summary>
-    /// The result as it may be recorded: unchanged when its status is one of <see cref="HealingLlmStatuses"/> and its
-    /// reported usage fits the column types, otherwise an <c>error</c> with no content and nothing spent.
-    /// </summary>
-    /// <param name="result">What the adapter reported for one attempt.</param>
-    /// <returns>The result the gateway records and counts.</returns>
-    internal static HealingLlmResult Recordable(HealingLlmResult result) =>
-        HealingLlmStatuses.IsKnown(result.Status) && result.Tokens >= 0 && IsRecordableCost(result.Cost)
-            ? result
-            : new HealingLlmResult(HealingLlmStatuses.Error, null, 0, 0m);
-
-    // Postgres rounds to the column's scale (6) before range-checking, so a cost just under one million can still
-    // overflow numeric(12,6); the rounding is repeated here with the same half-away-from-zero rule.
-    private static bool IsRecordableCost(decimal cost) =>
-        cost >= 0m && decimal.Round(cost, 6, MidpointRounding.AwayFromZero) <= MaxRecordableCost;
-}
-
-/// <summary>
 /// 08.5.1-T1: one gateway call's outcome. The gateway records every attempt and returns the last one, together with the
 /// id of that row — the value a generation stores as <c>authoring_version.ai_run_id</c> so the artefact it produced is
 /// attributable and costed (AC7).
@@ -262,12 +235,21 @@ internal sealed partial class HealingLlmGateway(
             cancellationToken.ThrowIfCancellationRequested();
         }
 
+        var notSent = false;
+
         try
         {
             // The provider's own numbers are brought inside the row's bounds before anything is recorded, so a provider
             // that reports an unknown status or an impossible cost cannot fail the INSERT or label the ledger.
             result = HealingLlmResultRules.Recordable(
                 await provider.InvokeAsync(request, cancellationToken).ConfigureAwait(false));
+        }
+        catch (HealingLlmNotSentException)
+        {
+            // A handler refused before the send, so nothing can have been billed: settling zero usage records the error
+            // row and returns the whole hold, unlike the unknown-outcome failures below that keep it charged.
+            result = new HealingLlmResult(HealingLlmStatuses.Error, null, 0, 0m);
+            notSent = true;
         }
         catch
         {
@@ -278,7 +260,7 @@ internal sealed partial class HealingLlmGateway(
             throw;
         }
 
-        if (reservation is not null && !ReportsUsage(result))
+        if (reservation is not null && !notSent && !ReportsUsage(result))
         {
             // The adapter reports a timeout or error as a result, and a result without usage says nothing about what the
             // provider billed: charge the held estimate rather than the zeros, the real status stays on the row.
