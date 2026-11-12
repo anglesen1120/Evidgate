@@ -327,11 +327,11 @@ public sealed class RunProjectKeyTests : IClassFixture<TenancyHostPool>
         var theirs = await SeedRefsAsync(world.Database, otherOrg, otherProject);
         var id = Guid.CreateVersion7();
 
-        // Acting as this org while the row names another org's project and parents. The BEFORE trigger reads under RLS and may answer
-        // 23503 before the WITH CHECK policy answers 42501; either way the row is refused.
+        // Acting as this org while the row names another org's project and parents. The BEFORE trigger reads under RLS and answers
+        // 23503 before the WITH CHECK policy could answer 42501.
         var error = await RefusedAsync(world.Org, world.Database, InsertRunSql(id, otherOrg, otherProject, theirs, null));
 
-        error.SqlState.ShouldBeOneOf("23503", "42501");
+        error.SqlState.ShouldBe("23503");
         await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
         (await owner.ScalarAsync<long>($"select count(*) from public.run where id = '{id}'")).ShouldBe(0L);
     }
@@ -346,9 +346,31 @@ public sealed class RunProjectKeyTests : IClassFixture<TenancyHostPool>
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database));
         var error = await scope.CaptureErrorAsync(InsertRunSql(id, world.Org, world.ProjectA, world.A, null));
 
-        error.SqlState.ShouldBeOneOf("23503", "42501");
+        error.SqlState.ShouldBe("23503");
         await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
         (await owner.ScalarAsync<long>($"select count(*) from public.run where id = '{id}'")).ShouldBe(0L);
+    }
+
+    [Fact]
+    public async Task Run_Parent_Run_Of_Another_Org_Is_Refused()
+    {
+        await using var world = await StartAsync();
+        var otherUser = Guid.CreateVersion7();
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("parents"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other");
+        var theirs = await SeedRefsAsync(world.Database, otherOrg, otherProject);
+        var foreignParent = Guid.CreateVersion7();
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
+        {
+            (await owner.ExecuteAsync(InsertRunSql(foreignParent, otherOrg, otherProject, theirs, null))).ShouldBe(1);
+            await owner.CommitAsync();
+        }
+
+        var error = await RefusedAsync(
+            world.Org, world.Database, InsertRunSql(Guid.CreateVersion7(), world.Org, world.ProjectA, world.A, null, foreignParent));
+
+        error.SqlState.ShouldBe("23503");
+        error.ConstraintName.ShouldBe("run_parent_run_fk");
     }
 
     [Theory]

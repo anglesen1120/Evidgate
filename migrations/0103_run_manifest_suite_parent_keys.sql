@@ -33,7 +33,7 @@
 -- before it writes `run`, so the two cannot wait for each other.
 --   * `create unique index` on `manifest`: SHARE (reads continue, writes wait); `add constraint ... unique using index`:
 --     ACCESS EXCLUSIVE, catalogue only;
---   * `lock table public.manifest in access exclusive mode`, then `lock table public.run in access exclusive mode`: the
+--   * `lock table public.manifest in access exclusive mode`, then `lock table public.run in access exclusive mode nowait`: the
 --     unique key on `run` and the swap of its parent key need ACCESS EXCLUSIVE, so it is taken once up front instead of
 --     upgraded from SHARE (an upgrade is a deadlock risk). `run` holds one row per run, not per execution, so the window is
 --     short; `planned_execution`, the large table, is untouched. Reads on both tables wait for the file;
@@ -49,8 +49,9 @@
 -- WRITERS: `UploadManifest` refuses an unknown or other-project suite revision (`unknown_suite_revision`) before
 -- `OrchestratorSql.InsertManifest` writes; `InsertRun` copies `suite_revision_id` from the manifest row;
 -- no source writer sets `parent_run_id`.
--- Deploy: any order. Rollback: drop the trigger and its function, drop `run_manifest_suite_revision_fk` and the two
--- unique keys, re-add the 2-column `run_parent_run_fk`; no data is transformed.
+-- Deploy: any order. Rollback: drop the trigger and its function; drop `run_parent_run_fk` and
+-- `run_manifest_suite_revision_fk` (the parent key depends on `run_org_project_id_key`), then both unique keys, then
+-- re-add the 2-column `run_parent_run_fk (org_id, parent_run_id) -> run (org_id, id)`; no data is transformed.
 set local lock_timeout = '5s';
 
 create unique index if not exists manifest_org_id_suite_revision_key on public.manifest (org_id, id, suite_revision_id);
@@ -65,7 +66,9 @@ $$;
 
 -- Explicit so a re-execution (key already attached) still takes the parent first, then `run`.
 lock table public.manifest in access exclusive mode;
-lock table public.run in access exclusive mode;
+-- NOWAIT: a run lock held by a reconciler or a run creation, which then reads `manifest` (held above), would wait for
+-- this file while this file waits for it. Failing at once (55P03) rolls the file back and frees `manifest`; rerun when idle.
+lock table public.run in access exclusive mode nowait;
 
 create unique index if not exists run_org_project_id_key on public.run (org_id, project_id, id);
 
