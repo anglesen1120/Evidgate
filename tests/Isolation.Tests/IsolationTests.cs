@@ -218,7 +218,7 @@ public sealed class IsolationTests
         (await _fixture.ColumnAsync<string>(
             database,
             "select rolname from pg_roles where rolname like 'evidgate\\_%' order by rolname"))
-            .ShouldBe(["evidgate_app", "evidgate_operator", "evidgate_owner", "evidgate_worker_sched"]);
+            .ShouldBe(["evidgate_app", "evidgate_operator", "evidgate_owner", "evidgate_worker", "evidgate_worker_sched"]);
 
         // No role may bypass the row-security system (DECISIONS F5, 00 §5.4.3).
         (await _fixture.ColumnAsync<string>(
@@ -233,7 +233,7 @@ public sealed class IsolationTests
             .ShouldBe(["evidgate_owner"]);
         (await _fixture.ScalarAsync<bool>(
             database,
-            "select bool_and(not rolinherit) from pg_roles where rolname in ('evidgate_app', 'evidgate_operator', 'evidgate_worker_sched')"))
+            "select bool_and(not rolinherit) from pg_roles where rolname in ('evidgate_app', 'evidgate_operator', 'evidgate_worker', 'evidgate_worker_sched')"))
             .ShouldBeTrue();
 
         // The template table is owned by the migration role and forced.

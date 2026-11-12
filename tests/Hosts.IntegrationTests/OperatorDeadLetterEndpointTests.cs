@@ -46,9 +46,24 @@ public sealed class OperatorDeadLetterEndpointTests
         new(connectionString, configureServices: services =>
             services.AddSingleton<IOperatorGate>(new PermitAllOperatorGate()));
 
+    /// <summary>Seeds one organization, the tenant the operator routes name.</summary>
+    private static async Task<Guid> SeedOrgAsync(string connectionString)
+    {
+        var org = Guid.CreateVersion7();
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(Token);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "insert into public.organization (id, name, slug) values (@id, 'operator', @slug)";
+        command.Parameters.AddWithValue("@id", org);
+        command.Parameters.AddWithValue("@slug", "op-" + org.ToString("N"));
+        await command.ExecuteNonQueryAsync(Token);
+        return org;
+    }
+
     /// <summary>A seeded task row; returns the id assigned to it.</summary>
     private static async Task<Guid> SeedTaskAsync(
         string connectionString,
+        Guid org,
         string queue,
         string state,
         DateTime createdAt,
@@ -60,10 +75,11 @@ public sealed class OperatorDeadLetterEndpointTests
         await using var command = connection.CreateCommand();
         command.CommandText = """
             insert into public.task
-              (id, queue, task_type, payload, idempotency_key, state, attempts, max_attempts, last_error, created_at)
+              (id, org_id, queue, task_type, payload, idempotency_key, state, attempts, max_attempts, last_error, created_at)
             values
-              (@id, @queue, 'operator.test', '{}'::jsonb, @idempotency_key, @state, 3, 3, 'InvalidOperationException: boom', @created_at)
+              (@id, @org, @queue, 'operator.test', '{}'::jsonb, @idempotency_key, @state, 3, 3, 'InvalidOperationException: boom', @created_at)
             """;
+        command.Parameters.AddWithValue("@org", org);
         command.Parameters.Add(new NpgsqlParameter("@id", id));
         command.Parameters.Add(new NpgsqlParameter("@queue", queue));
         command.Parameters.Add(new NpgsqlParameter("@idempotency_key", idempotencyKey));
@@ -89,6 +105,7 @@ public sealed class OperatorDeadLetterEndpointTests
         var database = new NpgsqlConnectionStringBuilder(connectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
 
+        var org = await SeedOrgAsync(admin);
         var oldest = DateTime.UtcNow.AddHours(-2);
         var seeded = new List<(Guid Id, string Queue)>();
         for (var index = 0; index < 5; index++)
@@ -96,7 +113,7 @@ public sealed class OperatorDeadLetterEndpointTests
             var queue = index < 3 ? "ops" : "sweep";
             seeded.Add((
                 await SeedTaskAsync(
-                    admin, queue, "dead_letter", oldest.AddMinutes(index), $"dead:{index}"),
+                    admin, org, queue, "dead_letter", oldest.AddMinutes(index), $"dead:{index}"),
                 queue));
         }
 
@@ -108,7 +125,7 @@ public sealed class OperatorDeadLetterEndpointTests
         var pages = 0;
         do
         {
-            var url = "/internal/operator/tasks/dead-letter?limit=2"
+            var url = $"/internal/operator/tasks/dead-letter?org_id={org:D}&limit=2"
                 + (cursor is null ? string.Empty : "&cursor=" + Uri.EscapeDataString(cursor));
             using var response = await client.GetAsync(url, Token);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -132,7 +149,7 @@ public sealed class OperatorDeadLetterEndpointTests
 
         // The queue filter narrows within the same ordering contract.
         using var filtered = await client.GetAsync(
-            "/internal/operator/tasks/dead-letter?queue=sweep&limit=100", Token);
+            $"/internal/operator/tasks/dead-letter?org_id={org:D}&queue=sweep&limit=100", Token);
         Assert.Equal(HttpStatusCode.OK, filtered.StatusCode);
         var filteredBody = await JsonDocument.ParseAsync(
             await filtered.Content.ReadAsStreamAsync(Token), cancellationToken: Token);
@@ -152,25 +169,26 @@ public sealed class OperatorDeadLetterEndpointTests
         await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         var database = new NpgsqlConnectionStringBuilder(connectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
-        await SeedTaskAsync(admin, "ops", "dead_letter", DateTime.UtcNow.AddMinutes(-1), "dead:one");
+        var org = await SeedOrgAsync(admin);
+        await SeedTaskAsync(admin, org, "ops", "dead_letter", DateTime.UtcNow.AddMinutes(-1), "dead:one");
 
         await using var factory = Permitted(connectionString);
         using var client = factory.CreateClient();
 
         using var badLimit = await client.GetAsync(
-            "/internal/operator/tasks/dead-letter?limit=abc", Token);
+            $"/internal/operator/tasks/dead-letter?org_id={org:D}&limit=abc", Token);
         Assert.Equal(HttpStatusCode.BadRequest, badLimit.StatusCode);
         Assert.Equal("request_invalid", ErrorCode(await JsonDocument.ParseAsync(
             await badLimit.Content.ReadAsStreamAsync(Token), cancellationToken: Token)));
 
         using var badCursor = await client.GetAsync(
-            "/internal/operator/tasks/dead-letter?cursor=not-a-cursor", Token);
+            $"/internal/operator/tasks/dead-letter?org_id={org:D}&cursor=not-a-cursor", Token);
         Assert.Equal(HttpStatusCode.BadRequest, badCursor.StatusCode);
         Assert.Equal("request_invalid", ErrorCode(await JsonDocument.ParseAsync(
             await badCursor.Content.ReadAsStreamAsync(Token), cancellationToken: Token)));
 
         using var clamped = await client.GetAsync(
-            "/internal/operator/tasks/dead-letter?limit=9999", Token);
+            $"/internal/operator/tasks/dead-letter?org_id={org:D}&limit=9999", Token);
         Assert.Equal(HttpStatusCode.OK, clamped.StatusCode);
         var clampedBody = await JsonDocument.ParseAsync(
             await clamped.Content.ReadAsStreamAsync(Token), cancellationToken: Token);
@@ -188,14 +206,15 @@ public sealed class OperatorDeadLetterEndpointTests
         await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         var database = new NpgsqlConnectionStringBuilder(connectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
+        var org = await SeedOrgAsync(admin);
         var taskId = await SeedTaskAsync(
-            admin, "ops", "dead_letter", DateTime.UtcNow.AddMinutes(-10), "dead:replay");
+            admin, org, "ops", "dead_letter", DateTime.UtcNow.AddMinutes(-10), "dead:replay");
 
         await using var factory = Permitted(connectionString);
         using var client = factory.CreateClient();
 
         using var response = await client.PostAsync(
-            $"/internal/operator/tasks/dead-letter/{taskId}/replay", content: null, Token);
+            $"/internal/operator/tasks/dead-letter/{taskId}/replay?org_id={org:D}", content: null, Token);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var body = await JsonDocument.ParseAsync(
@@ -224,14 +243,15 @@ public sealed class OperatorDeadLetterEndpointTests
         await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
         var database = new NpgsqlConnectionStringBuilder(connectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
+        var org = await SeedOrgAsync(admin);
         var taskId = await SeedTaskAsync(
-            admin, "ops", "queued", DateTime.UtcNow.AddMinutes(-5), "live:queued");
+            admin, org, "ops", "queued", DateTime.UtcNow.AddMinutes(-5), "live:queued");
 
         await using var factory = Permitted(connectionString);
         using var client = factory.CreateClient();
 
         using var response = await client.PostAsync(
-            $"/internal/operator/tasks/dead-letter/{taskId}/replay", content: null, Token);
+            $"/internal/operator/tasks/dead-letter/{taskId}/replay?org_id={org:D}", content: null, Token);
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("task_not_dead_letter", ErrorCode(await JsonDocument.ParseAsync(
             await response.Content.ReadAsStreamAsync(Token), cancellationToken: Token)));
@@ -255,7 +275,7 @@ public sealed class OperatorDeadLetterEndpointTests
         using var client = factory.CreateClient();
 
         using var response = await client.PostAsync(
-            $"/internal/operator/tasks/dead-letter/{Guid.CreateVersion7()}/replay", content: null, Token);
+            $"/internal/operator/tasks/dead-letter/{Guid.CreateVersion7()}/replay?org_id={Guid.CreateVersion7():D}", content: null, Token);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("task_not_found", ErrorCode(await JsonDocument.ParseAsync(
             await response.Content.ReadAsStreamAsync(Token), cancellationToken: Token)));
@@ -273,13 +293,14 @@ public sealed class OperatorDeadLetterEndpointTests
         await using var factory = new EvidgateApiFactory(DeadConnectionString);
         using var client = factory.CreateClient();
 
-        using var list = await client.GetAsync("/internal/operator/tasks/dead-letter", Token);
+        var org = Guid.CreateVersion7();
+        using var list = await client.GetAsync($"/internal/operator/tasks/dead-letter?org_id={org:D}", Token);
         Assert.Equal(HttpStatusCode.Unauthorized, list.StatusCode);
         Assert.Equal("unauthenticated", ErrorCode(await JsonDocument.ParseAsync(
             await list.Content.ReadAsStreamAsync(Token), cancellationToken: Token)));
 
         using var replay = await client.PostAsync(
-            $"/internal/operator/tasks/dead-letter/{Guid.CreateVersion7()}/replay", content: null, Token);
+            $"/internal/operator/tasks/dead-letter/{Guid.CreateVersion7()}/replay?org_id={org:D}", content: null, Token);
         Assert.Equal(HttpStatusCode.Unauthorized, replay.StatusCode);
         Assert.Equal("unauthenticated", ErrorCode(await JsonDocument.ParseAsync(
             await replay.Content.ReadAsStreamAsync(Token), cancellationToken: Token)));
@@ -299,7 +320,7 @@ public sealed class OperatorDeadLetterEndpointTests
         var context = await factory.Server.SendAsync(http =>
         {
             http.Request.Method = "GET";
-            http.Request.Path = "/internal/operator/tasks/dead-letter";
+            http.Request.Path = $"/internal/operator/tasks/dead-letter?org_id={Guid.CreateVersion7():D}";
             http.User = new ClaimsPrincipal(
                 new ClaimsIdentity([new Claim("sub", "tenant-caller")], "test"));
         }, Token);

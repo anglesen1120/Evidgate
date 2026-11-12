@@ -33,6 +33,7 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
 
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+    private readonly string _taskWorkerPassword = "task-worker-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _operatorPassword = "operator-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
     private TemplateDatabase? _template;
@@ -96,6 +97,7 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
             RepoMigrationsPath,
             [
                 $"alter role evidgate_app login password '{_appPassword}'",
+                $"alter role evidgate_worker login password '{_taskWorkerPassword}'",
                 $"alter role evidgate_operator login password '{_operatorPassword}'",
             ]);
     }
@@ -227,7 +229,10 @@ public sealed class PostgresTenancyFixture : IAsyncLifetime
 
     public string OwnerConnectionString(string database) => Build(DatabaseOwnerRole, _ownerPassword, database);
 
-    public string AppConnectionString(string database) => Build("evidgate_app", _appPassword, database);
+    public string AppConnectionString(string database) =>
+        TaskWorkerTestServices.Register(Build("evidgate_app", _appPassword, database), WorkerConnectionString(database));
+
+    public string WorkerConnectionString(string database) => Build("evidgate_worker", _taskWorkerPassword, database);
 
     public string OperatorConnectionString(string database) => Build("evidgate_operator", _operatorPassword, database);
 

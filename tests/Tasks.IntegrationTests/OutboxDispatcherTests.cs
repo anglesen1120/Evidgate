@@ -296,39 +296,32 @@ public sealed class OutboxDispatcherTests
     }
 
     /// <summary>
-    /// Migration 0009's contract, from the role that has to live with it: the app
-    /// role can select <c>outbox</c> and stamp exactly <c>dispatched_at</c>, and
-    /// nothing more — no table-level UPDATE (so a committed row's payload,
-    /// task_type, org_id or idempotency_key cannot be rewritten after the business
-    /// transaction committed) and no DELETE. The positive half — dispatch running
-    /// as this role — is what every other test in this class exercises.
+    /// The producer contract after the worker split: the app role inserts and does
+    /// nothing else with the outbox, while the queue role reads it and stamps
+    /// <c>dispatched_at</c> alone.
     /// </summary>
     [Fact]
-    public async Task Dispatcher_Grant_IsMinimal_And_Sufficient()
+    public async Task Dispatcher_Grant_IsInsertOnly_ForTheAppRole()
     {
         var database = await _fixture.CreateDatabaseAsync();
 
-        await using var app = new NpgsqlConnection(_fixture.AppConnectionString(database));
-        await app.OpenAsync(Token);
+        await using var worker = new NpgsqlConnection(_fixture.WorkerConnectionString(database));
+        await worker.OpenAsync(Token);
 
-        (await app.ExecuteScalarAsync<bool>(
-            "select has_table_privilege('evidgate_app', 'public.outbox', 'SELECT')")).ShouldBeTrue();
-        (await app.ExecuteScalarAsync<bool>(
+        (await worker.ExecuteScalarAsync<bool>(
             "select has_table_privilege('evidgate_app', 'public.outbox', 'INSERT')")).ShouldBeTrue();
-        (await app.ExecuteScalarAsync<bool>(
-            "select has_column_privilege('evidgate_app', 'public.outbox', 'dispatched_at', 'UPDATE')")).ShouldBeTrue();
-        (await app.ExecuteScalarAsync<bool>(
-            "select has_table_privilege('evidgate_app', 'public.outbox', 'UPDATE')")).ShouldBeFalse();
-        (await app.ExecuteScalarAsync<bool>(
+        (await worker.ExecuteScalarAsync<bool>(
+            "select has_table_privilege('evidgate_app', 'public.outbox', 'SELECT')")).ShouldBeFalse();
+        (await worker.ExecuteScalarAsync<bool>(
+            "select has_column_privilege('evidgate_app', 'public.outbox', 'dispatched_at', 'UPDATE')")).ShouldBeFalse();
+        (await worker.ExecuteScalarAsync<bool>(
             "select has_table_privilege('evidgate_app', 'public.outbox', 'DELETE')")).ShouldBeFalse();
 
-        var rewriteDenied = await Should.ThrowAsync<PostgresException>(() => app.ExecuteAsync(
-            "update public.outbox set task_type = task_type where false"));
-        rewriteDenied.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
-
-        var deleteDenied = await Should.ThrowAsync<PostgresException>(() => app.ExecuteAsync(
-            "delete from public.outbox"));
-        deleteDenied.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+        // The positive control: the queue role does read and stamp the dispatch column.
+        (await worker.ExecuteScalarAsync<bool>(
+            "select has_table_privilege('evidgate_worker', 'public.outbox', 'SELECT')")).ShouldBeTrue();
+        (await worker.ExecuteScalarAsync<bool>(
+            "select has_column_privilege('evidgate_worker', 'public.outbox', 'dispatched_at', 'UPDATE')")).ShouldBeTrue();
     }
 
     /// <summary>Seeds committed outbox rows directly (the app role's insert path of 01.5.1-T2).</summary>
@@ -570,7 +563,7 @@ public sealed class OutboxDispatcherTests
 
             var capture = new StatementCapture(killOnStatementContaining, killerConnection, KilledApplicationName);
 
-            var connectionString = new NpgsqlConnectionStringBuilder(fixture.AppConnectionString(database))
+            var connectionString = new NpgsqlConnectionStringBuilder(fixture.WorkerConnectionString(database))
             {
                 MaxPoolSize = 2,
                 MaxAutoPrepare = 0,
@@ -591,6 +584,7 @@ public sealed class OutboxDispatcherTests
             var services = new ServiceCollection();
             services.AddSingleton(dataSource);
             services.AddLogging();
+            values[$"{TasksOptions.SectionName}:WorkerConnectionString"] = fixture.WorkerConnectionString(database);
             services.AddEvidgateTasks(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
 
             return new DispatcherHost(dataSource, services.BuildServiceProvider(), capture);

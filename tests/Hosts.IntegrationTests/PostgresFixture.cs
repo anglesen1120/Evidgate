@@ -58,6 +58,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     private Task? _start;
 
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+    private readonly string _taskWorkerPassword = "task-worker-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
@@ -107,7 +108,7 @@ public sealed class PostgresFixture : IAsyncLifetime
             AdminConnectionString,
             OwnerConnectionString,
             RepoMigrationsPath,
-            [$"alter role {AppRoleName} noinherit"]);
+            [$"alter role {AppRoleName} noinherit", $"alter role evidgate_worker login password '{_taskWorkerPassword}'"]);
     }
 
     public async ValueTask DisposeAsync()
@@ -230,6 +231,9 @@ public sealed class PostgresFixture : IAsyncLifetime
     public string AppConnectionString(string database) =>
         Builder(ConnectionString, database, AppRoleName, _appPassword);
 
+    public string WorkerConnectionString(string database) =>
+        Builder(ConnectionString, database, "evidgate_worker", _taskWorkerPassword);
+
     /// <summary>Unpooled superuser connection string for a database in this container.</summary>
     public string AdminConnectionString(string database) =>
         Unpooled(Builder(ConnectionString, database, admin: true));
@@ -348,6 +352,7 @@ public sealed class TestDatabase : IAsyncDisposable
         _fixture = fixture;
         Name = name;
         AppConnectionString = appConnectionString;
+        WorkerConnectionString = fixture.WorkerConnectionString(name);
     }
 
     /// <summary>The database name, for the fixture's owner and admin connection-string helpers.</summary>
@@ -355,6 +360,9 @@ public sealed class TestDatabase : IAsyncDisposable
 
     /// <summary>The <c>evidgate_app</c> connection string for this database.</summary>
     public string AppConnectionString { get; }
+
+    /// <summary>The <c>evidgate_worker</c> credential of the same database.</summary>
+    public string WorkerConnectionString { get; }
 
     public static implicit operator string(TestDatabase database)
     {

@@ -37,7 +37,7 @@ public sealed class OutboxBacklogGaugeTests
         await SeedAsync(database, 3);
         var activity = new NpgsqlActivityCounter();
         var builder = new NpgsqlDataSourceBuilder(
-            new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database)) { MaxPoolSize = 2 }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(_fixture.WorkerConnectionString(database)) { MaxPoolSize = 2 }.ConnectionString);
         builder.UseLoggerFactory(activity);
         await using var dataSource = builder.Build();
         var time = new FakeTimeProvider();
@@ -72,7 +72,7 @@ public sealed class OutboxBacklogGaugeTests
     {
         var database = await _fixture.CreateDatabaseAsync();
         await SeedAsync(database, 2);
-        await using var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        await using var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         var time = new FakeTimeProvider();
         using var dispatcher = NewDispatcher(dataSource, time, new RefreshFailureLog());
         using var collector = new GaugeCollector();
@@ -96,7 +96,7 @@ public sealed class OutboxBacklogGaugeTests
     {
         var database = await _fixture.CreateDatabaseAsync();
         await SeedAsync(database, 5);
-        var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         var time = new FakeTimeProvider();
         var log = new RefreshFailureLog();
         using var dispatcher = NewDispatcher(dataSource, time, log);
@@ -133,7 +133,7 @@ public sealed class OutboxBacklogGaugeTests
     private async Task SeedAsync(string database, int count)
     {
         await using var connection = new NpgsqlConnection(
-            new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database)) { Pooling = false }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(_fixture.WorkerConnectionString(database)) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(Token);
 
         for (var i = 0; i < count; i++)

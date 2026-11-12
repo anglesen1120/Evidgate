@@ -33,7 +33,7 @@ public sealed class TaskQueueStateGaugeTests
         var database = await _fixture.CreateDatabaseAsync();
         await SeedDueAsync(database, 2, TimeSpan.FromSeconds(30));
         await SeedDeadLettersAsync(database, 1);
-        await using var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        await using var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         var time = new FakeTimeProvider();
         using var gauge = new TaskQueueStateGauge(dataSource, NullLogger<TaskQueueStateGauge>.Instance, time);
         using var collector = new GaugeCollector();
@@ -69,7 +69,7 @@ public sealed class TaskQueueStateGaugeTests
     public async Task EmptyQueue_ReportsZeroAgeAndZeroDepth_RatherThanNoMeasurement()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        await using var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        await using var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         var time = new FakeTimeProvider();
         using var gauge = new TaskQueueStateGauge(dataSource, NullLogger<TaskQueueStateGauge>.Instance, time);
         using var collector = new GaugeCollector();
@@ -91,7 +91,7 @@ public sealed class TaskQueueStateGaugeTests
     {
         var database = await _fixture.CreateDatabaseAsync();
         await SeedDeadLettersAsync(database, 1);
-        var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         var time = new FakeTimeProvider();
         using var gauge = new TaskQueueStateGauge(dataSource, NullLogger<TaskQueueStateGauge>.Instance, time);
         using var collector = new GaugeCollector();
@@ -129,7 +129,7 @@ public sealed class TaskQueueStateGaugeTests
         await SeedDueAsync(database, 2, TimeSpan.FromSeconds(30));
         await SeedDeadLettersAsync(database, 2);
 
-        await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
+        await using var connection = new NpgsqlConnection(_fixture.WorkerConnectionString(database));
         await connection.OpenAsync(Token);
         await connection.ExecuteAsync("set enable_seqscan = off");
 
@@ -161,7 +161,7 @@ public sealed class TaskQueueStateGaugeTests
         var database = await _fixture.CreateDatabaseAsync();
         await SeedDeadLettersAsync(database, 3);
 
-        await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
+        await using var connection = new NpgsqlConnection(_fixture.WorkerConnectionString(database));
         await connection.OpenAsync(Token);
 
         var belowCap = await ReadSnapshotAsync(connection, cap: 10);
@@ -187,7 +187,7 @@ public sealed class TaskQueueStateGaugeTests
     private async Task SeedDueAsync(string database, int count, TimeSpan waited)
     {
         await using var connection = new NpgsqlConnection(
-            new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database)) { Pooling = false }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(_fixture.WorkerConnectionString(database)) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(Token);
 
         for (var i = 0; i < count; i++)
@@ -207,7 +207,7 @@ public sealed class TaskQueueStateGaugeTests
     private async Task SeedDeadLettersAsync(string database, int count)
     {
         await using var connection = new NpgsqlConnection(
-            new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database)) { Pooling = false }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(_fixture.WorkerConnectionString(database)) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(Token);
 
         for (var i = 0; i < count; i++)

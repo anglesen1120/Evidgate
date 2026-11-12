@@ -261,7 +261,7 @@ public sealed partial class EvidenceCompleteTests(PostgresTenancyFixture fixture
     /// <summary>Runs one real outbox dispatch batch (01.5.1-T3) — the hop the API host itself never runs.</summary>
     private static async Task DispatchAsync(World world)
     {
-        var dataSource = world.Host.Services.GetRequiredService<NpgsqlDataSource>();
+        var dataSource = world.Host.Services.GetRequiredKeyedService<NpgsqlDataSource>(TaskWorkerDataSource.Key);
         using var dispatcher = new OutboxDispatcher(
             dataSource, Options.Create(new TasksOptions()), NullLogger<OutboxDispatcher>.Instance);
 

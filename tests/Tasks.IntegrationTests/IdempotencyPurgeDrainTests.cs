@@ -316,6 +316,7 @@ public sealed class IdempotencyPurgeDrainTests
             .AddInMemoryCollection(new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 [$"{TasksOptions.SectionName}:PollIntervalMilliseconds"] = "50",
+                [$"{TasksOptions.SectionName}:WorkerConnectionString"] = _fixture.WorkerConnectionString(database),
                 [$"{TasksOptions.SectionName}:BatchSize"] = "50",
                 [$"{TasksOptions.SectionName}:BackoffBaseSeconds"] = "1",
                 [$"{TasksOptions.SectionName}:BackoffMaxSeconds"] = "4",

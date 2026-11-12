@@ -333,6 +333,7 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
             // 10.3.1-T1.2: last, so the caller's additions see the host's final registrations
             // (the replaced NpgsqlDataSource included).
             _extraServices?.Invoke(services);
+            TaskWorkerTestServices.Configure(services, _connectionString);
         });
     }
 

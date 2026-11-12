@@ -26,6 +26,7 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
 
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+    private readonly string _taskWorkerPassword = "task-worker-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _operatorPassword = "operator-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _workerPassword = "worker-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
@@ -55,6 +56,8 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
     /// <summary>Connection string for the application role (used once logins are enabled).</summary>
     public string AppConnectionString(string database) => Build("evidgate_app", _appPassword, database);
 
+    public string WorkerConnectionString(string database) => Build("evidgate_worker", _taskWorkerPassword, database);
+
     /// <summary>Container name, for a test that drives a shell script through <c>docker exec</c>.</summary>
     public string ContainerName => _container.Name;
 
@@ -69,6 +72,8 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
 
     /// <summary>The sweep role's password.</summary>
     public string WorkerSchedPassword => _workerPassword;
+
+    public string WorkerPassword => _taskWorkerPassword;
 
     public async ValueTask InitializeAsync()
     {
@@ -118,6 +123,7 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
         await ExecuteAsync(connection, $"alter role evidgate_app login password '{_appPassword}'").ConfigureAwait(false);
         await ExecuteAsync(connection, $"alter role evidgate_operator login password '{_operatorPassword}'").ConfigureAwait(false);
         await ExecuteAsync(connection, $"alter role evidgate_worker_sched login password '{_workerPassword}'").ConfigureAwait(false);
+        await ExecuteAsync(connection, $"alter role evidgate_worker login password '{_taskWorkerPassword}'").ConfigureAwait(false);
     }
 
     /// <summary>Runs a scalar query as the superuser.</summary>

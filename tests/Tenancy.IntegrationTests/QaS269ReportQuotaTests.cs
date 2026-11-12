@@ -139,7 +139,11 @@ public sealed partial class EvidenceRawReportQuotaTests
         services.AddSingleton<NpgsqlDataSource>(_ => NpgsqlDataSource.Create(_fixture.AppConnectionString(world.Database)));
         services.AddLogging();
         services.AddEvidgateTenancy();
-        services.AddEvidgateTasks(new ConfigurationBuilder().Build());
+        services.AddEvidgateTasks(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                [$"{TasksOptions.SectionName}:WorkerConnectionString"] = _fixture.WorkerConnectionString(world.Database),
+            }).Build());
         services.AddSingleton<ITaskHandlerInvoker>(new TransactionlessTaskHandlerAdapter<ParseRawReportPayload>(CreateHandler(world)));
         return services.BuildServiceProvider();
     }

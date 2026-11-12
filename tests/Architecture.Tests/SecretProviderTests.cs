@@ -80,6 +80,7 @@ public class SecretProviderTests
     {
         SecretNames.All.ShouldContain(SecretNames.DatabaseConnectionString);
         SecretNames.All.ShouldContain(SecretNames.TasksSweepConnectionString);
+        SecretNames.All.ShouldContain(SecretNames.TasksWorkerConnectionString);
         SecretNames.All.ShouldContain(SecretNames.CiSigningKey);
         SecretNames.All.ShouldContain(SecretNames.CiPepper);
         SecretNames.All.ShouldContain(SecretNames.CiPreviousPepper);

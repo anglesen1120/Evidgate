@@ -1,4 +1,5 @@
 using System.Globalization;
+using Npgsql;
 using Evidgate.Worker;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -18,12 +19,14 @@ internal static class WorkerHostFactory
     public static HostApplicationBuilder Create(
         string connectionString,
         int healthPort,
-        CaptureLoggerProvider? capture = null)
+        CaptureLoggerProvider? capture = null,
+        string? workerConnectionString = null)
     {
         var builder = WorkerHost.CreateBuilder([]);
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["EVIDGATE:Database:ConnectionString"] = connectionString,
+            ["EVIDGATE:Tasks:WorkerConnectionString"] = workerConnectionString ?? WorkerConnection(connectionString),
             ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
             ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
             ["EVIDGATE:Worker:HealthPort"] = healthPort.ToString(CultureInfo.InvariantCulture),
@@ -43,6 +46,13 @@ internal static class WorkerHostFactory
         return builder;
     }
 
+    /// <summary>
+    /// The worker credential for a database string: the same coordinates as the caller's,
+    /// under the queue role. A test that boots the Worker over a dead or unmigrated
+    /// database still gets the shape the boot validator checks, without a second literal.
+    /// </summary>
+    internal static string WorkerConnection(string connectionString) =>
+        new NpgsqlConnectionStringBuilder(connectionString) { Username = "evidgate_worker" }.ConnectionString;
 }
 
 /// <summary>
@@ -63,9 +73,10 @@ internal sealed class RunningWorker : IAsyncDisposable
         string connectionString,
         int healthPort,
         CaptureLoggerProvider? capture = null,
+        string? workerConnectionString = null,
         CancellationToken cancellationToken = default)
     {
-        var host = WorkerHostFactory.Create(connectionString, healthPort, capture).Build();
+        var host = WorkerHostFactory.Create(connectionString, healthPort, capture, workerConnectionString).Build();
         try
         {
             await host.StartAsync(cancellationToken);

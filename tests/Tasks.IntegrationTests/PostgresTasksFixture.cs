@@ -25,6 +25,7 @@ public sealed class PostgresTasksFixture : IAsyncLifetime
 
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+    private readonly string _taskWorkerPassword = "task-worker-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _operatorPassword = "operator-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _workerSchedPassword = "sched-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
@@ -65,6 +66,7 @@ public sealed class PostgresTasksFixture : IAsyncLifetime
             RepoMigrationsPath,
             [
                 $"alter role evidgate_app login password '{_appPassword}'",
+                $"alter role evidgate_worker login password '{_taskWorkerPassword}'",
                 $"alter role evidgate_operator login password '{_operatorPassword}'",
                 $"alter role evidgate_worker_sched login password '{_workerSchedPassword}'",
             ]);
@@ -92,7 +94,15 @@ public sealed class PostgresTasksFixture : IAsyncLifetime
 
     public string AppConnectionString(string database) => Build("evidgate_app", _appPassword, database);
 
+    public string WorkerConnectionString(string database) => Build("evidgate_worker", _taskWorkerPassword, database);
+
     public string OperatorConnectionString(string database) => Build("evidgate_operator", _operatorPassword, database);
+
+    public NpgsqlDataSource OpenWorkerDataSource(string database, int maximumPoolSize = 1) =>
+        NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(WorkerConnectionString(database))
+        {
+            MaxPoolSize = maximumPoolSize,
+        }.ConnectionString);
 
     public string WorkerSchedConnectionString(string database) => Build("evidgate_worker_sched", _workerSchedPassword, database);
 

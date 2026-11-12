@@ -34,7 +34,7 @@ public sealed class RevokeDefinerContractTests : HarnessTest
     private static readonly string[] HelperNames = ["audit_append_user_event", "session_revoke_audit_append"];
 
     private static readonly string[] PlatformRoles =
-        ["evidgate_app", "evidgate_operator", "evidgate_worker_sched"];
+        ["evidgate_app", "evidgate_operator", "evidgate_worker", "evidgate_worker_sched"];
 
     /// <summary>Binds the test to the reset-based harness (container, migrations, Respawn).</summary>
     public RevokeDefinerContractTests(DatabaseFixture fixture)

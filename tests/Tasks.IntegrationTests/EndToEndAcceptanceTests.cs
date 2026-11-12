@@ -427,6 +427,7 @@ public sealed class EndToEndAcceptanceTests
                 [$"{TasksOptions.SectionName}:DispatchBatchSize"] = "50",
                 [$"{TasksOptions.SectionName}:DispatchDefaultQueue"] = Queue,
                 [$"{TasksOptions.SectionName}:SweepConnectionString"] = fixture.WorkerSchedConnectionString(database),
+                [$"{TasksOptions.SectionName}:WorkerConnectionString"] = fixture.WorkerConnectionString(database),
             };
 
             var collection = new ServiceCollection();
