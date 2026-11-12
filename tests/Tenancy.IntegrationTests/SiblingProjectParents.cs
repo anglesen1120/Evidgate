@@ -10,6 +10,18 @@ internal static class SiblingProjectParents
     /// <summary>The ids of the seeded parents.</summary>
     internal sealed record Ids(Guid SuiteRevision, Guid EnvironmentRevision, Guid Manifest);
 
+    /// <summary>Files an existing run under <paramref name="project"/> together with that project's own parents.</summary>
+    public static async Task MoveRunAsync(PostgresTenancyFixture fixture, string database, Guid org, Guid runId, Guid project)
+    {
+        var parents = await SeedAsync(fixture, database, org, project);
+
+        await fixture.ExecuteAsync(
+            database,
+            $"update public.run set project_id = '{project:D}', manifest_id = '{parents.Manifest:D}', "
+            + $"suite_revision_id = '{parents.SuiteRevision:D}', environment_revision_id = '{parents.EnvironmentRevision:D}' "
+            + $"where id = '{runId:D}'");
+    }
+
     public static async Task<Ids> SeedAsync(PostgresTenancyFixture fixture, string database, Guid org, Guid project)
     {
         var suite = Guid.CreateVersion7();
