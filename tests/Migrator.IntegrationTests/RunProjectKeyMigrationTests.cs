@@ -41,6 +41,8 @@ public sealed class RunProjectKeyMigrationTests
         var manifestA = Guid.CreateVersion7();
         var manifestB = Guid.CreateVersion7();
         var run = Guid.CreateVersion7();
+        var environmentB = Guid.CreateVersion7();
+        var environmentRevisionB = Guid.CreateVersion7();
         await ExecuteAsync(
             database,
             """
@@ -52,14 +54,17 @@ public sealed class RunProjectKeyMigrationTests
             insert into public.environment (id, org_id, project_id, environment_key, name) values (@env, @org, @a, 'staging', 'Staging');
             insert into public.environment_revision (id, org_id, project_id, environment_id, revision_no, base_urls, dependency_versions, revision_hash, created_by)
               values (@er, @org, @a, @env, 1, '{}', '{}', 'sha256:' || repeat('c', 64), 'probe');
+            insert into public.environment (id, org_id, project_id, environment_key, name) values (@envb, @org, @b, 'staging', 'Staging');
+            insert into public.environment_revision (id, org_id, project_id, environment_id, revision_no, base_urls, dependency_versions, revision_hash, created_by)
+              values (@erb, @org, @b, @envb, 1, '{}', '{}', 'sha256:' || repeat('c', 64), 'probe');
             insert into public.manifest (id, org_id, project_id, manifest_hash, schema_version, suite_revision_id, environment_revision_id, shard_plan, matrix, env_needs, planned_count, document, verified_by)
               values (@ma, @org, @a, 'sha256:' || repeat('d', 64), 1, @sr, @er, '{}', '{}', '{}', 0, '{}', 'probe'),
-                     (@mb, @org, @b, 'sha256:' || repeat('e', 64), 1, @sr, @er, '{}', '{}', '{}', 0, '{}', 'probe');
+                     (@mb, @org, @b, 'sha256:' || repeat('e', 64), 1, @sr, @erb, '{}', '{}', '{}', 0, '{}', 'probe');
             insert into public.run (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id, collection_deadline_at, late_window_minutes)
               values (@run, @org, @a, @mb, @sr, @er, now() + interval '2 hours', 1440);
             """,
             [("org", org), ("a", projectA), ("b", projectB), ("suite", suite), ("sr", suiteRevision), ("env", environment),
-             ("er", environmentRevision), ("ma", manifestA), ("mb", manifestB), ("run", run)],
+             ("er", environmentRevision), ("envb", environmentB), ("erb", environmentRevisionB), ("ma", manifestA), ("mb", manifestB), ("run", run)],
             token);
 
         migrations.CopyReal(KeyFile);
