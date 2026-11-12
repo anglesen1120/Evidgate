@@ -606,3 +606,9 @@ Closed carried row, verbatim (closed by #811, c932d98c; decision D-S401-A: the 4
 STATUS §5 row replaced text (04.1.2-T3):
 
 | 04.1.2-T3 | M | OpenAPI + integration tests for both stories. Partial: events operation documented (`contracts/openapi.yaml:1009,6848,7182`) and the 04.1.1+04.1.2 suite is on develop; the run-create 409 `producer_slots_conflict` still needs documenting. | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes — remainder only |
+
+## Moved from status-carried.md by S405 (2026-11-13)
+
+| check-no-secret-literals hits in S398 files (S403) | `scripts/check-no-secret-literals.sh` reports 3 connstr-password hits (`tests/Hosts.IntegrationTests/ManagementListenerProcessTests.cs:19`, `ManagementSurfaceTests.cs:14`, `RequestBodyLimitTests.cs:17`), so the check-env-matrix stage exits 1 on the wave head; the matrix and inventory sub-check pass. Medium. | coordinator |
+
+closed by #818 (4f8a2362)
