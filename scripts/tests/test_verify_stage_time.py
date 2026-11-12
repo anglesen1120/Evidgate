@@ -3,8 +3,12 @@
 The script is sourced with `run_stage` replaced by a stub, so the cases drive the
 real `main` and `run_selected_stages` without building or testing anything.
 """
+import os
+import signal
 import subprocess
+import tempfile
 import textwrap
+import time
 import unittest
 from pathlib import Path
 
@@ -68,6 +72,28 @@ class StageTimeTests(unittest.TestCase):
         )
         self.assertNotEqual(done.returncode, 0)
         self.assertNotIn("after false", done.stdout)
+
+    def test_a_term_sent_only_to_the_gate_process_reaches_the_stage_cleanup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            script = DRIVER.replace(
+                'format) echo "boom ran"; exit 3 ;;',
+                'format) trap \'touch "$D/cleaned"; exit 143\' TERM; touch "$D/started"; '
+                'sleep 30 & wait $! ;;',
+            )
+            proc = subprocess.Popen(
+                ["bash", "-c", script, "driver", str(VERIFY), "--stage", "format"],
+                env={**os.environ, "D": tmp},
+                cwd=ROOT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            for _ in range(100):
+                if (Path(tmp) / "started").exists():
+                    break
+                time.sleep(0.1)
+            proc.send_signal(signal.SIGTERM)
+            self.assertEqual(proc.wait(timeout=20), 143)
+            self.assertTrue((Path(tmp) / "cleaned").exists())
 
 
 if __name__ == "__main__":

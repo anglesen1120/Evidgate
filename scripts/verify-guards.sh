@@ -417,17 +417,23 @@ print_stage_summary() {
 # `run_selected_stages`: runs `selected` in order and stops at the first failure,
 # timing each. The summary is printed on both paths.
 run_selected_stages() {
-  local name rc t0
+  local name rc t0 child
   for name in "${selected[@]}"; do
     t0=$SECONDS
     # A subshell, so errexit stays armed inside the stage while its status is
     # still caught here, and a stage's own `exit` or trap cannot skip the table.
+    # It runs async so a TERM or INT sent to this process alone reaches the stage:
+    # its cleanup traps (test processes, containers, log dir) live in the subshell.
     set +e
     (
       set -e
       run_stage "$name"
-    )
+    ) &
+    child=$!
+    trap 'kill -TERM "$child" 2>/dev/null; wait "$child" 2>/dev/null; exit 143' INT TERM
+    wait "$child"
     rc=$?
+    trap - INT TERM
     set -e
     record_stage_time "$name" "$rc" "$((SECONDS - t0))"
     if [[ "$rc" -ne 0 ]]; then

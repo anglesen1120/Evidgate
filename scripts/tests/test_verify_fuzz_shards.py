@@ -56,7 +56,8 @@ def run_stage(**env):
             capture_output=True,
             text=True,
         )
-        calls = (tmp_path / "state" / "calls").read_text().splitlines()
+        log = tmp_path / "state" / "calls"
+        calls = log.read_text().splitlines() if log.exists() else []
         return done, [c.split() for c in calls]
 
 
@@ -122,6 +123,45 @@ def run_stage_expect_refusal(value):
         capture_output=True,
         text=True,
     )
+
+    def test_a_seed_above_int64_is_passed_verbatim_to_a_single_shard(self):
+        done, calls = run_stage(EVIDGATE_FUZZ_SHARDS="1", EVIDGATE_FUZZ_SEED="18446744073709551615")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(calls[0][0], "18446744073709551615")
+
+    def test_a_seed_that_is_not_a_decimal_is_refused_before_any_run(self):
+        for seed in ("abc", "a[$(touch pwned)]", "1 2"):
+            done, calls = run_stage(EVIDGATE_FUZZ_SHARDS="2", EVIDGATE_FUZZ_SEED=seed)
+            self.assertEqual(done.returncode, 2, seed)
+            self.assertEqual(calls, [], seed)
+
+    def test_a_multi_shard_seed_that_bash_cannot_add_to_is_refused(self):
+        done, calls = run_stage(EVIDGATE_FUZZ_SHARDS="2", EVIDGATE_FUZZ_SEED="18446744073709551615")
+        self.assertEqual(done.returncode, 2)
+        self.assertEqual(calls, [])
+
+    def test_leading_zero_budget_and_seed_are_decimal_not_octal(self):
+        done, calls = run_stage(
+            EVIDGATE_FUZZ_SHARDS="4", EVIDGATE_FUZZ_BUDGET_SECONDS="0600", EVIDGATE_FUZZ_SEED="0008"
+        )
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual({c[1] for c in calls}, {"150"})
+        self.assertIn("11", [c[0] for c in calls])
+
+    def test_a_zero_budget_is_refused(self):
+        done, calls = run_stage(EVIDGATE_FUZZ_BUDGET_SECONDS="0")
+        self.assertEqual(done.returncode, 2)
+        self.assertEqual(calls, [])
+
+    def test_a_directory_the_stage_did_not_create_is_never_emptied(self):
+        with tempfile.TemporaryDirectory() as other:
+            keep = Path(other) / "shard-0"
+            keep.mkdir()
+            (keep / "precious").write_text("x")
+            done, calls = run_stage(EVIDGATE_FUZZ_FINDINGS_DIR=other)
+            self.assertEqual(done.returncode, 2)
+            self.assertEqual(calls, [])
+            self.assertTrue((keep / "precious").exists())
 
 
 if __name__ == "__main__":
