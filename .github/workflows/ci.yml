@@ -147,6 +147,29 @@ jobs:
           --stage build
           --stage fixtures-hostile
 
+  # The parser child's no-egress test skips on a networked runner, so it is its own job: the stage runs the class
+  # from the Release output inside a `--network none` container and fails if it reports skipped.
+  parser-no-egress:
+    name: 'verify (parser no egress)'
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+          cache: true
+          cache-dependency-path: '**/packages.lock.json'
+      - name: 'Restore, build, parser no-egress — verify.sh stages in order'
+        run: >-
+          ./scripts/verify.sh
+          --stage restore
+          --stage build
+          --stage parser-no-egress
+
   # 06.3.2-T2.1 (AC4): the nightly fuzz job — the seeded-mutation harness over the 06.3.1 parser profile, seeded
   # from fixtures/hostile/, on the ten-minute budget the `fixtures-fuzz` stage sets. It runs on the nightly
   # schedule and on demand, never on a PR, so the extra minutes never land on the merge path. `--stage build`
