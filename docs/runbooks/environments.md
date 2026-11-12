@@ -257,14 +257,15 @@ an existing value and never prints one.
 
 |Name|Where it comes from|Rotate or recover|
 |---|---|---|
-|`EVIDGATE_DB_SUPERUSER_PASSWORD`, `EVIDGATE_APP_PASSWORD`, `EVIDGATE_OWNER_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD`, `EVIDGATE_PLATFORM_OPERATOR_PASSWORD`, `EVIDGATE_WORKER_PASSWORD`, `EVIDGATE_WORKER_SCHED_PASSWORD`|random hex generated into `.env.dev`; each role password is applied by the database bootstrap|delete `.env.dev` and run `scripts/dev/up.sh --reset` (the volume is recreated, so the old passwords die with it)|
-|`EVIDGATE_S3_ACCESS_KEY`, `EVIDGATE_S3_SECRET_KEY`|committed local-only values in `.env.dev.template`|edit the template and the identity file together, then `--reset`|
+|`EVIDGATE_DB_SUPERUSER_PASSWORD`, `EVIDGATE_APP_PASSWORD`, `EVIDGATE_OWNER_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD`, `EVIDGATE_PLATFORM_OPERATOR_PASSWORD`, `EVIDGATE_WORKER_PASSWORD`, `EVIDGATE_WORKER_SCHED_PASSWORD`|random hex generated into `.env.dev`; each role password is applied by the database bootstrap|delete `.env.dev` and run `scripts/dev/up.sh --reset` (new passwords are generated and the volume is recreated, so the old ones die with it)|
+|`EVIDGATE_S3_ACCESS_KEY`, `EVIDGATE_S3_SECRET_KEY`|committed local-only values in `.env.dev.template`|edit the template and the identity file together, delete `.env.dev` so it is regenerated from the template, then `up.sh --reset`; `up.sh` refuses to start while `.env.dev` and the identity file disagree|
 |`EVIDGATE_SEAWEEDFS_S3_CONFIG`|exported by `up.sh` from the committed identity file|not a stored value; nothing to rotate|
-|`EVIDGATE_DEV_TOKEN`|minted and printed once by the dev seed command, never stored|mint a new one by running the seed command again|
-|`EVIDGATE__DEVLOGIN__SECRET`|opt-in: a developer sets it to enable the dev session route|unset it to disable the route; choose a new value to rotate|
+|`EVIDGATE_DEV_TOKEN`|minted and printed once by the dev seed command, never stored|a rerun mints nothing while a live dev token exists; run `scripts/dev/down.sh && scripts/dev/up.sh --reset --with-token` (destroys the dev data) to get a new one|
+|`EVIDGATE__DEVLOGIN__SECRET`|opt-in: a developer sets it to enable the dev session route|change or unset the value in `.env.dev` and restart the stack|
 
-A leaked dev-stack value needs no rotation on a shared system because none is shared; if one was pasted
-into an issue or log, run `--reset` and treat any other use of the same string as exposed.
+`--reset` deletes the volumes but keeps `.env.dev`, so on its own it does not replace a generated password.
+If a dev-stack value was pasted into an issue or log, delete `.env.dev`, run `scripts/dev/up.sh --reset` and
+treat any other use of the same string as exposed.
 
 ### Adding a key
 

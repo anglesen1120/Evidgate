@@ -55,14 +55,14 @@ function headingSlugs(text) {
   const slugs = new Set();
   const counts = new Map();
   let fence = null;
-  for (const line of text.split('\n')) {
+  for (const line of text.split(/\r\n|\r|\n/)) {
     const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
     if (fence !== null) {
       if (
         marker &&
         marker[1][0] === fence.char &&
         marker[1].length >= fence.length &&
-        marker[2].trim() === ''
+        /^[ \t]*$/.test(marker[2])
       ) {
         fence = null;
       }
@@ -424,6 +424,14 @@ export function selfTestSecretsInventory(root, now = new Date()) {
       'runbook-anchor-hidden-by-longer-fence',
       (c) => {
         useFixture(c, '````\n```\n## Hidden\n````\n', 'hidden');
+      },
+      'runbook heading #hidden not found',
+    ],
+    [
+      'runbook-anchor-hidden-by-cr-fence-or-nbsp-closer',
+      (c) => {
+        useFixture(c, '~~~\rtext\n## Hidden\n~~~\n```\n```\u00a0\n## Nbsp\n', 'hidden');
+        c.inventory.secrets[1].runbook = 'docs/runbooks/fixture.md#nbsp';
       },
       'runbook heading #hidden not found',
     ],
