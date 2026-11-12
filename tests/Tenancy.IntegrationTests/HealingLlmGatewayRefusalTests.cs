@@ -101,7 +101,7 @@ public sealed class HealingLlmGatewayRefusalTests
             .Returns(async _ =>
             {
                 await cancel.CancelAsync();
-                return "2026-11-13";
+                return (string?)"2026-11-13";
             });
         var provider = new SpyProvider();
         var gateway = Gateway(provider, db, scopes, HealingProviderKind.Http);
