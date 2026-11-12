@@ -47,7 +47,7 @@ public sealed class HealingLlmBudgetResetTests
 
         await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(dedicated.Name));
         await connection.OpenAsync(TestContext.Current.CancellationToken);
-        await using var command = new NpgsqlCommand($"select public.roll_healing_llm_budget({Today})", connection);
+        await using var command = new NpgsqlCommand($"select evidgate.roll_healing_llm_budget({Today})", connection);
 
         var failure = await Should.ThrowAsync<PostgresException>(
             () => command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
@@ -163,7 +163,7 @@ public sealed class HealingLlmBudgetResetTests
         await using var connection = await _fixture.OpenSuperuserAsync(database);
         await ExecuteAsync(connection, "set role evidgate_worker_sched");
 
-        await using var command = new NpgsqlCommand($"select public.roll_healing_llm_budget({Today})", connection);
+        await using var command = new NpgsqlCommand($"select evidgate.roll_healing_llm_budget({Today})", connection);
         return Convert.ToInt32(
             await command.ExecuteScalarAsync(TestContext.Current.CancellationToken),
             System.Globalization.CultureInfo.InvariantCulture);

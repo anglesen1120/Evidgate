@@ -177,7 +177,9 @@ revision_no)`, the closed `missing[]` code CHECK of 00 §8.5 including `setup_er
   `webhook_delivery` (deduped by the global `(provider, delivery_id)` key) and `catalog_sync`
   (idempotent by `(binding_id, commit_sha)`, `queued -> running -> done | failed`, `failed -> queued`
   replay, terminal `done` frozen), with its list index and column-scoped app grants (notes at the end
-  of this file);
+  of this file); and `0107` is the daily healing LLM budget roll — `evidgate.roll_healing_llm_budget(date)`
+  opens each project's row for the new UTC day with the earlier caps and zero usage, executable by
+  `evidgate_worker_sched` alone (notes at the end of this file);
   the next free number is one above the highest file in this folder (`ls migrations/*.sql`), and this README does not
   track it; a gap means two branches invented the same sequence and neither history can be trusted.
 - One file runs in one transaction (`WithTransactionPerScript`), so PostgreSQL
@@ -1183,3 +1185,10 @@ target)` and `session_revoke_audit_append(org, actor, object_type, object_id, me
 - State columns carry guards per `D2`: `git_repo_binding_guard` moves `sync_state` only between `active` and `disabled` (installation events) and freezes the repository identity and the secret reference after the write; `catalog_sync_guard` allows `queued -> running -> done | failed` and `failed -> queued` (dead-letter replay) and refuses any change to a `done` row; `webhook_delivery_guard` allows `accepted -> duplicate | processed` once and freezes the payload identity. All three raise `23514`.
 - Grants follow `0104`'s split: `evidgate_app` holds SELECT, INSERT and a column-scoped UPDATE — the binding's `sync_state`, `head_commit`, `last_synced_commit`, `default_branch`, `updated_at` and `version`; the delivery's `state`; the sync's `state`, `counts`, `error`, `started_at` and `finished_at` — and no DELETE. `evidgate_worker` and `evidgate_worker_sched` hold nothing: the queue machinery never reads tenant catalog data, and the sync handler runs inside a tenant transaction as `evidgate_app`. `evidgate_operator` keeps its `0001` SELECT and has no policy, the same posture as every other business table.
 - Locks: the tables are new, so `create table`, the triggers and the policies lock nothing existing; `GRANT`/`REVOKE` take ACCESS SHARE plus a catalogue ACL update, and `lock_timeout = 5s` bounds every wait. The resolver `evidgate_resolve.github_repo` is not part of this file (its own migration). Rollback: drop the three tables and the three guard functions; nothing existing is altered.
+
+## Notes on the healing LLM budget roll (`0107`)
+
+- `0107` adds one function and no table. `evidgate.roll_healing_llm_budget(p_day date)` inserts, per project, a row for the day with the caps of the latest earlier row and zero usage, and answers the number of rows it opened. It never updates a row: a call that reserved on an earlier day settles on that day's row (`period_start` is part of the unique key and of the settle statement), so a roll under a running call cannot erase or double-release its hold. `p_day` is clamped to the server's UTC date; a rerun opens nothing (`on conflict do nothing`).
+- `SECURITY DEFINER`, owner-owned, `search_path = ''`; the owner reaches the tenant table through `0054`'s `_owner_backfill` policy. `EXECUTE` is `evidgate_worker_sched`'s alone and PUBLIC holds none. Each call appends one `public.platform_sweep_audit` row (action `healing.llm_budget_reset`, the opened count as `removed`), because the roll spans every org.
+- Locks: `create or replace function` and `GRANT`/`REVOKE` only, under `lock_timeout = '5s'`; the function itself takes row-level inserts on `healing_llm_budget` and an index probe per project. It scans the table once per fire (`distinct on` over the unique key's index). Budget rows now accrue one per project per day; their retention is not part of this file.
+- Deploy: migrator first, then the Worker's `llm-budget-reset` schedule (daily 00:05 UTC) calls it; until the schedule fires, a new day's calls are refused for want of a row, which is the fail-closed direction.

@@ -33,7 +33,7 @@ internal static class HealingLlmBudgetResetSweeps
 
 /// <summary>
 /// Opens each project's budget row for the new UTC day through the owner function
-/// <c>public.roll_healing_llm_budget</c>, which copies the caps from the latest earlier row and starts the counters at
+/// <c>evidgate.roll_healing_llm_budget</c>, which copies the caps from the latest earlier row and starts the counters at
 /// zero.
 /// </summary>
 /// <remarks>
@@ -75,7 +75,7 @@ internal sealed partial class HealingLlmBudgetResetTaskHandler(
 
         await using var connection = await sweep.OpenAsync(cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
-        command.CommandText = "select public.roll_healing_llm_budget(@day)";
+        command.CommandText = "select evidgate.roll_healing_llm_budget(@day)";
         command.Parameters.AddWithValue("day", day);
 
         var opened = Convert.ToInt32(
@@ -88,6 +88,6 @@ internal sealed partial class HealingLlmBudgetResetTaskHandler(
     [LoggerMessage(
         EventId = 8612,
         Level = LogLevel.Information,
-        Message = "Audited sweep public.roll_healing_llm_budget as evidgate_worker_sched opened {Opened} project budget rows for {Day}")]
+        Message = "Audited sweep evidgate.roll_healing_llm_budget as evidgate_worker_sched opened {Opened} project budget rows for {Day}")]
     private partial void LogRolled(int opened, DateOnly day);
 }
