@@ -116,14 +116,16 @@ public sealed class RunProjectKeyTests : IClassFixture<TenancyHostPool>
     public async Task Run_Project_Of_Another_Org_Is_Refused()
     {
         await using var world = await StartAsync();
-        var otherOrg = await CreateOrgAsync(world.Client, Guid.CreateVersion7(), Unique.Slug("beta"));
-        var otherProject = await CreateProjectAsync(world.Client, Guid.CreateVersion7(), otherOrg, "other");
+        var otherUser = Guid.CreateVersion7();
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("beta"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other");
+        var theirs = await SeedRefsAsync(world.Database, otherOrg, otherProject);
 
-        // Filed under this org (RLS passes) but naming another org's project: only run_project_fk refuses it.
-        var error = await RefusedAsync(world.Org, world.Database, InsertRunSql(Guid.CreateVersion7(), world.Org, otherProject, world.A, null));
+        // Filed under this org (RLS passes) naming another org's project, with that project's own parents: the database refuses it, and the BEFORE trigger answers first.
+        var error = await RefusedAsync(world.Org, world.Database, InsertRunSql(Guid.CreateVersion7(), world.Org, otherProject, theirs, null));
 
         error.SqlState.ShouldBe("23503");
-        error.ConstraintName.ShouldBe("run_project_fk");
+        error.ConstraintName.ShouldBe("run_suite_revision_project_guard", "the BEFORE trigger fires ahead of the AFTER foreign keys");
     }
 
     [Theory]
@@ -153,8 +155,9 @@ public sealed class RunProjectKeyTests : IClassFixture<TenancyHostPool>
     public async Task Suite_Revision_Of_Another_Org_Is_Refused()
     {
         await using var world = await StartAsync();
-        var otherOrg = await CreateOrgAsync(world.Client, Guid.CreateVersion7(), Unique.Slug("gamma"));
-        var otherProject = await CreateProjectAsync(world.Client, Guid.CreateVersion7(), otherOrg, "other");
+        var otherUser = Guid.CreateVersion7();
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("gamma"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other");
         var theirs = await SeedRefsAsync(world.Database, otherOrg, otherProject);
 
         var error = await RefusedAsync(
@@ -182,5 +185,54 @@ public sealed class RunProjectKeyTests : IClassFixture<TenancyHostPool>
 
         error.SqlState.ShouldBe("23503");
         error.ConstraintName.ShouldBe("run_suite_revision_project_guard");
+    }
+
+    [Theory]
+    [InlineData("project_id")]
+    [InlineData("suite_revision_id")]
+    [InlineData("manifest_id")]
+    [InlineData("environment_revision_id")]
+    [InlineData("policy_revision_id")]
+    public async Task Update_Of_A_Reference_To_Another_Project_Is_Refused_For_The_Owner_Too(string column)
+    {
+        await using var world = await StartAsync();
+        var runId = Guid.CreateVersion7();
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.ExecuteAsync(InsertRunSql(runId, world.Org, world.ProjectA, world.A, world.A.PolicyRevision))).ShouldBe(1);
+            await scope.CommitAsync();
+        }
+
+        var bad = column switch
+        {
+            "project_id" => world.ProjectB,
+            "suite_revision_id" => world.B.SuiteRevision,
+            "manifest_id" => world.B.Manifest,
+            "environment_revision_id" => world.B.EnvironmentRevision,
+            _ => world.B.PolicyRevision,
+        };
+        await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
+        var error = await owner.CaptureErrorAsync($"update public.run set {column} = '{bad}' where id = '{runId}'");
+
+        error.SqlState.ShouldBe("23503");
+    }
+
+    [Theory]
+    [InlineData("environment", "run_environment_revision_fk")]
+    [InlineData("policy", "run_policy_revision_fk")]
+    public async Task Run_Reference_From_Another_Org_Is_Refused(string which, string constraint)
+    {
+        await using var world = await StartAsync();
+        var otherUser = Guid.CreateVersion7();
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("foreign"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other");
+        var theirs = await SeedRefsAsync(world.Database, otherOrg, otherProject);
+        var refs = which == "environment" ? world.A with { EnvironmentRevision = theirs.EnvironmentRevision } : world.A;
+        var policy = which == "policy" ? theirs.PolicyRevision : world.A.PolicyRevision;
+
+        var error = await RefusedAsync(world.Org, world.Database, InsertRunSql(Guid.CreateVersion7(), world.Org, world.ProjectA, refs, policy));
+
+        error.SqlState.ShouldBe("23503");
+        error.ConstraintName.ShouldBe(constraint);
     }
 }

@@ -35,15 +35,25 @@
 --   * `add constraint ... foreign key ... not valid`: SHARE ROW EXCLUSIVE on `run` and the referenced table, no scan;
 --   * `validate constraint`: SHARE UPDATE EXCLUSIVE on `run`, ROW SHARE on the referenced table; one indexed pass
 --     over `run` (the pre-check above already proved it passes). `planned_execution`, the large table, is untouched;
+--   * `lock table public.run in share row exclusive mode` before the pre-check: reads continue, run writes wait;
 --   * `create trigger`: SHARE ROW EXCLUSIVE on `run`.
 -- The `run` table holds one row per run (not per execution), so the pass is short; the first deploy window is the
 -- only exposure.
+--
+-- ACCEPTED RESIDUALS: the table owner can DROP or DISABLE the trigger, and a superuser can set
+-- `session_replication_role = replica`, which also skips the foreign-key triggers; the app role can do neither. All
+-- locks above are held to commit, so VALIDATE does not shorten them; the pre-check makes it a single pass over `run`.
 --
 -- WRITERS: every `run` insert (`OrchestratorSql.InsertRun`, the rerun path) takes the manifest, suite revision,
 -- environment revision and policy revision from rows it has just resolved under the same project, so none of them
 -- inserts a row this file refuses. Deploy: any order. Rollback: drop the four keys, the trigger and its function, and
 -- re-add the old 2-column keys; no data is transformed.
 set local lock_timeout = '5s';
+
+-- Taken before the pre-check and held to commit: no run is written or moved between the check and the keys and trigger
+-- below, so a row that passes the check cannot be changed to violate a rule the trigger (which does not re-check old
+-- rows) would then miss. Reads continue.
+lock table public.run in share row exclusive mode;
 
 do $$
 declare
@@ -108,6 +118,7 @@ alter table public.run drop constraint if exists run_manifest_fk;
 alter table public.run drop constraint if exists run_environment_revision_fk;
 alter table public.run drop constraint if exists run_policy_revision_fk;
 
+alter table public.run drop constraint if exists run_project_fk;
 alter table public.run add constraint run_project_fk
   foreign key (org_id, project_id) references public.project (org_id, id) not valid;
 alter table public.run add constraint run_manifest_fk

@@ -84,6 +84,9 @@ public sealed class RunProjectKeyMigrationTests
             token)).ShouldBe(4);
         (await ScalarAsync(database, "select count(*) from pg_trigger where tgname = 'run_suite_revision_project_guard'", [], token))
             .ShouldBe(1);
+
+        // Raw re-execution of the file is a no-op: every statement is guarded or drops before it adds.
+        await ExecuteAsync(database, await File.ReadAllTextAsync(Path.Combine(migrations.Path, KeyFile), token), [], token);
     }
 
     private async Task ExecuteAsync(string database, string sql, (string Name, object Value)[] parameters, CancellationToken token)
