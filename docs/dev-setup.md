@@ -28,7 +28,7 @@ everything else, including the data in the volumes, is identical.
 From a clean checkout it does, in order:
 
 1. runs `scripts/env/secret-placeholders.mjs`, which derives every dev secret from `infra/secrets-inventory.json`: it creates `.env.dev` from [`.env.dev.template`](../.env.dev.template) on first run (mode 600), fills the role passwords, the CI and session/invite peppers and the CI signing key with fresh random values, and on later runs adds only the keys an older `.env.dev` lacks (an existing value is never changed, no value is printed);
-   `--env staging|prod` writes empty named entries for the secret store to `.secrets/<env>.placeholders.env` (git-ignored);
+   `--env staging|prod` writes empty named entries for the secret store to `.env.<env>.secrets` (git-ignored, kept out of the image build contexts by the `.env*` ignore rule);
 2. `docker compose -f infra/compose.dev.yml up -d --wait` — PostgreSQL 18 and
    SeaweedFS, both digest-pinned, healthy before anything else runs (no sleeps);
    `up.sh` refuses first when another process already holds a port the stack must

@@ -6,7 +6,7 @@
 //                       fresh boot: copies .env.dev.template when the file is missing, resolves
 //                       its __NAME__ tokens, then appends every key the rules can generate and
 //                       the file still lacks. An existing value is never changed.
-//   staging | prod      writes a git-ignored file of named, empty-valued entries (one per secret
+//   staging | prod      writes a git-ignored (.env.*) file of named, empty-valued entries (one per secret
 //                       the matrix sources from the secret store) for the operator to fill in
 //                       the store; an existing entry, empty or not, is kept as it is.
 //
@@ -24,7 +24,16 @@
 //          [--file <path>] [--template <path>]
 
 import { randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -86,22 +95,57 @@ const hex = () => randomBytes(24).toString('hex');
 const base64 = () => randomBytes(32).toString('base64');
 
 function lineFor(name) {
-  return new RegExp(`^(?:export[ \\t]+)?${name}=(.*)$`, 'm');
+  return new RegExp(`^[ \\t]*(?:export[ \\t]+)?${name}=(.*)$`, 'gm');
+}
+
+// The last assignment wins when the file is sourced, so it is the one read and replaced.
+function lastMatch(content, name) {
+  return [...content.matchAll(lineFor(name))].at(-1);
 }
 
 function valueOf(content, name) {
-  const match = lineFor(name).exec(content);
+  const match = lastMatch(content, name);
   if (!match) return undefined;
   return match[1].trim().replace(/^(['"])(.*)\1$/, '$2');
 }
 
-// Writes via a mode-600 temp file and rename, so a crash never leaves a half file.
+// A value inside an Npgsql connection string, quoted when it holds a separator, a quote or
+// whitespace; the whole string is then single-quoted for the shell.
+function dsnValue(value) {
+  return /[;"'\s]/.test(value) || value === '' ? `"${value.replaceAll('"', '""')}"` : value;
+}
+
+const shellSingleQuoted = (value) => `'${value.replaceAll("'", "'\\''")}'`;
+
+// A mode-600 temp file with an unpredictable name, then rename: a crash never leaves a half
+// file, and a leftover temp file is removed on failure.
 function writePrivate(path, content) {
   mkdirSync(dirname(path), { recursive: true });
-  const temp = `${path}.${process.pid}.tmp`;
-  writeFileSync(temp, content, { mode: 0o600 });
-  chmodSync(temp, 0o600);
-  renameSync(temp, path);
+  if (existsSync(path) && lstatSync(path).isSymbolicLink())
+    fail(`${path} is a symlink; refusing to replace it`);
+  const temp = `${path}.${randomBytes(6).toString('hex')}.tmp`;
+  try {
+    writeFileSync(temp, content, { mode: 0o600, flag: 'wx' });
+    chmodSync(temp, 0o600);
+    renameSync(temp, path);
+  } catch (error) {
+    rmSync(temp, { force: true });
+    throw error;
+  }
+}
+
+// One run at a time per target: two concurrent runs would each generate and overwrite.
+function withLock(path, action) {
+  const lock = `${path}.lock`;
+  mkdirSync(dirname(path), { recursive: true });
+  try {
+    mkdirSync(lock);
+  } catch {
+    fail(`${lock} exists: another run is in progress (remove the directory if none is)`);
+  }
+  // fail() exits the process, so the lock is released on exit rather than in a finally.
+  process.on('exit', () => rmSync(lock, { recursive: true, force: true }));
+  action();
 }
 
 function generateDev(root, rules, file, template) {
@@ -131,8 +175,9 @@ function generateDev(root, rules, file, template) {
   };
   const append = (name, value) => {
     const line = `${name}=${value}`;
-    content = lineFor(name).test(content)
-      ? content.replace(lineFor(name), () => line)
+    const last = lastMatch(content, name);
+    content = last
+      ? `${content.slice(0, last.index)}${line}${content.slice(last.index + last[0].length)}`
       : `${content.replace(/\n*$/, '\n')}${line}\n`;
     written.push(name);
   };
@@ -142,6 +187,7 @@ function generateDev(root, rules, file, template) {
     else if (rule.kind === 'random-base64' && missing(rule.name)) append(rule.name, base64());
   }
   const port = valueOf(content, 'EVIDGATE_DB_PORT') || '5432';
+  if (!/^\d{1,5}$/.test(port)) fail('EVIDGATE_DB_PORT is not a port number');
   for (const rule of rules) {
     if (rule.kind !== 'connection-string' || !missing(rule.name)) continue;
     const owner = rules.find((r) => r.kind === 'random-hex' && r.role === rule.role);
@@ -152,7 +198,17 @@ function generateDev(root, rules, file, template) {
       ['Username', rule.role],
       ['Password', valueOf(content, owner.name)],
     ];
-    append(rule.name, `'${pairs.map(([key, value]) => `${key}=${value}`).join(';')}'`);
+    append(
+      rule.name,
+      shellSingleQuoted(pairs.map(([key, value]) => `${key}=${dsnValue(value)}`).join(';')),
+    );
+  }
+  // The committed local-only identity: an older file that lacks it takes the template's value.
+  const templateContent = existsSync(template) ? readFileSync(template, 'utf8') : '';
+  for (const rule of rules) {
+    const committed = valueOf(templateContent, rule.name);
+    if (rule.kind === 'template-provided' && missing(rule.name) && committed)
+      append(rule.name, committed);
   }
   const absent = rules
     .filter((r) => r.kind === 'template-provided' && missing(r.name))
@@ -165,6 +221,7 @@ function generateDev(root, rules, file, template) {
 
   const unique = [...new Set(written)];
   if (!existed || unique.length > 0) writePrivate(file, content);
+  else chmodSync(file, 0o600);
   process.stdout.write(
     unique.length === 0
       ? `secret-placeholders: dev ${file}: nothing to add\n`
@@ -199,6 +256,7 @@ function generateRemote(root, rules, env, file) {
     added.push(rule.name);
   }
   if (!existing || added.length > 0) writePrivate(file, content);
+  else chmodSync(file, 0o600);
   process.stdout.write(
     added.length === 0
       ? `secret-placeholders: ${env} ${file}: nothing to add\n`
@@ -209,17 +267,11 @@ function generateRemote(root, rules, env, file) {
 const args = parseArgs(process.argv.slice(2));
 const rules = loadRules(args.root);
 if (args.env === 'dev') {
-  generateDev(
-    args.root,
-    rules,
-    args.file ?? join(args.root, '.env.dev'),
-    args.template ?? join(args.root, '.env.dev.template'),
+  const file = args.file ?? join(args.root, '.env.dev');
+  withLock(file, () =>
+    generateDev(args.root, rules, file, args.template ?? join(args.root, '.env.dev.template')),
   );
 } else {
-  generateRemote(
-    args.root,
-    rules,
-    args.env,
-    args.file ?? join(args.root, '.secrets', `${args.env}.placeholders.env`),
-  );
+  const file = args.file ?? join(args.root, `.env.${args.env}.secrets`);
+  withLock(file, () => generateRemote(args.root, rules, args.env, file));
 }

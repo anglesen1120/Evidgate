@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using System.Text.Json.Nodes;
 using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
@@ -151,14 +152,13 @@ public sealed class SecretPlaceholderGeneratorTests : IDisposable
         }
 
         File.Exists(EnvFile).ShouldBeFalse();
-        Directory.Exists(Path.Combine(_root, ".secrets")).ShouldBeFalse();
+        File.Exists(Path.Combine(_root, ".env.staging.secrets")).ShouldBeFalse();
     }
 
     [Fact]
     public async Task Staging_WritesEmptyNamedEntries_KeepsExistingOnes_AndRerunsClean()
     {
-        var file = Path.Combine(_root, ".secrets", "staging.placeholders.env");
-        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        var file = Path.Combine(_root, ".env.staging.secrets");
         await File.WriteAllTextAsync(file, "EVIDGATE__CI__PEPPER=filled-in-the-store\n", TestContext.Current.CancellationToken);
 
         (await RunAsync("staging")).ExitCode.ShouldBe(0);
@@ -171,6 +171,82 @@ public sealed class SecretPlaceholderGeneratorTests : IDisposable
 
         (await RunAsync("staging")).Output.ShouldContain("nothing to add");
         (await File.ReadAllBytesAsync(file, TestContext.Current.CancellationToken)).ShouldBe(bytes);
+    }
+
+    [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task FreshAndNoOpRuns_LeaveTheFilePrivate_EvenWhenItWasWorldReadable()
+    {
+        (await RunAsync("dev")).ExitCode.ShouldBe(0);
+        File.GetUnixFileMode(EnvFile).ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+        File.SetUnixFileMode(EnvFile, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+        (await RunAsync("dev")).Output.ShouldContain("nothing to add");
+
+        File.GetUnixFileMode(EnvFile).ShouldBe(UnixFileMode.UserRead | UnixFileMode.UserWrite);
+    }
+
+    [Fact]
+    public async Task SparseOlderFile_TakesTheCommittedLocalIdentityFromTheTemplate()
+    {
+        await File.WriteAllTextAsync(EnvFile, "EVIDGATE_DB_PORT=5432\n", TestContext.Current.CancellationToken);
+
+        (await RunAsync("dev")).ExitCode.ShouldBe(0);
+
+        var values = ReadEnvFile(EnvFile);
+        var template = ReadEnvFile(Path.Combine(_root, ".env.dev.template"));
+        values["EVIDGATE__OBJECT__ACCESSKEY"].ShouldBe(template["EVIDGATE__OBJECT__ACCESSKEY"]);
+        values["EVIDGATE_S3_SECRET_KEY"].ShouldBe(template["EVIDGATE_S3_SECRET_KEY"]);
+    }
+
+    [Fact]
+    public async Task IndentedAndDuplicateAssignments_AreReadTheWayTheShellSourcesThem()
+    {
+        await File.WriteAllTextAsync(
+            EnvFile,
+            "  EVIDGATE__SESSION__PEPPER=indented-and-kept\nEVIDGATE__INVITE__PEPPER=\nEVIDGATE__INVITE__PEPPER=\n",
+            TestContext.Current.CancellationToken);
+
+        (await RunAsync("dev")).ExitCode.ShouldBe(0);
+
+        var lines = await File.ReadAllLinesAsync(EnvFile, TestContext.Current.CancellationToken);
+        lines.Count(line => line.Contains("EVIDGATE__SESSION__PEPPER=", StringComparison.Ordinal)).ShouldBe(1);
+        ReadEnvFile(EnvFile)["EVIDGATE__SESSION__PEPPER"].ShouldBe("indented-and-kept");
+        ReadEnvFile(EnvFile)["EVIDGATE__INVITE__PEPPER"].ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task ExistingPasswordWithSeparatorAndQuote_ProducesAShellSafeQuotedConnectionString()
+    {
+        await File.WriteAllTextAsync(EnvFile, "EVIDGATE_APP_PASSWORD=\"a;b'c\"\n", TestContext.Current.CancellationToken);
+
+        (await RunAsync("dev")).ExitCode.ShouldBe(0);
+
+        var shell = await RunShellAsync($"set -a; . '{EnvFile}'; printf '%s' \"$EVIDGATE__DATABASE__CONNECTIONSTRING\"");
+        shell.ShouldEndWith("\"a;b'c\"");
+    }
+
+    [Fact]
+    public async Task HeldLock_RefusesTheRun_AndLeavesTheFileAlone()
+    {
+        Directory.CreateDirectory(EnvFile + ".lock");
+
+        var run = await RunAsync("dev");
+
+        run.ExitCode.ShouldNotBe(0);
+        run.Output.ShouldContain("another run is in progress");
+        File.Exists(EnvFile).ShouldBeFalse();
+    }
+
+    private static async Task<string> RunShellAsync(string script)
+    {
+        var start = new ProcessStartInfo("bash") { RedirectStandardOutput = true };
+        start.ArgumentList.Add("-c");
+        start.ArgumentList.Add(script);
+        using var process = Process.Start(start)!;
+        var output = await process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+        return output;
     }
 
     private async Task<(int ExitCode, string Output)> RunAsync(string env)
@@ -189,7 +265,16 @@ public sealed class SecretPlaceholderGeneratorTests : IDisposable
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();
         using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await process.WaitForExitAsync(cancel.Token);
+        try
+        {
+            await process.WaitForExitAsync(cancel.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw;
+        }
+
         return (process.ExitCode, await output + await error);
     }
 
