@@ -297,6 +297,27 @@ public sealed class ContainerStartReaperTests
     }
 
     [Fact]
+    public async Task Removal_that_landed_is_remembered_when_later_removes_answer_404()
+    {
+        var containers = Substitute.For<IContainerOperations>();
+        var removes = 0;
+        containers.RemoveContainerAsync(Arg.Any<string>(), Arg.Any<ContainerRemoveParameters>(), Arg.Any<CancellationToken>())
+            .Returns(_ => ++removes <= 2 ? Task.CompletedTask : Task.FromException(NotFound()));
+        var inspects = 0;
+        containers.InspectContainerAsync(Own, Arg.Any<CancellationToken>()).Returns(_ =>
+            ++inspects == 1
+                ? Task.FromResult(new ContainerInspectResponse { ID = FakeId })
+                : Task.FromException<ContainerInspectResponse>(NotFound()));
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(5));
+
+        await ContainerStart.RemoveReaperContainerAsync(
+            containers, Own, FakeId, _ => { }, cts.Token, TimeSpan.FromMilliseconds(1));
+
+        inspects.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task Caller_cancellation_ends_the_conflict_cleanup_before_the_dispose_timeout()
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));

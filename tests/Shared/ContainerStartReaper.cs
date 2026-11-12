@@ -174,9 +174,9 @@ public static partial class ContainerStart
         // While dockerd still registers the container, both the id and the name answer 404 to a remove, so
         // every round removes again: a name that is inspectable has not been removed yet. A 409 proves the
         // name is reserved, so with a quoted id a round where no remove landed waits instead of trusting a 404.
+        var removed = false;
         while (true)
         {
-            var removed = false;
             foreach (var target in new[] { conflictingId, name }.Where(t => !string.IsNullOrEmpty(t)).Distinct())
             {
                 try
