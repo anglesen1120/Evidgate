@@ -23,6 +23,19 @@ internal sealed class HealingLlmOptions
     internal int MaxTransportRetries { get; set; }
 
     /// <summary>
+    /// The output tokens one call may produce, held in the budget together with the prompt's estimate before the provider
+    /// is called. A deployment-neutral ceiling: the real per-model limit arrives with the provider contract.
+    /// </summary>
+    internal int ReservedOutputTokens { get; set; } = 1024;
+
+    /// <summary>
+    /// The cost held in the budget for one call before it is placed, replaced by the provider's reported cost afterwards.
+    /// A conservative placeholder until the price table of a real provider exists; real usage above the hold is
+    /// charged at settlement, so a call can overshoot the cap by its excess until the real price table exists.
+    /// </summary>
+    internal decimal ReservedCostPerCall { get; set; } = 0.05m;
+
+    /// <summary>
     /// Budget of one whole call: one attempt per allowed retry, plus the retry delays and a little slack — with the
     /// default 0 retries that is a single attempt. The client's own <c>Timeout</c> is infinite, so this — not a shorter
     /// client timeout — is what bounds the call.
