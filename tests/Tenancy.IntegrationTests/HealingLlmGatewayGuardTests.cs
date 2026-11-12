@@ -164,7 +164,7 @@ public sealed class HealingLlmGatewayGuardTests
     {
         var spy = new SpyProvider();
         await using var world = await StartAsync(HealingProviderSelection.Mock, Environments.Development, spy);
-        await world.SeedBudgetAsync(1.0m, 100, 0.4m, 40);
+        await world.SeedBudgetAsync(1.0m, 5000, 0.4m, 40);
 
         var result = await InvokeAsync(world, AuthoringRequest(world.Project));
 
@@ -215,7 +215,7 @@ public sealed class HealingLlmGatewayGuardTests
             spy,
             baseAddress: "https://llm.example.test/",
             apiKeySecret: SecretNames.HealingLlmApiKey);
-        await world.SeedBudgetAsync(1.0m, 100, 0.4m, 40);
+        await world.SeedBudgetAsync(1.0m, 5000, 0.4m, 40);
 
         using var listener = HealingTelemetryCapture.RefusedCalls(out var reasons);
         var result = await InvokeAsync(world, AuthoringRequest(world.Project));
@@ -400,19 +400,10 @@ public sealed class HealingLlmGatewayGuardTests
     /// <param name="request">The call.</param>
     private static async Task<Result<HealingLlmInvocation>> InvokeAsync(World world, HealingLlmRequest request)
     {
+        // The gateway opens its own short tenant transactions, so the caller holds no scope.
         await using var services = world.Provider.CreateAsyncScope();
-        var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
-        await using var scope = await scopes.BeginAsync(
-            world.Org,
-            world.Project,
-            readOnlyTransaction: false,
-            TestContext.Current.CancellationToken);
-
         var gateway = services.ServiceProvider.GetRequiredService<HealingLlmGateway>();
-        var result = await gateway.InvokeAsync(request, TestContext.Current.CancellationToken);
-
-        // The caller commits: every recorded attempt rides the caller's tenant transaction (00 §5.5 C3).
-        await scope.CommitAsync(TestContext.Current.CancellationToken);
+        var result = await gateway.InvokeAsync(world.Org, request, TestContext.Current.CancellationToken);
 
         return result;
     }
