@@ -237,13 +237,10 @@ trait_files() {
   done < <(grep -rlE --include='*.cs' 'Trait[[:space:]]*\(' tests || true)
 }
 
-# run_trait_stage <trait> <assembly>...
-# Each named assembly runs its own `dotnet test --project`: zero matching tests
-# then fail as exit 8 for that assembly, and `--minimum-expected-tests 1` states
-# the same rule where the exit code cannot (a stage that selected nothing). A
-# trait-bearing file whose owning project is not named fails the stage, so a
+# check_trait_coverage <trait> <assembly>...
+# A trait-bearing file whose owning project is not named fails the stage, so a
 # moved or reformatted test cannot silently drop out of it.
-run_trait_stage() {
+check_trait_coverage() {
   local trait="$1" file project
   shift
   while IFS= read -r file; do
@@ -258,6 +255,16 @@ run_trait_stage() {
       exit 2
     fi
   done < <(trait_files "$trait")
+}
+
+# run_trait_stage <trait> <assembly>...
+# Each named assembly runs its own `dotnet test --project`: zero matching tests
+# then fail as exit 8 for that assembly, and `--minimum-expected-tests 1` states
+# the same rule where the exit code cannot (a stage that selected nothing).
+run_trait_stage() {
+  local trait="$1" project
+  shift
+  check_trait_coverage "$trait" "$@"
   for project in "$@"; do
     dotnet test --no-build -c Release --project "$project" \
       --filter-trait "Category=$trait" --minimum-expected-tests 1
@@ -379,4 +386,60 @@ report_result() {
     fi
   done
   echo "== verify: all stages passed"
+}
+
+# --- per-stage wall time ------------------------------------------------------
+# Where a gate's minutes go: one `== stage <name>: <rc> <wall>s` line after each
+# stage and, once the loop ends (a failed stage included), a table of them with the
+# total. Plain integers from $SECONDS, so the Mac and the LAN logs read the same.
+STAGE_TIMES=()
+
+# `record_stage_time <name> <rc> <seconds>`: prints the stage's line and keeps it.
+record_stage_time() {
+  echo "== stage $1: $2 ${3}s"
+  STAGE_TIMES+=("$1 $2 $3")
+}
+
+# `print_stage_summary`: the table of every stage that ran and their total wall
+# time. Prints nothing when no stage ran.
+print_stage_summary() {
+  local row total=0 name rc secs
+  [[ "${#STAGE_TIMES[@]}" -gt 0 ]] || return 0
+  echo "== stage timings (name rc wall-seconds)"
+  for row in "${STAGE_TIMES[@]}"; do
+    read -r name rc secs <<<"$row"
+    printf '   %-28s %3s %6ss\n' "$name" "$rc" "$secs"
+    total=$((total + secs))
+  done
+  printf '   %-28s %3s %6ss\n' "total" "-" "$total"
+}
+
+# `run_selected_stages`: runs `selected` in order and stops at the first failure,
+# timing each. The summary is printed on both paths.
+run_selected_stages() {
+  local name rc t0 child
+  for name in "${selected[@]}"; do
+    t0=$SECONDS
+    # A subshell, so errexit stays armed inside the stage while its status is
+    # still caught here, and a stage's own `exit` or trap cannot skip the table.
+    # It runs async so a TERM or INT sent to this process alone reaches the stage:
+    # its cleanup traps (test processes, containers, log dir) live in the subshell.
+    set +e
+    (
+      set -e
+      run_stage "$name"
+    ) <&0 &
+    child=$!
+    trap 'kill -TERM "$child" 2>/dev/null; wait "$child" 2>/dev/null; exit 143' INT TERM
+    wait "$child"
+    rc=$?
+    trap - INT TERM
+    set -e
+    record_stage_time "$name" "$rc" "$((SECONDS - t0))"
+    if [[ "$rc" -ne 0 ]]; then
+      print_stage_summary
+      exit "$rc"
+    fi
+  done
+  print_stage_summary
 }
