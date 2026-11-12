@@ -102,7 +102,13 @@ public static class ContainerStart
 
         try
         {
-            options = options with { Budget = deadline - DateTime.UtcNow };
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                throw new TimeoutException($"Waiting for another fixture to start the Ryuk reaper exceeded {options.Budget}.");
+            }
+
+            options = options with { Budget = remaining };
             await EnsureResourceReaperAsync(
                 name,
                 () => ResourceReaper.IsUnavailable,
