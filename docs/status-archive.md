@@ -619,3 +619,9 @@ closed by #818 (4f8a2362)
 | Secret inventory slug edge cases (S250) | `scripts/secrets-inventory.mjs` heading-anchor parser: a 3-backtick line closes a 4-backtick fence (accepts a ghost anchor, rejects a real one) and a duplicate-heading suffix collides with an existing `-1` heading. No referenced runbook triggers either today. Also split-token value evasion is an accepted heuristic limit. | 10.1.2-T3.2 or next owner of `scripts/secrets-inventory.mjs` |
 
 closed by #820 (68358713)
+
+## Moved from status-carried.md by S409 (2026-11-13)
+
+| Sixth bounded JSON reader copy (S404) | `GitHubResponseReader` in `src/Modules/Evidgate.Modules.Catalog/Infrastructure/GitHub/` is the sixth hand-written bounded-JSON body reader (same shape as the other five); agent-code-rules §7 calls a second copy of protocol logic a defect. Extract one shared reader when the next HTTP client lands. | next HTTP-client task (T1.4 or 10.x) |
+
+closed by #826 (88ca42cf)
