@@ -44,4 +44,10 @@ fx_assert_log_has "$SSH_LOG" "command -v node" "a building host is asked for nod
 fx_assert_log_has "$SSH_LOG" "command -v python3" "a building host is asked for python3"
 fx_assert_log_has "$SSH_LOG" "check.sh --static-only" "a building host runs the gate before the build"
 
+# --- too little free space on the host is refused ---------------------------
+if out="$(FX_FREE_KB=1048576 bash "$FX_REPO/scripts/review/deploy.sh" review-host --no-dogfood 2>&1)"; then
+  fx_fail "a host with 1 GiB free was accepted"
+fi
+fx_assert_contains "$out" "only 1 GiB free" "low free space is refused with the figure"
+
 fx_ok "the preflight matches what the host is asked to do"

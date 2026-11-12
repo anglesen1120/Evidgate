@@ -66,12 +66,10 @@ fx_sha() { # FILE
   fi
 }
 
-fx_mode() { # FILE — octal permissions, on BSD stat and GNU stat
-  if stat -f '%Lp' "$1" >/dev/null 2>&1; then
-    stat -f '%Lp' "$1"
-  else
-    stat -c '%a' "$1"
-  fi
+fx_mode() { # FILE — octal permissions, on GNU stat and BSD stat
+  # GNU's `stat -f` reports the filesystem and can exit 0 on the BSD format, so
+  # `-c '%a'` (which BSD rejects outright) goes first.
+  stat -c '%a' "$1" 2>/dev/null || stat -f '%Lp' "$1"
 }
 
 fx_teardown() {
@@ -125,6 +123,9 @@ case "$*" in
     esac
     exit 0
     ;;
+  # The free-space probe describes the faked host, not the machine running the
+  # suite: a tmpfs /tmp with a few GiB would otherwise fail every deploy.
+  *"df -Pk"*) echo "${FX_FREE_KB:-209715200}" ; exit 0 ;;
   "uname -m") echo "aarch64" ; exit 0 ;;
 esac
 exec /bin/sh -c "$*"
