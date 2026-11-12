@@ -90,8 +90,15 @@ public sealed partial class EvidenceRawReportEnqueueTests
         await _fixture.ExecuteAsync(world.Database, $$"""
             insert into public.manifest (id, org_id, project_id, manifest_hash, schema_version, suite_revision_id, environment_revision_id, shard_plan, matrix, env_needs, planned_count, document, verified_by)
             select '{{manifestId}}', p.org_id, p.id, '{{manifestHash}}', 1,
-                   (select id from public.suite_revision where org_id = '{{org}}' order by id limit 1),
-                   (select id from public.environment_revision where org_id = '{{org}}' order by id limit 1),
+                   (select sr.id
+                      from public.suite_revision sr
+                      join public.suite s on s.org_id = sr.org_id and s.id = sr.suite_id
+                     where sr.org_id = '{{org}}' and s.project_id = p.id
+                     order by sr.id limit 1),
+                   (select er.id
+                      from public.environment_revision er
+                     where er.org_id = '{{org}}' and er.project_id = p.id
+                     order by er.id limit 1),
                    '{{shardPlan}}'::jsonb, '{}'::jsonb, '{}'::jsonb, 0, '{}'::jsonb, 'probe'
               from public.project p where p.id = '{{project}}'
             """);

@@ -88,11 +88,11 @@ public sealed class RunProjectKeyTests : IClassFixture<TenancyHostPool>
         return new Refs(manifest, suiteRevision, environmentRevision, policyRevision);
     }
 
-    private static string InsertRunSql(Guid id, Guid org, Guid project, Refs refs, Guid? policy) =>
+    private static string InsertRunSql(Guid id, Guid org, Guid project, Refs refs, Guid? policy, Guid? parent = null) =>
         "insert into public.run (id, org_id, project_id, manifest_id, policy_revision_id, suite_revision_id, environment_revision_id, "
-        + "collection_deadline_at, late_window_minutes) "
+        + "parent_run_id, collection_deadline_at, late_window_minutes) "
         + $"values ('{id}', '{org}', '{project}', '{refs.Manifest}', {(policy is null ? "null" : $"'{policy}'")}, "
-        + $"'{refs.SuiteRevision}', '{refs.EnvironmentRevision}', now() + interval '2 hours', 1440)";
+        + $"'{refs.SuiteRevision}', '{refs.EnvironmentRevision}', {(parent is null ? "null" : $"'{parent}'")}, now() + interval '2 hours', 1440)";
 
     private async Task<PostgresException> RefusedAsync(Guid actingOrg, string database, string sql)
     {
@@ -234,5 +234,169 @@ public sealed class RunProjectKeyTests : IClassFixture<TenancyHostPool>
 
         error.SqlState.ShouldBe("23503");
         error.ConstraintName.ShouldBe(constraint);
+    }
+
+    private async Task<Refs> SeedSecondSuiteRevisionAsync(string database, Guid org, Guid project, Refs like)
+    {
+        var suite = Guid.CreateVersion7();
+        var revision = Guid.CreateVersion7();
+        await using var scope = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(database));
+        await scope.ExecuteAsync(
+            "insert into public.suite (id, org_id, project_id, name, slug) values (@id, @org, @project, 'second', 'second-suite')",
+            ("id", suite), ("org", org), ("project", project));
+        await scope.ExecuteAsync(
+            """
+            insert into public.suite_revision (id, org_id, suite_id, revision_no, revision_hash, shard_strategy, retry_policy)
+            values (@id, @org, @suite, 1, @hash, '{"kind":"none"}', '{"max_retries":0}')
+            """,
+            ("id", revision), ("org", org), ("suite", suite), ("hash", "sha256:" + new string('b', 64)));
+        await scope.CommitAsync();
+
+        return like with { SuiteRevision = revision };
+    }
+
+    private static string InsertManifestSql(Guid org, Guid project, Guid suiteRevision, Guid environmentRevision) =>
+        "insert into public.manifest (id, org_id, project_id, manifest_hash, schema_version, suite_revision_id, environment_revision_id, "
+        + "shard_plan, matrix, env_needs, planned_count, document, verified_by) "
+        + $"values ('{Guid.CreateVersion7()}', '{org}', '{project}', 'sha256:{new string('c', 64)}', 1, '{suiteRevision}', '{environmentRevision}', "
+        + "'{}', '{}', '{}', 0, '{}', 'probe')";
+
+    [Fact]
+    public async Task Manifest_Naming_A_Suite_Revision_Of_Another_Project_Is_Refused()
+    {
+        await using var world = await StartAsync();
+
+        var error = await RefusedAsync(
+            world.Org, world.Database, InsertManifestSql(world.Org, world.ProjectA, world.B.SuiteRevision, world.A.EnvironmentRevision));
+
+        error.SqlState.ShouldBe("23503");
+        error.ConstraintName.ShouldBe("manifest_suite_revision_project_guard");
+    }
+
+    [Fact]
+    public async Task Manifest_Naming_A_Suite_Revision_Of_Its_Own_Project_Inserts()
+    {
+        await using var world = await StartAsync();
+
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        (await scope.ExecuteAsync(InsertManifestSql(world.Org, world.ProjectB, world.B.SuiteRevision, world.B.EnvironmentRevision))).ShouldBe(1);
+        await scope.CommitAsync();
+    }
+
+    [Fact]
+    public async Task Run_Suite_Revision_Different_From_Its_Manifests_Is_Refused()
+    {
+        await using var world = await StartAsync();
+        var other = await SeedSecondSuiteRevisionAsync(world.Database, world.Org, world.ProjectA, world.A);
+
+        // Same project, so the suite-revision trigger passes; only the manifest key can tell the revisions apart.
+        var error = await RefusedAsync(world.Org, world.Database, InsertRunSql(Guid.CreateVersion7(), world.Org, world.ProjectA, other, null));
+
+        error.SqlState.ShouldBe("23503");
+        error.ConstraintName.ShouldBe("run_manifest_suite_revision_fk");
+    }
+
+    [Fact]
+    public async Task Run_Parent_Run_Of_Another_Project_Is_Refused_And_Of_The_Same_Project_Inserts()
+    {
+        await using var world = await StartAsync();
+        var parentA = Guid.CreateVersion7();
+        var parentB = Guid.CreateVersion7();
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.ExecuteAsync(InsertRunSql(parentA, world.Org, world.ProjectA, world.A, null))).ShouldBe(1);
+            (await scope.ExecuteAsync(InsertRunSql(parentB, world.Org, world.ProjectB, world.B, null))).ShouldBe(1);
+            (await scope.ExecuteAsync(InsertRunSql(Guid.CreateVersion7(), world.Org, world.ProjectA, world.A, null, parentA))).ShouldBe(1);
+            await scope.CommitAsync();
+        }
+
+        var error = await RefusedAsync(
+            world.Org, world.Database, InsertRunSql(Guid.CreateVersion7(), world.Org, world.ProjectA, world.A, null, parentB));
+
+        error.SqlState.ShouldBe("23503");
+        error.ConstraintName.ShouldBe("run_parent_run_fk");
+    }
+
+    [Fact]
+    public async Task Insert_With_A_Forged_Org_Is_Refused_And_Leaves_No_Row()
+    {
+        await using var world = await StartAsync();
+        var otherUser = Guid.CreateVersion7();
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("forged"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other");
+        var theirs = await SeedRefsAsync(world.Database, otherOrg, otherProject);
+        var id = Guid.CreateVersion7();
+
+        // Acting as this org while the row names another org's project and parents. The BEFORE trigger reads under RLS and answers
+        // 23503 before the WITH CHECK policy could answer 42501.
+        var error = await RefusedAsync(world.Org, world.Database, InsertRunSql(id, otherOrg, otherProject, theirs, null));
+
+        error.SqlState.ShouldBe("23503");
+        await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
+        (await owner.ScalarAsync<long>($"select count(*) from public.run where id = '{id}'")).ShouldBe(0L);
+    }
+
+    [Fact]
+    public async Task Insert_With_No_Tenant_Scope_Is_Refused_And_Leaves_No_Row()
+    {
+        await using var world = await StartAsync();
+        var id = Guid.CreateVersion7();
+
+        // No `evidgate.org_id` setting: `current_org_id()` is null, no row passes the policy, and the trigger's reads see nothing.
+        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database));
+        var error = await scope.CaptureErrorAsync(InsertRunSql(id, world.Org, world.ProjectA, world.A, null));
+
+        error.SqlState.ShouldBe("23503");
+        await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));
+        (await owner.ScalarAsync<long>($"select count(*) from public.run where id = '{id}'")).ShouldBe(0L);
+    }
+
+    [Fact]
+    public async Task Run_Parent_Run_Of_Another_Org_Is_Refused()
+    {
+        await using var world = await StartAsync();
+        var otherUser = Guid.CreateVersion7();
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("parents"));
+        var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "other");
+        var theirs = await SeedRefsAsync(world.Database, otherOrg, otherProject);
+        var foreignParent = Guid.CreateVersion7();
+        await using (var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database)))
+        {
+            (await owner.ExecuteAsync(InsertRunSql(foreignParent, otherOrg, otherProject, theirs, null))).ShouldBe(1);
+            await owner.CommitAsync();
+        }
+
+        var error = await RefusedAsync(
+            world.Org, world.Database, InsertRunSql(Guid.CreateVersion7(), world.Org, world.ProjectA, world.A, null, foreignParent));
+
+        error.SqlState.ShouldBe("23503");
+        error.ConstraintName.ShouldBe("run_parent_run_fk");
+    }
+
+    [Theory]
+    [InlineData("project_id")]
+    [InlineData("suite_revision_id")]
+    [InlineData("manifest_id")]
+    [InlineData("parent_run_id")]
+    public async Task App_Role_Update_Of_A_Key_Column_Is_Refused_With_42501(string column)
+    {
+        await using var world = await StartAsync();
+        var runId = Guid.CreateVersion7();
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.ExecuteAsync(InsertRunSql(runId, world.Org, world.ProjectA, world.A, null))).ShouldBe(1);
+            await scope.CommitAsync();
+        }
+
+        var value = column switch
+        {
+            "project_id" => world.ProjectB,
+            "suite_revision_id" => world.B.SuiteRevision,
+            "manifest_id" => world.B.Manifest,
+            _ => runId,
+        };
+        var error = await RefusedAsync(world.Org, world.Database, $"update public.run set {column} = '{value}' where id = '{runId}'");
+
+        error.SqlState.ShouldBe("42501", "the app role holds no UPDATE grant on the key columns");
     }
 }

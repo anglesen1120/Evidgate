@@ -377,7 +377,7 @@ public sealed class RunCreationTests
         Details(refused).Single().GetProperty("path").GetString().ShouldBe("/environment_revision_id");
         await AssertNoRunRowsAsync(world);
 
-        // (b) A manifest whose suite revision belongs to another project of the same org: the composite FK accepts the
+        // (b) A manifest whose suite revision belongs to another project of the same org: the 0102 keys accept the
         // row, the project-scoped pre-check does not, so the run is refused before any write.
         var other = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
         var otherCases = await ManifestTests.SeedCasesAsync(_fixture, world.Api, world.Org, other, world.Database, 1);
@@ -387,10 +387,14 @@ public sealed class RunCreationTests
             new { members = otherCases.Select(id => new { case_revision_id = id }).ToArray() }, NewKey());
         var foreignSuite = otherRevision.Id("suite_revision_id");
         var foreignManifest = Guid.CreateVersion7();
+        // The manifest guard refuses this row for every writer, so it is seeded with the guard lifted for this one insert: the
+        // run's own pre-check stays as the second line of defence and is what this case exercises.
         await _fixture.ExecuteAsync(world.Database, $"""
+            alter table public.manifest disable trigger manifest_suite_revision_project_guard;
             insert into public.manifest (id, org_id, project_id, manifest_hash, schema_version, suite_revision_id, environment_revision_id, shard_plan, matrix, env_needs, planned_count, document, verified_by)
             select '{foreignManifest}', org_id, project_id, 'sha256:{new string('c', 64)}', 1, '{foreignSuite}', environment_revision_id, shard_plan, matrix, env_needs, planned_count, document, 'x'
-              from public.manifest where id = '{world.ManifestId}'
+              from public.manifest where id = '{world.ManifestId}';
+            alter table public.manifest enable trigger manifest_suite_revision_project_guard;
             """);
 
         var crossSuite = await CreateRunAsync(world, RunBody(foreignManifest));
