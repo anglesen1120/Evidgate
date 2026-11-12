@@ -8,6 +8,7 @@ TestResults/
 .env.*
 !.env.example
 !.env.dev.template
+.secrets/
 *.pem
 *.key
 

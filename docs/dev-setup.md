@@ -27,8 +27,8 @@ everything else, including the data in the volumes, is identical.
 
 From a clean checkout it does, in order:
 
-1. creates `.env.dev` from [`.env.dev.template`](../.env.dev.template) on first run
-   (mode 600, fresh random passwords for the superuser and the four database roles);
+1. runs `scripts/env/secret-placeholders.mjs`, which derives every dev secret from `infra/secrets-inventory.json`: it creates `.env.dev` from [`.env.dev.template`](../.env.dev.template) on first run (mode 600), fills the role passwords, the CI and session/invite peppers and the CI signing key with fresh random values, and on later runs adds only the keys an older `.env.dev` lacks (an existing value is never changed, no value is printed);
+   `--env staging|prod` writes empty named entries for the secret store to `.secrets/<env>.placeholders.env` (git-ignored);
 2. `docker compose -f infra/compose.dev.yml up -d --wait` — PostgreSQL 18 and
    SeaweedFS, both digest-pinned, healthy before anything else runs (no sleeps);
    `up.sh` refuses first when another process already holds a port the stack must
@@ -128,8 +128,8 @@ so only your own `psql` may hold it.
 | `EVIDGATE__TASKS__SWEEPCONNECTIONSTRING` | Worker | `evidgate_worker_sched` — the scheduled owner `SECURITY DEFINER` sweeps (01.5.1-T6.2, TL T80) |
 | `EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY`, `EVIDGATE__RUNS__CANCEL__KILLDELAY` | Api, Worker | the two windows of an accepted run cancel, as `TimeSpan` literals, measured from the request; the kill deadline is also the `available_at` of the durable kill task. Both are required at boot — there is no option default — and `KILLDELAY` must be at least `SOFTSTOPDELAY`. The `db-init.sh --with-token` seed does not read them |
 | `EVIDGATE_MIGRATOR__CONNECTIONSTRING` | `Evidgate.Migrator` | `evidgate_owner` — the only writer of `public.schema_migration` |
-| `EVIDGATE__CI__PEPPER` | `db-init.sh --with-token` (the seed) | base64 HMAC pepper for ingest tokens and binding challenges (`EVIDGATE:CI:PEPPER`), at least 32 bytes after decoding; the seed refuses and writes nothing when it is missing or invalid. Not in `.env.dev.template`: generate one with `openssl rand -base64 32` and paste it as `EVIDGATE__CI__PEPPER=<the value>` in `.env.dev` before the first `--with-token` run |
-| `EVIDGATE__CI__SIGNINGKEY` | Api | HS256 key of the `ci_producer` tokens `POST /v1/ci/token` mints and every CI route accepts; base64, at least 32 bytes after decoding. Not in `.env.dev.template`: generate one with `openssl rand -base64 48`, paste it as `EVIDGATE__CI__SIGNINGKEY=<the value>` in `.env.dev` and restart the Api, otherwise `/ci/token` answers 503 `CI authentication is not configured` |
+| `EVIDGATE__CI__PEPPER` | `db-init.sh --with-token` (the seed) | base64 HMAC pepper for ingest tokens and binding challenges (`EVIDGATE:CI:PEPPER`), at least 32 bytes after decoding; the seed refuses and writes nothing when it is missing or invalid. `up.sh` generates it on first run and fills it into an older `.env.dev` on the next; to rotate by hand replace the value in `.env.dev`. |
+| `EVIDGATE__CI__SIGNINGKEY` | Api | HS256 key of the `ci_producer` tokens `POST /v1/ci/token` mints and every CI route accepts; base64, at least 32 bytes after decoding. `up.sh` generates it on first run and fills it into an older `.env.dev` on the next; to rotate by hand replace the value in `.env.dev` and restart the Api. |
 | `ASPNETCORE_URLS`, `EVIDGATE__WORKER__HEALTHPORT`, `EVIDGATE__WORKER__HEALTHADDRESS` | Api, Worker | HTTP endpoint, worker probe port, and the address that probe binds (`127.0.0.1` in the template; the option default is `0.0.0.0`) |
 | `DOTNET_ENVIRONMENT`, `ASPNETCORE_ENVIRONMENT` | Api, Worker | `Development` for the dev stack |
 | `EVIDGATE_S3_ENDPOINT`, `EVIDGATE_S3_REGION`, `EVIDGATE_S3_BUCKET`, `EVIDGATE_S3_ACCESS_KEY`, `EVIDGATE_S3_SECRET_KEY` | `up.sh` | local emulator coordinates and identity |
