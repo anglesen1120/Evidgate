@@ -111,14 +111,17 @@ It is sourced and exported by the dev scripts, and inherited by compose, the Wor
 and the Migrator. The Api inherits every value except the worker credential:
 `up.sh` removes `EVIDGATE__TASKS__WORKERCONNECTIONSTRING` and
 `EVIDGATE_WORKER_PASSWORD` from its environment, so the Api process never holds
-them.
+them. Both hosts are also started without `EVIDGATE_PLATFORM_OPERATOR_PASSWORD`:
+that role is the only one allowed to execute the system healing-switch definer,
+so only your own `psql` may hold it.
 
 | Setting | Used by | Meaning |
 | --- | --- | --- |
 | `EVIDGATE_DB_PORT`, `EVIDGATE_S3_PORT` | compose | host ports published on `127.0.0.1` |
 | `EVIDGATE_WEB_PORT` | `up.sh` (`ng serve`) | port of the Angular dev server on `127.0.0.1`; not in `.env.dev.template`, `up.sh` defaults it to `4200` |
 | `EVIDGATE_DB_SUPERUSER_PASSWORD` | compose, `db-init.sh` | bootstrap-only superuser password |
-| `EVIDGATE_OWNER_PASSWORD`, `EVIDGATE_APP_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD`, `EVIDGATE_WORKER_PASSWORD`, `EVIDGATE_WORKER_SCHED_PASSWORD` | `db-init.sh` | the five role passwords |
+| `EVIDGATE_OWNER_PASSWORD`, `EVIDGATE_APP_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD`, `EVIDGATE_WORKER_PASSWORD`, `EVIDGATE_WORKER_SCHED_PASSWORD` | `db-init.sh` | the five host role passwords |
+| `EVIDGATE_PLATFORM_OPERATOR_PASSWORD` | `db-init.sh`, then you in `psql` (no host reads it) | the sixth role password: `evidgate_platform_operator` is the sole grantee of `evidgate.healing_switch_set_system`, `up.sh` starts the Api and Worker without it, and the system flip procedure is [`runbooks/kill-switch.md`](runbooks/kill-switch.md) §5.2 |
 | `EVIDGATE__DATABASE__CONNECTIONSTRING` | Api, Worker; `db-init.sh --with-token` builds the same value from the role password and port for the seed | `evidgate_app` — subject to RLS; INSERT only on `public.task` and `public.outbox` |
 | `EVIDGATE__TASKS__WORKERCONNECTIONSTRING` | Worker | `evidgate_worker` — the queue's service role: it claims, acknowledges, dispatches and prunes `public.task` and `public.outbox`. The Api never holds it: the dead-letter list and replay go through owner `SECURITY DEFINER` functions on the app role, scoped to `evidgate.current_org_id()` |
 | `EVIDGATE__TASKS__SWEEPCONNECTIONSTRING` | Worker | `evidgate_worker_sched` — the scheduled owner `SECURITY DEFINER` sweeps (01.5.1-T6.2, TL T80) |
