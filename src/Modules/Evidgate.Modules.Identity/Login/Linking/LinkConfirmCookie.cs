@@ -20,12 +20,6 @@ namespace Evidgate.Modules.Identity.Login.Linking;
 /// <param name="DisplayName">The provider's profile name, or null.</param>
 /// <param name="IssuedAt">When the callback staged it, for the lifetime check and the <c>expires_at</c> of the pending answer.</param>
 /// <param name="LinkId">A random id for this staging, so two stagings are distinguishable without naming the subject.</param>
-/// <param name="MovedFromUserId">
-/// The account the identity was moved from, carried only by a staging that a failed audit re-issued: that first
-/// confirm committed the move (<c>moved</c>) and could not write its <c>auth.link_move</c> rows, and the retry
-/// answers <c>already_linked</c> — where the store no longer reports the move — so the fact has to travel with
-/// the staging or the retry could never audit it. Null on a staging the callback just wrote.
-/// </param>
 internal sealed record LinkConfirmPayload(
     int Version,
     Guid UserId,
@@ -34,8 +28,7 @@ internal sealed record LinkConfirmPayload(
     string Email,
     string? DisplayName,
     DateTimeOffset IssuedAt,
-    string LinkId,
-    Guid? MovedFromUserId = null);
+    string LinkId);
 
 /// <summary>The source-generated JSON of <see cref="LinkConfirmPayload"/> (never on the wire; inside the protected cookie only).</summary>
 [JsonSerializable(typeof(LinkConfirmPayload))]
@@ -208,59 +201,6 @@ internal sealed class LinkConfirmCookie(
         string.IsNullOrWhiteSpace(displayName) || displayName.Length > MaxDisplayNameLength ? null : displayName;
 
     /// <summary>
-    /// Re-issues an ALREADY READ payload as this response's staged-link cookie, keeping its
-    /// <see cref="LinkConfirmPayload.IssuedAt"/> and <see cref="LinkConfirmPayload.LinkId"/>.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The one caller is the confirm route's fail-closed audit path: the link committed, the audit rows did not,
-    /// so the staging has to survive the 503 — and when that link was a MOVE, it has to survive carrying the
-    /// account the identity came from, because the retry will answer <c>already_linked</c> and could not
-    /// otherwise write the <c>auth.link_move</c> row at all. Keeping <see cref="LinkConfirmPayload.IssuedAt"/>
-    /// keeps the original expiry: the re-issued cookie and the staging inside it still end ten minutes after the
-    /// callback verified the identity, however often a failing audit re-issues it.
-    /// </para>
-    /// <para>
-    /// A staging whose window closed while the failed attempt ran is NOT re-issued: it could not be confirmed
-    /// anyway, so there is nothing to carry, and the 503 of the attempt stands on its own.
-    /// </para>
-    /// </remarks>
-    /// <param name="context">The request the browser is answering.</param>
-    /// <param name="payload">The payload <see cref="Read"/> returned, with any field this route had to carry on.</param>
-    /// <exception cref="ArgumentException">
-    /// The payload is not one this build writes and reads (version, empty ids, a field out of its bound): a
-    /// value <see cref="Read"/> returned cannot fail this, so it is a caller bug.
-    /// </exception>
-    public void Restage(HttpContext context, LinkConfirmPayload payload)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(payload);
-
-        var remaining = payload.IssuedAt + Lifetime - clock.GetUtcNow();
-        if (payload.Version != PayloadVersion
-            || payload.UserId == Guid.Empty
-            || payload.MovedFromUserId == Guid.Empty
-            || !IsBounded(payload.LinkId, 64)
-            || !IsBounded(payload.Provider, MaxProviderLength)
-            || !IsBounded(payload.Subject, MaxSubjectLength)
-            || !IsBounded(payload.Email, MaxEmailLength)
-            || payload.DisplayName?.Length > MaxDisplayNameLength)
-        {
-            throw new ArgumentException("the payload is not a staged link this build writes", nameof(payload));
-        }
-
-        if (remaining <= TimeSpan.Zero)
-        {
-            return;
-        }
-
-        context.Response.Cookies.Append(
-            Name,
-            _protector.Protect(JsonSerializer.Serialize(payload, LinkConfirmJsonContext.Default.LinkConfirmPayload)),
-            Attributes(remaining));
-    }
-
-    /// <summary>
     /// Reads a cookie value: null when it is absent, unprotected by another key or purpose, unparsable,
     /// unknown in version, missing a field, or outside its lifetime. Never throws for a client-supplied value,
     /// and never logs it.
@@ -295,7 +235,6 @@ internal sealed class LinkConfirmCookie(
         if (payload is null
             || payload.Version != PayloadVersion
             || payload.UserId == Guid.Empty
-            || payload.MovedFromUserId == Guid.Empty
             || !IsBounded(payload.LinkId, 64)
             || !IsBounded(payload.Provider, MaxProviderLength)
             || !IsBounded(payload.Subject, MaxSubjectLength)

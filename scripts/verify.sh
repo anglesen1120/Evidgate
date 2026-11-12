@@ -55,6 +55,7 @@ ALL_STAGES=(
   isolation
   fixtures-hostile
   fixtures-fuzz
+  parser-no-egress
   tsc-build
   tsc-spec
   vitest
@@ -223,6 +224,17 @@ run_stage() {
     # the strict gate.
     stage "tsc -b (solution references)"
     npm run build
+    ;;
+  parser-no-egress)
+    # The parser child's no-egress test skips on any host that can connect out, so it is run here from the
+    # built Release output inside a container started with `--network none` and must report passed, not
+    # skipped (scripts/parser-no-egress.sh). Needs the `build` stage and a Docker daemon.
+    if [[ "${EVIDGATE_VERIFY_SKIP_DOCKER:-}" == "1" ]]; then
+      stage "parser-no-egress (skipped: EVIDGATE_VERIFY_SKIP_DOCKER=1)"
+    else
+      stage "parser-no-egress (parser child in a --network none container)"
+      scripts/parser-no-egress.sh
+    fi
     ;;
   tsc-spec)
     # 01.6.1-T1.2: `tsc -b` covers the emitting workspaces only (every tsconfig.json excludes

@@ -276,10 +276,29 @@ check_pin_sources() {
   return "$fail"
 }
 
+# The no-egress probe image (scripts/parser-no-egress.sh) is the non-chiseled sibling of the Api runtime (the probe
+# needs bash) and no updater covers it, so it must be digest-pinned and stay on the Api runtime's aspnet version.
+probe_pin() { sed -n 's/^IMAGE="\([^"]*\)"$/\1/p' scripts/parser-no-egress.sh; }
+check_probe_pin() {
+  local probe api_tag probe_tag
+  probe="$(probe_pin)"
+  api_tag="$(runtime_pin api)"; api_tag="${api_tag%@*}"; api_tag="${api_tag##*:}"
+  probe_tag="${probe%@*}"; probe_tag="${probe_tag##*:}"
+  case "$probe" in
+    mcr.microsoft.com/dotnet/aspnet:*@sha256:*) ;;
+    *) echo "check-pins: scripts/parser-no-egress.sh IMAGE '$probe' is not a digest-pinned aspnet image" >&2; return 1 ;;
+  esac
+  if [[ "${probe_tag%%-*}" != "${api_tag%%-*}" ]]; then
+    echo "check-pins: scripts/parser-no-egress.sh aspnet version '${probe_tag%%-*}' differs from the api runtime '${api_tag%%-*}'" >&2
+    return 1
+  fi
+}
+
 check_pins() {
   local fail=0 sdk builder runtime worker_runtime
   check_pin_identity || fail=1
   check_pin_sources || fail=1
+  check_probe_pin || fail=1
   sdk="$(declared_sdk_version)"
   builder="$(builder_pin api)"
   runtime="$(runtime_pin api)"
@@ -287,6 +306,7 @@ check_pins() {
   printf 'builder  %s\n' "$builder"
   printf 'runtime  %s (api: -extra, ships ICU + tzdata for the authoring NFC rule)\n' "$runtime"
   printf 'runtime  %s (worker/migrator: plain -chiseled, globalization-invariant)\n' "$worker_runtime"
+  printf 'runtime  %s (parser no-egress probe: non-chiseled, bash)\n' "$(probe_pin)"
   printf 'sdk      %s (global.json: the same SDK CI installs, so the image and the test build compile with one toolchain)\n' "$sdk"
   return "$fail"
 }
@@ -295,7 +315,7 @@ check_pins() {
 # A moved tag is informational (upstream published a patch under the same tag;
 # the pin still points at what was reviewed), a tag that no longer resolves is fatal.
 check_registry() {
-  python3 - "$(builder_pin api)" "$(runtime_pin api)" "$(runtime_pin worker)" <<'PYEOF'
+  python3 - "$(builder_pin api)" "$(runtime_pin api)" "$(runtime_pin worker)" "$(probe_pin)" <<'PYEOF'
 import sys, urllib.request
 
 ACCEPT = ", ".join([
