@@ -190,9 +190,7 @@ internal sealed class IngestTestWorld : IAsyncDisposable
     {
         var plan = await PlannedExecutionSeeder.SeedPlanAsync(Fixture, Database, Org, planned);
 
-        await Fixture.ExecuteAsync(
-            Database,
-            $"update public.run set project_id = '{project:D}' where id = '{plan.RunId:D}'");
+        await SiblingProjectParents.MoveRunAsync(Fixture, Database, Org, plan.RunId, project);
 
         return plan;
     }

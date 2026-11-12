@@ -145,9 +145,7 @@ public sealed class EvidenceUploadUrlTests : IClassFixture<TenancyHostPool>
 
         if (project is { } moved)
         {
-            await _fixture.ExecuteAsync(
-                world.Database,
-                $"update public.run set project_id = '{moved:D}' where id = '{runId:D}'");
+            await SiblingProjectParents.MoveRunAsync(_fixture, world.Database, owningOrg, runId, moved);
         }
 
         await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), owningOrg);

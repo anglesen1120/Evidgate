@@ -197,14 +197,15 @@ public sealed partial class ListRunsTests
         await InsertEvaluationAsync(world, mine, policy, 1, "live", "PASS");
 
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
+        var parents = await SiblingProjectParents.SeedAsync(_fixture, world.Database, world.Org, sibling);
         await _fixture.ExecuteAsync(
             world.Database,
             $"""
             insert into public.run
               (id, org_id, project_id, manifest_id, policy_revision_id, suite_revision_id, environment_revision_id,
                state, collection_deadline_at, late_window_minutes, created_at, updated_at)
-            select gen_random_uuid(), r.org_id, '{sibling:D}', r.manifest_id, r.policy_revision_id,
-                   r.suite_revision_id, r.environment_revision_id, r.state, r.collection_deadline_at,
+            select gen_random_uuid(), r.org_id, '{sibling:D}', '{parents.Manifest:D}', null,
+                   '{parents.SuiteRevision:D}', '{parents.EnvironmentRevision:D}', r.state, r.collection_deadline_at,
                    r.late_window_minutes, r.created_at, r.updated_at
               from public.run r
              where r.id = '{mine:D}'
