@@ -167,7 +167,7 @@ psql -h "$DB_HOST" -p "$DB_PORT" -U evidgate_platform_operator -d "$DB_NAME" -v 
 unset PGPASSWORD
 ```
 
-- `$OPERATOR_ID` is the flipping person's `user` id as a uuid; it becomes the audit row's `actor` and the switch row's `set_by`. Never a tenant id.
+- `$OPERATOR_ID` is the flipping person's `user` id as a uuid, asserted by the caller and not verified by the database (the shared login proves only that someone held the platform operator password; per-person attribution waits for 02.8.1); it becomes the audit row's `actor` and the switch row's `set_by`. Never a tenant id.
 - `$DB_HOST`, `$DB_PORT`, `$DB_NAME` are the environment's database coordinates, the bootstrap's `EVIDGATE_DB_*` values.
 - Modes are `enabled`, `shadow`, `disabled`. `unavailable` and any other token raise `22023 invalid_parameter_value`, as does a reason longer than 2000 characters. The function refuses a call made inside a tenant transaction (`23514`); a plain `psql` session is not in one.
 - It returns one row — `mode`, `reason`, `set_by`, `at`, `version` — with the bumped `version`. The reason stays on the switch row and is deliberately not copied into the audit row, because it can name a customer.

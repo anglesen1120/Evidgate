@@ -26,7 +26,7 @@
 --
 -- WHY EACH PRIVILEGE, FROM THE STATEMENTS THAT NEED IT (nothing here is wider than the code):
 --   * operator `USAGE` on schema `evidgate` — the credential exists to call one function, and a
---     function is reachable only through USAGE on its schema. It gets no USAGE on `public`: it
+--     function is reachable only through USAGE on its schema. It holds no privilege on any `public` table: it
 --     never names a public relation, because the function is `SECURITY DEFINER` and reads and
 --     writes both tables as `evidgate_owner`.
 --   * operator `EXECUTE` on the definer — that call is the role's whole purpose, and the function
