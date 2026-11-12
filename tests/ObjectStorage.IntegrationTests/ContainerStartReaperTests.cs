@@ -279,6 +279,45 @@ public sealed class ContainerStartReaperTests
     }
 
     [Fact]
+    public async Task Name_found_after_both_removes_answered_404_is_removed_again_without_a_quoted_id()
+    {
+        var containers = Substitute.For<IContainerOperations>();
+        var removes = 0;
+        containers.RemoveContainerAsync(Own, Arg.Any<ContainerRemoveParameters>(), Arg.Any<CancellationToken>())
+            .Returns(_ => ++removes == 1 ? Task.FromException(NotFound()) : Task.CompletedTask);
+        containers.InspectContainerAsync(Own, Arg.Any<CancellationToken>()).Returns(_ =>
+            removes < 2
+                ? Task.FromResult(new ContainerInspectResponse { ID = FakeId })
+                : Task.FromException<ContainerInspectResponse>(NotFound()));
+
+        await ContainerStart.RemoveReaperContainerAsync(
+            containers, Own, null, _ => { }, TestContext.Current.CancellationToken, TimeSpan.FromMilliseconds(1));
+
+        removes.ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Caller_cancellation_ends_the_conflict_cleanup_before_the_dispose_timeout()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var calls = 0;
+        var started = DateTime.UtcNow;
+
+        await Should.ThrowAsync<OperationCanceledException>(() => ContainerStart.EnsureResourceReaperAsync(
+            Own,
+            () => true,
+            _ => ++calls == 1
+                ? Task.FromException(new DockerApiException(HttpStatusCode.Conflict, Conflict409(FakeId)))
+                : Task.CompletedTask,
+            async (_, token) => await Task.Delay(TimeSpan.FromSeconds(20), token),
+            Fast,
+            _ => { },
+            cts.Token));
+
+        (DateTime.UtcNow - started).ShouldBeLessThan(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
     public async Task Name_that_stays_taken_ends_with_the_callers_token()
     {
         var containers = Substitute.For<IContainerOperations>();

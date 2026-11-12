@@ -147,7 +147,8 @@ public static partial class ContainerStart
                     ct => removeOwnContainer(ConflictingContainerId(exception, ownContainerName), ct),
                     deadline,
                     options,
-                    log).ConfigureAwait(false);
+                    log,
+                    cancellationToken).ConfigureAwait(false);
             }
 
             await Task.Delay(options.Delay, cancellationToken).ConfigureAwait(false);
@@ -170,12 +171,12 @@ public static partial class ContainerStart
         ArgumentNullException.ThrowIfNull(containers);
         ArgumentNullException.ThrowIfNull(log);
         var interval = pollInterval ?? TimeSpan.FromMilliseconds(250);
-        // A 409 proves the name is reserved. While dockerd still registers that container both the id and the
-        // name answer 404 to a remove, so a conflict keeps removing until one call lands; a plain timeout has
-        // nothing proven to wait for and removes once.
-        var removed = false;
-        do
+        // While dockerd still registers the container, both the id and the name answer 404 to a remove, so
+        // every round removes again: a name that is inspectable has not been removed yet. A 409 proves the
+        // name is reserved, so with a quoted id a round where no remove landed waits instead of trusting a 404.
+        while (true)
         {
+            var removed = false;
             foreach (var target in new[] { conflictingId, name }.Where(t => !string.IsNullOrEmpty(t)).Distinct())
             {
                 try
@@ -191,23 +192,17 @@ public static partial class ContainerStart
                 }
             }
 
-            if (!removed && conflictingId is not null)
+            if (removed || conflictingId is null)
             {
-                await Task.Delay(interval, cancellationToken).ConfigureAwait(false);
-            }
-        }
-        while (!removed && conflictingId is not null);
-
-        while (true)
-        {
-            try
-            {
-                var held = await containers.InspectContainerAsync(name, cancellationToken).ConfigureAwait(false);
-                log($"[container-start] name {name} still held by {held.ID} ({held.State?.Status}); waiting");
-            }
-            catch (DockerContainerNotFoundException)
-            {
-                return;
+                try
+                {
+                    var held = await containers.InspectContainerAsync(name, cancellationToken).ConfigureAwait(false);
+                    log($"[container-start] name {name} still held by {held.ID} ({held.State?.Status}); removing again");
+                }
+                catch (DockerContainerNotFoundException)
+                {
+                    return;
+                }
             }
 
             await Task.Delay(interval, cancellationToken).ConfigureAwait(false);
@@ -234,6 +229,12 @@ public static partial class ContainerStart
                 catch (IOException)
                 {
                     await Task.Delay(TimeSpan.FromMilliseconds(250), lockWait.Token).ConfigureAwait(false);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Another user owns the lock file: it can never be taken, so do not wait for it.
+                    log("[container-start] host lock file is not accessible; starting without it");
+                    break;
                 }
             }
         }
@@ -302,13 +303,15 @@ public static partial class ContainerStart
         Func<CancellationToken, Task> remove,
         DateTime deadline,
         ContainerStartOptions options,
-        Action<string> log)
+        Action<string> log,
+        CancellationToken cancellationToken)
     {
         var budget = deadline - DateTime.UtcNow;
         var timeout = budget < options.DisposeTimeout ? budget : options.DisposeTimeout;
         try
         {
-            using var cts = new CancellationTokenSource(timeout > TimeSpan.Zero ? timeout : TimeSpan.Zero);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            cts.CancelAfter(timeout > TimeSpan.Zero ? timeout : TimeSpan.Zero);
             await remove(cts.Token).ConfigureAwait(false);
         }
         catch (Exception exception)
