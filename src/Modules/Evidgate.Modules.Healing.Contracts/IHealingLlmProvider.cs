@@ -126,6 +126,12 @@ public sealed record HealingLlmResult(string Status, string? Content, int Tokens
 /// 08.5.1-T1: the provider adapter seam (00 §5.5). The gateway owns schema validation, retry, recording and fail-closed
 /// behaviour; an adapter owns transport and provider-specific mapping only, and must never log or persist the payload.
 /// </summary>
+/// <remarks>
+/// Redaction seam: <see cref="HealingLlmRequest.Payload"/> is accepted already redacted and opt-in approved. The gateway
+/// does not redact, and the redaction pipeline is the caller's step before it builds the request. A later redaction
+/// stage hooks in at that call site (before <see cref="HealingLlmRequest"/> is constructed), so no adapter ever sees an
+/// unredacted prompt and no adapter changes when it lands.
+/// </remarks>
 public interface IHealingLlmProvider
 {
     /// <summary>Invokes the provider once for <paramref name="request"/>.</summary>

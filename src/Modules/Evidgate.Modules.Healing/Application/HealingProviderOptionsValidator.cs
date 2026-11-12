@@ -91,6 +91,12 @@ internal sealed class HealingProviderOptionsValidator(IHostEnvironment environme
         {
             problems.Add($"{HealingProviderKeys.BaseAddress}: must not carry a query or a fragment");
         }
+        else if (!development && HealingLlmEgress.IsInternalHost(address))
+        {
+            // The key and the prompt must only leave for a public provider: a loopback, private or link-local literal
+            // (cloud metadata included) or an unqualified name would aim the adapter at the platform's own network.
+            problems.Add($"{HealingProviderKeys.BaseAddress}: must name a public host outside Development");
+        }
 
         var secret = options.ApiKeySecret?.Trim();
 
