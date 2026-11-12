@@ -787,6 +787,26 @@
       "note": "`EVIDGATE:OAUTH:GITHUB:ClientSecret` (02.3.1-T1.3): OAuth client secret of the GitHub login client, declared once in `SecretNames` (`OauthGithubClientSecret`), resolved through `ISecretProvider` by `GitHubLoginOptionsSecretPostConfigure` — the property has an internal setter, so the binder never reads it from configuration — and never logged or put in an exception message. Absent with the client id, both GitHub routes answer 503 `unavailable` + `Retry-After` (no flag); staging and prod hold it in the provider secret store (10.1.1-T3), dev does not set it because the dev stack has no https origin to complete a login on."
     },
     {
+      "key": "EVIDGATE__GITHUB__APP__PRIVATEKEY",
+      "scope": "runtime",
+      "consumers": ["api", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "`EVIDGATE:GITHUB:PrivateKeySecretName` default (`SecretNames.GitHubAppPrivateKey`): PEM private key of the platform's GitHub App, read per JWT mint through `ISecretProvider` by the catalog App client and never bound, cached in options, logged or put in an exception message. Absent leaves the client unconfigured (`github_not_configured`, no outbound call), so a host without an App starts normally; staging and prod hold it in the provider secret store (10.1.1-T3) and dev leaves it unset until an App is installed against the dev stack."
+    },
+    {
       "key": "EVIDGATE__OAUTH__GITHUB__AUTHORIZEURL",
       "scope": "runtime",
       "consumers": ["api", "migrator", "worker"],

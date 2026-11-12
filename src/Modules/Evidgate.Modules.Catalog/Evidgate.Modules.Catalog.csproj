@@ -10,6 +10,10 @@
     <PackageReference Include="FluentValidation" />
     <!-- 03.1.1-T1.3: the evidgate.cases.yaml sidecar (TL T55). Used through its event-level Parser only. MIT. -->
     <PackageReference Include="YamlDotNet" />
+    <!-- RS256 App JWT for the GitHub App client. Version comes from Directory.Packages.props; MIT, registered in ADR-0002. -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <!-- P6: IHttpClientFactory resilience handlers (Polly v8) for the GitHub read client. -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
@@ -30,6 +34,7 @@
     <InternalsVisibleTo Include="Evidgate.Worker" />
     <InternalsVisibleTo Include="Evidgate.Migrator" />
     <InternalsVisibleTo Include="Hosts.IntegrationTests" />
+    <InternalsVisibleTo Include="Catalog.UnitTests" />
     <InternalsVisibleTo Include="Migrator.IntegrationTests" />
     <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
   </ItemGroup>

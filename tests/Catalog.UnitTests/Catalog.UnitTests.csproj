@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Catalog.UnitTests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- OutputType, Microsoft.NET.Test.Sdk, xunit.v3, Shouldly and NSubstitute come from
+         tests/Directory.Build.props; the *.UnitTests suffix also links the no-network guard. -->
+    <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Catalog\Evidgate.Modules.Catalog.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The App client is composed through AddHttpClient and IOptions, so the test host needs the
+         shared framework; no container package is referenced and no test opens a socket. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- FakeTimeProvider: token reuse and refresh are driven by Advance, never by a sleep. -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+</Project>
