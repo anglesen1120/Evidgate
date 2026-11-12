@@ -48,26 +48,41 @@ function githubSlug(heading) {
     .replace(/ /g, '-');
 }
 
-// Same rules GitHub applies: headings inside fenced code do not count and a repeated
-// heading gets a -1, -2 ... suffix.
+// Same rules GitHub applies: headings inside fenced code do not count (a fence closes only on
+// a line of the same character, at least as long as the opener, with nothing after it) and a
+// repeated heading gets the first free -1, -2 ... suffix, skipping slugs a heading already owns.
 function headingSlugs(text) {
   const slugs = new Set();
   const counts = new Map();
   let fence = null;
   for (const line of text.split('\n')) {
-    const marker = /^\s*(```+|~~~+)/.exec(line);
-    if (marker) {
-      if (fence === null) fence = marker[1][0];
-      else if (marker[1][0] === fence) fence = null;
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence !== null) {
+      if (
+        marker &&
+        marker[1][0] === fence.char &&
+        marker[1].length >= fence.length &&
+        marker[2].trim() === ''
+      ) {
+        fence = null;
+      }
       continue;
     }
-    if (fence !== null) continue;
-    const match = /^#{1,6}\s+(.*)$/.exec(line);
+    if (marker && !(marker[1][0] === '`' && marker[2].includes('`'))) {
+      fence = { char: marker[1][0], length: marker[1].length };
+      continue;
+    }
+    const match = /^ {0,3}#{1,6}\s+(.*)$/.exec(line);
     if (!match) continue;
-    const slug = githubSlug(match[1]);
-    const seen = counts.get(slug) ?? 0;
-    counts.set(slug, seen + 1);
-    slugs.add(seen === 0 ? slug : `${slug}-${seen}`);
+    const base = githubSlug(match[1]);
+    let n = counts.get(base) ?? 0;
+    let slug = n === 0 ? base : `${base}-${n}`;
+    while (slugs.has(slug)) {
+      n += 1;
+      slug = `${base}-${n}`;
+    }
+    counts.set(base, n + 1);
+    slugs.add(slug);
   }
   return slugs;
 }
@@ -143,7 +158,9 @@ export function evaluateInventory({ matrix, inventory, schema, readText, now }) 
     const text = readText(file);
     if (text === undefined) {
       errors.push(`E secrets-inventory: ${where} runbook file ${file} does not exist`);
-    } else if (anchor !== undefined && !headingSlugs(text).has(anchor)) {
+    } else if (anchor === undefined || anchor === '') {
+      errors.push(`E secrets-inventory: ${where} runbook ${file} has no #anchor section`);
+    } else if (!headingSlugs(text).has(anchor)) {
       errors.push(`E secrets-inventory: ${where} runbook heading #${anchor} not found in ${file}`);
     }
     if (entry.lastRotated !== null) {
@@ -204,6 +221,12 @@ export function selfTestSecretsInventory(root, now = new Date()) {
   const base = loadFrom(root);
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const firstSecret = base.inventory.secrets[0].name;
+  // Serve one fixture runbook for secrets[0]; every other file still comes from the repo.
+  const useFixture = (c, text, anchor) => {
+    const real = c.readText;
+    c.readText = (rel) => (rel === 'docs/runbooks/fixture.md' ? text : real(rel));
+    c.inventory.secrets[0].runbook = `docs/runbooks/fixture.md#${anchor}`;
+  };
   const cases = [
     ['inventory-clean', () => {}, null],
     [
@@ -389,6 +412,34 @@ export function selfTestSecretsInventory(root, now = new Date()) {
           'docs/runbooks/environments.md#per-environment-smoke-against-a-running-environment';
       },
       'runbook heading #per-environment-smoke',
+    ],
+    [
+      'runbook-without-anchor',
+      (c) => {
+        c.inventory.secrets[0].runbook = 'docs/runbooks/environments.md';
+      },
+      'has no #anchor section',
+    ],
+    [
+      'runbook-anchor-hidden-by-longer-fence',
+      (c) => {
+        useFixture(c, '````\n```\n## Hidden\n````\n', 'hidden');
+      },
+      'runbook heading #hidden not found',
+    ],
+    [
+      'runbook-anchor-after-closed-fence',
+      (c) => {
+        useFixture(c, '````\n```\n````\n## Shown\n', 'shown');
+      },
+      null,
+    ],
+    [
+      'runbook-duplicate-heading-skips-taken-suffix',
+      (c) => {
+        useFixture(c, '## A\n## A-1\n## A\n', 'a-2');
+      },
+      null,
     ],
     [
       'overdue-optional-deployed-key-is-error',
