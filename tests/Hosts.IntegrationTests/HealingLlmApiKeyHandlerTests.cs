@@ -90,11 +90,12 @@ public sealed partial class HealingLlmApiKeyHandlerTests
 
         await using var provider = Compose(capture, new FixedSecrets(null), endpoint).BuildServiceProvider();
 
-        var result = await provider
+        // A refusal before the send is not a provider outcome: it reaches the gateway as a not-sent failure, which gives
+        // the budget hold back.
+        await Should.ThrowAsync<HealingLlmNotSentException>(() => provider
             .GetRequiredService<HttpHealingLlmProvider>()
-            .InvokeAsync(Request(), TestContext.Current.CancellationToken);
+            .InvokeAsync(Request(), TestContext.Current.CancellationToken));
 
-        result.Status.ShouldBe(HealingLlmStatuses.Error);
         endpoint.Requests.ShouldBeEmpty();
         capture.Logs.ShouldNotContain(log => log.Text.Contains("Bearer", StringComparison.Ordinal));
     }

@@ -142,6 +142,25 @@ public sealed class HealingLlmTwoPhaseBudgetTests
     }
 
     /// <summary>
+    /// A refusal by the provider's own handlers happens before any byte is sent, so nothing can have been billed: the
+    /// hold goes back whole and one zero-usage error row records the attempt.
+    /// </summary>
+    [Fact]
+    public async Task InvokeHealingLlm_RefusedBeforeSend_ReleasesTheHold()
+    {
+        var provider = new ScriptedProvider(_ => throw new HealingLlmNotSentException("refused before the send"));
+        await using var world = await StartAsync(provider);
+        await world.SeedBudgetAsync(1.0m, 5000, 0.1m, 10);
+
+        var invocation = await InvokeAsync(world, Request(world), TestContext.Current.CancellationToken);
+
+        invocation.IsSuccess.ShouldBeTrue();
+        invocation.Value.Result.Status.ShouldBe(HealingLlmStatuses.Error);
+        (await world.UsedAsync()).ShouldBe((0.1m, 10));
+        (await world.CallCountAsync()).ShouldBe(1);
+    }
+
+    /// <summary>
     /// A provider that reports an extreme token count cannot abort the settlement: the paid attempt is recorded and the
     /// counter is clamped to its column range instead of overflowing.
     /// </summary>
