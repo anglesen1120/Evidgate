@@ -121,8 +121,6 @@ const shellSingleQuoted = (value) => `'${value.replaceAll("'", "'\\''")}'`;
 // file, and a leftover temp file is removed on failure.
 function writePrivate(path, content) {
   mkdirSync(dirname(path), { recursive: true });
-  if (existsSync(path) && lstatSync(path).isSymbolicLink())
-    fail(`${path} is a symlink; refusing to replace it`);
   const temp = `${path}.${randomBytes(6).toString('hex')}.tmp`;
   try {
     writeFileSync(temp, content, { mode: 0o600, flag: 'wx' });
@@ -136,6 +134,12 @@ function writePrivate(path, content) {
 
 // One run at a time per target: two concurrent runs would each generate and overwrite.
 function withLock(path, action) {
+  // A symlinked target (also a dangling one) is refused before any read, write or chmod.
+  try {
+    if (lstatSync(path).isSymbolicLink()) fail(`${path} is a symlink; refusing to use it`);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
   const lock = `${path}.lock`;
   mkdirSync(dirname(path), { recursive: true });
   try {

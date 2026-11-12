@@ -227,6 +227,23 @@ public sealed class SecretPlaceholderGeneratorTests : IDisposable
     }
 
     [Fact]
+    [UnsupportedOSPlatform("windows")]
+    public async Task SymlinkedTarget_IsRefused_AndItsDestinationIsNotTouched()
+    {
+        var real = Path.Combine(_root, "real.env");
+        await File.WriteAllTextAsync(real, "EVIDGATE_DB_PORT=5432\n", TestContext.Current.CancellationToken);
+        File.SetUnixFileMode(real, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead);
+        File.CreateSymbolicLink(EnvFile, real);
+
+        var run = await RunAsync("dev");
+
+        run.ExitCode.ShouldNotBe(0);
+        run.Output.ShouldContain("is a symlink");
+        File.GetUnixFileMode(real).HasFlag(UnixFileMode.GroupRead).ShouldBeTrue();
+        (await File.ReadAllTextAsync(real, TestContext.Current.CancellationToken)).ShouldBe("EVIDGATE_DB_PORT=5432\n");
+    }
+
+    [Fact]
     public async Task HeldLock_RefusesTheRun_AndLeavesTheFileAlone()
     {
         Directory.CreateDirectory(EnvFile + ".lock");
@@ -283,11 +300,18 @@ public sealed class SecretPlaceholderGeneratorTests : IDisposable
             .AsArray()
             .ToDictionary(entry => entry!["name"]!.GetValue<string>(), entry => entry!["generator"]!["kind"]!.GetValue<string>());
 
-    private static Dictionary<string, string> ReadEnvFile(string path) =>
-        File.ReadAllLines(path)
-            .Where(line => line.Contains('=') && !line.TrimStart().StartsWith('#'))
-            .Select(line => line.Split('=', 2))
-            .ToDictionary(parts => parts[0].Trim(), parts => parts[1].Trim().Trim('\''));
+    // Last assignment wins, as when the shell sources the file.
+    private static Dictionary<string, string> ReadEnvFile(string path)
+    {
+        var values = new Dictionary<string, string>();
+        foreach (var line in File.ReadAllLines(path).Where(line => line.Contains('=') && !line.TrimStart().StartsWith('#')))
+        {
+            var parts = line.Split('=', 2);
+            values[parts[0].Trim()] = parts[1].Trim().Trim('\'');
+        }
+
+        return values;
+    }
 
     private static IEnumerable<JsonObject> Walk(JsonNode node)
     {
