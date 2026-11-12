@@ -187,4 +187,52 @@ public sealed class ContainerStartReaperTests
         ContainerStart.IsNameConflict(conflict, Own[..^1]).ShouldBeFalse();
         ContainerStart.IsNameConflict(new DockerApiException(HttpStatusCode.NotFound, Own), Own).ShouldBeFalse();
     }
+
+    private static readonly TimeSpan Short = TimeSpan.FromMilliseconds(100);
+
+    [Fact]
+    public async Task Stalled_dispose_is_logged_and_left_for_ryuk()
+    {
+        var log = new List<string>();
+        var never = new TaskCompletionSource();
+
+        await ContainerStart.DisposeAsync(new object(), _ => new ValueTask(never.Task), () => true, Short, log.Add);
+
+        log.ShouldHaveSingleItem().ShouldContain("[container-stop]");
+        log[0].ShouldContain("left for Ryuk");
+        never.SetResult();
+    }
+
+    [Fact]
+    public async Task Docker_timeout_from_dispose_is_logged_and_left_for_ryuk()
+    {
+        var log = new List<string>();
+
+        await ContainerStart.DisposeAsync(new object(), _ => ValueTask.FromException(new HttpRequestException("reset")), () => true, Short, log.Add);
+
+        log.ShouldHaveSingleItem().ShouldContain("left for Ryuk");
+    }
+
+    [Fact]
+    public async Task Non_transient_dispose_failure_is_rethrown()
+    {
+        var failure = new DockerApiException(HttpStatusCode.NotFound, "no such container");
+
+        var thrown = await Should.ThrowAsync<DockerApiException>(() => ContainerStart.DisposeAsync(
+            new object(), _ => ValueTask.FromException(failure), () => true, Short, _ => { }));
+
+        thrown.ShouldBeSameAs(failure);
+    }
+
+    [Fact]
+    public async Task Transient_dispose_failure_is_rethrown_when_ryuk_is_not_running()
+    {
+        await Should.ThrowAsync<HttpRequestException>(() => ContainerStart.DisposeAsync(
+            new object(), _ => ValueTask.FromException(new HttpRequestException("reset")), () => false, Short, _ => { }));
+
+        var never = new TaskCompletionSource();
+        await Should.ThrowAsync<TimeoutException>(() => ContainerStart.DisposeAsync(
+            new object(), _ => new ValueTask(never.Task), () => false, Short, _ => { }));
+        never.SetResult();
+    }
 }

@@ -89,7 +89,7 @@ public sealed class PostgresMigratorFixture : IAsyncLifetime
     {
         if (_container is not null)
         {
-            await _container.DisposeAsync().ConfigureAwait(false);
+            await ContainerStart.DisposeAsync(_container).ConfigureAwait(false);
         }
     }
 

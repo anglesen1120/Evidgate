@@ -333,6 +333,55 @@ public static class ContainerStart
         return transient;
     }
 
+    /// <summary>
+    /// Disposes a fixture's container. On a loaded host dockerd can stall a remove past the Docker client's
+    /// timeout; the reaper removes the container when the process ends, so a timed-out or otherwise transient
+    /// dispose is logged and swallowed, but only while the reaper runs. Any other failure surfaces.
+    /// </summary>
+    public static Task DisposeAsync<TContainer>(TContainer? container, TimeSpan? timeout = null, Action<string>? log = null)
+        where TContainer : class, IAsyncDisposable =>
+        container is null
+            ? Task.CompletedTask
+            : DisposeAsync(
+                container,
+                static c => c.DisposeAsync(),
+                static () => TestcontainersSettings.ResourceReaperEnabled && !ResourceReaper.IsUnavailable,
+                timeout,
+                log);
+
+    /// <summary>The delegate form of <see cref="DisposeAsync{TContainer}"/>, so the rules are testable without Docker.</summary>
+    public static async Task DisposeAsync<T>(
+        T container,
+        Func<T, ValueTask> dispose,
+        Func<bool> reaperRunning,
+        TimeSpan? timeout = null,
+        Action<string>? log = null)
+        where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(dispose);
+        ArgumentNullException.ThrowIfNull(reaperRunning);
+        log ??= static message => Console.Error.WriteLine(message);
+        var pending = dispose(container).AsTask();
+        // A dispose still running after the wait must not surface as an unobserved fault later.
+        _ = pending.ContinueWith(
+            static t => _ = t.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
+        try
+        {
+            await pending.WaitAsync(timeout ?? DisposeBudget).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (reaperRunning() && (exception is TimeoutException || IsTransient(exception)))
+        {
+            log($"[container-stop] {exception.GetType().Name}: {exception.Message}; "
+                + $"{container.GetType().Name} left for Ryuk");
+        }
+    }
+
+    /// <summary>Two minutes: two Docker client timeouts' worth of waiting on one remove.</summary>
+    private static readonly TimeSpan DisposeBudget = TimeSpan.FromMinutes(2);
+
     private static bool IsClientError(HttpStatusCode status) =>
         (int)status is >= 400 and < 500 && status != HttpStatusCode.RequestTimeout;
 

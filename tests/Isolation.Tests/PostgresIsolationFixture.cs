@@ -108,7 +108,7 @@ public sealed class PostgresIsolationFixture : IAsyncLifetime
         {
             if (_container is not null)
             {
-                await _container.DisposeAsync().ConfigureAwait(false);
+                await ContainerStart.DisposeAsync(_container).ConfigureAwait(false);
             }
 
             _template?.Dispose();
