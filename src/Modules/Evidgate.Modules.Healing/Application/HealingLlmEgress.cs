@@ -27,7 +27,8 @@ internal static class HealingLlmEgress
     /// <param name="uri">The base address.</param>
     internal static bool IsInternalHost(Uri uri)
     {
-        var host = uri.IdnHost;
+        // The DNS root dot names the same host, so it is dropped before any name test.
+        var host = uri.IdnHost.TrimEnd('.');
 
         if (IPAddress.TryParse(host.Trim('[', ']'), out var ip))
         {
@@ -56,16 +57,28 @@ internal static class HealingLlmEgress
 
         if (ip.AddressFamily == AddressFamily.InterNetwork)
         {
-            return bytes[0] == 10
-                || (bytes[0] == 172 && bytes[1] is >= 16 and <= 31)
-                || (bytes[0] == 192 && bytes[1] == 168)
-                || (bytes[0] == 169 && bytes[1] == 254)
-                || (bytes[0] == 100 && bytes[1] is >= 64 and <= 127)
-                || bytes[0] == 0;
+            return IsInternalV4(bytes);
         }
 
-        return ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || (bytes[0] & 0xFE) == 0xFC;
+        // Only global unicast (2000::/3) can be a public provider; documentation space is not routable either, and a 6to4
+        // address is judged by the IPv4 address it embeds.
+        if ((bytes[0] & 0xE0) != 0x20 || (bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0D && bytes[3] == 0xB8))
+        {
+            return true;
+        }
+
+        return bytes[0] == 0x20 && bytes[1] == 0x02 && IsInternalV4(bytes[2..6]);
     }
+
+    private static bool IsInternalV4(byte[] bytes) =>
+        bytes[0] is 0 or 10 or 127 or >= 224
+        || (bytes[0] == 172 && bytes[1] is >= 16 and <= 31)
+        || (bytes[0] == 192 && bytes[1] == 168)
+        || (bytes[0] == 192 && bytes[1] == 0 && bytes[2] is 0 or 2)
+        || (bytes[0] == 169 && bytes[1] == 254)
+        || (bytes[0] == 100 && bytes[1] is >= 64 and <= 127)
+        || (bytes[0] == 198 && (bytes[1] is 18 or 19 || (bytes[1] == 51 && bytes[2] == 100)))
+        || (bytes[0] == 203 && bytes[1] == 0 && bytes[2] == 113);
 }
 
 /// <summary>Refuses a request whose target is not the configured provider endpoint, before any key is resolved for it.</summary>

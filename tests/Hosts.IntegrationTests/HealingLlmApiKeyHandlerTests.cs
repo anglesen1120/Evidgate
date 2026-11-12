@@ -65,6 +65,24 @@ public sealed partial class HealingLlmApiKeyHandlerTests
     }
 
     [Fact]
+    public async Task A_Foreign_Target_Through_The_Composed_Client_Reads_No_Key_And_Sends_Nothing()
+    {
+        var endpoint = new RecordingHandler();
+        var secrets = new CountingSecrets();
+        await using var provider = Compose(new CaptureLoggerProvider(), secrets, endpoint).BuildServiceProvider();
+
+        using var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(HttpHealingLlmProvider));
+
+        await Should.ThrowAsync<InvalidOperationException>(() => client.PostAsync(
+            "https://elsewhere.invalid/v1/llm/generate",
+            new StringContent("{}"),
+            TestContext.Current.CancellationToken));
+
+        secrets.Reads.ShouldBe(0);
+        endpoint.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task A_Key_That_Resolves_To_Nothing_Sends_No_Request()
     {
         var endpoint = new RecordingHandler(HttpStatusCode.OK, "{}");
@@ -194,6 +212,17 @@ public sealed partial class HealingLlmApiKeyHandlerTests
     {
         [LoggerMessage(EventId = 1, Level = LogLevel.Information, Message = "capture probe {Probe}")]
         public static partial void CaptureProbe(ILogger logger, string probe);
+    }
+
+    private sealed class CountingSecrets : ISecretProvider
+    {
+        internal int Reads { get; private set; }
+
+        public ValueTask<string?> GetSecretAsync(string name, CancellationToken cancellationToken = default)
+        {
+            Reads++;
+            return ValueTask.FromResult<string?>("unused");
+        }
     }
 
     private sealed class FixedSecrets(string? value) : ISecretProvider
