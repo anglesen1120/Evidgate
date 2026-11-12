@@ -12,9 +12,8 @@ namespace Tenancy.IntegrationTests;
 /// <summary>
 /// Evidgate's own CI reports (xUnit v3, Vitest, Playwright; committed under fixtures/reports/own-ci exactly as the
 /// runners emitted them) go through the parser profile customers' XML takes, <see cref="IParsing.ParseXmlReport"/>,
-/// and the streamed document must use only the elements of the committed JUnit sample corpus. The report mapper
-/// (plan 04) is not written yet: until it lands this is the strongest check the bytes can pass, and the same files
-/// are the mapper's regression input.
+/// and through the real JUnit mapper, which must report no discrepancy. The streamed document must also use only the
+/// elements of the committed JUnit sample corpus.
 /// </summary>
 public sealed class DogfoodReportTests
 {
