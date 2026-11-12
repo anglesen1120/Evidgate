@@ -130,10 +130,15 @@ public sealed class OutboxBacklogGaugeTests
     private static OutboxDispatcher NewDispatcher(NpgsqlDataSource dataSource, TimeProvider time, ILogger<OutboxDispatcher> logger) =>
         new(dataSource, Options.Create(new TasksOptions()), logger, time);
 
+    /// <summary>
+    /// Seeds the backlog the way a producer does: `evidgate_app` holds the INSERT on
+    /// `outbox` and nothing else, while `evidgate_worker` reads (SELECT) and stamps
+    /// (`dispatched_at`) the rows the gauge counts.
+    /// </summary>
     private async Task SeedAsync(string database, int count)
     {
         await using var connection = new NpgsqlConnection(
-            new NpgsqlConnectionStringBuilder(_fixture.WorkerConnectionString(database)) { Pooling = false }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database)) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(Token);
 
         for (var i = 0; i < count; i++)

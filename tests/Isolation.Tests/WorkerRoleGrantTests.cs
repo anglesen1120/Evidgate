@@ -177,16 +177,27 @@ public sealed class WorkerRoleGrantTests
             "select has_table_privilege('evidgate_worker', 'public.task', 'SELECT,INSERT,UPDATE,DELETE')");
         mechanism.ShouldBeTrue("the positive control: the queue tables are the worker's own");
 
-        var sequences = await _fixture.ColumnAsync<string>(
+        // The privilege test is a function, so it cannot share a WHERE with relkind = 'S': the
+        // planner pushes it into the pg_class scan ABOVE the relkind comparison, and the first
+        // TOAST relation it meets answers 42809 ("pg_toast_…" is not a sequence) instead of being
+        // skipped. WorkerSequencesAsync materializes the sequence set first, so the argument is
+        // always a sequence OID.
+        (await WorkerSequencesAsync(database)).ShouldBeEmpty(
+            "the queue uses application-generated UUIDs, not sequences");
+
+        // The positive control: a sequence the worker holds is reported, and the revoke takes it
+        // away again — an empty answer above cannot be the query's own blindness.
+        await _fixture.ExecuteAsync(database, "create sequence public.worker_role_probe_seq");
+        await _fixture.ExecuteAsync(
             database,
-            """
-            select c.relname
-              from pg_class c
-              join pg_namespace n on n.oid = c.relnamespace
-             where n.nspname = 'public' and c.relkind = 'S'
-               and has_sequence_privilege('evidgate_worker', c.oid, 'USAGE,SELECT,UPDATE')
-            """);
-        sequences.ShouldBeEmpty("the queue uses application-generated UUIDs, not sequences");
+            "grant usage, select, update on sequence public.worker_role_probe_seq to evidgate_worker");
+        (await WorkerSequencesAsync(database)).ShouldBe(
+            ["worker_role_probe_seq"],
+            "a sequence the worker holds must be reported by the same query");
+        await _fixture.ExecuteAsync(
+            database,
+            "revoke all on sequence public.worker_role_probe_seq from evidgate_worker");
+        (await WorkerSequencesAsync(database)).ShouldBeEmpty("the revoke removes it again");
     }
 
     /// <summary>
@@ -348,6 +359,27 @@ public sealed class WorkerRoleGrantTests
 
         granted.ShouldBeEmpty("no evidgate function names the worker in its ACL");
     }
+
+    /// <summary>
+    /// The <c>public</c> sequences on which the worker role holds any sequence privilege. The
+    /// sequence set is MATERIALIZED before <c>has_sequence_privilege</c> runs: without the barrier
+    /// the planner attaches the function to the <c>pg_class</c> scan ahead of the <c>relkind</c>
+    /// test and raises 42809 on the first TOAST relation (PostgreSQL 18.6).
+    /// </summary>
+    private Task<IReadOnlyList<string>> WorkerSequencesAsync(string database) =>
+        _fixture.ColumnAsync<string>(
+            database,
+            """
+            with sequences as materialized (
+                select c.relname, c.oid
+                  from pg_class c
+                  join pg_namespace n on n.oid = c.relnamespace
+                 where n.nspname = 'public' and c.relkind = 'S'
+            )
+            select relname
+              from sequences
+             where has_sequence_privilege('evidgate_worker', oid, 'USAGE,SELECT,UPDATE')
+            """);
 
     /// <summary>
     /// Column-level grants the ACL records for one grantee on one table, as <c>column:privilege</c>.

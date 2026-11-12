@@ -35,10 +35,28 @@ public sealed class OperatorDeadLetterEndpointTests
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
-    /// <summary>The test double that lets every request through.</summary>
+    /// <summary>
+    /// The test double that lets every request through and, when the request arrives anonymous, stamps the operator
+    /// principal — the real gate authenticates a caller that carries the operator credential, and the replay route
+    /// refuses one it cannot name as the audit row's actor. A caller that brings its own principal keeps it, so that
+    /// refusal stays reachable.
+    /// </summary>
     private sealed class PermitAllOperatorGate : IOperatorGate
     {
-        public ValueTask<bool> IsOperatorAsync(HttpContext httpContext) => ValueTask.FromResult(true);
+        /// <summary>The acting operator: replay writes it as the audit row's actor.</summary>
+        internal static readonly Guid OperatorId = Guid.CreateVersion7();
+
+        public ValueTask<bool> IsOperatorAsync(HttpContext httpContext)
+        {
+            if (httpContext.User.Identity?.IsAuthenticated != true)
+            {
+                httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, OperatorId.ToString("D"))],
+                    authenticationType: "operator-test"));
+            }
+
+            return ValueTask.FromResult(true);
+        }
     }
 
     /// <summary>Api factory whose operator gate permits (the 02.x gate stub replaced for the test).</summary>
@@ -234,6 +252,15 @@ public sealed class OperatorDeadLetterEndpointTests
         Assert.Equal(0, reader.GetInt32(1));
         Assert.True(reader.GetBoolean(2), "the lease is released");
         Assert.True(reader.GetBoolean(3), "the row is immediately claimable");
+        await reader.DisposeAsync();
+
+        // The replay is attributed to the operator the gate authenticated, not written unattributed.
+        await using var audit = connection.CreateCommand();
+        audit.CommandText = "select actor_id from public.audit_log where action = 'task.dead_letter_replay' and object_id = @id";
+        audit.Parameters.Add(new NpgsqlParameter("@id", taskId.ToString("D")));
+        Assert.Equal(
+            PermitAllOperatorGate.OperatorId.ToString("D"),
+            (string)(await audit.ExecuteScalarAsync(Token))!);
     }
 
     /// <summary>AC5: a replay on a non-dead-letter row is a 409 `task_not_dead_letter`.</summary>
@@ -304,6 +331,41 @@ public sealed class OperatorDeadLetterEndpointTests
         Assert.Equal(HttpStatusCode.Unauthorized, replay.StatusCode);
         Assert.Equal("unauthenticated", ErrorCode(await JsonDocument.ParseAsync(
             await replay.Content.ReadAsStreamAsync(Token), cancellationToken: Token)));
+
+        // The gate runs before the route's own org validation: an anonymous caller that names no org is 401
+        // unauthenticated, not 400 request_invalid. A 400 here would mean the validation moved ahead of the gate.
+        using var noOrgList = await client.GetAsync("/internal/operator/tasks/dead-letter", Token);
+        Assert.Equal(HttpStatusCode.Unauthorized, noOrgList.StatusCode);
+        Assert.Equal("unauthenticated", ErrorCode(await JsonDocument.ParseAsync(
+            await noOrgList.Content.ReadAsStreamAsync(Token), cancellationToken: Token)));
+
+        using var noOrgReplay = await client.PostAsync(
+            $"/internal/operator/tasks/dead-letter/{Guid.CreateVersion7()}/replay", content: null, Token);
+        Assert.Equal(HttpStatusCode.Unauthorized, noOrgReplay.StatusCode);
+        Assert.Equal("unauthenticated", ErrorCode(await JsonDocument.ParseAsync(
+            await noOrgReplay.Content.ReadAsStreamAsync(Token), cancellationToken: Token)));
+    }
+
+    /// <summary>
+    /// The replay route names the operator it authenticated as the audit row's actor: a gate that permits a
+    /// principal it cannot turn into a subject is 403 `forbidden`, never a replay written unattributed.
+    /// </summary>
+    [Fact]
+    public async Task Replay_UnattributablePrincipal_403()
+    {
+        await using var factory = Permitted(DeadConnectionString);
+
+        var context = await factory.Server.SendAsync(http =>
+        {
+            http.Request.Method = "POST";
+            http.Request.Path = $"/internal/operator/tasks/dead-letter/{Guid.CreateVersion7()}/replay";
+            http.Request.QueryString = new QueryString($"?org_id={Guid.CreateVersion7():D}");
+            http.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sub", "tenant-caller")], "test"));
+        }, Token);
+
+        Assert.Equal(403, context.Response.StatusCode);
+        var body = await new StreamReader(context.Response.Body).ReadToEndAsync(Token);
+        Assert.Contains("\"forbidden\"", body, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -320,7 +382,8 @@ public sealed class OperatorDeadLetterEndpointTests
         var context = await factory.Server.SendAsync(http =>
         {
             http.Request.Method = "GET";
-            http.Request.Path = $"/internal/operator/tasks/dead-letter?org_id={Guid.CreateVersion7():D}";
+            http.Request.Path = "/internal/operator/tasks/dead-letter";
+            http.Request.QueryString = new QueryString($"?org_id={Guid.CreateVersion7():D}");
             http.User = new ClaimsPrincipal(
                 new ClaimsIdentity([new Claim("sub", "tenant-caller")], "test"));
         }, Token);

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Claims;
 using System.Text.Json;
 using Evidgate.Api.OperatorIngress;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
@@ -173,10 +174,23 @@ public sealed class DeadLetterChainTests
             .ShouldBe("task_not_dead_letter");
     }
 
-    /// <summary>The test double that lets every request through (the 02.x operator gate's stand-in).</summary>
+    /// <summary>
+    /// The test double that lets every request through and stamps the authenticated operator principal (the 02.x
+    /// operator gate's stand-in): the replay route names that principal as the audit row's actor.
+    /// </summary>
     private sealed class PermitAllOperatorGate : IOperatorGate
     {
-        public ValueTask<bool> IsOperatorAsync(HttpContext httpContext) => ValueTask.FromResult(true);
+        /// <summary>The acting operator: the replay's audit row names it.</summary>
+        private static readonly Guid OperatorId = Guid.CreateVersion7();
+
+        public ValueTask<bool> IsOperatorAsync(HttpContext httpContext)
+        {
+            httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.NameIdentifier, OperatorId.ToString("D"))],
+                authenticationType: "operator-test"));
+
+            return ValueTask.FromResult(true);
+        }
     }
 
     /// <summary>Api factory whose operator gate permits, over the test's migrated database.</summary>

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Per-environment database bootstrap: the PostgreSQL 18 database,
-# the four Evidgate roles and the three application credentials, one environment
+# the five Evidgate roles and the four application credentials, one environment
 # at a time. The dev stack's scripts/dev/db-init.sh runs the same statements
 # through scripts/env/lib-db.sh, so the two cannot drift.
 #
@@ -46,11 +46,11 @@ steps, one per run, in this order:
                 * the non-built-in roles are exactly the five evidgate_* roles
                   (anything else is named; pg_* and the bootstrap superuser are
                   allowed);
-                * all four may log in, and none carries SUPERUSER, BYPASSRLS,
+                * all five may log in, and none carries SUPERUSER, BYPASSRLS,
                   REPLICATION, CREATEDB or CREATEROLE; only evidgate_owner
                   carries CREATEROLE;
                 * no application role is a member of any other role, apart from
-                  the owner's admin-only record of the three roles it creates
+                  the owner's admin-only record of the roles it creates
                   (no INHERIT, no SET);
                 * evidgate_app owns no object in the database;
                 * every public table is not an exceptions entry of kind

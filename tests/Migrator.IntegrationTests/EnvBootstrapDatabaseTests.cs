@@ -68,8 +68,7 @@ public sealed class EnvBootstrapDatabaseTests
             verify.Output.ShouldContain("evidgate_app");
             verify.Output.ShouldContain("rolbypassrls");
 
-            // A fresh database proves the migration refuses before it writes a
-            // journal row: the role set is cluster-wide, so 0001 sees the flag.
+            // A fresh database proves 0001 refuses the cluster-wide flag before any journal row.
             var fresh = NewDatabaseName();
             AssertSucceeded(await RunBootstrapAsync("dev", "database", DevEnvironment(fresh)));
 
@@ -98,6 +97,7 @@ public sealed class EnvBootstrapDatabaseTests
         run.Output.ShouldNotContain(_fixture.AppPassword);
         run.Output.ShouldNotContain(_fixture.OperatorPassword);
         run.Output.ShouldNotContain(_fixture.WorkerSchedPassword);
+        run.Output.ShouldNotContain(_fixture.WorkerPassword);
     }
 
     [Fact]
@@ -123,8 +123,7 @@ public sealed class EnvBootstrapDatabaseTests
     [Fact]
     public async Task Verify_NamesAppOwnedObjectsOutsideTheTableCatalogs()
     {
-        // The roles are cluster-wide and exist only after a migration run, so the
-        // migrated database — not the bare `database` step — is the precondition.
+        // The roles exist only after a migration run, so the migrated database is the precondition.
         var database = await MigratedDatabaseAsync();
         // A collation is outside the catalogs a hand-written ownership list
         // tends to cover; the check reads pg_shdepend so no class is skipped.
@@ -247,6 +246,7 @@ public sealed class EnvBootstrapDatabaseTests
         environment["EVIDGATE_APP_PASSWORD"] = tricky;
         environment["EVIDGATE_OPERATOR_PASSWORD"] = tricky + "1";
         environment["EVIDGATE_WORKER_SCHED_PASSWORD"] = tricky + "2";
+        environment["EVIDGATE_WORKER_PASSWORD"] = tricky + "3";
         try
         {
             AssertSucceeded(await RunBootstrapAsync("dev", "credentials", environment));
@@ -271,8 +271,7 @@ public sealed class EnvBootstrapDatabaseTests
     [InlineData("prod")]
     public async Task ManagedEnvironment_WithAContainer_IsRefusedNamingTheKey(string environment)
     {
-        // The fixture's container is running, so the refusal is about the
-        // environment, not about a container that cannot be reached.
+        // The fixture's container is running, so the refusal is about the environment.
         var variables = ManagedEnvironment(environment);
         variables["EVIDGATE_DB_CONTAINER"] = _fixture.ContainerName;
         var refused = await RunBootstrapAsync(environment, "database", variables);
@@ -349,6 +348,7 @@ public sealed class EnvBootstrapDatabaseTests
         ["EVIDGATE_APP_PASSWORD"] = _fixture.AppPassword,
         ["EVIDGATE_OPERATOR_PASSWORD"] = _fixture.OperatorPassword,
         ["EVIDGATE_WORKER_SCHED_PASSWORD"] = _fixture.WorkerSchedPassword,
+        ["EVIDGATE_WORKER_PASSWORD"] = _fixture.WorkerPassword,
     };
 
     /// <summary>Staging or prod values at a closed port: a run past the guards fails at the connection.</summary>

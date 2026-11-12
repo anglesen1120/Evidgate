@@ -12,11 +12,11 @@ namespace Migrator.IntegrationTests;
 /// schema or grant created by one test can never bleed into another.
 /// </summary>
 /// <remarks>
-/// Cluster-level objects (the four roles) are created once per container; the
+/// Cluster-level objects (the five roles) are created once per container; the
 /// bootstrap deliberately creates <em>only</em> <c>evidgate_owner</c> — with
-/// LOGIN + CREATEROLE and no other attribute — because migration 0001 creates the
-/// three application roles with their least-privilege attributes. Passwords are
-/// random per run and never written to a file (00 §5.7 S3).
+/// LOGIN + CREATEROLE and no other attribute — because migrations 0001 and 0104
+/// create the four application roles with their least-privilege attributes.
+/// Passwords are random per run and never written to a file (00 §5.7 S3).
 /// </remarks>
 public sealed class PostgresMigratorFixture : IAsyncLifetime
 {

@@ -72,9 +72,11 @@ evg_db_psql() {
   local database="$1"
   shift
   if [[ -n "${EVG_DB_CONTAINER:-}" ]]; then
-    docker exec -i \
-      -e EVIDGATE_OWNER_PASSWORD -e EVIDGATE_APP_PASSWORD \
-      -e EVIDGATE_OPERATOR_PASSWORD -e EVIDGATE_WORKER_SCHED_PASSWORD \
+    local forwards=() name
+    for name in "${EVG_DB_PASSWORD_VARS[@]}"; do
+      forwards+=(-e "$name")
+    done
+    docker exec -i "${forwards[@]}" \
       "$EVG_DB_CONTAINER" psql -X -q -v ON_ERROR_STOP=1 -U "$EVG_DB_SUPERUSER" -d "$database" "$@"
   else
     PGPASSWORD="$EVG_DB_SUPERUSER_PASSWORD" psql -X -q -v ON_ERROR_STOP=1 \

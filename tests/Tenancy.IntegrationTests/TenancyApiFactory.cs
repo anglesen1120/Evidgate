@@ -81,24 +81,38 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
     private Action<IServiceCollection>? _extraServices;
 
     /// <summary>
+    /// Whether this host's tests drive the queue's own hop (<see cref="WithPrincipal"/>'s <c>workerQueue</c>): the
+    /// Api never composes the keyed worker source, so only such a host asks for it.
+    /// </summary>
+    private bool _workerQueue;
+
+    /// <summary>
     /// A host whose requests carry <paramref name="principal"/> — a service principal with a
     /// <c>CredentialId</c> (the slot-binding identity, T9) and an optional <c>CiRunReference</c>, which the
     /// <c>X-Test-*</c> header stand-in cannot express — plus optional extra configuration (06.1.2-T1) and
     /// optional service registrations (10.3.1-T1.2: the task queue, so a test can run the real consumer
     /// against the row this host's request produced).
     /// </summary>
+    /// <param name="configuration">In-memory configuration the host adds (06.1.2-T1).</param>
+    /// <param name="services">Extra registrations, e.g. the task queue a test runs the real consumer against.</param>
+    /// <param name="workerQueue">
+    /// True when the test drives the queue's own hop (the outbox dispatcher): the Api composes no worker-role data
+    /// source, so the host asks <see cref="TaskWorkerTestServices"/> for one. Every other host stays without it.
+    /// </param>
     public static TenancyApiFactory WithPrincipal(
         string appConnectionString,
         Guid org,
         Guid project,
         IRequestPrincipal principal,
         IReadOnlyDictionary<string, string?>? configuration = null,
-        Action<IServiceCollection>? services = null) =>
+        Action<IServiceCollection>? services = null,
+        bool workerQueue = false) =>
         new(appConnectionString, realEvaluator: true, realResolver: true)
         {
             _publishedPrincipal = (org, project, principal),
             _extraConfiguration = configuration,
             _extraServices = services,
+            _workerQueue = workerQueue,
         };
 
     /// <summary>Every command Npgsql executed for this host, whitespace-normalised, in order.</summary>
@@ -333,7 +347,7 @@ internal sealed class TenancyApiFactory : WebApplicationFactory<Program>
             // 10.3.1-T1.2: last, so the caller's additions see the host's final registrations
             // (the replaced NpgsqlDataSource included).
             _extraServices?.Invoke(services);
-            TaskWorkerTestServices.Configure(services, _connectionString);
+            TaskWorkerTestServices.Configure(services, _connectionString, _workerQueue);
         });
     }
 

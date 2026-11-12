@@ -105,6 +105,10 @@ public sealed partial class ResolverTests : HarnessTest
     /// ids or one stored row rather than the tenant tuple. Every definer in any non-system schema that is
     /// not in <c>evidgate_resolve</c> must be named here or the suite fails by name, so a new definer
     /// cannot be added without being classified. The value is the migration that creates it.
+    /// The operator's dead-letter pair (0104) is the same shape: the page answers rows of the
+    /// caller's own tenant scope and the replay answers one transition plus the audit row it
+    /// appends, while the org comes from <c>evidgate.current_org_id()</c> rather than an argument,
+    /// so neither carries the tenant tuple of a resolver.
     /// </summary>
     private static readonly Dictionary<string, string> OwnerDefinerAllowlist = new(StringComparer.Ordinal)
     {
@@ -121,6 +125,8 @@ public sealed partial class ResolverTests : HarnessTest
         ["evidgate.usage_ledger_org_ids"] = "0076_usage_rollup_job.sql:126",
         ["evidgate.orchestration_run_state_event_append"] = "0082_orchestration_run_state_event.sql:120",
         ["evidgate.record_sweep_audit"] = "0088_platform_sweep_audit.sql:138",
+        ["evidgate.list_dead_letter_tasks"] = "0104_platform_worker_role.sql:291",
+        ["evidgate.replay_dead_letter_task"] = "0104_platform_worker_role.sql:352",
     };
 
     /// <summary>

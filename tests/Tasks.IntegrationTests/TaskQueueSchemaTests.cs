@@ -57,6 +57,7 @@ public sealed class TaskQueueSchemaTests
             "task_claim_idx",
             "task_claim_type_idx",
             "task_dead_idx",
+            "task_dead_org_idx",
             "task_fire_uq",
             "task_idem_uq",
             "task_parse_artifact_idx",

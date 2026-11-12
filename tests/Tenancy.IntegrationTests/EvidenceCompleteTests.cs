@@ -101,9 +101,11 @@ public sealed partial class EvidenceCompleteTests(PostgresTenancyFixture fixture
 
     /// <summary>
     /// The shared database with this test's own org and a project created through the real registry routes, plus
-    /// a host whose requests carry <paramref name="principal"/> and the object-store configuration.
+    /// a host whose requests carry <paramref name="principal"/> and the object-store configuration. A world that
+    /// drives the queue's own hop passes <paramref name="workerQueue"/>, which asks the host for the worker-role
+    /// data source the dispatcher runs on (the Api composes none).
     /// </summary>
-    private async Task<World> StartAsync(RequestPrincipal principal, string? database = null)
+    private async Task<World> StartAsync(RequestPrincipal principal, string? database = null, bool workerQueue = false)
     {
         database ??= await _fixture.SharedDatabaseAsync();
         var api = hosts.RealResolver(database);
@@ -118,7 +120,10 @@ public sealed partial class EvidenceCompleteTests(PostgresTenancyFixture fixture
             project = await CreateProjectAsync(setup, user, org, Unique.Slug("checkout"));
         }
 
-        var host = hosts.WithPrincipalConfigured(database, org, project, principal, _store.Configuration());
+        var host = workerQueue
+            ? TenancyApiFactory.WithPrincipal(
+                _fixture.AppConnectionString(database), org, project, principal, _store.Configuration(), workerQueue: true)
+            : hosts.WithPrincipalConfigured(database, org, project, principal, _store.Configuration());
 
         return new World(api, host, host.CreateClient(), database, user, org, project);
     }
@@ -261,6 +266,8 @@ public sealed partial class EvidenceCompleteTests(PostgresTenancyFixture fixture
     /// <summary>Runs one real outbox dispatch batch (01.5.1-T3) — the hop the API host itself never runs.</summary>
     private static async Task DispatchAsync(World world)
     {
+        // The dedicated world asked for the worker-role source (StartAsync, workerQueue: true): the dispatcher is
+        // the production class over it, so the hop runs as the role that owns public.task and public.outbox.
         var dataSource = world.Host.Services.GetRequiredKeyedService<NpgsqlDataSource>(TaskWorkerDataSource.Key);
         using var dispatcher = new OutboxDispatcher(
             dataSource, Options.Create(new TasksOptions()), NullLogger<OutboxDispatcher>.Instance);

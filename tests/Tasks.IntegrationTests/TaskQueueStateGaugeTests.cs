@@ -119,7 +119,7 @@ public sealed class TaskQueueStateGaugeTests
     }
 
     /// <summary>
-    /// The snapshot walks the live-backlog index for the age and the dead-letter index for the depth, with
+    /// The snapshot walks the live-backlog index for the age and a dead-letter index for the depth, with
     /// sequential scans disabled so a small table cannot hide a plan that would scan all task history.
     /// </summary>
     [Fact]
@@ -141,7 +141,14 @@ public sealed class TaskQueueStateGaugeTests
 
             var plan = (string)(await command.ExecuteScalarAsync(Token))!;
             plan.ShouldContain("task_claim_idx");
-            plan.ShouldContain("task_dead_idx");
+
+            // `task_dead_idx` and the operator page's `task_dead_org_idx` share the
+            // `state = 'dead_letter'` predicate, so both return the same rows for the depth; which
+            // one the planner walks is a cost decision (at a handful of rows the two tie on pages,
+            // and the wider per-org index is picked). The contract is a dead-letter index, never
+            // the task table.
+            plan.ShouldMatch("task_dead(_org)?_idx");
+
             plan.ShouldNotContain("Seq Scan");
         }
         finally
