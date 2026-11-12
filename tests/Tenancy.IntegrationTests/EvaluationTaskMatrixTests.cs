@@ -59,7 +59,7 @@ public sealed partial class EvaluationTaskTests
     public async Task Matrix_Row_IsStored_AndReloadsAsTheContractValues(string name)
     {
         var row = MatrixRow(name);
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedMatrixAsync(world, row);
         var cancellationToken = TestContext.Current.CancellationToken;
 
@@ -100,7 +100,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task StoredRow_RecomputedFromTheSameInputs_IsByteIdentical()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedMatrixAsync(world, MatrixRow("M2"));
         var cancellationToken = TestContext.Current.CancellationToken;
 
@@ -126,7 +126,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task StoredExceptionsHash_IsThePinnedCanonicalDigestOfTheActiveSet()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedMatrixAsync(world, MatrixRow("M1"));
         await InsertPinnedExceptionsAsync(world, seed);
 

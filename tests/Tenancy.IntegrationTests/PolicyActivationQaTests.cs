@@ -16,7 +16,7 @@ namespace Tenancy.IntegrationTests;
 /// successful re-activation, and the app role's write grant on <c>run</c>.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class PolicyActivationQaTests : IClassFixture<TenancyHostPool>
+public sealed class PolicyActivationQaTests
 {
     private const string BodyA = """{"flaky_budget":3,"required_suites":["smoke","regression"]}""";
 
@@ -26,9 +26,7 @@ public sealed class PolicyActivationQaTests : IClassFixture<TenancyHostPool>
 
     private readonly PostgresTenancyFixture _fixture;
 
-    private readonly TenancyHostPool _hosts;
-
-    public PolicyActivationQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
+    public PolicyActivationQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
 
     private sealed record World(
         TenancyApiFactory Api,
