@@ -73,6 +73,8 @@ public static partial class ContainerStart
                 name,
                 () => ResourceReaper.IsUnavailable,
                 token => WithHostLockAsync(
+                    HostLockPath,
+                    HostLockWait,
                     () => ResourceReaper.GetAndStartDefaultAsync(auth, NullLogger.Instance, false, token),
                     logger,
                     token),
@@ -212,11 +214,15 @@ public static partial class ContainerStart
     // Ten test processes of one full gate start their reaper within seconds of each other; a host-wide lock
     // spreads those creates so dockerd answers each inside the client's 100 s timeout. A lock that cannot be
     // taken in time only costs the spreading, so the start then goes ahead without it.
-    private static async Task WithHostLockAsync(Func<Task> action, Action<string> log, CancellationToken cancellationToken)
+    public static async Task WithHostLockAsync(
+        string path,
+        TimeSpan wait,
+        Func<Task> action,
+        Action<string> log,
+        CancellationToken cancellationToken)
     {
-        var path = Path.Combine(Path.GetTempPath(), "evidgate-ryuk-start.lock");
         using var lockWait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        lockWait.CancelAfter(HostLockWait);
+        lockWait.CancelAfter(wait);
         FileStream? handle = null;
         try
         {
@@ -250,6 +256,8 @@ public static partial class ContainerStart
     }
 
     private static readonly TimeSpan HostLockWait = TimeSpan.FromSeconds(60);
+
+    private static readonly string HostLockPath = Path.Combine(Path.GetTempPath(), "evidgate-ryuk-start.lock");
 
     /// <summary>The id the daemon quotes in a 409 ("is already in use by container \"id\""), or null.</summary>
     public static string? ConflictingContainerId(Exception exception, string containerName)
