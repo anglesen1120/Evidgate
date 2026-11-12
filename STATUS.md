@@ -60,7 +60,7 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 | 06.2.2-T1 | T1.2 | #503 |
 | 06.3.6-T1 | T1.4 | #243, #250, #262 |
 | 07.2.2-T2 | T2.2 | #385 |
-| 08.5.1-T1 | T1.3, T1.4, T1.5, T1.6, T1.7 | #306 |
+| 08.5.1-T1 | T1.5, T1.6, T1.7 | #306, #814 |
 | 09.1.1-T6 | T6.2 | #139 |
 | 09.6.1-T6 | T6.2 | #346, #364 |
 | 09.8.1-T3 | T3.2, T3.4 | #561, #637 (T3.3 landed: blocking CI e2e job and browser a11y stage; T3.2 failure triage and evidence viewer specs stay open) |
@@ -305,7 +305,7 @@ Stricter variant that also requires every dependency task's whole story to be me
 | 04.8.1-T1 | M | Emit `results` usage rows through `IUsageLedger.RecordAsync` in the accepted-batch transaction; unblocked by 12.3.1-T1 (04.1.1-T2 merged). Earlier T1.1 shipped the `usage.batch_accepted` outbox row (`IngestEventBatch.cs:590`, `IngestEventBatchTests.cs:186`). LANDED by S212 (#440, 4925b0f4): the `usage.batch_accepted` handler, fail-closed duplicate key compare (`IUsageLedger.FindAsync`) and the Architecture rules; AC3 reprocess test open until 04.4.2 exists (see carried rows 'Usage meter'). | yes | yes (0049+) | no | n/a | yes |
 | 06.2.2-T1 | M | Adapter capability + per-project options (disable kinds, allowlisted redaction rules) with 04; PARTIAL (S241, #503, 0071): capture-options read `GET /v1/projects/{p}/artifact-kind-policy`, `redaction_rule` table + allowlist, `ICaptureOptionsReader` landed, AC2 earlier (S220); AC4 run-create config document and AC5 next-run-only remain (carried row "Capture options not delivered to runs (S241)") | yes | yes (0049+) | no | n/a | yes |
 | 06.2.3-T1 | M | Async secret-scan `task` handler (outbox row written by `complete`): scan the object, set `scan_state`, write `masking_event`, enforce `reject_on_secret`; LANDED by S214 (#450, 4d2b26ae, migration 0066; AC4 stays with 06.2.1, residuals in the carried rows) | yes | yes (0049+) | no | n/a | yes |
-| 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1; partial: T1.1-T1.2 landed by S145 (#306, f8fd2f56; `healing_llm_call`, `healing_llm_budget`, provider seam, migration 0054), T1.3-T1.7 open | yes | yes (0049+) | no | T1.1-T1.2 ; T1.3-T1.4 ; T1.5-T1.6-T1.7 | yes (dep 12.3.1-T1 merged; `MockHealingLlmProvider` covers tests) |
+| 08.5.1-T1 | XL | Evidgate-provided AI gateway (split before build); unblocked by 12.3.1-T1; partial: T1.1-T1.2 landed by S145 (#306, f8fd2f56; `healing_llm_call`, `healing_llm_budget`, provider seam, migration 0054), T1.3-T1.4 landed by S402 (#814, 009af9ec; schema-validated output, two-phase budget), T1.5-T1.7 open | yes | yes (0049+) | no | T1.1-T1.2 ; T1.3-T1.4 ; T1.5-T1.6-T1.7 | yes (dep 12.3.1-T1 merged; `MockHealingLlmProvider` covers tests) |
 | 10.1.1-T3 | L | Environment bootstrap automation | yes | no | no | T3.1-T3.2 ; T3.3-T3.4 | yes for the scripts; AC5 needs a live instance. Landed in #558 (18de5766): T3.1 database bootstrap and T3.2 bucket bootstrap; T3.3 landed in #815 (564a2742, `scripts/env/secret-placeholders.mjs`); T3.4 open; AC5 verifies the four evidgate_* roles of migration 0001, not the three the plan names (D-S270-Q1) |
 | 10.1.2-T1 | M | Secret inventory and CI check | yes | no | no | n/a | yes PARTIAL (S250, #516): AC1 runbook anchors open |
 | 10.1.2-T2 | XS | Repository secret scanning and push protection | yes | no | no | n/a | yes (needs repo-admin token; ⚠️ plan feature availability) |
