@@ -92,9 +92,17 @@ public static class ContainerStart
 
         var auth = TestcontainersSettings.OS.DockerEndpointAuthConfig;
         var name = $"testcontainers-ryuk-{ResourceReaper.DefaultSessionId:D}";
-        await ReaperLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // The lock wait counts against the budget: a queued fixture must not add a second budget behind a failed one.
+        options ??= ContainerStartOptions.Default;
+        var deadline = DateTime.UtcNow + options.Budget;
+        if (!await ReaperLock.WaitAsync(options.Budget, cancellationToken).ConfigureAwait(false))
+        {
+            throw new TimeoutException($"Waiting for another fixture to start the Ryuk reaper exceeded {options.Budget}.");
+        }
+
         try
         {
+            options = options with { Budget = deadline - DateTime.UtcNow };
             await EnsureResourceReaperAsync(
                 name,
                 () => ResourceReaper.IsUnavailable,
@@ -143,9 +151,16 @@ public static class ContainerStart
         options ??= ContainerStartOptions.Default;
         log ??= static message => Console.Error.WriteLine(message);
         var deadline = DateTime.UtcNow + options.Budget;
+        ExceptionDispatchInfo? failure = null;
         for (var attempt = 1; isUnavailable(); attempt++)
         {
+            // Cleanup and the delay can overshoot the deadline; surface the Docker failure, not a negative timeout.
             var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                failure?.Throw();
+            }
+
             using var attemptTimeout = new CancellationTokenSource(
                 remaining < options.AttemptTimeout ? remaining : options.AttemptTimeout);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, attemptTimeout.Token);
@@ -167,6 +182,7 @@ public static class ContainerStart
                     $"[container-start] reaper attempt {attempt}/{options.MaxAttempts} failed in "
                     + $"{FailingCall(exception)}: {exception.GetType().Name}: {exception.Message}; "
                     + $"removing {ownContainerName} and retrying in {options.Delay.TotalSeconds:0.#}s");
+                failure = ExceptionDispatchInfo.Capture(exception);
                 await RemoveQuietlyAsync(removeOwnContainer, deadline, options, log).ConfigureAwait(false);
             }
 

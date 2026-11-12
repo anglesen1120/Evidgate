@@ -18,31 +18,43 @@ public sealed class ContainerStartReaperTests
         Delay: TimeSpan.FromMilliseconds(1),
         DisposeTimeout: TimeSpan.FromSeconds(5));
 
-    // Models dockerd: the container named like the reaper exists once any create reached it, and a create
-    // under an existing name answers 409 until that container is removed.
+    // Models dockerd: a create the client gave up on still lands later, and a create under an existing
+    // name answers 409 until that container is removed.
     private sealed class FakeDocker
     {
+        private bool _lateCreatePending;
+
         public bool RyukExists { get; private set; }
 
         public bool Started { get; private set; }
 
         public int Removed { get; private set; }
 
+        public int Conflicts { get; private set; }
+
         public List<string> Log { get; } = [];
 
         public Task StartReaper(int attempt, CancellationToken token)
         {
+            if (_lateCreatePending)
+            {
+                RyukExists = true;
+                _lateCreatePending = false;
+            }
+
             if (RyukExists)
             {
+                Conflicts++;
                 throw new DockerApiException(HttpStatusCode.Conflict, $"Conflict. The container name \"/{Own}\" is already in use by container \"abc\".");
             }
 
-            RyukExists = true;
             if (attempt == 1)
             {
+                _lateCreatePending = true;
                 throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.");
             }
 
+            RyukExists = true;
             Started = true;
             return Task.CompletedTask;
         }
@@ -76,7 +88,8 @@ public sealed class ContainerStartReaperTests
 
         docker.Started.ShouldBeTrue();
         docker.RyukExists.ShouldBeTrue();
-        docker.Removed.ShouldBe(1);
+        docker.Conflicts.ShouldBe(1);
+        docker.Removed.ShouldBe(2);
         docker.Log.ShouldContain(line => line.Contains("reaper attempt 1/3", StringComparison.Ordinal));
     }
 
@@ -122,6 +135,26 @@ public sealed class ContainerStartReaperTests
         }, tight));
 
         calls.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Cleanup_that_spends_the_budget_surfaces_the_docker_failure()
+    {
+        var docker = new FakeDocker();
+        var tight = Fast with { Budget = TimeSpan.FromMilliseconds(300), Delay = TimeSpan.FromMilliseconds(1) };
+        var failure = new TaskCanceledException("timeout");
+
+        await Should.ThrowAsync<TaskCanceledException>(() => ContainerStart.EnsureResourceReaperAsync(
+            Own,
+            () => true,
+            async _ =>
+            {
+                await Task.Yield();
+                throw failure;
+            },
+            async token => await Task.Delay(TimeSpan.FromMilliseconds(400), token),
+            tight,
+            docker.Log.Add));
     }
 
     [Fact]
