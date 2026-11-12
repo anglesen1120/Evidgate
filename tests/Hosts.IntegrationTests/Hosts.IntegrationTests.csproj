@@ -26,6 +26,7 @@
   <ItemGroup>
     <Compile Include="..\Shared\ContainerImages.cs" Link="ContainerImages.cs" />
     <Compile Include="..\Shared\ContainerStart.cs" Link="ContainerStart.cs" />
+    <Compile Include="..\Shared\ContainerStartReaper.cs" Link="ContainerStartReaper.cs" />
     <Compile Include="..\Shared\ContractSchemaWarmup.cs" Link="ContractSchemaWarmup.cs" />
     <Compile Include="..\Shared\TemplateDatabase.cs" Link="TemplateDatabase.cs" />
     <!-- The anonymous JSON probe the transport suites (correlation, envelope, endpoint filters) POST to. -->
