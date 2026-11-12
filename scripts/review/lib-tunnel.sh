@@ -80,7 +80,7 @@ rv_quick_tunnel_url() { # TIMEOUT_SECONDS
 rv_wait_http() { # URL TIMEOUT_SECONDS "ACCEPTED CODES" LABEL
   local url="$1" timeout="$2" accepted="$3" label="$4" code="000" deadline
   case "${RV_WAIT_HTTP_MAX_SECONDS:-}" in
-    '' | *[!0-9]*) ;;
+    '' | *[!0-9]* | ??????????*) ;; # not a plain number, or too long for bash arithmetic
     *) [ "$((10#$RV_WAIT_HTTP_MAX_SECONDS))" -lt "$timeout" ] && timeout=$((10#$RV_WAIT_HTTP_MAX_SECONDS)) ;;
   esac
   deadline=$((timeout + SECONDS))
