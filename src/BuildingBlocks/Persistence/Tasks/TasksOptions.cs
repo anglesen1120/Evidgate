@@ -111,6 +111,18 @@ public sealed class TasksOptions
     /// <c>ISecretProvider</c> (10.1.1-T2).
     /// </summary>
     public string SweepConnectionString { get; internal set; } = string.Empty;
+
+    /// <summary>
+    /// Connection string of <c>evidgate_worker</c>, the role that owns the queue:
+    /// <c>public.task</c> and <c>public.outbox</c> are writable by it alone, so the
+    /// dispatcher, the claim/lease path and the retention delete run on this second
+    /// credential. A module keeps the app role, which holds <c>INSERT</c> only. Optional
+    /// at bind time because an Api never opens it; the Worker refuses to boot without
+    /// it, naming this key. The setter is internal so only
+    /// <c>TasksOptionsSecretPostConfigure</c>, resolving through <c>ISecretProvider</c>,
+    /// can write it.
+    /// </summary>
+    public string WorkerConnectionString { get; internal set; } = string.Empty;
 }
 
 /// <summary>One consumed queue and its concurrency limit (§7: per-queue poller).</summary>

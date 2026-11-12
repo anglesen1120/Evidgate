@@ -106,7 +106,7 @@ public sealed class CorrelationTraceTests
         client.DefaultRequestHeaders.TryAddWithoutValidation(RequestIdHeader, "req-correlation-db");
 
         using var response = await client.GetAsync(
-            "/internal/operator/tasks/dead-letter?queue=correlation", Token);
+            $"/internal/operator/tasks/dead-letter?org_id={Guid.CreateVersion7():D}&queue=correlation", Token);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var server = await WaitForAsync(

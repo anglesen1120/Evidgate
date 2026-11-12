@@ -120,6 +120,7 @@ public sealed class SecretProviderBootTests
             ["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30",
             ["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00",
             ["EVIDGATE:Tasks:SweepConnectionString"] = sweepConnectionString,
+            ["EVIDGATE:Tasks:WorkerConnectionString"] = WorkerHostFactory.WorkerConnection(FirstConnectionString),
             [IsolationSelfCheckEnvironment.InMemoryKey] = IsolationSelfCheckEnvironment.Disabled,
         });
 

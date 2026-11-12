@@ -47,16 +47,8 @@ public sealed class SkeletonBootTests
         {
             using var worker = ProcessRunner.Start(
                 HostLocator.AppHost("Evidgate.Worker"),
-                new Dictionary<string, string>
-                {
-                    ["DOTNET_ENVIRONMENT"] = "Production",
-                    ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = connectionString,
-                    [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
-                    ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
-                    ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
-                    ["EVIDGATE__WORKER__HEALTHPORT"] = workerPort.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    ["EVIDGATE__WORKER__READINESSPOLLMILLISECONDS"] = "100",
-                });
+                WorkerChildEnvironment.Build(
+                    connectionString, connectionString.WorkerConnectionString, workerPort, isolationSelfCheckDisabled: true));
 
             try
             {

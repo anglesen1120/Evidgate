@@ -135,6 +135,10 @@
       "origin": "secret-store",
       "from": "provider secret store: the prod-only evidgate_worker_sched credential for the owner SECURITY DEFINER sweeps (TL T80). The sweep role's credential is per environment like every other one"
     },
+    "EVIDGATE__TASKS__WORKERCONNECTIONSTRING": {
+      "origin": "secret-store",
+      "from": "provider secret store: the prod-only evidgate_worker credential for the queue (claim/ack/dispatch/prune on public.task and public.outbox). Per environment like every other credential, and the Api never holds it"
+    },
     "EVIDGATE__TASKS__VISIBILITYTIMEOUTSECONDS": {
       "origin": "default",
       "from": "option default 300"
@@ -222,6 +226,10 @@
     "EVIDGATE_SEAWEEDFS_S3_CONFIG": {
       "origin": "default",
       "from": "dev-stack only: the committed local identity is accepted by the local container and by nothing else"
+    },
+    "EVIDGATE_WORKER_PASSWORD": {
+      "origin": "default",
+      "from": "dev-stack only; prod holds the same role's password in the provider secret store, referenced by EVIDGATE__TASKS__WORKERCONNECTIONSTRING"
     },
     "EVIDGATE_WORKER_SCHED_PASSWORD": {
       "origin": "default",

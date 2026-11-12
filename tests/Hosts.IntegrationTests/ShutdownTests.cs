@@ -39,17 +39,8 @@ public sealed class ShutdownTests
         var workerPort = HostLocator.FreePort();
         var workerResult = await ProcessRunner.RunThenSigtermAsync(
             HostLocator.AppHost("Evidgate.Worker"),
-            new Dictionary<string, string>
-            {
-                ["DOTNET_ENVIRONMENT"] = "Production",
-                ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
-                ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
-                ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
-                [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
-                ["EVIDGATE__WORKER__HEALTHPORT"] =
-                    workerPort.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ["EVIDGATE__WORKER__READINESSPOLLMILLISECONDS"] = "100",
-            },
+            WorkerChildEnvironment.Build(
+                DeadConnectionString, WorkerChildEnvironment.Unreachable, workerPort, isolationSelfCheckDisabled: true),
             $"http://127.0.0.1:{workerPort}/internal/health/live",
             TimeSpan.FromSeconds(30),
             TestContext.Current.CancellationToken);

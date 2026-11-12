@@ -165,7 +165,7 @@ public sealed class ClaimHelperTests
             await TaskSql.SeedTaskAsync(owner, Queue, TaskHandlerTypes.Recording, idempotencyKey: $"seed:{index}");
         }
 
-        await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
+        await using var connection = new NpgsqlConnection(_fixture.WorkerConnectionString(database));
         await connection.OpenAsync(Token);
         await TaskSql.ExecuteAsync(connection, "set enable_seqscan = off");
 

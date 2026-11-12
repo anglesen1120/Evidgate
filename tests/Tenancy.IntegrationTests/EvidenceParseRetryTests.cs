@@ -115,7 +115,7 @@ public sealed class EvidenceParseRetryTests(PostgresTenancyFixture fixture, Seaw
         await InsertParseOutboxAsync(database, org, artifactId);
 
         using var dispatcher = new OutboxDispatcher(
-            host.Services.GetRequiredService<NpgsqlDataSource>(),
+            host.Services.GetRequiredKeyedService<NpgsqlDataSource>(TaskWorkerDataSource.Key),
             Options.Create(new TasksOptions()),
             NullLogger<OutboxDispatcher>.Instance);
 

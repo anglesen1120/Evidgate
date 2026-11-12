@@ -266,14 +266,10 @@ public sealed partial class ReprocessEndpointTests
         return json + new string(' ', totalBytes - length);
     }
 
-    private async Task<long> ReprocessTasksAsync(World world)
-    {
-        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
-        return await scope.ScalarAsync<long>(
-            "select count(*) from public.outbox where org_id = @org and task_type = @task_type",
-            ("org", world.Org),
-            ("task_type", ReprocessTaskType));
-    }
+    private Task<long> ReprocessTasksAsync(World world) =>
+        _fixture.ScalarAsync<long>(
+            world.Database,
+            $"select count(*) from public.outbox where org_id = '{world.Org:D}' and task_type = '{ReprocessTaskType}'");
 
     private async Task SetRunStateAsync(World world, Guid runId, string state)
     {

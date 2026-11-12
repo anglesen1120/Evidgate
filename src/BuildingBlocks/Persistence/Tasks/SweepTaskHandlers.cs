@@ -1,5 +1,6 @@
 using Dapper;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 
@@ -10,9 +11,9 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 /// `dead_letter`) older than the retention window, in bounded batches.
 /// </summary>
 /// <remarks>
-/// This one runs on the ordinary app-role connection: `task` is the mechanism's
-/// own table, its DELETE grant is exactly this retention path (0008), and nothing
-/// else in the system deletes a task row.
+/// This one runs on the keyed worker-role connection: the retention delete is the only
+/// path that removes a task row, so <c>DELETE</c> on <c>public.task</c> belongs to
+/// <c>evidgate_worker</c> and the app role never holds it.
 /// </remarks>
 public sealed partial class TaskSweepTaskHandler : ITaskHandler<TaskSweepPayload>
 {
@@ -39,7 +40,9 @@ public sealed partial class TaskSweepTaskHandler : ITaskHandler<TaskSweepPayload
     private readonly NpgsqlDataSource _dataSource;
     private readonly ILogger<TaskSweepTaskHandler> _logger;
 
-    public TaskSweepTaskHandler(NpgsqlDataSource dataSource, ILogger<TaskSweepTaskHandler> logger)
+    public TaskSweepTaskHandler(
+        [FromKeyedServices(TaskWorkerDataSource.Key)] NpgsqlDataSource dataSource,
+        ILogger<TaskSweepTaskHandler> logger)
     {
         ArgumentNullException.ThrowIfNull(dataSource);
         ArgumentNullException.ThrowIfNull(logger);

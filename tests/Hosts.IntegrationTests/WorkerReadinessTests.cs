@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using Npgsql;
 using Xunit;
 
 namespace Hosts.IntegrationTests;
@@ -106,13 +107,14 @@ public sealed class WorkerReadinessTests
         }
     }
 
-    private static Task<RunningWorker> StartWorkerAsync(string connectionString, out int port)
+    private Task<RunningWorker> StartWorkerAsync(string connectionString, out int port)
     {
         port = HostLocator.FreePort();
         return RunningWorker.StartAsync(
             connectionString,
             port,
-            cancellationToken: TestContext.Current.CancellationToken);
+            cancellationToken: TestContext.Current.CancellationToken,
+            workerConnectionString: _postgres.WorkerConnectionString(new NpgsqlConnectionStringBuilder(connectionString).Database!));
     }
 
     private static async Task<HttpResponseMessage> GetAsync(int port, string path)

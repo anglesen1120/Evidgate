@@ -238,6 +238,7 @@ public sealed class UsageRollupScheduleTests
             [$"{TasksOptions.SectionName}:BatchSize"] = "50",
             [$"{TasksOptions.SectionName}:VisibilityTimeoutSeconds"] = "300",
             [$"{TasksOptions.SectionName}:ScheduleLookbackSeconds"] = "300",
+            [$"{TasksOptions.SectionName}:WorkerConnectionString"] = _fixture.WorkerConnectionString(database),
         };
 
         var services = new ServiceCollection();

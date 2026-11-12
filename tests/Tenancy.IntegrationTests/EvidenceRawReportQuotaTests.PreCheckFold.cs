@@ -62,7 +62,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
         gate.Peeks.ShouldBe(1);
         var probes = world.Host.Statements.Snapshot()
-            .Where(statement => statement.Contains("public.outbox as o", StringComparison.Ordinal))
+            .Where(statement => statement.Contains("public.outbox_task_in_scope as ot", StringComparison.Ordinal))
             .ToList();
         probes.ShouldHaveSingleItem("the deferred probe and the run facts are one round trip");
         probes[0].ShouldContain("public.run r");
@@ -107,7 +107,7 @@ public sealed partial class EvidenceRawReportQuotaTests
         outcome.Status.ShouldBe(ParseRawReportOutcome.Parsed);
         gate.Peeks.ShouldBe(0);
         world.Host.Statements.Snapshot()
-            .Count(statement => statement.Contains("public.outbox as o", StringComparison.Ordinal))
+            .Count(statement => statement.Contains("public.outbox_task_in_scope as ot", StringComparison.Ordinal))
             .ShouldBe(1, "the probe is one round trip even when the attempt was never deferred");
     }
 

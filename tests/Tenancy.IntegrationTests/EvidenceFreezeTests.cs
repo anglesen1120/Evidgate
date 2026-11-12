@@ -1128,8 +1128,8 @@ public sealed class EvidenceFreezeTests : IClassFixture<TenancyHostPool>
     }
 
     /// <summary>
-    /// The dispatcher's stamp on the parse outbox row. The app role may only insert outbox rows, so the stamp runs as
-    /// the owner, exactly the role the dispatcher holds.
+    /// The dispatcher's stamp on the parse outbox row. The app role may only insert outbox rows, so the stamp is
+    /// applied out of band through the fixture's superuser connection.
     /// </summary>
     private Task DispatchParseOutboxAsync(World world, Guid artifactId) =>
         _fixture.ExecuteAsync(
@@ -1140,11 +1140,13 @@ public sealed class EvidenceFreezeTests : IClassFixture<TenancyHostPool>
 
     /// <summary>
     /// The consumer's own transition of <paramref name="artifactId"/>'s parse row, keyed the way the dispatcher writes
-    /// it: the handler's verdict is durable in its transaction, so the row moves only after that commit.
+    /// it and run as the queue role that owns the transition: the handler's verdict is durable in its transaction, so
+    /// the row moves only after that commit.
     /// </summary>
     private async Task SetParseTaskStateAsync(World world, Guid artifactId, string state)
     {
-        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        await using var scope = await TenantScope.BeginAsync(
+            _fixture.WorkerConnectionString(world.Database), world.Org);
 
         (await scope.ExecuteAsync(
             "update public.task set state = @state "
@@ -1159,31 +1161,25 @@ public sealed class EvidenceFreezeTests : IClassFixture<TenancyHostPool>
     }
 
     /// <summary>
-    /// The parse consumer's rejection, in the order that makes the verdict durable first: the guarded
-    /// <c>ready → rejected</c> write, then the task's <c>done</c>.
+    /// The parse consumer's rejection, verdict first: the guarded <c>ready → rejected</c> write as the app role
+    /// that owns the artifact, then the task's <c>done</c> through the queue role's own transition.
     /// </summary>
     private async Task RejectReportAsync(World world, Guid artifactId)
     {
-        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
+        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
+        {
+            (await scope.ExecuteAsync(
+                "update public.artifact set state = @state, failure_code = @failure_code "
+                + "where org_id = @org_id and id = @id and state = 'ready'",
+                ("state", ArtifactState.Rejected),
+                ("failure_code", ArtifactFailureCode.ParseCrashed),
+                ("org_id", world.Org),
+                ("id", artifactId)))
+                .ShouldBe(1);
+            await scope.CommitAsync();
+        }
 
-        (await scope.ExecuteAsync(
-            "update public.artifact set state = @state, failure_code = @failure_code "
-            + "where org_id = @org_id and id = @id and state = 'ready'",
-            ("state", ArtifactState.Rejected),
-            ("failure_code", ArtifactFailureCode.ParseCrashed),
-            ("org_id", world.Org),
-            ("id", artifactId)))
-            .ShouldBe(1);
-
-        (await scope.ExecuteAsync(
-            "update public.task set state = 'done' "
-            + "where org_id = @org_id and task_type = 'artifact_parse' "
-            + "and payload ->> 'artifact_id' = @artifact_id",
-            ("org_id", world.Org),
-            ("artifact_id", artifactId.ToString("D", CultureInfo.InvariantCulture))))
-            .ShouldBe(1);
-
-        await scope.CommitAsync();
+        await SetParseTaskStateAsync(world, artifactId, "done");
     }
 
     // ------------------------------------------------------------------ authz: no HTTP surface

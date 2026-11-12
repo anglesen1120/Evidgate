@@ -379,7 +379,7 @@ public sealed class TaskCorrelationPipelineTests
         }
 
         // Dispatch copies the payload verbatim into the task row (0006/0009 contract).
-        var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         await using (dataSource)
         {
             using var dispatcher = new OutboxDispatcher(
@@ -525,7 +525,7 @@ public sealed class QueuePollSpanTests
         var database = await _fixture.CreateDatabaseAsync();
         var activities = new ConcurrentQueue<Activity>();
         using var listener = Listen(activities);
-        var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         await using (dataSource)
         {
             var claimer = new TaskClaimer(
@@ -576,7 +576,7 @@ public sealed class QueuePollSpanTests
         var database = await _fixture.CreateDatabaseAsync();
         var activities = new ConcurrentQueue<Activity>();
         using var listener = Listen(activities);
-        var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         await using (dataSource)
         {
             using var dispatcher = new OutboxDispatcher(
@@ -662,7 +662,7 @@ public sealed class TaskQueueWriterPayloadTests
     public async Task Enqueue_Falls_Back_To_The_Unstamped_Payload_When_The_Carrier_Crosses_The_Cap()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         await using (dataSource)
         {
             using var listener = Listen();
@@ -712,7 +712,7 @@ public sealed class TaskQueueWriterPayloadTests
     public async Task Enqueue_Still_Rejects_A_Payload_That_Is_Too_Large_On_Its_Own()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         await using (dataSource)
         {
             using var listener = Listen();

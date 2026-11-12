@@ -63,6 +63,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+    private readonly string _workerPassword = "worker-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly Stopwatch _suiteClock = new();
 
     private NpgsqlDataSource? _appDataSource;
@@ -109,6 +110,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
             _container = parent._container;
             _ownerPassword = parent._ownerPassword;
             _appPassword = parent._appPassword;
+            _workerPassword = parent._workerPassword;
 
             // The copy exists: there is nothing left to start.
             _start = Task.CompletedTask;
@@ -151,6 +153,15 @@ public sealed class DatabaseFixture : IAsyncLifetime
         {
             EnsureStarted();
             return Build(DatabaseOwnerRole, _ownerPassword, _database);
+        }
+    }
+
+    public string WorkerConnectionString
+    {
+        get
+        {
+            EnsureStarted();
+            return Build("evidgate_worker", _workerPassword, _database);
         }
     }
 
@@ -290,7 +301,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
         {
             await ExecuteAsync(
                 connection,
-                $"alter role {ApplicationRole} login password '{_appPassword}'",
+                $"alter role {ApplicationRole} login password '{_appPassword}'; "
+                + $"alter role evidgate_worker login password '{_workerPassword}'",
                 cancellationToken);
         }
 

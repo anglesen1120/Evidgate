@@ -72,7 +72,7 @@ public sealed class RlsIsolationTests : HarnessTest
     /// because FORCE row level security only binds a non-bypass owner — an owner with
     /// <c>BYPASSRLS</c> would read every tenant's rows through its own policy.
     /// </summary>
-    private static readonly string[] EvidgateRoles = ["evidgate_owner", "evidgate_app", "evidgate_operator", "evidgate_worker_sched"];
+    private static readonly string[] EvidgateRoles = ["evidgate_owner", "evidgate_app", "evidgate_operator", "evidgate_worker", "evidgate_worker_sched"];
 
     /// <summary>
     /// The three 01 mechanism tables the exception list's <c>mechanism</c> kind is pinned to
@@ -93,12 +93,13 @@ public sealed class RlsIsolationTests : HarnessTest
 
     /// <summary>
     /// SEC6: relations of kind view/materialized view/foreign table that <c>evidgate_app</c> may
-    /// SELECT. Empty by construction — no migration creates a view, materialized view or foreign
-    /// table (a scan of <c>migrations/</c> for <c>create view</c>/<c>create materialized view</c>/
-    /// <c>create foreign table</c> returns nothing). A view added here must carry
-    /// <c>security_invoker=true</c>, asserted below.
+    /// SELECT. The queue's scoped views are the only entries — the task, the outbox, and the keyed
+    /// join of the two: they replace the app role's lost read of the mechanism tables, are owned by
+    /// the migration role and carry <c>security_barrier</c> with an explicit
+    /// <c>org_id = evidgate.current_org_id()</c> predicate (proven behaviourally by the worker-role
+    /// grant suite). A view added here must carry <c>security_barrier=true</c>, asserted below.
     /// </summary>
-    private static readonly string[] SelectableRelationAllowlist = [];
+    private static readonly string[] SelectableRelationAllowlist = ["public.task_in_scope", "public.outbox_in_scope", "public.outbox_task_in_scope"];
 
     private readonly ITestOutputHelper _output;
 
@@ -670,11 +671,11 @@ public sealed class RlsIsolationTests : HarnessTest
             if (SelectableRelationAllowlist.Contains(relation.Name, StringComparer.Ordinal))
             {
                 if (string.Equals(relation.Kind, "v", StringComparison.Ordinal)
-                    && !relation.Options.Contains("security_invoker=true", StringComparison.Ordinal))
+                    && !relation.Options.Contains("security_barrier=true", StringComparison.Ordinal))
                 {
                     failures.Add(
-                        $"{relation.Name}: allowlisted view must carry security_invoker=true so it reads with the "
-                        + "caller's privileges, not the view owner's");
+                        $"{relation.Name}: allowlisted view must carry security_barrier=true so its tenant "
+                        + "predicate cannot be reordered around");
                 }
 
                 continue;

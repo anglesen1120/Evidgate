@@ -34,6 +34,7 @@ public sealed class QaS271WorkerGate(PostgresTasksFixture fixture)
         var builder = WorkerHost.CreateBuilder(
         [
             $"--EVIDGATE:Database:ConnectionString={fixture.AppConnectionString(database)}",
+            $"--EVIDGATE:Tasks:WorkerConnectionString={fixture.WorkerConnectionString(database)}",
             "--EVIDGATE:Runs:Cancel:SoftStopDelay=00:00:30",
             "--EVIDGATE:Runs:Cancel:KillDelay=00:02:00",
             $"--EVIDGATE:Usage:QuotaGate:Enabled={enabled.ToString(CultureInfo.InvariantCulture)}",
