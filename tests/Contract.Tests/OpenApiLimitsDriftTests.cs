@@ -61,6 +61,19 @@ public sealed class OpenApiLimitsDriftTests
     }
 
     /// <summary>
+    /// The 409 a run create answers when its producer slots already differ in count is documented on the operation
+    /// itself, under the wire code the registry returns.
+    /// </summary>
+    [Fact]
+    public void OpenApi_RunCreateDocumentsTheProducerSlotsConflict()
+    {
+        var block = OperationBlock("createRun");
+
+        block.ShouldContain($"`{ApiErrorCode.ProducerSlotsConflict}`", Case.Sensitive);
+        block.ShouldContain("'409':", Case.Sensitive, "the operation must declare a 409 response");
+    }
+
+    /// <summary>
     /// The manifest upload documents the cap it enforces: the configurable default and the option that lowers it, never
     /// the retired fixed 256 KiB.
     /// </summary>
