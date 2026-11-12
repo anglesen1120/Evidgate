@@ -164,7 +164,7 @@ Roles are seeded as data from `contracts/permissions.json` (02 §3 D2); 00 §2 l
 ## 6. Security and privacy
 
 - **Untrusted input everywhere.** Repository content, sidecar manifests, OpenAPI files, producer names and AI output are untrusted: parsed with size/type limits, never executed at sync time, and never used to build SQL or file paths directly (DECISIONS F4, plan 11).
-- **GitHub App least privilege.** Read-only repository content + webhooks for V1; write access to contents/PRs only when the V2 draft workflow ships. The exact permission list is ⚠️ **unverified** in this plan and must be confirmed against GitHub's App documentation in story 03.4.1 before the App is published.
+- **GitHub App least privilege.** Read-only repository content + webhooks for V1; write access to contents/PRs only when the V2 draft workflow ships. The V1 sync permission set (Contents: read, Metadata: read) was verified against GitHub's documentation in 03.4.1-T1.1 (2026-11-13, `plans/features/03-catalog-authoring/03.4.1-commit-registration-and-catalog-sync.md` §3 note); Metadata auto-grant stays ⚠️ until the registration UI is read.
 - **Drafts and the platform.** The platform never holds a user's Git credentials; installation tokens are short-lived and never stored. A draft is only ever a PR (D10); protected branches are never written to.
 - **AI drafts.** Approved requirements only; LLM output is structured draft content with no shell, no secret access and no policy power (source §8); provenance (`ai_run_id`, model id, prompt hash) is stored so an auditor can see what produced the code; unapproved AI code runs only in the sandbox (D11).
 - **Secrets.** Suite/fixture revisions carry references, never values (D7); variant normalisation rejects secret-shaped data (D5); resolution happens in the customer CI or the agent's environment (11).
@@ -185,7 +185,7 @@ Roles are seeded as data from `contracts/permissions.json` (02 §3 D2); 00 §2 l
 | Annotation discipline in customer repos is weak (tests without ids) | high | medium | Import identity + UI mapping (D2/D13); onboarding in 12 makes annotated tests the default; templates always emit an id |
 | Monorepo same-name collisions make auto-mapping wrong | medium | high | Never auto-bind on name alone; propose a mapping only on a unique match, otherwise require the UI (D2) |
 | Catalog sync load (large repos, many commits) | medium | medium | Incremental sync per push, scheduled reconcile, pagination and rate-limit-aware backoff; measure in 10 |
-| Git host changes webhook payloads or App permissions | medium | medium | Payload hash + dedupe table, contract fixtures for the events we consume, ⚠️ permission list re-verified in 03.4.1 |
+| Git host changes webhook payloads or App permissions | medium | medium | Payload hash + dedupe table, contract fixtures for the events we consume, ✅ permission list verified in 03.4.1-T1.1 (Metadata auto-grant ⚠️) |
 | Sandbox dry run leaks tenant data into a draft or vice versa | low | high | Ephemeral namespace, no tenant secrets, one-shot identity, capability downgrade (D11); tested in 11 |
 | V2 scope creep: the draft editor becomes an IDE | medium | high | V1 is template + Git only (D9); V2 acceptance is "draft → dry run → PR", nothing more |
 | AI drafts produce plausible but wrong assertions | high | medium | Human review + assertion hash + provenance; AI code bound to approved requirements; evaluation task 03.7.1-T3 measures validity before any adoption |
@@ -245,7 +245,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 #### Story 03.4.1 Commit registration and catalog sync — acceptance: a push registers the commit and syncs cases/suite revisions idempotently; a duplicate or forged delivery never changes data; a suspended installation stops sync without deleting history.
 | ID | Task | Size | Version | Milestone | Depends on |
 |---|---|---|---|---|---|
-| 03.4.1-T1 | GitHub App registration + installation binding (minimal permission list ⚠️ to verify here) + `git_repo_binding`; GitHub API access via typed `HttpClient` + RS256 app JWT (`Microsoft.IdentityModel.JsonWebTokens`), no Octokit (T46) | L | V1 | G1 | 02.1.1-T2 |
+| 03.4.1-T1 | GitHub App registration + installation binding (minimal permission list verified in T1.1; Metadata auto-grant ⚠️) + `git_repo_binding`; GitHub API access via typed `HttpClient` + RS256 app JWT (`Microsoft.IdentityModel.JsonWebTokens`), no Octokit (T46) | L | V1 | G1 | 02.1.1-T2 |
 | 03.4.1-T2 | Webhook receiver: `X-Hub-Signature-256` verify → `evidgate_resolve` SECURITY DEFINER pre-tenant resolution (`installation_id`/`repository_id` → `org_id`, T1) → tenant scope → `webhook_delivery` dedupe → `catalog_sync` task | M | V1 | G1 | 03.4.1-T1 |
 | 03.4.1-T3 | Catalog sync task (tree walk, annotation/sidecar discovery, case upsert, revision append, rename + conflict report) + scheduled reconcile (Cronos, 00 §5.3) | M | V1 | G2 | 03.4.1-T2, 03.1.1-T2, 03.2.1-T1 |
 **Story 03.4.1 total: 4.0**
@@ -328,7 +328,7 @@ Sizes: XS 0.25 · S 0.5 · M 1 · L 2 · XL 3 (person-days, one senior full-stac
 | Q2 | Where dependency edges are declared: test metadata, suite definition file, or a CLI flag | QA Lead | before 03.2.1-T3 |
 | Q3 | OpenAPI skeleton scope in V1: which parts of a spec produce assertions (status/schema only?) | Tech Lead | before 03.5.1-T2 |
 | Q4 | May a `test_maintainer` create a PR from a `dry_failed` draft (with `allow_unverified`), or is it admin-only? | Product owner + QA Lead | before 03.6.1-T3 |
-| Q5 | Which GitHub App permissions are the minimum for V1 sync only (marked ⚠️ unverified here) | Tech Lead | before 03.4.1-T1 |
+| Q5 | Which GitHub App permissions are the minimum for V1 sync only (answered in 03.4.1-T1.1: Contents: read + Metadata: read; Metadata auto-grant ⚠️) | Tech Lead | before 03.4.1-T1 |
 | Q6 | Fixture seed format and who authors seed data (customer repo vs Evidgate-side fixture repo) | QA Lead | before 03.3.1-T1 |
 | Q7 | Should imported (unmapped) results be visible in reports before mapping, or hidden until resolved? | Product owner | before 03.1.2-T2 |
 | Q8 | Does V2 need multi-repo projects (one project, several repositories)? | Product owner | before 03.4.1-T1 |
