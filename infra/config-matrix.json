@@ -2046,6 +2046,46 @@
       "note": "the `service.version` resource attribute of traces, metrics and logs (10.3.1-T1.3); unset means the entry assembly's informational version, which in this repository is the SDK default (`1.0.0`): no build sets `Version` or `SourceRevisionId`, so the fallback does not tell two commits apart. A deployment sets the key per environment to the image tag or digest, so two builds of one commit, or a rollback, are distinguishable in the backend; the value is set by the deployment, never in the repository. A blank value fails the boot naming this key. The companion `deployment.environment` attribute is not a key of its own: it is the host environment name (`ASPNETCORE_ENVIRONMENT`/`DOTNET_ENVIRONMENT`, dev/staging/prod)."
     },
     {
+      "key": "EVIDGATE__API__MANAGEMENTPORT",
+      "scope": "runtime",
+      "consumers": ["api", "dev-stack"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "TCP port of the Api's management listener, which serves /metrics and the detailed /internal/health/ready body (reason and journal heads) and nothing else; the public listener answers 404 for /metrics and a status-only readiness body. Unset means the management surface is off: /metrics is not served at all and the readiness detail is not shown anywhere. The listener is added next to the public ones (ASPNETCORE_URLS / ASPNETCORE_HTTP_PORTS keep working), so the port must differ from every public port, or the boot fails naming this key. Which listener a request used is read from the connection's local port, never from a header. A deployment that sets it must keep the port off the public ingress and reachable by the metrics scraper only (00 §9.1, N9)."
+    },
+    {
+      "key": "EVIDGATE__API__MANAGEMENTADDRESS",
+      "scope": "runtime",
+      "consumers": ["api"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "IP address the Api's management listener binds when EVIDGATE__API__MANAGEMENTPORT is set; default 127.0.0.1, so the surface is unreachable off-host until a deployment names the instance's own interface for a scraper on another host (a container sets 0.0.0.0 and keeps the port off the published ports). A value that is not an IP literal fails the boot naming this key."
+    },
+    {
       "key": "EVIDGATE__WORKER__HEALTHADDRESS",
       "scope": "runtime",
       "consumers": ["dev-stack", "worker"],

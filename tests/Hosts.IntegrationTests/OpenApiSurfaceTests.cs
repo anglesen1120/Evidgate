@@ -13,14 +13,16 @@ public sealed class OpenApiSurfaceTests
     public async Task Internal_Routes_Absent_From_Served_Document()
     {
         await using var factory = new EvidgateApiFactory(
-            "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2");
+            "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2",
+            managementPort: EvidgateApiFactory.TestManagementPort);
         using var client = factory.CreateClient();
+        using var management = factory.CreateManagementClient();
 
         // The operational surface itself exists and answers.
         using var live = await client.GetAsync("/internal/health/live", TestContext.Current.CancellationToken);
         Assert.Equal(200, (int)live.StatusCode);
 
-        using var metrics = await client.GetAsync("/metrics", TestContext.Current.CancellationToken);
+        using var metrics = await management.GetAsync("/metrics", TestContext.Current.CancellationToken);
         Assert.Equal(200, (int)metrics.StatusCode);
 
         // The served OpenAPI document has the documented /v1 routes but no /internal/* path.

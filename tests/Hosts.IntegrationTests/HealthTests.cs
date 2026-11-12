@@ -23,8 +23,8 @@ public sealed class HealthTests
         // Valid shape, nothing listening on the port.
         var deadConnectionString = "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2";
 
-        await using var factory = new EvidgateApiFactory(deadConnectionString);
-        using var client = factory.CreateClient();
+        await using var factory = new EvidgateApiFactory(deadConnectionString, managementPort: EvidgateApiFactory.TestManagementPort);
+        using var client = factory.CreateManagementClient();
 
         using var response = await client.GetAsync("/internal/health/ready", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
@@ -43,8 +43,8 @@ public sealed class HealthTests
         // own 0001+), so it is always behind the baked expected head.
         await using var connectionString = await _postgres.CreateDatabaseAtHeadAsync("0000_behind.sql");
 
-        await using var factory = new EvidgateApiFactory(connectionString);
-        using var client = factory.CreateClient();
+        await using var factory = new EvidgateApiFactory(connectionString, managementPort: EvidgateApiFactory.TestManagementPort);
+        using var client = factory.CreateManagementClient();
 
         using var response = await client.GetAsync("/internal/health/ready", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
@@ -61,8 +61,8 @@ public sealed class HealthTests
         // expand/contract rollout (01.4.1 §11): the old code keeps serving (AC3).
         await using var connectionString = await _postgres.CreateDatabaseAtHeadAsync("9999_foundation_future.sql");
 
-        await using var factory = new EvidgateApiFactory(connectionString);
-        using var client = factory.CreateClient();
+        await using var factory = new EvidgateApiFactory(connectionString, managementPort: EvidgateApiFactory.TestManagementPort);
+        using var client = factory.CreateManagementClient();
 
         using var response = await client.GetAsync("/internal/health/ready", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -81,8 +81,8 @@ public sealed class HealthTests
         await using var connectionString = await _postgres.CreateDatabaseAtHeadAsync(PostgresFixture.ExpectedHead);
         await PostgresFixture.RevokeJournalSelectAsync(connectionString);
 
-        await using var factory = new EvidgateApiFactory(connectionString);
-        using var client = factory.CreateClient();
+        await using var factory = new EvidgateApiFactory(connectionString, managementPort: EvidgateApiFactory.TestManagementPort);
+        using var client = factory.CreateManagementClient();
 
         using var response = await client.GetAsync("/internal/health/ready", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
@@ -90,6 +90,23 @@ public sealed class HealthTests
         var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("check_failed", body, StringComparison.Ordinal);
         Assert.DoesNotContain("database_unreachable", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Ready_On_Public_Port_Answers_Status_Without_Detail()
+    {
+        await using var factory = new EvidgateApiFactory(
+            "Host=127.0.0.1;Port=1;Username=evidgate_app;Password=y;Database=evidgate;Timeout=2",
+            managementPort: EvidgateApiFactory.TestManagementPort);
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync("/internal/health/ready", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("\"status\":\"unready\"", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("database_unreachable", body, StringComparison.Ordinal);
+        Assert.Contains("\"expected_head\":null", body, StringComparison.Ordinal);
     }
 
     [Fact]

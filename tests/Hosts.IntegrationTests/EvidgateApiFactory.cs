@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -18,16 +19,39 @@ public sealed class EvidgateApiFactory : WebApplicationFactory<Program>
 {
     private readonly string? _connectionString;
     private readonly Action<IServiceCollection>? _configureServices;
+    private readonly int? _managementPort;
 
     /// <summary>Creates a factory; <paramref name="connectionString"/> feeds EVIDGATE__DATABASE__CONNECTIONSTRING.</summary>
     public EvidgateApiFactory(
         string? connectionString,
         CaptureLoggerProvider? capture = null,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        int? managementPort = null)
     {
+        _managementPort = managementPort;
         _connectionString = connectionString;
         _configureServices = configureServices;
         Capture = capture;
+    }
+
+    /// <summary>
+    /// Header a test sets to <see cref="ManagementPortHeaderValue"/> to make the in-memory server report the
+    /// management listener's local port, which a real connection takes from the socket.
+    /// </summary>
+    public const string ListenerHeader = "X-Test-Listener";
+
+    /// <summary>The <see cref="ListenerHeader"/> value that selects the management listener.</summary>
+    public const string ManagementPortHeaderValue = "management";
+
+    /// <summary>The management port a factory built with one reports; the in-memory server has no real listener.</summary>
+    public const int TestManagementPort = 18081;
+
+    /// <summary>Client of this factory whose requests arrive on the management listener.</summary>
+    public HttpClient CreateManagementClient()
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Add(ListenerHeader, ManagementPortHeaderValue);
+        return client;
     }
 
     /// <summary>Provider the tests read; added inside the app so redaction proves itself.</summary>
@@ -60,6 +84,11 @@ public sealed class EvidgateApiFactory : WebApplicationFactory<Program>
             settings["EVIDGATE:Runs:Cancel:SoftStopDelay"] = "00:00:30";
             settings["EVIDGATE:Runs:Cancel:KillDelay"] = "00:02:00";
 
+            if (_managementPort is { } managementPort)
+            {
+                settings["EVIDGATE:Api:ManagementPort"] = managementPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
             configuration.AddInMemoryCollection(settings);
         });
 
@@ -68,6 +97,7 @@ public sealed class EvidgateApiFactory : WebApplicationFactory<Program>
             // The transport suites POST to an anonymous JSON route; the host owns no such
             // route any more, so the probe joins the host pipeline (routing, envelope, filters).
             services.AddSingleton<IStartupFilter, Evidgate.Testing.TransportProbeStartupFilter>();
+            services.AddSingleton<IStartupFilter, ListenerPortStartupFilter>();
 
             if (Capture is not null)
             {
@@ -135,3 +165,22 @@ public sealed class CaptureLoggerProvider : ILoggerProvider
 
 /// <summary>One captured log line.</summary>
 public sealed record CapturedLog(string Category, LogLevel Level, EventId EventId, string Text);
+
+/// <summary>Reports the management listener's local port for a request that says it arrived there.</summary>
+internal sealed class ListenerPortStartupFilter : IStartupFilter
+{
+    /// <inheritdoc />
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+    {
+        app.Use((context, nextMiddleware) =>
+        {
+            if (context.Request.Headers[EvidgateApiFactory.ListenerHeader] == EvidgateApiFactory.ManagementPortHeaderValue)
+            {
+                context.Connection.LocalPort = EvidgateApiFactory.TestManagementPort;
+            }
+
+            return nextMiddleware(context);
+        });
+        next(app);
+    };
+}
