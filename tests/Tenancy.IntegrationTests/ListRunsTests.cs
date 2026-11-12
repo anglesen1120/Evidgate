@@ -17,19 +17,21 @@ namespace Tenancy.IntegrationTests;
 /// service credential is the permission stage's 403.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class ListRunsTests
+public sealed partial class ListRunsTests : IClassFixture<TenancyHostPool>
 {
     private const string ShaOne = "1111111111111111111111111111111111111111";
 
     private readonly PostgresTenancyFixture _fixture;
 
-    public ListRunsTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts;
+
+    public ListRunsTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     /// <summary>AC6: each filter selects exactly the run its identity field identifies.</summary>
     [Fact]
     public async Task ListRuns_FiltersEachField()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var branch = await CreateBranchAsync(world, "main", ShaOne);
         var pullRequest = await CreateRunAsync(
             world,
@@ -50,7 +52,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_FiltersCombined()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var branch = await CreateBranchAsync(world, "main", ShaOne);
         await CreateBranchAsync(world, "feature", ShaOne);
 
@@ -62,7 +64,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_NoMatch_EmptyPage()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateBranchAsync(world, "main", ShaOne);
 
         var answer = await ListAsync(world, "ref_name=does-not-exist");
@@ -80,7 +82,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_Pagination_TiesOnCreatedAt_StableAcrossPages()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateBranchAsync(world, "main", ShaOne);
         await CreateBranchAsync(world, "feature", ShaOne);
         await CreateBranchAsync(world, "release", ShaOne);
@@ -110,7 +112,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_InsertBetweenPages_NewRowSortsAfter()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var first = await CreateBranchAsync(world, "main", ShaOne);
         var second = await CreateBranchAsync(world, "feature", ShaOne);
         await _fixture.ExecuteAsync(
@@ -140,7 +142,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_TamperedCursor_422()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         // Two runs so that limit=1 yields a next_cursor to tamper with.
         await CreateBranchAsync(world, "main", ShaOne);
         await CreateBranchAsync(world, "main", ShaOne);
@@ -167,7 +169,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_BadLimit_422()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateBranchAsync(world, "main", ShaOne);
 
         foreach (var raw in new[] { "0", "201", "-1", "abc", "1.5" })
@@ -189,7 +191,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_BadFilterValues_422()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateBranchAsync(world, "main", ShaOne);
 
         (string Parameter, string Value)[] cases =
@@ -227,7 +229,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_UnknownProject_404()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await world.Client.SendAsync(
             HttpMethod.Get,
@@ -242,7 +244,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_CrossTenant_404()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateBranchAsync(world, "main", ShaOne);
 
         var otherUser = Guid.CreateVersion7();
@@ -266,7 +268,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_NoPermission_403()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateBranchAsync(world, "main", ShaOne);
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
 
@@ -289,7 +291,7 @@ public sealed partial class ListRunsTests
     [Fact]
     public async Task ListRuns_RowsCarryRefAndUnverifiedRef()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var run = await CreateBranchAsync(world, "main", ShaOne);
 
         var answer = await ListAsync(world, "limit=1");

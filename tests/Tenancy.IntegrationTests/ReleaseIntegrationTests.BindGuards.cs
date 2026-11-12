@@ -44,7 +44,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ExplicitBind_DraftRelease_422ReleaseNotActive_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var draft = await ReleaseWithAsync(world, "bind-draft", state: null, ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
 
@@ -66,7 +66,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ExplicitBind_DraftReleaseWithLiveEvaluation_422ReleaseNotActive()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var draft = await ReleaseWithAsync(world, "bind-draft-live", state: null, ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
         await SeedLiveEvaluationAsync(world, runId);
@@ -81,7 +81,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindClosedAfterLiveEvaluation_409_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-closed", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
         await SeedLiveEvaluationAsync(world, runId);
@@ -100,8 +100,8 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task TenantIsolation_CrossOrgReleaseAndRun_404SameEnvelope()
     {
-        await using var worldA = await RunCreationTests.StartAsync(_fixture, slug: "alpha");
-        await using var worldB = await RunCreationTests.StartAsync(_fixture, slug: "beta");
+        await using var worldA = await RunCreationTests.StartAsync(_fixture, slug: "alpha", hosts: _hosts);
+        await using var worldB = await RunCreationTests.StartAsync(_fixture, slug: "beta", hosts: _hosts);
         var releaseA = await ReleaseWithAsync(worldA, "bind-tenant-a", "active", ("web", 'a'));
         var releaseB = await ReleaseWithAsync(worldB, "bind-tenant-b", "active", ("web", 'a'));
         var runA = await RunWithAsync(worldA, Components(("web", 'a')));
@@ -144,7 +144,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ExplicitBind_CallerWithoutRunCreate_403_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-forbidden", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
 
@@ -237,7 +237,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ExplicitBind_ForkRun_422ForkRunNotBindable_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-fork", "active", ("web", 'a'));
         var forkRun = await RunWithForkIdentityAsync(world);
 
@@ -308,7 +308,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task NarrowedCaller_OtherProjectRelease_404LikeAnUnknownId()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("narrowed"));
         var siblingRelease = await SeedReleaseAsync(world, sibling, "scope-sibling");
         var ownRelease = await ReleaseWithAsync(world, "scope-own", "active", ("web", 'a'));
@@ -339,7 +339,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task SiblingProject_ReleaseAndRun_Are404LikeAnUnknownId()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("sibling"));
         var siblingRelease = await SeedReleaseAsync(world, sibling, "bind-sibling");
         var ownRelease = await ReleaseWithAsync(world, "bind-sibling-own", "active", ("web", 'a'));

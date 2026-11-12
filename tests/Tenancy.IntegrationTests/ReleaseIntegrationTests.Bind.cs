@@ -138,7 +138,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ExplicitBind_BindsEveryMatchingComponent()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-exact", "active", ("web", 'a'), ("api", 'b'));
         var runId = await RunWithAsync(world, Components(("web", 'a'), ("api", 'b')));
 
@@ -167,7 +167,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ExplicitBind_PartialMatch_ListsEveryMismatchWithItsReason()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(
             world, "bind-partial", "active", ("web", 'a'), ("api", 'b'), ("worker", 'c'));
         var runId = await RunWithAsync(world, Components(("web", 'a'), ("api", 'd')));
@@ -192,7 +192,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ExplicitBind_IgnoresRunComponentsTheReleaseDoesNotDeclare()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-extra", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a'), ("docs", 'e'), ("mobile", 'f')));
 
@@ -207,7 +207,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ExplicitBind_ZeroMatch_422ReleaseComponentMismatch_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-none", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'b')));
 
@@ -231,7 +231,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ExplicitBind_NewerMismatchedRun_IsNotBound()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-recency", "active", ("web", 'a'));
 
         // The matching run is older; the run created after it carries another build and must not be preferred.

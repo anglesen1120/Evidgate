@@ -24,7 +24,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_BindsEveryMatchingComponent()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "run-create-exact", "active", ("web", 'a'), ("api", 'b'));
 
         var created = await RunCreationTests.CreateRunAsync(
@@ -42,7 +42,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_PartialMatch_CreatesTheRunAndBindsTheMatchedKeys()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(
             world, "run-create-partial", "active", ("web", 'a'), ("api", 'b'), ("worker", 'c'));
 
@@ -58,7 +58,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_ZeroMatch_StillCreatesTheRun()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "run-create-none", "active", ("web", 'a'));
 
         var created = await RunCreationTests.CreateRunAsync(
@@ -75,7 +75,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_DraftRelease_422ReleaseNotActive_NoRun()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "run-create-draft", state: null, ("web", 'a'));
 
         var created = await RunCreationTests.CreateRunAsync(
@@ -91,7 +91,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_UnknownAndForeignRelease_404NoRun()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var (foreignOrg, foreignProject, foreignRevision) = await SeedForeignTenantAsync(world.Database);
         var foreign = Guid.CreateVersion7();
         await _fixture.ExecuteAsync(
@@ -130,7 +130,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_ForkIdentity_422NoRun()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "run-create-fork", "active", ("web", 'a'));
         var forkBody = "{\"ref\":{\"is_fork\":true},"
             + RunBodyWith(world.ManifestId, Components(("web", 'a')), releaseId).TrimStart('{');
@@ -168,7 +168,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_FailureAfterTheBind_RollsBackEverything()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "run-create-rollback", "active", ("web", 'a'), ("api", 'b'));
         await using var crashing = world.Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
@@ -218,7 +218,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_ReplayKeepsOneRun_AndThePayloadHashCoversTheRelease()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var firstRelease = await ReleaseWithAsync(world, "run-create-key-a", "active", ("web", 'a'));
         var secondRelease = await ReleaseWithAsync(world, "run-create-key-b", "active", ("web", 'a'));
         var key = NewKey();

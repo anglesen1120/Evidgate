@@ -23,11 +23,12 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 [Trait("Category", "Docker")]
 [Collection(ExclusiveTenancySuite.Name)]
-public sealed partial class EvaluationTaskTests
+public sealed partial class EvaluationTaskTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public EvaluationTaskTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public EvaluationTaskTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     // ------------------------------------------------------------------ AC1: two callers, one row
 
@@ -38,7 +39,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_TwoConcurrentInvocations_StoreOneRowAndBothReadIt()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
 
         var first = OnOwnFlow(token => EvaluateAsync(world, seed, EvaluationMode.Live, token));
@@ -63,7 +64,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_ShadowBesideLive_InsertsAndSecondLiveKeyIsRefused()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
 
         var live = await EvaluateAsync(world, seed, EvaluationMode.Live, TestContext.Current.CancellationToken);
@@ -101,7 +102,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_AfterFaultBeforeCommit_ReRunsToIdenticalRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
 
         var computed = await EvaluateThenFailAsync(
@@ -133,7 +134,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_HandlerCalledDirectlyWithScope_LoadsBothInputs()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
 
         await using var scope = await OpenScopeAsync(world, seed, TestContext.Current.CancellationToken);
@@ -164,7 +165,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_CommittedEvaluation_RecordsOneLatencyMeasurement()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
 
         var measured = new List<double>();

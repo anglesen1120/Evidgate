@@ -6,7 +6,7 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
-public sealed class AiSettingsRequestShapeTests(PostgresTenancyFixture fixture)
+public sealed class AiSettingsRequestShapeTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
     [Theory]
     [InlineData("root", "/unexpected")]
@@ -15,7 +15,7 @@ public sealed class AiSettingsRequestShapeTests(PostgresTenancyFixture fixture)
     [InlineData("template", "/template/unexpected")]
     public async Task Save_UnknownMember_RefusesTheExactPointer(string location, string path)
     {
-        await using var world = await AiSettingsCalls.StartAsync(fixture);
+        await using var world = await AiSettingsCalls.StartAsync(fixture, hosts);
         var body = ValidBody();
         var parent = location switch
         {
@@ -50,7 +50,7 @@ public sealed class AiSettingsRequestShapeTests(PostgresTenancyFixture fixture)
     [InlineData("-1")]
     public async Task TemplateVersion_NonPositiveOrNonInteger_Is422Not500(string json)
     {
-        await using var world = await AiSettingsCalls.StartAsync(fixture);
+        await using var world = await AiSettingsCalls.StartAsync(fixture, hosts);
         var body = ValidBody();
         body["template"]!["version"] = JsonNode.Parse(json);
         var before = await AiSettingsCalls.IdempotencyCountAsync(fixture, world);
@@ -75,7 +75,7 @@ public sealed class AiSettingsRequestShapeTests(PostgresTenancyFixture fixture)
     [InlineData("null", "invalid")]
     public async Task Languages_InvalidSet_Is422WithoutWrites(string json, string reason)
     {
-        await using var world = await AiSettingsCalls.StartAsync(fixture);
+        await using var world = await AiSettingsCalls.StartAsync(fixture, hosts);
         var body = ValidBody();
         body["settings"]!["languages"] = JsonNode.Parse(json);
         var before = await AiSettingsCalls.IdempotencyCountAsync(fixture, world);
@@ -92,7 +92,7 @@ public sealed class AiSettingsRequestShapeTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task Languages_ReorderedUniqueSet_HasTheSameHashAndNoNewVersion()
     {
-        await using var world = await AiSettingsCalls.StartAsync(fixture);
+        await using var world = await AiSettingsCalls.StartAsync(fixture, hosts);
         var body = ValidBody();
         body["settings"]!["languages"] = new JsonArray("vi", "en");
         var first = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, body, "\"0\"");
@@ -115,7 +115,7 @@ public sealed class AiSettingsRequestShapeTests(PostgresTenancyFixture fixture)
     [InlineData("reason")]
     public async Task Save_NulInText_IsRefusedBeforePersistence(string field)
     {
-        await using var world = await AiSettingsCalls.StartAsync(fixture);
+        await using var world = await AiSettingsCalls.StartAsync(fixture, hosts);
         var body = ValidBody();
         var path = field switch
         {

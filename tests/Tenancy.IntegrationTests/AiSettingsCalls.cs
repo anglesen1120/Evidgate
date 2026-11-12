@@ -94,10 +94,10 @@ internal static class AiSettingsCalls
 
     /// <summary>A fresh org with one project, as its founder.</summary>
     /// <param name="fixture">The harness fixture (shared database, app connection string).</param>
-    internal static async Task<World> StartAsync(PostgresTenancyFixture fixture)
+    internal static async Task<World> StartAsync(PostgresTenancyFixture fixture, TenancyHostPool? hosts = null)
     {
         var database = await fixture.SharedDatabaseAsync();
-        var api = TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
+        var api = hosts?.RealResolver(database) ?? TenancyApiFactory.RealResolver(fixture.AppConnectionString(database));
         var client = api.CreateClient();
         var user = Guid.CreateVersion7();
         var org = await RegistryApi.CreateOrgAsync(client, user, Unique.Slug("acme"));

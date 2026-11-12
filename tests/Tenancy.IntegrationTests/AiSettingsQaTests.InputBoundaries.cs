@@ -6,7 +6,7 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
-public sealed class AiSettingsInputBoundaryTests(PostgresTenancyFixture fixture)
+public sealed class AiSettingsInputBoundaryTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
     public static TheoryData<string, int> TextFields => new()
     {
@@ -27,7 +27,7 @@ public sealed class AiSettingsInputBoundaryTests(PostgresTenancyFixture fixture)
     [MemberData(nameof(TextFields))]
     public async Task TextField_LimitMinusOneAndLimitAccepted_OneOverRefused(string path, int limit)
     {
-        await using var world = await AiSettingsCalls.StartAsync(fixture);
+        await using var world = await AiSettingsCalls.StartAsync(fixture, hosts);
         var rejected = BodyWith(path, ValueOfLength(path, limit + 1));
         var idempotencyBefore = await AiSettingsCalls.IdempotencyCountAsync(fixture, world);
 
@@ -56,7 +56,7 @@ public sealed class AiSettingsInputBoundaryTests(PostgresTenancyFixture fixture)
     [MemberData(nameof(TextFields))]
     public async Task TextField_SecretShapesRefused_OrdinaryTextAccepted(string path, int limit)
     {
-        await using var world = await AiSettingsCalls.StartAsync(fixture);
+        await using var world = await AiSettingsCalls.StartAsync(fixture, hosts);
         var idempotencyBefore = await AiSettingsCalls.IdempotencyCountAsync(fixture, world);
         string[] secrets =
         [
@@ -102,7 +102,7 @@ public sealed class AiSettingsInputBoundaryTests(PostgresTenancyFixture fixture)
     [InlineData("https://example.test/?password=hunter2", "secret_value_detected")]
     public async Task EnvironmentUrl_UnsafeShapeRefused_CredentialFreeHttpsAccepted(string value, string reason)
     {
-        await using var world = await AiSettingsCalls.StartAsync(fixture);
+        await using var world = await AiSettingsCalls.StartAsync(fixture, hosts);
         var refused = await AiSettingsCalls.SaveAsync(
             world.Client, world.As, world, BodyWith("/settings/environment_url", value), "\"0\"");
 
@@ -122,7 +122,7 @@ public sealed class AiSettingsInputBoundaryTests(PostgresTenancyFixture fixture)
     [InlineData("http://127.0.0.1")]
     public async Task EnvironmentUrl_LocalAndMetadataAddresses_AreStoredAsGuidance(string value)
     {
-        await using var world = await AiSettingsCalls.StartAsync(fixture);
+        await using var world = await AiSettingsCalls.StartAsync(fixture, hosts);
         var accepted = await AiSettingsCalls.SaveAsync(
             world.Client, world.As, world, BodyWith("/settings/environment_url", value), "\"0\"");
 

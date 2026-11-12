@@ -34,7 +34,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task IdempotentBind_SameKeyReplaysTheOriginalRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
         var releaseId = await ReleaseWithAsync(world, "bind-replay", "active", ("web", 'a'), ("api", 'b'));
         var runId = await RunWithAsync(world, Components(("web", 'a'), ("api", 'b')));
@@ -54,7 +54,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindReplayDifferentPayload_409IdempotencyConflict()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
         var releaseId = await ReleaseWithAsync(world, "bind-conflict", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
@@ -75,7 +75,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Rebind_DifferentKey_IsIdempotentAndWritesNoDuplicate()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-rebind", "active", ("web", 'a'), ("api", 'b'));
         var runId = await RunWithAsync(world, Components(("web", 'a'), ("api", 'b')));
 
@@ -103,7 +103,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Rebind_AfterTheRunRecordsAnotherMatchingComponent_AddsOnlyThatKey()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-late-key", "active", ("web", 'a'), ("api", 'b'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
 
@@ -128,7 +128,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ConcurrentBinds_OfOnePair_BothSucceedWithOneRowPerKey()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-race", "active", ("web", 'a'), ("api", 'b'));
         var runId = await RunWithAsync(world, Components(("web", 'a'), ("api", 'b')));
 

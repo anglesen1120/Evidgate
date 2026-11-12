@@ -15,7 +15,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_PayloadOrgMismatch_ThrowsAndWritesNoRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         var payload = new EvidenceRevisionFrozenPayload(
             Guid.CreateVersion7(), seed.Project, seed.RunId, seed.RevisionId, 1);
@@ -47,7 +47,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_PayloadOrgCannotOverrideForeignScope_RefusesRunOutsideTenant()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var ownSeed = await SeedAsync(world);
         var foreign = await SeedForeignTenantRunAsync(world);
         var handler = world.Api.Services.GetRequiredService<EvidenceRevisionFrozenTaskHandler>();
@@ -81,7 +81,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_MissingPolicyPin_RefusesUntilRunIsPinned()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         await _fixture.ExecuteAsync(world.Database,
             $"update public.run set policy_revision_id = null where id = '{seed.RunId:D}'");
@@ -105,7 +105,7 @@ public sealed partial class EvaluationTaskTests
     [InlineData(1, 2)]
     public async Task Evaluate_InvalidRevisionOrMode_RefusesWithoutWriting(int revision, int mode)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         await using (var scope = await OpenScopeAsync(world, seed, TestContext.Current.CancellationToken))
         {
@@ -125,7 +125,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_NonexistentRevision_RefusesWithoutWriting()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         await using (var scope = await OpenScopeAsync(world, seed, TestContext.Current.CancellationToken))
         {
@@ -147,7 +147,7 @@ public sealed partial class EvaluationTaskTests
     [InlineData("""{"flaky_budget":"high"}""")]
     public async Task Evaluate_PolicyBodyValueUnreadable_RefusesNamingPolicyRevision(string body)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         var policyId = await RepinToBodyAsync(world, seed, body);
 
@@ -166,7 +166,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_IncompleteRevisionWithoutMissingCode_IsJudgedIncomplete()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         await _fixture.ExecuteAsync(world.Database,
             $"""
@@ -192,7 +192,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_LiveLoserUnderDifferentEvaluatorVersion_RefusesWithoutSecondRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         await InsertLiveEvaluationAsync(world, seed, "eval-foreign-1");
 
@@ -211,7 +211,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_RetryOlderRevisionAfterNewAttempt_PreservesFrozenDecision()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         var first = await EvaluateThenFailAsync(world, seed, EvaluationMode.Live, TestContext.Current.CancellationToken);
         first.Decision.ShouldBe("PASS");

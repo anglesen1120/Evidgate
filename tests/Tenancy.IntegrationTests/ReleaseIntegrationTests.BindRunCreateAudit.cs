@@ -22,7 +22,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_WritesTheSameAuditRowAndEventAsAnExplicitBind()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "run-create-evidence", "active", ("web", 'a'), ("api", 'b'));
 
         var created = await RunCreationTests.CreateRunAsync(
@@ -71,7 +71,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_ZeroMatch_WritesNoBindEvidence()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "run-create-no-evidence", "active", ("web", 'a'));
 
         var created = await RunCreationTests.CreateRunAsync(
@@ -103,7 +103,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_PartialMatch_EventCarriesBothCounts()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(
             world, "run-create-evidence-partial", "active", ("web", 'a'), ("api", 'b'), ("worker", 'c'));
 
@@ -141,7 +141,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindAtRunCreate_FailureFlushingTheAudit_RollsBackTheInsertedEventsToo()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(
             world, "run-create-audit-rollback", "active", ("web", 'a'), ("api", 'b'));
         await using var crashing = world.Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>

@@ -20,7 +20,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindServiceScope_OwnProjectBinds_SiblingScopeGetsTheUnknownId404()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-scope", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
         var sibling = await SiblingProjectAsync(world);
@@ -69,7 +69,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task BindServiceScope_GrantedScopeWithoutThePermission_403NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-scope-denied", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
 
