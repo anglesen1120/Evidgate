@@ -126,7 +126,11 @@ internal static class HealingModule
                 PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             })
 
-            // Outermost, so the key is read and presented once per call and a refused key is not retried by the
+            // Outermost: a request that is not for the configured endpoint is refused before a key is resolved for it.
+            .AddHttpMessageHandler(provider => new HealingLlmEgressHandler(
+                provider.GetRequiredService<IOptions<HealingProviderOptions>>().Value))
+
+            // Next, so the key is read and presented once per call and a refused key is not retried by the
             // pipeline. The handler resolves it through the secret provider and keeps no copy.
             .AddHttpMessageHandler(provider => new HealingLlmApiKeyHandler(
                 provider.GetRequiredService<ISecretProvider>(),

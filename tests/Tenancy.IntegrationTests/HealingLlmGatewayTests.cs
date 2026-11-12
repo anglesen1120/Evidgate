@@ -489,7 +489,13 @@ public sealed class HealingLlmGatewayTests
 
         // The key handler resolves the configured secret per request; this world has no secret store, so one fixed value.
         services.TryAddSingleton<ISecretProvider>(new FixedSecret());
-        services.PostConfigure<HealingProviderOptions>(options => options.ApiKeySecret = SecretNames.HealingLlmApiKey);
+        services.PostConfigure<HealingProviderOptions>(options =>
+        {
+            options.ApiKeySecret = SecretNames.HealingLlmApiKey;
+
+            // The egress handler pins requests to the configured base address, so it names the stand-in endpoint too.
+            options.BaseAddress = "http://healing.invalid/";
+        });
 
         services
             .AddHttpClient<HttpHealingLlmProvider>()

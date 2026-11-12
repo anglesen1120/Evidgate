@@ -612,3 +612,10 @@ STATUS §5 row replaced text (04.1.2-T3):
 | check-no-secret-literals hits in S398 files (S403) | `scripts/check-no-secret-literals.sh` reports 3 connstr-password hits (`tests/Hosts.IntegrationTests/ManagementListenerProcessTests.cs:19`, `ManagementSurfaceTests.cs:14`, `RequestBodyLimitTests.cs:17`), so the check-env-matrix stage exits 1 on the wave head; the matrix and inventory sub-check pass. Medium. | coordinator |
 
 closed by #818 (4f8a2362)
+
+## Moved from status-carried.md by S407 (2026-11-13)
+
+| Secret inventory dev-stack runbook links (S250) | 10.1.2 AC1 asks for runbook links into 10.7.1-T4 sections; 13 rows in `infra/secrets-inventory.json` do, ten dev-stack rows link `docs/runbooks/environments.md` without an anchor because no 10.7.1-T4 section covers dev-stack credentials. AC1 is PARTIAL (#516). Add a dev-stack section or accept the file link. | 10.7.1-T4 |
+| Secret inventory slug edge cases (S250) | `scripts/secrets-inventory.mjs` heading-anchor parser: a 3-backtick line closes a 4-backtick fence (accepts a ghost anchor, rejects a real one) and a duplicate-heading suffix collides with an existing `-1` heading. No referenced runbook triggers either today. Also split-token value evasion is an accepted heuristic limit. | 10.1.2-T3.2 or next owner of `scripts/secrets-inventory.mjs` |
+
+closed by #820 (68358713)
