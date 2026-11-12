@@ -42,8 +42,7 @@ public sealed partial class EvidenceCompleteTests
         using var setup = world.Api.CreateClient();
         var otherProject = await CreateProjectAsync(setup, world.User, world.Org, "other");
         var otherRun = await SeedRunAsync(world);
-        await _fixture.ExecuteAsync(
-            world.Database, $"update public.run set project_id = '{otherProject:D}' where id = '{otherRun:D}'");
+        await SiblingProjectParents.MoveRunAsync(_fixture, world.Database, world.Org, otherRun, otherProject);
         var artifactId = await InsertArtifactAsync(world, world.Org, otherProject, otherRun);
 
         var answer = await CompleteAsync(world, artifactId, NewKey());

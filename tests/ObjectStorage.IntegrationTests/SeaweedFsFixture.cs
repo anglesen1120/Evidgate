@@ -85,7 +85,7 @@ public sealed class SeaweedFsFixture : IAsyncLifetime
     {
         if (_container is not null)
         {
-            await _container.DisposeAsync();
+            await ContainerStart.DisposeAsync(_container);
         }
     }
 

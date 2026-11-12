@@ -273,8 +273,8 @@ public sealed partial class ReleaseIntegrationTests
     }
 
     /// <summary>
-    /// One run row recorded under another project, for the project predicate of the run lookup: the row carries this
-    /// suite's revisions and only its <c>project_id</c> differs, so the lookup's project filter is what must miss it.
+    /// One run row recorded under another project, for the project predicate of the run lookup: the row carries its own
+    /// project's parents and only its <c>project_id</c> differs from this suite's, so the lookup's project filter is what must miss it.
     /// </summary>
     /// <param name="world">The suite's tenant.</param>
     /// <param name="project">The project to record on the run.</param>
@@ -285,6 +285,7 @@ public sealed partial class ReleaseIntegrationTests
         string components)
     {
         var runId = Guid.CreateVersion7();
+        var parents = await SiblingProjectParents.SeedAsync(_fixture, world.Database, world.Org, project).ConfigureAwait(false);
 
         await _fixture.ExecuteAsync(
             world.Database,
@@ -292,10 +293,8 @@ public sealed partial class ReleaseIntegrationTests
             insert into public.run
               (id, org_id, project_id, manifest_id, suite_revision_id, environment_revision_id, components,
                collection_deadline_at, late_window_minutes)
-            select '{runId:D}', '{world.Org:D}', '{project:D}', m.id, m.suite_revision_id, m.environment_revision_id,
-                   '{components}'::jsonb, now() + interval '1 hour', 30
-              from public.manifest m
-             where m.org_id = '{world.Org:D}' and m.id = '{world.ManifestId:D}';
+            values ('{runId:D}', '{world.Org:D}', '{project:D}', '{parents.Manifest:D}', '{parents.SuiteRevision:D}',
+                    '{parents.EnvironmentRevision:D}', '{components}'::jsonb, now() + interval '1 hour', 30);
             """).ConfigureAwait(false);
 
         return runId;

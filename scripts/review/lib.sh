@@ -485,22 +485,6 @@ rv_published_mappings() {
   }'
 }
 
-# Waits on a condition the caller can observe, never on a fixed sleep.
-rv_wait_http() { # URL TIMEOUT_SECONDS "ACCEPTED CODES" LABEL
-  local url="$1" deadline=$(($2 + SECONDS)) accepted="$3" label="$4" code="000"
-  while [ "$SECONDS" -lt "$deadline" ]; do
-    if [ -n "$RV_FORWARD_PID" ] && ! kill -0 "$RV_FORWARD_PID" 2>/dev/null; then
-      rv_die "the ssh port forward for $label died; check that 127.0.0.1:$RV_API_PORT is free on this machine"
-    fi
-    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null || true)"
-    case " $accepted " in
-      *" ${code} "*) return 0 ;;
-    esac
-    sleep 2
-  done
-  rv_die "$label did not answer with one of [$accepted] within $2 s (last HTTP ${code:-none}): $url"
-}
-
 rv_open_forward() {
   if [ "$RV_MODE" = local ]; then
     return 0

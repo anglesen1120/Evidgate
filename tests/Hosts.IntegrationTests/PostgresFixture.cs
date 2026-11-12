@@ -117,7 +117,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         // Built before any await in StartAsync, so a failed or still-starting fixture is disposed too.
         if (_container is not null)
         {
-            await _container.DisposeAsync();
+            await ContainerStart.DisposeAsync(_container);
         }
     }
 
