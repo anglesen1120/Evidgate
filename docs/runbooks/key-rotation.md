@@ -100,7 +100,7 @@ Limits of the step: it is all-or-nothing across tenants, projects and bindings, 
 
 ### 2.5 Database credentials
 
-**Where it lives.** `EVIDGATE__DATABASE__CONNECTIONSTRING` (app), `EVIDGATE__TASKS__SWEEPCONNECTIONSTRING` (worker sweep), and `EVIDGATE_MIGRATOR__CONNECTIONSTRING` (migrator owner) are secret rows in `infra/config-matrix.json:31,1566,1817`; readers are `src/BuildingBlocks/Persistence/Options/DatabaseOptions.cs:6-11,18-26`, `src/BuildingBlocks/Persistence/Tasks/TasksOptions.cs:103-113`, and `src/Evidgate.Migrator/MigratorOptions.cs:71-85`.
+**Where it lives.** `EVIDGATE__DATABASE__CONNECTIONSTRING` (app), `EVIDGATE__TASKS__SWEEPCONNECTIONSTRING` (worker sweep), `EVIDGATE__TASKS__WORKERCONNECTIONSTRING` (worker queue: claim/acknowledge/dispatch/prune on `public.task` and `public.outbox`; the Api does not hold it), and `EVIDGATE_MIGRATOR__CONNECTIONSTRING` (migrator owner) are secret rows in `infra/config-matrix.json`; readers are `src/BuildingBlocks/Persistence/Options/DatabaseOptions.cs`, `src/BuildingBlocks/Persistence/Tasks/TasksOptions.cs`, `src/BuildingBlocks/Persistence/Tasks/TaskWorkerDataSource.cs`, and `src/Evidgate.Migrator/MigratorOptions.cs`.
 
 **Who may rotate.** The platform environment owner with the corresponding database-administration and secret-delivery authority [OPEN O-E]. Provisioning and managed-store choice are open [OPEN O-C].
 
@@ -108,7 +108,7 @@ Limits of the step: it is all-or-nothing across tenants, projects and bindings, 
 
 1. In a coordinated maintenance window, create the replacement credential in the database through its authorized administration mechanism. [INFERENCE] A password change for the same role affects existing connections on reconnect; do not assume a new credential leaves both passwords valid.
 2. Update the corresponding connection-string secret in the environment's secret delivery and perform a coordinated rolling restart of affected processes. Restart alone does not guarantee uninterrupted connections during a one-password cutover.
-3. Check each affected role's ordinary service operation and connection health without exposing the connection string. Include the worker sweep or deploy-time migrator if their credentials were changed.
+3. Check each affected role's ordinary service operation and connection health without exposing the connection string. Include the worker queue connection, the worker sweep or deploy-time migrator if their credentials were changed.
 
 **Verify.** Use the existing readiness route `/internal/health/ready` (`docs/runbooks/environments.md:266-269`) and a normal operation that requires the changed role; for the migrator, use its established deployment procedure, not an ad-hoc SQL write. Test reference: `tests/Migrator.IntegrationTests/MigratorSecretResolutionTests.cs:33-71`.
 
@@ -122,7 +122,7 @@ Limits of the step: it is all-or-nothing across tenants, projects and bindings, 
 
 | Class | Registered keys and reader |
 |---|---|
-| Database | The three connection-string keys and readers in §2.5. |
+| Database | The four connection-string keys and readers in §2.5. |
 | CI | `EVIDGATE__CI__SIGNINGKEY`, `EVIDGATE__CI__PEPPER`, `EVIDGATE__CI__PREVIOUSPEPPER`; `CiSecrets.cs:199-214` (§2.3 and §3.1). |
 | Object store | `EVIDGATE__OBJECT__ACCESSKEY`, `EVIDGATE__OBJECT__SECRETKEY` (`infra/config-matrix.json:1125,1145`); `src/BuildingBlocks/ObjectStorage/ObjectStorageOptionsSecretPostConfigure.cs:13-25`. |
 | Human login | `EVIDGATE__OIDC__GOOGLE__CLIENTSECRET`, `EVIDGATE__OAUTH__GITHUB__CLIENTSECRET` (`infra/config-matrix.json:472,707`); `src/Modules/Evidgate.Modules.Identity/Login/Google/GoogleLoginSecrets.cs:13-24` and `src/Modules/Evidgate.Modules.Identity/Login/GitHub/GitHubLoginSecrets.cs:13-24`. |

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Dapper;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -30,12 +31,11 @@ public sealed record OutboxDispatchResult(int Claimed, int Enqueued)
 /// <c>task_idem_uq</c> (<c>'outbox:' || outbox.id</c>).
 /// </summary>
 /// <remarks>
-/// Runs as <c>evidgate_app</c> on the application data source — the role
-/// migration 0009 grants exactly `select` and `update (dispatched_at)` for, and
-/// no test or handler ever needs more. Mechanism-side only: the per-queue
-/// poller that drives it lives in the Worker host
-/// (<c>OutboxDispatcherHostedService</c>), and the tenant boundary stays one hop
-/// downstream where a handler opens <c>ITenantScope</c> from
+/// Runs as <c>evidgate_worker</c> on the keyed worker data source: that role alone holds
+/// the DML on <c>public.outbox</c> and <c>public.task</c>, while a producer's app role
+/// keeps <c>INSERT</c> only. Mechanism-side only: the per-queue poller that drives it
+/// lives in the Worker host (<c>OutboxDispatcherHostedService</c>), and the tenant
+/// boundary stays one hop downstream where a handler opens <c>ITenantScope</c> from
 /// <c>task.org_id</c> (00 §5.4, 01.5.1 §8 S1).
 /// </remarks>
 public sealed partial class OutboxDispatcher : IDisposable
@@ -54,9 +54,9 @@ public sealed partial class OutboxDispatcher : IDisposable
     private readonly TimeProvider _time;
     private volatile bool _disposed;
 
-    /// <summary>Creates the dispatcher over the registered app-role data source.</summary>
+    /// <summary>Creates the dispatcher over the keyed worker-role data source.</summary>
     public OutboxDispatcher(
-        NpgsqlDataSource dataSource,
+        [FromKeyedServices(TaskWorkerDataSource.Key)] NpgsqlDataSource dataSource,
         IOptions<TasksOptions> options,
         ILogger<OutboxDispatcher> logger)
         : this(dataSource, options, logger, TimeProvider.System)
@@ -65,7 +65,7 @@ public sealed partial class OutboxDispatcher : IDisposable
 
     /// <summary>Creates the dispatcher with an explicit clock (the backlog cache's age is measured on it).</summary>
     public OutboxDispatcher(
-        NpgsqlDataSource dataSource,
+        [FromKeyedServices(TaskWorkerDataSource.Key)] NpgsqlDataSource dataSource,
         IOptions<TasksOptions> options,
         ILogger<OutboxDispatcher> logger,
         TimeProvider timeProvider)

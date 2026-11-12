@@ -29,16 +29,8 @@ public sealed class WorkerStartupTests
         {
             using var process = ProcessRunner.Start(
                 HostLocator.AppHost("Evidgate.Worker"),
-                new Dictionary<string, string>
-                {
-                    ["DOTNET_ENVIRONMENT"] = "Production",
-                    ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = DeadConnectionString,
-                    ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
-                    ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
-                    [IsolationSelfCheckEnvironment.Variable] = IsolationSelfCheckEnvironment.Disabled,
-                    ["EVIDGATE__WORKER__HEALTHPORT"] = port.ToString(CultureInfo.InvariantCulture),
-                    ["EVIDGATE__WORKER__READINESSPOLLMILLISECONDS"] = "100",
-                });
+                WorkerChildEnvironment.Build(
+                    DeadConnectionString, WorkerChildEnvironment.Unreachable, port, isolationSelfCheckDisabled: true));
 
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             ProcessRunner.Result result;

@@ -55,7 +55,7 @@ public sealed class MigratorTests
         (await _fixture.TableExistsAsync(database, "rls_probe")).ShouldBeTrue();
         (await _fixture.ScalarAsync<bool>(database, "select evidgate.current_org_id() is null")).ShouldBeTrue();
         (await _fixture.ScalarAsync<long>(database, "select count(*) from pg_roles where rolname like 'evidgate_%'"))
-            .ShouldBe(4);
+            .ShouldBe(5);
 
         var status = MigratorHarness.Run(
             PostgresMigratorFixture.RepoMigrationsPath,

@@ -62,7 +62,7 @@ public sealed class IsolationSelfCheckBootTests
         var workerPort = HostLocator.FreePort();
         var worker = await RunToExitAsync(
             HostLocator.AppHost("Evidgate.Worker"),
-            WorkerEnvironment(connectionString, workerPort));
+            WorkerChildEnvironment.Build(connectionString, connectionString.WorkerConnectionString, workerPort));
 
         Assert.Equal(WorkerHost.IsolationSelfCheckExitCode, worker.ExitCode);
 
@@ -70,6 +70,11 @@ public sealed class IsolationSelfCheckBootTests
         Assert.Contains(RefusalCode, workerOutput, StringComparison.Ordinal);
         Assert.Contains("public.project", workerOutput, StringComparison.Ordinal);
         Assert.DoesNotContain(password, workerOutput, StringComparison.Ordinal);
+
+        // The Worker child holds the worker role's credential too: that one must not be echoed either.
+        var workerPassword = new NpgsqlConnectionStringBuilder(connectionString.WorkerConnectionString).Password;
+        Assert.False(string.IsNullOrEmpty(workerPassword), "the fixture must hand out a real worker credential");
+        Assert.DoesNotContain(workerPassword, workerOutput, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -104,7 +109,7 @@ public sealed class IsolationSelfCheckBootTests
         var workerPort = HostLocator.FreePort();
         var worker = await RunToExitAsync(
             HostLocator.AppHost("Evidgate.Worker"),
-            WorkerEnvironment(connectionString, workerPort));
+            WorkerChildEnvironment.Build(connectionString, WorkerChildEnvironment.Unreachable, workerPort));
 
         Assert.Equal(WorkerHost.IsolationSelfCheckExitCode, worker.ExitCode);
 
@@ -510,18 +515,6 @@ public sealed class IsolationSelfCheckBootTests
             ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = connectionString,
             ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
             ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
-        };
-
-    /// <summary>The environment the Worker needs, including its readiness listener.</summary>
-    private static Dictionary<string, string> WorkerEnvironment(string connectionString, int port) =>
-        new(StringComparer.Ordinal)
-        {
-            ["DOTNET_ENVIRONMENT"] = "Production",
-            ["EVIDGATE__DATABASE__CONNECTIONSTRING"] = connectionString,
-            ["EVIDGATE__RUNS__CANCEL__SOFTSTOPDELAY"] = "00:00:30",
-            ["EVIDGATE__RUNS__CANCEL__KILLDELAY"] = "00:02:00",
-            ["EVIDGATE__WORKER__HEALTHPORT"] = port.ToString(CultureInfo.InvariantCulture),
-            ["EVIDGATE__WORKER__READINESSPOLLMILLISECONDS"] = "100",
         };
 
     /// <summary>Drops the tenant policy of <c>public.project</c> as the migration role that owns it.</summary>

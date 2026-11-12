@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Claims;
 using System.Text.Json;
 using Evidgate.Api.OperatorIngress;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
@@ -56,7 +57,8 @@ public sealed class DeadLetterChainTests
         await using var appConnectionString = await _postgres.CreateMigratedDatabaseAsync();
         var database = new NpgsqlConnectionStringBuilder(appConnectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
-        var taskId = await SeedTaskAsync(admin, Queue, DeadLetterChainHandler.HandlerTaskType, maxAttempts: 2);
+        var org = await SeedOrgAsync(admin);
+        var taskId = await SeedTaskAsync(admin, org, Queue, DeadLetterChainHandler.HandlerTaskType, maxAttempts: 2);
 
         await using var consumer = DeadLetterChainConsumerHost.Start(_postgres, database, Queue);
         consumer.Recorder.Failure = new InvalidOperationException(DeadLetterChainRecorder.PoisonMessage);
@@ -91,7 +93,7 @@ public sealed class DeadLetterChainTests
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync(
-            $"/internal/operator/tasks/dead-letter?queue={Uri.EscapeDataString(Queue)}", Token);
+            $"/internal/operator/tasks/dead-letter?org_id={org:D}&queue={Uri.EscapeDataString(Queue)}", Token);
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         var body = await JsonDocument.ParseAsync(
@@ -122,8 +124,10 @@ public sealed class DeadLetterChainTests
         await using var appConnectionString = await _postgres.CreateMigratedDatabaseAsync();
         var database = new NpgsqlConnectionStringBuilder(appConnectionString).Database!;
         var admin = _postgres.AdminConnectionString(database);
+        var org = await SeedOrgAsync(admin);
         var taskId = await SeedTaskAsync(
             admin,
+            org,
             Queue,
             DeadLetterChainHandler.HandlerTaskType,
             state: "dead_letter",
@@ -137,7 +141,7 @@ public sealed class DeadLetterChainTests
         using var client = factory.CreateClient();
 
         using var replayed = await client.PostAsync(
-            $"/internal/operator/tasks/dead-letter/{taskId}/replay", content: null, Token);
+            $"/internal/operator/tasks/dead-letter/{taskId}/replay?org_id={org:D}", content: null, Token);
         replayed.StatusCode.ShouldBe(HttpStatusCode.OK);
 
         // What the route wrote, read back through the mechanism's own columns: the
@@ -162,7 +166,7 @@ public sealed class DeadLetterChainTests
         // The state guard is the replay's idempotency contract: the completed row is
         // no longer dead-lettered, so a second replay is the 409.
         using var again = await client.PostAsync(
-            $"/internal/operator/tasks/dead-letter/{taskId}/replay", content: null, Token);
+            $"/internal/operator/tasks/dead-letter/{taskId}/replay?org_id={org:D}", content: null, Token);
         again.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         var envelope = await JsonDocument.ParseAsync(
             await again.Content.ReadAsStreamAsync(Token), cancellationToken: Token);
@@ -170,10 +174,23 @@ public sealed class DeadLetterChainTests
             .ShouldBe("task_not_dead_letter");
     }
 
-    /// <summary>The test double that lets every request through (the 02.x operator gate's stand-in).</summary>
+    /// <summary>
+    /// The test double that lets every request through and stamps the authenticated operator principal (the 02.x
+    /// operator gate's stand-in): the replay route names that principal as the audit row's actor.
+    /// </summary>
     private sealed class PermitAllOperatorGate : IOperatorGate
     {
-        public ValueTask<bool> IsOperatorAsync(HttpContext httpContext) => ValueTask.FromResult(true);
+        /// <summary>The acting operator: the replay's audit row names it.</summary>
+        private static readonly Guid OperatorId = Guid.CreateVersion7();
+
+        public ValueTask<bool> IsOperatorAsync(HttpContext httpContext)
+        {
+            httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
+                [new Claim(ClaimTypes.NameIdentifier, OperatorId.ToString("D"))],
+                authenticationType: "operator-test"));
+
+            return ValueTask.FromResult(true);
+        }
     }
 
     /// <summary>Api factory whose operator gate permits, over the test's migrated database.</summary>
@@ -181,9 +198,24 @@ public sealed class DeadLetterChainTests
         new(connectionString, configureServices: services =>
             services.AddSingleton<IOperatorGate>(new PermitAllOperatorGate()));
 
+    /// <summary>Seeds one organization: the operator routes name the tenant explicitly.</summary>
+    private static async Task<Guid> SeedOrgAsync(string connectionString)
+    {
+        var org = Guid.CreateVersion7();
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(Token);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "insert into public.organization (id, name, slug) values (@id, 'chain', @slug)";
+        command.Parameters.AddWithValue("@id", org);
+        command.Parameters.AddWithValue("@slug", "chain-" + org.ToString("N"));
+        await command.ExecuteNonQueryAsync(Token);
+        return org;
+    }
+
     /// <summary>Seeds one task row; only the row's arrangement goes through raw SQL (the suite's own convention).</summary>
     private static async Task<Guid> SeedTaskAsync(
         string connectionString,
+        Guid org,
         string queue,
         string taskType,
         string state = "queued",
@@ -197,10 +229,11 @@ public sealed class DeadLetterChainTests
         await using var command = connection.CreateCommand();
         command.CommandText = """
             insert into public.task
-              (id, queue, task_type, payload, idempotency_key, state, attempts, max_attempts, last_error)
+              (id, org_id, queue, task_type, payload, idempotency_key, state, attempts, max_attempts, last_error)
             values
-              (@id, @queue, @task_type, '{"value":"replay"}'::jsonb, @idempotency_key, @state, @attempts, @max_attempts, @last_error)
+              (@id, @org, @queue, @task_type, '{"value":"replay"}'::jsonb, @idempotency_key, @state, @attempts, @max_attempts, @last_error)
             """;
+        command.Parameters.AddWithValue("@org", org);
         command.Parameters.AddWithValue("@id", id);
         command.Parameters.AddWithValue("@queue", queue);
         command.Parameters.AddWithValue("@task_type", taskType);
@@ -363,6 +396,7 @@ internal sealed class DeadLetterChainConsumerHost : IAsyncDisposable
         var values = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             [$"{TasksOptions.SectionName}:PollIntervalMilliseconds"] = "50",
+            [$"{TasksOptions.SectionName}:WorkerConnectionString"] = fixture.WorkerConnectionString(database),
             [$"{TasksOptions.SectionName}:BatchSize"] = "50",
             [$"{TasksOptions.SectionName}:VisibilityTimeoutSeconds"] = "300",
             [$"{TasksOptions.SectionName}:BackoffBaseSeconds"] = "1",
@@ -376,6 +410,8 @@ internal sealed class DeadLetterChainConsumerHost : IAsyncDisposable
         services.AddLogging();
         services.AddEvidgateTenancy();
         services.AddEvidgateTasks(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
+        services.AddKeyedSingleton<NpgsqlDataSource>(TaskWorkerDataSource.Key, (_, _) =>
+            NpgsqlDataSource.Create(fixture.WorkerConnectionString(database)));
         services.AddSingleton<DeadLetterChainRecorder>();
         services.AddTaskHandler<DeadLetterChainPayload, DeadLetterChainHandler>();
 

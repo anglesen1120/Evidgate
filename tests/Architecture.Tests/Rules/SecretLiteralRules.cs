@@ -25,6 +25,7 @@ public static class SecretLiteralRules
     [
         "EVIDGATE__DATABASE__CONNECTIONSTRING",
         "EVIDGATE__TASKS__SWEEPCONNECTIONSTRING",
+        "EVIDGATE__TASKS__WORKERCONNECTIONSTRING",
         "EVIDGATE__CI__SIGNINGKEY",
         "EVIDGATE__CI__PEPPER",
         "EVIDGATE__CI__PREVIOUSPEPPER",
@@ -33,6 +34,7 @@ public static class SecretLiteralRules
         "EVIDGATE__OBJECT__SECRETKEY",
         "EVIDGATE:Database:ConnectionString",
         "EVIDGATE:Tasks:SweepConnectionString",
+        "EVIDGATE:Tasks:WorkerConnectionString",
         "EVIDGATE:Ci:SigningKey",
         "EVIDGATE:Ci:Pepper",
         "EVIDGATE:Ci:PreviousPepper",
@@ -99,7 +101,7 @@ public static class SecretLiteralRules
     /// doc <c>cref="SigningKey"</c> from being mistaken for a read.
     /// </summary>
     private static readonly Regex ForbiddenPropertyPattern = new(
-        "(?<![=\\w])\"(ConnectionString|SweepConnectionString|SigningKey|Pepper|PreviousPepper|AccessKey|SecretKey)\"",
+        "(?<![=\\w])\"(ConnectionString|SweepConnectionString|WorkerConnectionString|SigningKey|Pepper|PreviousPepper|AccessKey|SecretKey)\"",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     /// <summary>
@@ -118,7 +120,7 @@ public static class SecretLiteralRules
     /// <c>SecretShape</c> seam's own rule, so the property-name pattern must not flag it.
     /// </summary>
     private static readonly Regex DetectorArgumentLine = new(
-        "\\bContains\\s*\\(\\s*\"(?:ConnectionString|SweepConnectionString|SigningKey|Pepper|PreviousPepper|AccessKey|SecretKey)\"\\s*,",
+        "\\bContains\\s*\\(\\s*\"(?:ConnectionString|SweepConnectionString|WorkerConnectionString|SigningKey|Pepper|PreviousPepper|AccessKey|SecretKey)\"\\s*,",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     /// <summary>

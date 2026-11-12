@@ -48,7 +48,7 @@ Every `SECURITY DEFINER` function (TL T80) must:
   definer_public_grant  never be granted to PUBLIC
   definer_unqualified   use schema-qualified relations only (`from public.x`, never `from x`)
   definer_audit         write a per-call audit row, unless named in DEFINER_AUDIT_EXEMPT
-                        or the file carries `-- lint: audit-deferred <task>`
+                        or the file carries `-- lint: audit-deferred <justification> <schema.function>[, ...]`
 
 Usage: check-rls.py [--migrations DIR] [--exceptions FILE]. Exit 1 lists every finding.
 """

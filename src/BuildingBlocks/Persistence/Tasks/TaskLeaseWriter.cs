@@ -1,4 +1,5 @@
 using Dapper;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
 namespace Evidgate.BuildingBlocks.Persistence.Tasks;
@@ -65,8 +66,8 @@ public interface ITaskLeaseWriter
 }
 
 /// <summary>
-/// The production lease writer: one short `update` per transition on the app-role
-/// data source, outside the handler's tenant transaction. The tenant transaction is
+/// The production lease writer: one short `update` per transition on the keyed
+/// worker-role data source, outside the handler's tenant transaction. The tenant transaction is
 /// the handler's business boundary and must never span the mechanism row — a handler
 /// that rolled back has produced no side effect, while the row still has to move on
 /// (that is why 01.5.1 §8 P5 keeps the claim and the completion transactions short).
@@ -134,8 +135,8 @@ public sealed class TaskLeaseWriter : ITaskLeaseWriter
 
     private readonly NpgsqlDataSource _dataSource;
 
-    /// <summary>Creates the lease writer over the registered app-role data source.</summary>
-    public TaskLeaseWriter(NpgsqlDataSource dataSource)
+    /// <summary>Creates the lease writer over the keyed worker-role data source.</summary>
+    public TaskLeaseWriter([FromKeyedServices(TaskWorkerDataSource.Key)] NpgsqlDataSource dataSource)
     {
         ArgumentNullException.ThrowIfNull(dataSource);
         _dataSource = dataSource;

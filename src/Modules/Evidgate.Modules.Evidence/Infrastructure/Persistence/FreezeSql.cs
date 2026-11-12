@@ -37,9 +37,16 @@ internal static class FreezeSql
     /// evidence.
     /// </para>
     /// <para>
-    /// <b>Neither <c>public.task</c> nor <c>public.outbox</c> carries row-level security</b> (the dispatcher scans
-    /// every org by design) and <c>evidgate_app</c> reads them unprivileged, so <c>org_id</c> equality on each
-    /// anti-join is the whole isolation: a payload's <c>artifact_id</c> alone would match another tenant's row.
+    /// <b>The queue tables are read through their scoped views.</b> <c>public.task</c> and
+    /// <c>public.outbox</c> are mechanism tables without a tenant policy, so the app role
+    /// holds <c>SELECT</c> on <c>public.task_in_scope</c> and <c>public.outbox_in_scope</c>
+    /// instead: owner-owned, <c>security_barrier</c>, filtered by
+    /// <c>evidgate.current_org_id()</c> and exposing only the columns this read uses.
+    /// <c>artifact_id</c> is the views' own projection of <c>payload ->> 'artifact_id'</c>, the
+    /// expression the parse-state partial indexes are built on, so the equality below stays a
+    /// plain text comparison the planner may push through the barrier into an index probe. The
+    /// explicit <c>org_id</c> equality on each anti-join stays as the second lock: an
+    /// <c>artifact_id</c> alone would match another tenant's row.
     /// </para>
     /// </summary>
     internal const string SelectReadyArtifacts = """
@@ -65,18 +72,18 @@ internal static class FreezeSql
            and a.state = 'ready'
            and not exists (
                  select 1
-                   from public.task t
+                   from public.task_in_scope t
                   where t.org_id = a.org_id
                     and t.task_type = 'artifact_parse'
                     and t.state <> 'done'
-                    and t.payload ->> 'artifact_id' = a.id::text)
+                    and t.artifact_id = a.id::text)
            and not exists (
                  select 1
-                   from public.outbox o
+                   from public.outbox_in_scope o
                   where o.org_id = a.org_id
                     and o.task_type = 'artifact_parse'
                     and o.dispatched_at is null
-                    and o.payload ->> 'artifact_id' = a.id::text)
+                    and o.artifact_id = a.id::text)
          limit @max_rows
         """;
 

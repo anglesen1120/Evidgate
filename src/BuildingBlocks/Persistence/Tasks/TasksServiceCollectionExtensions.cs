@@ -5,12 +5,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 
 /// <summary>
-/// Registration of the durable task queue (01.5.1-T1): claim, lease, dispatch,
-/// schedule runner and the story's own sweeps, plus the queue options bound from
+/// Registration of the durable task queue: claim, lease, dispatch,
+/// schedule runner and its own sweeps, plus the queue options bound from
 /// <c>EVIDGATE__TASKS__*</c>.
 /// </summary>
 /// <remarks>
@@ -21,25 +22,32 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 public static class TasksServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the task queue over the app-role <c>NpgsqlDataSource</c> that
-    /// <c>AddEvidgatePersistence</c> put in the container, and the
-    /// <c>evidgate_worker_sched</c> connection a sweep calls its owner function
-    /// with.
+    /// Registers the task queue: the claim/lease/dispatch machinery on the keyed
+    /// <c>evidgate_worker</c> data source, plus the sweep role's own connection.
     /// </summary>
     public static IServiceCollection AddEvidgateTasks(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        // 10.1.1-T2: the sweep connection string is a secret, so the provider and
+        // The sweep connection string is a secret, so the provider and
         // its post-configurer are registered here too — a host that composes the
         // queue without persistence still resolves it through ISecretProvider.
         services.AddEvidgateSecrets(configuration);
 
         services.AddEvidgateTaskOptions(configuration);
 
+        // The queue's own role, resolved when first used: public.task and public.outbox
+        // are writable by evidgate_worker alone, so the dispatcher, the claim/lease path
+        // and the retention delete open this source. Only a Worker composes this method,
+        // which is what keeps the credential out of the Api.
+        services.AddKeyedSingleton<NpgsqlDataSource>(
+            TaskWorkerDataSource.Key,
+            static (provider, _) => TaskWorkerDataSource.Create(
+                provider.GetRequiredService<IOptions<TasksOptions>>().Value));
+
         // The consumer opens the tenant scope of a tenant task from the row's
-        // org_id (00 §5.4.2 covers a task exactly as it covers a request), so the
+        // org_id (a task row is tenant-scoped exactly as a request is), so the
         // tenancy path is a prerequisite of this registration, not of the host: the
         // Worker composes persistence for its data source and never opens a scope
         // of its own, so without this the consumer would fail to resolve at boot.
@@ -49,7 +57,7 @@ public static class TasksServiceCollectionExtensions
 
         services.TryAddSingleton(TimeProvider.System);
 
-        // 01.5.1 §7/T4.1: the default alert sink for every `dead_letter`
+        // The default alert sink for every `dead_letter`
         // transition is the logging/counter one — it exists so the hook is never
         // unregistered (the consumer and the claimer call it unconditionally).
         // TryAdd so a host or a test with a real sink wins by registering first.
@@ -64,9 +72,9 @@ public static class TasksServiceCollectionExtensions
         services.TryAddSingleton<IWorkerSchedDataSource, WorkerSchedDataSource>();
         services.TryAddSingleton<TaskConsumer>();
         services.TryAddSingleton<TaskScheduleRunner>();
-        // 01.5.1-T3: the read/stamp half of the outbox. It belongs to the
+        // The read/stamp half of the outbox. It belongs to the
         // mechanism, not the outbox writer's registration, because it consumes
-        // TasksOptions and the app-role data source and only ever runs in the
+        // TasksOptions and the keyed worker data source and only ever runs in the
         // Worker — a host that composes the write path without the queue gets
         // no dispatcher, which is the correct posture for the Api.
         services.TryAddSingleton<OutboxDispatcher>();
@@ -76,7 +84,7 @@ public static class TasksServiceCollectionExtensions
         services.AddTaskHandler<TaskSweepPayload, TaskSweepTaskHandler>();
         services.AddTaskHandler<Audit.VerifyAuditChainPayload, Audit.VerifyAuditChainTaskHandler>();
 
-        // 01.5.1 §7: the two schedules this story owns. Registering them here means
+        // The two schedules the queue owns. Registering them here means
         // every Worker fires them without a leader — the unique fire key decides.
         services.AddTaskSchedule(EvidgateSweeps.IdempotencyPurge);
         services.AddTaskSchedule(AuthoringChangeSweeps.Purge);
@@ -156,7 +164,7 @@ public static class TasksServiceCollectionExtensions
 
     /// <summary>
     /// Registers one typed handler that opens and commits its own short tenant transactions, so the attempt can make
-    /// the network call (object store, HTTP) the platform forbids inside a database transaction (00 §5.7 P5). The
+    /// the network call (object store, HTTP) the platform forbids inside a database transaction. The
     /// consumer supplies the row's tenant and marks the row's outcome exactly as it does for a scoped handler.
     /// </summary>
     /// <typeparam name="TPayload">Payload type the handler binds the row's JSON to.</typeparam>

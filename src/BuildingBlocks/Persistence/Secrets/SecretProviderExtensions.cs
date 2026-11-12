@@ -66,10 +66,11 @@ internal sealed class DatabaseOptionsSecretPostConfigure : IPostConfigureOptions
 }
 
 /// <summary>
-/// Resolves <see cref="TasksOptions.SweepConnectionString"/> through
-/// <see cref="ISecretProvider"/> after the binder has run (10.1.1-T2). The property
-/// setter is internal, so <c>BindConfiguration</c> skips it and this is its only
-/// writer; the value stays optional, so an unset secret leaves the sweep fail-closed.
+/// Resolves <see cref="TasksOptions.SweepConnectionString"/> and
+/// <see cref="TasksOptions.WorkerConnectionString"/> through <see cref="ISecretProvider"/>
+/// after the binder has run (10.1.1-T2). Both setters are internal, so
+/// <c>BindConfiguration</c> skips them and this is their only writer; neither value is
+/// required here, because the Api composes the same options and opens neither source.
 /// </summary>
 internal sealed class TasksOptionsSecretPostConfigure : IPostConfigureOptions<TasksOptions>
 {
@@ -84,5 +85,7 @@ internal sealed class TasksOptionsSecretPostConfigure : IPostConfigureOptions<Ta
 
         options.SweepConnectionString =
             _secrets.GetSecret(SecretNames.TasksSweepConnectionString) ?? string.Empty;
+        options.WorkerConnectionString =
+            _secrets.GetSecret(SecretNames.TasksWorkerConnectionString) ?? string.Empty;
     }
 }

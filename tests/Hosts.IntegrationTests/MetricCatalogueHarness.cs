@@ -177,9 +177,9 @@ internal sealed class MetricCatalogueHarness : IAsyncDisposable
         internal Probes(TestDatabase database, InstrumentDirectory instruments)
         {
             _instruments = instruments;
-            _queueProbe = OpenDataSource(database.AppConnectionString, QueuePoolName, maximumPoolSize: 4);
+            _queueProbe = OpenDataSource(database.WorkerConnectionString, QueuePoolName, maximumPoolSize: 4);
             _timeoutProbe = OpenDataSource(
-                database.AppConnectionString,
+                database.WorkerConnectionString,
                 TimeoutPoolName,
                 maximumPoolSize: 1,
                 timeoutSeconds: PoolTimeoutSeconds);

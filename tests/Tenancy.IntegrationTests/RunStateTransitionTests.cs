@@ -421,8 +421,12 @@ public sealed class RunStateTransitionTests
             applied.Value.Outcome.ShouldBe(TransitionOutcome.Applied);
             await rollback.FlushAuditAsync();
 
+            // The app role holds no privilege on `public.outbox` itself (0104): the tenant read path is the
+            // owner-owned `public.outbox_in_scope`, whose filter is the scope's own org, and the state-change
+            // idempotency key names the run and the edge.
             (await rollback.ScalarAsync<long>(
-                $"select count(*) from public.outbox where aggregate_id = '{runId}' and task_type = '{StateChangedTask}'"))
+                $"select count(*) from public.outbox_in_scope where task_type = '{StateChangedTask}' "
+                + $"and idempotency_key = 'orchestrator:run:{runId:D}:state:running'"))
                 .ShouldBe(1, "the outbox row is on this transaction");
             (await rollback.ScalarAsync<long>(
                 $"select count(*) from public.audit_log where org_id = '{world.Org}' and action = '{StateChangedAction}' and object_id = '{runId}'"))

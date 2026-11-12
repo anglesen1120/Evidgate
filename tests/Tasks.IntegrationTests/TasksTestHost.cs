@@ -70,6 +70,7 @@ internal sealed class TasksTestHost : IAsyncDisposable
             [$"{TasksOptions.SectionName}:BackoffMaxSeconds"] = "4",
             [$"{TasksOptions.SectionName}:ScheduleLookbackSeconds"] = "300",
             [$"{TasksOptions.SectionName}:SweepConnectionString"] = fixture.WorkerSchedConnectionString(database),
+            [$"{TasksOptions.SectionName}:WorkerConnectionString"] = fixture.WorkerConnectionString(database),
         };
 
         if (configuration is not null)

@@ -3,12 +3,13 @@
 #
 # Creates the migration database and its owner credential as superuser, brings it
 # to head with Evidgate.Migrator (migration 0001 creates the three application
-# roles), then grants LOGIN + a password to those roles as superuser and prints
-# the EVIDGATE_* environment template. This mirrors the production separation
-# (owner runs migrations, app serves traffic, operator reads, worker_sched
-# sweeps) so an RLS mistake fails locally first.
+# roles and 0104 adds evidgate_worker), then grants LOGIN + a password to those
+# roles as superuser and prints the EVIDGATE_* environment template. This mirrors
+# the production separation (owner runs migrations, app serves traffic, operator
+# reads, worker_sched sweeps, worker drains the outbox and the task queue) so an
+# RLS mistake fails locally first.
 #
-# No credential is committed and none is passed on a command line: the four
+# No credential is committed and none is passed on a command line: the five
 # passwords are read from the environment, exported to the psql children as
 # environment variables, and read inside psql with \getenv — so they never appear
 # in `ps` output (00 §5.7 S3). The template printed at the end carries
@@ -36,6 +37,7 @@
 #   EVIDGATE_APP_PASSWORD         password for the application role
 #   EVIDGATE_OPERATOR_PASSWORD    password for the audited read-only role
 #   EVIDGATE_WORKER_SCHED_PASSWORD password for the sweep role
+#   EVIDGATE_WORKER_PASSWORD      password for the outbox/task-queue worker role
 # optional environment (defaults in brackets):
 #   EVIDGATE_DB_HOST [127.0.0.1]          EVIDGATE_DB_PORT [5432]
 #   EVIDGATE_DB_NAME [evidgate]           EVIDGATE_DB_SUPERUSER [postgres]
@@ -67,8 +69,9 @@ usage: scripts/dev/db-init.sh [--with-token] [--help]
 
 Creates the database and its owner credential as superuser, applies the
 migrations as evidgate_owner (migration 0001 creates evidgate_app,
-evidgate_operator and evidgate_worker_sched), grants those roles LOGIN +
-a password as superuser and prints the EVIDGATE_* environment template.
+evidgate_operator and evidgate_worker_sched, 0104 adds evidgate_worker), grants
+those roles LOGIN + a password as superuser and prints the EVIDGATE_*
+environment template.
 
   --with-token  after the grants, also run `seed-dev --with-token`: the dev
                 tenant, one project-bound dev ingest token (artifact:write,
@@ -81,6 +84,7 @@ required environment:
   EVIDGATE_APP_PASSWORD          password for the application role
   EVIDGATE_OPERATOR_PASSWORD     password for the audited read-only role
   EVIDGATE_WORKER_SCHED_PASSWORD password for the sweep role
+  EVIDGATE_WORKER_PASSWORD       password for the outbox/task-queue worker role
 
 optional environment (defaults in brackets):
   EVIDGATE_DB_HOST [127.0.0.1]           EVIDGATE_DB_PORT [5432]
@@ -182,7 +186,7 @@ if [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ]; then
 fi
 
 cat <<EOF
-db-init: done — $DB_NAME is at head with evidgate_owner, evidgate_app, evidgate_operator, evidgate_worker_sched.
+db-init: done — $DB_NAME is at head with evidgate_owner, evidgate_app, evidgate_operator, evidgate_worker_sched, evidgate_worker.
 
 # Evidgate dev environment template (placeholders; fill in the passwords you exported).
 # Keep this out of version control: .env* is git-ignored (00 §5.7 S3).
@@ -194,6 +198,11 @@ export EVIDGATE_MIGRATOR__CONNECTIONSTRING='Host=$DB_HOST;Port=$DB_PORT;Database
 # Audited support path (TL T76) and owner SECURITY DEFINER sweeps (TL T80):
 #   evidgate_operator      Password=<EVIDGATE_OPERATOR_PASSWORD>   (SELECT only)
 #   evidgate_worker_sched  Password=<EVIDGATE_WORKER_SCHED_PASSWORD> (EXECUTE per function)
+#
+# Worker (01.1.2) — the outbox dispatcher and the task queue machinery. The Api
+# never holds this one: a tenant read of the queue goes through the two scoped
+# views instead.
+export EVIDGATE__TASKS__WORKERCONNECTIONSTRING='Host=$DB_HOST;Port=$DB_PORT;Database=$DB_NAME;Username=evidgate_worker;Password=<EVIDGATE_WORKER_PASSWORD>'
 # A password containing ';' or '"' must be wrapped in double quotes inside the
 # connection string (Npgsql's quoted value form), e.g. Password="a;b".
 EOF

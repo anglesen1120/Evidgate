@@ -25,6 +25,7 @@ public sealed class PostgresPersistenceFixture : IAsyncLifetime
 
     private readonly string _ownerPassword = "owner-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
     private readonly string _appPassword = "app-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+    private readonly string _taskWorkerPassword = "task-worker-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
     private TemplateDatabase? _template;
 
@@ -61,7 +62,8 @@ public sealed class PostgresPersistenceFixture : IAsyncLifetime
             SuperuserConnectionString,
             OwnerConnectionString,
             RepoMigrationsPath,
-            [$"alter role evidgate_app login password '{_appPassword}'"]);
+            [$"alter role evidgate_app login password '{_appPassword}'",
+                $"alter role evidgate_worker login password '{_taskWorkerPassword}'"]);
     }
 
     public ValueTask DisposeAsync()
@@ -94,6 +96,8 @@ public sealed class PostgresPersistenceFixture : IAsyncLifetime
         Build(DatabaseOwnerRole, _ownerPassword, database, pooling: false);
 
     public string AppConnectionString(string database) => Build("evidgate_app", _appPassword, database);
+
+    public string WorkerConnectionString(string database) => Build("evidgate_worker", _taskWorkerPassword, database);
 
     /// <summary>
     /// Opens an app-role data source for one test. <paramref name="maximumPoolSize"/>

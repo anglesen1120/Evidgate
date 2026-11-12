@@ -1,5 +1,6 @@
 using System.Diagnostics.Metrics;
 using Dapper;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 
@@ -42,7 +43,7 @@ public sealed partial class TaskQueueStateGauge : IDisposable
 
     /// <summary>Creates the gauges with the system clock.</summary>
     public TaskQueueStateGauge(
-        NpgsqlDataSource dataSource,
+        [FromKeyedServices(TaskWorkerDataSource.Key)] NpgsqlDataSource dataSource,
         ILogger<TaskQueueStateGauge> logger)
         : this(dataSource, logger, TimeProvider.System)
     {
@@ -50,7 +51,7 @@ public sealed partial class TaskQueueStateGauge : IDisposable
 
     /// <summary>Creates the gauges with an explicit clock (the cached snapshot's age is measured on it).</summary>
     public TaskQueueStateGauge(
-        NpgsqlDataSource dataSource,
+        [FromKeyedServices(TaskWorkerDataSource.Key)] NpgsqlDataSource dataSource,
         ILogger<TaskQueueStateGauge> logger,
         TimeProvider timeProvider)
     {

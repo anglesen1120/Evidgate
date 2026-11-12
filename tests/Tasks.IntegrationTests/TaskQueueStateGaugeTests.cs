@@ -33,7 +33,7 @@ public sealed class TaskQueueStateGaugeTests
         var database = await _fixture.CreateDatabaseAsync();
         await SeedDueAsync(database, 2, TimeSpan.FromSeconds(30));
         await SeedDeadLettersAsync(database, 1);
-        await using var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        await using var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         var time = new FakeTimeProvider();
         using var gauge = new TaskQueueStateGauge(dataSource, NullLogger<TaskQueueStateGauge>.Instance, time);
         using var collector = new GaugeCollector();
@@ -69,7 +69,7 @@ public sealed class TaskQueueStateGaugeTests
     public async Task EmptyQueue_ReportsZeroAgeAndZeroDepth_RatherThanNoMeasurement()
     {
         var database = await _fixture.CreateDatabaseAsync();
-        await using var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        await using var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         var time = new FakeTimeProvider();
         using var gauge = new TaskQueueStateGauge(dataSource, NullLogger<TaskQueueStateGauge>.Instance, time);
         using var collector = new GaugeCollector();
@@ -91,7 +91,7 @@ public sealed class TaskQueueStateGaugeTests
     {
         var database = await _fixture.CreateDatabaseAsync();
         await SeedDeadLettersAsync(database, 1);
-        var dataSource = _fixture.OpenAppDataSource(database, maximumPoolSize: 2);
+        var dataSource = _fixture.OpenWorkerDataSource(database, maximumPoolSize: 2);
         var time = new FakeTimeProvider();
         using var gauge = new TaskQueueStateGauge(dataSource, NullLogger<TaskQueueStateGauge>.Instance, time);
         using var collector = new GaugeCollector();
@@ -119,7 +119,7 @@ public sealed class TaskQueueStateGaugeTests
     }
 
     /// <summary>
-    /// The snapshot walks the live-backlog index for the age and the dead-letter index for the depth, with
+    /// The snapshot walks the live-backlog index for the age and a dead-letter index for the depth, with
     /// sequential scans disabled so a small table cannot hide a plan that would scan all task history.
     /// </summary>
     [Fact]
@@ -129,7 +129,7 @@ public sealed class TaskQueueStateGaugeTests
         await SeedDueAsync(database, 2, TimeSpan.FromSeconds(30));
         await SeedDeadLettersAsync(database, 2);
 
-        await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
+        await using var connection = new NpgsqlConnection(_fixture.WorkerConnectionString(database));
         await connection.OpenAsync(Token);
         await connection.ExecuteAsync("set enable_seqscan = off");
 
@@ -141,7 +141,14 @@ public sealed class TaskQueueStateGaugeTests
 
             var plan = (string)(await command.ExecuteScalarAsync(Token))!;
             plan.ShouldContain("task_claim_idx");
-            plan.ShouldContain("task_dead_idx");
+
+            // `task_dead_idx` and the operator page's `task_dead_org_idx` share the
+            // `state = 'dead_letter'` predicate, so both return the same rows for the depth; which
+            // one the planner walks is a cost decision (at a handful of rows the two tie on pages,
+            // and the wider per-org index is picked). The contract is a dead-letter index, never
+            // the task table.
+            plan.ShouldMatch("task_dead(_org)?_idx");
+
             plan.ShouldNotContain("Seq Scan");
         }
         finally
@@ -161,7 +168,7 @@ public sealed class TaskQueueStateGaugeTests
         var database = await _fixture.CreateDatabaseAsync();
         await SeedDeadLettersAsync(database, 3);
 
-        await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(database));
+        await using var connection = new NpgsqlConnection(_fixture.WorkerConnectionString(database));
         await connection.OpenAsync(Token);
 
         var belowCap = await ReadSnapshotAsync(connection, cap: 10);
@@ -187,7 +194,7 @@ public sealed class TaskQueueStateGaugeTests
     private async Task SeedDueAsync(string database, int count, TimeSpan waited)
     {
         await using var connection = new NpgsqlConnection(
-            new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database)) { Pooling = false }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(_fixture.WorkerConnectionString(database)) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(Token);
 
         for (var i = 0; i < count; i++)
@@ -207,7 +214,7 @@ public sealed class TaskQueueStateGaugeTests
     private async Task SeedDeadLettersAsync(string database, int count)
     {
         await using var connection = new NpgsqlConnection(
-            new NpgsqlConnectionStringBuilder(_fixture.AppConnectionString(database)) { Pooling = false }.ConnectionString);
+            new NpgsqlConnectionStringBuilder(_fixture.WorkerConnectionString(database)) { Pooling = false }.ConnectionString);
         await connection.OpenAsync(Token);
 
         for (var i = 0; i < count; i++)

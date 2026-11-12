@@ -400,22 +400,7 @@ public sealed class EndToEndAcceptanceTests
                 MaxPoolSize = maximumPoolSize,
                 MaxAutoPrepare = 0,
             };
-
-            NpgsqlDataSource dataSource;
-            if (killerConnection is null || killOnStatementContaining is null)
-            {
-                dataSource = NpgsqlDataSource.Create(connectionString.ConnectionString);
-            }
-            else
-            {
-                connectionString.ApplicationName = applicationName ?? KilledApplicationName;
-                var builder = new NpgsqlDataSourceBuilder(connectionString.ConnectionString);
-                builder.UseLoggerFactory(new KillOnStatementLogger(
-                    killOnStatementContaining,
-                    killerConnection,
-                    connectionString.ApplicationName));
-                dataSource = builder.Build();
-            }
+            var dataSource = NpgsqlDataSource.Create(connectionString.ConnectionString);
 
             var values = new Dictionary<string, string?>(StringComparer.Ordinal)
             {
@@ -427,6 +412,7 @@ public sealed class EndToEndAcceptanceTests
                 [$"{TasksOptions.SectionName}:DispatchBatchSize"] = "50",
                 [$"{TasksOptions.SectionName}:DispatchDefaultQueue"] = Queue,
                 [$"{TasksOptions.SectionName}:SweepConnectionString"] = fixture.WorkerSchedConnectionString(database),
+                [$"{TasksOptions.SectionName}:WorkerConnectionString"] = fixture.WorkerConnectionString(database),
             };
 
             var collection = new ServiceCollection();
@@ -434,6 +420,19 @@ public sealed class EndToEndAcceptanceTests
             collection.AddLogging();
             collection.AddEvidgateTenancy();
             collection.AddEvidgateTasks(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
+
+            if (killerConnection is not null && killOnStatementContaining is not null)
+            {
+                // The queue's statements run on the keyed worker source, so the crash injection sits there.
+                var worker = new NpgsqlConnectionStringBuilder(fixture.WorkerConnectionString(database))
+                { MaxPoolSize = maximumPoolSize, MaxAutoPrepare = 0, ApplicationName = applicationName ?? KilledApplicationName };
+                var builder = new NpgsqlDataSourceBuilder(worker.ConnectionString);
+                builder.UseLoggerFactory(new KillOnStatementLogger(
+                    killOnStatementContaining, killerConnection, worker.ApplicationName));
+                var killed = builder.Build();
+                collection.AddKeyedSingleton<NpgsqlDataSource>(TaskWorkerDataSource.Key, (_, _) => killed);
+            }
+
             collection.AddSingleton<TaskRunRecorder>();
             collection.AddTaskHandler<RecordingPayload, RecordingTaskHandler>();
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Dapper;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -97,11 +98,11 @@ internal sealed record DeadLetteredLeaseRow(
     string? LastError);
 
 /// <summary>
-/// The production claim path: Dapper over the app-role <c>NpgsqlDataSource</c>
-/// (01.5.1 §8 S1 — parameterised SQL, no string building). The claim is its own
-/// short transaction, and the handler runs outside it (§8 P5): no row lock is held
-/// while a handler works, which is exactly what `for update skip locked` plus an
-/// explicit lease buys.
+/// The production claim path: Dapper over the keyed <c>evidgate_worker</c>
+/// <c>NpgsqlDataSource</c> (01.5.1 §8 S1 — parameterised SQL, no string building). The
+/// claim is its own short transaction, and the handler runs outside it (§8 P5): no row
+/// lock is held while a handler works, which is exactly what `for update skip locked`
+/// plus an explicit lease buys.
 /// </summary>
 public sealed partial class TaskClaimer : ITaskClaimer
 {
@@ -114,9 +115,9 @@ public sealed partial class TaskClaimer : ITaskClaimer
     private readonly int _reclaimBatchSize;
     private readonly ILogger<TaskClaimer> _logger;
 
-    /// <summary>Creates the claimer over the registered app-role data source.</summary>
+    /// <summary>Creates the claimer over the keyed worker-role data source.</summary>
     public TaskClaimer(
-        NpgsqlDataSource dataSource,
+        [FromKeyedServices(TaskWorkerDataSource.Key)] NpgsqlDataSource dataSource,
         ITaskAlertSink alerts,
         IOptions<TasksOptions> options,
         ILogger<TaskClaimer> logger)

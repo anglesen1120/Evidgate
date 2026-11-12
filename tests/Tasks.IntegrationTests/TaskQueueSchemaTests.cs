@@ -57,6 +57,7 @@ public sealed class TaskQueueSchemaTests
             "task_claim_idx",
             "task_claim_type_idx",
             "task_dead_idx",
+            "task_dead_org_idx",
             "task_fire_uq",
             "task_idem_uq",
             "task_parse_artifact_idx",
@@ -77,13 +78,23 @@ public sealed class TaskQueueSchemaTests
         var database = await _fixture.CreateDatabaseAsync();
         var owner = _fixture.OwnerConnectionString(database);
 
-        var app = await TaskSql.QueryAsync<bool>(
+        var app = await TaskSql.QueryAsync<string>(
             owner,
             """
-            select has_table_privilege('evidgate_app', 'public.task', privilege)
-              from unnest(array['select', 'insert', 'update', 'delete']) as privilege
+            select p from unnest(array['select', 'insert', 'update', 'delete']) as p
+             where has_table_privilege('evidgate_app', 'public.task', p)
+             order by 1
             """);
-        app.ShouldAllBe(granted => granted);
+        app.ShouldBe(["insert"], "the producer keeps INSERT; the queue role owns the DML");
+
+        var worker = await TaskSql.QueryAsync<string>(
+            owner,
+            """
+            select p from unnest(array['select', 'insert', 'update', 'delete']) as p
+             where has_table_privilege('evidgate_worker', 'public.task', p)
+             order by 1
+            """);
+        worker.ShouldBe(["delete", "insert", "select", "update"], "the queue role is the only DML role");
 
         foreach (var role in new[] { "evidgate_operator", "evidgate_worker_sched" })
         {
@@ -91,7 +102,7 @@ public sealed class TaskQueueSchemaTests
                 owner,
                 $"select has_table_privilege('{role}', 'public.task', 'select')");
 
-            granted.ShouldBeFalse($"{role} must not read the mechanism table (0008 grants/revokes)");
+            granted.ShouldBeFalse($"{role} must not read the mechanism table");
         }
     }
 

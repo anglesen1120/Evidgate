@@ -10,13 +10,13 @@ Purpose: let the **second on-call operator** (someone who did not build 01.5.1) 
 
 Audience: the on-call operator on duty. Prerequisites:
 
-- read access to the `task` and `outbox` tables with the `evidgate_app` role, plus that session set read only before its first statement (§3.1 gives the exact statements, roles and guard — the role holds `update`/`delete` on `public.task`, so the guard is what keeps the triage read-only);
+- read access to the `task` and `outbox` tables with the `evidgate_worker` role — the queue's service role, and the only role with `select` on them — plus that session set read only before its first statement (§3.1 gives the exact statements, roles and guard — the role holds `update`/`delete` on `public.task`, so the guard is what keeps the triage read-only). The request path (`evidgate_app`) cannot read either table: it holds `insert` only;
 - the operator credential for the API, once 02.x authentication lands (today the operator gate denies every caller: `src/Evidgate.Api/OperatorIngress/OperatorGate.cs:30-33`) ⚠️;
 - the alert that brought you here: the dead-letter-depth alert or the sink log line (§2). Neither names a person; there is no pager integration yet ⚠️ (10.3.1-T5).
 
 Rules:
 
-- **Never hand-write an `UPDATE` or `DELETE` on `public.task`.** The replay is the guarded operator path (§5); the only `DELETE` that exists on the table is the 30-day retention sweep (`migrations/0008_platform_task_queue.sql:79-81`, `src/BuildingBlocks/Persistence/Tasks/EvidgateSweeps.cs:84-96`, statement at `src/BuildingBlocks/Persistence/Tasks/SweepTaskHandlers.cs:114-124`). A hand update skips the state guard, the attempt reset and the audit expectations the route encodes.
+- **Never hand-write an `UPDATE` or `DELETE` on `public.task`.** The replay is the guarded operator path (§5); the only `DELETE` that exists on the table is the 30-day retention sweep, which the Worker runs over its own connection (`migrations/0008_platform_task_queue.sql:79-81`, `src/BuildingBlocks/Persistence/Tasks/EvidgateSweeps.cs:84-96`, statement at `src/BuildingBlocks/Persistence/Tasks/SweepTaskHandlers.cs`). A hand update skips the state guard, the attempt reset and the audit row the replay function appends.
 - **Replay once, then look.** A second replay *while the row is still queued* is a no-op by construction (§5.3), because nothing but a `dead_letter` row matches the guard. A replay of a row that **dead-lettered again in between is not a no-op**: it sets `attempts` back to `0`, so every replay of a poison payload hands the row a fresh full attempt budget (`src/BuildingBlocks/Persistence/Tasks/TaskQueueSql.cs:246-255`) and a new run of the same crash. The failure mode to avoid is therefore not duplication — it is replaying a poison payload repeatedly instead of classifying it (§4) once.
 - Record ids, closed enum values, counts and timestamps only. Never copy a payload, a raw exception message beyond the redacted `last_error` head, or tenant names into a ticket (`ITaskHandler.cs:57-63` is the redaction rule the rows themselves follow).
 - Nothing here is a statement about availability targets; the dead-letter depth number is measured, not an SLA (`plans/00-overview.md:445`).
@@ -40,24 +40,30 @@ How to confirm the sink fired, without a pager: search the Worker log for event 
 
 ### 3.1 Roles, RLS, grants and the read-only guard
 
-`public.task` and `public.outbox` are **mechanism tables with no row level security on purpose**: the claim scan and the outbox dispatcher walk every org (`migrations/0008_platform_task_queue.sql:16-19`, `migrations/0006_platform_outbox.sql:11-19`, listed as exceptions in `contracts/rls-exceptions.txt:51-52`). Consequences for a triage query:
+`public.task` and `public.outbox` are **mechanism tables with no row level security on purpose**: the claim scan and the outbox dispatcher walk every org (`migrations/0008_platform_task_queue.sql:16-19`, `migrations/0006_platform_outbox.sql:11-19`, listed as exceptions in `contracts/rls-exceptions.txt:51-52`). The roles were split for exactly that reason: the process that walks every tenant's queue is a dedicated role, and the request path cannot read it at all. Consequences for a triage query:
 
 | Fact | Evidence |
 | --- | --- |
-| `evidgate_app` holds `select, insert, update, delete` on `public.task` | `migrations/0008_platform_task_queue.sql:155` |
-| `evidgate_operator` holds **nothing** on `public.task` | `migrations/0008_platform_task_queue.sql:156` |
-| `evidgate_app` holds `select` on `public.outbox` (added with the dispatcher) | `migrations/0009_platform_outbox_dispatch.sql:58` |
-| `evidgate_operator` holds **nothing** on `public.outbox` | `migrations/0006_platform_outbox.sql:99` |
-| So: run §3.2's `task`/`outbox` statements as `evidgate_app`; there is no tenant filter to set, and one statement reads every tenant's rows | the grants above; `src/BuildingBlocks/Persistence/Tasks/ListDeadLetterTasksQuery.cs:83-93` (the endpoint also reads over the app-role data source) |
+| `evidgate_worker` holds `select, insert, update, delete` on `public.task` | `migrations/0104_platform_worker_role.sql` (grant block) |
+| `evidgate_worker` holds `select` and `update (dispatched_at)` on `public.outbox` | same migration; the outbox dispatcher's statements |
+| `evidgate_app` holds **`insert` only** on `public.task` and `public.outbox` — no `select`, `update` or `delete` on either | same migration (the revokes) |
+| `evidgate_operator` holds **nothing** on either table | `migrations/0008_platform_task_queue.sql:156`, `migrations/0006_platform_outbox.sql:99` |
+| So: run §3.2's `task`/`outbox` statements as `evidgate_worker`; there is no tenant filter to set, and one statement reads every tenant's rows | the grants above |
+| The **operator dead-letter route** is the tenant-scoped way in: `evidgate.list_dead_letter_tasks(...)` and `evidgate.replay_dead_letter_task(...)` are owner `SECURITY DEFINER` functions, `search_path = ''`, `EXECUTE` granted to `evidgate_app` alone. Neither function takes an org: each route requires `?org_id=`, opens that org's tenant transaction, and the function reads the org from `evidgate.current_org_id()`, so a task of another org answers not found. Neither route needs the worker credential | `migrations/0104_platform_worker_role.sql`; `src/BuildingBlocks/Persistence/Tasks/ListDeadLetterTasksQuery.cs`, `src/BuildingBlocks/Persistence/Tasks/ReplayDeadLetterTask.cs` |
+| Tenant-path module reads use the owner-owned `security_barrier` views `public.task_in_scope` and `public.outbox_in_scope`, which filter on `org_id = evidgate.current_org_id()` and are `select`-only to `evidgate_app` | same migration |
 | `public.run` **is** FORCE RLS, tenant policy `org_id = evidgate.current_org_id()`; `evidgate_app` sees one org only | `migrations/0031_orchestration_run.sql:143-150` |
 | `evidgate_operator` has a `select` grant on `public.run` but **no policy**, so it reads zero rows until 02.8.1's grant-gated policy lands | `migrations/0031_orchestration_run.sql:152-155`; grant at `:167` |
 | Cross-tenant `run` reads are possible only through the owner backfill policy (`evidgate_owner`) — the migration role, **not an on-call credential** ⚠️ | `migrations/0031_orchestration_run.sql:161-163` |
-| `evidgate_app` also holds `insert` on `public.outbox`, and `update (dispatched_at)` on it — a triage session could write the very queue it is inspecting | `migrations/0006_platform_outbox.sql:97-98`, `migrations/0009_platform_outbox_dispatch.sql:58-59` |
 
-**Protect the session before its first statement.** `public.task` has no RLS at all, and the role you triage with holds `update` and `delete` on it (`migrations/0008_platform_task_queue.sql:155`), so nothing in the database turns a mistyped statement into an error. One session-level guard makes every statement that follows read-only — Q1, Q2, Q3, the undispatched-backlog query, Q5 and §7.1 steps 1–2 — and an accidental `insert`/`update`/`delete` then fails with SQLSTATE `25006` instead of touching a row:
+**Which role runs what.** Two different credentials appear below, and they are not interchangeable:
+
+- **`evidgate_worker`** — the queue's service role, for the raw triage statements in §3.2 and §7.1. It holds `update`/`delete` on `public.task`, so the read-only guard is not optional here.
+- **`evidgate_app`** — the request path, for `public.run` reads and for the operator list/replay route (§5), which reaches the queue only through the definer functions above and therefore sees one org: the one in `evidgate.org_id`.
+
+**Protect the session before its first statement.** `public.task` has no RLS at all, and the role you triage with holds `update` and `delete` on it (`migrations/0104_platform_worker_role.sql`), so nothing in the database turns a mistyped statement into an error. One session-level guard makes every statement that follows read-only — Q1, Q2, Q3, the undispatched-backlog query, Q5 and §7.1 steps 1–2 — and an accidental `insert`/`update`/`delete` then fails with SQLSTATE `25006` instead of touching a row:
 
 ```sql
--- role: evidgate_app, a fresh session used for triage only
+-- role: evidgate_worker, a fresh session used for triage only
 set session characteristics as transaction read only;
 ```
 
@@ -73,15 +79,16 @@ select set_config('evidgate.org_id', '<org uuid from task.org_id>', true);
 commit;
 ```
 
-The third argument `true` is what makes the setting transaction-local; `evidgate.current_org_id()` reads exactly that GUC (`migrations/0002_foundation_evidgate_schema.sql:30-33`). Never set it outside a transaction, and never set it to an org you have no incident for.
+The third argument `true` is what makes the setting transaction-local; `evidgate.current_org_id()` reads exactly that GUC (`migrations/0002_foundation_evidgate_schema.sql:30-33`). Never set it outside a transaction, and never set it to an org you have no incident for. The operator route sets it the same way before the list or replay function runs, which is why a replay can only reach a task of the caller's own org.
 
 ### 3.2 The statements
 
-Every statement in this section runs in the read-only session of §3.1 (`set session characteristics as transaction read only;`), and Q4 also needs the tenant-scope transaction above it. None of them writes anything; if one fails with SQLSTATE `25006` after an accidental edit, the guard did its job.
+Every statement in this section runs in the read-only session of §3.1 (`set session characteristics as transaction read only;`), and Q4 also needs the tenant-scope transaction above it. Q1, Q2, Q3, the backlog query and Q5 read the queue tables directly, so they run as **`evidgate_worker`** — the only role with `select` on both tables; Q4 reads `public.run` and runs as **`evidgate_app`**. None of them writes anything; if one fails with SQLSTATE `25006` after an accidental edit, the guard did its job.
 
-Q1 — the dead-letter list: the same table, predicate and ordering as the statement behind `GET /internal/operator/tasks/dead-letter` (`src/BuildingBlocks/Persistence/Tasks/TaskQueueSql.cs:195-210`), with the queue filter spelled out for psql instead of the endpoint's `@queue` parameter:
+Q1 — the dead-letter list: the same table, predicate and ordering as the body of `evidgate.list_dead_letter_tasks` (`migrations/0104_platform_worker_role.sql`), the function behind `GET /internal/operator/tasks/dead-letter` (called at `src/BuildingBlocks/Persistence/Tasks/ListDeadLetterTasksQuery.cs:119`), with the queue filter spelled out for psql instead of that function's `p_queue` parameter. The route itself returns **one org's** rows (the org named by its required `?org_id=`); this statement reads every org and is why it is a `evidgate_worker` session:
 
 ```sql
+-- role: evidgate_worker
 select id, org_id, queue, task_type, idempotency_key, attempts, max_attempts, last_error, created_at
   from public.task
  where state = 'dead_letter'          -- one of: queued, active, retry, dead_letter, done
@@ -95,6 +102,7 @@ Served by `task_dead_idx` (`migrations/0008_platform_task_queue.sql:136`); the s
 Q2 — dead-letter depth by queue and type, to see whether the row is an incident or a singleton:
 
 ```sql
+-- role: evidgate_worker
 select queue, task_type, count(*) as depth, min(created_at) as oldest, max(updated_at) as newest
   from public.task
  where state = 'dead_letter'
@@ -105,15 +113,17 @@ select queue, task_type, count(*) as depth, min(created_at) as oldest, max(updat
 Q3 — the row that produced the task, when the dead letter came from the outbox (`task.idempotency_key` is `'outbox:' || outbox.id`, `migrations/0008_platform_task_queue.sql:34-38`):
 
 ```sql
+-- role: evidgate_worker
 select o.id, o.org_id, o.task_type, o.aggregate_type, o.aggregate_id, o.created_at, o.dispatched_at
   from public.outbox o
   join public.task t on t.idempotency_key = 'outbox:' || o.id::text
  where t.id = '<task id>';
 ```
 
-`outbox` has **no dead-letter state**: it is a row that is `dispatched_at is null` or stamped, and it is never deleted — no application role holds `delete` on it (`migrations/0006_platform_outbox.sql:98-99` revokes it from `evidgate_app` and everything from `evidgate_operator`; `migrations/0009_platform_outbox_dispatch.sql:28-31` keeps the posture and says so). Only the table's owner, the migration role `evidgate_owner`, could delete one, and it is not an on-call credential (§3.1). "Dead outbox rows" in the alert vocabulary therefore means *task* rows; an undispatched backlog is a different signal:
+`outbox` has **no dead-letter state**: it is a row that is `dispatched_at is null` or stamped, and it is never deleted — no application role holds `delete` on it (`migrations/0006_platform_outbox.sql:98-99` revoked it from `evidgate_app` and took everything from `evidgate_operator`; `migrations/0009_platform_outbox_dispatch.sql:28-31` kept the posture, and `0104` grants `evidgate_worker` `select` and `update (dispatched_at)` only). Only the table's owner, the migration role `evidgate_owner`, could delete one, and it is not an on-call credential (§3.1). "Dead outbox rows" in the alert vocabulary therefore means *task* rows; an undispatched backlog is a different signal:
 
 ```sql
+-- role: evidgate_worker
 select count(*) as undispatched, min(created_at) as oldest
   from public.outbox
  where dispatched_at is null;         -- outbox_undispatched_idx
@@ -124,6 +134,7 @@ select count(*) as undispatched, min(created_at) as oldest
 Q4 — the run behind a run-scoped dead letter (deadline reconcile, classify step "tenant-scoped"): run Q3 first, take `o.aggregate_id` as the run id, then in the tenant scope of §3.1:
 
 ```sql
+-- role: evidgate_app, inside the tenant-scope transaction of §3.1
 select id, state, collection_deadline_at, version, updated_at
   from public.run
  where id = '<run uuid>';
@@ -134,13 +145,14 @@ select id, state, collection_deadline_at, version, updated_at
 Q5 — one task row by id, **whatever its state**. This is the only query that can verify a replay: Q1 filters `state = 'dead_letter'`, so a row that replayed successfully is invisible there, and absence from that list proves nothing.
 
 ```sql
+-- role: evidgate_worker
 select id, org_id, queue, task_type, attempts, max_attempts, state,
        available_at, locked_until, last_error, created_at, updated_at, version
   from public.task
  where id = '<task id>';          -- task_pkey
 ```
 
-Columns at `migrations/0008_platform_task_queue.sql:103-111` (`state`, `attempts`, `max_attempts`, `available_at`, `locked_until`, `last_error`, `created_at`, `updated_at`, `version`); served by `task_pkey` (`:112`). Run as `evidgate_app` like Q1 (no RLS on the table, §3.1).
+Columns at `migrations/0008_platform_task_queue.sql:103-111` (`state`, `attempts`, `max_attempts`, `available_at`, `locked_until`, `last_error`, `created_at`, `updated_at`, `version`); served by `task_pkey` (`:112`). Run as `evidgate_worker` like Q1 (no RLS on the table, §3.1).
 
 ## 4. Classification tree
 
@@ -148,7 +160,7 @@ Columns at `migrations/0008_platform_task_queue.sql:103-111` (`state`, `attempts
 
 1. **Tenant-scoped task claimed without a tenant.** `last_error` begins with `missing_tenant:` (`TaskConsumer.cs:28` is the stored text) and `org_id` is null while the handler is tenant-bound (`ITaskHandler.cs:16-23`); the consumer dead-letters it rather than running it unscoped, on that first claim (`TaskConsumer.cs:268-272`). A low `attempts` count here means "refused immediately", not "still retrying" — this class never uses the budget (`:334-346`). Action: do **not** replay; the producer wrote a platform row for tenant work — that is a bug in the writer, escalate with the `task.id` and the task type.
 2. **Transient dependency.** `last_error` names a connection, timeout or pool failure, and attempts reached the cap because the dependency was down for minutes. `[INFERENCE]` from the backoff/last-error text; confirm by the sibling tasks of the same `task_type` recovering with no replay. Action: replay (§5) — the work is unchanged and the dependency is back.
-3. **Expired lease / consumer died.** `last_error` begins with `lease expired:` — that exact text is written by the claimer's reclaim (`src/BuildingBlocks/Persistence/Tasks/TaskQueueSql.cs:69`) and event `2350` names the batch (`TaskClaimer.cs:287-291`). Action: replay; a crashing handler on a large payload may repeat, so check the same `task_type` for other lease-expiry dead letters before replaying.
+3. **Expired lease / consumer died.** `last_error` begins with `lease expired:` — that exact text is written by the claimer's reclaim (`src/BuildingBlocks/Persistence/Tasks/TaskQueueSql.cs:122`, statement `DeadLetterExpiredLeases` at `:118`) and event `2350` names the batch (`TaskClaimer.cs:287-291`). Action: replay; a crashing handler on a large payload may repeat, so check the same `task_type` for other lease-expiry dead letters before replaying.
 4. **Poison payload.** The same row dead-letters again within one attempt, or every row of one `task_type`/`aggregate_id` fails with a parse or validation error. Action: do not replay a third time; escalate as a producer bug with the `idempotency_key` and the run/aggregate id from Q3.
 5. **Handler bug (systemic).** Q2 shows one `task_type` with meaningful depth across several orgs and no dependency outage. Action: escalate to the owning module; replay only after the fix is deployed, and expect the queue to drain itself on the next claim cycle.
 6. **Tenant-scoped run path.** A dead letter whose `aggregate_type` is `run` (Q3) and whose run is `queued`, `running` or `collecting` past `collection_deadline_at` — the deadline trigger's case — gets a bounded re-arm from the sweep (three attempts at most, §7.1), so follow §7.1 rather than the generic replay.
@@ -161,42 +173,46 @@ If none match, keep the row: it is the evidence. Classification is recorded in t
 
 | Item | Value | Evidence |
 | --- | --- | --- |
-| Verb and path | `POST /internal/operator/tasks/dead-letter/{id:guid}/replay` | `src/Evidgate.Api/Endpoints/OperatorEndpoints.cs:45` (`:127-144` handler) |
-| Listing (find the id) | `GET /internal/operator/tasks/dead-letter?queue=&cursor=&limit=` (limit default 50, max 200) | `OperatorEndpoints.cs:44` (`:74-119` handler); `ListDeadLetterTasksQuery.cs:98-101` |
-| Mount / visibility | group `/internal/operator/tasks`, `ExcludeFromDescription()`, **no `/v1` mount** — operator routes carry no tenant context | `OperatorEndpoints.cs:12-19` and `:39-42` |
+| Verb and path | `POST /internal/operator/tasks/dead-letter/{id:guid}/replay?org_id={org}` | `src/Evidgate.Api/Endpoints/OperatorEndpoints.cs:45` (`:143-183` handler) |
+| Listing (find the id) | `GET /internal/operator/tasks/dead-letter?org_id={org}&queue=&cursor=&limit=` (limit default 50, max 200) | `OperatorEndpoints.cs:44` (`:85-134` handler); `ListDeadLetterTasksQuery.cs:98-101` |
+| `org_id` (both routes) | **required**; absent → 400 `request_invalid` with detail `org_id required` | `OperatorEndpoints.cs:93-97` and `:149-154` |
+| What the org reaches | the route opens that org's tenant transaction; the definer function reads `evidgate.current_org_id()` and sees nothing beyond it | `ListDeadLetterTasksQuery.cs:92-93`; `ReplayDeadLetterTask.cs:48-52`; `migrations/0104_platform_worker_role.sql` |
+| Credential | neither route needs the worker connection string: they run on the app role and reach the queue only through the definer functions | `migrations/0104_platform_worker_role.sql` |
+| Mount / visibility | group `/internal/operator/tasks`, `ExcludeFromDescription()`, **no `/v1` mount** | `OperatorEndpoints.cs:12-19` and `:39-42` |
 | Auth ingress | `RequireOperatorFilter` → `IOperatorGate.IsOperatorAsync`; denial is 401 `unauthenticated` without a principal, 403 `forbidden` with one | `OperatorEndpoints.cs:41`; `OperatorGate.cs:52-82` |
 | Gate implementation today | `DenyAllOperatorGate` — **every real call is denied until 02.x authentication lands**; only test hosts substitute a permitting gate | `OperatorEndpoints.cs:67`; `OperatorGate.cs:30-33`; `tests/Hosts.IntegrationTests/OperatorDeadLetterEndpointTests.cs:40-48` |
-| Request body | none (the id is the path) | `OperatorEndpoints.cs:127-132` |
-| 200 response | `{ id, state: "queued", attempts: 0, available_at }` | `OperatorEndpoints.cs:136-137`; the response record is `:213` |
-| 404 / 409 | `task_not_found` / `task_not_dead_letter` | `OperatorEndpoints.cs:138-143` |
+| Request body | none (the id is the path, the org is the query parameter) | `OperatorEndpoints.cs:143-154` |
+| Replay actor | the authenticated principal's user id (`NameIdentifier` / `sub`), which becomes the audit row's actor; unauthenticated → 401, authenticated without a usable id → 403 | `OperatorEndpoints.cs:156-169` |
+| 200 response | `{ id, state: "queued", attempts: 0, available_at }` | `OperatorEndpoints.cs:175-176` |
+| 404 / 409 | `task_not_found` / `task_not_dead_letter` | `OperatorEndpoints.cs:177-181` |
 
 ⚠️ **Blocked on a real host today:** with `DenyAllOperatorGate` registered, the route answers 401 for anyone (`OperatorGate.cs:30-33` and `:68-70`). Until 02.x lands, the on-call operator cannot replay over HTTP in staging or production, and the drill T1.2 cannot be executed against a real host — the path is proven only by the integration hosts that install `PermitAllOperatorGate` (`tests/Hosts.IntegrationTests/DeadLetterChainTests.cs:175-183`). Escalate rather than hand-writing the update (§1).
 
 ### 5.2 What the replay does to the row
 
-One guarded `UPDATE … RETURNING` with `state = 'dead_letter'` as the predicate (`src/BuildingBlocks/Persistence/Tasks/TaskQueueSql.cs:246-255`):
+The route calls `evidgate.replay_dead_letter_task(p_task_id uuid, p_actor uuid)` — an owner `SECURITY DEFINER` function (`search_path = ''`, `EXECUTE` to `evidgate_app` alone) on the app-role tenant transaction (`src/BuildingBlocks/Persistence/Tasks/ReplayDeadLetterTask.cs:55-61`) — which performs one guarded `UPDATE … RETURNING` with `state = 'dead_letter'` as the predicate, reads the org it may touch from `evidgate.current_org_id()`, appends one audit row with `p_actor`, and returns `replayed` (with the new `available_at`), `not_found` or `not_dead_letter` (`migrations/0104_platform_worker_role.sql`). A null org raises `23514` and a null actor `22004` rather than replaying unattributed; the row of another org is invisible to the guard and answers `not_found`:
 
 - `state` → `queued` (`migrations/0008_platform_task_queue.sql:113`);
 - `attempts` → `0` — the row gets a full attempt budget again (`:104`; `max_attempts` is untouched, `:105`);
 - `available_at` → `now()`, `locked_until` → null, so the row is immediately claimable (`:106-107`, claim index `:133`);
-- **`last_error` is kept** — a replay is a re-queue, not an acquittal, and the reason stays visible (`TaskQueueSql.cs:238-245`).
+- **`last_error` is kept** — a replay is a re-queue, not an acquittal, and the reason stays visible (the function's guarded `UPDATE` keeps the column out of its `SET` list).
 
 There is **no `replayed` state**: `Replayed` is the *outcome* enum of the service (`src/BuildingBlocks/Persistence/Tasks/ReplayDeadLetterTask.cs:12-22`); the stored state vocabulary stays `queued, active, retry, dead_letter, done` (`migrations/0008_platform_task_queue.sql:113`). If a list still shows a row you replayed, the row was claimed again and failed again — read the new `attempts` and `last_error`, not a "replayed" marker.
 
 ### 5.3 Idempotency of the replay, and of the handler
 
-- The **replay** is idempotent by the state guard: a second POST finds a non-`dead_letter` row and answers 409 instead of re-queueing (`ReplayDeadLetterTask.cs:40-45` and `:90-102`; `OperatorEndpoints.cs:26-27`). No `Idempotency-Key` and no `ETag` (same cite).
+- The **replay** is idempotent by the state guard: a second POST finds a row that is no longer `dead_letter`, `evidgate.replay_dead_letter_task` returns `not_dead_letter`, and the route answers 409 instead of re-queueing (`ReplayDeadLetterTask.cs:101-110` maps the function's outcome; `OperatorEndpoints.cs:179-181`). An outcome the map does not know fails the call closed rather than being treated as a replay. No `Idempotency-Key` and no `ETag` (same cite).
 - The **handler** is at-least-once and must be idempotent on the work's natural key, which is the producer's `task.idempotency_key` (`ITaskHandler.cs:30-35`); the queue itself dedupes inserts by `task_idem_uq` (`migrations/0008_platform_task_queue.sql:34-38`; `:131`). For a run reconcile this is explicit: the finisher appends at most one evidence revision per attempt and never rewrites one (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileFinisher.cs:231-244` for the equal-evidence guard, `migrations/0049_orchestration_evidence_revision.sql:162-165` for the append-only revoke), and a terminal run, or one the reconciler answers `NotCollectable` for, never reaches it (`src/Modules/Evidgate.Modules.Orchestrator/Application/Runs/ReconcileRunTask.cs:78-87`).
 
 ### 5.4 Audit
 
-The two operator task routes call the queue services directly; **no audit row is written for a list or a replay** (`OperatorEndpoints.cs:22-28` and `:127-144`). The replay service is the positive evidence: it opens the app-role data source and executes the queue's own SQL directly — the guarded `UPDATE`, and only when that matches no row the state read that discriminates 404 from 409 (`src/BuildingBlocks/Persistence/Tasks/ReplayDeadLetterTask.cs:53-104`, statements at `:80-83` and `:95-98`) — with no outbox writer, no audit buffer and no `ICommand` pipeline, so nothing on that path can produce an audit record. The only operator-surface write that records a principal is the healing switch (`OperatorEndpoints.cs:165-205`). The replay's own record is the row: `last_error`, `attempts`, `updated_at`, and the `version` bump from the shared trigger (`migrations/0008_platform_task_queue.sql:139-143`). ⚠️ A tenant-visible audit of an operator replay does not exist yet; 02.8.1's grant-gated operator read path is where it belongs (`migrations/0031_orchestration_run.sql:152-155`). Record the operator's own action in the handover note (time, task id, who).
+`evidgate.replay_dead_letter_task` appends **one audit row per replay**, in the same transaction as the guarded `UPDATE` that made the row `queued`; `not_found` and `not_dead_letter` append nothing because they change nothing (`migrations/0104_platform_worker_role.sql`; `src/BuildingBlocks/Persistence/Tasks/ReplayDeadLetterTask.cs` for the outcome mapping the route returns). The list route writes no audit row: it reads `evidgate.list_dead_letter_tasks(...)` and returns rows of one org. The replay's own record is the row: `last_error`, `attempts`, `updated_at`, and the `version` bump from the shared trigger (`migrations/0008_platform_task_queue.sql:139-143`). The audit row names the operator principal's user id as its actor (`OperatorEndpoints.cs:156-171`); ⚠️ the gate denies every caller until 02.x (§5.1), so no actor has been recorded on a real host yet — still write the operator's action into the handover note (time, task id, who).
 
 ### 5.5 Steps
 
 1. Classify (§4). Do not replay a poison payload or a `missing_tenant` row.
-2. Get the id from Q1 or the list route (§5.1) and **write it down**: steps 4–5 and §6 all read that one row by id with Q5.
-3. POST the replay with the operator credential. Expect 200 with `state: "queued"`, `attempts: 0`.
+2. Get the id from Q1 or the list route (§5.1) and **write it down** together with the task's `org_id`: steps 4–5 and §6 all read that one row by id with Q5, and the replay must name the org.
+3. POST the replay with the operator credential and `?org_id=<the task's org>`. Expect 200 with `state: "queued"`, `attempts: 0`; a missing org is 400 `org_id required`, an org that does not own the task is 404 `task_not_found`.
 4. Watch the Worker log for the row: event `2306` again means a second dead letter; event `2320` means it dead-lettered again; absence of both plus a `done` state means it ran.
 5. Re-read the row with **Q5** by that id — not Q1: Q1 lists only rows still in `dead_letter`, so a row you replayed successfully disappears from it and its absence proves nothing. Expect `state` `queued`/`active`/`done` and `attempts` below `max_attempts`. If Q5 shows `dead_letter` again, repeat §4 from the top — the second death may be a different class from the first (a `missing_tenant` refusal or an expired lease, not the handler failure you replayed) — then §6.
 
@@ -240,7 +256,7 @@ The operator is involved only after the third attempt: event `2427` names how ma
 1. Find the deadline outbox rows for the run — one per attempt (§3.2 Q4 gives `org_id` and the run id; then):
 
    ```sql
-   -- role: evidgate_app, in the read-only session of §3.1 (set session characteristics as transaction read only)
+   -- role: evidgate_worker, in the read-only session of §3.1 (set session characteristics as transaction read only)
    select o.id, o.idempotency_key, o.created_at, o.dispatched_at
      from public.outbox o
     where o.org_id = '<org uuid>'
@@ -251,7 +267,7 @@ The operator is involved only after the third attempt: event `2427` names how ma
 2. Find the task row the dispatcher derived from it (`'outbox:' || o.id`, `migrations/0008_platform_task_queue.sql:34-38`) and confirm it is the dead letter:
 
    ```sql
-   -- role: evidgate_app, same read-only session
+   -- role: evidgate_worker, same read-only session
    select t.id, t.state, t.attempts, t.max_attempts, t.last_error, t.created_at
      from public.task t
     where t.idempotency_key = 'outbox:' || '<outbox id>';
@@ -274,7 +290,7 @@ The operator is involved only after the third attempt: event `2427` names how ma
 ### 7.2 Other gaps this runbook states plainly
 
 - **No operator authentication** — `DenyAllOperatorGate` denies every real caller, so §5 is not executable on a real host today (`OperatorGate.cs:30-33`); the target is 02.x.
-- **No audit row for a replay** (§5.4) ⚠️.
+- **The replay actor is only as good as the principal** (§5.4): a real host refuses every caller until 02.x, so no replay has been attributed to a person yet.
 - **No dead-letter-depth alert rule, no pager, no runbook link in an alert file** — the rule set is 10.3.1-T5.1 (`plans/features/10-operations/10.3.1-telemetry-and-alerting.md:135`); this file is the link target when it lands.
 - **Alert delivery is at-most-once and non-durable**; a lost alert is recovered by Q1 (`ITaskAlertSink.cs:55-60`).
 - **30-day retention** removes the row (`EvidgateSweeps.cs:84-96`, `SweepTaskHandlers.cs:114-124`); after that a dead letter is only reconstructable from `outbox` (which is never deleted: no application role holds `delete`, `migrations/0006_platform_outbox.sql:98-99`, `migrations/0009_platform_outbox_dispatch.sql:28-31`) and from logs.
@@ -309,7 +325,7 @@ Each SQL identifier this runbook uses, and where the schema defines it.
 | `task_dead_idx` (`(created_at, id)` for Q1) | partial index | `migrations/0008_platform_task_queue.sql:136` |
 | `task_terminal_idx` (retention scan) | partial index | `migrations/0008_platform_task_queue.sql:137` |
 | `task_set_updated_at_and_version` | trigger | `migrations/0008_platform_task_queue.sql:139-143` |
-| `grant … on public.task to evidgate_app` | grant (the triage role) | `migrations/0008_platform_task_queue.sql:155` |
+| `grant select, insert, update, delete on public.task to evidgate_worker` (the triage role) and `revoke` the same from `evidgate_app`, which keeps `insert` only | grants | `migrations/0104_platform_worker_role.sql` (supersedes `migrations/0008_platform_task_queue.sql:155`) |
 | `revoke all on public.task from evidgate_operator` | revoke | `migrations/0008_platform_task_queue.sql:156` |
 | `public.outbox` | table | `migrations/0006_platform_outbox.sql:73` |
 | `outbox.org_id` (not null) | column | `migrations/0006_platform_outbox.sql:75` |
@@ -324,8 +340,10 @@ Each SQL identifier this runbook uses, and where the schema defines it.
 | `grant insert on public.outbox to evidgate_app` (the write path; `update` is column-scoped below) | grant | `migrations/0006_platform_outbox.sql:97` |
 | `revoke select, update, delete on public.outbox from evidgate_app` (so no application role can delete an outbox row) | revoke | `migrations/0006_platform_outbox.sql:98` |
 | `revoke all on public.outbox from evidgate_operator` | revoke | `migrations/0006_platform_outbox.sql:99` |
-| `grant select on public.outbox to evidgate_app` | grant | `migrations/0009_platform_outbox_dispatch.sql:58` |
-| `grant update (dispatched_at) on public.outbox to evidgate_app` | column grant | `migrations/0009_platform_outbox_dispatch.sql:59` |
+| `grant select` and `update (dispatched_at) on public.outbox to evidgate_worker` (the dispatcher); `insert` stays with `evidgate_app`, which loses the `select` and the column grant | grants | `migrations/0104_platform_worker_role.sql` (supersedes `migrations/0009_platform_outbox_dispatch.sql:58-59`) |
+| `public.task_in_scope`, `public.outbox_in_scope` (`security_barrier`, `where org_id = evidgate.current_org_id()`, `select` to `evidgate_app` only) | views (the tenant path into the queue) | `migrations/0104_platform_worker_role.sql` |
+| `evidgate.list_dead_letter_tasks(p_queue text, p_after_created_at timestamptz, p_after_id uuid, p_limit int)` | owner `SECURITY DEFINER` function, `search_path = ''`, `EXECUTE` to `evidgate_app` only | `migrations/0104_platform_worker_role.sql` |
+| `evidgate.replay_dead_letter_task(p_task_id uuid, p_actor uuid)` → `replayed` / `not_found` / `not_dead_letter` | owner `SECURITY DEFINER` function, org from `evidgate.current_org_id()`, one audit row per replay naming `p_actor` | `migrations/0104_platform_worker_role.sql` |
 | `public.run` | table | `migrations/0031_orchestration_run.sql:88` |
 | `run.id`, `run.org_id` | columns | `migrations/0031_orchestration_run.sql:89-90` |
 | `run.version` (optimistic token) | column | `migrations/0031_orchestration_run.sql:106` |

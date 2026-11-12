@@ -10,13 +10,13 @@ accepted (2026-09-25)
 
 ## Context
 
-DECISIONS.md §4.1 picks plain SQL migrations run by DbUp 7 inside `Evidgate.Migrator`, and F5 (PostgreSQL RLS docs) shows table owners and `BYPASSRLS` roles bypass row-security policies unless `FORCE ROW LEVEL SECURITY` is set. Multi-tenancy therefore requires that the role applying DDL can never be the role serving application traffic. 00 §5.4.3 fixes four roles — `evidgate_owner`, `evidgate_app`, `evidgate_operator`, `evidgate_worker_sched` — and 01 FR-01-5 requires forward-only, expand/contract, plain-SQL migrations with a journal storing name + checksum, applied as the owner role while application traffic runs as a non-owner role without `BYPASSRLS`.
+DECISIONS.md §4.1 picks plain SQL migrations run by DbUp 7 inside `Evidgate.Migrator`, and F5 (PostgreSQL RLS docs) shows table owners and `BYPASSRLS` roles bypass row-security policies unless `FORCE ROW LEVEL SECURITY` is set. Multi-tenancy therefore requires that the role applying DDL can never be the role serving application traffic. 00 §5.4.3 fixes four roles — `evidgate_owner`, `evidgate_app`, `evidgate_operator`, `evidgate_worker_sched` — and migration `0104` adds a fifth, `evidgate_worker`, which owns the queue's claim/acknowledge/dispatch/prune statements while `evidgate_app` keeps `INSERT` only on `public.task` and `public.outbox`. 01 FR-01-5 requires forward-only, expand/contract, plain-SQL migrations with a journal storing name + checksum, applied as the owner role while application traffic runs as a non-owner role without `BYPASSRLS`.
 
 ## Decision
 
 - `src/Evidgate.Migrator` is a short-lived console process running `migrations/*.sql` through **DbUp 7** (`dbup-postgresql` 7.0.1) connected as `evidgate_owner`; one transaction per file; a custom `IJournal` writes `schema_migration` rows with `name` + `checksum` (DbUp's default journal stores names only ⚠️ — confirmed in 01.4.1-T1).
 - Application traffic connects as `evidgate_app`: not table owner, no `BYPASSRLS`; every business table gets `FORCE ROW LEVEL SECURITY` so even the owner path is policy-bound (00 §5.4.3, F5).
-- `evidgate_operator` is a separate audited role for operator/admin paths (TL T76); `evidgate_worker_sched` is the only role allowed to call owner `SECURITY DEFINER` functions for cross-tenant sweeps (TL T80). `evidgate_resolve` holds pre-tenant `SECURITY DEFINER` resolvers on which `evidgate_app` has `EXECUTE` and nothing else outside RLS (00 §5.4.8, TL T1).
+- `evidgate_operator` is a separate audited role for operator/admin paths (TL T76); `evidgate_worker_sched` is the only role allowed to call owner `SECURITY DEFINER` functions for cross-tenant sweeps (TL T80). `evidgate_worker` is the queue's service role — `select, insert, update, delete` on `public.task`, `select` and `update (dispatched_at)` on `public.outbox` — and `evidgate_app` reaches the dead-letter list and replay only through owner `SECURITY DEFINER` functions scoped to `evidgate.current_org_id()`. `evidgate_resolve` holds pre-tenant `SECURITY DEFINER` resolvers on which `evidgate_app` has `EXECUTE` and nothing else outside RLS (00 §5.4.8, TL T1).
 - Migrations are forward-only and expand/contract; a change that breaks the previous app version is rejected in review. `--status`/`--dry-run` exist on the runner; a checksum mismatch on an already-applied file makes the runner refuse to start (01 §5).
 
 ## Alternatives rejected
@@ -29,7 +29,7 @@ DECISIONS.md §4.1 picks plain SQL migrations run by DbUp 7 inside `Evidgate.Mig
 ## Consequences
 
 - Deploy order matters: migrator runs before `Evidgate.Api`/`Evidgate.Worker`, which verify the journal head equals the build's expected head and refuse to start on mismatch (01 §4 boot flow).
-- Role objects must exist before migrations apply them — the bootstrap migration that creates `evidgate_app`/`evidgate_operator`/`evidgate_worker_sched` runs as `evidgate_owner` (01.4.1).
+- Role objects must exist before migrations apply them — the bootstrap migration that creates `evidgate_app`/`evidgate_operator`/`evidgate_worker_sched`, and `0104` for `evidgate_worker`, run as `evidgate_owner` (01.4.1).
 - Dev roles mirror the production split so an RLS mistake fails locally first (01 §6).
 - The checksum journal is custom code (`IJournal`); its correctness is covered by unit tests and the deliberate-failure CI test (edited applied migration fails `Evidgate.Migrator --status`).
 

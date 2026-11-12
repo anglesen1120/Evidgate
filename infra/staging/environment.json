@@ -135,6 +135,10 @@
       "origin": "secret-store",
       "from": "provider secret store; a staging-only evidgate_worker_sched credential — the sweep role is per environment, like every other credential"
     },
+    "EVIDGATE__TASKS__WORKERCONNECTIONSTRING": {
+      "origin": "secret-store",
+      "from": "provider secret store; a staging-only evidgate_worker credential — the queue's service role (claim/ack/dispatch/prune on public.task and public.outbox), per environment like every other credential; the Api does not hold it"
+    },
     "EVIDGATE__TASKS__VISIBILITYTIMEOUTSECONDS": {
       "origin": "default",
       "from": "option default 300"
@@ -222,6 +226,10 @@
     "EVIDGATE_SEAWEEDFS_S3_CONFIG": {
       "origin": "default",
       "from": "dev-stack only: the committed local identity is accepted by the local container and by nothing else"
+    },
+    "EVIDGATE_WORKER_PASSWORD": {
+      "origin": "default",
+      "from": "dev-stack only; staging holds the same role's password in the provider secret store, referenced by EVIDGATE__TASKS__WORKERCONNECTIONSTRING"
     },
     "EVIDGATE_WORKER_SCHED_PASSWORD": {
       "origin": "default",

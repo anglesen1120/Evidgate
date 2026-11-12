@@ -206,7 +206,9 @@ Every secret an Evidgate process resolves goes through one interface,
 from `IConfiguration` or the environment directly. `SecretNames.All` is the registry of those names, and
 they are the existing `EVIDGATE_*` variable names — nothing was renamed: the Api/Worker database
 connection string (`EVIDGATE__DATABASE__CONNECTIONSTRING`), the task sweep connection string
-(`EVIDGATE__TASKS__SWEEPCONNECTIONSTRING`), the CI signing key, pepper and previous pepper
+(`EVIDGATE__TASKS__SWEEPCONNECTIONSTRING`), the Worker queue connection string
+(`EVIDGATE__TASKS__WORKERCONNECTIONSTRING`, the `evidgate_worker` role that claims,
+acknowledges, dispatches and prunes the queue — the Api does not hold it), the CI signing key, pepper and previous pepper
 (`EVIDGATE__CI__SIGNINGKEY`, `EVIDGATE__CI__PEPPER`, `EVIDGATE__CI__PREVIOUSPEPPER`), the object-storage
 identity (`EVIDGATE__OBJECT__ACCESSKEY`, `EVIDGATE__OBJECT__SECRETKEY`), the Migrator
 connection string (`EVIDGATE_MIGRATOR__CONNECTIONSTRING`), the Google login client secret
@@ -304,16 +306,20 @@ steps, run in this order because each one's evidence depends on the previous one
    and the database that role owns, then stops.
 2. The environment's deploy job runs `Evidgate.Migrator` against the owner
    connection. Migration `0001` creates `evidgate_app`, `evidgate_operator` and
-   `evidgate_worker_sched` without LOGIN. Each script runs in its own transaction under a
+   `evidgate_worker_sched` without LOGIN, and migration `0104` adds
+   `evidgate_worker` on the same pattern — no LOGIN, no attribute, and only the
+   queue privileges: `select, insert, update, delete` on `public.task` and
+   `select` plus `update (dispatched_at)` on `public.outbox`, with
+   `evidgate_app` reduced to `insert` on both. Each script runs in its own transaction under a
    5 s `lock_timeout` and a 900 s `statement_timeout`
    (`EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS`, `EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS`,
    `0` disables); a timeout is exit `5` or `6`, the script rolls back and nothing is journalled —
    see the [Migrator timeouts runbook](migrator-timeouts.md) before rerunning.
 3. `scripts/env/bootstrap-db.sh <env> credentials` — as superuser: LOGIN + a
-   password for those three roles. It refuses, naming the missing roles, until
+   password for those four roles. It refuses, naming the missing roles, until
    step 2 has run.
 4. `scripts/env/bootstrap-db.sh <env> verify` — read-only assertions as superuser:
-   the role set, the least-privilege attributes (all four may log in; none carries
+   the role set, the least-privilege attributes (all five may log in; none carries
    SUPERUSER, BYPASSRLS, REPLICATION, CREATEDB or CREATEROLE beyond the owner's
    CREATEROLE), no application role being a member of any other role,
    `evidgate_app` owning nothing, and ENABLE + FORCE row level security on every
@@ -348,8 +354,8 @@ drift apart.
 | `EVIDGATE_BOOTSTRAP_CONFIRM_ENV` | — | — | must be exactly `prod` |
 
 `database` reads `EVIDGATE_OWNER_PASSWORD`; `credentials` reads
-`EVIDGATE_APP_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD` and
-`EVIDGATE_WORKER_SCHED_PASSWORD`; `verify` reads no role password at all. A
+`EVIDGATE_APP_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD`, `EVIDGATE_WORKER_PASSWORD`
+and `EVIDGATE_WORKER_SCHED_PASSWORD`; `verify` reads no role password at all. A
 missing variable fails naming the key, never a value, and no password reaches a
 command line or the output: the script exports each variable to the `psql` child,
 which reads it with `\getenv`.
@@ -365,7 +371,7 @@ web CSP input and the test switches are (see above).
 Four guards run before the script connects, so a refused bootstrap has created
 nothing:
 
-- **Every environment needs its own cluster.** `evidgate_owner` and the three
+- **Every environment needs its own cluster.** `evidgate_owner` and the four
   application roles are cluster-wide, so two environments on one server would
   share them: the prod roles would carry whatever staging granted, and the other
   way round. `staging` therefore refuses `EVIDGATE_DB_NAME=evidgate_prod` and
@@ -377,7 +383,7 @@ nothing:
   also bypasses the host rule below.
 - **Dev connects to loopback only** unless `EVIDGATE_DB_CONTAINER` is set. A
   `EVIDGATE_DB_HOST` such as a shared server is refused by name, so a dev
-  bootstrap cannot create the four roles on a server someone else uses.
+  bootstrap cannot create the five roles on a server someone else uses.
 - **`EVIDGATE_DB_NAME` must be a plain identifier**, matching
   `^[a-z_][a-z0-9_]{0,62}$`; anything else is refused naming the key.
 
@@ -386,7 +392,7 @@ managed server never receives the superuser password over an unencrypted
 connection. The value the deploy sets wins, which keeps a provider that requires
 a different mode (`verify-full` with its CA) in charge of its own policy. The
 shared [`../../scripts/env/lib-db.sh`](../../scripts/env/lib-db.sh) disables
-statement and error-statement logging in the session that sets the four role
+statement and error-statement logging in the session that sets the five role
 passwords, so neither the `ALTER` nor a failure of it can reach a server log.
 
 **Only the deploy identity runs `database` and `credentials`.** They create or
@@ -397,10 +403,11 @@ identity only (10.1.1-T3.4), and `Evidgate.Api`, `Evidgate.Worker` and the
 migrator keep their own least-privilege roles. The prod bootstrap additionally
 refuses to run unless `EVIDGATE_BOOTSTRAP_CONFIRM_ENV=prod`.
 
-**AC5 says three roles; the bootstrap verifies four.** AC5 names the owner, app
-and operator roles, while the bootstrap creates and verifies the four roles of
-01.4.1: `evidgate_owner`, `evidgate_app`, `evidgate_operator` and
-`evidgate_worker_sched`, because the sweep role of TL T80 belongs to the same role
+**AC5 says three roles; the bootstrap verifies five.** AC5 names the owner, app
+and operator roles, while the bootstrap creates and verifies the five roles of
+01.4.1 plus the queue split: `evidgate_owner`, `evidgate_app`, `evidgate_operator`,
+`evidgate_worker` and `evidgate_worker_sched`, because the sweep role of TL T80 and
+the queue role that owns claim/ack/dispatch belong to the same role
 split. `verify` also accepts PostgreSQL's own `pg_*` roles and the bootstrap
 superuser it connected as; every other role is an offender, which is what makes a
 stray grant or a leftover verification role visible. A managed provider that

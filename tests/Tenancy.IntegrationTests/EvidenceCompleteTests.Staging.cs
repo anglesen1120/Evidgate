@@ -59,9 +59,10 @@ public sealed partial class EvidenceCompleteTests
     public async Task Complete_StagingDelete_OnlyAfterCommit()
     {
         // The dispatcher claims undispatched outbox rows of every tenant, so this test needs a database of its own
-        // (and the pool then hands it private hosts).
+        // (and the pool then hands it private hosts). It also drives the dispatch hop itself, so its host asks for
+        // the worker-role source.
         await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await StartAsync(Writer(), dedicated.Name);
+        await using var world = await StartAsync(Writer(), dedicated.Name, workerQueue: true);
         var runId = await SeedRunAsync(world);
         await InsertKindPolicyAsync(world);
 
