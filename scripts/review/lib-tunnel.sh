@@ -73,3 +73,26 @@ rv_quick_tunnel_url() { # TIMEOUT_SECONDS
   done
   rv_die "cloudflared did not report a trycloudflare.com URL within $timeout s on $(rv_target); check: docker logs $RV_QUICK_TUNNEL_CONTAINER"
 }
+
+# Waits on a condition the caller can observe, never on a fixed sleep.
+# RV_WAIT_HTTP_MAX_SECONDS only ever lowers the timeout (tests that prove a
+# refusal must not wait out the production budget).
+rv_wait_http() { # URL TIMEOUT_SECONDS "ACCEPTED CODES" LABEL
+  local url="$1" timeout="$2" accepted="$3" label="$4" code="000" deadline
+  case "${RV_WAIT_HTTP_MAX_SECONDS:-}" in
+    '' | *[!0-9]* | ??????????*) ;; # not a plain number, or too long for bash arithmetic
+    *) [ "$((10#$RV_WAIT_HTTP_MAX_SECONDS))" -lt "$timeout" ] && timeout=$((10#$RV_WAIT_HTTP_MAX_SECONDS)) ;;
+  esac
+  deadline=$((timeout + SECONDS))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    if [ -n "$RV_FORWARD_PID" ] && ! kill -0 "$RV_FORWARD_PID" 2>/dev/null; then
+      rv_die "the ssh port forward for $label died; check that 127.0.0.1:$RV_API_PORT is free on this machine"
+    fi
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" 2>/dev/null || true)"
+    case " $accepted " in
+      *" ${code} "*) return 0 ;;
+    esac
+    sleep 2
+  done
+  rv_die "$label did not answer with one of [$accepted] within $timeout s (last HTTP ${code:-none}): $url"
+}

@@ -18,11 +18,28 @@ deploy="$FX_REPO/scripts/review/deploy.sh"
 root="$HOME/evidgate-review"
 
 # --- quick mode: a 200 from the throwaway host is refused -----------------
-if out="$(FX_HTTP_CODE=200 bash "$deploy" review-host --tunnel quick --no-dogfood 2>&1)"; then
+if out="$(RV_WAIT_HTTP_MAX_SECONDS=4 FX_HTTP_CODE=200 bash "$deploy" review-host --tunnel quick --no-dogfood 2>&1)"; then
   fx_fail "a quick tunnel that answered 200 was accepted"
 fi
 fx_assert_contains "$out" "one of [401]" "quick mode accepts exactly 401"
 fx_assert_contains "$out" "the quick tunnel" "the failure names the quick tunnel"
+fx_assert_contains "$out" "within 4 s" "the wait was capped by the injected timeout"
+
+# --- the cap only ever lowers the wait ------------------------------------
+wait_msg() { # CAP BUDGET — the refusal message names the timeout that applied
+  (
+    # shellcheck source=/dev/null
+    . "$FX_REPO/scripts/review/lib.sh"
+    RV_WAIT_HTTP_MAX_SECONDS="$1"
+    rv_wait_http "http://127.0.0.1:1/" "$2" "401" "the probe" 2>&1 || true
+  )
+}
+export FX_HTTP_CODE=200
+fx_assert_contains "$(wait_msg 0 2)" "within 0 s" "a zero cap refuses at once"
+fx_assert_contains "$(wait_msg abc 2)" "within 2 s" "a non-numeric cap is ignored"
+fx_assert_contains "$(wait_msg 99999999999999999999 2)" "within 2 s" "a cap too large for bash arithmetic is ignored"
+fx_assert_contains "$(wait_msg 9 2)" "within 2 s" "a cap above the budget never raises it"
+unset FX_HTTP_CODE
 
 # --- the matrix behind the helper ----------------------------------------
 codes_for() { # MODE HASH
