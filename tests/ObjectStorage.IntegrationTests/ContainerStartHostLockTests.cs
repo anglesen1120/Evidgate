@@ -3,6 +3,8 @@ using Evidgate.Testing;
 using Shouldly;
 using Xunit;
 
+#pragma warning disable VSTHRD003 // the awaited tasks are started by these tests with Task.Run
+
 namespace ObjectStorage.IntegrationTests;
 
 /// <summary>Contention tests of the host-wide file lock around the Ryuk reaper start; no Docker needed.</summary>
@@ -23,16 +25,24 @@ public sealed class ContainerStartHostLockTests : IDisposable
         var maxInside = 0;
         var done = 0;
         var log = new List<string>();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+        var callers = Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
             ContainerStart.WithHostLockAsync(LockPath, Generous, async () =>
             {
-                var now = Interlocked.Increment(ref inside);
-                InterlockedMax(ref maxInside, now);
-                await Task.Delay(40, TestContext.Current.CancellationToken);
+                InterlockedMax(ref maxInside, Interlocked.Increment(ref inside));
+                await release.Task;
                 Interlocked.Decrement(ref inside);
                 Interlocked.Increment(ref done);
-            }, Record(log), CancellationToken.None))));
+            }, Record(log), CancellationToken.None), TestContext.Current.CancellationToken)).ToArray();
+
+        // The first holder blocks on the gate while the other seven poll the lock: several poll rounds must
+        // pass with exactly one action inside, or the lock does not exclude.
+        await Task.Delay(1200, TestContext.Current.CancellationToken);
+        Volatile.Read(ref inside).ShouldBe(1);
+
+        release.SetResult();
+        await Task.WhenAll(callers);
 
         maxInside.ShouldBe(1);
         done.ShouldBe(8);
@@ -42,44 +52,60 @@ public sealed class ContainerStartHostLockTests : IDisposable
     [Fact]
     public async Task SecondProcess_WaitsForTheProcessHoldingTheFile()
     {
-        var hold = TimeSpan.FromSeconds(2);
-        using var holder = StartPythonHolder(LockPath, hold);
-        (await holder.StandardOutput.ReadLineAsync(TestContext.Current.CancellationToken)).ShouldBe("locked");
-
-        var log = new List<string>();
-        var ran = false;
-        var clock = Stopwatch.StartNew();
-        await ContainerStart.WithHostLockAsync(LockPath, Generous, () =>
+        using var holder = StartPythonHolder(LockPath);
+        try
         {
-            ran = true;
-            return Task.CompletedTask;
-        }, Record(log), CancellationToken.None);
-        clock.Stop();
+            await WaitForLockedAsync(holder);
 
-        ran.ShouldBeTrue();
-        clock.Elapsed.ShouldBeGreaterThan(TimeSpan.FromSeconds(1));
-        log.ShouldBeEmpty();
-        await holder.WaitForExitAsync(TestContext.Current.CancellationToken);
+            var log = new List<string>();
+            var ran = false;
+            var waiting = Task.Run(() => ContainerStart.WithHostLockAsync(LockPath, Generous, () =>
+            {
+                ran = true;
+                return Task.CompletedTask;
+            }, Record(log), CancellationToken.None), TestContext.Current.CancellationToken);
+
+            await Task.Delay(1000, TestContext.Current.CancellationToken);
+            ran.ShouldBeFalse();
+            waiting.IsCompleted.ShouldBeFalse();
+
+            holder.StandardInput.Close();
+            await waiting.WaitAsync(Generous, TestContext.Current.CancellationToken);
+
+            ran.ShouldBeTrue();
+            log.ShouldBeEmpty();
+        }
+        finally
+        {
+            KillQuietly(holder);
+        }
     }
 
     [Fact]
     public async Task LockHeldByAKilledProcess_IsReleasedWithIt()
     {
-        using var holder = StartPythonHolder(LockPath, TimeSpan.FromMinutes(5));
-        (await holder.StandardOutput.ReadLineAsync(TestContext.Current.CancellationToken)).ShouldBe("locked");
-        holder.Kill();
-        await holder.WaitForExitAsync(TestContext.Current.CancellationToken);
-
-        var log = new List<string>();
-        var ran = false;
-        await ContainerStart.WithHostLockAsync(LockPath, Generous, () =>
+        using var holder = StartPythonHolder(LockPath);
+        try
         {
-            ran = true;
-            return Task.CompletedTask;
-        }, Record(log), CancellationToken.None);
+            await WaitForLockedAsync(holder);
+            holder.Kill();
+            await holder.WaitForExitAsync(TestContext.Current.CancellationToken);
 
-        ran.ShouldBeTrue();
-        log.ShouldBeEmpty();
+            var log = new List<string>();
+            var ran = false;
+            await ContainerStart.WithHostLockAsync(LockPath, Generous, () =>
+            {
+                ran = true;
+                return Task.CompletedTask;
+            }, Record(log), CancellationToken.None);
+
+            ran.ShouldBeTrue();
+            log.ShouldBeEmpty();
+        }
+        finally
+        {
+            KillQuietly(holder);
+        }
     }
 
     [Fact]
@@ -154,15 +180,22 @@ public sealed class ContainerStartHostLockTests : IDisposable
     {
         var log = new List<string>();
         using var cts = new CancellationTokenSource();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var running = ContainerStart.WithHostLockAsync(
-            LockPath, Generous, () => Task.Delay(Timeout.Infinite, cts.Token), Record(log), cts.Token);
-        await Task.Delay(300, TestContext.Current.CancellationToken);
+        var running = Task.Run(() => ContainerStart.WithHostLockAsync(
+            LockPath,
+            Generous,
+            () =>
+            {
+                entered.SetResult();
+                return Task.Delay(Timeout.Infinite, cts.Token);
+            },
+            Record(log),
+            cts.Token), TestContext.Current.CancellationToken);
+        await entered.Task.WaitAsync(Generous, TestContext.Current.CancellationToken);
         await cts.CancelAsync();
 
-#pragma warning disable VSTHRD003 // the task is started above, in this test's own context
         await Should.ThrowAsync<OperationCanceledException>(() => running);
-#pragma warning restore VSTHRD003
         await AssertLockIsFreeAsync();
     }
 
@@ -173,17 +206,15 @@ public sealed class ContainerStartHostLockTests : IDisposable
         await using var held = new FileStream(LockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         using var cts = new CancellationTokenSource();
 
-        var waiting = ContainerStart.WithHostLockAsync(LockPath, Generous, () =>
+        var waiting = Task.Run(() => ContainerStart.WithHostLockAsync(LockPath, Generous, () =>
         {
             ran = true;
             return Task.CompletedTask;
-        }, _ => { }, cts.Token);
-        await Task.Delay(300, TestContext.Current.CancellationToken);
+        }, _ => { }, cts.Token), TestContext.Current.CancellationToken);
+        await Task.Delay(800, TestContext.Current.CancellationToken);
         await cts.CancelAsync();
 
-#pragma warning disable VSTHRD003 // the task is started above, in this test's own context
         await Should.ThrowAsync<OperationCanceledException>(() => waiting);
-#pragma warning restore VSTHRD003
         ran.ShouldBeFalse();
     }
 
@@ -217,23 +248,45 @@ public sealed class ContainerStartHostLockTests : IDisposable
         }
     }
 
-    // flock(2) is what FileShare.None takes on Unix, so a python flock holder contends like a second test process.
-    private static Process StartPythonHolder(string path, TimeSpan hold)
+    private static async Task WaitForLockedAsync(Process holder)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(10));
+        (await holder.StandardOutput.ReadLineAsync(deadline.Token)).ShouldBe("locked");
+    }
+
+    private static void KillQuietly(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (InvalidOperationException)
+        {
+        }
+    }
+
+    // flock(2) is what FileShare.None takes on Unix, so a python flock holder contends like a second test
+    // process. It keeps the lock until its stdin closes, so the test decides when it lets go.
+    private static Process StartPythonHolder(string path)
     {
         var info = new ProcessStartInfo("python3")
         {
             RedirectStandardOutput = true,
+            RedirectStandardInput = true,
             UseShellExecute = false,
         };
         info.ArgumentList.Add("-c");
         info.ArgumentList.Add(
-            "import fcntl,sys,time\n"
+            "import fcntl,sys\n"
             + "f=open(sys.argv[1],'a+')\n"
             + "fcntl.flock(f,fcntl.LOCK_EX)\n"
             + "print('locked',flush=True)\n"
-            + "time.sleep(float(sys.argv[2]))\n");
+            + "sys.stdin.read()\n");
         info.ArgumentList.Add(path);
-        info.ArgumentList.Add(hold.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
         return Process.Start(info) ?? throw new InvalidOperationException("python3 did not start");
     }
 }

@@ -65,6 +65,7 @@ public sealed class ContainerStartReaperDockerTests : IAsyncLifetime
         await ShouldBeGoneAsync(staleId);
         var reaper = await _docker.Containers.InspectContainerAsync(_name, TestContext.Current.CancellationToken);
         reaper.ID.ShouldNotBe(staleId);
+        reaper.State?.Status.ShouldBe("running");
         _log.ShouldContain(line => line.Contains("removed stale reaper container by id " + staleId));
         _log.ShouldContain(line => line.Contains("reaper attempt 1/4 failed") && line.Contains($"removing {_name} and retrying"));
     }
@@ -77,8 +78,11 @@ public sealed class ContainerStartReaperDockerTests : IAsyncLifetime
         var containers = Substitute.For<IContainerOperations>();
         containers.RemoveContainerAsync(Arg.Any<string>(), Arg.Any<ContainerRemoveParameters>(), Arg.Any<CancellationToken>())
             .Returns(call => RemoveOrAnswer404(call.ArgAt<string>(0), call.ArgAt<ContainerRemoveParameters>(1), call.ArgAt<CancellationToken>(2)));
+        // The name is not inspectable yet either while dockerd registers it: the 409 is the only proof it is taken.
         containers.InspectContainerAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(call => _docker.Containers.InspectContainerAsync(call.ArgAt<string>(0), call.ArgAt<CancellationToken>(1)));
+            .Returns(call => Volatile.Read(ref _removes) <= 2
+                ? throw new DockerContainerNotFoundException(System.Net.HttpStatusCode.NotFound, "No such container")
+                : _docker.Containers.InspectContainerAsync(call.ArgAt<string>(0), call.ArgAt<CancellationToken>(1)));
 
         await ContainerStart.RemoveReaperContainerAsync(
             containers, _name, staleId, Record, TestContext.Current.CancellationToken, TimeSpan.FromMilliseconds(50));
@@ -109,7 +113,8 @@ public sealed class ContainerStartReaperDockerTests : IAsyncLifetime
     {
         try
         {
-            await CreateAsync(token);
+            var id = await CreateAsync(token);
+            await _docker.Containers.StartContainerAsync(id, new ContainerStartParameters(), token);
             Started = true;
         }
         catch (DockerApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.Conflict)
@@ -123,7 +128,7 @@ public sealed class ContainerStartReaperDockerTests : IAsyncLifetime
     private async Task<string> CreateAsync(CancellationToken token = default)
     {
         var created = await _docker.Containers.CreateContainerAsync(
-            new CreateContainerParameters { Name = _name, Image = ContainerImages.Postgres }, token);
+            new CreateContainerParameters { Name = _name, Image = ContainerImages.Postgres, Cmd = ["sleep", "300"] }, token);
         return created.ID;
     }
 
@@ -131,14 +136,15 @@ public sealed class ContainerStartReaperDockerTests : IAsyncLifetime
     {
         try
         {
-            await _docker.Images.InspectImageAsync(ContainerImages.Postgres);
+            await _docker.Images.InspectImageAsync(ContainerImages.Postgres, TestContext.Current.CancellationToken);
         }
         catch (DockerImageNotFoundException)
         {
             await _docker.Images.CreateImageAsync(
                 new ImagesCreateParameters { FromImage = ContainerImages.Postgres },
                 null,
-                new Progress<JSONMessage>());
+                new Progress<JSONMessage>(),
+                TestContext.Current.CancellationToken);
         }
     }
 
@@ -153,7 +159,7 @@ public sealed class ContainerStartReaperDockerTests : IAsyncLifetime
         {
             await _docker.Containers.RemoveContainerAsync(id, new ContainerRemoveParameters { Force = true });
         }
-        catch (DockerContainerNotFoundException)
+        catch (DockerApiException)
         {
         }
     }
