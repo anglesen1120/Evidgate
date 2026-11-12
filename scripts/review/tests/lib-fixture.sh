@@ -123,12 +123,17 @@ case "$*" in
     esac
     exit 0
     ;;
-  # The free-space probe describes the faked host, not the machine running the
-  # suite: a tmpfs /tmp with a few GiB would otherwise fail every deploy.
-  *"df -Pk"*) echo "${FX_FREE_KB:-209715200}" ; exit 0 ;;
   "uname -m") echo "aarch64" ; exit 0 ;;
 esac
 exec /bin/sh -c "$*"
+STUB
+
+  # The free-space probe describes the faked host, not the machine running the
+  # suite (a tmpfs /tmp with a few GiB would fail every ssh and --local deploy),
+  # so df is a stub on PATH that both reach.
+  cat >"$bin/df" <<'STUB'
+#!/bin/sh
+printf 'Filesystem 1024-blocks Used Available Capacity Mounted on\nstub 1 1 %s 1%% /\n' "${FX_FREE_KB:-209715200}"
 STUB
 
   cat >"$bin/docker" <<'STUB'
@@ -215,7 +220,7 @@ esac
 exit 0
 STUB
 
-  chmod +x "$bin/ssh" "$bin/docker" "$bin/curl" "$bin/sudo"
+  chmod +x "$bin/ssh" "$bin/df" "$bin/docker" "$bin/curl" "$bin/sudo"
 }
 
 # A commit carries the whole contract the scripts read: the compose file, the env
