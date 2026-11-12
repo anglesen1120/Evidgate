@@ -72,6 +72,10 @@ begin
 end
 $$;
 
+-- Explicit so a re-execution (keys already attached, nothing above locks) still takes the parents first; dropping the old
+-- foreign keys below needs ACCESS EXCLUSIVE on them.
+lock table public.manifest, public.environment_revision, public.policy_revision in access exclusive mode;
+
 -- Taken after the parents' locks and before the pre-check and held to commit: no run is written or moved between the check and the keys and trigger
 -- below, so a row that passes the check cannot be changed to violate a rule the trigger (which does not re-check old
 -- rows) would then miss. Reads continue.
