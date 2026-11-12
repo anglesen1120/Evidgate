@@ -114,14 +114,21 @@ class OverlapTests(unittest.TestCase):
         self.assertIn("isolation saw: yes", done.stdout)
 
     def test_a_lane_that_dies_without_results_fails_the_gate(self):
-        script = DRIVER.replace('tsc-build) echo "side one a"; sleep 1; echo "side one b" ;;', 'tsc-build) kill -KILL $(ps -o ppid= -p "$(sh -c "echo \\$PPID")"); sleep 5 ;;')
-        done = subprocess.run(
-            ["bash", "-c", script, "driver", str(VERIFY), *[a for s in STAGES for a in ("--stage", s)]],
-            capture_output=True, text=True, cwd=ROOT,
-            env={**os.environ, "EVIDGATE_VERIFY_OVERLAP": "1", "TEST_SLEEP": "1"},
+        # The stage's parent is the lane; killing the lane leaves no .rc file at all.
+        kill_lane = (
+            "tsc-build) sh -c 'ps -o ppid= -p $PPID >\"$D/lane\"'; "
+            'kill -KILL "$(cat "$D/lane")"; sleep 5 ;;'
         )
+        script = DRIVER.replace('tsc-build) echo "side one a"; sleep 1; echo "side one b" ;;', kill_lane)
+        with tempfile.TemporaryDirectory() as tmp:
+            done = subprocess.run(
+                ["bash", "-c", script, "driver", str(VERIFY), *[a for s in STAGES for a in ("--stage", s)]],
+                capture_output=True, text=True, cwd=ROOT,
+                env={**os.environ, "D": tmp, "EVIDGATE_VERIFY_OVERLAP": "1", "TEST_SLEEP": "1"},
+            )
         self.assertNotEqual(done.returncode, 0, done.stdout)
-        self.assertNotIn("selected stages passed", done.stdout)
+        self.assertIn("tsc-build did not run to the end", done.stdout)
+        self.assertIn("ended without a result", done.stderr)
 
     def test_a_bad_switch_value_is_refused(self):
         done = run(STAGES, EVIDGATE_VERIFY_OVERLAP="yes")
