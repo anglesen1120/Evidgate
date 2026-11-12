@@ -310,16 +310,21 @@ steps, run in this order because each one's evidence depends on the previous one
    `evidgate_worker` on the same pattern — no LOGIN, no attribute, and only the
    queue privileges: `select, insert, update, delete` on `public.task` and
    `select` plus `update (dispatched_at)` on `public.outbox`, with
-   `evidgate_app` reduced to `insert` on both. Each script runs in its own transaction under a
+   `evidgate_app` reduced to `insert` on both. Migration `0105` adds
+   `evidgate_platform_operator`, also without LOGIN and with no attribute: it is
+   the sole `EXECUTE` grantee of `evidgate.healing_switch_set_system`, the
+   grant to `evidgate_app` is revoked, and each call leaves a row in
+   `public.platform_operator_audit` (see the
+   [kill-switch runbook](kill-switch.md) §5.2). Each script runs in its own transaction under a
    5 s `lock_timeout` and a 900 s `statement_timeout`
    (`EVIDGATE_MIGRATOR__LOCKTIMEOUTSECONDS`, `EVIDGATE_MIGRATOR__STATEMENTTIMEOUTSECONDS`,
    `0` disables); a timeout is exit `5` or `6`, the script rolls back and nothing is journalled —
    see the [Migrator timeouts runbook](migrator-timeouts.md) before rerunning.
 3. `scripts/env/bootstrap-db.sh <env> credentials` — as superuser: LOGIN + a
-   password for those four roles. It refuses, naming the missing roles, until
+   password for those five roles. It refuses, naming the missing roles, until
    step 2 has run.
 4. `scripts/env/bootstrap-db.sh <env> verify` — read-only assertions as superuser:
-   the role set, the least-privilege attributes (all five may log in; none carries
+   the role set, the least-privilege attributes (all six may log in; none carries
    SUPERUSER, BYPASSRLS, REPLICATION, CREATEDB or CREATEROLE beyond the owner's
    CREATEROLE), no application role being a member of any other role,
    `evidgate_app` owning nothing, and ENABLE + FORCE row level security on every
@@ -332,7 +337,7 @@ steps, run in this order because each one's evidence depends on the previous one
    that covers the owner, another application role, a `pg_*` role, the bootstrap
    superuser and a provider-supplied role alike, whether the edge is direct or
    reached through a chain of `SET`/`INHERIT` edges. The one accepted edge is the
-   admin-only record PostgreSQL writes when `evidgate_owner` creates the three
+   admin-only record PostgreSQL writes when `evidgate_owner` creates the
    application roles (no `inherit_option`, no `set_option`), which lets the owner
    administer them but not act as them. This is why a managed environment that
    grants a provider role to `evidgate_owner` on purpose must record that decision:
@@ -354,11 +359,17 @@ drift apart.
 | `EVIDGATE_BOOTSTRAP_CONFIRM_ENV` | — | — | must be exactly `prod` |
 
 `database` reads `EVIDGATE_OWNER_PASSWORD`; `credentials` reads
-`EVIDGATE_APP_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD`, `EVIDGATE_WORKER_PASSWORD`
-and `EVIDGATE_WORKER_SCHED_PASSWORD`; `verify` reads no role password at all. A
+`EVIDGATE_APP_PASSWORD`, `EVIDGATE_OPERATOR_PASSWORD`, `EVIDGATE_WORKER_PASSWORD`,
+`EVIDGATE_WORKER_SCHED_PASSWORD` and `EVIDGATE_PLATFORM_OPERATOR_PASSWORD`;
+`verify` reads no role password at all. A
 missing variable fails naming the key, never a value, and no password reaches a
 command line or the output: the script exports each variable to the `psql` child,
 which reads it with `\getenv`.
+
+`EVIDGATE_PLATFORM_OPERATOR_PASSWORD` belongs to the psql-only role of the
+[kill-switch runbook](kill-switch.md) §5.2: no process is configured with it, and
+there is no connection-string key for it, so it is delivered to the person
+performing a system flip rather than to a host.
 
 Staging and prod take the server and its superuser from the environment, with no
 `localhost`/`postgres` default, so a missing or mistyped value fails instead of
@@ -371,7 +382,7 @@ web CSP input and the test switches are (see above).
 Four guards run before the script connects, so a refused bootstrap has created
 nothing:
 
-- **Every environment needs its own cluster.** `evidgate_owner` and the four
+- **Every environment needs its own cluster.** `evidgate_owner` and the five
   application roles are cluster-wide, so two environments on one server would
   share them: the prod roles would carry whatever staging granted, and the other
   way round. `staging` therefore refuses `EVIDGATE_DB_NAME=evidgate_prod` and
@@ -383,7 +394,7 @@ nothing:
   also bypasses the host rule below.
 - **Dev connects to loopback only** unless `EVIDGATE_DB_CONTAINER` is set. A
   `EVIDGATE_DB_HOST` such as a shared server is refused by name, so a dev
-  bootstrap cannot create the five roles on a server someone else uses.
+  bootstrap cannot create the six roles on a server someone else uses.
 - **`EVIDGATE_DB_NAME` must be a plain identifier**, matching
   `^[a-z_][a-z0-9_]{0,62}$`; anything else is refused naming the key.
 
@@ -392,7 +403,7 @@ managed server never receives the superuser password over an unencrypted
 connection. The value the deploy sets wins, which keeps a provider that requires
 a different mode (`verify-full` with its CA) in charge of its own policy. The
 shared [`../../scripts/env/lib-db.sh`](../../scripts/env/lib-db.sh) disables
-statement and error-statement logging in the session that sets the five role
+statement and error-statement logging in the session that sets the six role
 passwords, so neither the `ALTER` nor a failure of it can reach a server log.
 
 **Only the deploy identity runs `database` and `credentials`.** They create or
@@ -403,11 +414,13 @@ identity only (10.1.1-T3.4), and `Evidgate.Api`, `Evidgate.Worker` and the
 migrator keep their own least-privilege roles. The prod bootstrap additionally
 refuses to run unless `EVIDGATE_BOOTSTRAP_CONFIRM_ENV=prod`.
 
-**AC5 says three roles; the bootstrap verifies five.** AC5 names the owner, app
-and operator roles, while the bootstrap creates and verifies the five roles of
-01.4.1 plus the queue split: `evidgate_owner`, `evidgate_app`, `evidgate_operator`,
-`evidgate_worker` and `evidgate_worker_sched`, because the sweep role of TL T80 and
-the queue role that owns claim/ack/dispatch belong to the same role
+**AC5 says three roles; the bootstrap verifies six.** AC5 names the owner, app
+and operator roles, while the bootstrap creates and verifies the six roles of
+01.4.1 plus the queue and operator splits: `evidgate_owner`, `evidgate_app`,
+`evidgate_operator`, `evidgate_worker`, `evidgate_worker_sched` and
+`evidgate_platform_operator`, because the sweep role of TL T80, the queue role
+that owns claim/ack/dispatch and the psql-only grantee of the system
+healing-switch definer belong to the same role
 split. `verify` also accepts PostgreSQL's own `pg_*` roles and the bootstrap
 superuser it connected as; every other role is an offender, which is what makes a
 stray grant or a leftover verification role visible. A managed provider that

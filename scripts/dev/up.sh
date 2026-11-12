@@ -111,7 +111,8 @@ ensure_env_file() {
   local content name
   content="$(<"$EVG_ENV_TEMPLATE")"
   for name in EVIDGATE_DB_SUPERUSER_PASSWORD EVIDGATE_OWNER_PASSWORD EVIDGATE_APP_PASSWORD \
-    EVIDGATE_OPERATOR_PASSWORD EVIDGATE_WORKER_SCHED_PASSWORD EVIDGATE_WORKER_PASSWORD; do
+    EVIDGATE_OPERATOR_PASSWORD EVIDGATE_WORKER_SCHED_PASSWORD EVIDGATE_WORKER_PASSWORD \
+    EVIDGATE_PLATFORM_OPERATOR_PASSWORD; do
     content="${content//__${name}__/$(random_secret)}"
   done
 
@@ -441,9 +442,12 @@ configure_dev_bucket
 ensure_web_prerequisites
 build_hosts
 
-# The Api never holds the worker credential: `env -u` drops it from the child env.
-start_host api env -u EVIDGATE__TASKS__WORKERCONNECTIONSTRING -u EVIDGATE_WORKER_PASSWORD dotnet watch --project "$EVG_ROOT/src/Evidgate.Api" --non-interactive run
-start_host worker dotnet watch --project "$EVG_ROOT/src/Evidgate.Worker" --non-interactive run
+# The Api never holds the worker credential, and neither host holds the platform
+# operator's: `env -u` drops them from the child env, so only a human's psql has
+# the role that may execute the system healing-switch definer.
+start_host api env -u EVIDGATE__TASKS__WORKERCONNECTIONSTRING -u EVIDGATE_WORKER_PASSWORD \
+  -u EVIDGATE_PLATFORM_OPERATOR_PASSWORD dotnet watch --project "$EVG_ROOT/src/Evidgate.Api" --non-interactive run
+start_host worker env -u EVIDGATE_PLATFORM_OPERATOR_PASSWORD dotnet watch --project "$EVG_ROOT/src/Evidgate.Worker" --non-interactive run
 # CI=1 and NG_CLI_ANALYTICS=false keep `ng serve` non-interactive under nohup (a
 # first run would otherwise ask about usage-data); --scrub drops every credential.
 start_host web --scrub env CI=1 NG_CLI_ANALYTICS=false \
@@ -462,7 +466,7 @@ cat <<EOF
   Api                 ${ASPNETCORE_URLS}   (GET ${ASPNETCORE_URLS}/internal/health/ready)
   Worker              readiness http://127.0.0.1:${EVIDGATE__WORKER__HEALTHPORT}/internal/health/ready
   web (ng serve)      http://127.0.0.1:${EVIDGATE_WEB_PORT}/
-  PostgreSQL 18       127.0.0.1:${EVIDGATE_DB_PORT}   database evidgate (roles: owner/app/operator/worker_sched/worker)
+  PostgreSQL 18       127.0.0.1:${EVIDGATE_DB_PORT}   database evidgate (roles: owner/app/operator/worker_sched/worker/platform_operator)
   SeaweedFS S3        ${EVIDGATE_S3_ENDPOINT}   bucket ${EVIDGATE_S3_BUCKET}
 
   logs   scripts/dev/logs.sh        stop   scripts/dev/down.sh

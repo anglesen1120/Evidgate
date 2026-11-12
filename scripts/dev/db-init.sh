@@ -3,13 +3,14 @@
 #
 # Creates the migration database and its owner credential as superuser, brings it
 # to head with Evidgate.Migrator (migration 0001 creates the three application
-# roles and 0104 adds evidgate_worker), then grants LOGIN + a password to those
-# roles as superuser and prints the EVIDGATE_* environment template. This mirrors
-# the production separation (owner runs migrations, app serves traffic, operator
-# reads, worker_sched sweeps, worker drains the outbox and the task queue) so an
-# RLS mistake fails locally first.
+# roles, 0104 adds evidgate_worker and 0105 evidgate_platform_operator), then
+# grants LOGIN + a password to those roles as superuser and prints the EVIDGATE_*
+# environment template. This mirrors the production separation (owner runs
+# migrations, app serves traffic, operator reads, worker_sched sweeps, worker
+# drains the outbox and the task queue, platform_operator sets the platform
+# switch from psql) so an RLS mistake fails locally first.
 #
-# No credential is committed and none is passed on a command line: the five
+# No credential is committed and none is passed on a command line: the six
 # passwords are read from the environment, exported to the psql children as
 # environment variables, and read inside psql with \getenv — so they never appear
 # in `ps` output (00 §5.7 S3). The template printed at the end carries
@@ -69,9 +70,9 @@ usage: scripts/dev/db-init.sh [--with-token] [--help]
 
 Creates the database and its owner credential as superuser, applies the
 migrations as evidgate_owner (migration 0001 creates evidgate_app,
-evidgate_operator and evidgate_worker_sched, 0104 adds evidgate_worker), grants
-those roles LOGIN + a password as superuser and prints the EVIDGATE_*
-environment template.
+evidgate_operator and evidgate_worker_sched, 0104 adds evidgate_worker, 0105
+evidgate_platform_operator), grants those roles LOGIN + a password as superuser
+and prints the EVIDGATE_* environment template.
 
   --with-token  after the grants, also run `seed-dev --with-token`: the dev
                 tenant, one project-bound dev ingest token (artifact:write,
@@ -85,6 +86,9 @@ required environment:
   EVIDGATE_OPERATOR_PASSWORD     password for the audited read-only role
   EVIDGATE_WORKER_SCHED_PASSWORD password for the sweep role
   EVIDGATE_WORKER_PASSWORD       password for the outbox/task-queue worker role
+  EVIDGATE_PLATFORM_OPERATOR_PASSWORD
+                                 password for the platform-operator role that
+                                 alone may execute the system healing-switch definer
 
 optional environment (defaults in brackets):
   EVIDGATE_DB_HOST [127.0.0.1]           EVIDGATE_DB_PORT [5432]
@@ -136,7 +140,8 @@ printf 'db-init: preparing %s on %s:%s as superuser %s\n' "$DB_NAME" "$DB_HOST" 
 evg_db_create_owner_and_database "$DB_NAME"
 
 # 2. Bring the database to head as evidgate_owner; migration 0001 creates
-#    evidgate_app, evidgate_operator and evidgate_worker_sched without LOGIN.
+#    evidgate_app, evidgate_operator and evidgate_worker_sched without LOGIN, and
+#    0104 / 0105 add evidgate_worker and evidgate_platform_operator.
 printf 'db-init: applying migrations as evidgate_owner\n'
 migrator_connection_string="Host=$DB_HOST;Port=$DB_PORT;Database=$DB_NAME;Username=evidgate_owner;Password=$(dsn_quote "$EVIDGATE_OWNER_PASSWORD")"
 # The status probe is the first connect as evidgate_owner: on success its output is
@@ -150,7 +155,7 @@ fi
 EVIDGATE_MIGRATOR__CONNECTIONSTRING="$migrator_connection_string" \
   dotnet run --project "$ROOT/src/Evidgate.Migrator"
 
-# 3. Credentials for the application roles created by migration 0001: LOGIN +
+# 3. Credentials for the application roles created by the migrations: LOGIN +
 #    password are granted here, by the superuser bootstrap, never in a migration
 #    (00 §5.7 S3). The statements live in scripts/env/lib-db.sh.
 evg_db_grant_application_logins
@@ -186,7 +191,7 @@ if [ "${EVIDGATE_DB_INIT_SEED:-1}" != "0" ]; then
 fi
 
 cat <<EOF
-db-init: done — $DB_NAME is at head with evidgate_owner, evidgate_app, evidgate_operator, evidgate_worker_sched, evidgate_worker.
+db-init: done — $DB_NAME is at head with evidgate_owner, evidgate_app, evidgate_operator, evidgate_worker_sched, evidgate_worker, evidgate_platform_operator.
 
 # Evidgate dev environment template (placeholders; fill in the passwords you exported).
 # Keep this out of version control: .env* is git-ignored (00 §5.7 S3).
@@ -198,6 +203,11 @@ export EVIDGATE_MIGRATOR__CONNECTIONSTRING='Host=$DB_HOST;Port=$DB_PORT;Database
 # Audited support path (TL T76) and owner SECURITY DEFINER sweeps (TL T80):
 #   evidgate_operator      Password=<EVIDGATE_OPERATOR_PASSWORD>   (SELECT only)
 #   evidgate_worker_sched  Password=<EVIDGATE_WORKER_SCHED_PASSWORD> (EXECUTE per function)
+#
+# Platform operator (08.6.3) — psql only and no host holds it: this role is the
+# one grantee of evidgate.healing_switch_set_system, so the platform-wide row is
+# set by a human, never by an Api request.
+#   evidgate_platform_operator Password=<EVIDGATE_PLATFORM_OPERATOR_PASSWORD> (the switch definer only)
 #
 # Worker (01.1.2) — the outbox dispatcher and the task queue machinery. The Api
 # never holds this one: a tenant read of the queue goes through the two scoped

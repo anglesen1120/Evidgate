@@ -105,6 +105,7 @@ public sealed class HarnessTests : TenantTest
                 "evidgate_app: super=False bypassrls=False createdb=False createrole=False",
                 "evidgate_operator: super=False bypassrls=False createdb=False createrole=False",
                 "evidgate_owner: super=False bypassrls=False createdb=False createrole=True",
+                "evidgate_platform_operator: super=False bypassrls=False createdb=False createrole=False",
                 "evidgate_worker: super=False bypassrls=False createdb=False createrole=False",
                 "evidgate_worker_sched: super=False bypassrls=False createdb=False createrole=False",
             ];

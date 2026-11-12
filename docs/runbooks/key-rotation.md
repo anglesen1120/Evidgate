@@ -100,7 +100,7 @@ Limits of the step: it is all-or-nothing across tenants, projects and bindings, 
 
 ### 2.5 Database credentials
 
-**Where it lives.** `EVIDGATE__DATABASE__CONNECTIONSTRING` (app), `EVIDGATE__TASKS__SWEEPCONNECTIONSTRING` (worker sweep), `EVIDGATE__TASKS__WORKERCONNECTIONSTRING` (worker queue: claim/acknowledge/dispatch/prune on `public.task` and `public.outbox`; the Api does not hold it), and `EVIDGATE_MIGRATOR__CONNECTIONSTRING` (migrator owner) are secret rows in `infra/config-matrix.json`; readers are `src/BuildingBlocks/Persistence/Options/DatabaseOptions.cs`, `src/BuildingBlocks/Persistence/Tasks/TasksOptions.cs`, `src/BuildingBlocks/Persistence/Tasks/TaskWorkerDataSource.cs`, and `src/Evidgate.Migrator/MigratorOptions.cs`.
+**Where it lives.** `EVIDGATE__DATABASE__CONNECTIONSTRING` (app), `EVIDGATE__TASKS__SWEEPCONNECTIONSTRING` (worker sweep), `EVIDGATE__TASKS__WORKERCONNECTIONSTRING` (worker queue: claim/acknowledge/dispatch/prune on `public.task` and `public.outbox`; the Api does not hold it), and `EVIDGATE_MIGRATOR__CONNECTIONSTRING` (migrator owner) are secret rows in `infra/config-matrix.json`; readers are `src/BuildingBlocks/Persistence/Options/DatabaseOptions.cs`, `src/BuildingBlocks/Persistence/Tasks/TasksOptions.cs`, `src/BuildingBlocks/Persistence/Tasks/TaskWorkerDataSource.cs`, and `src/Evidgate.Migrator/MigratorOptions.cs`. The password of the psql-only `evidgate_platform_operator` role (`EVIDGATE_PLATFORM_OPERATOR_PASSWORD`) is a `dev-stack` secret row with no connection-string key and no reader: it is delivered to the person running the [kill-switch runbook](kill-switch.md) §5.2, so rotating it restarts nothing.
 
 **Who may rotate.** The platform environment owner with the corresponding database-administration and secret-delivery authority [OPEN O-E]. Provisioning and managed-store choice are open [OPEN O-C].
 
@@ -108,7 +108,7 @@ Limits of the step: it is all-or-nothing across tenants, projects and bindings, 
 
 1. In a coordinated maintenance window, create the replacement credential in the database through its authorized administration mechanism. [INFERENCE] A password change for the same role affects existing connections on reconnect; do not assume a new credential leaves both passwords valid.
 2. Update the corresponding connection-string secret in the environment's secret delivery and perform a coordinated rolling restart of affected processes. Restart alone does not guarantee uninterrupted connections during a one-password cutover.
-3. Check each affected role's ordinary service operation and connection health without exposing the connection string. Include the worker queue connection, the worker sweep or deploy-time migrator if their credentials were changed.
+3. Check each affected role's ordinary service operation and connection health without exposing the connection string. Include the worker queue connection, the worker sweep or deploy-time migrator if their credentials were changed. `evidgate_platform_operator` has no process to check: `scripts/env/bootstrap-db.sh <env> credentials` re-grants it and the next operator `psql` session uses the new password.
 
 **Verify.** Use the existing readiness route `/internal/health/ready` (`docs/runbooks/environments.md:266-269`) and a normal operation that requires the changed role; for the migrator, use its established deployment procedure, not an ad-hoc SQL write. Test reference: `tests/Migrator.IntegrationTests/MigratorSecretResolutionTests.cs:33-71`.
 
