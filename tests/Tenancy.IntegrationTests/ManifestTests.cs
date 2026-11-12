@@ -391,8 +391,10 @@ public sealed class ManifestTests
             """,
             connection,
             transaction);
+        // The BEFORE suite-revision guard reads under RLS and cannot see this org's revision from the rival's scope, so it may refuse
+        // (23503) ahead of the WITH CHECK policy (42501); either way the row is refused.
         (await Should.ThrowAsync<PostgresException>(async () => await insert.ExecuteNonQueryAsync(TestContext.Current.CancellationToken)))
-            .SqlState.ShouldBe("42501");
+            .SqlState.ShouldBeOneOf("42501", "23503");
     }
 
     // ------------------------------------------------------------------ review fixes (05.1.1 §8a)
