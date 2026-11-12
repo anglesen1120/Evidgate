@@ -18,11 +18,12 @@ deploy="$FX_REPO/scripts/review/deploy.sh"
 root="$HOME/evidgate-review"
 
 # --- quick mode: a 200 from the throwaway host is refused -----------------
-if out="$(FX_HTTP_CODE=200 bash "$deploy" review-host --tunnel quick --no-dogfood 2>&1)"; then
+if out="$(RV_WAIT_HTTP_MAX_SECONDS=4 FX_HTTP_CODE=200 bash "$deploy" review-host --tunnel quick --no-dogfood 2>&1)"; then
   fx_fail "a quick tunnel that answered 200 was accepted"
 fi
 fx_assert_contains "$out" "one of [401]" "quick mode accepts exactly 401"
 fx_assert_contains "$out" "the quick tunnel" "the failure names the quick tunnel"
+fx_assert_contains "$out" "within 4 s" "the wait was capped by the injected timeout"
 
 # --- the matrix behind the helper ----------------------------------------
 codes_for() { # MODE HASH
