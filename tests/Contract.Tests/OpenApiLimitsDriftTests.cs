@@ -61,6 +61,22 @@ public sealed class OpenApiLimitsDriftTests
     }
 
     /// <summary>
+    /// The defensive 409 of the producer-slot registration is documented on the createRun operation itself, under the
+    /// wire code the registry returns. The registry-level proof is ProducerSlotTests; the create path issues a fresh run
+    /// id, so no route test can reach it today.
+    /// </summary>
+    [Fact]
+    public void OpenApi_RunCreateDocumentsTheProducerSlotsConflict()
+    {
+        // The path block also holds listRuns (GET); createRun (POST) is the part from its operationId on.
+        var path = OperationBlock("createRun");
+        var block = path[path.IndexOf("operationId: createRun", StringComparison.Ordinal)..];
+
+        block.ShouldContain($"`{ApiErrorCode.ProducerSlotsConflict}`", Case.Sensitive);
+        block.ShouldContain("'409':", Case.Sensitive, "the operation must declare a 409 response");
+    }
+
+    /// <summary>
     /// The manifest upload documents the cap it enforces: the configurable default and the option that lowers it, never
     /// the retired fixed 256 KiB.
     /// </summary>
