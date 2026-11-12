@@ -421,7 +421,7 @@ run_stage() {
       scripts/tests/test_gate_scope.py scripts/tests/test_gate_scope_reasons.py \
       scripts/tests/test_verify_scope.py \
       scripts/tests/test_verify_refusal.py scripts/tests/test_verify_shards.py \
-      scripts/tests/test_verify_test_parallel.py scripts/tests/test_verify_stage_time.py scripts/tests/test_verify_fuzz_shards.py \
+      scripts/tests/test_verify_test_parallel.py scripts/tests/test_verify_stage_time.py scripts/tests/test_verify_fuzz_shards.py scripts/tests/test_verify_overlap.py \
       scripts/tests/test_smoke_mktemp.py
     ;;
   image-pins)

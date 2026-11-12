@@ -164,6 +164,7 @@ GATE_PATHS = frozenset(
         "scripts/verify.sh",
         "scripts/verify-guards.sh",
         "scripts/verify-parallel-tests.sh",
+        "scripts/verify-overlap.sh",
         "scripts/locked-run.sh",
         "scripts/gate_scope.py",
         "scripts/tests/test_gate_scope.py",

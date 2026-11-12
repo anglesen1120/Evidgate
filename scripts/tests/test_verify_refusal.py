@@ -71,6 +71,7 @@ class SourceFlag(unittest.TestCase):
         (self.tree / "scripts").mkdir()
         shutil.copy(VERIFY.with_name("verify-guards.sh"), self.tree / "scripts")
         shutil.copy(VERIFY.with_name("verify-parallel-tests.sh"), self.tree / "scripts")
+        shutil.copy(VERIFY.with_name("verify-overlap.sh"), self.tree / "scripts")
         self.script = self.tree / "scripts" / "verify.sh"
         self.bin = self.tree / "bin"
         self.bin.mkdir()

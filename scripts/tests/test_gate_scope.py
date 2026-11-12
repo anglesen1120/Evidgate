@@ -103,6 +103,7 @@ class PathClasses(unittest.TestCase):
         # exercise it — a change to any of them is judged by the whole gate.
         "scripts/verify-guards.sh",
         "scripts/verify-parallel-tests.sh",
+        "scripts/verify-overlap.sh",
         "scripts/tests/test_verify_refusal.py",
         "scripts/tests/test_smoke_mktemp.py",
         "scripts/tests/test_gate_scope_reasons.py",

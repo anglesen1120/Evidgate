@@ -146,7 +146,7 @@ u8_flag_lines() {
 refuse_gate_flag() {
   local argument variable value file found=() hits
   for file in "$ROOT/scripts/verify.sh" "$ROOT/scripts/verify-guards.sh" \
-    "$ROOT/scripts/verify-parallel-tests.sh"; do
+    "$ROOT/scripts/verify-parallel-tests.sh" "$ROOT/scripts/verify-overlap.sh"; do
     hits="$(u8_flag_lines "$file")"
     if [[ -n "$hits" ]]; then found+=("$hits"); fi
   done
@@ -275,6 +275,9 @@ run_trait_stage() {
 # run_parallel_tests and its helpers live in their own file.
 # shellcheck source=scripts/verify-parallel-tests.sh
 . "$ROOT/scripts/verify-parallel-tests.sh"
+# The opt-in side lane that runs light stages beside the test stage.
+# shellcheck source=scripts/verify-overlap.sh
+. "$ROOT/scripts/verify-overlap.sh"
 
 # --- argument parsing ---------------------------------------------------------
 # `in_list <name> <names...>`: membership over an explicit list.
@@ -412,13 +415,19 @@ print_stage_summary() {
     total=$((total + secs))
   done
   printf '   %-28s %3s %6ss\n' "total" "-" "$total"
+  overlap_summary_note
 }
 
 # `run_selected_stages`: runs `selected` in order and stops at the first failure,
-# timing each. The summary is printed on both paths.
+# timing each. The summary is printed on both paths. With EVIDGATE_VERIFY_OVERLAP=1
+# the stages in SIDE_NAMES run in a side lane started with `test`; they are joined
+# after the last main stage, and a side failure fails the gate like any other.
 run_selected_stages() {
   local name rc t0 child
+  plan_overlap || exit $?
   for name in "${selected[@]}"; do
+    if in_list "$name" ${SIDE_NAMES[@]+"${SIDE_NAMES[@]}"}; then continue; fi
+    if [[ "$name" == "test" ]]; then start_side_lane; fi
     t0=$SECONDS
     # A subshell, so errexit stays armed inside the stage while its status is
     # still caught here, and a stage's own `exit` or trap cannot skip the table.
@@ -433,13 +442,19 @@ run_selected_stages() {
     trap 'kill -TERM "$child" 2>/dev/null; wait "$child" 2>/dev/null; exit 143' INT TERM
     wait "$child"
     rc=$?
-    trap - INT TERM
+    # Between stages a live side lane still needs the EXIT trap to run on a signal.
+    if [[ -n "$SIDE_PID" ]]; then trap 'exit 143' INT TERM; else trap - INT TERM; fi
     set -e
     record_stage_time "$name" "$rc" "$((SECONDS - t0))"
+    if [[ "$rc" -eq 0 ]] && side_lane_failed; then rc=1; fi
     if [[ "$rc" -ne 0 ]]; then
+      finish_side_lane 0 || true
       print_stage_summary
       exit "$rc"
     fi
   done
+  rc=0
+  finish_side_lane 1 || rc=$?
   print_stage_summary
+  if [[ "$rc" -ne 0 ]]; then exit "$rc"; fi
 }

@@ -203,6 +203,7 @@ class BareRun(unittest.TestCase):
         # refuses to start without it, so a copied script needs both files.
         shutil.copy(VERIFY.with_name("verify-guards.sh"), self.tree / "scripts")
         shutil.copy(VERIFY.with_name("verify-parallel-tests.sh"), self.tree / "scripts")
+        shutil.copy(VERIFY.with_name("verify-overlap.sh"), self.tree / "scripts")
         (self.tree / "scripts" / "gate_scope.py").write_text(STUB_CLASSIFIER)
         self.marker = self.tree / "classifier-ran"
 
