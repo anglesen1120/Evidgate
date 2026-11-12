@@ -1,4 +1,5 @@
 using Evidgate.Api.Json;
+using Evidgate.Api.Management;
 using Evidgate.BuildingBlocks.Persistence.Health;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OpenTelemetry.Metrics;
@@ -8,7 +9,9 @@ namespace Evidgate.Api.Endpoints;
 /// <summary>
 /// Operational endpoints of 00 §9.1 (01.1.2-T1.3): <c>/internal/health/live</c>,
 /// <c>/internal/health/ready</c> and <c>/metrics</c> live outside <c>/v1</c> and
-/// are excluded from the served OpenAPI document (AC7).
+/// are excluded from the served OpenAPI document (AC7). The public listener answers
+/// health with the status only; <c>/metrics</c> and the readiness reason and journal heads are served on the
+/// management listener alone (<see cref="ManagementPortMiddleware"/>).
 /// </summary>
 public static class InternalEndpoints
 {
@@ -42,11 +45,16 @@ public static class InternalEndpoints
             ? entry
             : null;
 
-        var dto = new HealthReportDto(
-            Status: ready is null ? "live" : (ready.Value.Status == HealthStatus.Healthy ? "ready" : "unready"),
-            Reason: ready?.Data.TryGetValue("reason", out var reason) == true ? reason as string : null,
-            JournalHead: ready?.Data.TryGetValue("journal_head", out var head) == true ? head as string : null,
-            ExpectedHead: ready?.Data.TryGetValue("expected_head", out var expected) == true ? expected as string : null);
+        var status = ready is null ? "live" : (ready.Value.Status == HealthStatus.Healthy ? "ready" : "unready");
+
+        // The journal heads and the failure reason describe the deployment, so only the management listener sees them.
+        var dto = ManagementPortMiddleware.IsManagement(context)
+            ? new HealthReportDto(
+                Status: status,
+                Reason: ready?.Data.TryGetValue("reason", out var reason) == true ? reason as string : null,
+                JournalHead: ready?.Data.TryGetValue("journal_head", out var head) == true ? head as string : null,
+                ExpectedHead: ready?.Data.TryGetValue("expected_head", out var expected) == true ? expected as string : null)
+            : new HealthReportDto(status, null, null, null);
 
         // 00 §9.2: a 503 carries Retry-After.
         if (context.Response.StatusCode == StatusCodes.Status503ServiceUnavailable)
