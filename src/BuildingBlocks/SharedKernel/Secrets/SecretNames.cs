@@ -19,6 +19,12 @@ public static class SecretNames
     /// <summary>Sweep-role database connection string (<c>evidgate_worker_sched</c>, TL T80).</summary>
     public const string TasksSweepConnectionString = "EVIDGATE__TASKS__SWEEPCONNECTIONSTRING";
 
+    /// <summary>
+    /// Connection string of <c>evidgate_worker</c>, the role that owns the outbox
+    /// dispatcher and every task-queue transition; only the Worker process needs it.
+    /// </summary>
+    public const string TasksWorkerConnectionString = "EVIDGATE__TASKS__WORKERCONNECTIONSTRING";
+
     /// <summary>Base64 HS256 key that signs the minted <c>ci_producer</c> JWTs (D7).</summary>
     public const string CiSigningKey = "EVIDGATE__CI__SIGNINGKEY";
 
@@ -80,6 +86,7 @@ public static class SecretNames
     [
         DatabaseConnectionString,
         TasksSweepConnectionString,
+        TasksWorkerConnectionString,
         CiSigningKey,
         CiPepper,
         CiPreviousPepper,

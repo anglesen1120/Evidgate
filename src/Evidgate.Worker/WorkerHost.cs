@@ -22,6 +22,7 @@ using Evidgate.Worker.Tasks;
 using Mediator;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace Evidgate.Worker;
 
@@ -190,6 +191,11 @@ public static class WorkerHost
         _ = host.Services.GetRequiredService<IOptions<IsolationSelfCheckOptions>>().Value;
         _ = host.Services.GetRequiredService<IOptions<TelemetryOptions>>().Value;
         _ = host.Services.GetRequiredService<IOptions<TasksOptions>>().Value;
+
+        // The queue writes as evidgate_worker, a credential this process alone holds: resolving
+        // the keyed source here names the missing key on one line instead of failing later inside
+        // a hosted service, and no connection is opened (building a data source pools lazily).
+        _ = host.Services.GetRequiredKeyedService<NpgsqlDataSource>(TaskWorkerDataSource.Key);
         // The cancel windows belong to the Orchestrator module and are read through its seam.
         host.Services.ValidateOrchestratorOptions();
 

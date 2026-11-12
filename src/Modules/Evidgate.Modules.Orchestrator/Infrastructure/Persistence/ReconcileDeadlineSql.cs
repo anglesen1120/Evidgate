@@ -15,11 +15,14 @@ namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 /// window.
 /// </para>
 /// <para>
-/// The probe runs inside the run's own tenant scope and names <c>org_id</c> explicitly, and that filter
-/// is the whole of its boundary: <c>public.outbox</c> and <c>public.task</c> are mechanism tables and
-/// deliberately carry no tenant policy (0006 — the dispatcher scans every org by design), so nothing else
-/// narrows the read. It reads the keys with the state of the task each became rather than a count, so the
-/// sweep can decide every run of a page in one statement instead of one round trip per run.
+/// The probe runs inside the run's own tenant scope and names <c>org_id</c> explicitly. It
+/// reads <c>public.outbox_in_scope</c> and <c>public.task_in_scope</c>: owner-owned
+/// <c>security_barrier</c> views filtered by <c>evidgate.current_org_id()</c>, exposing
+/// only the columns this read uses, because the queue tables themselves carry no tenant
+/// policy (0006 — the dispatcher scans every org by design) and the app role only ever
+/// holds <c>INSERT</c> on them. The explicit <c>org_id</c> predicates stay as the second
+/// lock, and the probe reads the keys with the state of the task each became rather than a
+/// count, so the sweep can decide every run of a page in one statement.
 /// </para>
 /// </remarks>
 internal static class ReconcileDeadlineSql
@@ -62,8 +65,8 @@ internal static class ReconcileDeadlineSql
         select o.idempotency_key as "IdempotencyKey",
                (o.dispatched_at is not null) as "Dispatched",
                t.state as "TaskState"
-          from public.outbox o
-          left join public.task t
+          from public.outbox_in_scope o
+          left join public.task_in_scope t
             on t.idempotency_key = 'outbox:' || o.id::text
            and t.org_id = @org_id
          where o.org_id = @org_id

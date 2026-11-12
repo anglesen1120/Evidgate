@@ -97,12 +97,16 @@ internal sealed partial class ParseRawReportHandler
     /// <summary>The probe the skip line asks alone and the pre-check folds into <see cref="DeferredRunSql"/>.</summary>
     private const string DeferredTaskSql = "select " + DeferredProbeSql;
 
-    /// <summary>The deferred-report probe as one boolean expression named <c>deferred</c>.</summary>
+    /// <summary>
+    /// The deferred-report probe as one boolean expression named <c>deferred</c>. Both
+    /// sides are the scoped views, so the predicate that narrows them is the caller's own
+    /// session scope rather than a table grant.
+    /// </summary>
     private const string DeferredProbeSql = """
         exists (
             select 1
-            from public.outbox as o
-            join public.task as t
+            from public.outbox_in_scope as o
+            join public.task_in_scope as t
               on t.idempotency_key = 'outbox:' || o.id::text
              and t.org_id = o.org_id
             where o.org_id = @org_id

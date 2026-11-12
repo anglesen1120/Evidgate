@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 
@@ -21,10 +22,8 @@ namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 public static class TasksServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the task queue over the app-role <c>NpgsqlDataSource</c> that
-    /// <c>AddEvidgatePersistence</c> put in the container, and the
-    /// <c>evidgate_worker_sched</c> connection a sweep calls its owner function
-    /// with.
+    /// Registers the task queue: the claim/lease/dispatch machinery on the keyed
+    /// <c>evidgate_worker</c> data source, plus the sweep role's own connection.
     /// </summary>
     public static IServiceCollection AddEvidgateTasks(this IServiceCollection services, IConfiguration configuration)
     {
@@ -37,6 +36,15 @@ public static class TasksServiceCollectionExtensions
         services.AddEvidgateSecrets(configuration);
 
         services.AddEvidgateTaskOptions(configuration);
+
+        // The queue's own role, resolved when first used: public.task and public.outbox
+        // are writable by evidgate_worker alone, so the dispatcher, the claim/lease path
+        // and the retention delete open this source. Only a Worker composes this method,
+        // which is what keeps the credential out of the Api.
+        services.AddKeyedSingleton<NpgsqlDataSource>(
+            TaskWorkerDataSource.Key,
+            static (provider, _) => TaskWorkerDataSource.Create(
+                provider.GetRequiredService<IOptions<TasksOptions>>().Value));
 
         // The consumer opens the tenant scope of a tenant task from the row's
         // org_id (00 §5.4.2 covers a task exactly as it covers a request), so the
@@ -66,7 +74,7 @@ public static class TasksServiceCollectionExtensions
         services.TryAddSingleton<TaskScheduleRunner>();
         // 01.5.1-T3: the read/stamp half of the outbox. It belongs to the
         // mechanism, not the outbox writer's registration, because it consumes
-        // TasksOptions and the app-role data source and only ever runs in the
+        // TasksOptions and the keyed worker data source and only ever runs in the
         // Worker — a host that composes the write path without the queue gets
         // no dispatcher, which is the correct posture for the Api.
         services.TryAddSingleton<OutboxDispatcher>();

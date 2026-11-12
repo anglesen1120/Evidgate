@@ -1,4 +1,5 @@
 using Dapper;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -29,9 +30,9 @@ public sealed partial class TaskScheduleRunner
     private readonly TimeSpan _lookback;
     private readonly ILogger<TaskScheduleRunner> _logger;
 
-    /// <summary>Creates the runner over the registered app-role data source.</summary>
+    /// <summary>Creates the runner over the keyed worker-role data source.</summary>
     public TaskScheduleRunner(
-        NpgsqlDataSource dataSource,
+        [FromKeyedServices(TaskWorkerDataSource.Key)] NpgsqlDataSource dataSource,
         IScheduleRegistry registry,
         ITaskQueueWriter writer,
         IOptions<TasksOptions> options,

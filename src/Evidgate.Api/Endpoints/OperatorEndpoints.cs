@@ -14,17 +14,18 @@ namespace Evidgate.Api.Endpoints;
 /// listing and replay live under <c>/internal/operator/*</c>, guarded by
 /// <see cref="IOperatorGate"/> and excluded from the served OpenAPI document
 /// (T16/CR-01-4) — the same posture <c>/internal/health/*</c> and
-/// <c>/internal/health</c> already take. No <c>/v1</c> mount exists: operator
-/// routes carry no tenant context, so the tenant pipeline never applies (§5's
-/// "routes are outside /v1").
+/// <c>/internal/health</c> already take. No <c>/v1</c> mount exists: the operator
+/// surface is not a tenant contract.
 /// </summary>
 /// <remarks>
 /// The handlers call the queue services directly rather than going through the
-/// Mediator C2 pipeline: a Result-contract command would trip the
-/// tenant-transaction stage's fail-closed Require() on a request that has no
-/// org, and the operator surface is outside the tenant contract by design.
-/// Replay is naturally idempotent through the row's <c>state = 'dead_letter'</c>
-/// guard, so neither route needs an <c>Idempotency-Key</c>.
+/// Mediator C2 pipeline, because that pipeline's tenant stage is entered by a tenant
+/// principal and this surface is admitted by the operator gate. Each route names its org
+/// as a required <c>org_id</c> parameter, and the queue service opens that org's tenant
+/// transaction around the owner <c>SECURITY DEFINER</c> function, which reads the org from
+/// <c>evidgate.current_org_id()</c> rather than from a caller-supplied filter. Replay is
+/// naturally idempotent through the row's <c>state = 'dead_letter'</c> guard, so neither
+/// route needs an <c>Idempotency-Key</c>.
 /// </remarks>
 public static class OperatorEndpoints
 {
@@ -77,17 +78,25 @@ public static class OperatorEndpoints
     }
 
     /// <summary>
-    /// <c>GET /internal/operator/tasks/dead-letter?queue=&amp;cursor=&amp;limit=</c>
-    /// → the keyset page of <c>task_dead_idx</c> (00 §9.1 ordering
+    /// <c>GET /internal/operator/tasks/dead-letter?org_id=&amp;queue=&amp;cursor=&amp;limit=</c>
+    /// → the keyset page of one org's dead-lettered rows (00 §9.1 ordering
     /// <c>(created_at, id)</c>, response <c>{ items, next_cursor }</c>).
     /// </summary>
     private static async Task<Result<DeadLetterTaskPage>> ListDeadLetterAsync(
+        Guid? org_id,
         string? queue,
         string? cursor,
         string? limit,
         ListDeadLetterTasksQuery query,
         HttpContext context)
     {
+        if (org_id is not { } orgId)
+        {
+            return Result.Failure<DeadLetterTaskPage>(Error.BadRequest(
+                "org_id is required: an operator read of the dead-letter queue is scoped to one organization",
+                [new ErrorDetail("org_id", "required")]));
+        }
+
         var pageSize = ListDeadLetterTasksQuery.DefaultLimit;
         if (!string.IsNullOrEmpty(limit))
         {
@@ -108,6 +117,7 @@ public static class OperatorEndpoints
             // named ''" — a client rendering an unset filter must not see an
             // empty page while rows exist (QA-H defect H-3).
             page = await query.ExecuteAsync(
+                orgId,
                 string.IsNullOrEmpty(queue) ? null : queue,
                 cursor,
                 pageSize,
@@ -124,17 +134,41 @@ public static class OperatorEndpoints
     }
 
     /// <summary>
-    /// <c>POST /internal/operator/tasks/dead-letter/{id}/replay</c> →
+    /// <c>POST /internal/operator/tasks/dead-letter/{id}/replay?org_id={o}</c> →
     /// <c>ReplayDeadLetterTask</c>: the guarded <c>state = 'dead_letter'</c>
-    /// update, mapped to 200 with the row's new state / 404
-    /// <c>task_not_found</c> / 409 <c>task_not_dead_letter</c> (§5).
+    /// transition, mapped to 200 with the row's new state / 404
+    /// <c>task_not_found</c> / 409 <c>task_not_dead_letter</c> (§5). The acting
+    /// operator is the audit row's actor, so a principal nobody can be held to is refused.
     /// </summary>
     private static async Task<Result<ReplayDeadLetterTaskResponse>> ReplayDeadLetterAsync(
         Guid id,
+        Guid? org_id,
         ReplayDeadLetterTask replay,
         HttpContext context)
     {
-        var outcome = await replay.ExecuteAsync(id, context.RequestAborted);
+        if (org_id is not { } orgId)
+        {
+            return Result.Failure<ReplayDeadLetterTaskResponse>(Error.BadRequest(
+                "org_id is required: a replay is scoped to the organization that owns the task",
+                [new ErrorDetail("org_id", "required")]));
+        }
+
+        if (context.User?.Identity?.IsAuthenticated != true)
+        {
+            return Result.Failure<ReplayDeadLetterTaskResponse>(new Error(
+                ApiErrorCode.Unauthenticated,
+                "the operator principal is not authenticated",
+                StatusCodes.Status401Unauthorized));
+        }
+
+        var subject = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? context.User.FindFirstValue("sub");
+        if (!Guid.TryParse(subject, out var actor))
+        {
+            return Result.Failure<ReplayDeadLetterTaskResponse>(Error.Forbidden(
+                "the operator principal carries no user id, so the replay cannot be attributed"));
+        }
+
+        var outcome = await replay.ExecuteAsync(orgId, id, actor, context.RequestAborted);
 
         return outcome.Outcome switch
         {
