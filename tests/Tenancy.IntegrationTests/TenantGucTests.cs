@@ -221,6 +221,37 @@ public sealed class TenantGucTests
             ("id", bindingId),
             ("org_id", orgId),
             ("project_id", projectId));
+        // The commit-registration tables (migration 0106): one binding, one received delivery and one queued
+        // sync, all owner-written so the fail-closed-zero assertions below have a row of each to hide.
+        var gitBindingId = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            """
+            insert into public.git_repo_binding
+                (id, org_id, project_id, installation_id, repository_id, webhook_secret_ref)
+            values (@id, @org_id, @project_id, '1', '2', 'secret:probe')
+            """,
+            ("id", gitBindingId),
+            ("org_id", orgId),
+            ("project_id", projectId));
+        await scope.ExecuteAsync(
+            """
+            insert into public.webhook_delivery (id, org_id, provider, delivery_id, event, payload_hash)
+            values (@id, @org_id, 'github', @delivery_id, 'push', @payload_hash)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("delivery_id", "probe-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)),
+            ("payload_hash", "sha256:" + new string('a', 64)));
+        await scope.ExecuteAsync(
+            """
+            insert into public.catalog_sync (id, org_id, project_id, binding_id, commit_sha)
+            values (@id, @org_id, @project_id, @binding_id, @commit_sha)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("project_id", projectId),
+            ("binding_id", gitBindingId),
+            ("commit_sha", "0123456789abcdef0123456789abcdef01234567"));
         await scope.ExecuteAsync(
             """
             insert into public.retention_policy (id, org_id, project_id, artifact_days, metadata_days)

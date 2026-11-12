@@ -90,7 +90,7 @@ Owns the org/project registry and the data-access contract: `org_id` on every bu
 
 ### M-catalog — Catalog
 
-Owns test identity (`test_case`, `case_identity_source`), immutable `test_revision` and suite revisions, variants, fixtures and the GitHub catalog sync. Security-relevant surface: `/v1/projects/{p}/cases`, `/v1/suites/{s}/revisions`, `/v1/cases/{c}`, `POST /v1/webhooks/github` (00 §9.3; 03 §4), tables `test_case`, `test_revision`, `suite`, `suite_revision`, `variant`, `fixture_revision` (00 §8.10).
+Owns test identity (`test_case`, `case_identity_source`), immutable `test_revision` and suite revisions, variants, fixtures and the GitHub catalog sync. Security-relevant surface: `/v1/projects/{p}/cases`, `/v1/suites/{s}/revisions`, `/v1/cases/{c}`, `POST /v1/webhooks/github` (00 §9.3; 03 §4), tables `test_case`, `test_revision`, `suite`, `suite_revision`, `variant`, `fixture_revision`, `git_repo_binding`, `webhook_delivery`, `catalog_sync` (00 §8.10).
 
 | ID | STRIDE | Threat | Attacker | Impact | Disposition |
 |---|---|---|---|---|---|
