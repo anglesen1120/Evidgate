@@ -40,6 +40,9 @@
     <Compile Include="..\Shared\TransportProbeStartupFilter.cs" Link="TransportProbeStartupFilter.cs" />
     <Compile Include="..\Shared\NoForwardedProxy.cs" Link="NoForwardedProxy.cs" />
     <Compile Include="..\Shared\NoHealingProvider.cs" Link="NoHealingProvider.cs" />
+    <!-- One schema compile per process before the first test: parallel classes that each triggered the cold
+         Roslyn load multiplied the CPU use. -->
+    <Compile Include="..\Shared\ContractSchemaWarmup.cs" Link="ContractSchemaWarmup.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- WebApplicationFactory for in-process Api tests (10.0.12, ADR-0002 row
