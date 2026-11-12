@@ -4,6 +4,7 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Healing.Contracts;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Shouldly;
@@ -12,88 +13,73 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The budget guard without a database: the reader's verdicts at every boundary, and the gateway's refusal when the read
-/// itself fails. A read fault is the one refusal a real PostgreSQL makes awkward to reproduce, and the rule it protects is
+/// The budget guard without a database: the ledger's verdict mapping, and the gateway's refusal when the reservation
+/// itself fails. A statement fault is the one refusal a real PostgreSQL makes awkward to reproduce, and the rule it protects is
 /// the strictest one — an unreadable budget is refused, never treated as room.
 /// </summary>
 public sealed class HealingLlmGatewayRefusalTests
 {
     private static readonly Guid Project = Guid.CreateVersion7();
+    private static readonly Guid Org = Guid.CreateVersion7();
 
-    /// <summary>The reader's four verdicts, including both caps of the exhausted branch and the exact-cap boundary.</summary>
-    /// <param name="capCost">The row's cost cap.</param>
-    /// <param name="capTokens">The row's token cap.</param>
-    /// <param name="usedCost">The cost spent.</param>
-    /// <param name="usedTokens">The tokens spent.</param>
-    /// <param name="verdict">The name of the verdict the four numbers must produce.</param>
+    /// <summary>A refused-statement outcome the ledger maps to a verdict, without a database.</summary>
+    [Fact]
+    public async Task Reserve_Hold_IsReservedWithItsPeriod()
+    {
+        var (db, scopes) = Database();
+        db.ScalarAsync<string?>(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>("2026-11-13"));
+
+        var (verdict, reservation) = await new HealingLlmBudgetLedger(db, scopes)
+            .ReserveAsync(Project, 10, 0.05m, TestContext.Current.CancellationToken);
+
+        verdict.ShouldBe(HealingLlmBudgetVerdict.Reserved);
+        reservation.ShouldBe(new HealingLlmReservation(10, 0.05m, "2026-11-13"));
+    }
+
     [Theory]
-    [InlineData(1.0, 100, 0.0, 0, "Room")]
-    [InlineData(1.0, 100, 0.99, 99, "Room")]
-    [InlineData(1.0, 100, 1.0, 0, "Exceeded")]
-    [InlineData(1.0, 100, 1.2, 0, "Exceeded")]
-    [InlineData(1.0, 100, 0.0, 100, "Exceeded")]
-    [InlineData(1.0, 100, 0.0, 140, "Exceeded")]
-    public async Task Read_BudgetRow_AnswersItsVerdict(
-        double capCost,
-        int capTokens,
-        double usedCost,
-        int usedTokens,
-        string verdict)
+    [InlineData(true, "Exceeded")]
+    [InlineData(false, "NotProvisioned")]
+    public async Task Reserve_RefusedHold_TellsSpentFromMissingRow(bool rowExists, string verdict)
     {
         var (db, scopes) = Database();
-        StubRow(db, new HealingLlmBudgetRow((decimal)capCost, capTokens, (decimal)usedCost, usedTokens));
+        db.ScalarAsync<string?>(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>(null));
+        db.ScalarAsync<bool>(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(rowExists));
 
-        var reader = new HealingLlmBudgetReader(db, scopes);
+        var (actual, reservation) = await new HealingLlmBudgetLedger(db, scopes)
+            .ReserveAsync(Project, 10, 0.05m, TestContext.Current.CancellationToken);
 
-        (await reader.ReadAsync(Project, TestContext.Current.CancellationToken))
-            .ShouldBe(Enum.Parse<HealingLlmBudgetVerdict>(verdict));
+        actual.ShouldBe(Enum.Parse<HealingLlmBudgetVerdict>(verdict));
+        reservation.ShouldBeNull();
     }
 
-    /// <summary>No row for today's period is "not provisioned", never "room".</summary>
     [Fact]
-    public async Task Read_AbsentRow_IsNotProvisioned()
+    public async Task Reserve_Fault_IsUnreadable()
     {
         var (db, scopes) = Database();
-        StubRow(db, null);
+        db.ScalarAsync<string?>(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<string?>>(_ => Task.FromException<string?>(new BudgetReadFault()));
 
-        var reader = new HealingLlmBudgetReader(db, scopes);
+        var (verdict, reservation) = await new HealingLlmBudgetLedger(db, scopes)
+            .ReserveAsync(Project, 10, 0.05m, TestContext.Current.CancellationToken);
 
-        (await reader.ReadAsync(Project, TestContext.Current.CancellationToken))
-            .ShouldBe(HealingLlmBudgetVerdict.NotProvisioned);
+        verdict.ShouldBe(HealingLlmBudgetVerdict.Unreadable);
+        reservation.ShouldBeNull();
     }
 
-    /// <summary>A read fault fails closed: an unmeasurable budget is not one with room.</summary>
-    [Fact]
-    public async Task Read_Fault_IsUnreadable()
-    {
-        var (db, scopes) = Database();
-        StubFault(db);
-
-        var reader = new HealingLlmBudgetReader(db, scopes);
-
-        (await reader.ReadAsync(Project, TestContext.Current.CancellationToken))
-            .ShouldBe(HealingLlmBudgetVerdict.Unreadable);
-    }
-
-    /// <summary>
-    /// The gateway turns the unreadable verdict into a counted refusal before it compiles a schema or reaches an adapter,
-    /// and writes no attempt row: nothing was attempted.
-    /// </summary>
     [Fact]
     public async Task InvokeAsync_UnreadableBudget_RefusesWithoutProviderCallOrRow()
     {
         var (db, scopes) = Database();
-        StubFault(db);
+        db.ScalarAsync<string?>(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>())
+            .Returns<Task<string?>>(_ => Task.FromException<string?>(new BudgetReadFault()));
         var provider = new SpyProvider();
-        var gateway = new HealingLlmGateway(
-            provider,
-            new HealingLlmCallRecorder(db, scopes),
-            Availability(),
-            new HealingLlmBudgetReader(db, scopes),
-            Options.Create(new HealingProviderOptions { Kind = HealingProviderKind.Http, Provider = "http" }));
+        var gateway = Gateway(provider, db, scopes, HealingProviderKind.Http);
 
         using var listener = HealingTelemetryCapture.RefusedCalls(out var reasons);
-        var result = await gateway.InvokeAsync(Request(), TestContext.Current.CancellationToken);
+        var result = await gateway.InvokeAsync(Org, Request(), TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeFalse("an unreadable budget must refuse the call");
         result.Error!.Details!.ShouldHaveSingleItem().Reason.ShouldBe(HealingLlmRefusals.BudgetUnreadable);
@@ -105,23 +91,40 @@ public sealed class HealingLlmGatewayRefusalTests
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Guards run before the schema is compiled: a deployment with no provider answers <c>provider_disabled</c> even for a
-    /// schema that would not compile, instead of surfacing a caller-side argument error as the outcome of a disabled call.
-    /// </summary>
+    /// <summary>A call cancelled before the request is sent gives the whole hold back and reaches no provider.</summary>
+    [Fact]
+    public async Task InvokeAsync_CancelledBeforeSend_ReleasesTheHold()
+    {
+        var (db, scopes) = Database();
+        using var cancel = new CancellationTokenSource();
+        db.ScalarAsync<string?>(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>())
+            .Returns(async _ =>
+            {
+                await cancel.CancelAsync();
+                return (string?)"2026-11-13";
+            });
+        var provider = new SpyProvider();
+        var gateway = Gateway(provider, db, scopes, HealingProviderKind.Http);
+
+        await Should.ThrowAsync<OperationCanceledException>(() => gateway.InvokeAsync(Org, Request(), cancel.Token));
+
+        provider.Calls.ShouldBe(0);
+        await db.DidNotReceive().ExecuteAsync(HealingLlmCallSql.Insert, Arg.Any<object?>(), Arg.Any<CancellationToken>());
+        await db.Received(1).ExecuteAsync(
+            HealingLlmBudgetSql.Settle,
+            Arg.Any<object?>(),
+            Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task InvokeAsync_NoProviderSelected_RefusesBeforeSchemaCompile()
     {
         var (db, scopes) = Database();
         var provider = new SpyProvider();
-        var gateway = new HealingLlmGateway(
-            provider,
-            new HealingLlmCallRecorder(db, scopes),
-            Availability(),
-            new HealingLlmBudgetReader(db, scopes),
-            Options.Create(new HealingProviderOptions { Kind = HealingProviderKind.None }));
+        var gateway = Gateway(provider, db, scopes, HealingProviderKind.None);
 
         var result = await gateway.InvokeAsync(
+            Org,
             Request(responseSchema: """{"type": "not-a-json-schema-type"}"""),
             TestContext.Current.CancellationToken);
 
@@ -130,30 +133,33 @@ public sealed class HealingLlmGatewayRefusalTests
         provider.Calls.ShouldBe(0);
     }
 
+    private static HealingLlmGateway Gateway(
+        SpyProvider provider,
+        ITenantDb db,
+        ITenantScopeAccessor scopes,
+        HealingProviderKind kind) =>
+        new(
+            provider,
+            new HealingLlmCallRecorder(db, scopes),
+            Availability(),
+            new HealingLlmBudgetLedger(db, scopes),
+            new HealingLlmTransactions((ITenantScopeFactory)scopes),
+            Options.Create(new HealingProviderOptions { Kind = kind, Provider = kind.ToString().ToLowerInvariant() }),
+            Options.Create(new HealingLlmOptions()),
+            NullLogger<HealingLlmGateway>.Instance);
+
     private static (ITenantDb Db, ITenantScopeAccessor Scopes) Database()
     {
         var db = Substitute.For<ITenantDb>();
-        var scopes = Substitute.For<ITenantScopeAccessor>();
+        var factory = Substitute.For<ITenantScopeFactory>();
         var tenant = Substitute.For<ITenantScope>();
-        tenant.OrgId.Returns(Guid.CreateVersion7());
-        scopes.Require().Returns(tenant);
-        return (db, scopes);
+        tenant.OrgId.Returns(Org);
+        factory.Current.Returns((ITenantScope?)null);
+        factory.Require().Returns(tenant);
+        factory.BeginAsync(Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(tenant));
+        return (db, factory);
     }
-
-    private static void StubRow(ITenantDb db, HealingLlmBudgetRow? row) =>
-        db.QuerySingleOrDefaultAsync<HealingLlmBudgetRow>(
-                Arg.Any<string>(),
-                Arg.Any<object?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(row));
-
-    private static void StubFault(ITenantDb db) =>
-        db.QuerySingleOrDefaultAsync<HealingLlmBudgetRow>(
-                Arg.Any<string>(),
-                Arg.Any<object?>(),
-                Arg.Any<CancellationToken>())
-            .Returns<Task<HealingLlmBudgetRow?>>(_ =>
-                Task.FromException<HealingLlmBudgetRow?>(new BudgetReadFault()));
 
     private static ShadowAvailability Availability() => new();
 

@@ -498,27 +498,18 @@ public sealed class HealingLlmGatewayTests
     }
 
     /// <summary>
-    /// Invokes the gateway inside a tenant scope on the app role, which is exactly the caller's situation: the recorder
-    /// writes inside this transaction through the module's Dapper path. Every case here asks for a call the guards allow,
-    /// so a refusal fails the case with its reason instead of surfacing later as a missing row.
+    /// Invokes the gateway the way a caller does: with the org id and no tenant scope of its own, on the app role. Every
+    /// case here asks for a call the guards allow, so a refusal fails the case with its reason instead of surfacing later
+    /// as a missing row.
     /// </summary>
     private static async Task<HealingLlmInvocation> InvokeAsync(World world, HealingLlmRequest request)
     {
+        // The gateway opens its own short tenant transactions, so the caller holds no scope.
         await using var services = world.Provider.CreateAsyncScope();
-        var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
-        await using var scope = await scopes.BeginAsync(
-            world.Org,
-            world.Project,
-            readOnlyTransaction: false,
-            TestContext.Current.CancellationToken);
-
         var gateway = services.ServiceProvider.GetRequiredService<HealingLlmGateway>();
-        var result = await gateway.InvokeAsync(request, TestContext.Current.CancellationToken);
+        var result = await gateway.InvokeAsync(world.Org, request, TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
-
-        // The caller commits: every recorded attempt rides the caller's tenant transaction (00 §5.5 C3).
-        await scope.CommitAsync(TestContext.Current.CancellationToken);
 
         return result.Value;
     }

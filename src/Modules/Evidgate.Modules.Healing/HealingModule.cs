@@ -95,9 +95,10 @@ internal static class HealingModule
         services.AddTransient<IHealingLlmProvider>(ProviderFor);
 
         // Every attempt is recorded through the module's tenant Dapper path, so all three are scoped like the switch
-        // store; the gateway refuses a call before it is placed, so it reads the period budget through the same seam.
+        // store; the gateway reserves the period budget before it places a call, through the same seam.
         services.TryAddScoped<HealingLlmCallRecorder>();
-        services.TryAddScoped<HealingLlmBudgetReader>();
+        services.TryAddScoped<HealingLlmBudgetLedger>();
+        services.TryAddScoped<HealingLlmTransactions>();
         services.TryAddScoped<HealingLlmGateway>();
 
         // The time budget lives in the pipeline, so the client timeout is infinite: a finite client timeout would abort

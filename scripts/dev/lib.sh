@@ -41,9 +41,9 @@ evg_load_env() {
 # Exported names whose value is a credential. A new secret is covered by this
 # pattern instead of an edit at every call site. ACCESS_?KEY covers both spellings
 # a local identity uses (EVIDGATE_S3_ACCESS_KEY, EVIDGATE__OBJECT__ACCESSKEY);
-# PEPPER and DEV_TOKEN cover the two credentials the token seed relies on, so a
+# PEPPER, SIGNING_?KEY, API_?KEY and DEV_TOKEN cover the CI, seed and provider credentials, so a
 # shell that exported them does not hand them to npm, ng serve or dotnet build.
-EVG_SECRET_ENV_PATTERN='PASSWORD|SECRET|CONNECTIONSTRING|ACCESS_?KEY|S3_CONFIG|PEPPER|DEV_TOKEN'
+EVG_SECRET_ENV_PATTERN='PASSWORD|SECRET|CONNECTIONSTRING|ACCESS_?KEY|S3_CONFIG|PEPPER|SIGNING_?KEY|API_?KEY|DEV_TOKEN'
 
 # Fills EVG_SCRUB_ARGS with one `-u NAME` pair per exported variable matching
 # the pattern above, read from the live environment. Process substitution, not a
