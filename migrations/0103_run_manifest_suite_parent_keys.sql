@@ -43,6 +43,10 @@
 --     (the pre-check proved it passes; the locks above stay held to commit, so VALIDATE does not shorten them);
 --   * `create trigger` on `manifest`: SHARE ROW EXCLUSIVE.
 --
+-- D5 DEVIATION (coordinator decision, recorded): NOT VALID and VALIDATE are in this one file, not two. The file already
+-- holds ACCESS EXCLUSIVE on `manifest` and `run` to commit (see LOCKS), as `0102` does, so a separate VALIDATE migration
+-- would shorten no lock; it would only cost a second migration number.
+--
 -- ACCEPTED RESIDUALS: as in `0102`: the table owner can DROP or DISABLE the trigger, and a superuser can set
 -- `session_replication_role = replica`, which also skips the foreign-key triggers; the app role can do neither.
 --
