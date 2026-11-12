@@ -226,7 +226,7 @@ public sealed class HealingLlmBudgetResetTests
         await using var connection = await _fixture.OpenSuperuserAsync(database);
         await ExecuteAsync(connection, "set role evidgate_worker_sched");
 
-        await using var command = new NpgsqlCommand($"select evidgate.roll_healing_llm_budget({Today})", connection);
+        await using var command = new NpgsqlCommand($"select evidgate.roll_healing_llm_budget({daySql})", connection);
         return Convert.ToInt32(
             await command.ExecuteScalarAsync(TestContext.Current.CancellationToken),
             System.Globalization.CultureInfo.InvariantCulture);
