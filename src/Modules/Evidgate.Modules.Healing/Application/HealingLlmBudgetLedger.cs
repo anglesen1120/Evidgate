@@ -134,7 +134,7 @@ internal static class HealingLlmBudgetSql
            and used_cost < period_cap_cost
            and used_tokens < period_cap_tokens
            and used_cost + @cost::numeric <= period_cap_cost
-           and used_tokens + @tokens::integer <= period_cap_tokens
+           and used_tokens::bigint + @tokens::bigint <= period_cap_tokens
         returning period_start::text
         """;
 
@@ -149,11 +149,14 @@ internal static class HealingLlmBudgetSql
              and period_start = (now() at time zone 'utc')::date)
         """;
 
-    /// <summary>Swaps the hold for the real usage on the row the hold was taken on; counters never go below zero.</summary>
+    /// <summary>Swaps the hold for the real usage on the row the hold was taken on. The arithmetic is widened and clamped to the
+    /// column ranges, so a provider's extreme report cannot abort the settlement and lose a paid attempt.</summary>
     internal const string Settle = """
         update public.healing_llm_budget
-           set used_cost = greatest(used_cost - @reserved_cost::numeric + @actual_cost::numeric, 0),
-               used_tokens = greatest(used_tokens - @reserved_tokens::integer + @actual_tokens::integer, 0)
+           set used_cost = least(greatest(used_cost - @reserved_cost::numeric + @actual_cost::numeric, 0), 999999.999999),
+               used_tokens = least(
+                   greatest(used_tokens::bigint - @reserved_tokens::bigint + @actual_tokens::bigint, 0),
+                   2147483647)
          where org_id = @org_id::uuid
            and project_id = @project_id::uuid
            and period = 'daily'

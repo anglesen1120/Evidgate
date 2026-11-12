@@ -4,6 +4,7 @@ using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Healing.Contracts;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace Evidgate.Modules.Healing.Application;
 
@@ -140,8 +141,8 @@ internal sealed record HealingLlmInvocation(HealingLlmResult Result, Guid CallId
 /// </para>
 /// <para>
 /// A reservation is released in a fresh scope when the provider throws, the call is cancelled or the settlement fails.
-/// A hard process kill between the phases cannot run that release, so the estimate of one call stays counted until the
-/// period resets; the counters can then only over-count, which makes the next reservation refuse sooner and never lets
+/// A hard process kill between the phases, or a settlement whose outcome is unknown (connection lost at COMMIT), cannot
+/// be released safely, so the estimate of one call stays counted until the period resets; the counters can then only over-count, which makes the next reservation refuse sooner and never lets
 /// spend exceed a cap. The reset (and any sweep) belongs to the reset schedule, not to this class.
 /// </para>
 /// </remarks>
@@ -301,10 +302,18 @@ internal sealed partial class HealingLlmGateway(
 
             return (status, content, result.Tokens, result.Cost, callId);
         }
-        catch
+        catch (PostgresException)
         {
-            // The settlement transaction rolled back whole, so the hold is still in place: release it in a fresh scope.
+            // The server refused the settlement, so it rolled back whole and the hold is still in place: release it in a
+            // fresh scope.
             await ReleaseAsync(orgId, request.ProjectId, reservation).ConfigureAwait(false);
+            throw;
+        }
+        catch (Exception exception) when (exception is DbException or IOException)
+        {
+            // A lost connection after COMMIT may mean the settlement landed; releasing then would subtract the hold twice
+            // and under-count. The hold stays, which can only over-count until the period resets.
+            LogSettlementUnknown(exception, request.ProjectId);
             throw;
         }
     }
@@ -350,11 +359,20 @@ internal sealed partial class HealingLlmGateway(
         Message = "Healing LLM budget reservation could not be released; it stays counted until the period resets (project={ProjectId})")]
     private partial void LogReleaseFailed(Exception exception, Guid projectId);
 
-    /// <summary>The tokens to hold for one attempt: the prompt's estimate plus the output ceiling.</summary>
+    /// <summary>The structured record of a settlement whose outcome is unknown; the hold stays counted.</summary>
+    /// <param name="exception">The connection-level failure.</param>
+    /// <param name="projectId">The project whose estimate stays counted until the period resets.</param>
+    [LoggerMessage(
+        EventId = 8611,
+        Level = LogLevel.Error,
+        Message = "Healing LLM settlement outcome unknown; the reservation is kept counted until the period resets (project={ProjectId})")]
+    private partial void LogSettlementUnknown(Exception exception, Guid projectId);
+
+    /// <summary>The tokens to hold for one attempt: the prompt and schema estimate plus the output ceiling.</summary>
     /// <param name="request">The call about to be placed.</param>
     private int EstimatedTokens(HealingLlmRequest request) =>
         (int)Math.Min(
-            ((long)request.Payload.Length / 4) + 1 + llmOptions.Value.ReservedOutputTokens,
+            (((long)request.Payload.Length + (request.ResponseSchema?.Length ?? 0)) / 4) + 1 + llmOptions.Value.ReservedOutputTokens,
             int.MaxValue);
 
     /// <summary>The refusal reason a budget verdict maps to, or null when the reservation was taken or is not needed.</summary>

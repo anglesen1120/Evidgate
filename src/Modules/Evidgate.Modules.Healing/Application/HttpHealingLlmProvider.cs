@@ -30,8 +30,8 @@ internal sealed class HealingLlmOptions
 
     /// <summary>
     /// The cost held in the budget for one call before it is placed, replaced by the provider's reported cost afterwards.
-    /// A conservative placeholder until the price table of a real provider exists; it bounds concurrent overshoot to this
-    /// amount per call in flight.
+    /// A conservative placeholder until the price table of a real provider exists; real usage above the hold is
+    /// charged at settlement, so a call can overshoot the cap by its excess until the real price table exists.
     /// </summary>
     internal decimal ReservedCostPerCall { get; set; } = 0.05m;
 

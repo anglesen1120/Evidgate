@@ -137,7 +137,7 @@ public sealed class HealingLlmGatewayGuardTests
     /// <param name="usedCost">The cost the period spent.</param>
     /// <param name="usedTokens">The tokens the period spent.</param>
     [Theory]
-    [InlineData(1.0, 100, 1.0, 40)]
+    [InlineData(1.0, 5000, 1.0, 40)]
     [InlineData(1.0, 100, 0.4, 100)]
     public async Task InvokeHealingLlm_BudgetSpent_RefusesWithoutProviderCall(
         double capCost,

@@ -138,6 +138,24 @@ public sealed class HealingLlmTwoPhaseBudgetTests
         (await world.CallCountAsync()).ShouldBe(0);
     }
 
+    /// <summary>
+    /// A provider that reports an extreme token count cannot abort the settlement: the paid attempt is recorded and the
+    /// counter is clamped to its column range instead of overflowing.
+    /// </summary>
+    [Fact]
+    public async Task InvokeHealingLlm_ExtremeProviderUsage_IsRecordedAndClamped()
+    {
+        var provider = new ScriptedProvider(_ =>
+            Task.FromResult(new HealingLlmResult(HealingLlmStatuses.Ok, Answer, int.MaxValue, 0.01m)));
+        await using var world = await StartAsync(provider);
+        await world.SeedBudgetAsync(1.0m, 5000, 0m, 1);
+
+        (await InvokeAsync(world, Request(world), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
+
+        (await world.UsedAsync()).ShouldBe((0.01m, int.MaxValue));
+        (await world.CallCountAsync()).ShouldBe(1);
+    }
+
     /// <summary>A cancelled call gives its hold back.</summary>
     [Fact]
     public async Task InvokeHealingLlm_Cancelled_ReleasesTheHold()
@@ -175,6 +193,35 @@ public sealed class HealingLlmTwoPhaseBudgetTests
                 $$ begin raise exception 'settlement fault'; end $$;
                 create trigger healing_llm_call_test_fail before insert on public.healing_llm_call
                   for each row execute function public.healing_llm_call_test_fail();
+                """);
+            return Ok();
+        });
+        await using var world = await StartAsync(provider);
+        await world.SeedBudgetAsync(1.0m, 5000, 0.1m, 10);
+
+        await Should.ThrowAsync<PostgresException>(() => InvokeAsync(world, Request(world), TestContext.Current.CancellationToken));
+
+        (await world.UsedAsync()).ShouldBe((0.1m, 10));
+        (await world.CallCountAsync()).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A budget update that fails after the attempt row was inserted rolls the row back too, and the hold is released
+    /// by the zero-usage settlement that the fault does not match.
+    /// </summary>
+    [Fact]
+    public async Task InvokeHealingLlm_BudgetUpdateFailsAfterRowInsert_RollsBackBothAndReleases()
+    {
+        ScriptedProvider? provider = null;
+        provider = new ScriptedProvider(async _ =>
+        {
+            // Fails only the settlement that lands on 0.11 (0.15 held - 0.05 + 0.01), not the release back to 0.10.
+            await provider!.World!.ExecuteOwnerAsync(
+                """
+                create function public.healing_llm_budget_test_fail() returns trigger language plpgsql as
+                $$ begin if new.used_cost = 0.11 then raise exception 'budget fault'; end if; return new; end $$;
+                create trigger healing_llm_budget_test_fail before update on public.healing_llm_budget
+                  for each row execute function public.healing_llm_budget_test_fail();
                 """);
             return Ok();
         });

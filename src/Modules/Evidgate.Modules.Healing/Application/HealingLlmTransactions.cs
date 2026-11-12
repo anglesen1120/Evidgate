@@ -33,7 +33,8 @@ internal sealed class HealingLlmTransactions(ITenantScopeFactory scopes)
 
         await using var scope = await scopes.BeginAsync(orgId, projectId, false, cancellationToken).ConfigureAwait(false);
         var result = await work(cancellationToken).ConfigureAwait(false);
-        await scope.CommitAsync(cancellationToken).ConfigureAwait(false);
+        // A cancellation racing the COMMIT must not leave a committed hold the caller never learns about.
+        await scope.CommitAsync(CancellationToken.None).ConfigureAwait(false);
         return result;
     }
 }
