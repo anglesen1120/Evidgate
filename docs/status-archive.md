@@ -625,3 +625,10 @@ closed by #820 (68358713)
 | Sixth bounded JSON reader copy (S404) | `GitHubResponseReader` in `src/Modules/Evidgate.Modules.Catalog/Infrastructure/GitHub/` is the sixth hand-written bounded-JSON body reader (same shape as the other five); agent-code-rules §7 calls a second copy of protocol logic a defect. Extract one shared reader when the next HTTP client lands. | next HTTP-client task (T1.4 or 10.x) |
 
 closed by #826 (88ca42cf)
+
+## Moved from status-carried.md by S406 (2026-11-13)
+
+| Hard-kill reservation leak until budget reset (S402) | A process killed between the reserve and settle commits of a healing LLM call leaves that call's estimate counted in `healing_llm_budget` until the period resets; it only over-counts (the next reservation refuses sooner), never lets spend pass a cap. The reset is not built yet. Source: 08.5.1-T1.4 (#814, decision 402 A). | 08.5.1-T1.7 |
+| Provider output ceiling and estimate overshoot (S402) | The adapter sends no max-tokens field, so the held `ReservedOutputTokens` is not enforced on the wire; real usage above the estimate is charged at settlement and a call can overshoot a cap by its excess. Source: security review F2, #814. | 08.5.1-T1.5 |
+
+closed by #822 (c0609f31: `max_tokens` on the wire) and #828 (b66504d0: a leaked hold sits on its own day's row and the daily roll starts the next day at zero, so the leak is bounded to one period)
