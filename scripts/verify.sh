@@ -201,22 +201,17 @@ run_stage() {
     run_trait_stage Hostile "${HOSTILE_ASSEMBLIES[@]}"
     ;;
   fixtures-fuzz)
-    # 06.3.2-T2.1 (AC4): the seeded-mutation fuzz harness (HostileFuzzTests, FuzzPromotionTests) over
-    # IParsing.ParseXmlReport/EnumerateArchive, selected by [Trait("Category","Fuzz")] and run on the built
-    # assembly, so the stage needs no Docker daemon. The ten-minute budget is set HERE, so the `test` stage — the
-    # only other stage that selects the Fuzz trait — runs the harness's few-second smoke default (a caller that
-    # already exported EVIDGATE_FUZZ_BUDGET_SECONDS keeps its value); the `fixtures-hostile` stage filters
-    # Category=Hostile only and never runs this harness. The seed is set HERE too: one per run, from the CI run id
-    # (or the clock outside CI), so consecutive nights do not replay one PRNG stream; it is echoed below so a red
-    # run can be replayed with EVIDGATE_FUZZ_SEED=<value>. Findings go under artifacts/fuzz-findings, which the
-    # nightly job uploads. Only the trait-bearing assemblies run (see `run_trait_stage`): a trait that selects
-    # nothing fails the stage instead of passing it.
+    # Seeded-mutation fuzz harness over IParsing.ParseXmlReport/EnumerateArchive, selected by
+    # [Trait("Category","Fuzz")] on the built assembly (no Docker). The ten-minute budget is set HERE so the `test`
+    # stage keeps the few-second smoke default (a caller's exported budget wins); the seed is one per run (CI run
+    # id, else the clock). `run_fuzz_shards` (verify-parallel-tests.sh) splits the work over concurrent shards and
+    # prints each shard's seed and how to replay it; findings go under artifacts/fuzz-findings/shard-N (uploaded).
     export EVIDGATE_FUZZ_BUDGET_SECONDS="${EVIDGATE_FUZZ_BUDGET_SECONDS:-600}"
     export EVIDGATE_FUZZ_FINDINGS_DIR="${EVIDGATE_FUZZ_FINDINGS_DIR:-$ROOT/artifacts/fuzz-findings}"
     export EVIDGATE_FUZZ_SEED="${EVIDGATE_FUZZ_SEED:-${GITHUB_RUN_ID:-$(date +%s)}}"
     stage "dotnet test (fuzz harness, ${EVIDGATE_FUZZ_BUDGET_SECONDS}s budget)"
     echo "   EVIDGATE_FUZZ_SEED=${EVIDGATE_FUZZ_SEED}"
-    run_trait_stage Fuzz "${FUZZ_ASSEMBLIES[@]}"
+    run_fuzz_shards "${FUZZ_ASSEMBLIES[@]}"
     ;;
   tsc-build)
     # tsc -b of the root tsconfig.json references: packages/* AND apps/web — the
@@ -426,7 +421,8 @@ run_stage() {
       scripts/tests/test_gate_scope.py scripts/tests/test_gate_scope_reasons.py \
       scripts/tests/test_verify_scope.py \
       scripts/tests/test_verify_refusal.py scripts/tests/test_verify_shards.py \
-      scripts/tests/test_verify_test_parallel.py scripts/tests/test_smoke_mktemp.py
+      scripts/tests/test_verify_test_parallel.py scripts/tests/test_verify_stage_time.py scripts/tests/test_verify_fuzz_shards.py \
+      scripts/tests/test_smoke_mktemp.py
     ;;
   image-pins)
     # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three
@@ -480,7 +476,7 @@ selected=() scope_tier="" scope_reason="" scope_changed="" scope_base=""
 scope_stages="" scope_skipped="" scope_notes=()
 
 main() {
-  local name report
+  local report
   cd "$ROOT"
   refuse_gate_flag "$@"
   parse_args "$@"
@@ -491,9 +487,7 @@ main() {
   else
     echo "== gate scope: explicit (--stage given: no path filtering, every listed stage runs)"
   fi
-  for name in "${selected[@]}"; do
-    run_stage "$name"
-  done
+  run_selected_stages
   report_result
 }
 

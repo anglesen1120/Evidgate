@@ -169,3 +169,113 @@ run_parallel_tests() {
   eval "$saved_traps"
   return "$failed"
 }
+
+# --- sharded fuzz stage -------------------------------------------------------
+# The harness is one single-threaded loop bounded by a wall budget, so 600 s
+# leaves the other cores idle. The work is split over N processes
+# (N = min(4, cores), or EVIDGATE_FUZZ_SHARDS). Concurrent shards share cores,
+# caches and memory (LAN host: ~91k inputs/s per shard at N=4 against ~149k/s for
+# one), so a shard runs ceil(budget * 9 / (5 * N)) seconds for N >= 2: N=4 gives
+# 270 s each and ~10 % more inputs than the serial 600 s; N=1 keeps the budget. Shard i
+# drives seed base+i and writes under <findings dir>/shard-i, inside the path the
+# nightly job uploads. Replay a finding from its shard's printed seed alone:
+#   EVIDGATE_FUZZ_SEED=<shard seed> EVIDGATE_FUZZ_SHARDS=1 \
+#     EVIDGATE_FUZZ_BUDGET_SECONDS=<shard budget> scripts/verify.sh --stage fixtures-fuzz
+# A failed shard or a finding fails the stage; shard iteration counts are summed.
+
+# `fuzz_shard_count`: the shard count, 1 to 16; prints nothing and fails on a bad override.
+fuzz_shard_count() {
+  local n="${EVIDGATE_FUZZ_SHARDS:-}" cores
+  if [[ -z "$n" ]]; then
+    cores="$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+    [[ "$cores" =~ ^[1-9][0-9]*$ ]] || cores=1
+    n=$((cores < 4 ? cores : 4))
+  fi
+  if ! [[ "$n" =~ ^[1-9][0-9]?$ ]] || [[ "$n" -gt 16 ]]; then
+    echo "verify: EVIDGATE_FUZZ_SHARDS must be an integer from 1 to 16, got '$n'" >&2
+    return 1
+  fi
+  echo "$n"
+}
+
+# `fuzz_shard_seed <base> <index>`: shard 0 keeps the base verbatim (the harness takes any
+# unsigned 64-bit seed); further shards add the index, which bash can only do below 10^18.
+fuzz_shard_seed() {
+  if [[ "$2" -eq 0 ]]; then
+    echo "$1"
+  elif [[ "$1" =~ ^[0-9]{1,18}$ ]]; then
+    echo $((10#$1 + $2))
+  else
+    echo "verify: EVIDGATE_FUZZ_SEED must be a decimal below 10^18 to run more than one shard" >&2
+    return 1
+  fi
+}
+
+# `claim_fuzz_findings <root>`: makes the findings root and clears the shard dirs of an
+# earlier run, but only where this stage left its marker: a directory it did not create
+# is never emptied.
+claim_fuzz_findings() {
+  mkdir -p "$1"
+  if [[ -f "$1/.fuzz-shards" ]]; then
+    rm -rf "$1"/shard-*
+  elif compgen -G "$1/shard-*" >/dev/null; then
+    echo "verify: $1 already holds shard-* entries this stage did not create; point" \
+      "EVIDGATE_FUZZ_FINDINGS_DIR at an empty or new directory" >&2
+    return 1
+  else
+    : >"$1/.fuzz-shards"
+  fi
+}
+
+# `run_fuzz_shards <assembly>...`: the Fuzz-trait run of each assembly, once per shard.
+run_fuzz_shards() {
+  local shards total per base project i seed dir iterations sum=0 saved_traps
+  shards="$(fuzz_shard_count)" || return 2
+  total="${EVIDGATE_FUZZ_BUDGET_SECONDS:?}"
+  base="${EVIDGATE_FUZZ_SEED:?}"
+  if ! [[ "$total" =~ ^[0-9]{1,9}$ && "$base" =~ ^[0-9]{1,20}$ ]] || [[ "$((10#$total))" -eq 0 ]]; then
+    echo "verify: EVIDGATE_FUZZ_BUDGET_SECONDS must be a positive decimal and EVIDGATE_FUZZ_SEED a decimal" >&2
+    return 2
+  fi
+  total=$((10#$total))
+  if [[ "$shards" -eq 1 ]]; then per=$total; else per=$(((total * 9 + 5 * shards - 1) / (5 * shards))); fi
+  claim_fuzz_findings "$EVIDGATE_FUZZ_FINDINGS_DIR" || return 2
+  for ((i = 0; i < shards; i++)); do fuzz_shard_seed "$base" "$i" >/dev/null || return 2; done
+  check_trait_coverage Fuzz "$@"
+  PT_PIDS=() PT_NAMES=() PT_FILES=() PT_STARTS=() PT_FAILED=0 PT_CAP=0
+  PT_LOGS="$(mktemp -d)"
+  saved_traps="$(trap -p EXIT INT TERM)"
+  trap stop_parallel_tests EXIT
+  trap 'exit 143' INT TERM
+  echo "   $shards fuzz shard(s) of ${per}s each ($total s budget in total), base seed $base"
+  for project in "$@"; do
+    for ((i = 0; i < shards; i++)); do
+      seed="$(fuzz_shard_seed "$base" "$i")"
+      dir="$EVIDGATE_FUZZ_FINDINGS_DIR/shard-$i"
+      echo "   fuzz shard $i: seed $seed budget ${per}s findings $dir"
+      EVIDGATE_FUZZ_SEED="$seed" EVIDGATE_FUZZ_BUDGET_SECONDS="$per" EVIDGATE_FUZZ_FINDINGS_DIR="$dir" \
+        start_test_run "fuzz-$i" "$PT_LOGS/fuzz-$i.log" \
+        --project "$project" --filter-trait "Category=Fuzz" --minimum-expected-tests 1
+    done
+  done
+  while [[ "$(running_test_runs)" -gt 0 ]]; do
+    sleep 0.2
+    reap_test_runs
+  done
+  for ((i = 0; i < shards; i++)); do
+    iterations="$(sed -n 's/^ *"Iterations": *\([0-9][0-9]*\),\{0,1\}$/\1/p' \
+      "$EVIDGATE_FUZZ_FINDINGS_DIR/shard-$i/run.json" 2>/dev/null | tail -n 1)" || iterations=""
+    if [[ -z "$iterations" ]]; then
+      echo "verify: fuzz shard $i wrote no run.json with an iteration count" >&2
+      PT_FAILED=1
+      continue
+    fi
+    echo "   fuzz shard $i: $iterations inputs"
+    sum=$((sum + iterations))
+  done
+  echo "   fuzz: $sum inputs in total over $shards shard(s)"
+  stop_parallel_tests
+  trap - EXIT INT TERM
+  eval "$saved_traps"
+  return "$PT_FAILED"
+}

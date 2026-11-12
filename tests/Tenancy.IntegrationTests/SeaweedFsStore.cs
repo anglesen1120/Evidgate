@@ -101,7 +101,7 @@ public sealed class SeaweedFsServer : IAsyncLifetime
         if (_container is not null)
         {
             // Only a started container is kept here; the shared start helper disposes failed attempts.
-            await _container.DisposeAsync();
+            await ContainerStart.DisposeAsync(_container);
         }
     }
 

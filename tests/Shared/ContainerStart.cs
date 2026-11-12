@@ -1,8 +1,12 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.ExceptionServices;
+using System.Runtime.InteropServices;
 using Docker.DotNet;
+using Docker.DotNet.Models;
+using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Evidgate.Testing;
 
@@ -48,13 +52,194 @@ public static class ContainerStart
         Action<string>? log = null,
         CancellationToken cancellationToken = default)
         where TContainer : IContainer =>
-        StartAsync(
+        StartWithReaperAsync(create, options, log, cancellationToken);
+
+    // Testcontainers starts its Ryuk reaper lazily inside the first container start of the process. A create
+    // that times out client-side leaves a Ryuk container under the session's fixed name, so every retry of
+    // that lazy start dies with 409 for the rest of the process; starting it here, with the stale one removed,
+    // keeps the fixture's own container attempts independent of it.
+    private static async Task<TContainer> StartWithReaperAsync<TContainer>(
+        Func<TContainer> create,
+        ContainerStartOptions? options,
+        Action<string>? log,
+        CancellationToken cancellationToken)
+        where TContainer : IContainer
+    {
+        await EnsureResourceReaperAsync(options, log, cancellationToken).ConfigureAwait(false);
+        return await StartAsync(
             create,
             (container, token) => container.StartAsync(token),
             container => container.DisposeAsync(),
             options,
             log,
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static readonly SemaphoreSlim ReaperLock = new(1, 1);
+
+    /// <summary>Starts the process-wide Ryuk reaper once, recovering from a name conflict on its own session container.</summary>
+    public static async Task EnsureResourceReaperAsync(
+        ContainerStartOptions? options = null,
+        Action<string>? log = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!TestcontainersSettings.ResourceReaperEnabled
+            || !ResourceReaper.IsUnavailable
+            || RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return;
+        }
+
+        var auth = TestcontainersSettings.OS.DockerEndpointAuthConfig;
+        var name = $"testcontainers-ryuk-{ResourceReaper.DefaultSessionId:D}";
+        // The lock wait counts against the budget: a queued fixture must not add a second budget behind a failed one.
+        options ??= ContainerStartOptions.Default;
+        var deadline = DateTime.UtcNow + options.Budget;
+        if (!await ReaperLock.WaitAsync(options.Budget, cancellationToken).ConfigureAwait(false))
+        {
+            throw new TimeoutException($"Waiting for another fixture to start the Ryuk reaper exceeded {options.Budget}.");
+        }
+
+        try
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                throw new TimeoutException($"Waiting for another fixture to start the Ryuk reaper exceeded {options.Budget}.");
+            }
+
+            options = options with { Budget = remaining };
+            await EnsureResourceReaperAsync(
+                name,
+                () => ResourceReaper.IsUnavailable,
+                token => ResourceReaper.GetAndStartDefaultAsync(auth, NullLogger.Instance, false, token),
+                async token =>
+                {
+                    var builder = auth.GetDockerClientBuilder(ResourceReaper.DefaultSessionId);
+                    using var client = builder.Build();
+                    try
+                    {
+                        await client.Containers
+                            .RemoveContainerAsync(name, new ContainerRemoveParameters { Force = true }, token)
+                            .ConfigureAwait(false);
+                    }
+                    catch (DockerContainerNotFoundException)
+                    {
+                        // Gone already, or dockerd has not finished creating it: the next attempt tells.
+                    }
+                },
+                options,
+                log,
+                cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ReaperLock.Release();
+        }
+    }
+
+    /// <summary>
+    /// The loop of <see cref="EnsureResourceReaperAsync(ContainerStartOptions?, Action{string}?, CancellationToken)"/>
+    /// over delegates, so it is testable without Docker. A transient Docker failure or a 409 on
+    /// <paramref name="ownContainerName"/> removes that container and retries inside the budget; any other
+    /// failure, including a 409 on a foreign name, surfaces at once.
+    /// </summary>
+    public static async Task EnsureResourceReaperAsync(
+        string ownContainerName,
+        Func<bool> isUnavailable,
+        Func<CancellationToken, Task> startReaper,
+        Func<CancellationToken, Task> removeOwnContainer,
+        ContainerStartOptions? options = null,
+        Action<string>? log = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(ownContainerName);
+        options ??= ContainerStartOptions.Default;
+        log ??= static message => Console.Error.WriteLine(message);
+        var deadline = DateTime.UtcNow + options.Budget;
+        ExceptionDispatchInfo? failure = null;
+        for (var attempt = 1; isUnavailable(); attempt++)
+        {
+            // Cleanup and the delay can overshoot the deadline; surface the Docker failure, not a negative timeout.
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+            {
+                failure?.Throw();
+            }
+
+            using var attemptTimeout = new CancellationTokenSource(
+                remaining < options.AttemptTimeout ? remaining : options.AttemptTimeout);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, attemptTimeout.Token);
+            try
+            {
+                await startReaper(linked.Token).ConfigureAwait(false);
+                return;
+            }
+            catch (Exception exception)
+            {
+                var conflict = IsNameConflict(exception, ownContainerName);
+                var last = attempt >= options.MaxAttempts || deadline - DateTime.UtcNow <= options.Delay;
+                if (last || cancellationToken.IsCancellationRequested || !(conflict || IsTransient(exception)))
+                {
+                    throw;
+                }
+
+                log(
+                    $"[container-start] reaper attempt {attempt}/{options.MaxAttempts} failed in "
+                    + $"{FailingCall(exception)}: {exception.GetType().Name}: {exception.Message}; "
+                    + $"removing {ownContainerName} and retrying in {options.Delay.TotalSeconds:0.#}s");
+                failure = ExceptionDispatchInfo.Capture(exception);
+                await RemoveQuietlyAsync(removeOwnContainer, deadline, options, log).ConfigureAwait(false);
+            }
+
+            await Task.Delay(options.Delay, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>True when a 409 anywhere in the chain names exactly the given container.</summary>
+    public static bool IsNameConflict(Exception exception, string containerName)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        return Chain(exception).Any(link =>
+            link is DockerApiException { StatusCode: HttpStatusCode.Conflict } api
+            && NamesContainer(api.Message, containerName));
+    }
+
+    // The daemon quotes the name ("/name", escaped inside a JSON body); a longer name sharing the prefix must not match.
+    private static bool NamesContainer(string message, string containerName)
+    {
+        var needle = $"/{containerName}";
+        for (var at = message.IndexOf(needle, StringComparison.Ordinal); at >= 0;
+             at = message.IndexOf(needle, at + 1, StringComparison.Ordinal))
+        {
+            var end = at + needle.Length;
+            if (end >= message.Length || !(char.IsAsciiLetterOrDigit(message[end]) || message[end] is '-' or '_' or '.'))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static async Task RemoveQuietlyAsync(
+        Func<CancellationToken, Task> remove,
+        DateTime deadline,
+        ContainerStartOptions options,
+        Action<string> log)
+    {
+        var budget = deadline - DateTime.UtcNow;
+        var timeout = budget < options.DisposeTimeout ? budget : options.DisposeTimeout;
+        try
+        {
+            using var cts = new CancellationTokenSource(timeout > TimeSpan.Zero ? timeout : TimeSpan.Zero);
+            await remove(cts.Token).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            log($"[container-start] removing the stale reaper container failed: {exception.GetType().Name}");
+        }
+    }
 
     /// <summary>The delegate form of <see cref="StartAsync{TContainer}"/>, so the loop is testable without Docker.</summary>
     public static async Task<T> StartAsync<T>(
@@ -147,6 +332,55 @@ public static class ContainerStart
 
         return transient;
     }
+
+    /// <summary>
+    /// Disposes a fixture's container. On a loaded host dockerd can stall a remove past the Docker client's
+    /// timeout; the reaper removes the container when the process ends, so a timed-out or otherwise transient
+    /// dispose is logged and swallowed, but only while the reaper runs. Any other failure surfaces.
+    /// </summary>
+    public static Task DisposeAsync<TContainer>(TContainer? container, TimeSpan? timeout = null, Action<string>? log = null)
+        where TContainer : class, IAsyncDisposable =>
+        container is null
+            ? Task.CompletedTask
+            : DisposeAsync(
+                container,
+                static c => c.DisposeAsync(),
+                static () => TestcontainersSettings.ResourceReaperEnabled && !ResourceReaper.IsUnavailable,
+                timeout,
+                log);
+
+    /// <summary>The delegate form of <see cref="DisposeAsync{TContainer}"/>, so the rules are testable without Docker.</summary>
+    public static async Task DisposeAsync<T>(
+        T container,
+        Func<T, ValueTask> dispose,
+        Func<bool> reaperRunning,
+        TimeSpan? timeout = null,
+        Action<string>? log = null)
+        where T : notnull
+    {
+        ArgumentNullException.ThrowIfNull(dispose);
+        ArgumentNullException.ThrowIfNull(reaperRunning);
+        log ??= static message => Console.Error.WriteLine(message);
+        try
+        {
+            var pending = dispose(container).AsTask();
+            // A dispose still running after the wait must not surface as an unobserved fault later.
+            _ = pending.ContinueWith(
+                static t => _ = t.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
+            await pending.WaitAsync(timeout ?? DisposeBudget).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (reaperRunning() && (exception is TimeoutException || IsTransient(exception)))
+        {
+            log($"[container-stop] {exception.GetType().Name}: {exception.Message}; "
+                + $"{container.GetType().Name} left for Ryuk");
+        }
+    }
+
+    /// <summary>Two minutes: two Docker client timeouts' worth of waiting on one remove.</summary>
+    private static readonly TimeSpan DisposeBudget = TimeSpan.FromMinutes(2);
 
     private static bool IsClientError(HttpStatusCode status) =>
         (int)status is >= 400 and < 500 && status != HttpStatusCode.RequestTimeout;
