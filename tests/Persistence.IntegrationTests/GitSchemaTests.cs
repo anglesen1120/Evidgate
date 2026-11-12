@@ -65,16 +65,17 @@ public sealed class GitSchemaTests
     }
 
     /// <summary>
-    /// The composite tenant keys refuse a parent of another organization: a sync row filed under org B naming
-    /// org A's project or binding, and a binding filed under org B naming org A's project. Each shape's valid
-    /// same-org row is inserted first as the positive control.
+    /// The composite tenant keys refuse a parent outside the row's own tenant pair: a sync row filed under org B
+    /// naming org A's project or binding, a binding filed under org B naming org A's project, and a sync row
+    /// filed under a sibling project of the same org naming its neighbour's binding. Each shape's valid
+    /// same-project row is inserted first as the positive control.
     /// </summary>
     [Fact]
     public async Task CrossTenantParent_IsRejectedByTheCompositeFk()
     {
         var database = await _fixture.CreateDatabaseAsync();
         await using var connection = await OpenOwnerAsync(database);
-        var (projectA, _, projectB) = await SeedWorldAsync(connection);
+        var (projectA, sibling, projectB) = await SeedWorldAsync(connection);
 
         var binding = await InsertBindingAsync(connection, OrgA, projectA);
         (await InsertBindingAsync(connection, OrgB, projectB)).ShouldNotBe(Guid.Empty);
@@ -83,11 +84,11 @@ public sealed class GitSchemaTests
 
         await AssertRefusedAsync(
             connection,
-            "insert into public.git_repo_binding (id, org_id, project_id, installation_id, repository_id, webhook_secret_ref) "
-            + "values (@id, @org_id, @project_id, '1', @repository_id, 'secret:probe')",
+            InsertBindingSql,
             PostgresErrorCodes.ForeignKeyViolation,
             "git_repo_binding_project_fk",
-            ("id", Guid.CreateVersion7()), ("org_id", OrgB), ("project_id", projectA), ("repository_id", NewNumber()));
+            ("id", Guid.CreateVersion7()), ("org_id", OrgB), ("project_id", projectA),
+            ("installation_id", "1"), ("repository_id", NewNumber().ToString(CultureInfo.InvariantCulture)));
 
         await AssertRefusedAsync(
             connection, InsertSyncSql, PostgresErrorCodes.ForeignKeyViolation, "catalog_sync_project_fk",
@@ -98,11 +99,17 @@ public sealed class GitSchemaTests
             connection, InsertSyncSql, PostgresErrorCodes.ForeignKeyViolation, "catalog_sync_binding_fk",
             ("id", Guid.CreateVersion7()), ("org_id", OrgB), ("project_id", projectB),
             ("binding_id", binding), ("commit_sha", NewSha()));
+
+        await AssertRefusedAsync(
+            connection, InsertSyncSql, PostgresErrorCodes.ForeignKeyViolation, "catalog_sync_binding_fk",
+            ("id", Guid.CreateVersion7()), ("org_id", OrgA), ("project_id", sibling),
+            ("binding_id", binding), ("commit_sha", NewSha()));
     }
 
     /// <summary>
-    /// Each unique key refuses its duplicate and nothing else: the binding identity is per project, the sync
-    /// identity per binding and commit, and the delivery identity is <em>global</em> — a second org's row with
+    /// Each unique key refuses its duplicate and nothing else: the binding identity is per project, a repository
+    /// is bound once across the whole installation so the tenant-less resolver finds a single binding, the sync
+    /// identity is per binding and commit, and the delivery identity is <em>global</em> — a second org's row with
     /// the same delivery id must be refused, while a fresh id is a different row.
     /// </summary>
     [Fact]
@@ -110,19 +117,41 @@ public sealed class GitSchemaTests
     {
         var database = await _fixture.CreateDatabaseAsync();
         await using var connection = await OpenOwnerAsync(database);
-        var (projectA, sibling, _) = await SeedWorldAsync(connection);
+        var (projectA, sibling, projectB) = await SeedWorldAsync(connection);
 
         var binding = await InsertBindingAsync(connection, OrgA, projectA, repositoryId: "4242");
         await AssertRefusedAsync(
-            connection,
-            "insert into public.git_repo_binding (id, org_id, project_id, installation_id, repository_id, webhook_secret_ref) "
-            + "values (@id, @org_id, @project_id, '2', '4242', 'secret:probe')",
-            PostgresErrorCodes.UniqueViolation,
+            connection, InsertBindingSql, PostgresErrorCodes.UniqueViolation,
             "git_repo_binding_repository_key",
-            ("id", Guid.CreateVersion7()), ("org_id", OrgA), ("project_id", projectA));
+            ("id", Guid.CreateVersion7()), ("org_id", OrgA), ("project_id", projectA),
+            ("installation_id", "2"), ("repository_id", "4242"));
 
         (await InsertBindingAsync(connection, OrgA, sibling, repositoryId: "4242"))
             .ShouldNotBe(Guid.Empty, "the repository key is scoped to its project");
+
+        var shared = (
+            Installation: "i" + NewNumber().ToString(CultureInfo.InvariantCulture),
+            Repository: "r" + NewNumber().ToString(CultureInfo.InvariantCulture));
+        (await InsertBindingAsync(
+                connection, OrgB, projectB, repositoryId: shared.Repository, installationId: shared.Installation))
+            .ShouldNotBe(Guid.Empty, "the first binding of an installation repository is the control");
+
+        await AssertRefusedAsync(
+            connection, InsertBindingSql, PostgresErrorCodes.UniqueViolation,
+            "git_repo_binding_global_repository_key",
+            ("id", Guid.CreateVersion7()), ("org_id", OrgA), ("project_id", projectA),
+            ("installation_id", shared.Installation), ("repository_id", shared.Repository));
+
+        await AssertRefusedAsync(
+            connection, InsertBindingSql, PostgresErrorCodes.UniqueViolation,
+            "git_repo_binding_global_repository_key",
+            ("id", Guid.CreateVersion7()), ("org_id", OrgA), ("project_id", sibling),
+            ("installation_id", shared.Installation), ("repository_id", shared.Repository));
+
+        (await InsertBindingAsync(
+                connection, OrgA, projectA, repositoryId: shared.Repository,
+                installationId: NewNumber().ToString(CultureInfo.InvariantCulture)))
+            .ShouldNotBe(Guid.Empty, "another installation's repository id is a different repository");
 
         var commit = NewSha();
         await InsertSyncAsync(connection, OrgA, projectA, binding, commit);

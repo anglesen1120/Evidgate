@@ -1,9 +1,10 @@
 -- The commit-registration tables: one repository binding per project, the webhook delivery ledger, and the
 -- sync queue. A binding names the installation, the repository and a secret-store *reference* — never the
--- secret — and `sync_state` follows installation events only. Deliveries are deduped by the global
--- (provider, delivery_id) key, because GitHub re-delivers the same id against the same repository. A sync
--- row is idempotent by (binding, commit) and moves queued -> running -> done | failed, with a failed row
--- replayed back to queued by the dead-letter route; a done row never changes again.
+-- secret — and `sync_state` follows installation events only. A repository is bound once across the whole
+-- installation, so the tenant-less resolver has exactly one binding to answer with. Deliveries are deduped
+-- by the global (provider, delivery_id) key, because GitHub re-delivers the same id against the same
+-- repository. A sync row is idempotent by (binding, commit) and moves queued -> running -> done | failed,
+-- with a failed row replayed back to queued by the dead-letter route; a done row never changes again.
 --
 -- GRANTS: `evidgate_app` holds SELECT, INSERT and a column-scoped UPDATE only. The binding's identity, the
 -- delivery's payload identity and a sync's commit are written once; the mutable columns are the ones the
@@ -31,7 +32,11 @@ create table if not exists public.git_repo_binding (
   version integer not null default 1,
   constraint git_repo_binding_pkey primary key (id),
   constraint git_repo_binding_org_id_key unique (org_id, id),
+  -- The target of the sync row's three-column FK: a sync names a binding of its own project, never a sibling's.
+  constraint git_repo_binding_project_id_key unique (org_id, project_id, id),
   constraint git_repo_binding_repository_key unique (org_id, project_id, provider, repository_id),
+  -- Global on purpose: the tenant-less resolver matches installation + repository and must find one binding.
+  constraint git_repo_binding_global_repository_key unique (provider, installation_id, repository_id),
   constraint git_repo_binding_project_fk
     foreign key (org_id, project_id) references public.project (org_id, id),
   constraint git_repo_binding_provider_check check (provider in ('github')),
@@ -86,7 +91,7 @@ create table if not exists public.catalog_sync (
   constraint catalog_sync_project_fk
     foreign key (org_id, project_id) references public.project (org_id, id),
   constraint catalog_sync_binding_fk
-    foreign key (org_id, binding_id) references public.git_repo_binding (org_id, id),
+    foreign key (org_id, project_id, binding_id) references public.git_repo_binding (org_id, project_id, id),
   constraint catalog_sync_state_check check (state in ('queued', 'running', 'done', 'failed')),
   constraint catalog_sync_commit_sha_check check (commit_sha ~ '^[0-9a-f]{7,64}$'),
   constraint catalog_sync_counts_check
@@ -94,10 +99,14 @@ create table if not exists public.catalog_sync (
   constraint catalog_sync_error_check check (error is null or char_length(error) <= 4096)
 );
 
--- The sync list (newest first) and the FK's own child side: `(org_id, project_id)` is this table's prefix,
--- and the parent-side lookups are served by `project_pkey`/`project_org_id_key` and the binding's keys.
+-- The sync list (newest first), and one index per child side: `catalog_sync_list` covers the project FK and
+-- `catalog_sync_binding` covers the (org_id, project_id, binding_id) FK, whose leading pair is not a prefix of
+-- the list. The parent-side lookups are served by `project_pkey`/`project_org_id_key` and the binding's keys.
 create index if not exists catalog_sync_list
   on public.catalog_sync (org_id, project_id, created_at desc, id);
+
+create index if not exists catalog_sync_binding
+  on public.catalog_sync (org_id, project_id, binding_id);
 
 -- WHY: the binding's repository identity is written once by the binding command, and only the four event
 -- columns move afterwards. A later rewrite of `repository_id` or `webhook_secret_ref` would silently point

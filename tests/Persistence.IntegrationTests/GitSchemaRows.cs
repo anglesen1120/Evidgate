@@ -23,6 +23,10 @@ internal static class GitSchemaRows
         "insert into public.catalog_sync (id, org_id, project_id, binding_id, commit_sha) "
         + "values (@id, @org_id, @project_id, @binding_id, @commit_sha)";
 
+    internal const string InsertBindingSql =
+        "insert into public.git_repo_binding (id, org_id, project_id, installation_id, repository_id, webhook_secret_ref) "
+        + "values (@id, @org_id, @project_id, @installation_id, @repository_id, 'secret:probe')";
+
     private static long _number = 1000;
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
@@ -79,17 +83,17 @@ internal static class GitSchemaRows
         NpgsqlConnection connection,
         Guid org,
         Guid project,
-        string? repositoryId = null)
+        string? repositoryId = null,
+        string? installationId = null)
     {
         var id = Guid.CreateVersion7();
         await ExecuteAsync(
             connection,
-            "insert into public.git_repo_binding (id, org_id, project_id, installation_id, repository_id, webhook_secret_ref) "
-            + "values (@id, @org_id, @project_id, @installation_id, @repository_id, 'secret:probe')",
+            InsertBindingSql,
             ("id", id),
             ("org_id", org),
             ("project_id", project),
-            ("installation_id", NewNumber().ToString(CultureInfo.InvariantCulture)),
+            ("installation_id", installationId ?? NewNumber().ToString(CultureInfo.InvariantCulture)),
             ("repository_id", repositoryId ?? NewNumber().ToString(CultureInfo.InvariantCulture)));
         return id;
     }
