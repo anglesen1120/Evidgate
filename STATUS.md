@@ -65,7 +65,7 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 | 09.6.1-T6 | T6.2 | #346, #364 |
 | 09.8.1-T3 | T3.2, T3.4 | #561, #637 (T3.3 landed: blocking CI e2e job and browser a11y stage; T3.2 failure triage and evidence viewer specs stay open) |
 | 10.1.1-T3 | T3.4 | #558, #815 (T3.3 landed: per-environment secret placeholder generator, fresh `up.sh` boot proven on the LAN) |
-| 10.1.2-T1 | T1.1 | #516 |
+| 10.1.2-T1 | T1.1 | none (T1 complete: remaining AC1 anchors landed #820 68358713; leaves this list at the next recount) |
 | 10.2.1-T1 | T1.4 | #12 |
 | 10.3.1-T2 | Done-when: public browser traces intake and forced-sampling cap (dev profile only; plan 10.3.1 T2 notes) | #722; withheld by S369; receiver: the web-vitals intake work in 10.2.1-T1.4 and a later 10.3.1-T2 slice |
 | 10.3.2-T1 | Done-when: T1.2 AC2/AC3 proof (retention expiry, size ceiling, Worker export) | #465, #713; withheld by S369; receiver: carried rows titled `(S348)` |
