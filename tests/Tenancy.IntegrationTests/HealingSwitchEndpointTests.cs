@@ -94,8 +94,9 @@ public sealed class HealingSwitchEndpointTests
     /// One host over a fresh database with an org, a project, and an active <c>qa_engineer</c> member (the
     /// <c>healing:triage</c> holder) seeded with the role row. <paramref name="applyEnabled"/> turns the V1
     /// clamp on through the deployment configuration (<c>EVIDGATE:Healing:Apply</c>), and
-    /// <paramref name="permittingOperator"/> replaces the fail-closed operator gate so the system row can be written
-    /// through the real operator route — both are host-composition changes, never product substitutions.
+    /// <paramref name="permittingOperator"/> replaces the fail-closed operator gate so the operator route's refusal —
+    /// the API role holds no EXECUTE on the definer — can be exercised — both are host-composition changes, never
+    /// product substitutions.
     /// </summary>
     private Task<World> StartAsync(bool applyEnabled = false, bool permittingOperator = false) =>
         _fixture.StartDedicatedAsync(async database =>
@@ -194,10 +195,6 @@ public sealed class HealingSwitchEndpointTests
             HttpMethod.Get,
             project is null ? "/v1/healing/switch" : $"/v1/healing/switch?project_id={project:D}",
             caller: caller ?? world.TriageHeaders);
-
-    /// <summary>The operator's system write: no tenant headers and no <c>Idempotency-Key</c> (D-S124-Q4).</summary>
-    private static Task<ApiAnswer> PostSystemAsync(World world, string json) =>
-        SendAsync(world, HttpMethod.Post, "/internal/operator/healing/switch", json, caller: _ => { });
 
     /// <summary>A body the raw-body helper needs to send verbatim (the JSON helper would re-serialize it).</summary>
     private static StringContent RawBody(string json) => new(json, Encoding.UTF8, "application/json");
@@ -379,19 +376,38 @@ public sealed class HealingSwitchEndpointTests
     }
 
     /// <summary>
-    /// AC1/SR-F2: the <c>system</c> row is written through the real operator route (a permitting gate stands in for
-    /// 02.8.1) and a tenant's read sees its mode — but neither the operator's <c>set_by</c> nor the incident
-    /// <c>reason</c>, which are the platform operator's own record.
+    /// The API role holds no EXECUTE on the definer, so the operator route's valid system write is a 403-class
+    /// refusal that stores neither the system row nor a platform operator audit row.
+    /// </summary>
+    [Fact]
+    public async Task The_operator_route_refuses_the_system_write_and_stores_nothing()
+    {
+        await using var world = await StartAsync(permittingOperator: true);
+        var set = await SendAsync(
+            world, HttpMethod.Post, "/internal/operator/healing/switch",
+            """{"mode":"disabled","reason":"platform incident"}""", caller: _ => { });
+        set.Status.ShouldBe(HttpStatusCode.Forbidden, set.ErrorMessage);
+        set.ErrorCode.ShouldBe("forbidden");
+
+        var stored = await _fixture.ScalarAsync<string>(
+            world.Database,
+            "select count(*) || ':' || (select count(*) from public.platform_operator_audit) from public.healing_switch");
+        stored.ShouldBe("0:0");
+    }
+
+    /// <summary>
+    /// A system row written out of band — the platform operator login holds the definer — reads to a tenant as its
+    /// mode, but never as the operator's <c>set_by</c> or the incident <c>reason</c>, which stay platform records.
     /// </summary>
     [Fact]
     public async Task The_tenant_read_redacts_the_system_row_operator_and_reason()
     {
-        await using var world = await StartAsync(permittingOperator: true);
-
-        var set = await PostSystemAsync(world, """{"mode":"disabled","reason":"platform incident"}""");
-        set.Status.ShouldBe(HttpStatusCode.OK, set.ErrorMessage);
-        set.Body.GetProperty("set_by").GetGuid().ShouldBe(OperatorId);
-        set.Body.GetProperty("reason").GetString().ShouldBe("platform incident");
+        await using var world = await StartAsync();
+        var at = new DateTimeOffset(2026, 5, 6, 7, 8, 9, TimeSpan.Zero);
+        await _fixture.ExecuteAsync(world.Database, $"""
+            insert into public.healing_switch (id, scope, org_id, project_id, mode, reason, set_by, at)
+            values (gen_random_uuid(), 'system', null, null, 'disabled', 'platform incident', '{OperatorId:D}', '{at:O}');
+            """);
 
         var read = await GetAsync(world);
         read.Status.ShouldBe(HttpStatusCode.OK, read.ErrorMessage);
@@ -402,8 +418,8 @@ public sealed class HealingSwitchEndpointTests
         system.GetProperty("mode").GetString().ShouldBe("disabled");
         system.GetProperty("set_by").ValueKind.ShouldBe(JsonValueKind.Null);
         system.GetProperty("reason").ValueKind.ShouldBe(JsonValueKind.Null);
-        system.GetProperty("at").GetDateTimeOffset().ShouldBe(set.Body.GetProperty("at").GetDateTimeOffset());
-        system.GetProperty("version").GetInt32().ShouldBe(set.Body.GetProperty("version").GetInt32());
+        system.GetProperty("at").GetDateTimeOffset().ShouldBe(at);
+        system.GetProperty("version").GetInt32().ShouldBe(1);
     }
 
     /// <summary>

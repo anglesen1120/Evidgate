@@ -16,9 +16,10 @@ namespace Architecture.Tests;
 /// scan; a real call is then pinned separately by <see cref="The_allowed_file_carries_the_definer_call"/>.
 /// <c>migrations/</c> is excluded: the file that defines the function necessarily names it.
 /// <para>
-/// Three test files legitimately name it: <c>HealingSwitchSchemaTests</c> exercises the definer against a database
-/// (grants, the tenant-context refusal, the upsert), <c>Isolation.Tests/Rls/ResolverTests</c> maps the function to the
-/// migration that defines it for the RLS resolver, and this boundary test declares the needle and the allowlist. Any
+/// Four test files legitimately name it: <c>HealingSwitchSchemaTests</c> and its
+/// <c>PlatformOperator</c> part exercise the definer against a database (grants, the tenant-context refusal, the
+/// upsert, the audit row), <c>Isolation.Tests/Rls/ResolverTests</c> maps the function to the migration that defines it
+/// for the RLS resolver, and this boundary test declares the needle and the allowlist. Any
 /// <em>other</em> test naming it fails the scan, because a test that can call the definer can also write the platform
 /// row behind the operator gate.
 /// </para>
@@ -38,6 +39,7 @@ public sealed class HealingSystemSwitchBoundaryTests
     [
         "tests/Architecture.Tests/HealingSystemSwitchBoundaryTests.cs",
         "tests/Isolation.Tests/Rls/ResolverTests.cs",
+        "tests/Tenancy.IntegrationTests/HealingSwitchSchemaTests.PlatformOperator.cs",
         "tests/Tenancy.IntegrationTests/HealingSwitchSchemaTests.cs",
     ];
 

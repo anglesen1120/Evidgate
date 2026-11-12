@@ -10,7 +10,7 @@ Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · �
 
 **Purpose.** Change the healing kill switch deliberately, at the right scope, and be able to say afterwards what the mode was, who set it and how to put it back. The switch is persisted in one table, one row per scope (`migrations/0052_healing_switch.sql:105-134`), and read at resolution time with "most restrictive wins" (`src/Modules/Evidgate.Modules.Healing.Contracts/HealingAvailability.cs:104-126`).
 
-**Audience.** A second on-call operator, or an incident commander, who did not build 08.6.3. You need a member session holding `healing:configure` for the tenant/project scopes (§4), and the platform-operator credential for the system scope — which is not usable today (§4, §9).
+**Audience.** A second on-call operator, or an incident commander, who did not build 08.6.3. You need a member session holding `healing:configure` for the tenant/project scopes (§4), and for the system scope a `psql` session as `evidgate_platform_operator`, the role whose password is `EVIDGATE_PLATFORM_OPERATOR_PASSWORD` (§5.2).
 
 **In scope.** The three scopes of `public.healing_switch` (`system`, `tenant`, `project`), the stored mode of each, the resolved posture, and how to read both back.
 
@@ -21,15 +21,15 @@ Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · �
 - A checkout of the release tag the incident is about; every cite below is a line in that tree.
 - For tenant/project flips: a member account holding `healing:configure` in the org (`src/Modules/Evidgate.Modules.Healing/Application/SetHealingSwitch.cs:76-77`, `:95-98`), and the project id when you flip a project.
 - **The read and the write are separate permissions, and no single built-in role has both.** `tenant_admin` holds `healing:configure` only (`migrations/0010_identity_permission_catalogue.sql:302`); `qa_engineer` holds `healing:triage` only (`:299`). To flip and verify in one session, use a membership carrying both — a membership may hold several roles and its permission set is the union over them (`migrations/0011_identity_membership.sql:120`, `:129`; `src/Modules/Evidgate.Modules.Identity/Infrastructure/Persistence/IdentityAccessSql.cs:41-55`) — or a custom role, since both catalogue rows are tenant-assignable and non-reserved (`:329`, `:331`).
-- For a system flip: the platform-operator credential (§4). It does not exist yet: the gate denies every caller (`src/Evidgate.Api/OperatorIngress/OperatorGate.cs:30-33`). ⚠️
+- For a system flip: a host with `psql` and network access to the environment's database, and the `evidgate_platform_operator` password (§5.2). No Evidgate host runs as that role, so there is nothing to sign in as and no route to call.
 - The org id — sent as `X-Evidgate-Org` on every member call, the read included (§5.1) — and (optionally) the project id; never paste a customer name or URL into a ticket.
 
 **Rules.**
 
-1. **Never write `public.healing_switch` by hand.** The tenant/project write path is the route (§5); the system row's only write path is the definer `evidgate.healing_switch_set_system` (`migrations/0052_healing_switch.sql:211-288`, called at `src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs:43-46`). A hand `UPDATE` skips the mode gate, the reason bound and the audit row.
+1. **Never write `public.healing_switch` by hand.** The tenant/project write path is the route (§5.1); the system row's only write path is the definer `evidgate.healing_switch_set_system` (`migrations/0052_healing_switch.sql:211-288`, rewritten by migration `0105`), which only `evidgate_platform_operator` may execute and a human reaches through `psql` (§5.2). A hand `UPDATE` skips the mode gate, the reason bound and the audit row.
 2. **Never try to set `unavailable`.** It is a derived observation; four layers refuse it (§3).
-3. **Write a reason.** It is optional in the contract (`contracts/schemas/healing-switch-set.v1.json:27-32`) and in the UI (`apps/web/src/app/features/availability/healing-switch.copy.ts:43`), but the reason is the only human context stored with the change, and the audit row keeps only the mode.
-4. **Record the before-state yourself for a system flip, and for any scope that has no row yet.** The system row has no durable audit record (A-F2, §8), so the value you overwrite cannot be recovered from an audit chain later; and a tenant/project `PUT` on a scope with no row **creates** the row, after which there is no earlier mode to restore (§7). Record the `X-Request-Id` the response **echoes** for every flip (send a safe token of your own when you want the value known in advance) — the echoed value is the only handle that ties the audit entry back to your own write (§5.1).
+3. **Write a reason.** It is optional in the contract (`contracts/schemas/healing-switch-set.v1.json:27-32`) and in the UI (`apps/web/src/app/features/availability/healing-switch.copy.ts:43`), but the reason is the only human context stored with the change, and the audit row keeps only the modes.
+4. **A first write on a scope has no earlier mode to restore.** A system flip leaves `old_mode` in `public.platform_operator_audit` — `null` when that call created the row — while a tenant/project audit entry stores only the new mode, and a `PUT` on a scope with no row **creates** it (§7). For a scope with no row, record the posture you replaced. Record the `X-Request-Id` the response **echoes** for every member flip (send a safe token of your own when you want the value known in advance) — the echoed value is the only handle that ties the audit entry back to your own write (§5.1).
 5. **One intent per attempt.** Reuse the same `Idempotency-Key` only to retry the same body; a different body under a reused key is `409 idempotency_conflict` (`contracts/openapi.yaml:6090-6094`).
 6. The switch holds configuration only: no customer data, no evidence. Never treat a mode as a statement about a run.
 
@@ -37,7 +37,7 @@ Legend as in [`../../AGENTS.md`](../../AGENTS.md): ✅ verified with a link · �
 
 | Scope | Row identity | Who writes it | Route |
 |---|---|---|---|
-| `system` | one row, `org_id` NULL (`migrations/0052_healing_switch.sql:123-125`, partial unique at `:139-141`) | platform operator, through the definer (`:211-288`) | `POST /internal/operator/healing/switch` (`src/Evidgate.Api/Endpoints/OperatorEndpoints.cs:49-54`) |
+| `system` | one row, `org_id` NULL (`migrations/0052_healing_switch.sql:123-125`, partial unique at `:139-141`) | a human in `psql` as `evidgate_platform_operator`, through the definer (`:211-288`; grant moved by `migrations/0105`) | `psql`, `select * from evidgate.healing_switch_set_system(…)` (§5.2); `POST /internal/operator/healing/switch` stays fail-closed and cannot write (§5.2) |
 | `tenant` | one row per org (`migrations/0052_healing_switch.sql:142-144`) | a member holding `healing:configure` | `PUT /v1/healing/switch` with `scope: tenant` (`src/Modules/Evidgate.Modules.Healing/Endpoints/HealingEndpoints.cs:35-37`) |
 | `project` | one row per project (`migrations/0052_healing_switch.sql:145-147`) | the same permission, project in scope | `PUT /v1/healing/switch` with `scope: project` and `project_id` |
 
@@ -92,15 +92,15 @@ How to verify it on a live deployment:
 |---|---|---|---|---|
 | `tenant`, `project` | `healing:configure` | `[Permission(Permissions.Healing.Configure)]` on the handler (`src/Modules/Evidgate.Modules.Healing/Application/SetHealingSwitch.cs:76-77`; constant `src/BuildingBlocks/SharedKernel/Authorization/Permissions.g.cs:163`) | the `tenant_admin` role, and only it among the built-in roles (`migrations/0010_identity_permission_catalogue.sql:302`); the catalogue row is tenant-assignable and non-reserved (`:329`) | ✅ shipped |
 | `tenant`, `project` (read) | `healing:triage` | `[Permission(Permissions.Healing.Triage)]` on the read (`src/Modules/Evidgate.Modules.Healing/Application/GetHealingSwitch.cs:90`; constant `Permissions.g.cs:169`) | the `qa_engineer` role, and only it among the built-in roles (`migrations/0010_identity_permission_catalogue.sql:299`); tenant-assignable, non-reserved (`:331`) | ✅ shipped |
-| `system` | `platform_operator` + audited support grant | `RequireOperatorFilter` on the operator group (`src/Evidgate.Api/Endpoints/OperatorEndpoints.cs:49-54`; contract `plans/00-overview.md:333`) | the platform operator only | ⚠️ the default gate denies every caller (`src/Evidgate.Api/OperatorIngress/OperatorGate.cs:30-33`); the real operator identity is 02.8.1-T1 and is open |
-| `system` (database) | `EXECUTE` on the definer, `evidgate_app` alone; `evidgate_operator` and `evidgate_worker_sched` are revoked | `migrations/0052_healing_switch.sql:290-295` | the API process | ✅ shipped |
+| `system` | `platform_operator` + audited support grant, no route that works on this base | `RequireOperatorFilter` on the operator group (`src/Evidgate.Api/Endpoints/OperatorEndpoints.cs:49-54`; contract `plans/00-overview.md:333`) | the platform operator only | ⚠️ the default gate denies every caller (`src/Evidgate.Api/OperatorIngress/OperatorGate.cs:30-33`) and the app role lost the definer's `EXECUTE`; the flip is `psql` (§5.2) until 02.8.1 |
+| `system` (database) | `EXECUTE` on the definer, `evidgate_platform_operator` alone; `PUBLIC`, `evidgate_app`, `evidgate_operator`, `evidgate_worker` and `evidgate_worker_sched` are revoked | `migrations/0052_healing_switch.sql:290-295`; grant moved by `migrations/0105` | the person at `psql`, never the Api process | ✅ shipped with 0105 |
 
 Two boundaries worth stating explicitly:
 
 - The definer **refuses to run inside a tenant transaction** (23514) even though the caller holds `EXECUTE`, so no tenant request can write the platform row through it (`migrations/0052_healing_switch.sql:228-240`, `:27-38`).
-- `evidgate_operator` holds `SELECT` on the table but no policy, so an operator database login reads **zero rows** (`migrations/0052_healing_switch.sql:196-199`). Do not plan a system-scope read around an operator SQL session.
+- `evidgate_operator` holds `SELECT` on `public.healing_switch` and on `public.platform_operator_audit` but has no policy on either, so an operator database login reads **zero rows** (`migrations/0052_healing_switch.sql:196-199`; `migrations/0105_platform_operator_role.sql:214-227`). Do not plan a system-scope read around an operator SQL session: the owner's `FORCE RLS` policies are the reader path (§5.2). `evidgate_platform_operator` cannot read them either — migration `0105` gives it schema usage and the definer's `EXECUTE`, no table privilege — and `evidgate_app` holds no grant on the audit table.
 
-How a flip is attributed: the tenant/project write requires an authenticated member principal and uses its user id as `set_by` (`src/Modules/Evidgate.Modules.Healing/Application/SetHealingSwitch.cs:95-98`, `:151-152`); the system write requires an authenticated operator principal with a user id, 401/403 otherwise (`src/Evidgate.Api/Endpoints/OperatorEndpoints.cs:174-187`).
+How a flip is attributed: the tenant/project write requires an authenticated member principal and uses its user id as `set_by` (`src/Modules/Evidgate.Modules.Healing/Application/SetHealingSwitch.cs:95-98`, `:151-152`); the system write passes the operator's user id as the definer's `p_set_by`, which becomes both the row's `set_by` and the audit row's `actor` (§5.2).
 
 ## 5. How to flip
 
@@ -143,17 +143,40 @@ A project flip is the same call — same cookie jar, `X-Evidgate-Org`, `X-XSRF-T
 
 Answers: 200 with the stored row (`HealingSwitchView`: scope, project, mode, reason, set_by, at, version — `src/Modules/Evidgate.Modules.Healing/Application/GetHealingSwitch.cs:23-30`); 403 `forbidden_scope` for `scope: system`, refused before any lookup (`src/Modules/Evidgate.Modules.Healing/Application/SetHealingSwitch.cs:107-114`); 422 `project_id: not_allowed` / `required` (`:116-131`); 403 `project_scope_mismatch` for a project outside the credential or request scope (`src/Modules/Evidgate.Modules.Healing/Application/HealingSwitches.cs:136-149`); 404 for an unknown, soft-deleted or other-tenant project (`src/Modules/Evidgate.Modules.Healing/Application/SetHealingSwitch.cs:138-141`); 409 `idempotency_conflict`; 413 `payload_too_large`.
 
-### 5.2 The system route
+### 5.2 The system flip: `psql` as `evidgate_platform_operator`
 
-`POST /internal/operator/healing/switch` (`src/Evidgate.Api/Endpoints/OperatorEndpoints.cs:49-54`, handler `:170-210`), excluded from the served OpenAPI document (`:38-42`).
+The platform row has exactly one write path: the definer `evidgate.healing_switch_set_system(p_mode text, p_reason text, p_set_by uuid)` (`migrations/0052_healing_switch.sql:211-288`, rewritten by `migrations/0105_platform_operator_role.sql`, which also inserts the audit row). Migration `0105` revokes its `EXECUTE` from `PUBLIC`, `evidgate_app`, `evidgate_operator`, `evidgate_worker` and `evidgate_worker_sched`, and grants it to `evidgate_platform_operator` alone — a role no Evidgate host runs as. A system flip is therefore a human `psql` session, not an HTTP call.
 
-- Body: `{"mode": "...", "reason": "..."}` — `set_by` is never in the body, it is the authenticated operator's own id (`src/Evidgate.Api/Endpoints/OperatorEndpoints.cs:220-226`).
-- **No `Idempotency-Key`** and therefore no idempotency semantics on this route; a retry writes the same mode again and bumps `version` (`:164-168`). **No `If-Match`.**
-- The same mode gate applies, so `unavailable` and any other token is 422 `invalid_switch_mode`, and `enabled` is 422 `mode_not_available` while `Healing:Apply` is off (`src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs:59-62`).
-- The write calls the definer on a connection outside any tenant transaction (`:64-71`); the definer validates again and returns the stored row (`migrations/0052_healing_switch.sql:242-286`).
-- The change is recorded by log event `8603` (mode, operator, version — never the reason) and by the row itself (`src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs:87-95`, `:21-29`).
+**Step 1 — record the current row and the audit tail.** Both reads need a role that can actually see the rows. `evidgate_platform_operator` holds no table privilege at all (executing the definer is its whole reach); `evidgate_operator` holds `SELECT` on both tables but, with `FORCE` RLS and no operator policy, reads **zero rows**; `evidgate_app` has no grant on the audit table. Read them as `evidgate_owner`, the migrator credential, whose `FORCE RLS` policies cover both tables (`migrations/0052_healing_switch.sql:181-183`; `migrations/0105_platform_operator_role.sql:204-208`).
 
-Today every caller of this route is denied by the fail-closed gate (`src/Evidgate.Api/OperatorIngress/OperatorGate.cs:30-33`), so a human cannot perform a system flip on this base. ⚠️
+```bash
+PGPASSWORD="$EVIDGATE_OWNER_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U evidgate_owner -d "$DB_NAME" \
+  -c "select mode, set_by, at, version from public.healing_switch where scope = 'system'" \
+  -c "select actor, action, old_mode, new_mode, version, created_at from public.platform_operator_audit order by created_at desc limit 5"
+```
+
+**Step 2 — call the definer as the platform operator.** The password goes into `PGPASSWORD` only: never on the command line, never inside `psql -c` text, never echoed.
+
+```bash
+# The same value as EVIDGATE_PLATFORM_OPERATOR_PASSWORD in the environment's
+# secret delivery: read it into the environment, do not paste it into history.
+read -rsp 'evidgate_platform_operator password: ' PGPASSWORD; echo
+export PGPASSWORD
+psql -h "$DB_HOST" -p "$DB_PORT" -U evidgate_platform_operator -d "$DB_NAME" -v ON_ERROR_STOP=1 \
+  -c "select * from evidgate.healing_switch_set_system('disabled', 'INC-… healing off while the model endpoint is degraded', '$OPERATOR_ID')"
+unset PGPASSWORD
+```
+
+- `$OPERATOR_ID` is the flipping person's `user` id as a uuid, asserted by the caller and not verified by the database (the shared login proves only that someone held the platform operator password; per-person attribution waits for 02.8.1); it becomes the audit row's `actor` and the switch row's `set_by`. Never a tenant id.
+- `$DB_HOST`, `$DB_PORT`, `$DB_NAME` are the environment's database coordinates, the bootstrap's `EVIDGATE_DB_*` values.
+- Modes are `enabled`, `shadow`, `disabled`. `unavailable` and any other token raise `22023 invalid_parameter_value`, as does a reason longer than 2000 characters. The function refuses a call made inside a tenant transaction (`23514`); a plain `psql` session is not in one.
+- It returns one row — `mode`, `reason`, `set_by`, `at`, `version` — with the bumped `version`. The reason stays on the switch row and is deliberately not copied into the audit row, because it can name a customer.
+
+**Step 3 — read the audit row back.** Run step 1's second select again: the newest `healing.switch.system_set` row is this call, with `actor` = `$OPERATOR_ID`, `old_mode` = the mode you recorded (or `null` when this call created the row), `new_mode` = the mode you set, and the same `version` the function returned.
+
+The V1 clamp is Api-side, not in the database: the handler refuses `enabled` while `Healing:Apply` is off (`EVIDGATE__HEALING__APPLY`, `src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs:59-62`), while the definer accepts `enabled`. Setting it here changes stored configuration only — with apply off nothing acts on it, so never report healing as switched on.
+
+**Why not the Api route.** `POST /internal/operator/healing/switch` still exists, and it stays fail-closed on this base: every caller is denied by `DenyAllOperatorGate` (`src/Evidgate.Api/OperatorIngress/OperatorGate.cs:30-33`), because the real `platform_operator` identity is 02.8.1's, and even with that gate opened the handler runs as `evidgate_app`, which migration `0105` no longer lets execute the definer — the call answers a permission error instead of a flip. The route cannot be used to set the system row until 02.8.1 gives the operator ingress its own credential path.
 
 ### 5.3 The web UI
 
@@ -175,8 +198,8 @@ Record the before-state first, with a session holding `healing:triage` (the read
 
 Then, in the order of §2.2:
 
-1. **System.** `POST /internal/operator/healing/switch` with the new mode and a reason (§5.2). ⚠️ blocked today by the operator gate (§4); until 02.8.1-T1 lands this step can only be exercised by a test host that substitutes the gate.
-   Verify: `GET /v1/healing/switch` → `system.mode` is the new value, `system.version` increased (`migrations/0052_healing_switch.sql:149-154`), and `resolved` equals the most restrictive mode across the rows that carry one.
+1. **System.** `psql` as `evidgate_platform_operator`, calling `evidgate.healing_switch_set_system(...)` with the new mode and a reason (§5.2).
+   Verify: the function's returned row shows the new `mode` with the bumped `version` (`migrations/0052_healing_switch.sql:149-154`), and step 1's audit query shows the matching `healing.switch.system_set` row with `old_mode` = the mode you recorded, `new_mode` = the new mode and the same `version`. The member `GET /v1/healing/switch` then reports `system.mode` as the new value and recomputes `resolved` as the most restrictive mode across the rows that carry one.
 2. **Tenant.** `PUT /v1/healing/switch` with `scope: tenant` (§5.1).
    Verify: `GET /v1/healing/switch` → `tenant.mode` is the new value, `version` increased, `resolved` recomputed. A tenant mode weaker than the system row changes `tenant.mode` but not `resolved` — that is the resolver working, not a failed write.
 3. **Project.** `PUT /v1/healing/switch` with `scope: project` and the project id (§5.1).
@@ -199,7 +222,7 @@ Steps:
 1. **Find the previous mode.**
    - Tenant/project: the audit chain, which needs `audit:read` (`contracts/openapi.yaml:4644`). `GET /v1/orgs/{o}/audit?object_type=healing_switch&action=healing.switch.set` (`:4635-4654`) returns the entries newest first (`src/Modules/Evidgate.Modules.Identity.Contracts/AuditDtos.cs:36-39`), each with `metadata.mode` — the mode that entry set — plus `id`, `object_id`, `actor_id`, `request_id` and `created_at` (`:19-34`). The page mixes every `healing_switch` object of the org (the tenant row and each project row) and the filter set has **no `object_id` parameter** (`:4646-4654`), so match it yourself on the request id: walk the pages with `cursor` (the response's `next_cursor`) and `limit` 1–200 (`contracts/openapi.yaml:8748-8756`, `:8787-8795`) and keep the entry whose `request_id` equals the `X-Request-Id` the response echoed for the flip (§5.1; an inbound id the middleware will not accept is replaced, `src/Evidgate.Api/Middleware/RequestIdMiddleware.cs:37-45`). **That entry is how you obtain the row id**: its `object_id` is the switch row id the handler passed as the audit object (`src/Modules/Evidgate.Modules.Healing/Application/SetHealingSwitch.cs:159-165`). Nothing else hands you that id — neither the `PUT` answer nor `GET` returns it (`HealingSwitchView` is scope, project, mode, reason, set_by, at and version only — `src/Modules/Evidgate.Modules.Healing/Application/GetHealingSwitch.cs:23-30`; the `GET` answer holds three of those views and no id — `:71-76`) — and it is the value the next older entry's `object_id` must equal. If a flip was made without a chosen `X-Request-Id`, fall back to the newest entry whose `actor_id` is yours and whose `created_at` matches the flip you recorded, say so in the record, and treat the preceding-mode conclusion as `[OPEN]` when more than one entry matches. The **next older entry with that same `object_id`** carries the mode to restore.
    - **First write on a scope leaves no previous stored mode.** When the `PUT` created the row (`insert … on conflict … do update` — `src/Modules/Evidgate.Modules.Healing/Application/HealingSwitches.cs:196-209`) its audit entry has no predecessor for that `object_id`; when the entry you matched carries your own `X-Request-Id` that absence does establish the creation, and when the correlation was ambiguous (no chosen request id) it does **not** — record that as `[OPEN]` instead of inferring it. "No row at this scope" is also not the same as the posture `shadow`: the resolution falls back to `shadow` only when **no** scope carries a row (`src/Modules/Evidgate.Modules.Healing.Contracts/HealingAvailability.cs:104-126`), so the posture before the flip is whatever `resolved` the §6 `GET` returned — keep that value, and if it is missing record the posture as unknown `[OPEN]`. That posture is not re-submittable either: `mode` accepts only the three stored values (`migrations/0052_healing_switch.sql:122`) and the row cannot be removed (the app role holds no `DELETE` — `migrations/0052_healing_switch.sql:191`; no route removes one — §5, §11), so there is no literal undo. The **conservative** recovery is a flip of that scope to `disabled`, the strictest settable mode (`migrations/0052_healing_switch.sql:122`, `src/Modules/Evidgate.Modules.Healing.Contracts/HealingAvailability.cs:104-139`) — chosen, not forced, since `shadow` is equally accepted and `enabled` answers `mode_not_available` while `Healing:Apply` is off (§9). The record must state that the scope held no row before and what `resolved` was then. An approved procedure for this case is `[OPEN]`.
-   - System: ⚠️ **there is no durable record** (A-F2, §8). Use the `system.mode` you recorded before the change (§6), or the operator host's log event `8603` (`src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs:87-95`). Do not claim an audit trail for a system flip. `[OPEN]`
+   - System: the durable record is `public.platform_operator_audit` (migration `0105`), read with the owner credential of §5.2 step 1: the newest `healing.switch.system_set` row carries `actor`, `old_mode`, `new_mode`, `version` and `created_at`. `old_mode` is `null` when the call created the system row, so its predecessor is the no-row default `shadow` (§2.1) unless a narrower scope was stricter. The log event `8603` on the Api host is an operational trace of the old route, not the record.
 2. **Re-flip that scope to the previous mode**, with a reason naming the incident and the rollback (§5.1 / §5.2). The reason is optional in the contract and the UI but expected in practice (§1 rule 3). This is a new change and takes a **new** `Idempotency-Key` for a tenant/project body; reusing the delivery key of the original would be a different body under a used key, which is `409 idempotency_conflict` (`contracts/openapi.yaml:6090-6094`).
 3. **Verify the resolved posture**, not only the row: `GET /v1/healing/switch?project_id=…` and compare `resolved` with the value you recorded before the first flip (§6). Rolling back the innermost row while an ancestor is still stricter will not move `resolved` — that is expected, and the reason the rollback walks the same scopes in the same order (§2.2).
 4. **Check the version moved.** Each write bumps the row's `version` through the shared trigger (`migrations/0052_healing_switch.sql:149-154`); an unchanged `version` in the 200 body means the row you read is not the row you just wrote.
@@ -219,15 +242,26 @@ Steps:
 
 The **old** mode is not stored in the new entry; it is the `metadata.mode` of the preceding entry for the same `object_id`. The outbox event `healing.switch_changed` carries ids and the mode only, never the reason (`src/Modules/Evidgate.Modules.Healing/Application/SetHealingSwitch.cs:223-227`).
 
-**A system flip is not audited in `audit_log`.** That table's `org_id` is `NOT NULL` and its hash chain is per org (`migrations/0015_identity_audit_log.sql:27`, `:39-45`), and the system row belongs to no org, so there is no chain to append to; the writer says so and stands in a log line instead (`src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs:21-29`, `:87-95`). `migrations/0088_platform_sweep_audit.sql` is the platform **sweep** audit table — it covers owner sweeps, not the switch (`:1-20`, table at `:54-72`), so it does not close this gap.
+**A system flip is audited in the platform table, not in `audit_log`.** `audit_log`'s `org_id` is `NOT NULL` and its hash chain is per org (`migrations/0015_identity_audit_log.sql:27`, `:39-45`), and the system row belongs to no org, so there is no chain it could join. Migration `0105` closes that gap for the switch: `evidgate.healing_switch_set_system` inserts one row into `public.platform_operator_audit` inside the same call and transaction:
 
-The gap is carried as row **"A-F2 healing_switch_set_system has no durable audit record (S301)"** (`docs/status-carried.md:872`, detail `docs/security/resolver-review.md:92-97`: the only record is the mutable row plus an information log line; P2; receiver is the "Platform security event table (D-S137-OWNER)" queue row). `[OPEN]`
+| Column | Value |
+|---|---|
+| `actor` | the `p_set_by` uuid passed to the definer — the operator's `user` id |
+| `action` | `healing.switch.system_set` |
+| `old_mode` | the mode the row held before the call, `null` when the call created it |
+| `new_mode` | the mode just stored |
+| `version` | the switch row's version after the call |
+| `created_at` | when the call ran |
+
+The reason text is deliberately not stored there, because it can name a customer. The table is modelled on `public.platform_sweep_audit` (`migrations/0088_platform_sweep_audit.sql:1-20`, table at `:54-72`): no `org_id`, FORCE RLS with owner-only policies, an append-only guard trigger that raises `23514` on `UPDATE`/`DELETE`, `SELECT` granted to `evidgate_operator` with no policy (grant-gated, zero rows until 02.8.1's operator scope), the same `SELECT` not granted to `evidgate_app`, and a `platform` entry in `contracts/rls-exceptions.txt`. The rows are therefore read through the owner credential (§5.2 step 1).
+
+This closes the switch half of carried row **"A-F2 healing_switch_set_system has no durable audit record (S301)"** (`docs/status-carried.md:872`, detail `docs/security/resolver-review.md:92-97`). The platform security-event table for other org-less events (D-S137-OWNER) remains a separate receiver; the status owner moves the carried row.
 
 ## 9. Known gaps
 
-- **The system flip has no durable audit record.** A-F2, as above (`docs/security/resolver-review.md:92-97`). `[OPEN]`
-- **The system route admits nobody today.** The default operator gate denies every caller; the real credential is 02.8.1-T1 (`src/Evidgate.Api/OperatorIngress/OperatorGate.cs:30-33`, `plans/00-overview.md:333`). A system-scope drill cannot be executed by a human until it lands. `[OPEN]`
-- **`enabled` cannot be set on this base.** `Healing:Apply` defaults to false and no infra configuration file sets it (`src/Modules/Evidgate.Modules.Healing/Application/HealingSwitches.cs:16-29`; environment spelling `EVIDGATE__HEALING__APPLY`, `:16-19`), so the `enabled` leg of AC6's `enabled → shadow → disabled` answers 422 `mode_not_available` (`:74-80`). That is the V1 posture ruling T33 records: only `shadow` and `disabled` are settable until the V2 apply path is switched on (`plans/features/README.md:88`). ⚠️ The drill's first leg is therefore blocked by configuration, not by the switch. `[OPEN]`
+- **The system flip now leaves a durable audit row.** A-F2's switch half is closed by migration `0105` (§8). ✅
+- **The operator route cannot flip the switch, and cannot be made to.** The default operator gate denies every caller, and the app role lost the definer's `EXECUTE`; the real credential path is 02.8.1-T1 (`src/Evidgate.Api/OperatorIngress/OperatorGate.cs:30-33`, `plans/00-overview.md:333`). Use §5.2 until it lands. `[OPEN]`
+- **`enabled` is not settable through the Api on this base.** `Healing:Apply` defaults to false and no infra configuration file sets it (`src/Modules/Evidgate.Modules.Healing/Application/HealingSwitches.cs:16-29`; environment spelling `EVIDGATE__HEALING__APPLY`, `:16-19`), so the `enabled` leg of AC6's `enabled → shadow → disabled` answers 422 `mode_not_available` through the route (`:74-80`). That is the V1 posture ruling T33 records: only `shadow` and `disabled` are the settable modes until the V2 apply path is switched on (`plans/features/README.md:88`). The definer accepts `enabled` and §5.2 will store it, but nothing acts on it while apply is off — do not run the drill's `enabled` leg through `psql` and call it verified. `[OPEN]`
 - **Nothing consumes the resolved mode yet.** The resolver has no caller outside its module (§6), so a flip changes stored configuration and the `GET` answer, not any behaviour. The apply path is V2. `[OPEN]`
 - **`unavailable` is never produced.** The health probes and `dependency_health` values are 08.6.3-T2's; until then both fields are null (`src/Modules/Evidgate.Modules.Healing/Application/GetHealingSwitch.cs:54-60`). The runbook can prove `unavailable` is not settable; it cannot yet observe the platform producing it. `[OPEN]`
 - **The healing-false-positive alert does not exist, so this file is not linked from it.** T5.1's done-when is "runbook committed and linked from the healing-false-positive alert" (`plans/features/10-operations/10.7.1-operable-by-a-second-person.md:125`); the rules are 10.3.1-T5.1 under `infra/alerts/<env>/` and the coverage lint is `scripts/check-alerts.sh` (`plans/features/10-operations/10.3.1-telemetry-and-alerting.md:135-136`). On this base `infra/` holds no alert rule and `scripts/` holds no `check-alerts.sh` (source search), so the link target for that rule is **this file**, to be wired when 10.3.1-T5.1 lands. `[OPEN]`
@@ -256,11 +290,13 @@ Every route, permission, table, column and UI path this runbook uses, and where 
 | `healing_switch_system_key`, `_tenant_key`, `_project_key` | partial unique indexes | `migrations/0052_healing_switch.sql:139-147` |
 | `healing_switch_app_read` (`org_id is null or org_id = current_org_id()`), `healing_switch_app_write`, `healing_switch_owner_backfill` | RLS policies | `migrations/0052_healing_switch.sql:162-183` |
 | `healing_switch` grants: app `select` + column-scoped `insert`/`update`, no `delete`; operator `select` (no policy); worker_sched none | grants | `migrations/0052_healing_switch.sql:191-200` |
-| `evidgate.healing_switch_set_system(text, text, uuid)` — security definer, `search_path = ''`, tenant-transaction refusal, mode validation, reason bound | function | `migrations/0052_healing_switch.sql:211-288` (refusal `:237-240`, mode `:244-247`, reason `:251-254`) |
-| definer ACL: PUBLIC revoked, `EXECUTE` to `evidgate_app` alone | grants | `migrations/0052_healing_switch.sql:290-295` |
+| `evidgate.healing_switch_set_system(text, text, uuid)` — security definer, `search_path = ''`, tenant-transaction refusal, mode validation, reason bound, audit insert | function | `migrations/0052_healing_switch.sql:211-288` (refusal `:237-240`, mode `:244-247`, reason `:251-254`); rewritten with the audit insert by `migrations/0105` |
+| definer ACL: `PUBLIC`, `evidgate_app`, `evidgate_operator`, `evidgate_worker` and `evidgate_worker_sched` revoked; `EXECUTE` to `evidgate_platform_operator` alone | grants | `migrations/0052_healing_switch.sql:290-295`; moved by `migrations/0105` |
+| `public.platform_operator_audit` (`actor`, `action`, `old_mode`, `new_mode`, `version`, `created_at`; append-only; no `org_id`; owner insert/read policies, operator `SELECT` grant with no policy, app/worker/sched/platform_operator revoked) | table | `migrations/0105_platform_operator_role.sql`; model `migrations/0088_platform_sweep_audit.sql:54-72`; `contracts/rls-exceptions.txt` (`platform`) |
+| `evidgate_platform_operator` (psql-only login; schema usage + the definer's `EXECUTE`) | role | `migrations/0105`; bootstrap `scripts/env/bootstrap-db.sh` |
 | `PUT /v1/healing/switch` | route | `src/Modules/Evidgate.Modules.Healing/Endpoints/HealingEndpoints.cs:35-37`; contract `contracts/openapi.yaml:6086-6143` |
 | `GET /v1/healing/switch` | route | `src/Modules/Evidgate.Modules.Healing/Endpoints/HealingEndpoints.cs:31-33`; contract `contracts/openapi.yaml:6046-6085` |
-| `POST /internal/operator/healing/switch` | route | `src/Evidgate.Api/Endpoints/OperatorEndpoints.cs:49-54` (handler `:170-210`) |
+| `POST /internal/operator/healing/switch` (fail-closed; cannot write after `0105`) | route | `src/Evidgate.Api/Endpoints/OperatorEndpoints.cs:49-54` (handler `:170-210`); gate `src/Evidgate.Api/OperatorIngress/OperatorGate.cs:30-33` |
 | `healing:configure` | permission (route) + catalogue row | `src/BuildingBlocks/SharedKernel/Authorization/Permissions.g.cs:163`; `migrations/0010_identity_permission_catalogue.sql:329`; held by `tenant_admin` `:302` |
 | `healing:triage` | permission (route) + catalogue row | `src/BuildingBlocks/SharedKernel/Authorization/Permissions.g.cs:169`; `migrations/0010_identity_permission_catalogue.sql:331`; held by `qa_engineer` `:299` |
 | `membership_role` (a membership may hold several roles) | table + unique | `migrations/0011_identity_membership.sql:120`, `:129` |
@@ -281,14 +317,14 @@ Every route, permission, table, column and UI path this runbook uses, and where 
 | `HealingSwitchStore.ReadAsync` / `UpsertAsync` | data path | `src/Modules/Evidgate.Modules.Healing/Application/HealingSwitches.cs:253-286` |
 | `SetHealingSwitchCommandHandler` (`system` refused, scope shape, project checks, audit, outbox) | handler | `src/Modules/Evidgate.Modules.Healing/Application/SetHealingSwitch.cs:76-201` |
 | `healing.switch_changed` (task type, aggregate `healing_switch`, per-version key, no handler) | outbox event | `src/Modules/Evidgate.Modules.Healing/Application/SetHealingSwitch.cs:223-269` |
-| `HealingSystemSwitchWriter` (definer call, log 8603, no audit/outbox) | writer | `src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs:34-104` |
+| `HealingSystemSwitchWriter` (definer call as the app role, log 8603) — unreachable for a write after `0105` (no `EXECUTE`) | writer | `src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs:34-104` |
 | `HealingOptions` / `Healing:Apply` (`EVIDGATE__HEALING__APPLY`, default false) | configuration | `src/Modules/Evidgate.Modules.Healing/Application/HealingSwitches.cs:15-29` |
 | `public.audit_log` (per-org chain, `org_id NOT NULL`) | table | `migrations/0015_identity_audit_log.sql:25-45` |
 | `GET /v1/orgs/{o}/audit` (`audit:read`; `object_type`, `action`, `from`, `to` filters, **no `object_id` filter**) | route | `contracts/openapi.yaml:4635-4654`; parameters `:8655-8679` |
 | `AuditEntryDto` (`metadata`, `object_id`, `request_id`, `created_at`, hashes) | wire shape | `src/Modules/Evidgate.Modules.Identity.Contracts/AuditDtos.cs:19-34` |
 | `mode` on the audit metadata allowlist | allowlist | `src/BuildingBlocks/Persistence/Audit/AuditMetadata.cs:52` |
 | `public.platform_sweep_audit` (sweep audit, not the switch) | table + function | `migrations/0088_platform_sweep_audit.sql:54-72` (table), `:138-159` (`evidgate.record_sweep_audit`) |
-| A-F2 carried row | status record | `docs/status-carried.md:872`; detail `docs/security/resolver-review.md:92-97` |
+| A-F2 carried row (switch half closed by `migrations/0105`) | status record | `docs/status-carried.md:872`; detail `docs/security/resolver-review.md:92-97` |
 | T33 — only `enabled`, `shadow` and `disabled` are settable; `unavailable` is derived; V1 allows `shadow`/`disabled` | ruling | `plans/features/README.md:88` |
 | DECISIONS §5.9 item 9 — switches at every scope before apply; failure leaves tests and gates running | locked rule | `DECISIONS.md:112` |
 | 00 §8.7 — healing availability vocabulary and `system → tenant → project` resolution | contract | `plans/00-overview.md:303` |

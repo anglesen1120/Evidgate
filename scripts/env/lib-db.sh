@@ -12,7 +12,7 @@
 # The caller sets EVG_DB_LABEL (the error prefix) and, for the verifier,
 # EVG_DB_ROOT (the repository root holding contracts/rls-exceptions.txt).
 
-# The five role passwords. Exported only for the action that needs them, so a
+# The six role passwords. Exported only for the action that needs them, so a
 # docker exec -e NAME copies a value instead of a command-line argument.
 EVG_DB_PASSWORD_VARS=(
   EVIDGATE_OWNER_PASSWORD
@@ -20,6 +20,7 @@ EVG_DB_PASSWORD_VARS=(
   EVIDGATE_OPERATOR_PASSWORD
   EVIDGATE_WORKER_SCHED_PASSWORD
   EVIDGATE_WORKER_PASSWORD
+  EVIDGATE_PLATFORM_OPERATOR_PASSWORD
 )
 
 evg_db_die() {
@@ -119,11 +120,11 @@ select format('create database %I owner evidgate_owner', :'db_name')
 SQL
 }
 
-# Step 3: LOGIN + a password for the four roles migration 0001 and 0104 created,
-# as superuser and never in a migration (00 §5.7 S3).
+# Step 3: LOGIN + a password for the five roles migrations 0001, 0104 and 0105
+# created, as superuser and never in a migration (00 §5.7 S3).
 evg_db_grant_application_logins() {
   evg_db_psql postgres <<'SQL'
--- Same reason as the owner step: the four ALTERs carry passwords.
+-- Same reason as the owner step: the five ALTERs carry passwords.
 set log_statement = 'none';
 set log_min_error_statement = 'panic';
 set log_min_duration_statement = -1;
@@ -135,11 +136,13 @@ set log_transaction_sample_rate = 0;
 \getenv operator_password EVIDGATE_OPERATOR_PASSWORD
 \getenv worker_sched_password EVIDGATE_WORKER_SCHED_PASSWORD
 \getenv worker_password EVIDGATE_WORKER_PASSWORD
+\getenv platform_operator_password EVIDGATE_PLATFORM_OPERATOR_PASSWORD
 
 alter role evidgate_app login password :'app_password';
 alter role evidgate_operator login password :'operator_password';
 alter role evidgate_worker_sched login password :'worker_sched_password';
 alter role evidgate_worker login password :'worker_password';
+alter role evidgate_platform_operator login password :'platform_operator_password';
 SQL
 }
 
@@ -154,7 +157,8 @@ declare
 begin
   select string_agg(candidate, ', ' order by candidate)
     into missing
-    from unnest(array['evidgate_app', 'evidgate_operator', 'evidgate_worker_sched', 'evidgate_worker']) as candidate
+    from unnest(array['evidgate_app', 'evidgate_operator', 'evidgate_worker_sched', 'evidgate_worker',
+                      'evidgate_platform_operator']) as candidate
    where not exists (select 1 from pg_catalog.pg_roles where rolname = candidate);
 
   if missing is not null then

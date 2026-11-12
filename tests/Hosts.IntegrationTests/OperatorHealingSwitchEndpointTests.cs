@@ -7,16 +7,17 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using Shouldly;
 using Xunit;
 
 namespace Hosts.IntegrationTests;
 
 /// <summary>
-/// 08.6.3-T1 (coordinator decision, ruling T72): the platform-wide healing switch lives only on the operator ingress.
-/// The registered gate denies a request that carries no operator credential (401 <c>unauthenticated</c>), a permitted
-/// operator sets the one <c>system</c> row through migration 0052's definer with its own user id as <c>set_by</c>, and
-/// the V1 clamp holds there too — <c>enabled</c> is 422 <c>mode_not_available</c> while <c>Healing:Apply</c> is off.
+/// The platform-wide healing switch route on the operator ingress. The registered gate denies a request that carries
+/// no operator credential (401 <c>unauthenticated</c>); a permitted operator reaches the handler, whose definer call
+/// the database refuses because the API role holds no EXECUTE on it — 403 <c>forbidden</c>, never a 500 and never a
+/// stored row. The V1 clamp still answers 422 before any connection is opened.
 /// </summary>
 /// <remarks>
 /// The gate is a test double, exactly as the dead-letter suite does it: the real <c>platform_operator</c> check lands
@@ -89,59 +90,67 @@ public sealed class OperatorHealingSwitchEndpointTests
     }
 
     /// <summary>
-    /// AC1: a permitted operator sets the system row and a second call bumps its version; AC2/AC7: the vocabulary
-    /// and the clamp are the same gate the tenant route uses, and an unattributable principal is refused.
+    /// The API role holds no EXECUTE on the definer, so a permitted operator's valid request is a 403-class refusal
+    /// and writes nothing at all: no system row and no platform operator audit row.
     /// </summary>
     [Fact]
-    public async Task The_permitted_operator_sets_the_system_switch_through_the_definer()
+    public async Task The_permitted_operator_is_refused_and_writes_no_row()
     {
         await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        var admin = _postgres.AdminConnectionString(connectionString.Name);
 
         await using var factory = new EvidgateApiFactory(
             connectionString,
             configureServices: services => services.AddSingleton<IOperatorGate>(new PermitGate(OperatorId)));
         using var client = factory.CreateClient();
 
-        using var first = await client.PostAsJsonAsync(
+        using var response = await client.PostAsJsonAsync(
             "/internal/operator/healing/switch", new { mode = "shadow", reason = "V1 posture" }, Token);
-        first.StatusCode.ShouldBe(HttpStatusCode.OK);
 
-        using var firstBody = await JsonDocument.ParseAsync(await first.Content.ReadAsStreamAsync(Token), cancellationToken: Token);
-        var root = firstBody.RootElement;
-        root.GetProperty("scope").GetString().ShouldBe("system");
-        root.GetProperty("mode").GetString().ShouldBe("shadow");
-        root.GetProperty("project_id").ValueKind.ShouldBe(JsonValueKind.Null);
-        root.GetProperty("set_by").GetGuid().ShouldBe(OperatorId);
-        root.GetProperty("reason").GetString().ShouldBe("V1 posture");
-        var firstVersion = root.GetProperty("version").GetInt32();
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await ErrorCodeAsync(response)).ShouldBe("forbidden");
+        await AssertNothingStoredAsync(admin);
+    }
 
-        using var second = await client.PostAsJsonAsync(
-            "/internal/operator/healing/switch", new { mode = "disabled" }, Token);
-        second.StatusCode.ShouldBe(HttpStatusCode.OK);
-        using var secondBody = await JsonDocument.ParseAsync(await second.Content.ReadAsStreamAsync(Token), cancellationToken: Token);
-        secondBody.RootElement.GetProperty("version").GetInt32().ShouldBeGreaterThan(firstVersion);
-        secondBody.RootElement.GetProperty("mode").GetString().ShouldBe("disabled");
+    /// <summary>
+    /// The mode vocabulary and the V1 clamp are judged before any connection is opened: <c>unavailable</c> is 422
+    /// <c>invalid_switch_mode</c> and <c>enabled</c> is 422 <c>mode_not_available</c> while the clamp is off, so
+    /// neither refusal depends on the definer's grant.
+    /// </summary>
+    [Fact]
+    public async Task The_mode_vocabulary_and_the_clamp_are_judged_before_the_database()
+    {
+        await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        var admin = _postgres.AdminConnectionString(connectionString.Name);
+
+        await using var factory = new EvidgateApiFactory(
+            connectionString,
+            configureServices: services => services.AddSingleton<IOperatorGate>(new PermitGate(OperatorId)));
+        using var client = factory.CreateClient();
 
         using var unavailable = await client.PostAsJsonAsync(
             "/internal/operator/healing/switch", new { mode = "unavailable" }, Token);
         unavailable.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await ErrorCodeAsync(unavailable)).ShouldBe("invalid_switch_mode");
 
-        // AC7, on the operator path: the clamp refuses `enabled` while Healing:Apply is off (the test host sets none).
+        // The clamp, on the operator path: the test host sets no Healing:Apply, the V1 posture.
         using var enabled = await client.PostAsJsonAsync(
             "/internal/operator/healing/switch", new { mode = "enabled" }, Token);
         enabled.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await ErrorCodeAsync(enabled)).ShouldBe("mode_not_available");
+
+        await AssertNothingStoredAsync(admin);
     }
 
     /// <summary>
-    /// AC7 on the operator path with the clamp on: a host configured with <c>EVIDGATE:Healing:Apply=true</c> stores
-    /// <c>enabled</c> on the platform row, so the flag both writers read really is the deployment key.
+    /// With the clamp on, <c>enabled</c> passes the gate and the handler really runs, so this case proves the database
+    /// refusal is what answers the route — 403 rather than a 500 — and that it stores nothing.
     /// </summary>
     [Fact]
-    public async Task The_permitted_operator_may_enable_healing_when_the_clamp_is_on()
+    public async Task A_permitted_operator_reaching_the_handler_with_the_clamp_on_is_refused()
     {
         await using var connectionString = await _postgres.CreateMigratedDatabaseAsync();
+        var admin = _postgres.AdminConnectionString(connectionString.Name);
 
         await using var factory = new EvidgateApiFactory(
             connectionString,
@@ -155,12 +164,11 @@ public sealed class OperatorHealingSwitchEndpointTests
         using var client = host.CreateClient();
 
         using var response = await client.PostAsJsonAsync(
-            "/internal/operator/healing/switch", new { mode = "enabled" }, Token);
+            "/internal/operator/healing/switch", new { mode = "enabled", reason = "clamp on" }, Token);
 
-        response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(Token), cancellationToken: Token);
-        body.RootElement.GetProperty("scope").GetString().ShouldBe("system");
-        body.RootElement.GetProperty("mode").GetString().ShouldBe("enabled");
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await ErrorCodeAsync(response)).ShouldBe("forbidden");
+        await AssertNothingStoredAsync(admin);
     }
 
     /// <summary>
@@ -182,6 +190,24 @@ public sealed class OperatorHealingSwitchEndpointTests
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
         (await ErrorCodeAsync(response)).ShouldBe("unauthenticated");
+    }
+
+    /// <summary>No switch write may leave a trace while the API role lacks the definer's EXECUTE.</summary>
+    private static async Task AssertNothingStoredAsync(string adminConnectionString)
+    {
+        (await CountAsync(adminConnectionString,
+            "select count(*) from public.healing_switch where scope = 'system'")).ShouldBe(0L);
+        (await CountAsync(adminConnectionString, "select count(*) from public.platform_operator_audit")).ShouldBe(0L);
+    }
+
+    private static async Task<long> CountAsync(string connectionString, string sql)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(Token);
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+
+        return (long)(await command.ExecuteScalarAsync(Token))!;
     }
 
     private static async Task<string?> ErrorCodeAsync(HttpResponseMessage response)

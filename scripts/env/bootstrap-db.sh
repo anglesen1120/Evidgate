@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Per-environment database bootstrap: the PostgreSQL 18 database,
-# the five Evidgate roles and the four application credentials, one environment
+# the six Evidgate roles and the five application credentials, one environment
 # at a time. The dev stack's scripts/dev/db-init.sh runs the same statements
 # through scripts/env/lib-db.sh, so the two cannot drift.
 #
 # The steps are separate because the migrator runs between the two halves: the
 # superuser creates evidgate_owner and the database, the deploy's migration job
 # runs Evidgate.Migrator as that owner (migration 0001 creates evidgate_app,
-# evidgate_operator and evidgate_worker_sched without LOGIN, and 0104 adds
-# evidgate_worker), and only then can the superuser grant those four LOGIN and a
-# password.
+# evidgate_operator and evidgate_worker_sched without LOGIN, 0104 adds
+# evidgate_worker and 0105 evidgate_platform_operator), and only then can the
+# superuser grant those five LOGIN and a password.
 #
 # No credential is passed on a command line and none is printed: the passwords
 # are read from the environment by name, exported to the psql child, and read
@@ -37,16 +37,17 @@ steps, one per run, in this order:
   database      as superuser: create evidgate_owner (LOGIN + CREATEROLE, never
                 SUPERUSER/BYPASSRLS/CREATEDB) and the database it owns. Then run
                 Evidgate.Migrator against the owner connection: migration 0001
-                creates the three application roles, 0104 evidgate_worker.
+                creates the three application roles, 0104 evidgate_worker, 0105
+                evidgate_platform_operator.
   credentials   as superuser: LOGIN + a password for evidgate_app,
-                evidgate_operator, evidgate_worker_sched and evidgate_worker.
-                Refuses, naming the missing roles, until the migrator created
-                them.
+                evidgate_operator, evidgate_worker_sched, evidgate_worker and
+                evidgate_platform_operator. Refuses, naming the missing roles,
+                until the migrator created them.
   verify        read-only assertions as superuser against the database:
-                * the non-built-in roles are exactly the five evidgate_* roles
+                * the non-built-in roles are exactly the six evidgate_* roles
                   (anything else is named; pg_* and the bootstrap superuser are
                   allowed);
-                * all five may log in, and none carries SUPERUSER, BYPASSRLS,
+                * all six may log in, and none carries SUPERUSER, BYPASSRLS,
                   REPLICATION, CREATEDB or CREATEROLE; only evidgate_owner
                   carries CREATEROLE;
                 * no application role is a member of any other role, apart from
@@ -61,7 +62,8 @@ steps, one per run, in this order:
 required environment, per step (values are never printed):
   database     EVIDGATE_OWNER_PASSWORD
   credentials  EVIDGATE_APP_PASSWORD, EVIDGATE_OPERATOR_PASSWORD,
-               EVIDGATE_WORKER_SCHED_PASSWORD, EVIDGATE_WORKER_PASSWORD
+               EVIDGATE_WORKER_SCHED_PASSWORD, EVIDGATE_WORKER_PASSWORD,
+               EVIDGATE_PLATFORM_OPERATOR_PASSWORD
   verify       none (the superuser connection only)
 
 per-environment variables (a bracketed value is the dev-only default; staging
@@ -150,8 +152,9 @@ if [[ ! "$DB_NAME" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]; then
   evg_db_die "refusing EVIDGATE_DB_NAME '$DB_NAME': the name must match ^[a-z_][a-z0-9_]{0,62}\$"
 fi
 
-# The four roles are cluster-wide, so two environments on one server would share
-# them: prod would carry whatever staging granted, and the other way round.
+# The five application roles are cluster-wide, so two environments on one server
+# would share them: prod would carry whatever staging granted, and the other way
+# round.
 case "$ENVIRONMENT:$DB_NAME" in
   staging:evidgate_prod | prod:evidgate_staging)
     evg_db_die "refusing EVIDGATE_DB_NAME '$DB_NAME' for $ENVIRONMENT: staging and prod need
@@ -189,9 +192,10 @@ case "$STEP" in
     ;;
   credentials)
     evg_db_require_env EVIDGATE_APP_PASSWORD EVIDGATE_OPERATOR_PASSWORD EVIDGATE_WORKER_SCHED_PASSWORD \
-      EVIDGATE_WORKER_PASSWORD
+      EVIDGATE_WORKER_PASSWORD EVIDGATE_PLATFORM_OPERATOR_PASSWORD
     evg_db_export_passwords \
-      EVIDGATE_APP_PASSWORD EVIDGATE_OPERATOR_PASSWORD EVIDGATE_WORKER_SCHED_PASSWORD EVIDGATE_WORKER_PASSWORD
+      EVIDGATE_APP_PASSWORD EVIDGATE_OPERATOR_PASSWORD EVIDGATE_WORKER_SCHED_PASSWORD EVIDGATE_WORKER_PASSWORD \
+      EVIDGATE_PLATFORM_OPERATOR_PASSWORD
     ;;
   verify)
     # The superuser connection is the only credential verify needs.
@@ -218,10 +222,10 @@ verify_fail() {
 
 # The role catalogue is cluster-wide, so this reads it through the target
 # database and holds every role that is neither PostgreSQL's own (pg_*) nor the
-# bootstrap superuser to the five Evidgate roles.
+# bootstrap superuser to the six Evidgate roles.
 evg_db_verify_roles() {
   local before="$verify_failures" rows name extra="" missing="" seen=""
-  local expected="evidgate_owner evidgate_app evidgate_operator evidgate_worker_sched evidgate_worker"
+  local expected="evidgate_owner evidgate_app evidgate_operator evidgate_worker_sched evidgate_worker evidgate_platform_operator"
 
   rows="$(evg_db_psql "$DB_NAME" -t -A <<'SQL'
 select rolname from pg_catalog.pg_roles order by rolname
@@ -269,7 +273,7 @@ evg_db_verify_role_attributes() {
 select rolname, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole, rolreplication, rolcanlogin
   from pg_catalog.pg_roles
  where rolname in ('evidgate_owner', 'evidgate_app', 'evidgate_operator', 'evidgate_worker_sched',
-                   'evidgate_worker')
+                   'evidgate_worker', 'evidgate_platform_operator')
  order by rolname
 SQL
 )"
@@ -304,12 +308,12 @@ SQL
     fi
   done <<<"$rows"
 
-  if [[ "$count" -ne 5 ]]; then
-    verify_fail "attributes" "found $count of the five roles, so their attributes cannot all be checked (see the roles check)"
+  if [[ "$count" -ne 6 ]]; then
+    verify_fail "attributes" "found $count of the six roles, so their attributes cannot all be checked (see the roles check)"
     return 0
   fi
   if [[ "$verify_failures" == "$before" ]]; then
-    verify_pass "attributes" "all five may log in; no SUPERUSER, BYPASSRLS, REPLICATION or CREATEDB on any role; CREATEROLE only on evidgate_owner"
+    verify_pass "attributes" "all six may log in; no SUPERUSER, BYPASSRLS, REPLICATION or CREATEDB on any role; CREATEROLE only on evidgate_owner"
   fi
 }
 
@@ -324,7 +328,7 @@ with recursive members(oid, rolname) as (
   select oid, rolname
     from pg_catalog.pg_roles
    where rolname in ('evidgate_owner', 'evidgate_app', 'evidgate_operator', 'evidgate_worker_sched',
-                     'evidgate_worker')
+                     'evidgate_worker', 'evidgate_platform_operator')
 ), walk(origin, reached) as (
   select oid, oid from members
   union
@@ -342,7 +346,7 @@ with recursive members(oid, rolname) as (
        am.member = (select oid from pg_catalog.pg_roles where rolname = 'evidgate_owner')
        and am.roleid in (select oid from pg_catalog.pg_roles
                           where rolname in ('evidgate_app', 'evidgate_operator', 'evidgate_worker_sched',
-                                            'evidgate_worker'))
+                                            'evidgate_worker', 'evidgate_platform_operator'))
        and am.admin_option
        and not am.inherit_option
        and not am.set_option
@@ -491,7 +495,7 @@ case "$STEP" in
   credentials)
     evg_db_require_application_roles
     evg_db_grant_application_logins
-    printf 'bootstrap-db: evidgate_app, evidgate_operator, evidgate_worker_sched and evidgate_worker may log in to %s\n' "$DB_NAME"
+    printf 'bootstrap-db: evidgate_app, evidgate_operator, evidgate_worker_sched, evidgate_worker and evidgate_platform_operator may log in to %s\n' "$DB_NAME"
     ;;
   verify)
     evg_db_verify

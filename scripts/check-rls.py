@@ -180,21 +180,14 @@ DEFINER_AUDIT_EXEMPT = {
         "expired and past-retention sessions, observed via the task row, exactly like `purge_expired_idempotency`"
     ),
     "evidgate.healing_switch_set_system": (
-        "created 0052_healing_switch.sql:211 (text, text, uuid): the platform-wide healing kill switch "
-        "belongs to no tenant, so there is no org chain to append to — `public.audit_log.org_id` is NOT "
-        "NULL and every row of it is chained per org (0015). The action is attested outside the audit "
-        "chain: its only caller is `POST /internal/operator/healing/switch` "
-        "(src/Evidgate.Api/Endpoints/OperatorEndpoints.cs, `healing.MapPost(\"/switch\", ...)`, behind "
-        "02.8.1's fail-closed `RequireOperatorFilter`), which writes a structured operator log event on "
-        "every system write — mode, set_by and version, never the reason text — through "
-        "`HealingSystemSwitchWriter` (src/Modules/Evidgate.Modules.Healing/Application/HealingSystemSwitch.cs), "
-        "and a security_event row would be the durable record but does not fit it yet: 11.5.1-T5 "
-        "shipped `security_event` (0053) and handed the platform-scope record over, because its org_id is "
-        "NOT NULL, so a no-tenant write has no row; D-S137-OWNER (DECISIONS §8.2, decided 2026-10-29) "
-        "puts such an event in the separate `platform_security_event` table, never a nullable org_id, "
-        "and that table plus its emitter are still owed — an open receiver, "
-        "exactly like the D-S102-Q3 entries above. No per-call audit row is possible here, which is why "
-        "the exemption is recorded rather than the row"
+        "the effective body is 0105_platform_operator_role.sql:244 (same signature, text/text/uuid), which inserts "
+        "one row per call into public.platform_operator_audit in the same transaction as the switch write, so the live "
+        "definer does not need an exemption. The entry stays for the historical 0052_healing_switch.sql:211 body: this "
+        "lint replays every definition a file creates, 0052's text is immutable once applied, and that body had no "
+        "audit row of its own because the platform-wide switch belongs to no tenant and `public.audit_log.org_id` is "
+        "NOT NULL with a per-org chain (0015) — the platform-scope record is the table 0105 added, never a nullable "
+        "org_id (the decision 0088 records for `platform_sweep_audit`). EXECUTE moved from evidgate_app to "
+        "evidgate_platform_operator in the same file, so the Api writer's call is refused (42501) instead of writing"
     ),
     "evidgate.usage_price_insert_global": (
         "created 0073_usage_price.sql:215 (uuid, text, numeric, text, timestamptz, timestamptz, numeric, text): the "
@@ -206,8 +199,10 @@ DEFINER_AUDIT_EXEMPT = {
     ),
 }
 
-# Roles a definer function may be granted EXECUTE to.
-ALLOWED_GRANTEES = {"evidgate_app", "evidgate_worker_sched", "evidgate_operator"}
+# Roles a definer function may be granted EXECUTE to. `evidgate_platform_operator` (0105) is the
+# operator-only login for the platform healing switch: it holds USAGE on `evidgate` and EXECUTE on
+# that one definer, no table privilege, and the Api never receives its connection string.
+ALLOWED_GRANTEES = {"evidgate_app", "evidgate_worker_sched", "evidgate_operator", "evidgate_platform_operator"}
 
 # Tenant policies that shipped without a `TO` clause and were replaced later. The key is the
 # EXACT statement (file, policy, table) and it counts only while a later statement re-creates the

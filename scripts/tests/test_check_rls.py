@@ -366,22 +366,23 @@ class AuditExemptions(unittest.TestCase):
             with self.subTest(name=unlisted):
                 self.assertEqual(rules(run(EXEMPT_DEFINER.format(name=unlisted))), {"definer_audit"})
 
-    def test_the_healing_switch_reason_names_the_live_caller_and_its_receiver(self):
-        """08.6.3/`0052`: the exemption describes what attests a system write today.
+    def test_the_healing_switch_reason_names_the_live_body_and_its_audit_table(self):
+        """`0105`: the effective definer writes its own row, so the exemption covers 0052's body only.
 
         The reason is the only place that records why a definer owes no per-call audit row, so it
-        must name the caller that exists (the operator route, wired in T1) and the structured log
-        that stands in for the row — not a planned or removed route — plus the `security_event`
-        receiver that will add one later. A stale "not wired yet" sentence would claim the write
-        path is unbuilt while the writer ships in the same change.
+        must say which body is live (0105), which table the row lands in, and which role holds
+        EXECUTE now. A reason still naming the removed Api route or a structured log would claim a
+        write path the grants no longer allow.
         """
         reason = check_rls.DEFINER_AUDIT_EXEMPT["evidgate.healing_switch_set_system"]
 
         self.assertNotIn("not wired", reason.lower())
-        self.assertIn("OperatorEndpoints.cs", reason)
-        self.assertIn("HealingSystemSwitch.cs", reason)
-        self.assertIn("structured operator log event", reason)
-        self.assertIn("11.5.1-T5", reason)
+        self.assertNotIn("OperatorEndpoints.cs", reason)
+        self.assertNotIn("structured operator log event", reason)
+        self.assertIn("0105_platform_operator_role.sql:244", reason)
+        self.assertIn("public.platform_operator_audit", reason)
+        self.assertIn("evidgate_platform_operator", reason)
+        self.assertIn("evidgate_app", reason)
 
     def test_no_exemption_still_claims_the_security_event_table_is_missing(self):
         """11.5.1-T5/`0053`: `security_event` exists, so a reason must not deny it.

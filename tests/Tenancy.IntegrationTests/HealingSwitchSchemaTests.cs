@@ -17,10 +17,16 @@ namespace Tenancy.IntegrationTests;
 /// write it, and a tenant's own rows stay invisible to every other tenant (AC7, ruling T72);
 /// </description></item>
 /// <item><description>
-/// the operator definer <c>evidgate.healing_switch_set_system</c>: it upserts the one system row, the
-/// shared trigger bumps <c>version</c>, an unstorable mode is refused with 22023, a call made from
-/// inside a tenant transaction is refused with 23514 and writes nothing, and EXECUTE is held by
-/// <c>evidgate_app</c> alone (AC9);
+/// the operator definer <c>evidgate.healing_switch_set_system</c> (0052, re-created by 0105): it upserts
+/// the one system row, the shared trigger bumps <c>version</c>, an unstorable mode is refused with 22023,
+/// a call made from inside a tenant transaction is refused with 23514 and writes nothing, and EXECUTE is
+/// held by <c>evidgate_platform_operator</c> alone (AC9);
+/// </description></item>
+/// <item><description>
+/// the platform-scope trail 0105 adds: every accepted call appends exactly one
+/// <c>public.platform_operator_audit</c> row (actor, old mode, new mode, version) in the same
+/// transaction, a refused call appends none, and the table is append-only for every statement that
+/// reaches a row — one guard trigger and FORCE row level security with owner insert/select policies only;
 /// </description></item>
 /// <item><description>
 /// the resolution read's plan: the resolver's SELECT is answered from the three partial unique
@@ -35,7 +41,7 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class HealingSwitchSchemaTests : IAsyncLifetime
+public sealed partial class HealingSwitchSchemaTests : IAsyncLifetime
 {
     /// <summary>The operator definer and its exact signature (the one the migration grants EXECUTE on).</summary>
     private const string Definer = "evidgate.healing_switch_set_system(text, text, uuid)";
@@ -141,20 +147,34 @@ public sealed class HealingSwitchSchemaTests : IAsyncLifetime
             ("mode", mode),
             ("set_by", Guid.CreateVersion7()));
 
-    /// <summary>Writes the system row through the operator definer, as the app role (the only caller).</summary>
-    private async Task<(string Mode, int Version)> SetSystemAsync(World world, string mode)
+    /// <summary>Writes the system row through the operator definer, as the 0105 platform-operator login.</summary>
+    private async Task<(string Mode, int Version)> SetSystemAsync(World world, string mode, Guid? setBy = null)
     {
-        await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database));
+        await using var scope = await TenantScope.BeginAsync(_fixture.PlatformOperatorConnectionString(world.Database));
         var stored = await scope.ScalarAsync<string>(
             "select r.mode || ':' || r.version from evidgate.healing_switch_set_system(@mode, @reason, @set_by) r",
             ("mode", mode),
             ("reason", "test"),
-            ("set_by", Guid.CreateVersion7()));
+            ("set_by", setBy ?? Guid.CreateVersion7()));
         await scope.CommitAsync();
 
         var parts = stored.Split(':');
         return (parts[0], int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture));
     }
+
+    /// <summary>The trail rows as <c>actor:action:old_mode:new_mode:version</c>, oldest first.</summary>
+    private async Task<IReadOnlyList<string>> AuditRowsAsync(string database) =>
+        await _fixture.ColumnAsync<string>(
+            database,
+            """
+            select actor || ':' || action || ':' || coalesce(old_mode, '-') || ':' || new_mode || ':' || version
+              from public.platform_operator_audit
+             order by created_at, version
+            """);
+
+    /// <summary>How many trail rows exist, read as the owner (no runtime role may read them but the owner).</summary>
+    private Task<long> AuditCountAsync(string database) =>
+        _fixture.ScalarAsync<long>(database, "select count(*) from public.platform_operator_audit");
 
     // ------------------------------------------------------------------ (a) shape, keys, RLS flags
 
@@ -762,14 +782,15 @@ public sealed class HealingSwitchSchemaTests : IAsyncLifetime
         }
 
         var before = await AllRowsAsync(world.Database);
+        var auditBefore = await AuditCountAsync(world.Database);
 
         // The definer borrows `evidgate_owner`'s rights, so row level security cannot confine it: the
         // function refuses on its own account when a tenant context is set — before the argument checks
         // and before any statement — and the refusal is the same for every org. It is a 23514 (wrong
-        // writer/context, 0027/0030 precedent), not a 42501: the caller does hold EXECUTE.
+        // writer/context, 0027/0030 precedent), not a 42501: the platform operator does hold EXECUTE.
         foreach (var org in new[] { world.OrgA, world.OrgB })
         {
-            await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), org);
+            await using var scope = await TenantScope.BeginAsync(_fixture.PlatformOperatorConnectionString(world.Database), org);
             var error = await scope.CaptureErrorAsync(
                 "select * from evidgate.healing_switch_set_system('disabled', 'operator', @set_by)",
                 ("set_by", Guid.CreateVersion7()));
@@ -783,17 +804,20 @@ public sealed class HealingSwitchSchemaTests : IAsyncLifetime
         (await AllRowsAsync(world.Database)).ShouldBe(
             before,
             "a refused call writes nothing: no system, tenant or project row changes, not even its version");
+        (await AuditCountAsync(world.Database)).ShouldBe(
+            auditBefore,
+            "a refused call appends no trail row either: the write and its audit share one transaction");
 
-        // Outside a tenant context the call still works — the app role on the operator route's own
-        // connection (no org GUC) …
+        // Outside a tenant context the call still works — the operator's own login, which is the
+        // only role 0105 leaves EXECUTE with (no org GUC) …
 
-        await using (var app = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database)))
+        await using (var platformOperator = await TenantScope.BeginAsync(_fixture.PlatformOperatorConnectionString(world.Database)))
         {
-            (await app.ScalarAsync<string>(
+            (await platformOperator.ScalarAsync<string>(
                 "select r.mode || ':' || r.version from evidgate.healing_switch_set_system('disabled', 'operator', @set_by) r",
                 ("set_by", Guid.CreateVersion7())))
                 .ShouldBe("disabled:2", "the first update of the seeded row bumps version 1 -> 2");
-            await app.CommitAsync();
+            await platformOperator.CommitAsync();
         }
 
         // … and as the owner, which is how a migration or a backfill would call it.
@@ -836,7 +860,7 @@ public sealed class HealingSwitchSchemaTests : IAsyncLifetime
         // observation of a dependency, not a configuration.
         foreach (var mode in new[] { "unavailable", "bogus", "UNAVAILABLE", "" })
         {
-            await using var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database));
+            await using var scope = await TenantScope.BeginAsync(_fixture.PlatformOperatorConnectionString(world.Database));
             var error = await scope.CaptureErrorAsync(
                 "select * from evidgate.healing_switch_set_system(@mode, null, @set_by)",
                 ("mode", mode),
@@ -845,7 +869,7 @@ public sealed class HealingSwitchSchemaTests : IAsyncLifetime
             error.SqlState.ShouldBe(PostgresErrorCodes.InvalidParameterValue, mode);
         }
 
-        await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database)))
+        await using (var scope = await TenantScope.BeginAsync(_fixture.PlatformOperatorConnectionString(world.Database)))
         {
             var error = await scope.CaptureErrorAsync(
                 "select * from evidgate.healing_switch_set_system(null, null, @set_by)",
@@ -855,25 +879,40 @@ public sealed class HealingSwitchSchemaTests : IAsyncLifetime
 
         (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.healing_switch"))
             .ShouldBe(0, "a refused call writes nothing");
+        (await AuditCountAsync(world.Database)).ShouldBe(0, "a refused call appends no trail row");
     }
 
     [Fact]
-    public async Task Definer_IsExecutableByTheAppRoleAlone()
+    public async Task Definer_IsExecutableByThePlatformOperatorAlone()
     {
         var world = await SeedTenantsAsync();
 
         (await _fixture.ScalarAsync<bool>(
             world.Database,
-            $"select has_function_privilege('evidgate_app', '{Definer}', 'EXECUTE')"))
-            .ShouldBeTrue("the operator ingress runs as evidgate_app (02.8.1 RequireOperatorFilter)");
+            $"select has_function_privilege('evidgate_platform_operator', '{Definer}', 'EXECUTE')"))
+            .ShouldBeTrue("0105 moves the platform switch onto the operator's own login");
 
-        foreach (var role in new[] { "evidgate_operator", "evidgate_worker_sched" })
+        foreach (var role in new[] { "evidgate_app", "evidgate_operator", "evidgate_worker", "evidgate_worker_sched" })
         {
             (await _fixture.ScalarAsync<bool>(
                 world.Database,
                 $"select has_function_privilege('{role}', '{Definer}', 'EXECUTE')"))
                 .ShouldBeFalse($"{role} must not set the platform-wide switch");
         }
+
+        // A real call as the app role — the one role 0052 handed EXECUTE to — is refused by the grant,
+        // not by a policy, and leaves both tables untouched: the Api is no longer a writer of the
+        // tenant-less row even if something inside it calls the definer.
+        (await CaptureAppErrorAsync(
+            world.Database,
+            world.OrgA,
+            "select * from evidgate.healing_switch_set_system('disabled', 'operator', @set_by)",
+            ("set_by", Guid.CreateVersion7())))
+            .SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege);
+
+        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.healing_switch"))
+            .ShouldBe(0, "the refused call wrote no switch row");
+        (await AuditCountAsync(world.Database)).ShouldBe(0, "the refused call wrote no trail row");
 
         // The built-in PUBLIC grant is closed (TL T80), the definition is SECURITY DEFINER, and its
         // search_path is pinned empty so no caller can steer resolution of an unqualified name.
