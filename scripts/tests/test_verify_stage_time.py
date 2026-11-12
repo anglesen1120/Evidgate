@@ -95,6 +95,18 @@ class StageTimeTests(unittest.TestCase):
             self.assertEqual(proc.wait(timeout=20), 143)
             self.assertTrue((Path(tmp) / "cleaned").exists())
 
+    def test_a_stage_still_reads_the_gate_stdin(self):
+        script = DRIVER.replace('format) echo "boom ran"; exit 3 ;;', 'format) read -r word; echo "got $word" ;;')
+        done = subprocess.run(
+            ["bash", "-c", script, "driver", str(VERIFY), "--stage", "format"],
+            input="hello\n",
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("got hello", done.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

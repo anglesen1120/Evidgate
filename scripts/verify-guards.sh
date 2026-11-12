@@ -428,7 +428,7 @@ run_selected_stages() {
     (
       set -e
       run_stage "$name"
-    ) &
+    ) <&0 &
     child=$!
     trap 'kill -TERM "$child" 2>/dev/null; wait "$child" 2>/dev/null; exit 143' INT TERM
     wait "$child"

@@ -61,6 +61,27 @@ def run_stage(**env):
         return done, [c.split() for c in calls]
 
 
+def run_stage_expect_refusal(value):
+    # No fake call is made, so the calls file does not exist: run the shell directly.
+    return subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'set -euo pipefail; ROOT="{ROOT}"; source "{GUARDS}"; '
+            "run_fuzz_shards tests/Tenancy.IntegrationTests",
+        ],
+        env={
+            **os.environ,
+            "EVIDGATE_FUZZ_SHARDS": value,
+            "EVIDGATE_FUZZ_BUDGET_SECONDS": "600",
+            "EVIDGATE_FUZZ_SEED": "1",
+            "EVIDGATE_FUZZ_FINDINGS_DIR": "/nonexistent",
+        },
+        capture_output=True,
+        text=True,
+    )
+
+
 class FuzzShardTests(unittest.TestCase):
     def test_budget_is_split_and_every_shard_gets_its_own_seed_and_directory(self):
         done, calls = run_stage(EVIDGATE_FUZZ_SHARDS="4")
@@ -102,27 +123,6 @@ class FuzzShardTests(unittest.TestCase):
                 done = run_stage_expect_refusal(value)
                 self.assertEqual(done.returncode, 2)
                 self.assertIn("EVIDGATE_FUZZ_SHARDS must be an integer from 1 to 16", done.stderr)
-
-
-def run_stage_expect_refusal(value):
-    # No fake call is made, so the calls file does not exist: run the shell directly.
-    return subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'set -euo pipefail; ROOT="{ROOT}"; source "{GUARDS}"; '
-            "run_fuzz_shards tests/Tenancy.IntegrationTests",
-        ],
-        env={
-            **os.environ,
-            "EVIDGATE_FUZZ_SHARDS": value,
-            "EVIDGATE_FUZZ_BUDGET_SECONDS": "600",
-            "EVIDGATE_FUZZ_SEED": "1",
-            "EVIDGATE_FUZZ_FINDINGS_DIR": "/nonexistent",
-        },
-        capture_output=True,
-        text=True,
-    )
 
     def test_a_seed_above_int64_is_passed_verbatim_to_a_single_shard(self):
         done, calls = run_stage(EVIDGATE_FUZZ_SHARDS="1", EVIDGATE_FUZZ_SEED="18446744073709551615")
