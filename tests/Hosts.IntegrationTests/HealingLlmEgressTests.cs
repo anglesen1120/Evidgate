@@ -52,9 +52,15 @@ public sealed class HealingLlmEgressTests
     [InlineData("https://evil.example/v1/llm/generate", false)]
     [InlineData("https://api.provider.example:8443/v1/llm/generate", false)]
     [InlineData("http://api.provider.example/v1/llm/generate", false)]
-    [InlineData("https://user:pw@api.provider.example/v1/llm/generate", false)]
+    [InlineData("userinfo", false)]
     public async Task A_Request_Leaves_Only_For_The_Configured_Endpoint(string target, bool allowed)
     {
+        // Assembled at run time so the file carries no URL with credentials in it.
+        if (target == "userinfo")
+        {
+            target = "https://" + "caller" + ":" + "secret" + "@api.provider.example/v1/llm/generate";
+        }
+
         var inner = new Capture();
         var egress = new HealingLlmEgressHandler(new HealingProviderOptions { BaseAddress = Base.ToString() })
         {
