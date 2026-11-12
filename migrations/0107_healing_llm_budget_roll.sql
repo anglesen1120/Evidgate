@@ -48,7 +48,7 @@ begin
             from public.healing_llm_budget b
            where b.period = 'daily'
              and b.period_start < v_day
-           order by b.org_id, b.project_id, b.period_start desc) prev
+           order by b.org_id desc, b.project_id desc, b.period_start desc) prev
   on conflict (org_id, project_id, period, period_start) do nothing;
 
   get diagnostics v_opened = row_count;

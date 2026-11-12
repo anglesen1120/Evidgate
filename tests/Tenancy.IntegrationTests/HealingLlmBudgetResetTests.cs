@@ -71,6 +71,69 @@ public sealed class HealingLlmBudgetResetTests
         (await ReadRowAsync(dedicated.Name, project, $"{Today}")).ShouldBe((1.0m, 5000, 0m, 0));
     }
 
+    [Fact]
+    public async Task Roll_WithNoEarlierRow_OpensNothing()
+    {
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        _ = await SeedProjectAsync(dedicated.Name);
+
+        (await RollAsWorkerAsync(dedicated.Name)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Roll_ForAFutureDay_OpensTodayAndNeverAFutureRow()
+    {
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var (org, project) = await SeedProjectAsync(dedicated.Name);
+        await SeedRowAsync(dedicated.Name, org, project, $"{Today} - 1", 2.0m, 9000, 0m, 0);
+
+        (await RollAsWorkerAsync(dedicated.Name, $"{Today} + 30")).ShouldBe(1);
+
+        (await ReadRowAsync(dedicated.Name, project, $"{Today}")).ShouldBe((2.0m, 9000, 0m, 0));
+        (await CountRowsAsync(dedicated.Name, project)).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task Roll_CopiesTheCapsOfTheLatestEarlierRow()
+    {
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var (org, project) = await SeedProjectAsync(dedicated.Name);
+        await SeedRowAsync(dedicated.Name, org, project, $"{Today} - 5", 1.0m, 1000, 0m, 0);
+        await SeedRowAsync(dedicated.Name, org, project, $"{Today} - 2", 3.0m, 7000, 0m, 0);
+
+        (await RollAsWorkerAsync(dedicated.Name)).ShouldBe(1);
+
+        (await ReadRowAsync(dedicated.Name, project, $"{Today}")).ShouldBe((3.0m, 7000, 0m, 0));
+    }
+
+    [Fact]
+    public async Task Roll_AppendsOneSweepAuditRowPerCall()
+    {
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var (org, project) = await SeedProjectAsync(dedicated.Name);
+        await SeedRowAsync(dedicated.Name, org, project, $"{Today} - 1", 2.0m, 9000, 0m, 0);
+
+        _ = await RollAsWorkerAsync(dedicated.Name);
+        _ = await RollAsWorkerAsync(dedicated.Name);
+
+        await using var connection = await _fixture.OpenSuperuserAsync(dedicated.Name);
+        await using var command = new NpgsqlCommand(
+            "select count(*), coalesce(sum(removed), 0) from public.platform_sweep_audit where action = 'healing.llm_budget_reset'",
+            connection);
+        await using var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken);
+        (await reader.ReadAsync(TestContext.Current.CancellationToken)).ShouldBeTrue();
+        (reader.GetInt64(0), reader.GetInt64(1)).ShouldBe((2L, 1L));
+    }
+
+    private async Task<long> CountRowsAsync(string database, Guid project)
+    {
+        await using var connection = await _fixture.OpenSuperuserAsync(database);
+        await using var command = new NpgsqlCommand(
+            "select count(*) from public.healing_llm_budget where project_id = @p", connection);
+        command.Parameters.AddWithValue("p", project);
+        return (long)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
+    }
+
     private async Task<(Guid Org, Guid Project)> SeedProjectAsync(string database)
     {
         var org = Guid.CreateVersion7();
@@ -142,7 +205,7 @@ public sealed class HealingLlmBudgetResetTests
         decimal actualCost)
     {
         await using var connection = await _fixture.OpenSuperuserAsync(database);
-        var periodStart = (DateTime)(await new NpgsqlCommand($"select {Today} - 1", connection)
+        var periodStart = (string)(await new NpgsqlCommand($"select ({Today} - 1)::text", connection)
             .ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
 
         await ExecuteAsync(
@@ -150,7 +213,7 @@ public sealed class HealingLlmBudgetResetTests
             HealingLlmBudgetSql.Settle,
             ("org_id", org),
             ("project_id", project),
-            ("period_start", periodStart.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)),
+            ("period_start", periodStart),
             ("reserved_tokens", reservedTokens),
             ("reserved_cost", reservedCost),
             ("actual_tokens", actualTokens),
@@ -158,7 +221,7 @@ public sealed class HealingLlmBudgetResetTests
     }
 
     /// <summary>Calls the roll the way the schedule does: delegate to <c>evidgate_worker_sched</c>.</summary>
-    private async Task<int> RollAsWorkerAsync(string database)
+    private async Task<int> RollAsWorkerAsync(string database, string daySql = Today)
     {
         await using var connection = await _fixture.OpenSuperuserAsync(database);
         await ExecuteAsync(connection, "set role evidgate_worker_sched");
