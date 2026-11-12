@@ -91,6 +91,30 @@ public sealed class HealingLlmGatewayRefusalTests
             Arg.Any<CancellationToken>());
     }
 
+    /// <summary>A call cancelled before the request is sent gives the whole hold back and reaches no provider.</summary>
+    [Fact]
+    public async Task InvokeAsync_CancelledBeforeSend_ReleasesTheHold()
+    {
+        var (db, scopes) = Database();
+        using var cancel = new CancellationTokenSource();
+        db.ScalarAsync<string?>(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>())
+            .Returns(async _ =>
+            {
+                await cancel.CancelAsync();
+                return "2026-11-13";
+            });
+        var provider = new SpyProvider();
+        var gateway = Gateway(provider, db, scopes, HealingProviderKind.Http);
+
+        await Should.ThrowAsync<OperationCanceledException>(() => gateway.InvokeAsync(Org, Request(), cancel.Token));
+
+        provider.Calls.ShouldBe(0);
+        await db.Received(1).ExecuteAsync(
+            HealingLlmBudgetSql.Settle,
+            Arg.Any<object?>(),
+            Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task InvokeAsync_NoProviderSelected_RefusesBeforeSchemaCompile()
     {

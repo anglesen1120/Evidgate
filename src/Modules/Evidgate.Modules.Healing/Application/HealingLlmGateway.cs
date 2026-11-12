@@ -140,9 +140,10 @@ internal sealed record HealingLlmInvocation(HealingLlmResult Result, Guid CallId
 /// <see cref="EvidgateTelemetry.HealingLlmRefusedMetricName"/> and writes no row — a refused call spends nothing.
 /// </para>
 /// <para>
-/// A reservation is released in a fresh scope when the provider throws, the call is cancelled or the settlement fails.
-/// A hard process kill between the phases, or a settlement whose outcome is unknown (connection lost at COMMIT), cannot
-/// be released safely, so the estimate of one call stays counted until the period resets; that leak can only over-count,
+/// A reservation is released in a fresh scope only for a failure before the request is sent. Once the provider call has
+/// started, a throw, a cancel, a timeout or a failed settlement keeps the estimate charged (an error row records it),
+/// because the provider may have billed the call. A hard process kill between the phases leaks the same way until the
+/// period resets; every such leak can only over-count,
 /// which makes the next reservation refuse sooner. Real usage above an estimate is charged at settlement, so a call can
 /// overshoot a cap by its excess until the provider enforces an output ceiling. The reset belongs to the reset schedule.
 /// </para>
@@ -242,7 +243,7 @@ internal sealed partial class HealingLlmGateway(
 
     /// <summary>
     /// One two-phase attempt: the reservation is already committed, the provider runs outside any transaction, and the
-    /// settlement commits usage and the row together. A provider failure or a refused settlement releases the reservation.
+    /// settlement commits usage and the row together. A failure before the request is sent releases the reservation; once it may have been sent, the estimate stays charged.
     /// </summary>
     private async Task<(string Status, string? Content, int Tokens, decimal Cost, Guid CallId)> RunAttemptAsync(
         Guid orgId,
@@ -254,6 +255,13 @@ internal sealed partial class HealingLlmGateway(
     {
         HealingLlmResult result;
 
+        if (cancellationToken.IsCancellationRequested)
+        {
+            // Nothing has left the process yet, so nothing can have been billed: the hold goes back whole.
+            await ReleaseAsync(orgId, request.ProjectId, reservation).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
         try
         {
             // The provider's own numbers are brought inside the row's bounds before anything is recorded, so a provider
@@ -263,7 +271,10 @@ internal sealed partial class HealingLlmGateway(
         }
         catch
         {
-            await ReleaseAsync(orgId, request.ProjectId, reservation).ConfigureAwait(false);
+            // The request may have left the process, so the provider may bill it whatever the outcome was: the hold
+            // stays as the charge (an over-count at worst) and an error row records it. Refunding here would let repeated
+            // failing calls drain the budget past its cap.
+            await ChargeEstimateAsync(orgId, request, attempt, reservation).ConfigureAwait(false);
             throw;
         }
 
@@ -282,8 +293,7 @@ internal sealed partial class HealingLlmGateway(
     }
 
     /// <summary>
-    /// Commits the attempt row and the real usage together. A settlement the server refused rolled back whole, so the
-    /// hold is released; one whose outcome is unknown keeps it (it may have landed, and a second release would under-count).
+    /// Commits the attempt row and the usage together. A settlement that fails keeps the hold (see the catch).
     /// </summary>
     private async Task<Guid> SettleAttemptAsync(
         Guid orgId,
@@ -319,19 +329,45 @@ internal sealed partial class HealingLlmGateway(
 
             return callId;
         }
-        catch (PostgresException)
-        {
-            // The server refused the settlement, so it rolled back whole and the hold is still in place: release it in a
-            // fresh scope.
-            await ReleaseAsync(orgId, request.ProjectId, reservation).ConfigureAwait(false);
-            throw;
-        }
         catch (Exception exception) when (exception is DbException or IOException)
         {
-            // A lost connection after COMMIT may mean the settlement landed; releasing then would subtract the hold twice
-            // and under-count. The hold stays, which can only over-count until the period resets.
+            // The provider answered, so its usage is owed whether or not the ledger took it. The hold stays as the charge:
+            // releasing after a refused or lost settlement would refund billed spend (or subtract it twice), so the
+            // counters can only over-count until the period resets.
             LogSettlementUnknown(exception, request.ProjectId);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Records a call whose outcome is unknown as an error row at the held estimate and settles the hold to exactly that,
+    /// so the counters keep the charge. Faults here are logged: the hold stays either way and must not mask the failure.
+    /// </summary>
+    private async Task ChargeEstimateAsync(
+        Guid orgId,
+        HealingLlmRequest request,
+        int attempt,
+        HealingLlmReservation? reservation)
+    {
+        if (reservation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = await SettleAttemptAsync(
+                    orgId,
+                    request,
+                    attempt,
+                    HealingLlmStatuses.Error,
+                    new HealingLlmResult(HealingLlmStatuses.Error, null, reservation.Tokens, reservation.Cost),
+                    reservation)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is DbException or IOException or InvalidOperationException)
+        {
+            LogSettlementUnknown(exception, request.ProjectId);
         }
     }
 

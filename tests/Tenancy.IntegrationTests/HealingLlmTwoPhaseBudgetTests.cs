@@ -124,9 +124,12 @@ public sealed class HealingLlmTwoPhaseBudgetTests
         (await world.CallCountAsync()).ShouldBe(4);
     }
 
-    /// <summary>A provider that throws gives its hold back and surfaces the failure; no row is written.</summary>
+    /// <summary>
+    /// A provider that throws after the request may have left keeps the estimate charged (the provider may have billed it)
+    /// and surfaces the failure; one error row records the charge.
+    /// </summary>
     [Fact]
-    public async Task InvokeHealingLlm_ProviderThrows_ReleasesTheHold()
+    public async Task InvokeHealingLlm_ProviderThrows_ChargesTheEstimate()
     {
         var provider = new ScriptedProvider(_ => throw new InvalidOperationException("provider exploded"));
         await using var world = await StartAsync(provider);
@@ -134,8 +137,8 @@ public sealed class HealingLlmTwoPhaseBudgetTests
 
         await Should.ThrowAsync<InvalidOperationException>(() => InvokeAsync(world, Request(world), TestContext.Current.CancellationToken));
 
-        (await world.UsedAsync()).ShouldBe((0.1m, 10));
-        (await world.CallCountAsync()).ShouldBe(0);
+        (await world.UsedAsync()).ShouldBe((0.15m, 10 + HoldTokens));
+        (await world.CallCountAsync()).ShouldBe(1);
     }
 
     /// <summary>
@@ -156,9 +159,9 @@ public sealed class HealingLlmTwoPhaseBudgetTests
         (await world.CallCountAsync()).ShouldBe(1);
     }
 
-    /// <summary>A cancelled call gives its hold back.</summary>
+    /// <summary>A call cancelled while the provider runs keeps the estimate charged, like a throw.</summary>
     [Fact]
-    public async Task InvokeHealingLlm_Cancelled_ReleasesTheHold()
+    public async Task InvokeHealingLlm_CancelledAfterSend_ChargesTheEstimate()
     {
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var provider = new ScriptedProvider(async ct =>
@@ -172,16 +175,16 @@ public sealed class HealingLlmTwoPhaseBudgetTests
 
         await Should.ThrowAsync<OperationCanceledException>(() => InvokeAsync(world, Request(world), cancel.Token));
 
-        (await world.UsedAsync()).ShouldBe((0.1m, 10));
-        (await world.CallCountAsync()).ShouldBe(0);
+        (await world.UsedAsync()).ShouldBe((0.15m, 10 + HoldTokens));
+        (await world.CallCountAsync()).ShouldBe(1);
     }
 
     /// <summary>
-    /// A settlement that fails (the attempt row cannot be inserted) rolls back whole and the hold is released in a fresh
-    /// scope, so the failed call leaves the counters as it found them.
+    /// A settlement that fails (the attempt row cannot be inserted) rolls back whole; the provider answered, so the hold
+    /// stays charged rather than refunding spend the ledger never saw.
     /// </summary>
     [Fact]
-    public async Task InvokeHealingLlm_SettlementFails_ReleasesTheHoldInAFreshScope()
+    public async Task InvokeHealingLlm_SettlementFails_KeepsTheHold()
     {
         ScriptedProvider? provider = null;
         provider = new ScriptedProvider(async _ =>
@@ -201,21 +204,20 @@ public sealed class HealingLlmTwoPhaseBudgetTests
 
         await Should.ThrowAsync<PostgresException>(() => InvokeAsync(world, Request(world), TestContext.Current.CancellationToken));
 
-        (await world.UsedAsync()).ShouldBe((0.1m, 10));
+        (await world.UsedAsync()).ShouldBe((0.15m, 10 + HoldTokens));
         (await world.CallCountAsync()).ShouldBe(0);
     }
 
     /// <summary>
-    /// A budget update that fails after the attempt row was inserted rolls the row back too, and the hold is released
-    /// by the zero-usage settlement that the fault does not match.
+    /// A budget update that fails after the attempt row was inserted rolls the row back too; the hold stays charged.
     /// </summary>
     [Fact]
-    public async Task InvokeHealingLlm_BudgetUpdateFailsAfterRowInsert_RollsBackBothAndReleases()
+    public async Task InvokeHealingLlm_BudgetUpdateFailsAfterRowInsert_RollsBackTheRowAndKeepsTheHold()
     {
         ScriptedProvider? provider = null;
         provider = new ScriptedProvider(async _ =>
         {
-            // Fails only the settlement that lands on 0.11 (0.15 held - 0.05 + 0.01), not the release back to 0.10.
+            // Fails the settlement that lands on 0.11 (0.15 held - 0.05 + 0.01).
             await provider!.World!.ExecuteOwnerAsync(
                 """
                 create function public.healing_llm_budget_test_fail() returns trigger language plpgsql as
@@ -230,7 +232,7 @@ public sealed class HealingLlmTwoPhaseBudgetTests
 
         await Should.ThrowAsync<PostgresException>(() => InvokeAsync(world, Request(world), TestContext.Current.CancellationToken));
 
-        (await world.UsedAsync()).ShouldBe((0.1m, 10));
+        (await world.UsedAsync()).ShouldBe((0.15m, 10 + HoldTokens));
         (await world.CallCountAsync()).ShouldBe(0);
     }
 
