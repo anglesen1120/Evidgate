@@ -29,7 +29,7 @@ OVERLAP_STAGES=(
 
 # SIDE_NAMES: the stages that run in the lane; SIDE_DIR: logs and `<name>.rc` files
 # ("<rc> <seconds>", written when the stage ends); SIDE_T0: when the run started.
-SIDE_NAMES=() SIDE_PID="" SIDE_DIR="" SIDE_T0=0
+SIDE_NAMES=() SIDE_PID="" SIDE_DIR="" SIDE_OWNER="" SIDE_T0=0
 
 # `kill_tree <pid>`: TERM to a process and everything under it, children first, so
 # a stage's own npm/dotnet children do not outlive the gate.
@@ -93,6 +93,7 @@ run_side_lane() {
 start_side_lane() {
   [[ "${#SIDE_NAMES[@]}" -gt 0 ]] || return 0
   SIDE_DIR="$(mktemp -d)"
+  SIDE_OWNER="$(exec sh -c 'echo $PPID')"
   echo "== side lane (EVIDGATE_VERIFY_OVERLAP=1): beside test, one at a time: ${SIDE_NAMES[*]}"
   run_side_lane &
   SIDE_PID=$!
@@ -101,7 +102,11 @@ start_side_lane() {
 
 # Idempotent; also the EXIT trap, so every way out of the gate stops the lane and
 # drops its logs.
+# $$ and $BASHPID are no use here (3.2 has no BASHPID); `exec sh` reports the calling
+# shell's own pid. A stage subshell can re-install this trap (bash 5 `trap -p` in a subshell reports the
+# parent's traps), so only the shell that started the lane may drop its directory.
 stop_side_lane() {
+  [[ "$SIDE_OWNER" == "$(exec sh -c 'echo $PPID')" ]] || return 0
   stop_lane_process
   if [[ -n "$SIDE_DIR" ]]; then rm -rf "$SIDE_DIR"; SIDE_DIR=""; fi
 }

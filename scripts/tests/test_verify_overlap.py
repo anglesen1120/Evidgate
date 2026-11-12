@@ -20,7 +20,7 @@ DRIVER = textwrap.dedent("""\
     shift
     run_stage() {
       case "$1" in
-      test) sleep "${TEST_SLEEP:-2}"; echo "ran test"; [[ -z "${TEST_FAIL:-}" ]] || exit 7 ;;
+      test) sleep "${TEST_SLEEP:-2}"; echo "ran test"; [[ -z "${TEST_RETRAP:-}" ]] || stop_side_lane; [[ -z "${TEST_FAIL:-}" ]] || exit 7 ;;
       tsc-build) echo "side one a"; sleep 1; echo "side one b" ;;
       prettier) echo "side two a"; sleep 1; echo "side two b"; [[ -z "${SIDE_FAIL:-}" ]] || exit 5 ;;
       *) echo "ran $1" ;;
@@ -129,6 +129,14 @@ class OverlapTests(unittest.TestCase):
         self.assertNotEqual(done.returncode, 0, done.stdout)
         self.assertIn("tsc-build did not run to the end", done.stdout)
         self.assertIn("ended without a result", done.stderr)
+
+    def test_a_test_stage_reinstalling_the_exit_trap_keeps_the_lane_results(self):
+        # Bash 5 reports the parent's traps from `trap -p` in a stage subshell, so the test
+        # stage's trap restore runs the lane's cleanup there; the stub calls it directly.
+        done = run(STAGES, EVIDGATE_VERIFY_OVERLAP="1", TEST_RETRAP="1", TEST_SLEEP="3")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("side one b", done.stdout)
+        self.assertNotIn("did not run to the end", done.stdout)
 
     def test_a_bad_switch_value_is_refused(self):
         done = run(STAGES, EVIDGATE_VERIFY_OVERLAP="yes")
