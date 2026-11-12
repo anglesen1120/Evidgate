@@ -278,6 +278,13 @@ internal sealed partial class HealingLlmGateway(
             throw;
         }
 
+        if (reservation is not null && !ReportsUsage(result))
+        {
+            // The adapter reports a timeout or error as a result, and a result without usage says nothing about what the
+            // provider billed: charge the held estimate rather than the zeros, the real status stays on the row.
+            result = result with { Tokens = reservation.Tokens, Cost = reservation.Cost };
+        }
+
         var status = result.Status;
         var content = result.Content;
 
@@ -365,11 +372,21 @@ internal sealed partial class HealingLlmGateway(
                     reservation)
                 .ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is DbException or IOException or InvalidOperationException)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             LogSettlementUnknown(exception, request.ProjectId);
         }
     }
+
+    /// <summary>
+    /// Whether a returned result carries usage the ledger can take as real: a timeout, an error and a result with neither
+    /// tokens nor cost (absent, or replaced by the bounds check) do not.
+    /// </summary>
+    /// <param name="result">The result after the bounds check.</param>
+    private static bool ReportsUsage(HealingLlmResult result) =>
+        result.Status != HealingLlmStatuses.Timeout
+        && result.Status != HealingLlmStatuses.Error
+        && (result.Tokens > 0 || result.Cost > 0m);
 
     /// <summary>
     /// Gives the hold back in a fresh scope, whatever the caller's token says. A release that itself fails is logged and

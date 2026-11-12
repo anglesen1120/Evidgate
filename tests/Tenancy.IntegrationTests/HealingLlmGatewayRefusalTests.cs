@@ -109,6 +109,7 @@ public sealed class HealingLlmGatewayRefusalTests
         await Should.ThrowAsync<OperationCanceledException>(() => gateway.InvokeAsync(Org, Request(), cancel.Token));
 
         provider.Calls.ShouldBe(0);
+        await db.DidNotReceive().ExecuteAsync(HealingLlmCallSql.Insert, Arg.Any<object?>(), Arg.Any<CancellationToken>());
         await db.Received(1).ExecuteAsync(
             HealingLlmBudgetSql.Settle,
             Arg.Any<object?>(),

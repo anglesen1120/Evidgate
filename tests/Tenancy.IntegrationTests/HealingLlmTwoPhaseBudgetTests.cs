@@ -13,8 +13,8 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>
 /// The two-phase budget of the healing gateway against a real PostgreSQL: the hold is committed before the provider is
-/// called, no tenant scope is open while it runs, concurrent holds never pass the caps, and every in-process failure
-/// between the phases gives the hold back. A hold that is never given back (a hard process kill) can only over-count.
+/// called, no tenant scope is open while it runs, and concurrent holds never pass the caps. A call cancelled before the
+/// request is sent gives its hold back; once it may have been sent, any failure keeps the estimate charged. A hold that is never given back (a hard process kill) can only over-count.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class HealingLlmTwoPhaseBudgetTests
@@ -156,6 +156,30 @@ public sealed class HealingLlmTwoPhaseBudgetTests
         (await InvokeAsync(world, Request(world), TestContext.Current.CancellationToken)).IsSuccess.ShouldBeTrue();
 
         (await world.UsedAsync()).ShouldBe((0.01m, int.MaxValue));
+        (await world.CallCountAsync()).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// An adapter that returns a timeout, an error or an answer without usage says nothing about what the provider billed:
+    /// the held estimate stays charged and the row keeps the real status.
+    /// </summary>
+    /// <param name="status">The status the adapter returned.</param>
+    /// <param name="tokens">The tokens it reported.</param>
+    /// <param name="cost">The cost it reported.</param>
+    [Theory]
+    [InlineData("timeout", 0, 0)]
+    [InlineData("error", 0, 0)]
+    [InlineData("ok", 0, 0)]
+    public async Task InvokeHealingLlm_ResultWithoutUsage_ChargesTheEstimate(string status, int tokens, double cost)
+    {
+        var provider = new ScriptedProvider(_ =>
+            Task.FromResult(new HealingLlmResult(status, status == "ok" ? Answer : null, tokens, (decimal)cost)));
+        await using var world = await StartAsync(provider);
+        await world.SeedBudgetAsync(1.0m, 5000, 0.1m, 10);
+
+        _ = await InvokeAsync(world, Request(world), TestContext.Current.CancellationToken);
+
+        (await world.UsedAsync()).ShouldBe((0.15m, 10 + HoldTokens));
         (await world.CallCountAsync()).ShouldBe(1);
     }
 
