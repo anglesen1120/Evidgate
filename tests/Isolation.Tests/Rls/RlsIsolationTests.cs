@@ -93,13 +93,13 @@ public sealed class RlsIsolationTests : HarnessTest
 
     /// <summary>
     /// SEC6: relations of kind view/materialized view/foreign table that <c>evidgate_app</c> may
-    /// SELECT. The queue's two scoped views are the only entries: they replace the app role's
-    /// lost read of the mechanism tables, are owned by the migration role and carry
-    /// <c>security_barrier</c> with an explicit <c>org_id = evidgate.current_org_id()</c> predicate
-    /// (proven behaviourally by the worker-role grant suite). A view added here must carry
-    /// <c>security_barrier=true</c>, asserted below.
+    /// SELECT. The queue's scoped views are the only entries — the task, the outbox, and the keyed
+    /// join of the two: they replace the app role's lost read of the mechanism tables, are owned by
+    /// the migration role and carry <c>security_barrier</c> with an explicit
+    /// <c>org_id = evidgate.current_org_id()</c> predicate (proven behaviourally by the worker-role
+    /// grant suite). A view added here must carry <c>security_barrier=true</c>, asserted below.
     /// </summary>
-    private static readonly string[] SelectableRelationAllowlist = ["public.task_in_scope", "public.outbox_in_scope"];
+    private static readonly string[] SelectableRelationAllowlist = ["public.task_in_scope", "public.outbox_in_scope", "public.outbox_task_in_scope"];
 
     private readonly ITestOutputHelper _output;
 

@@ -38,8 +38,6 @@ public sealed class WorkerRoleGrantTests
             (await positive.ExecuteScalarAsync(Token)).ShouldBe(0);
         }
 
-        await using var scope = await TenantScope.BeginAsync(app, Guid.CreateVersion7());
-
         foreach (var statement in new[]
         {
             "select count(*)::int from public.task",
@@ -50,6 +48,10 @@ public sealed class WorkerRoleGrantTests
             "delete from public.outbox where false",
         })
         {
+            // A refused statement aborts its transaction (25P02), so every denial gets
+            // its own: sharing one transaction would read the previous failure's corpse
+            // instead of this statement's answer, and only the first line would be proven.
+            await using var scope = await TenantScope.BeginAsync(app, Guid.CreateVersion7());
             var refused = await scope.CaptureErrorAsync(statement);
             refused.SqlState.ShouldBe(PostgresErrorCodes.InsufficientPrivilege, statement);
         }
@@ -187,6 +189,184 @@ public sealed class WorkerRoleGrantTests
         sequences.ShouldBeEmpty("the queue uses application-generated UUIDs, not sequences");
     }
 
+    /// <summary>
+    /// The app role's privilege on the mechanism is the producer's INSERT and nothing else:
+    /// the verbs it lost stay lost, TRUNCATE/REFERENCES/TRIGGER were never granted, and no
+    /// column-level grant hides a second path in the ACL.
+    /// </summary>
+    [Fact]
+    public async Task AppRole_Privileges_AreInsertAlone_OnQueueTables()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+
+        foreach (var table in new[] { "public.task", "public.outbox" })
+        {
+            (await _fixture.ScalarAsync<bool>(
+                database,
+                $"select has_table_privilege('evidgate_app', '{table}', 'INSERT')"))
+                .ShouldBeTrue($"{table}: the producer keeps INSERT");
+
+            foreach (var privilege in new[] { "SELECT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER" })
+            {
+                (await _fixture.ScalarAsync<bool>(
+                    database,
+                    $"select has_table_privilege('evidgate_app', '{table}', '{privilege}')"))
+                    .ShouldBeFalse($"{table}: evidgate_app must hold no {privilege}");
+            }
+
+            (await ColumnGrantsAsync(database, table, "evidgate_app")).ShouldBeEmpty(
+                $"{table}: a column grant would be a second path the table-level scan cannot see");
+
+            // The effective probe, which also sees a grant inherited through PUBLIC: every
+            // column answers for INSERT (the table grant) and for nothing else.
+            (await _fixture.ColumnAsync<string>(
+                database,
+                $"""
+                select a.attname || ':' || p
+                  from pg_catalog.pg_attribute a
+                  cross join unnest(array['SELECT', 'UPDATE', 'REFERENCES']) p
+                 where a.attrelid = '{table}'::regclass
+                   and a.attnum > 0 and not a.attisdropped
+                   and pg_catalog.has_column_privilege('evidgate_app', a.attrelid, a.attname, p)
+                """)).ShouldBeEmpty($"{table}: no effective column privilege beyond the producer's INSERT");
+
+            (await _fixture.ScalarAsync<bool>(
+                database,
+                $"""
+                select not exists (
+                  select 1 from pg_catalog.pg_attribute a
+                   where a.attrelid = '{table}'::regclass
+                     and a.attnum > 0 and not a.attisdropped
+                     and not pg_catalog.has_column_privilege('evidgate_app', a.attrelid, a.attname, 'INSERT'))
+                """)).ShouldBeTrue($"{table}: the positive control — INSERT is effective on every column");
+        }
+    }
+
+    /// <summary>
+    /// The queue role's only column-scoped privilege is the dispatch stamp: the ACL names
+    /// <c>dispatched_at</c> and no other column of either table.
+    /// </summary>
+    [Fact]
+    public async Task WorkerRole_ColumnGrants_AreTheDispatchStampAlone()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+
+        (await ColumnGrantsAsync(database, "public.outbox", "evidgate_worker"))
+            .ShouldBe(["dispatched_at:UPDATE"], "the positive control: a column grant is visible here");
+        (await ColumnGrantsAsync(database, "public.task", "evidgate_worker")).ShouldBeEmpty(
+            "the task table's UPDATE is table-wide, and nothing else is column-scoped");
+    }
+
+    /// <summary>
+    /// Neither the operator role nor PUBLIC holds a privilege on the mechanism: the audited
+    /// operator page is the definer, not a standing grant.
+    /// </summary>
+    [Fact]
+    public async Task OperatorAndPublic_HoldNothing_OnQueueTables()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+
+        var appInserts = await _fixture.ScalarAsync<long>(
+            database,
+            """
+            select count(*) from information_schema.table_privileges
+             where table_schema = 'public' and table_name in ('task', 'outbox')
+               and grantee = 'evidgate_app' and privilege_type = 'INSERT'
+            """);
+        appInserts.ShouldBe(2, "the positive control: the catalogue reports the grants that exist");
+
+        var granted = await _fixture.ColumnAsync<string>(
+            database,
+            """
+            select grantee || ':' || privilege_type || ':' || table_name
+              from information_schema.table_privileges
+             where table_schema = 'public' and table_name in ('task', 'outbox')
+               and grantee in ('PUBLIC', 'evidgate_operator')
+            """);
+
+        granted.ShouldBeEmpty("no standing grant reaches the operator role or PUBLIC");
+
+        // The table-level catalogue carries no column grant at all, so the ACL is read directly,
+        // with PUBLIC matched by OID 0 (it has no pg_roles row): a SELECT(payload) granted there
+        // would otherwise reach every role unseen.
+        foreach (var grantee in new[] { "PUBLIC", "evidgate_operator" })
+        {
+            foreach (var table in new[] { "public.task", "public.outbox" })
+            {
+                (await ColumnGrantsAsync(database, table, grantee)).ShouldBeEmpty(
+                    $"{table}: no column grant reaches {grantee}");
+            }
+        }
+
+        // A PUBLIC grant is effective for every role, so a role that holds nothing else answers
+        // for it: the sweep role can reach no column of the task table.
+        (await _fixture.ScalarAsync<bool>(
+            database,
+            "select has_column_privilege('evidgate_worker_sched', 'public.task', 'payload', 'SELECT')"))
+            .ShouldBeFalse("a PUBLIC column grant on the mechanism would be effective here");
+    }
+
+    /// <summary>
+    /// The queue role reaches no function: the two definers are the app role's capability and
+    /// no ACL in the schema names the worker.
+    /// </summary>
+    [Fact]
+    public async Task WorkerRole_HoldsNoExecute()
+    {
+        var database = await _fixture.CreateDatabaseAsync();
+
+        var definers = new[]
+        {
+            "evidgate.list_dead_letter_tasks(text, timestamp with time zone, uuid, integer)",
+            "evidgate.replay_dead_letter_task(uuid, uuid)",
+        };
+
+        foreach (var definer in definers)
+        {
+            (await _fixture.ScalarAsync<bool>(
+                database,
+                $"select has_function_privilege('evidgate_worker', '{definer}', 'EXECUTE')"))
+                .ShouldBeFalse(definer);
+
+            // The positive control: the same probe sees the app role's grant.
+            (await _fixture.ScalarAsync<bool>(
+                database,
+                $"select has_function_privilege('evidgate_app', '{definer}', 'EXECUTE')"))
+                .ShouldBeTrue(definer);
+        }
+
+        var granted = await _fixture.ColumnAsync<string>(
+            database,
+            """
+            select p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')'
+              from pg_proc p
+              join pg_namespace n on n.oid = p.pronamespace
+              cross join lateral pg_catalog.aclexplode(p.proacl) acl
+              join pg_roles r on r.oid = acl.grantee
+             where n.nspname = 'evidgate' and r.rolname = 'evidgate_worker'
+            """);
+
+        granted.ShouldBeEmpty("no evidgate function names the worker in its ACL");
+    }
+
+    /// <summary>
+    /// Column-level grants the ACL records for one grantee on one table, as <c>column:privilege</c>.
+    /// The grantee is matched through a left join, because PUBLIC is not a row in <c>pg_roles</c>
+    /// (OID 0): an inner join would silently hide a grant that reaches every role.
+    /// </summary>
+    private Task<IReadOnlyList<string>> ColumnGrantsAsync(string database, string table, string grantee) =>
+        _fixture.ColumnAsync<string>(
+            database,
+            $"""
+            select a.attname || ':' || acl.privilege_type
+              from pg_catalog.pg_attribute a
+              cross join lateral pg_catalog.aclexplode(a.attacl) acl
+              left join pg_catalog.pg_roles r on r.oid = acl.grantee
+             where a.attrelid = '{table}'::regclass
+               and a.attnum > 0 and not a.attisdropped
+               and coalesce(r.rolname, case when acl.grantee = 0 then 'PUBLIC' end) = '{grantee}'
+            """);
+
     private Task<Guid> SeedOrgAsync(string database) => RunAsync(async connection =>
     {
         var org = Guid.CreateVersion7();
@@ -212,6 +392,10 @@ public sealed class WorkerRoleGrantTests
         return true;
     }, _fixture.WorkerConnectionString(database));
 
+    /// <summary>
+    /// One outbox row seeded as the owner: the queue role reads and stamps that table but
+    /// does not produce work (only <c>evidgate_app</c> holds its INSERT).
+    /// </summary>
     private Task<bool> InsertOutboxAsync(string database, Guid org, string key) => RunAsync(async connection =>
     {
         await using var command = connection.CreateCommand();
@@ -225,7 +409,7 @@ public sealed class WorkerRoleGrantTests
         command.Parameters.AddWithValue("@key", key);
         await command.ExecuteNonQueryAsync(Token);
         return true;
-    }, _fixture.WorkerConnectionString(database));
+    }, _fixture.OwnerConnectionString(database));
 
     private static async Task<T> RunAsync<T>(Func<NpgsqlConnection, Task<T>> work, string connectionString)
     {

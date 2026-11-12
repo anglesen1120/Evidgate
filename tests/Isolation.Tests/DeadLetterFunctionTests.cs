@@ -100,6 +100,10 @@ public sealed class DeadLetterFunctionTests
                 "select outcome from evidgate.replay_dead_letter_task(@id, @actor)",
                 ("id", taskId),
                 ("actor", actor))).ShouldBe("replayed");
+
+            // The replay and its audit row are the transaction's work: the caller commits,
+            // and every assertion below reads the committed state rather than its own snapshot.
+            await scope.CommitAsync();
         }
 
         var row = await _fixture.ColumnAsync<string>(

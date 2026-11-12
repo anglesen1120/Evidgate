@@ -32,6 +32,8 @@ public sealed class WorkerRoleLifecycleTests
         var owner = _fixture.OwnerConnectionString(database);
         var org = await SeedOrgAsync(owner);
 
+        var outboxId = Guid.CreateVersion7();
+
         // A producer writes the outbox row with the app role: INSERT is the only DML it keeps.
         (await TaskSql.ExecuteAsync(
             _fixture.AppConnectionString(database),
@@ -39,7 +41,7 @@ public sealed class WorkerRoleLifecycleTests
             insert into public.outbox (id, org_id, aggregate_type, aggregate_id, task_type, payload, idempotency_key)
             values (@id, @org, 'record', @aggregate, @task_type, '{"value":"lifecycle"}'::jsonb, @key)
             """,
-            ("id", Guid.CreateVersion7()),
+            ("id", outboxId),
             ("org", org),
             ("aggregate", Guid.CreateVersion7()),
             ("task_type", TaskHandlerTypes.Recording),
@@ -52,9 +54,14 @@ public sealed class WorkerRoleLifecycleTests
 
         dispatched.Claimed.ShouldBe(1);
         dispatched.Enqueued.ShouldBe(1);
+
+        // The dispatcher derives the task's dedupe key from the outbox row's id, not from the
+        // producer's key: the row is found by 'outbox:' || <outbox id>.
         var taskId = await TaskSql.ScalarAsync<Guid>(
             owner,
-            "select id from public.task where idempotency_key = 'lifecycle:outbox'");
+            "select id from public.task where idempotency_key = @key",
+            ("key", "outbox:" + outboxId.ToString("D")));
+        taskId.ShouldNotBe(Guid.Empty, "the dispatched task is keyed by the outbox row's id");
 
         await using var host = TasksTestHost.Start(_fixture, database);
 

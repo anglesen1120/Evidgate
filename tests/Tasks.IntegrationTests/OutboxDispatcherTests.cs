@@ -15,12 +15,11 @@ using Xunit;
 namespace Tasks.IntegrationTests;
 
 /// <summary>
-/// 01.5.1-T3: the outbox dispatcher over real PostgreSQL 18 (Docker-backed). The
-/// suite drives the production mechanism as the production role —
-/// <c>evidgate_app</c> on the app-role data source — so it proves at once that
-/// migration 0009's `select` / `update (dispatched_at)` grant is sufficient for the
-/// batch, that it is not more than that, and that 0009 reaches head (the fixture
-/// applies the real <c>migrations/</c> through the real Migrator).
+/// The outbox dispatcher over real PostgreSQL 18 (Docker-backed). The suite drives the
+/// production mechanism as the production role — <c>evidgate_worker</c> on the queue role's
+/// data source — so it proves the worker's <c>select</c> / <c>update (dispatched_at)</c> grant
+/// on <c>outbox</c> plus its DML on <c>task</c> is sufficient for the batch and not more,
+/// and that the split reaches head (the fixture applies the real <c>migrations/</c>).
 /// </summary>
 /// <remarks>
 /// Statement counting is an Npgsql logging capture, not a database-side counter:
@@ -525,12 +524,7 @@ public sealed class OutboxDispatcherTests
         }
     }
 
-    /// <summary>
-    /// The production mechanism over one test database: an app-role
-    /// <c>NpgsqlDataSource</c> whose commands are captured, and
-    /// <c>AddEvidgateTasks</c> — the registration that puts the dispatcher beside
-    /// the queue it feeds.
-    /// </summary>
+    /// <summary>The production mechanism: the queue role's data source (captured) plus <c>AddEvidgateTasks</c>.</summary>
     private sealed class DispatcherHost : IAsyncDisposable
     {
         internal const string KilledApplicationName = "evidgate-test-killed-dispatcher";
@@ -586,6 +580,11 @@ public sealed class OutboxDispatcherTests
             services.AddLogging();
             values[$"{TasksOptions.SectionName}:WorkerConnectionString"] = fixture.WorkerConnectionString(database);
             services.AddEvidgateTasks(new ConfigurationBuilder().AddInMemoryCollection(values).Build());
+
+            // The dispatcher opens the queue role's keyed source, so the instrumented source
+            // has to answer under that same key. Registering it last wins the resolution and
+            // keeps the statement capture (and the kill) on the commands the batch sends.
+            services.AddKeyedSingleton<NpgsqlDataSource>(TaskWorkerDataSource.Key, (_, _) => dataSource);
 
             return new DispatcherHost(dataSource, services.BuildServiceProvider(), capture);
         }
