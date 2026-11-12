@@ -7,7 +7,7 @@
 #   scripts/dogfood/collect.sh [--produce] [--src DIR] [--out DIR]
 #
 #   --src DIR   directory holding xunit.junit.xml, vitest.junit.xml, playwright.junit.xml
-#               (default artifacts/dogfood/raw; the committed sample is scripts/dogfood/testdata)
+#               (default artifacts/dogfood/raw; the committed sample is fixtures/reports/own-ci)
 #   --out DIR   upload set to write (default artifacts/dogfood/upload)
 #   --produce   run the three small producers into --src first (needs a built workspace and the
 #               Playwright fixtures bundle prerequisites)
