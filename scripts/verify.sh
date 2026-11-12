@@ -206,16 +206,16 @@ run_stage() {
     # only other stage that selects the Fuzz trait — runs the harness's few-second smoke default (a caller that
     # already exported EVIDGATE_FUZZ_BUDGET_SECONDS keeps its value); the `fixtures-hostile` stage filters
     # Category=Hostile only and never runs this harness. The seed is set HERE too: one per run, from the CI run id
-    # (or the clock outside CI), so consecutive nights do not replay one PRNG stream; it is echoed below so a red
-    # run can be replayed with EVIDGATE_FUZZ_SEED=<value>. Findings go under artifacts/fuzz-findings, which the
-    # nightly job uploads. Only the trait-bearing assemblies run (see `run_trait_stage`): a trait that selects
-    # nothing fails the stage instead of passing it.
+    # (or the clock outside CI), so consecutive nights do not replay one PRNG stream. `run_fuzz_shards`
+    # (verify-parallel-tests.sh) splits the budget over concurrent shards, prints each shard's own seed and
+    # says how to replay one. Findings go under artifacts/fuzz-findings/shard-N, which the nightly job uploads.
+    # Only the trait-bearing assemblies run: a trait that selects nothing fails the stage instead of passing it.
     export EVIDGATE_FUZZ_BUDGET_SECONDS="${EVIDGATE_FUZZ_BUDGET_SECONDS:-600}"
     export EVIDGATE_FUZZ_FINDINGS_DIR="${EVIDGATE_FUZZ_FINDINGS_DIR:-$ROOT/artifacts/fuzz-findings}"
     export EVIDGATE_FUZZ_SEED="${EVIDGATE_FUZZ_SEED:-${GITHUB_RUN_ID:-$(date +%s)}}"
     stage "dotnet test (fuzz harness, ${EVIDGATE_FUZZ_BUDGET_SECONDS}s budget)"
     echo "   EVIDGATE_FUZZ_SEED=${EVIDGATE_FUZZ_SEED}"
-    run_trait_stage Fuzz "${FUZZ_ASSEMBLIES[@]}"
+    run_fuzz_shards "${FUZZ_ASSEMBLIES[@]}"
     ;;
   tsc-build)
     # tsc -b of the root tsconfig.json references: packages/* AND apps/web — the
@@ -414,7 +414,7 @@ run_stage() {
       scripts/tests/test_gate_scope.py scripts/tests/test_gate_scope_reasons.py \
       scripts/tests/test_verify_scope.py \
       scripts/tests/test_verify_refusal.py scripts/tests/test_verify_shards.py \
-      scripts/tests/test_verify_test_parallel.py scripts/tests/test_verify_stage_time.py \
+      scripts/tests/test_verify_test_parallel.py scripts/tests/test_verify_stage_time.py scripts/tests/test_verify_fuzz_shards.py \
       scripts/tests/test_smoke_mktemp.py
     ;;
   image-pins)

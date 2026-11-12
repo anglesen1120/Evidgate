@@ -237,13 +237,10 @@ trait_files() {
   done < <(grep -rlE --include='*.cs' 'Trait[[:space:]]*\(' tests || true)
 }
 
-# run_trait_stage <trait> <assembly>...
-# Each named assembly runs its own `dotnet test --project`: zero matching tests
-# then fail as exit 8 for that assembly, and `--minimum-expected-tests 1` states
-# the same rule where the exit code cannot (a stage that selected nothing). A
-# trait-bearing file whose owning project is not named fails the stage, so a
+# check_trait_coverage <trait> <assembly>...
+# A trait-bearing file whose owning project is not named fails the stage, so a
 # moved or reformatted test cannot silently drop out of it.
-run_trait_stage() {
+check_trait_coverage() {
   local trait="$1" file project
   shift
   while IFS= read -r file; do
@@ -258,6 +255,16 @@ run_trait_stage() {
       exit 2
     fi
   done < <(trait_files "$trait")
+}
+
+# run_trait_stage <trait> <assembly>...
+# Each named assembly runs its own `dotnet test --project`: zero matching tests
+# then fail as exit 8 for that assembly, and `--minimum-expected-tests 1` states
+# the same rule where the exit code cannot (a stage that selected nothing).
+run_trait_stage() {
+  local trait="$1" project
+  shift
+  check_trait_coverage "$trait" "$@"
   for project in "$@"; do
     dotnet test --no-build -c Release --project "$project" \
       --filter-trait "Category=$trait" --minimum-expected-tests 1
