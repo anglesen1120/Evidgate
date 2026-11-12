@@ -74,8 +74,8 @@ internal sealed partial class ParseRawReportHandler
 
     /// <summary>
     /// Whether this report's task row carries a deferral, the only sign the queue has already waited for this report:
-    /// the row's idempotency key is derived from the outbox row (<c>'outbox:' || outbox.id</c>), so the probe joins
-    /// the two on that derivation and both sides are unique-index lookups.
+    /// the row's idempotency key is derived from the outbox row (<c>'outbox:' || outbox.id</c>), so the view pairs
+    /// the two inside its own barrier and the probe is one keyed lookup of that pair.
     /// </summary>
     /// <param name="orgId">The tenant the claimed task row names.</param>
     /// <param name="artifactId">The report artifact the key derives from.</param>
@@ -98,20 +98,18 @@ internal sealed partial class ParseRawReportHandler
     private const string DeferredTaskSql = "select " + DeferredProbeSql;
 
     /// <summary>
-    /// The deferred-report probe as one boolean expression named <c>deferred</c>. Both
-    /// sides are the scoped views, so the predicate that narrows them is the caller's own
-    /// session scope rather than a table grant.
+    /// The deferred-report probe as one boolean expression named <c>deferred</c>. The join between
+    /// the outbox row and the task it became lives inside <c>public.outbox_task_in_scope</c>, whose
+    /// tenant filter is the caller's own session scope rather than a table grant: a caller could
+    /// only re-derive the key outside that barrier, where the task side is not filtered by org.
     /// </summary>
     private const string DeferredProbeSql = """
         exists (
             select 1
-            from public.outbox_in_scope as o
-            join public.task_in_scope as t
-              on t.idempotency_key = 'outbox:' || o.id::text
-             and t.org_id = o.org_id
-            where o.org_id = @org_id
-              and o.idempotency_key = @idempotency_key
-              and t.last_error = @last_error) as deferred
+            from public.outbox_task_in_scope as ot
+            where ot.org_id = @org_id
+              and ot.idempotency_key = @idempotency_key
+              and ot.last_error = @last_error) as deferred
         """;
 
     /// <summary>

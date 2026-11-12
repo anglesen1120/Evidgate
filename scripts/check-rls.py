@@ -48,7 +48,7 @@ Every `SECURITY DEFINER` function (TL T80) must:
   definer_public_grant  never be granted to PUBLIC
   definer_unqualified   use schema-qualified relations only (`from public.x`, never `from x`)
   definer_audit         write a per-call audit row, unless named in DEFINER_AUDIT_EXEMPT
-                        or the file carries `-- lint: audit-deferred <task>`
+                        or the file carries `-- lint: audit-deferred <justification> <schema.function>[, ...]`
 
 Usage: check-rls.py [--migrations DIR] [--exceptions FILE]. Exit 1 lists every finding.
 """
@@ -206,11 +206,8 @@ DEFINER_AUDIT_EXEMPT = {
     ),
 }
 
-# Roles a definer function may be granted EXECUTE to: the four runtime roles of the matrix
-# 0104 and 0001 establish (tenant traffic, support reads, platform sweeps, the outbox and task
-# queue machinery). Membership here says the role is one the system grants to on purpose; it
-# does not say a particular function should hand it anything.
-ALLOWED_GRANTEES = {"evidgate_app", "evidgate_worker_sched", "evidgate_operator", "evidgate_worker"}
+# Roles a definer function may be granted EXECUTE to.
+ALLOWED_GRANTEES = {"evidgate_app", "evidgate_worker_sched", "evidgate_operator"}
 
 # Tenant policies that shipped without a `TO` clause and were replaced later. The key is the
 # EXACT statement (file, policy, table) and it counts only while a later statement re-creates the

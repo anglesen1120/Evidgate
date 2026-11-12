@@ -4,8 +4,8 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 
 /// <summary>
-/// The outcome of <c>POST /internal/operator/tasks/dead-letter/{id}/replay</c>
-/// (01.5.1 §5): <see cref="Replayed"/> carries the row's new
+/// The outcome of <c>POST /internal/operator/tasks/dead-letter/{id}/replay</c>:
+/// <see cref="Replayed"/> carries the row's new
 /// <c>available_at</c>, <see cref="NotFound"/> and <see cref="NotDeadLetter"/>
 /// discriminate the two ways the guarded update matched no row.
 /// </summary>
@@ -38,14 +38,14 @@ public sealed record ReplayDeadLetterResult(ReplayDeadLetterOutcome Outcome, Dat
 }
 
 /// <summary>
-/// The replay of 01.5.1 §5/T4.2 (`dead_letter → queued`, §6): one call to
+/// The replay (<c>dead_letter → queued</c>): one call to
 /// <c>evidgate.replay_dead_letter_task</c>, the owner <c>SECURITY DEFINER</c> function whose
 /// guard is the capability — a row that is not <c>dead_letter</c> simply does not match,
 /// which is why the endpoint is idempotent and needs no <c>ETag</c> or
 /// <c>Idempotency-Key</c>.
 /// </summary>
 /// <remarks>
-/// Deliberately NOT an <c>ICommand</c> through the Mediator C2 pipeline (01.5.1 §5): a
+/// Deliberately NOT an <c>ICommand</c> through the Mediator C2 pipeline: a
 /// Result-contract command would trip <c>TenantTransactionBehaviour</c>'s fail-closed
 /// Require() on a request the tenant pipeline never entered. The org and the acting
 /// operator arrive as parameters, the service opens the tenant transaction the function

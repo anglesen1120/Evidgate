@@ -107,8 +107,11 @@ deletes both volumes.
 ## Configuration (`.env.dev`)
 
 `.env.dev` is git-ignored (00 §5.7 S3) and is the only place dev credentials live.
-It is sourced and exported by the dev scripts, and inherited by compose, the Api,
-the Worker and the Migrator:
+It is sourced and exported by the dev scripts, and inherited by compose, the Worker
+and the Migrator. The Api inherits every value except the worker credential:
+`up.sh` removes `EVIDGATE__TASKS__WORKERCONNECTIONSTRING` and
+`EVIDGATE_WORKER_PASSWORD` from its environment, so the Api process never holds
+them.
 
 | Setting | Used by | Meaning |
 | --- | --- | --- |

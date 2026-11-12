@@ -16,11 +16,11 @@ namespace Evidgate.Modules.Orchestrator.Infrastructure.Persistence;
 /// </para>
 /// <para>
 /// The probe runs inside the run's own tenant scope and names <c>org_id</c> explicitly. It
-/// reads <c>public.outbox_in_scope</c> and <c>public.task_in_scope</c>: owner-owned
-/// <c>security_barrier</c> views filtered by <c>evidgate.current_org_id()</c>, exposing
-/// only the columns this read uses, because the queue tables themselves carry no tenant
+/// reads <c>public.outbox_task_in_scope</c>: the owner-owned <c>security_barrier</c> view that
+/// pairs an outbox row with the task it became and filters both by
+/// <c>evidgate.current_org_id()</c>, because the queue tables themselves carry no tenant
 /// policy (0006 — the dispatcher scans every org by design) and the app role only ever
-/// holds <c>INSERT</c> on them. The explicit <c>org_id</c> predicates stay as the second
+/// holds <c>INSERT</c> on them. The explicit <c>org_id</c> predicate stays as the second
 /// lock, and the probe reads the keys with the state of the task each became rather than a
 /// count, so the sweep can decide every run of a page in one statement.
 /// </para>
@@ -45,8 +45,10 @@ internal static class ReconcileDeadlineSql
     /// <para>
     /// The join is the only link from a trigger to the work it produced: a task row carries no outbox id, it
     /// carries <c>'outbox:' || outbox.id</c> as its own idempotency key, so that expression — not a column — is
-    /// what pairs the two. <c>org_id</c> is named on both sides: neither table has a tenant policy, so the
-    /// predicates are the whole boundary, and a task row of another tenant can never answer for this one.
+    /// what pairs the two. It lives inside <c>public.outbox_task_in_scope</c>, because a caller-side join on the
+    /// expression would pair the task side before the tenant filter and the view is the only place both sides are
+    /// filtered by the same org. <c>org_id</c> is still named here as the second lock, and the keys are a
+    /// <c>= any (array …)</c> comparison so the planner can use the outbox idempotency key as an index probe.
     /// </para>
     /// <para>
     /// Dispatch inserts the tasks and stamps <c>dispatched_at</c> in one transaction, so a stamped row with no task
@@ -62,15 +64,13 @@ internal static class ReconcileDeadlineSql
     /// </para>
     /// </summary>
     internal const string AttemptStates = """
-        select o.idempotency_key as "IdempotencyKey",
-               (o.dispatched_at is not null) as "Dispatched",
-               t.state as "TaskState"
-          from public.outbox_in_scope o
-          left join public.task_in_scope t
-            on t.idempotency_key = 'outbox:' || o.id::text
-           and t.org_id = @org_id
-         where o.org_id = @org_id
-           and o.idempotency_key in (select k.value from jsonb_array_elements_text(@keys::jsonb) as k(value))
+        select ot.idempotency_key as "IdempotencyKey",
+               (ot.dispatched_at is not null) as "Dispatched",
+               ot.task_state as "TaskState"
+          from public.outbox_task_in_scope ot
+         where ot.org_id = @org_id
+           and ot.idempotency_key = any (
+                 array(select k.value from jsonb_array_elements_text(@keys::jsonb) as k(value)))
         """;
 }
 

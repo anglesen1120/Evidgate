@@ -10,10 +10,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Evidgate.Api.Endpoints;
 
 /// <summary>
-/// The operator-ingress endpoints of 01.5.1 §5/T4.2 (00 §9.1): dead-letter
+/// The operator-ingress endpoints: dead-letter
 /// listing and replay live under <c>/internal/operator/*</c>, guarded by
 /// <see cref="IOperatorGate"/> and excluded from the served OpenAPI document
-/// (T16/CR-01-4) — the same posture <c>/internal/health/*</c> and
+/// — the same posture <c>/internal/health/*</c> and
 /// <c>/internal/health</c> already take. No <c>/v1</c> mount exists: the operator
 /// surface is not a tenant contract.
 /// </summary>
@@ -45,7 +45,7 @@ public static class OperatorEndpoints
         group.MapGet("/dead-letter", ListDeadLetterAsync);
         group.MapPost("/dead-letter/{id:guid}/replay", ReplayDeadLetterAsync);
 
-        // 08.6.3-T1 (AC1/T72): the platform-wide healing switch. The same gate and envelope filters as the task
+        // The platform-wide healing switch. The same gate and envelope filters as the task
         // routes, and the same ExcludeFromDescription posture: the operator surface is never in the served document.
         var healing = app.MapGroup("/internal/operator/healing")
             .ExcludeFromDescription()
@@ -54,7 +54,7 @@ public static class OperatorEndpoints
 
         healing.MapPost("/switch", SetHealingSwitchSystemAsync);
 
-        // The billing operator's audited reads (12.4.1's invoice statement and its reconciliation). Same gate and
+        // The billing operator's audited reads (the invoice statement and its reconciliation). Same gate and
         // envelope, same exclusion from the served document; the routes own the org segment because an operator read
         // is not scoped to one tenant by the request pipeline.
         app.MapUsageOperatorEndpoints();
@@ -79,7 +79,7 @@ public static class OperatorEndpoints
 
     /// <summary>
     /// <c>GET /internal/operator/tasks/dead-letter?org_id=&amp;queue=&amp;cursor=&amp;limit=</c>
-    /// → the keyset page of one org's dead-lettered rows (00 §9.1 ordering
+    /// → the keyset page of one org's dead-lettered rows (ordering
     /// <c>(created_at, id)</c>, response <c>{ items, next_cursor }</c>).
     /// </summary>
     private static async Task<Result<DeadLetterTaskPage>> ListDeadLetterAsync(
@@ -137,7 +137,7 @@ public static class OperatorEndpoints
     /// <c>POST /internal/operator/tasks/dead-letter/{id}/replay?org_id={o}</c> →
     /// <c>ReplayDeadLetterTask</c>: the guarded <c>state = 'dead_letter'</c>
     /// transition, mapped to 200 with the row's new state / 404
-    /// <c>task_not_found</c> / 409 <c>task_not_dead_letter</c> (§5). The acting
+    /// <c>task_not_found</c> / 409 <c>task_not_dead_letter</c>. The acting
     /// operator is the audit row's actor, so a principal nobody can be held to is refused.
     /// </summary>
     private static async Task<Result<ReplayDeadLetterTaskResponse>> ReplayDeadLetterAsync(
@@ -184,7 +184,7 @@ public static class OperatorEndpoints
 
     /// <summary>
     /// <c>POST /internal/operator/healing/switch</c> → <see cref="HealingSystemSwitchWriter"/>: the
-    /// platform-wide row, set through migration 0052's definer on a non-tenant connection (08.6.3 §5, T72). The
+    /// platform-wide row, set through migration 0052's definer on a non-tenant connection. The
     /// principal's user id is the row's <c>set_by</c>; an unauthenticated caller is 401 and an authenticated one
     /// without a subject 403, so a system write can never be attributed to nobody. 422
     /// <c>invalid_switch_mode</c> / <c>mode_not_available</c> come from the same gate the tenant route uses.
@@ -245,14 +245,14 @@ public static class OperatorEndpoints
 }
 
 /// <summary>
-/// The 200 body of the replay endpoint (01.5.1 §5, snake_case on the wire):
+/// The 200 body of the replay endpoint (snake_case on the wire):
 /// the row's id, its new <c>state</c>, the reset <c>attempts</c> and the
 /// <c>available_at</c> the guarded update set.
 /// </summary>
 public sealed record ReplayDeadLetterTaskResponse(Guid Id, string State, int Attempts, DateTime AvailableAt);
 
 /// <summary>
-/// The body of <c>POST /internal/operator/healing/switch</c> (08.6.3 §5): the platform-wide mode and its reason.
+/// The body of <c>POST /internal/operator/healing/switch</c>: the platform-wide mode and its reason.
 /// <c>set_by</c> is never in the body — it is the authenticated operator's own id.
 /// </summary>
 /// <param name="Mode">One of <c>enabled</c>, <c>shadow</c>, <c>disabled</c>.</param>

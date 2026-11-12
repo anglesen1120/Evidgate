@@ -441,11 +441,11 @@ configure_dev_bucket
 ensure_web_prerequisites
 build_hosts
 
-start_host api dotnet watch --project "$EVG_ROOT/src/Evidgate.Api" --non-interactive run
+# The Api never holds the worker credential: `env -u` drops it from the child env.
+start_host api env -u EVIDGATE__TASKS__WORKERCONNECTIONSTRING -u EVIDGATE_WORKER_PASSWORD dotnet watch --project "$EVG_ROOT/src/Evidgate.Api" --non-interactive run
 start_host worker dotnet watch --project "$EVG_ROOT/src/Evidgate.Worker" --non-interactive run
-# CI=1 and NG_CLI_ANALYTICS=false keep `ng serve` non-interactive: a first run
-# would otherwise ask about usage-data sharing and wait for an answer under nohup.
-# --scrub starts it without any exported credential (it is third-party tooling).
+# CI=1 and NG_CLI_ANALYTICS=false keep `ng serve` non-interactive under nohup (a
+# first run would otherwise ask about usage-data); --scrub drops every credential.
 start_host web --scrub env CI=1 NG_CLI_ANALYTICS=false \
   npm run start -w apps/web -- --host 127.0.0.1 --port "$EVIDGATE_WEB_PORT"
 

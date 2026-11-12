@@ -5,8 +5,8 @@ using Evidgate.BuildingBlocks.Persistence.Tenancy;
 namespace Evidgate.BuildingBlocks.Persistence.Tasks;
 
 /// <summary>
-/// One dead-lettered task row as the operator list serves it (01.5.1 §5, response
-/// <c>items</c> entry). The mechanism columns that an operator does not need
+/// One dead-lettered task row as the operator list serves it: one <c>items</c> entry of the
+/// response. The mechanism columns that an operator does not need
 /// (locked_until, payload, schedule fields, version) stay in the table.
 /// </summary>
 public sealed record DeadLetterTaskItem(
@@ -21,7 +21,7 @@ public sealed record DeadLetterTaskItem(
     DateTime CreatedAt);
 
 /// <summary>
-/// One page of the operator dead-letter list (00 §9.1): the items plus the
+/// One page of the operator dead-letter list: the items plus the
 /// opaque continuation cursor, or null when this page is the last.
 /// </summary>
 public sealed record DeadLetterTaskPage(IReadOnlyList<DeadLetterTaskItem> Items, string? NextCursor);
@@ -79,9 +79,8 @@ internal static class DeadLetterTaskCursor
 }
 
 /// <summary>
-/// <c>ListDeadLetterTasksQuery</c> of 01.5.1 §5/T4.2 — the read behind
-/// <c>GET /internal/operator/tasks/dead-letter</c>. It runs inside the named org's tenant
-/// transaction and calls <c>evidgate.list_dead_letter_tasks</c>, the owner
+/// The read behind <c>GET /internal/operator/tasks/dead-letter</c>. It runs inside the named
+/// org's tenant transaction and calls <c>evidgate.list_dead_letter_tasks</c>, the owner
 /// <c>SECURITY DEFINER</c> projection over <c>public.task</c>; the app role holds no
 /// <c>SELECT</c> on that table.
 /// </summary>
@@ -90,15 +89,15 @@ internal static class DeadLetterTaskCursor
 /// pipeline, because the operator surface answers to the platform operator rather
 /// than a tenant principal; the org is therefore the route's own parameter and the
 /// service opens the scope the function reads <c>evidgate.current_org_id()</c> from.
-/// The limit is bounded here (00 §9.1: default 50, max 200) because a resource bound
+/// The limit is bounded here (default 50, max 200) because a resource bound
 /// belongs with the query, not with whichever caller passes it.
 /// </remarks>
 public sealed class ListDeadLetterTasksQuery
 {
-    /// <summary>00 §9.1 default when <c>limit</c> is absent.</summary>
+    /// <summary>Default when <c>limit</c> is absent.</summary>
     public const int DefaultLimit = 50;
 
-    /// <summary>00 §9.1 maximum <c>limit</c>.</summary>
+    /// <summary>Maximum <c>limit</c>.</summary>
     public const int MaxLimit = 200;
 
     /// <summary>
