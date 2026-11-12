@@ -1,3 +1,5 @@
+using Evidgate.BuildingBlocks.Persistence.Tasks;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Healing.Contracts;
@@ -69,6 +71,13 @@ internal static class HealingModule
     {
         // Defaults live in code: there is no configuration key for this slice.
         services.AddOptions<HealingLlmOptions>();
+
+        // The daily budget roll runs as the sweep role through an owner function; `AddTaskSchedule` is idempotent per
+        // host and the schedule's unique (schedule_name, fire_at) key makes one fire run once.
+        services.TryAddSingleton<IWorkerSchedDataSource, WorkerSchedDataSource>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddTaskHandler<HealingLlmBudgetResetPayload, HealingLlmBudgetResetTaskHandler>();
+        services.AddTaskSchedule(HealingLlmBudgetResetSweeps.Reset);
 
         // The selected kind is settled before validation runs, so a host that states a provider it may not run refuses to
         // start naming the key. The group is validated on start as well as by the host's own materialisation.
