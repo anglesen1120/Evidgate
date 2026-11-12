@@ -87,7 +87,7 @@ class FuzzShardTests(unittest.TestCase):
         done, calls = run_stage(EVIDGATE_FUZZ_SHARDS="4")
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
         self.assertEqual(sorted(c[0] for c in calls), ["5000", "5001", "5002", "5003"])
-        self.assertEqual({c[1] for c in calls}, {"150"})
+        self.assertEqual({c[1] for c in calls}, {"270"})
         self.assertEqual(len({c[2] for c in calls}), 4)
         self.assertTrue(all("/shard-" in c[2] for c in calls))
         self.assertIn("fuzz: 4000 inputs in total over 4 shard(s)", done.stdout)
@@ -95,7 +95,7 @@ class FuzzShardTests(unittest.TestCase):
     def test_the_budget_rounds_up_so_core_seconds_are_never_lost(self):
         done, calls = run_stage(EVIDGATE_FUZZ_SHARDS="3", EVIDGATE_FUZZ_BUDGET_SECONDS="100")
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertEqual({c[1] for c in calls}, {"34"})
+        self.assertEqual({c[1] for c in calls}, {"60"})
 
     def test_one_shard_keeps_the_whole_budget_and_the_base_seed(self):
         done, calls = run_stage(EVIDGATE_FUZZ_SHARDS="1")
@@ -145,7 +145,7 @@ class FuzzShardTests(unittest.TestCase):
             EVIDGATE_FUZZ_SHARDS="4", EVIDGATE_FUZZ_BUDGET_SECONDS="0600", EVIDGATE_FUZZ_SEED="0008"
         )
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
-        self.assertEqual({c[1] for c in calls}, {"150"})
+        self.assertEqual({c[1] for c in calls}, {"270"})
         self.assertIn("11", [c[0] for c in calls])
 
     def test_a_zero_budget_is_refused(self):

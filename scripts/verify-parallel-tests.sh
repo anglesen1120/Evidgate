@@ -172,8 +172,11 @@ run_parallel_tests() {
 
 # --- sharded fuzz stage -------------------------------------------------------
 # The harness is one single-threaded loop bounded by a wall budget, so 600 s
-# leaves the other cores idle. The same total work is split over N processes
-# (N = min(4, cores), or EVIDGATE_FUZZ_SHARDS) of budget/N seconds each. Shard i
+# leaves the other cores idle. The work is split over N processes
+# (N = min(4, cores), or EVIDGATE_FUZZ_SHARDS). Concurrent shards share cores,
+# caches and memory (LAN host: ~91k inputs/s per shard at N=4 against ~149k/s for
+# one), so a shard runs ceil(budget * 9 / (5 * N)) seconds for N >= 2: N=4 gives
+# 270 s each and ~10 % more inputs than the serial 600 s; N=1 keeps the budget. Shard i
 # drives seed base+i and writes under <findings dir>/shard-i, inside the path the
 # nightly job uploads. Replay a finding from its shard's printed seed alone:
 #   EVIDGATE_FUZZ_SEED=<shard seed> EVIDGATE_FUZZ_SHARDS=1 \
@@ -235,7 +238,7 @@ run_fuzz_shards() {
     return 2
   fi
   total=$((10#$total))
-  per=$(((total + shards - 1) / shards))
+  if [[ "$shards" -eq 1 ]]; then per=$total; else per=$(((total * 9 + 5 * shards - 1) / (5 * shards))); fi
   claim_fuzz_findings "$EVIDGATE_FUZZ_FINDINGS_DIR" || return 2
   for ((i = 0; i < shards; i++)); do fuzz_shard_seed "$base" "$i" >/dev/null || return 2; done
   check_trait_coverage Fuzz "$@"
