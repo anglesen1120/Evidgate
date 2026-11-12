@@ -166,6 +166,7 @@ src/Modules/Evidgate.Modules.Usage/Evidgate.Modules.Usage.csproj
 src/Tools/Evidgate.GoldenHarness/Evidgate.GoldenHarness.csproj
 tests/Architecture.Tests/Architecture.Tests.csproj
 tests/Canonicalization.UnitTests/Canonicalization.UnitTests.csproj
+tests/Catalog.UnitTests/Catalog.UnitTests.csproj
 tests/Contract.Tests/Contract.Tests.csproj
 tests/Evaluation.UnitTests/Evaluation.UnitTests.csproj
 tests/Foundation.IntegrationTests/Foundation.IntegrationTests.csproj
