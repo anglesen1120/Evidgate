@@ -47,7 +47,7 @@ public sealed class RequestBodyLimitTests
     }
 
     [Fact]
-    public async Task Handler_Refusing_Routes_Are_Backstopped_One_Byte_Past_Their_Cap()
+    public async Task Handler_Refusing_Routes_Are_Not_Pre_Empted_By_The_Host()
     {
         await using var factory = new EvidgateApiFactory(DeadConnectionString);
         using var client = factory.CreateClient();

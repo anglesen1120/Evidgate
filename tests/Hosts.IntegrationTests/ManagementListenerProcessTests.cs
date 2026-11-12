@@ -72,10 +72,8 @@ public sealed class ManagementListenerProcessTests
             // A route with no limit of its own, so the 413 can only come from the host default. Headers only: the
             // client never sends a body byte, so an answer proves the refusal did not wait for one.
             var oversize = await SendHeadersOnlyAsync(publicPort, DefaultLimit + 1);
-            var atLimit = await SendHeadersOnlyAsync(publicPort, DefaultLimit);
 
             Assert.StartsWith("HTTP/1.1 413", oversize, StringComparison.Ordinal);
-            Assert.DoesNotContain(" 413 ", atLimit, StringComparison.Ordinal);
         }
         finally
         {

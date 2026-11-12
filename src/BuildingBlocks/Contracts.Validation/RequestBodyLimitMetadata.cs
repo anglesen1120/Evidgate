@@ -8,7 +8,7 @@ namespace Evidgate.BuildingBlocks.Contracts.Validation;
 /// stays the only place the number is written), or that its handler owns the refusal because the cap is
 /// configurable and the 413 carries route-specific detail. A route whose handler already refuses an over-cap body
 /// with its own error code and counters sets <paramref name="HandlerRefusesFirst"/>: the host then only backstops it
-/// one byte past the cap and never answers before the handler does.
+/// a fixed slack past the cap and never answers before the handler does.
 /// </summary>
 /// <param name="Bytes">The fixed limit, or null.</param>
 /// <param name="SchemaKey">The contract schema whose <c>x-max-bytes</c> is the limit, or null.</param>
@@ -47,7 +47,7 @@ public static class RequestBodyLimitEndpointExtensions
     /// <typeparam name="TBuilder">The endpoint builder type.</typeparam>
     /// <param name="builder">The route builder.</param>
     /// <param name="bytes">The limit in bytes; positive.</param>
-    /// <param name="handlerRefusesFirst">True when the handler's own refusal must answer first (the host backstops at <paramref name="bytes"/> + 1).</param>
+    /// <param name="handlerRefusesFirst">True when the handler's own refusal must answer first (the host only backstops past <paramref name="bytes"/>).</param>
     /// <returns>The builder.</returns>
     public static TBuilder WithBodyLimit<TBuilder>(this TBuilder builder, long bytes, bool handlerRefusesFirst = false)
         where TBuilder : IEndpointConventionBuilder
@@ -62,7 +62,7 @@ public static class RequestBodyLimitEndpointExtensions
     /// <typeparam name="TBuilder">The endpoint builder type.</typeparam>
     /// <param name="builder">The route builder.</param>
     /// <param name="schemaKey">A key of <see cref="ContractSchemaKeys"/> whose schema declares a transport cap.</param>
-    /// <param name="handlerRefusesFirst">True when the handler's own refusal must answer first (the host backstops at the cap + 1).</param>
+    /// <param name="handlerRefusesFirst">True when the handler's own refusal must answer first (the host only backstops past the cap).</param>
     /// <returns>The builder.</returns>
     public static TBuilder WithContractBodyLimit<TBuilder>(this TBuilder builder, string schemaKey, bool handlerRefusesFirst = false)
         where TBuilder : IEndpointConventionBuilder

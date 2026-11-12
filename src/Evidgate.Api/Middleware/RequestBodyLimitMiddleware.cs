@@ -15,6 +15,12 @@ public sealed class RequestBodyLimitMiddleware(RequestDelegate next)
     /// <summary>The default body limit for a route that declares none: every body route below it counts its own cap.</summary>
     public const long DefaultBodyBytes = 1024 * 1024;
 
+    /// <summary>
+    /// How far past its cap a handler-refusing route may read before Kestrel stops it: more than one read
+    /// chunk of any such handler and than the chunk framing Kestrel counts, so the handler's own 413 comes first.
+    /// </summary>
+    public const long HandlerBackstopSlackBytes = 64 * 1024;
+
     /// <inheritdoc cref="RequestDelegate" />
     public Task Invoke(HttpContext context)
     {
@@ -42,8 +48,7 @@ public sealed class RequestBodyLimitMiddleware(RequestDelegate next)
 
         if (feature is { IsReadOnly: false })
         {
-            // One byte of slack lets the handler's own "cap + 1" probe read and refuse with its own error.
-            feature.MaxRequestBodySize = handlerRefusesFirst ? bytes + 1 : bytes;
+            feature.MaxRequestBodySize = handlerRefusesFirst ? bytes + HandlerBackstopSlackBytes : bytes;
         }
 
         return !handlerRefusesFirst && context.Request.ContentLength > bytes
