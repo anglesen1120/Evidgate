@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -244,39 +245,24 @@ internal sealed partial class GitHubLoginProvider(
                 : (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
         }
 
-        if (response.Content.Headers.ContentLength is { } declared && declared > _options.MaxResponseBytes)
+        var read = await BoundedHttpBody.ReadJsonAsync(response.Content, _options.MaxResponseBytes, requireObject: true, bodyToken)
+            .ConfigureAwait(false);
+
+        return read.Status switch
         {
-            return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
-        }
+            BoundedBodyStatus.Ok => ReadAccessToken(read.Document!),
+            BoundedBodyStatus.TooLarge => (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable),
 
-        var json = await ReadCappedAsync(response.Content, _options.MaxResponseBytes, bodyToken).ConfigureAwait(false);
-
-        return json is null
-            ? (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable)
-            : ReadAccessToken(json);
+            // A 200 whose body is not a JSON object is not a token this flow can use, and it is not an outage either.
+            _ => (null, LoginFailure.TokenInvalid, CategoryTokenEndpointRejected),
+        };
     }
 
     /// <summary>Reads <c>access_token</c> from the token response; anything else in the body is ignored, never logged.</summary>
-    private static (string? AccessToken, LoginFailure? Failure, string Category) ReadAccessToken(string json)
+    private static (string? AccessToken, LoginFailure? Failure, string Category) ReadAccessToken(JsonDocument document)
     {
-        JsonDocument document;
-        try
-        {
-            document = JsonDocument.Parse(json);
-        }
-        catch (JsonException)
-        {
-            // A 200 whose body is not JSON is not a token this flow can use, and it is not an outage either.
-            return (null, LoginFailure.TokenInvalid, CategoryTokenEndpointRejected);
-        }
-
         using (document)
         {
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                return (null, LoginFailure.TokenInvalid, CategoryTokenEndpointRejected);
-            }
-
             // GitHub answers a rejected code with 200 and {"error": "bad_verification_code"} when the
             // caller asked for JSON, so the body itself has to carry the refusal.
             if (document.RootElement.TryGetProperty("error", out var error) && error.ValueKind is not JsonValueKind.Null)
@@ -429,25 +415,12 @@ internal sealed partial class GitHubLoginProvider(
             };
         }
 
-        if (response.Content.Headers.ContentLength is { } declared && declared > _options.MaxResponseBytes)
-        {
-            return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
-        }
+        var read = await BoundedHttpBody.ReadJsonAsync(response.Content, _options.MaxResponseBytes, requireObject: false, bodyToken)
+            .ConfigureAwait(false);
 
-        var json = await ReadCappedAsync(response.Content, _options.MaxResponseBytes, bodyToken).ConfigureAwait(false);
-        if (json is null)
-        {
-            return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
-        }
-
-        try
-        {
-            return (JsonDocument.Parse(json), null, CategoryVerified);
-        }
-        catch (JsonException)
-        {
-            return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
-        }
+        return read.Status == BoundedBodyStatus.Ok
+            ? (read.Document, null, CategoryVerified)
+            : (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
     }
 
     /// <summary>The authenticated API request: bearer token, the fixed JSON media type, the API version and a user agent.</summary>
@@ -551,26 +524,6 @@ internal sealed partial class GitHubLoginProvider(
 
     private static bool IsTrue(JsonElement entry, string property) =>
         entry.TryGetProperty(property, out var element) && element.ValueKind == JsonValueKind.True;
-
-    /// <summary>Reads at most <paramref name="maxBytes"/>; returns null instead of buffering a longer body.</summary>
-    private static async Task<string?> ReadCappedAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
-    {
-        await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var buffer = new MemoryStream();
-        var chunk = new byte[8192];
-        int read;
-        while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
-        {
-            if (buffer.Length + read > maxBytes)
-            {
-                return null;
-            }
-
-            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-        }
-
-        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
-    }
 
     private const string CategoryUnconfigured = "unconfigured";
     private const string CategoryTokenInvalid = "token_invalid";

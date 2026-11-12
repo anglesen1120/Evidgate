@@ -155,7 +155,8 @@ Legend: ✅ verified with a link · ⚠️ unverified · `[OPEN]` gate not built
 | Keyset page step of a cursor walk (drop rows already shown, refuse a repeated cursor or a page without new rows; the run list's automatic top-up walk is not this step: it throws a plain `Error` naming the cursor, appends every row as served, never refuses an empty page, and stops fetching once 5 pages or 1 000 rows are scanned, checked before each fetch so the last page can overshoot; an explicit `loadMore()` click passes `forceFirst`, which lets that first fetch run even when enough rows are already visible, and its later fetches obey the checks) | `takeKeysetPage`, `KeysetStep` | `apps/web/src/app/shared/keyset-walk.ts` |
 | Web data-service spec HTTP helpers (`takeRequest` with a prefix or an exact URL match profile, `JSON_HEADERS`, `apiError(kind, status)`) | `takeRequest`, `takeRequestWith`, `PREFIX_MATCH_PROFILE`, `EXACT_MATCH_PROFILE`, `JSON_HEADERS`, `apiError` | `apps/web/src/app/shared/testing/http-data.testing.ts` |
 | Timer-delay ceiling and clamp for a `Retry-After`-style wait | `MAX_TIMER_DELAY_MS`, `clampTimerDelay` | `apps/web/src/app/shared/time/timer-delay.ts` |
-| Bounded body reader, `Base64Url`, client-IP throttle key, regex `Shapes`, pepper ring, polling loop | **to be extracted** `[OPEN]`: until then, the PR that adds a third copy must extract it instead | — |
+| Bounded outbound HTTP response body (cap checked on `Content-Length` and while streaming, optional object-root check) | `BoundedHttpBody.ReadBytesAsync`, `BoundedHttpBody.ReadJsonAsync` | `src/BuildingBlocks/SharedKernel/Serialization/BoundedHttpBody.cs` |
+| Bounded inbound request body reader, `Base64Url`, client-IP throttle key, regex `Shapes`, pepper ring, polling loop | **to be extracted** `[OPEN]`: until then, the PR that adds a third copy must extract it instead | — |
 
 Add a row whenever a shared helper is created.
 
