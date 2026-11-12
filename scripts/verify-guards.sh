@@ -447,6 +447,9 @@ run_selected_stages() {
     set -e
     record_stage_time "$name" "$rc" "$((SECONDS - t0))"
     if [[ "$rc" -eq 0 ]] && side_lane_failed; then rc=1; fi
+    # Everything after `test` may consume what the lane builds (tsc-build output), and
+    # runs Docker builds over the tree the lane's generators check: join it first.
+    if [[ "$rc" -eq 0 && "$name" == "test" ]]; then finish_side_lane 1 || rc=$?; fi
     if [[ "$rc" -ne 0 ]]; then
       finish_side_lane 0 || true
       print_stage_summary

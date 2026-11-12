@@ -37,7 +37,7 @@ def run(stages, **env):
         capture_output=True,
         text=True,
         cwd=ROOT,
-        env={**os.environ, **env},
+        env={**os.environ, "EVIDGATE_VERIFY_OVERLAP": "0", **env},
     )
 
 
@@ -89,6 +89,39 @@ class OverlapTests(unittest.TestCase):
         done = run(["tsc-build", "test"], EVIDGATE_VERIFY_OVERLAP="1")
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertNotIn("side lane", done.stdout)
+
+    def test_a_repeated_stage_is_refused_before_anything_runs(self):
+        for stages in (["tsc-build", "test", "tsc-build"], ["test", "tsc-build", "test"]):
+            with self.subTest(stages=stages):
+                done = run(stages, EVIDGATE_VERIFY_OVERLAP="1")
+                self.assertEqual(done.returncode, 2)
+                self.assertIn("refuses a repeated stage", done.stderr)
+                self.assertNotIn("ran ", done.stdout)
+
+    def test_a_repeated_stage_is_fine_with_the_switch_off(self):
+        self.assertEqual(run(["tsc-build", "test", "tsc-build"]).returncode, 0)
+
+    def test_the_lane_is_joined_before_the_stage_after_test(self):
+        script = DRIVER.replace('*) echo "ran $1" ;;', 'isolation) echo "isolation saw: $(cat "$D/side-done" 2>/dev/null)" ;;\n      *) echo "ran $1" ;;')
+        script = script.replace('prettier) echo "side two a"; sleep 1;', 'prettier) echo "side two a"; sleep 3; echo yes >"$D/side-done";')
+        with tempfile.TemporaryDirectory() as tmp:
+            done = subprocess.run(
+                ["bash", "-c", script, "driver", str(VERIFY), *[a for s in STAGES for a in ("--stage", s)]],
+                capture_output=True, text=True, cwd=ROOT,
+                env={**os.environ, "D": tmp, "EVIDGATE_VERIFY_OVERLAP": "1", "TEST_SLEEP": "1"},
+            )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("isolation saw: yes", done.stdout)
+
+    def test_a_lane_that_dies_without_results_fails_the_gate(self):
+        script = DRIVER.replace('tsc-build) echo "side one a"; sleep 1; echo "side one b" ;;', 'tsc-build) kill -KILL $(ps -o ppid= -p "$(sh -c "echo \\$PPID")"); sleep 5 ;;')
+        done = subprocess.run(
+            ["bash", "-c", script, "driver", str(VERIFY), *[a for s in STAGES for a in ("--stage", s)]],
+            capture_output=True, text=True, cwd=ROOT,
+            env={**os.environ, "EVIDGATE_VERIFY_OVERLAP": "1", "TEST_SLEEP": "1"},
+        )
+        self.assertNotEqual(done.returncode, 0, done.stdout)
+        self.assertNotIn("selected stages passed", done.stdout)
 
     def test_a_bad_switch_value_is_refused(self):
         done = run(STAGES, EVIDGATE_VERIFY_OVERLAP="yes")

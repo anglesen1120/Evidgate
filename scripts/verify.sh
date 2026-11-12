@@ -417,7 +417,7 @@ run_stage() {
     # run prints "Ran 0 tests ... OK" and a rename would turn this stage green.
     stage "check-gate-scope"
     PYTHONPATH="${ROOT}/scripts:${ROOT}/scripts/tests${PYTHONPATH:+:${PYTHONPATH}}" \
-      PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
+      PYTHONDONTWRITEBYTECODE=1 EVIDGATE_VERIFY_OVERLAP=0 python3 -m unittest \
       scripts/tests/test_gate_scope.py scripts/tests/test_gate_scope_reasons.py \
       scripts/tests/test_verify_scope.py \
       scripts/tests/test_verify_refusal.py scripts/tests/test_verify_shards.py \
