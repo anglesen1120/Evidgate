@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.Text;
 using Evidgate.BuildingBlocks.Observability;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -271,12 +271,7 @@ internal sealed partial class HttpGoogleJwksCache : IGoogleJwksProvider, IDispos
             throw new HttpRequestException("the Google OIDC JWKS document could not be fetched");
         }
 
-        if (response.Content.Headers.ContentLength is { } declared && declared > _options.MaxResponseBytes)
-        {
-            throw new HttpRequestException("the Google OIDC JWKS document is unreasonably large");
-        }
-
-        var json = await ReadCappedAsync(response.Content, _options.MaxResponseBytes, timeout.Token).ConfigureAwait(false)
+        var json = await BoundedHttpBody.ReadTextAsync(response.Content, _options.MaxResponseBytes, timeout.Token).ConfigureAwait(false)
                    ?? throw new HttpRequestException("the Google OIDC JWKS document is unreasonably large");
 
         var keys = Parse(json);
@@ -305,26 +300,6 @@ internal sealed partial class HttpGoogleJwksCache : IGoogleJwksProvider, IDispos
         }
 
         return keys;
-    }
-
-    /// <summary>Reads at most <paramref name="maxBytes"/>; a longer body is refused rather than buffered whole.</summary>
-    private static async Task<string?> ReadCappedAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
-    {
-        await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var buffer = new MemoryStream();
-        var chunk = new byte[8192];
-        int read;
-        while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
-        {
-            if (buffer.Length + read > maxBytes)
-            {
-                return null;
-            }
-
-            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-        }
-
-        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 
     [LoggerMessage(

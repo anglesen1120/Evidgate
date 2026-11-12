@@ -3,6 +3,7 @@ using System.Net;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 
 namespace Evidgate.Modules.Catalog.Infrastructure.GitHub;
 
@@ -46,8 +47,6 @@ internal static class GitHubErrorCodes
 /// <summary>Reads one GitHub answer under a byte cap, then hands it to the endpoint's own parser.</summary>
 internal static class GitHubResponseReader
 {
-    private const int ChunkBytes = 8192;
-    private const int MaxJsonDepth = 64;
     private const long FallbackDelaySeconds = 60;
 
     /// <summary>
@@ -65,32 +64,15 @@ internal static class GitHubResponseReader
     {
         ArgumentNullException.ThrowIfNull(response);
 
-        if (response.Content.Headers.ContentLength is { } declared && declared > maxBytes)
-        {
-            return Result.Failure<JsonDocument>(TooLarge());
-        }
+        var read = await BoundedHttpBody.ReadJsonAsync(response.Content, maxBytes, requireObject: true, cancellationToken)
+            .ConfigureAwait(false);
 
-        var body = await ReadBytesAsync(response.Content, maxBytes, cancellationToken).ConfigureAwait(false);
-        if (body is null)
+        return read.Status switch
         {
-            return Result.Failure<JsonDocument>(TooLarge());
-        }
-
-        try
-        {
-            var document = JsonDocument.Parse(body, new JsonDocumentOptions { MaxDepth = MaxJsonDepth });
-            if (document.RootElement.ValueKind == JsonValueKind.Object)
-            {
-                return Result.Success(document);
-            }
-
-            document.Dispose();
-            return Result.Failure<JsonDocument>(Invalid());
-        }
-        catch (JsonException)
-        {
-            return Result.Failure<JsonDocument>(Invalid());
-        }
+            BoundedBodyStatus.Ok => Result.Success(read.Document!),
+            BoundedBodyStatus.TooLarge => Result.Failure<JsonDocument>(TooLarge()),
+            _ => Result.Failure<JsonDocument>(Invalid()),
+        };
     }
 
     /// <summary>The error for a body over the cap.</summary>
@@ -197,32 +179,6 @@ internal static class GitHubResponseReader
     /// </summary>
     private static long Bound(double seconds) =>
         (long)Math.Max(Math.Ceiling(seconds), 1);
-
-    private static async Task<byte[]?> ReadBytesAsync(
-        HttpContent content,
-        int maxBytes,
-        CancellationToken cancellationToken)
-    {
-        await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var buffer = new MemoryStream(Math.Min(maxBytes, 65536));
-        var chunk = new byte[ChunkBytes];
-
-        while (true)
-        {
-            var read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false);
-            if (read == 0)
-            {
-                return buffer.ToArray();
-            }
-
-            if (buffer.Length + read > maxBytes)
-            {
-                return null;
-            }
-
-            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-        }
-    }
 }
 
 /// <summary>Small helpers shared by the endpoint parsers; every failure is a typed <see cref="Error"/>.</summary>

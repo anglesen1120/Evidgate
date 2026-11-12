@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -209,31 +210,17 @@ internal sealed partial class GoogleLoginProvider(
                 : (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
         }
 
-        if (response.Content.Headers.ContentLength is { } declared && declared > _options.MaxResponseBytes)
-        {
-            return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
-        }
+        var read = await BoundedHttpBody.ReadJsonAsync(response.Content, _options.MaxResponseBytes, requireObject: true, bodyToken)
+            .ConfigureAwait(false);
 
-        var json = await ReadCappedAsync(response.Content, _options.MaxResponseBytes, bodyToken).ConfigureAwait(false);
-
-        return json is null
-            ? (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable)
-            : ReadIdToken(json);
+        return read.Status == BoundedBodyStatus.Ok
+            ? ReadIdToken(read.Document!)
+            : (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
     }
 
     /// <summary>Reads <c>id_token</c> from the token response; anything else in the body is ignored, never logged.</summary>
-    private static (string? IdToken, LoginFailure? Failure, string Category) ReadIdToken(string json)
+    private static (string? IdToken, LoginFailure? Failure, string Category) ReadIdToken(JsonDocument document)
     {
-        JsonDocument document;
-        try
-        {
-            document = JsonDocument.Parse(json);
-        }
-        catch (JsonException)
-        {
-            return (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable);
-        }
-
         using (document)
         {
             if (document.RootElement.ValueKind != JsonValueKind.Object
@@ -248,26 +235,6 @@ internal sealed partial class GoogleLoginProvider(
                 ? (null, LoginFailure.ProviderUnavailable, CategoryProviderUnavailable)
                 : (idToken, null, CategoryVerified);
         }
-    }
-
-    /// <summary>Reads at most <paramref name="maxBytes"/>; returns null instead of buffering a longer body.</summary>
-    private static async Task<string?> ReadCappedAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
-    {
-        await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var buffer = new MemoryStream();
-        var chunk = new byte[8192];
-        int read;
-        while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
-        {
-            if (buffer.Length + read > maxBytes)
-            {
-                return null;
-            }
-
-            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-        }
-
-        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 
     private const string CategoryUnconfigured = "unconfigured";
