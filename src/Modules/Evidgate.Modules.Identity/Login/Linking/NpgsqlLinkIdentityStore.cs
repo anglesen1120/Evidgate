@@ -7,7 +7,8 @@ namespace Evidgate.Modules.Identity.Login.Linking;
 
 /// <summary>
 /// The only implementation of <see cref="ILinkIdentityStore"/> (02.3.1-T2.2): one call to
-/// <c>evidgate_resolve.login_link_identity</c> (migration 0045) on the app-role data source, because the app
+/// <c>evidgate_resolve.login_link_identity_audited</c> (migration 0101, which wraps the 0045 link and writes its
+/// audit rows in the same transaction) on the app-role data source, because the app
 /// role holds no privilege on <c>public.user_identity</c> and <c>public."user"</c> (0041) — never a direct
 /// INSERT or UPDATE, which RLS and the missing grant would refuse.
 /// </summary>
@@ -20,14 +21,15 @@ namespace Evidgate.Modules.Identity.Login.Linking;
 /// the cookie to prove the request, so no raw credential and no second hashing live in this class.
 /// </para>
 /// <para>
-/// The function always returns one row and never raises for a business outcome, so an empty result means the
+/// The function always returns one row and raises only when the audit cannot be written (the link then rolls
+/// back and this class answers 503). An empty result means the
 /// stored contract moved: this class then fails closed (503) instead of guessing that the identity was
 /// attached. An outcome string this build does not know is <see cref="LinkResult.Unrecognised"/> — also a 503,
 /// never a silent success.
 /// </para>
 /// <para>
 /// Nothing here is logged: the address and the subject are personal data (02.3.1 §8), the proof is a credential
-/// hash, and the caller's audit row carries the provider name and, for a move, the previous user id only.
+/// hash, and the audit rows written by the function carry the provider name and, for a move, the previous user id only.
 /// </para>
 /// </remarks>
 /// <param name="dataSource">The app-role <see cref="NpgsqlDataSource"/> (the only role that may call the resolver).</param>
@@ -53,6 +55,8 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource, TimeP
         string provider,
         string subject,
         string email,
+        string? requestId,
+        string? traceId,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(provider);
@@ -68,8 +72,8 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource, TimeP
         try
         {
             await using var command = dataSource.CreateCommand(
-                "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity("
-                + "cast(@cookie_hmacs as bytea[]), @now, @provider, @subject, @email, @identity_id)");
+                "select outcome, moved_from_user_id from evidgate_resolve.login_link_identity_audited("
+                + "cast(@cookie_hmacs as bytea[]), @now, @provider, @subject, @email, @identity_id, @request_id, @trace_id)");
 
             // One element: the authenticator's proof of the live session, which after a lazy rotation is already
             // the hash of the newly issued cookie.
@@ -90,6 +94,17 @@ internal sealed class NpgsqlLinkIdentityStore(NpgsqlDataSource dataSource, TimeP
             // No profile name: the function has no argument for one, because a second provider's display name must
             // not rename an account whose name the login upsert (0042) owns.
             command.Parameters.AddWithValue("identity_id", Guid.CreateVersion7());
+
+            // Explicit text type: "the request carried none" is legal and a DBNull has no CLR type to infer from.
+            // The definer nulls a value that is not a safe request id or a 32-hex trace id.
+            command.Parameters.Add(new NpgsqlParameter("request_id", NpgsqlDbType.Text)
+            {
+                Value = (object?)requestId ?? DBNull.Value,
+            });
+            command.Parameters.Add(new NpgsqlParameter("trace_id", NpgsqlDbType.Text)
+            {
+                Value = (object?)traceId ?? DBNull.Value,
+            });
 
             await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             if (!await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
