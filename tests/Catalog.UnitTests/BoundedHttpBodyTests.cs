@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Pipeline.Serialization;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Shouldly;
 using Xunit;
