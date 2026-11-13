@@ -38,6 +38,9 @@ internal static class GitRepoBindingEndpoints
         group.MapPost("/projects/{p}/git-repo-bindings", RegisterAsync)
             .Accepts<RegisterGitRepoBindingRequest>("application/json")
             .Produces<GitRepoBindingDto>(StatusCodes.Status201Created)
+            // Declaring the default status keeps the OpenAPI generator from deriving it from the delegate's
+            // `Result<GitRepoBindingDto>` and publishing the internal wrapper as a served schema.
+            .Produces(StatusCodes.Status200OK)
             .WithSummary("Register a repository binding after the customer installs the GitHub App (03.4.1)");
 
         return group;

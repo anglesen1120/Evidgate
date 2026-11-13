@@ -94,24 +94,94 @@ public sealed class CatalogGitHubBindingApiTests
     }
 
     /// <summary>
-    /// The global key of §4: a repository another org already bound in the same installation is 409
-    /// <c>binding_conflict</c>; the calling org gets no row and no audit row, and the other org's binding is untouched.
+    /// The global key of §4: a repository another project of the same org already bound in the same installation is
+    /// 409 <c>binding_conflict</c> — an installation belongs to one org, so a second org cannot bind in it. The calling
+    /// project gets no row and no audit row, and the sibling project's binding is untouched.
     /// </summary>
     [Fact]
-    public async Task RepositoryBoundByAnotherOrg_Is409_AndTheBindingStaysTheirs()
+    public async Task RepositoryBoundByAnotherProject_Is409_AndTheBindingStaysTheirs()
     {
         await using var site = await CatalogGitHubBindingSite.StartAsync(
             _postgres,
-            new CatalogGitHubBindingSetup { RepositoryBoundByAnotherOrg = true },
+            new CatalogGitHubBindingSetup { RepositoryBoundByAnotherProject = true },
             Token);
 
-        using var response = await site.RegisterAsync("binding-cross-org", Token);
+        using var response = await site.RegisterAsync("binding-sibling-project", Token);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
         (await ErrorCodeAsync(response)).ShouldBe("binding_conflict");
-        (await site.BindingCountAsync()).ShouldBe(0);
+        (await site.ProjectBindingCountAsync()).ShouldBe(0);
         (await site.AuditCountAsync()).ShouldBe(0);
-        (await site.OtherOrgBindingCountAsync()).ShouldBe(1);
+        (await site.OtherProjectBindingCountAsync()).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// The token exchange itself can refuse the repository scope with 422: that is the same caller error as a read
+    /// GitHub refuses, never an internal <c>github_failed</c>, and nothing is written.
+    /// </summary>
+    [Fact]
+    public async Task TokenExchangeRefusingTheRepository_Is422_AndWritesNothing()
+    {
+        await using var site = await CatalogGitHubBindingSite.StartAsync(_postgres, cancellationToken: Token);
+        site.GitHub.MintStatus = HttpStatusCode.UnprocessableEntity;
+
+        using var response = await site.RegisterAsync("binding-mint-refused", Token);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        (await ErrorCodeAsync(response)).ShouldBe("repository_unreachable");
+        site.GitHub.Requests.ShouldContain(request => request.Method == HttpMethod.Post);
+        (await site.ProjectBindingCountAsync()).ShouldBe(0);
+        (await site.AuditCountAsync()).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A body without a usable installation id is refused by the command shape (422 <c>out_of_range</c>) before the
+    /// ownership unit, so it is never reported as another org's installation (403) and never reaches GitHub.
+    /// </summary>
+    [Fact]
+    public async Task InstallationIdZero_Is422_OutOfRange_WithoutCallingGitHub()
+    {
+        await using var site = await CatalogGitHubBindingSite.StartAsync(_postgres, cancellationToken: Token);
+
+        using var response = await site.RegisterAsync(
+            "binding-zero-installation",
+            new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["installation_id"] = 0,
+                ["repository_id"] = CatalogGitHubBindingSite.RepositoryNumber,
+            },
+            Token);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        using var body = await ReadJsonAsync(response);
+        var error = body.RootElement.GetProperty("error");
+        error.GetProperty("code").GetString().ShouldBe("request_invalid");
+        error.GetProperty("details").EnumerateArray()
+            .ShouldContain(detail => detail.GetProperty("reason").GetString() == "out_of_range");
+        site.GitHub.Requests.ShouldBeEmpty();
+        (await site.ProjectBindingCountAsync()).ShouldBe(0);
+    }
+
+    /// <summary>
+    /// A branch GitHub reports beyond the column's 255 characters is refused by the write command's validation (422
+    /// <c>invalid_length</c>) instead of reaching the database CHECK, and nothing is written.
+    /// </summary>
+    [Fact]
+    public async Task BranchBeyondTheColumn_Is422_ValidationError_AndWritesNothing()
+    {
+        await using var site = await CatalogGitHubBindingSite.StartAsync(_postgres, cancellationToken: Token);
+        site.GitHub.DefaultBranch = new string('a', 256);
+
+        using var response = await site.RegisterAsync("binding-long-branch", Token);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+        using var body = await ReadJsonAsync(response);
+        var error = body.RootElement.GetProperty("error");
+        error.GetProperty("code").GetString().ShouldBe("request_invalid");
+        error.GetProperty("details").EnumerateArray()
+            .ShouldContain(detail => detail.GetProperty("reason").GetString() == "invalid_length");
+        (await site.ProjectBindingCountAsync()).ShouldBe(0);
+        (await site.AuditCountAsync()).ShouldBe(0);
     }
 
     /// <summary>

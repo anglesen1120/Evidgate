@@ -106,8 +106,7 @@ internal sealed class GitRepoBindingStore(ITenantDb db) : IGitRepoBindingStore
         }
         catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
         {
-            // The project key says this project already holds it; the global key says the repository is taken by
-            // another org in the same installation, which the tenant-less resolver needs to be singular.
+            // An installation belongs to one org; the global key therefore conflicts with another project in that org.
             return Result.Failure<GitRepoBindingDto>(
                 exception.ConstraintName == "git_repo_binding_global_repository_key"
                     ? GitRepoBindingErrors.BoundElsewhere

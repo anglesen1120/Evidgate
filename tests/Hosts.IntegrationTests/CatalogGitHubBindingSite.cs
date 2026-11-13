@@ -24,8 +24,11 @@ internal sealed record CatalogGitHubBindingSetup
     /// <summary>Seeds the reported installation under another org, the foreign-installation refusal.</summary>
     internal bool InstallationOwnedByAnotherOrg { get; init; }
 
-    /// <summary>Seeds a binding for the same installation and repository under another org, the global-key conflict.</summary>
-    internal bool RepositoryBoundByAnotherOrg { get; init; }
+    /// <summary>
+    /// Seeds a binding for the same installation and repository under another project of the same org, the global-key
+    /// conflict: an installation belongs to one org, so no other org can hold a binding in it.
+    /// </summary>
+    internal bool RepositoryBoundByAnotherProject { get; init; }
 }
 
 /// <summary>
@@ -146,8 +149,11 @@ internal sealed class CatalogGitHubBindingSite : IAsyncDisposable
     /// <summary>Audit rows of the calling org: the proof that a refusal wrote nothing.</summary>
     internal Task<long> AuditCountAsync() => CountAsync("audit_log", Org);
 
-    /// <summary>Bindings of the other org, so a conflict is proven to leave its row untouched.</summary>
-    internal Task<long> OtherOrgBindingCountAsync() => CountAsync("git_repo_binding", OtherOrg);
+    /// <summary>Bindings of the calling project, so a refusal is proven to have written none.</summary>
+    internal Task<long> ProjectBindingCountAsync() => CountAsync("git_repo_binding", Org, Project);
+
+    /// <summary>Bindings of the other project, so a conflict is proven to leave its row untouched.</summary>
+    internal Task<long> OtherProjectBindingCountAsync() => CountAsync("git_repo_binding", Org, OtherProject);
 
     /// <summary>The persisted secret reference of the calling project's binding, or null when none was written.</summary>
     internal Task<string?> PersistedSecretReferenceAsync() =>
@@ -156,10 +162,16 @@ internal sealed class CatalogGitHubBindingSite : IAsyncDisposable
             ("org", Org),
             ("project", Project));
 
-    private async Task<long> CountAsync(string table, Guid org)
+    private async Task<long> CountAsync(string table, Guid org, Guid? project = null)
     {
-        var sql = string.Create(CultureInfo.InvariantCulture, $"select count(*) from public.{table} where org_id = @org");
-        var count = await ScalarAsync<long?>(sql, ("org", org)).ConfigureAwait(false);
+        var sql = project is null
+            ? string.Create(CultureInfo.InvariantCulture, $"select count(*) from public.{table} where org_id = @org")
+            : string.Create(
+                CultureInfo.InvariantCulture,
+                $"select count(*) from public.{table} where org_id = @org and project_id = @project");
+        var count = project is null
+            ? await ScalarAsync<long?>(sql, ("org", org)).ConfigureAwait(false)
+            : await ScalarAsync<long?>(sql, ("org", org), ("project", project.Value)).ConfigureAwait(false);
 
         return count ?? 0;
     }
@@ -249,7 +261,7 @@ internal static class CatalogGitHubBindingSeed
                 ("installation_id", CatalogGitHubBindingSite.InstallationNumber));
         }
 
-        if (setup.RepositoryBoundByAnotherOrg)
+        if (setup.RepositoryBoundByAnotherProject)
         {
             await ExecuteAsync(
                 connection,
@@ -259,7 +271,7 @@ internal static class CatalogGitHubBindingSeed
                 values (@id, @org, @project, @installation_id, @repository_id, 'main', @secret_ref)
                 """,
                 cancellationToken,
-                ("id", Guid.CreateVersion7()), ("org", otherOrg), ("project", otherProject),
+                ("id", Guid.CreateVersion7()), ("org", org), ("project", otherProject),
                 ("installation_id", CatalogGitHubBindingSite.InstallationNumber.ToString(CultureInfo.InvariantCulture)),
                 ("repository_id", CatalogGitHubBindingSite.RepositoryNumber.ToString(CultureInfo.InvariantCulture)),
                 ("secret_ref", string.Create(CultureInfo.InvariantCulture, $"secret:gh_wh_{Guid.CreateVersion7():N}")));

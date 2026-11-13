@@ -131,6 +131,22 @@ public sealed class GitHubAppJwtTests
     }
 
     [Fact]
+    public void AppToken_AfterAnotherHostDisposedTheSameKey_StillSigns()
+    {
+        // IdentityModel caches signature providers per key material: a cached provider bound to a disposed RSA must
+        // not reach the next host that loads the same PEM, or every call on that host reports not-configured.
+        var first = new GitHubTestBench(new StubHandler(_ => GitHubResponses.Json("{}")));
+        first.AppTokens.Create().IsSuccess.ShouldBeTrue();
+        first.AppTokens.Dispose();
+
+        var second = new GitHubTestBench(new StubHandler(_ => GitHubResponses.Json("{}")));
+
+        var result = second.AppTokens.Create();
+
+        result.IsSuccess.ShouldBeTrue(result.Error?.Message);
+    }
+
+    [Fact]
     public void AppToken_WithAnUnusableKey_ReportsTheFailureOncePerKey_WithoutKeyMaterial()
     {
         using var rsa = RSA.Create(2048);

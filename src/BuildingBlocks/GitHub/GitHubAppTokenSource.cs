@@ -74,7 +74,7 @@ public sealed class GitHubAppTokenSource : IDisposable
                     Issuer = options.AppId,
                     IssuedAt = issuedAt.UtcDateTime,
                     Expires = (issuedAt + Lifetime).UtcDateTime,
-                    SigningCredentials = new SigningCredentials(new RsaSecurityKey(key), SecurityAlgorithms.RsaSha256),
+                    SigningCredentials = new SigningCredentials(KeyFor(key), SecurityAlgorithms.RsaSha256),
                 };
 
                 return Result.Success(Handler.CreateToken(descriptor));
@@ -101,6 +101,16 @@ public sealed class GitHubAppTokenSource : IDisposable
     /// <summary>The one "no App is configured" failure, used for a missing id and a missing key alike.</summary>
     public static Error NotConfigured() =>
         new(GitHubErrorCodes.NotConfigured, "No GitHub App is configured on this host.", 503);
+
+    /// <summary>
+    /// The signing key for one RSA instance. IdentityModel caches signature providers per key material and hands a
+    /// later call a provider bound to a disposed RSA, so this key never caches: the host that disposed the old key
+    /// must be able to sign again with the same PEM.
+    /// </summary>
+    private static RsaSecurityKey KeyFor(RSA key) => new(key)
+    {
+        CryptoProviderFactory = new CryptoProviderFactory { CacheSignatureProviders = false },
+    };
 
     private void ReportSigningFailure(string? pem, Exception exception)
     {

@@ -70,11 +70,11 @@ public sealed class GitRepoBindingStateTests(PostgresTenancyFixture fixture)
     }
 
     [Theory]
-    [InlineData("repository_id = '999999'", "repository_id")]
-    [InlineData("webhook_secret_ref = 'secret:gh_wh_00000000000000000000000000000000'", "webhook_secret_ref")]
-    [InlineData("installation_id = '424242'", "installation_id")]
-    [InlineData("sync_state = 'suspended'", "sync_state")]
-    public async Task RewritingTheIdentityOrAnUnknownState_IsRefused(string assignment, string column)
+    [InlineData("repository_id = '999999'", "repository_id", PostgresErrorCodes.InsufficientPrivilege)]
+    [InlineData("webhook_secret_ref = 'secret:gh_wh_00000000000000000000000000000000'", "webhook_secret_ref", PostgresErrorCodes.InsufficientPrivilege)]
+    [InlineData("installation_id = '424242'", "installation_id", PostgresErrorCodes.InsufficientPrivilege)]
+    [InlineData("sync_state = 'suspended'", "sync_state", PostgresErrorCodes.CheckViolation)]
+    public async Task RewritingTheIdentityOrAnUnknownState_IsRefused(string assignment, string column, string sqlState)
     {
         var seeded = await SeedAsync();
 
@@ -85,7 +85,9 @@ public sealed class GitRepoBindingStateTests(PostgresTenancyFixture fixture)
                 $"update public.git_repo_binding set {assignment} where id = @binding",
                 ("binding", seeded.Binding));
 
-            error.SqlState.ShouldBe(PostgresErrorCodes.CheckViolation, $"{column} must not move under the app role");
+            // The app role holds UPDATE on the mutable columns only, so an identity rewrite is refused by privilege;
+            // an unknown state on a column it may write is refused by the column's CHECK.
+            error.SqlState.ShouldBe(sqlState, $"{column} must not move under the app role");
         }
 
         (await StateAsync(seeded)).ShouldBe("active");
@@ -174,13 +176,13 @@ public sealed class GitRepoBindingStateTests(PostgresTenancyFixture fixture)
             values ('{Guid.CreateVersion7():D}', '{seeded.Org:D}', '{seeded.Project:D}', 'abc1234', '{seeded.Binding:D}');
             """);
 
-    private Task<int> SyncCountAsync(Seeded seeded) =>
-        _fixture.ScalarAsync<int>(
+    private Task<long> SyncCountAsync(Seeded seeded) =>
+        _fixture.ScalarAsync<long>(
             seeded.Database,
             $"select count(*) from public.catalog_sync where binding_id = '{seeded.Binding:D}'");
 
-    private Task<int> RowCountAsync(Seeded seeded) =>
-        _fixture.ScalarAsync<int>(
+    private Task<long> RowCountAsync(Seeded seeded) =>
+        _fixture.ScalarAsync<long>(
             seeded.Database,
             $"select count(*) from public.git_repo_binding where org_id = '{seeded.Org:D}'");
 

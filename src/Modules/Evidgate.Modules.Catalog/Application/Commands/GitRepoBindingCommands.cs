@@ -21,13 +21,30 @@ namespace Evidgate.Modules.Catalog.Application.Commands;
 
 /// <summary>
 /// The first unit of <c>POST /v1/projects/{p}/git-repo-bindings</c>: proves under the route's permission that the
-/// installation is this org's own live one, before any GitHub call is made and before anything is written.
+/// installation is this org's own live one, before any GitHub call is made and before anything is written. It reads
+/// only, so it is a query: a refusal here writes and audits nothing.
 /// </summary>
 /// <param name="ProjectId">The project from the route.</param>
 /// <param name="InstallationId">The installation the caller installed the App on.</param>
+/// <param name="RepositoryId">The repository the caller names; checked here so a missing id is refused before GitHub.</param>
 /// <param name="IdempotencyKey">The client's <c>Idempotency-Key</c>, read to answer a retry without a GitHub call.</param>
-internal sealed record PrepareGitRepoBindingCommand(Guid ProjectId, long InstallationId, string IdempotencyKey)
-    : ICommand<Result<bool>>;
+internal sealed record PrepareGitRepoBindingQuery(
+    Guid ProjectId,
+    long InstallationId,
+    long RepositoryId,
+    string IdempotencyKey)
+    : IQuery<Result<bool>>;
+
+/// <summary>Shape validation of <see cref="PrepareGitRepoBindingQuery"/>: both ids are positive before any read.</summary>
+internal sealed class PrepareGitRepoBindingQueryValidator : AbstractValidator<PrepareGitRepoBindingQuery>
+{
+    /// <summary>Builds the rules.</summary>
+    public PrepareGitRepoBindingQueryValidator()
+    {
+        RuleFor(query => query.InstallationId).GreaterThan(0).WithErrorCode("out_of_range");
+        RuleFor(query => query.RepositoryId).GreaterThan(0).WithErrorCode("out_of_range");
+    }
+}
 
 /// <summary>The write unit: records the binding the GitHub verification already accepted.</summary>
 /// <param name="ProjectId">The project from the route.</param>
@@ -80,35 +97,37 @@ internal sealed class RegisterGitRepoBindingCommandValidator : AbstractValidator
 }
 
 /// <summary>
-/// Handler of <see cref="PrepareGitRepoBindingCommand"/>: read-only checks, so a refusal writes and audits nothing.
+/// Handler of <see cref="PrepareGitRepoBindingQuery"/>: read-only checks, so a refusal writes and audits nothing.
 /// </summary>
 [Permission(Permissions.Project.Write)]
-internal sealed class PrepareGitRepoBindingCommandHandler(
+internal sealed class PrepareGitRepoBindingQueryHandler(
     ITenantDb db,
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
     IRequestTenantContextAccessor tenant,
     IGitHubInstallationOwnership installations,
     IIdempotencyStore idempotency)
-    : ICommandHandler<PrepareGitRepoBindingCommand, Result<bool>>
+    : IQueryHandler<PrepareGitRepoBindingQuery, Result<bool>>
 {
     /// <inheritdoc />
     public async ValueTask<Result<bool>> Handle(
-        PrepareGitRepoBindingCommand command,
+        PrepareGitRepoBindingQuery query,
         CancellationToken cancellationToken)
     {
-        if (CatalogScope.Project(command.ProjectId, principals, tenant) is { } mismatch)
+        if (CatalogScope.Project(query.ProjectId, principals, tenant) is { } mismatch)
         {
             return Result.Failure<bool>(mismatch);
         }
 
-        if (!await ProjectExistsAsync(db, command.ProjectId, cancellationToken).ConfigureAwait(false))
+        if (!await ProjectExistsAsync(db, query.ProjectId, cancellationToken).ConfigureAwait(false))
         {
             return Result.Failure<bool>(CatalogErrors.ProjectNotFound);
         }
 
+        // Active only: an unknown id, another org's installation, and this org's own suspended one all refuse here with
+        // the same 403, so no later stage has a "no live installation" case to answer with a separate code.
         var owned = await installations
-            .OwnsActiveAsync(scopes.Require().OrgId, command.InstallationId, cancellationToken)
+            .OwnsActiveAsync(scopes.Require().OrgId, query.InstallationId, cancellationToken)
             .ConfigureAwait(false);
         if (!owned)
         {
@@ -119,13 +138,13 @@ internal sealed class PrepareGitRepoBindingCommandHandler(
         // unreachable or the branch renamed since. Reading the record claims nothing, so a failed verification that
         // follows leaves no incomplete idempotency row behind. A blank key owns no record — the write unit's gate
         // answers its 400, so nothing is probed here.
-        if (string.IsNullOrWhiteSpace(command.IdempotencyKey))
+        if (string.IsNullOrWhiteSpace(query.IdempotencyKey))
         {
             return Result.Success(false);
         }
 
         var replay = await idempotency
-            .ReplayAsync(RegisterGitRepoBindingCommand.OperationName, command.IdempotencyKey, cancellationToken)
+            .ReplayAsync(RegisterGitRepoBindingCommand.OperationName, query.IdempotencyKey, cancellationToken)
             .ConfigureAwait(false);
 
         return Result.Success(replay is not null);
@@ -171,7 +190,7 @@ internal sealed class RegisterGitRepoBindingCommandHandler(
             return Result.Failure<GitRepoBindingDto>(mismatch);
         }
 
-        if (!await PrepareGitRepoBindingCommandHandler
+        if (!await PrepareGitRepoBindingQueryHandler
                 .ProjectExistsAsync(db, command.ProjectId, cancellationToken)
                 .ConfigureAwait(false))
         {

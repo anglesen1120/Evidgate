@@ -8,11 +8,8 @@ namespace Evidgate.Modules.Catalog.Application;
 /// <summary>The machine codes the repository-binding routes add to the 00 §9.2 vocabulary.</summary>
 internal static class GitRepoBindingErrorCodes
 {
-    /// <summary>403: the installation id is not this org's own live installation.</summary>
+    /// <summary>403: the installation id is unknown, another org's, or this org's but suspended.</summary>
     internal const string InstallationNotOwned = "installation_not_owned";
-
-    /// <summary>409: the org has no live installation, or the installation cannot mint a token.</summary>
-    internal const string InstallationUnavailable = "installation_unavailable";
 
     /// <summary>422: the installation cannot read the repository, so a sync against it would fail.</summary>
     internal const string RepositoryUnreachable = "repository_unreachable";
@@ -24,15 +21,13 @@ internal static class GitRepoBindingErrorCodes
 /// <summary>The refusals of the binding routes, in one place so their codes cannot drift apart.</summary>
 internal static class GitRepoBindingErrors
 {
-    /// <summary>403: the installation belongs to another org, is unknown, or is not the live one.</summary>
+    /// <summary>
+    /// 403: the installation id is unknown, belongs to another org, or is this org's but suspended — the ownership
+    /// unit only accepts an active installation of the caller's org.
+    /// </summary>
     internal static Error InstallationNotOwned { get; } = Error.Denied(
         GitRepoBindingErrorCodes.InstallationNotOwned,
-        "the installation id is not this org's live GitHub App installation");
-
-    /// <summary>409: the org holds no live installation, so no repository can be verified through one.</summary>
-    internal static Error InstallationUnavailable { get; } = Error.Conflict(
-        GitRepoBindingErrorCodes.InstallationUnavailable,
-        "this org has no live GitHub installation, or its installation is suspended");
+        "the installation id is not this org's active GitHub App installation");
 
     /// <summary>422: GitHub answered that this installation cannot read the repository.</summary>
     internal static Error RepositoryUnreachable { get; } = Error.Unprocessable(
@@ -44,10 +39,10 @@ internal static class GitRepoBindingErrors
         ApiErrorCode.BindingExists,
         "this project already binds that repository");
 
-    /// <summary>409: another org already binds the repository in this installation.</summary>
+    /// <summary>409: another project in this org already binds the repository in this installation.</summary>
     internal static Error BoundElsewhere { get; } = Error.Conflict(
         ApiErrorCode.BindingConflict,
-        "another org already binds that repository in this installation");
+        "another project in this org already binds that repository in this installation");
 
     /// <summary>404: the binding id names no live binding of the project.</summary>
     internal static Error BindingNotFound { get; } = new(
@@ -74,11 +69,8 @@ internal static class GitRepoBindingErrors
         return error.Code switch
         {
             GitHubErrorCodes.NotFound or GitHubErrorCodes.Forbidden or GitHubErrorCodes.Unauthorized
-                or GitHubErrorCodes.PermissionNotGranted => RepositoryUnreachable,
+                or GitHubErrorCodes.PermissionNotGranted or GitHubErrorCodes.Unprocessable => RepositoryUnreachable,
             GitHubErrorCodes.NotConfigured => NotConfigured,
-            // The token source resolves the org's live installation first, so "no live installation" answers with the
-            // installation vocabulary rather than as a repository the caller got wrong.
-            "installation_unavailable" => InstallationUnavailable,
             _ => error,
         };
     }

@@ -111,7 +111,7 @@ public sealed class GitHubInstallationTokenSource : IGitHubInstallationTokens
     /// <param name="feature">The consuming feature; its compiled permission row is the ceiling.</param>
     /// <param name="repositoryIds">Numeric repository ids the token may act on.</param>
     /// <param name="cancellationToken">Cancels this caller's wait, not the shared exchange.</param>
-    public Task<Result<GitHubInstallationToken>> GetAsync(
+    internal Task<Result<GitHubInstallationToken>> GetAsync(
         long installationId,
         GitHubFeature feature,
         IReadOnlyList<long>? repositoryIds,

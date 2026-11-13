@@ -19,6 +19,9 @@ internal sealed class CatalogGitHubHttpHandler : HttpMessageHandler
 
     internal bool InstallationUnreachable { get; set; }
 
+    /// <summary>A status the token exchange answers instead of a token, so a refused mint is provable.</summary>
+    internal HttpStatusCode? MintStatus { get; set; }
+
     internal bool RepositoryUnreachable { get; set; }
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -33,6 +36,11 @@ internal sealed class CatalogGitHubHttpHandler : HttpMessageHandler
         if (request.Method == HttpMethod.Post && path.StartsWith("/app/installations/", StringComparison.Ordinal)
             && path.EndsWith("/access_tokens", StringComparison.Ordinal))
         {
+            if (MintStatus is { } status)
+            {
+                return Task.FromResult(new HttpResponseMessage(status));
+            }
+
             return Task.FromResult(InstallationUnreachable
                 ? new HttpResponseMessage(HttpStatusCode.NotFound)
                 : Json(new { token = "host-test-installation-token", expires_at = DateTimeOffset.UtcNow.AddHours(1) }));

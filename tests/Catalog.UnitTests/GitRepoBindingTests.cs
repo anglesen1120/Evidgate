@@ -85,6 +85,22 @@ public sealed class GitRepoBindingTests
     }
 
     [Fact]
+    public void Validator_RefusesABranchBeyondTheColumn()
+    {
+        var fitting = new RegisterGitRepoBindingCommand(
+            Guid.CreateVersion7(), 1, 1, new string('a', 255), BindingKey);
+        var tooLong = new RegisterGitRepoBindingCommand(
+            Guid.CreateVersion7(), 1, 1, new string('a', 256), BindingKey);
+
+        var validator = new RegisterGitRepoBindingCommandValidator();
+
+        validator.Validate(fitting).IsValid.ShouldBeTrue("255 characters is the column's ceiling");
+        var refused = validator.Validate(tooLong);
+        refused.IsValid.ShouldBeFalse("the column's CHECK refuses 256 characters, so the shape must too");
+        refused.Errors.ShouldContain(error => error.ErrorCode == "invalid_length");
+    }
+
+    [Fact]
     public void Fingerprint_ExcludesTheVerifiedBranch_SoARenameOrAProbeStillReplays()
     {
         var project = Guid.CreateVersion7();
@@ -176,17 +192,16 @@ public sealed class GitRepoBindingTests
     [InlineData(GitHubErrorCodes.Forbidden, "repository_unreachable", 422)]
     [InlineData(GitHubErrorCodes.Unauthorized, "repository_unreachable", 422)]
     [InlineData(GitHubErrorCodes.PermissionNotGranted, "repository_unreachable", 422)]
+    [InlineData(GitHubErrorCodes.Unprocessable, "repository_unreachable", 422)]
     [InlineData(GitHubErrorCodes.NotConfigured, "github_not_configured", 503)]
     [InlineData(GitHubErrorCodes.RateLimited, GitHubErrorCodes.RateLimited, 429)]
     [InlineData(GitHubErrorCodes.Unavailable, GitHubErrorCodes.Unavailable, 503)]
-    [InlineData("installation_unavailable", "installation_unavailable", 409)]
     public void VerificationFailure_MapsToTheDocumentedRefusal(string code, string expectedCode, int expectedStatus)
     {
         var error = code switch
         {
             GitHubErrorCodes.RateLimited => new Error(code, "limited", 429, Retryable: true),
             GitHubErrorCodes.Unavailable => new Error(code, "down", 503, Retryable: true),
-            "installation_unavailable" => Error.Conflict(code, "no live installation"),
             _ => new Error(code, "refused", 404),
         };
 
@@ -272,14 +287,9 @@ public sealed class GitRepoBindingTests
         {
             // The record types are matched through object: TResponse is unconstrained, so the compiler cannot see that
             // a binding command implements ICommand<TResponse>.
-            if ((object)command is PrepareGitRepoBindingCommand)
-            {
-                return ValueTask.FromResult((TResponse)(object)Result.Success(replays));
-            }
-
             if ((object)command is not RegisterGitRepoBindingCommand write)
             {
-                throw new InvalidOperationException($"{command.GetType()} is not a binding unit");
+                throw new InvalidOperationException($"{command.GetType()} is not a binding write unit");
             }
 
             Registered = write;
@@ -289,7 +299,10 @@ public sealed class GitRepoBindingTests
         public ValueTask<TResponse> Send<TResponse>(
             IQuery<TResponse> query,
             CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException("the binding flow sends commands");
+            // The read unit is the Prepare query; anything else is a flow change this fake must not hide.
+            (object)query is PrepareGitRepoBindingQuery
+                ? ValueTask.FromResult((TResponse)(object)Result.Success(replays))
+                : throw new InvalidOperationException($"{query.GetType()} is not the binding read unit");
 
         public ValueTask<TResponse> Send<TResponse>(
             IRequest<TResponse> request,

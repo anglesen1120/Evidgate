@@ -5269,8 +5269,8 @@ paths:
         `repository_unreachable`, and a host with no App configured answers 503 `github_not_configured` before any
         outbound call. The webhook secret reference is assigned by the server: `secret:gh_wh_<binding id>`, with the
         value kept in the secret store, so no member of the request or answer names it. 409 `binding_exists` when the
-        project already binds the repository, and 409 `binding_conflict` when another org binds it in the same
-        installation. A retry with the same `Idempotency-Key` and the same body replays the original `201`.
+        project already binds the repository, and 409 `binding_conflict` when another project of the same org binds
+        it in the same installation (an installation belongs to one org). A retry with the same `Idempotency-Key` and the same body replays the original `201`.
       x-permission: project:write
       x-version: v1
       parameters:

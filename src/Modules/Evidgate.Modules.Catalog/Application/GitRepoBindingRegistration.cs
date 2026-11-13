@@ -38,7 +38,9 @@ internal sealed class GitRepoBindingRegistration(
         CancellationToken cancellationToken)
     {
         var prepared = await mediator
-            .Send(new PrepareGitRepoBindingCommand(projectId, installationId, idempotencyKey), cancellationToken)
+            .Send(
+                new PrepareGitRepoBindingQuery(projectId, installationId, repositoryId, idempotencyKey),
+                cancellationToken)
             .ConfigureAwait(false);
         if (!prepared.IsSuccess)
         {

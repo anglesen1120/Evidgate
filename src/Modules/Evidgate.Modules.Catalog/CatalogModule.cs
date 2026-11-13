@@ -29,6 +29,8 @@ internal static class CatalogModule
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateSuiteCommand>, CreateSuiteCommandValidator>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateFixtureCommand>, CreateFixtureCommandValidator>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<CreateFixtureRevisionCommand>, CreateFixtureRevisionCommandValidator>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<PrepareGitRepoBindingQuery>, PrepareGitRepoBindingQueryValidator>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidator<RegisterGitRepoBindingCommand>, RegisterGitRepoBindingCommandValidator>());
 
         // The sidecar reader validates against contracts/catalog/sidecar.v1.json; the compiled set is built on first
         // use, so a host that never syncs a tree pays nothing at start-up.
