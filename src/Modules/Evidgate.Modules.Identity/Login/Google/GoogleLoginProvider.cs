@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Pipeline.Serialization;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
