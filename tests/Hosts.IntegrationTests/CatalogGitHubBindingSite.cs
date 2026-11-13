@@ -236,7 +236,7 @@ internal static class CatalogGitHubBindingSeed
         await ExecuteAsync(connection, "insert into public.project (id, org_id, name, slug) values (@id, @org, 'binding', @slug)", cancellationToken,
             ("id", project), ("org", org), ("slug", "binding-" + project.ToString("N")));
         await ExecuteAsync(connection, "insert into public.project (id, org_id, name, slug) values (@id, @org, 'other', @slug)", cancellationToken,
-            ("id", otherProject), ("org", otherOrg), ("slug", "other-" + otherProject.ToString("N")));
+            ("id", otherProject), ("org", setup.RepositoryBoundByAnotherProject ? org : otherOrg), ("slug", "other-" + otherProject.ToString("N")));
         await ExecuteAsync(
             connection,
             """
@@ -263,9 +263,6 @@ internal static class CatalogGitHubBindingSeed
 
         if (setup.RepositoryBoundByAnotherProject)
         {
-            var siblingProject = Guid.CreateVersion7();
-            await ExecuteAsync(connection, "insert into public.project (id, org_id, name, slug) values (@id, @org, 'sibling', @slug)", cancellationToken,
-                ("id", siblingProject), ("org", org), ("slug", "sibling-" + siblingProject.ToString("N")));
             await ExecuteAsync(
                 connection,
                 """
@@ -274,7 +271,7 @@ internal static class CatalogGitHubBindingSeed
                 values (@id, @org, @project, @installation_id, @repository_id, 'main', @secret_ref)
                 """,
                 cancellationToken,
-                ("id", Guid.CreateVersion7()), ("org", org), ("project", siblingProject),
+                ("id", Guid.CreateVersion7()), ("org", org), ("project", otherProject),
                 ("installation_id", CatalogGitHubBindingSite.InstallationNumber.ToString(CultureInfo.InvariantCulture)),
                 ("repository_id", CatalogGitHubBindingSite.RepositoryNumber.ToString(CultureInfo.InvariantCulture)),
                 ("secret_ref", string.Create(CultureInfo.InvariantCulture, $"secret:gh_wh_{Guid.CreateVersion7():N}")));
