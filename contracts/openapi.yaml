@@ -4390,7 +4390,8 @@ paths:
         minutes, and answers the GitHub install URL carrying it. Nothing is bound by this call: the callback
         consumes the state, so a replay answers 400 `state_invalid`. Answers 409 `already_installed` when the
         org already has an installation to disconnect first, and 503 `github_not_configured` when this host has
-        no App id, client id or slug.
+        no App id, client id or slug. Idempotency-Key exempt: the state is single-use and nothing is bound
+        here, so a retry mints a fresh state (README exemption list).
       x-permission: ci_binding:write
       x-version: v1
       parameters:
@@ -4435,26 +4436,9 @@ paths:
       x-permission: ci_binding:write
       x-version: v1
       parameters:
-        - name: installation_id
-          in: query
-          required: true
-          schema:
-            type: integer
-            format: int64
-            minimum: 1
-        - name: code
-          in: query
-          required: true
-          schema:
-            type: string
-            maxLength: 512
-        - name: state
-          in: query
-          required: true
-          description: The nonce the start route issued; only its SHA-256 exists in the database.
-          schema:
-            type: string
-            maxLength: 256
+        - $ref: '#/components/parameters/GitHubInstallationIdQuery'
+        - $ref: '#/components/parameters/GitHubInstallCode'
+        - $ref: '#/components/parameters/GitHubInstallState'
       responses:
         '200':
           description: The bound installation
@@ -9690,6 +9674,39 @@ components:
       schema:
         type: string
         format: uuid
+    GitHubInstallationIdQuery:
+      name: installation_id
+      in: query
+      required: true
+      description: >-
+        GitHub's own installation id from the install redirect. Verified through `GET /app/installations/{id}`
+        with the App JWT, and the row is written only when the caller reaches the installation in
+        `GET /user/installations` and administers its account (02.4.3).
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    GitHubInstallCode:
+      name: code
+      in: query
+      required: true
+      description: >-
+        The one-time OAuth authorization `code` GitHub appends to the redirect. It is exchanged once for a
+        user token, and neither the code nor the token is stored or echoed (02.4.3).
+      schema:
+        type: string
+        maxLength: 512
+    GitHubInstallState:
+      name: state
+      in: query
+      required: true
+      description: >-
+        The `<org>.<nonce>` state the start route issued; only the nonce's SHA-256 exists in the database. A
+        value that is unknown, expired, already consumed or issued to another org or user answers 400
+        `state_invalid` (02.4.3).
+      schema:
+        type: string
+        maxLength: 256
   headers:
     XRequestId:
       description: Server request id; echoed in `error.request_id` (00 §9.1/§9.2).

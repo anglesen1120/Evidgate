@@ -1211,7 +1211,7 @@ export const updateCiBinding = <ThrowOnError extends boolean = false>(options: O
 /**
  * Start the GitHub App install flow; answers the install URL carrying a single-use state (02.4.3)
  *
- * Draws a single-use `state` nonce, stores only its SHA-256 bound to the caller's org and user for ten minutes, and answers the GitHub install URL carrying it. Nothing is bound by this call: the callback consumes the state, so a replay answers 400 `state_invalid`. Answers 409 `already_installed` when the org already has an installation to disconnect first, and 503 `github_not_configured` when this host has no App id, client id or slug.
+ * Draws a single-use `state` nonce, stores only its SHA-256 bound to the caller's org and user for ten minutes, and answers the GitHub install URL carrying it. Nothing is bound by this call: the callback consumes the state, so a replay answers 400 `state_invalid`. Answers 409 `already_installed` when the org already has an installation to disconnect first, and 503 `github_not_configured` when this host has no App id, client id or slug. Idempotency-Key exempt: the state is single-use and nothing is bound here, so a retry mints a fresh state (README exemption list).
  */
 export const startGitHubInstall = <ThrowOnError extends boolean = false>(options?: Options<StartGitHubInstallData, ThrowOnError>): RequestResult<StartGitHubInstallResponses, StartGitHubInstallErrors, ThrowOnError> => (options?.client ?? client).post<StartGitHubInstallResponses, StartGitHubInstallErrors, ThrowOnError>({
     security: [{
