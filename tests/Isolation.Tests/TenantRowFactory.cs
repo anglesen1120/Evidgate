@@ -534,6 +534,14 @@ internal sealed class TenantRowFactory
             values[column.Name] = Value(table, column, isOwnId ? forcedId : null);
         }
 
+        // The OAuth state's primary key is its digest, so its defaulted surrogate id is not generated above, yet
+        // the suite addresses every tenant row by its `id`.
+        if (string.Equals(table, "public.github_install_state", StringComparison.Ordinal)
+            && !values.ContainsKey(TenantFkScan.TenantKeyColumn))
+        {
+            values[TenantFkScan.TenantKeyColumn] = forcedId ?? Guid.CreateVersion7();
+        }
+
         // artifact.object_key is a function of the row's own identity (0028's shape CHECK): the
         // server-chosen key embeds org, project, run, execution key, attempt and id, so the generic
         // per-column rule cannot produce it — derive it from the values just resolved.

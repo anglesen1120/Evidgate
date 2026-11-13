@@ -54,6 +54,7 @@ internal sealed record DisconnectGitHubInstallCommand(Guid InstallationId, strin
 
 /// <summary>Handler of <see cref="StartGitHubInstallCommand"/>.</summary>
 [Permission(Permissions.CiBinding.Write)]
+[AuditedAction("github_installation.start")]
 internal sealed partial class StartGitHubInstallCommandHandler(
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,
@@ -133,6 +134,7 @@ internal sealed partial class StartGitHubInstallCommandHandler(
 /// the nonce is spent even when the GitHub checks that follow refuse the callback.
 /// </summary>
 [Permission(Permissions.CiBinding.Write)]
+[AuditedAction("github_installation.state_consume")]
 internal sealed class ConsumeGitHubInstallStateCommandHandler(
     ITenantScopeAccessor scopes,
     IRequestPrincipalAccessor principals,

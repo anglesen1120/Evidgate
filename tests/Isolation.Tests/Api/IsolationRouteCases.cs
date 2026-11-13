@@ -592,11 +592,11 @@ public static class IsolationRouteCases
 
         // ---- GitHub App installation (GitHubInstallationEndpoints; 02.4.3-T2) ---------------------------------
         // The install routes are header-scoped: an org-B member naming org A is refused at tenant resolution
-        // before the handler, and a service credential cannot select an org at all. The GET case reads org B's
-        // own seeded installation (IsolationWorld), which is why its positive control answers 200.
+        // before the handler, and a service credential cannot select an org at all. The GET case reads org A's
+        // seeded installation (IsolationWorld): no case deletes it, so the read holds in any probe order.
         HeaderCase("POST", "/v1/github/installations/start", _ => new(HttpMethod.Post, "/v1/github/installations/start")),
         HeaderCase("GET", "/v1/github/installations", _ => new(HttpMethod.Get, "/v1/github/installations"),
-            ownOrg: (route, w) => OwnObject(route, "own installation answers 200", OrgBAdmin(w), new(HttpMethod.Get, "/v1/github/installations"))),
+            ownOrg: (route, w) => OwnObject(route, "own installation answers 200", OrgAAdmin(w), new(HttpMethod.Get, "/v1/github/installations"))),
         // The callback carries the single-use state, not an org: a forged state is refused identically whether the
         // caller names org A or a random org, and the answer carries no org-A id.
         Case("GET", "/v1/github/installations/callback", (route, w) =>
@@ -606,7 +606,7 @@ public static class IsolationRouteCases
                 new(HttpMethod.Get, "/v1/github/installations/callback?installation_id=1&code=probe&state=forged-b")),
         ]),
         // Disconnect names the row: org A's installation id and a random id must answer the same 404, and org B's
-        // own row disconnects (204). The positive control runs last so the GET case above still sees a row.
+        // own row disconnects (204). Only org B's row is disconnected, so the GET case above keeps org A's.
         Case("DELETE", "/v1/github/installations/{i}", (route, w) =>
         [
             Pair(route, "org A installation id in {i}", ProbeExpect.NotFound, OrgBAdmin(w),
