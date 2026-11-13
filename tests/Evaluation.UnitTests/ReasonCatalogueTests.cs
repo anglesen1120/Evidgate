@@ -10,6 +10,7 @@ public sealed class ReasonCatalogueTests
     private static readonly string[] ContractReasons =
     [
         "artifact_missing",
+        "advisory_only_run",
         "build_mismatch",
         "count_mismatch",
         "critical_not_executed",

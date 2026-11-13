@@ -9892,6 +9892,7 @@ components:
           purpose,
           ref,
           unverified_ref,
+          advisory_only,
           manifest_hash,
           suite_revision_id,
           policy_revision_id,
@@ -9933,6 +9934,13 @@ components:
             True when at least one stored identity value came from the request
             body instead of a verified CI claim (05.2.2-T1); false for a
             verified CI caller and for a run with no identity at all.
+        advisory_only:
+          type: boolean
+          description: >-
+            Derived from `ref.is_fork`, never stored separately (05.2.2-T3.2).
+            True marks a fork run: it is shown and evaluated, but it is never
+            bound to a release (422 `fork_run_not_bindable`) and its evaluation
+            never passes (reason `advisory_only_run`). No setting turns this off.
         manifest_hash:
           type: string
           pattern: '^sha256:[0-9a-f]{64}$'

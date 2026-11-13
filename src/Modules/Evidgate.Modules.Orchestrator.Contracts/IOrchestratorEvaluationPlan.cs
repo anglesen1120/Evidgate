@@ -27,6 +27,7 @@ public interface IOrchestratorEvaluationPlan
 /// <param name="PolicyRevisionId">The run's <c>policy_revision_id</c>, nullable like the column: null when the run pinned no policy.</param>
 /// <param name="ProjectId">The run's <c>project_id</c>; the caller compares it with its own scope.</param>
 /// <param name="Purpose">The run's <c>purpose</c> (<c>regular</c> or <c>replay</c>).</param>
+/// <param name="IsFork">The run's <c>is_fork</c>: a fork run is advisory-only and its evaluation can never pass.</param>
 /// <param name="PlannedCount">The pinned manifest's <c>planned_count</c>, the count the run itself planned, not the number of execution rows below.</param>
 /// <param name="SuiteRevisionId">The run's <c>suite_revision_id</c>, the key the catalogue read takes, so the catalogue never reads <c>run</c>.</param>
 /// <param name="Executions">The run's planned executions, in the plan's <c>execution_key</c> order, the order the evaluator assembles its result rows in.</param>
@@ -34,6 +35,7 @@ public sealed record EvaluationRunPlan(
     Guid? PolicyRevisionId,
     Guid ProjectId,
     string Purpose,
+    bool IsFork,
     int PlannedCount,
     Guid SuiteRevisionId,
     IReadOnlyList<EvaluationPlannedExecution> Executions);

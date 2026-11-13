@@ -379,9 +379,9 @@ public sealed partial class EvaluationTaskTests : IClassFixture<TenancyHostPool>
     /// <summary>Seeds what only the owner may write, on top of the run the real creation path wrote.</summary>
     /// <remarks>The attempts come before the revision, as in the real path: a revision freezes evidence that already
     /// exists, and the results read is bounded by the revision's freeze stamp.</remarks>
-    private async Task<Seed> SeedAsync(RunCreationTests.World world)
+    private async Task<Seed> SeedAsync(RunCreationTests.World world, bool fork = false)
     {
-        var (runId, manifestHash) = await CreateRunForSeedAsync(world);
+        var (runId, manifestHash) = await CreateRunForSeedAsync(world, fork);
         var (policyId, policyHash) = await PinPolicyAsync(world, runId);
         await PassEveryPlannedExecutionAsync(world, runId);
         var revisionId = await FreezeRevisionAsync(world, runId, manifestHash);
@@ -389,10 +389,11 @@ public sealed partial class EvaluationTaskTests : IClassFixture<TenancyHostPool>
     }
 
     /// <summary>POST /runs, then the manifest hash the evidence has to freeze against.</summary>
-    private async Task<(Guid RunId, string ManifestHash)> CreateRunForSeedAsync(RunCreationTests.World world)
+    private async Task<(Guid RunId, string ManifestHash)> CreateRunForSeedAsync(RunCreationTests.World world, bool fork = false)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
+        var body = RunCreationTests.RunBody(world.ManifestId).Replace("}", fork ? ",\"ref\":{\"is_fork\":true}}" : "}", StringComparison.Ordinal);
+        var created = await RunCreationTests.CreateRunAsync(world, body);
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
 
         await using var connection = await OwnerAsync(world);

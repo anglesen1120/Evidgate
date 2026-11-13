@@ -39,6 +39,11 @@ public sealed record EvidenceRevisionInput
     /// <summary>True when the pinned suite revision declares no cases.</summary>
     public bool SuiteDeclaredEmpty { get; init; }
 
+    /// <summary>
+    /// True when the run is advisory-only (a fork run): its evidence is judged and stored but can never decide a pass.
+    /// </summary>
+    public bool AdvisoryOnly { get; init; }
+
     /// <summary>The closed <c>missing[]</c> codes the reconciler recorded; duplicates are collapsed.</summary>
     public IReadOnlyList<MissingReasonCode> Missing
     {

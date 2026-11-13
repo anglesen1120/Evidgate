@@ -37,11 +37,15 @@ internal static class Scenarios
         IReadOnlyList<CaseResultInput>? results = null,
         IReadOnlyList<MissingReasonCode>? missing = null,
         int expectedExecutionCount = 1,
-        bool suiteDeclaredEmpty = false) => new(
+        bool suiteDeclaredEmpty = false,
+        bool advisoryOnly = false) => new(
             expectedExecutionCount,
             suiteDeclaredEmpty,
             missing ?? [],
-            results ?? [Result(CaseStatus.Passed)]);
+            results ?? [Result(CaseStatus.Passed)])
+        {
+            AdvisoryOnly = advisoryOnly,
+        };
 
     public static CaseResultInput Result(
         CaseStatus status,

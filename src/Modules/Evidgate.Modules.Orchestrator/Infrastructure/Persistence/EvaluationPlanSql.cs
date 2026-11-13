@@ -17,6 +17,7 @@ internal static class EvaluationPlanSql
         select r.policy_revision_id as "PolicyRevisionId",
                r.project_id as "ProjectId",
                r.purpose as "Purpose",
+               r.is_fork as "IsFork",
                m.planned_count as "PlannedCount",
                r.suite_revision_id as "SuiteRevisionId",
                pe.execution_key as "ExecutionKey",

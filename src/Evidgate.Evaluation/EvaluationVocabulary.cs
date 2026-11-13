@@ -137,4 +137,7 @@ public enum EvaluationReason
 
     /// <summary>Reserved for the flaky layer: a non-critical retry flip exceeded the policy's budget.</summary>
     FlakyBudgetExceeded = 14,
+
+    /// <summary>The run is advisory-only (a fork run): complete evidence is held at inconclusive and never passes.</summary>
+    AdvisoryOnlyRun = 15,
 }

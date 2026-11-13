@@ -46,6 +46,7 @@ internal sealed class EvaluationPlanReader(ITenantDb db) : IOrchestratorEvaluati
             header.PolicyRevisionId,
             header.ProjectId,
             header.Purpose,
+            header.IsFork,
             header.PlannedCount,
             header.SuiteRevisionId,
             executions);
@@ -62,6 +63,8 @@ internal sealed class EvaluationPlanReader(ITenantDb db) : IOrchestratorEvaluati
         public Guid ProjectId { get; set; }
 
         public string Purpose { get; set; } = string.Empty;
+
+        public bool IsFork { get; set; }
 
         public int PlannedCount { get; set; }
 

@@ -96,7 +96,14 @@ public sealed record RunStateDto(
     int AfterCancelEvents,
     IReadOnlyList<RunStateTransition>? StateHistory,
     RunAttemptCounts Counts,
-    RunAttemptPage ExecutionsPage);
+    RunAttemptPage ExecutionsPage)
+{
+    /// <summary>
+    /// The run's advisory label, derived from <see cref="RunRef.IsFork"/> and never stored separately: a fork run is
+    /// judged and shown but never bound to a release and never passes a gating policy.
+    /// </summary>
+    public bool AdvisoryOnly => Ref.IsFork;
+}
 
 /// <summary>
 /// The run's case attempts counted by normalised status (00 §8.5), in one grouped pass so the run detail stays
