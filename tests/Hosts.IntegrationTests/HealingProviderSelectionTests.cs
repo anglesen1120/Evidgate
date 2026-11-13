@@ -81,9 +81,9 @@ public sealed class HealingProviderSelectionTests
     /// the handler for its task type and the schedule that fires it, with no registration of the test's own.
     /// </summary>
     [Fact]
-    public void The_Module_Registers_The_Budget_Reset_Handler_And_Schedule()
+    public async Task The_Module_Registers_The_Budget_Reset_Handler_And_Schedule()
     {
-        using var provider = Compose(Environments.Production, provider: "none").BuildServiceProvider();
+        await using var provider = Compose(Environments.Production, provider: "none").BuildServiceProvider();
 
         provider.GetServices<ITaskHandlerInvoker>()
             .Count(invoker => invoker.TaskType == HealingLlmBudgetResetSweeps.TaskType)

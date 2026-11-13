@@ -40,7 +40,7 @@ public sealed class HealingLlmResponseBodyTests
         var result = await InvokeAsync(Json(body));
 
         result.Status.ShouldBe(HealingLlmStatuses.Ok);
-        result.Content!.Length.ShouldBe(filler.Length + 1);
+        result.Content.ShouldBe(filler);
     }
 
     [Fact]
@@ -58,9 +58,25 @@ public sealed class HealingLlmResponseBodyTests
     }
 
     [Fact]
-    public async Task A_Streamed_Body_Above_The_Cap_Is_Refused_Even_Without_A_Declared_Length()
+    public async Task A_Streamed_Body_Above_The_Cap_Is_Refused_Without_Reading_It_All()
     {
-        var result = await InvokeAsync(new UnsizedContent(new string('x', Cap + 1)));
+        var body = new EndlessEnvelopeStream();
+
+        var result = await InvokeAsync(new StreamContent(body));
+
+        result.Status.ShouldBe(HealingLlmStatuses.Error);
+        result.Content.ShouldBeNull();
+        body.BytesRead.ShouldBeLessThan(Cap + (64 * 1024), "the read stops shortly after the cap instead of draining the stream");
+    }
+
+    [Fact]
+    public async Task A_Body_Longer_Than_Its_Declared_Length_Is_Refused()
+    {
+        var oversize = "{\"content\":\"" + new string('x', Cap) + "\"}";
+        var content = new StreamContent(new MemoryStream(Encoding.UTF8.GetBytes(oversize)));
+        content.Headers.ContentLength = 10;
+
+        var result = await InvokeAsync(content);
 
         result.Status.ShouldBe(HealingLlmStatuses.Error);
         result.Content.ShouldBeNull();
@@ -72,6 +88,7 @@ public sealed class HealingLlmResponseBodyTests
     [InlineData("[1,2]")]
     [InlineData("\"text\"")]
     [InlineData("""{"content":""")]
+    [InlineData("""{"content":"\ud800"}""")]
     public async Task A_Body_That_Is_Not_A_Json_Object_Is_An_Error_Result(string body)
     {
         var result = await InvokeAsync(Json(body));
@@ -119,18 +136,50 @@ public sealed class HealingLlmResponseBodyTests
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
     }
 
-    /// <summary>A body with no <c>Content-Length</c>, as a chunked response arrives.</summary>
-    private sealed class UnsizedContent(string text) : HttpContent
+    /// <summary>
+    /// A valid envelope that never ends: <c>{"content":"</c> followed by endless <c>x</c>, with no length, so only the
+    /// streaming byte count can stop it.
+    /// </summary>
+    private sealed class EndlessEnvelopeStream : Stream
     {
-        private readonly byte[] _bytes = Encoding.UTF8.GetBytes(text);
+        private static readonly byte[] Prefix = Encoding.UTF8.GetBytes("{\"content\":\"");
 
-        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
-            stream.WriteAsync(_bytes, 0, _bytes.Length);
+        internal long BytesRead { get; private set; }
 
-        protected override bool TryComputeLength(out long length)
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+
+        public override void Flush()
         {
-            length = 0;
-            return false;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => Fill(buffer.AsSpan(offset, count));
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(Fill(buffer.Span));
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        private int Fill(Span<byte> target)
+        {
+            for (var i = 0; i < target.Length; i++)
+            {
+                target[i] = BytesRead < Prefix.Length ? Prefix[(int)BytesRead] : (byte)'x';
+                BytesRead++;
+            }
+
+            return target.Length;
         }
     }
 

@@ -76,8 +76,9 @@ internal static class HealingLlmHttpClients
 /// The adapter maps its own transport failure, time budget and non-success status into
 /// <see cref="HealingLlmStatuses"/> instead of throwing, so the gateway records every attempt; only the caller's own
 /// cancellation propagates. A response body above <see cref="HealingLlmHttpClients.MaxResponseBytes"/>, one that is not
-/// a JSON object, and any other read fault are an <c>error</c> result, never an exception; the body read has its own
-/// attempt-sized deadline because the headers-only send leaves it outside the resilience pipeline. It holds no API key, logs nothing, and never
+/// a JSON object, and any other read fault are an <c>error</c> result, never an exception; one deadline of
+/// <see cref="HealingLlmOptions.TotalTimeout"/> covers the send and the body read, because the headers-only send leaves
+/// the body outside the resilience pipeline. It holds no API key, logs nothing, and never
 /// puts the payload or the response in an exception message (S3, AC6).
 /// </remarks>
 internal sealed class HttpHealingLlmProvider(HttpClient client, IOptions<HealingLlmOptions> options) : IHealingLlmProvider
@@ -104,11 +105,16 @@ internal sealed class HttpHealingLlmProvider(HttpClient client, IOptions<Healing
 
         try
         {
+            // One deadline over the send and the body read, so a provider cannot spend the budget on the headers and then
+            // trickle the body for a second one; the pipeline bounds the send, this bounds the whole exchange.
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(options.Value.TotalTimeout);
+
             using var message = new HttpRequestMessage(HttpMethod.Post, HealingLlmHttpClients.GeneratePath) { Content = content };
 
             // Headers only: the body is then read under the byte cap instead of being buffered whole by the client.
             using var response = await client
-                .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, deadline.Token)
                 .ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
@@ -118,12 +124,8 @@ internal sealed class HttpHealingLlmProvider(HttpClient client, IOptions<Healing
                 return Failure(HealingLlmStatuses.Error);
             }
 
-            // The pipeline's time budget ends with the send, so a body that trickles in is bounded here.
-            using var bodyDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            bodyDeadline.CancelAfter(options.Value.AttemptTimeout);
-
             var read = await BoundedHttpBody
-                .ReadJsonAsync(response.Content, HealingLlmHttpClients.MaxResponseBytes, requireObject: true, bodyDeadline.Token)
+                .ReadJsonAsync(response.Content, HealingLlmHttpClients.MaxResponseBytes, requireObject: true, deadline.Token)
                 .ConfigureAwait(false);
 
             return read.Status == BoundedBodyStatus.Ok ? Answer(read.Document!) : Failure(HealingLlmStatuses.Error);
