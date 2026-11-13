@@ -32,5 +32,3 @@ internal sealed record GitHubTree(string Sha, bool Truncated, IReadOnlyList<GitH
 /// <param name="Size">Size GitHub declared, in bytes.</param>
 /// <param name="Content">The decoded content, at most <see cref="GitHubOptions.MaxBlobBytes"/>.</param>
 internal sealed record GitHubBlob(string Sha, long Size, byte[] Content);
-
-
