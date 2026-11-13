@@ -13,7 +13,9 @@ public sealed class AdvisoryOnlyRunTests
     private static EvaluationResult Evaluate(EvidenceRevisionInput evidence, bool emptySuiteAllowed = false) =>
         new PolicyEvaluator().Evaluate(
             evidence,
-            Scenarios.Policy(emptySuiteAllowed: emptySuiteAllowed),
+            emptySuiteAllowed
+                ? Scenarios.Policy(requiredCaseKeys: [], emptySuiteAllowed: true)
+                : Scenarios.Policy(),
             Scenarios.NoExceptions);
 
     [Fact]
