@@ -130,6 +130,12 @@ const EXPECTED = [
   ['/projects/{p}/ci-bindings', 'get', 'project:read', 'v1'],
   ['/ci-bindings/{b}', 'patch', 'ci_binding:write', 'v1'],
   ['/ci-bindings/{b}', 'delete', 'ci_binding:write', 'v1'],
+  // 02.4.3: the GitHub App installation surface — start and the callback act on the org's one
+  // binding (`ci_binding:write`), the read is `project:read`, disconnect is `ci_binding:write`.
+  ['/github/installations/start', 'post', 'ci_binding:write', 'v1'],
+  ['/github/installations/callback', 'get', 'ci_binding:write', 'v1'],
+  ['/github/installations', 'get', 'project:read', 'v1'],
+  ['/github/installations/{i}', 'delete', 'ci_binding:write', 'v1'],
   ['/projects/{p}/ingest-tokens', 'post', 'ingest_token:write', 'v1'],
   ['/projects/{p}/ingest-tokens', 'get', 'ingest_token:read', 'v1'],
   ['/ingest-tokens/{t}/rotate', 'post', 'ingest_token:write', 'v1'],
@@ -305,7 +311,8 @@ const INLINE_PARAM_ALLOWED = new Set(['X-Hub-Signature-256', 'traceparent']);
 // own-profile write of 02.3.1-T3 = the body sets one column to one of two values, so a replay would write the
 // same state, and the `If-Match` version makes the retry that re-sends the already-applied version answer 412
 // instead of applying twice; the retention upsert = a PUT that writes the same two windows for the same body,
-// so a replay cannot create a second row or a different answer.
+// so a replay cannot create a second row or a different answer; the GitHub install start of 02.4.3 = no
+// resource is created (a one-time state nonce the callback consumes), so a retry mints a fresh state.
 const IDEM_EXEMPT = new Set([
   'post /ci/token',
   'post /projects/{p}/ci-bindings',
@@ -313,6 +320,7 @@ const IDEM_EXEMPT = new Set([
   'post /projects/{p}/api-tokens',
   'post /ingest-tokens/{t}/rotate',
   'post /webhooks/github',
+  'post /github/installations/start',
   'post /runs/{r}/events',
   'post /drafts/{d}/pull-request',
   'post /jobs/{j}/heartbeat',

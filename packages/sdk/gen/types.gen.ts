@@ -4011,6 +4011,21 @@ export type IfMatchOrder = string;
  */
 export type GitHubInstallationId = string;
 
+/**
+ * GitHub's own installation id from the install redirect. Verified through `GET /app/installations/{id}` with the App JWT, and the row is written only when the caller reaches the installation in `GET /user/installations` and administers its account (02.4.3).
+ */
+export type GitHubInstallationIdQuery = number;
+
+/**
+ * The one-time OAuth authorization `code` GitHub appends to the redirect. It is exchanged once for a user token, and neither the code nor the token is stored or echoed (02.4.3).
+ */
+export type GitHubInstallCode = string;
+
+/**
+ * The `<org>.<nonce>` state the start route issued; only the nonce's SHA-256 exists in the database. A value that is unknown, expired, already consumed or issued to another org or user answers 400 `state_invalid` (02.4.3).
+ */
+export type GitHubInstallState = string;
+
 export type ExchangeCiTokenData = {
     body?: CiTokenRequest;
     path?: never;
@@ -8095,10 +8110,16 @@ export type CompleteGitHubInstallData = {
     body?: never;
     path?: never;
     query: {
+        /**
+         * GitHub's own installation id from the install redirect. Verified through `GET /app/installations/{id}` with the App JWT, and the row is written only when the caller reaches the installation in `GET /user/installations` and administers its account (02.4.3).
+         */
         installation_id: number;
+        /**
+         * The one-time OAuth authorization `code` GitHub appends to the redirect. It is exchanged once for a user token, and neither the code nor the token is stored or echoed (02.4.3).
+         */
         code: string;
         /**
-         * The nonce the start route issued; only its SHA-256 exists in the database.
+         * The `<org>.<nonce>` state the start route issued; only the nonce's SHA-256 exists in the database. A value that is unknown, expired, already consumed or issued to another org or user answers 400 `state_invalid` (02.4.3).
          */
         state: string;
     };
