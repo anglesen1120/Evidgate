@@ -72,7 +72,7 @@ public sealed class AiSettingsTemplateTests : IClassFixture<TenancyHostPool>
     [Fact]
     public async Task SeededTemplates_SaveTheirOwnDocument_Unchanged()
     {
-        // Private: this world outlives the loop, so a lease would block the pool for every save world.
+        // Private: this world outlives the loop, so a lease would defeat the pool for every save world.
         await using var catalogueWorld = await AiSettingsCalls.StartAsync(_fixture);
 
         var catalogue = await AiSettingsCalls.GetAsync(

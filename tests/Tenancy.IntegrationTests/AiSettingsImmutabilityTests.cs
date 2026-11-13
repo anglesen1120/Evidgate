@@ -53,7 +53,7 @@ public sealed class AiSettingsImmutabilityTests : IClassFixture<TenancyHostPool>
         (await AsAppAsync(world.Database, "delete from public.project_ai_settings"))
             .ShouldStartWith("42501", customMessage: "the app role may not delete a version");
 
-        (await AsOwnerAsync(world.Database, "delete from public.project_ai_settings"))
+        (await AsOwnerAsync(world.Database, $"delete from public.project_ai_settings where org_id = '{world.Org}'"))
             .ShouldBeNull("the owner keeps DELETE for the expand/contract path");
 
         (await AiSettingsCalls.SettingsCountAsync(_fixture, world)).ShouldBe(0);
