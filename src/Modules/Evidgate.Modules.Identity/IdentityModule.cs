@@ -2,11 +2,14 @@ using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
+using Evidgate.BuildingBlocks.SharedKernel.GitHub;
+using Evidgate.Modules.Identity.Application;
 using Evidgate.Modules.Identity.Application.Commands;
 using Evidgate.Modules.Identity.Authorization;
 using Evidgate.Modules.Identity.Ci;
 using Evidgate.Modules.Identity.Contracts;
 using Evidgate.Modules.Identity.DevLogin;
+using Evidgate.Modules.Identity.Infrastructure.GitHub;
 using Evidgate.Modules.Identity.Infrastructure.Persistence;
 using Evidgate.Modules.Identity.Invites;
 using Evidgate.Modules.Identity.Login;
@@ -129,6 +132,7 @@ internal static class IdentityModule
         services.AddCiAuthentication(configuration);
         services.AddApiTokens(configuration);
         services.AddInviteMinting(configuration);
+        services.AddGitHubInstallation(configuration);
 
         // 02.3.1-T1 (AC8): the federated login — EVIDGATE:Login and EVIDGATE:SESSION options, the
         // pending-login cookie, the one-time state record, the session store and the completion that issues
@@ -162,6 +166,33 @@ internal static class IdentityModule
         // calls; a platform task, so it takes no tenant scope.
         services.AddTaskHandler<SessionCleanupPayload, SessionCleanupTaskHandler>();
         services.AddTaskSchedule(SessionCleanupSweeps.Cleanup);
+
+        return services;
+    }
+
+    /// <summary>
+    /// The GitHub App installation binding (§4-§5): the shared App client, the row and nonce stores, the two GitHub
+    /// clients the callback calls, and the daily purge of expired nonces. The token source is the shared one, so the
+    /// resolver registered here is what the rest of the platform's features mint through.
+    /// </summary>
+    private static IServiceCollection AddGitHubInstallation(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddGitHubApp(configuration);
+
+        services.TryAddSingleton<GitHubInstallationStore>();
+        services.TryAddSingleton<IGitHubInstallationStore>(
+            provider => provider.GetRequiredService<GitHubInstallationStore>());
+        services.TryAddSingleton<IGitHubInstallStateStore>(
+            provider => provider.GetRequiredService<GitHubInstallationStore>());
+        services.TryAddSingleton<IGitHubInstallationResolver>(
+            provider => provider.GetRequiredService<GitHubInstallationStore>());
+
+        services.TryAddSingleton<IGitHubOAuthClient, GitHubOAuthClient>();
+        services.TryAddSingleton<IGitHubAppInstallations, GitHubAppInstallationsClient>();
+        services.TryAddScoped<GitHubInstallCompletion>();
+
+        services.AddTaskHandler<GitHubInstallStatePurgePayload, GitHubInstallStatePurgeTaskHandler>();
+        services.AddTaskSchedule(GitHubInstallStatePurges.Purge);
 
         return services;
     }

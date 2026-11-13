@@ -15,4 +15,10 @@ public static class TelemetryMeters
 
     /// <summary>The ASP.NET Core hosting meter: the server request-duration histogram the ingest SLI reads.</summary>
     public const string AspNetCoreHosting = "Microsoft.AspNetCore.Hosting";
+
+    /// <summary>
+    /// The GitHub installation-token meter. The name is repeated in the GitHub block's token source, which does not
+    /// reference this project, so a rename there must be mirrored here.
+    /// </summary>
+    public const string GitHub = "Evidgate.GitHub";
 }

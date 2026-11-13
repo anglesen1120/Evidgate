@@ -2984,6 +2984,44 @@ export type UsageSummaryProjectsStatusDto = {
 };
 
 /**
+ * The install URL the caller's browser is sent to (02.4.3). It carries the single-use `state`; the nonce is never returned separately, logged, or stored in clear text.
+ */
+export type GitHubInstallStartResponse = {
+    /**
+     * The GitHub install URL, `https://github.com/apps/{slug}/installations/new?state={nonce}`.
+     */
+    url: string;
+};
+
+/**
+ * The org's bound GitHub App installation (02.4.3). No secret exists in the row, so every member with `project:read` may read it.
+ */
+export type GitHubInstallationView = {
+    /**
+     * The row id to disconnect with; it changes when the org reinstalls.
+     */
+    id: string;
+    /**
+     * The numeric GitHub installation id.
+     */
+    installation_id: number;
+    /**
+     * Login of the user or organization account the App is installed on.
+     */
+    account_login: string;
+    /**
+     * Only `active` is served by the view route; the other two answer 409.
+     */
+    state: 'active' | 'suspended' | 'deleted';
+    /**
+     * The repository permission map GitHub reported when the installation was verified.
+     */
+    permissions: {
+        [key: string]: string;
+    };
+};
+
+/**
  * Adapter capability document v1
  *
  * 00 §10 adapter protocol capability document (04.7.1-T1.1). The server rejects an incompatible protocol.major; supports is extensible — flags the server does not know are recorded verbatim in adapter_capability.supports and never evaluated (04.7.1 AC3). capture_control: false declares that the adapter cannot honour the run-create configuration document (contracts/adapter/config.v1.json), so its runs carry the capture_uncontrolled label (T97, AC7); an absent capture_control means the configuration document must be honoured. The document is untrusted input capped at 16 KiB. See contracts/README.md for the *.vN.json versioning rule.
@@ -3963,6 +4001,11 @@ export type AiSettingsVersionNo = number;
  * Order tag of the sibling set, `"order:sha256:<hex>"` — `AuthoringHashes.OrderHash` over the sorted `(id, version)` pairs of the parent's live siblings (13.1.1-T2) — never a row `version`. Absent or malformed is 422 `request_invalid` with `details[].path = /If-Match` (`required` / `invalid`); a stale tag is 412 `precondition_failed` with the current tag in `error.details`, and nothing is written.
  */
 export type IfMatchOrder = string;
+
+/**
+ * The row id the view route returns as `id` (02.4.3). A value that is not a uuid, or names no non-deleted installation of the caller's org, answers 404 `not_found`; disconnect never answers the binding 400.
+ */
+export type GitHubInstallationId = string;
 
 export type ExchangeCiTokenData = {
     body?: CiTokenRequest;
@@ -7996,6 +8039,210 @@ export type UpdateCiBindingResponses = {
 };
 
 export type UpdateCiBindingResponse = UpdateCiBindingResponses[keyof UpdateCiBindingResponses];
+
+export type StartGitHubInstallData = {
+    body?: never;
+    headers?: {
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path?: never;
+    query?: never;
+    url: '/github/installations/start';
+};
+
+export type StartGitHubInstallErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type StartGitHubInstallError = StartGitHubInstallErrors[keyof StartGitHubInstallErrors];
+
+export type StartGitHubInstallResponses = {
+    /**
+     * The install URL; the nonce it carries is never logged or stored in clear
+     */
+    200: GitHubInstallStartResponse;
+};
+
+export type StartGitHubInstallResponse = StartGitHubInstallResponses[keyof StartGitHubInstallResponses];
+
+export type CompleteGitHubInstallData = {
+    body?: never;
+    path?: never;
+    query: {
+        installation_id: number;
+        code: string;
+        /**
+         * The nonce the start route issued; only its SHA-256 exists in the database.
+         */
+        state: string;
+    };
+    url: '/github/installations/callback';
+};
+
+export type CompleteGitHubInstallErrors = {
+    /**
+     * 400 request_invalid — a malformed or missing request header, e.g. the `Idempotency-Key` every mutating authoring route requires (00 §9.1)
+     */
+    400: ErrorEnvelope;
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type CompleteGitHubInstallError = CompleteGitHubInstallErrors[keyof CompleteGitHubInstallErrors];
+
+export type CompleteGitHubInstallResponses = {
+    /**
+     * The bound installation
+     */
+    200: GitHubInstallationView;
+};
+
+export type CompleteGitHubInstallResponse = CompleteGitHubInstallResponses[keyof CompleteGitHubInstallResponses];
+
+export type GetGitHubInstallationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/github/installations';
+};
+
+export type GetGitHubInstallationErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type GetGitHubInstallationError = GetGitHubInstallationErrors[keyof GetGitHubInstallationErrors];
+
+export type GetGitHubInstallationResponses = {
+    /**
+     * The installation
+     */
+    200: GitHubInstallationView;
+};
+
+export type GetGitHubInstallationResponse = GetGitHubInstallationResponses[keyof GetGitHubInstallationResponses];
+
+export type DisconnectGitHubInstallData = {
+    body?: never;
+    headers: {
+        /**
+         * Client-supplied, ≤ 128 chars, unique per `(org_id, project_id, operation)` ≥ 24 h (00 §7/§9.1).
+         */
+        'Idempotency-Key': string;
+        /**
+         * Required whenever the caller is cookie-authenticated (00 §9.1, T38); bearer-only callers omit it. 403 `csrf_failed` on mismatch.
+         */
+        'X-XSRF-TOKEN'?: string;
+    };
+    path: {
+        /**
+         * The row id the view route returns as `id` (02.4.3). A value that is not a uuid, or names no non-deleted installation of the caller's org, answers 404 `not_found`; disconnect never answers the binding 400.
+         */
+        i: string;
+    };
+    query?: never;
+    url: '/github/installations/{i}';
+};
+
+export type DisconnectGitHubInstallErrors = {
+    /**
+     * 401 (00 §9.2). The `code` distinguishes the credential's state (02.3.2-T1, D2): `unauthenticated` (no credential, or a cookie that names no session), `session_expired` (past the idle or the absolute deadline — the client signs in again), `session_revoked` (the session was ended, rotated away or revoked; the client signs in again), and the bearer family (`token_invalid`, `token_expired`, …). A refused session answers its own code here, before any handler runs.
+     */
+    401: ErrorEnvelope;
+    /**
+     * 403 forbidden — includes token-scope mismatch, `csrf_failed` (a cookie-authenticated mutation whose `X-XSRF-TOKEN` is missing or does not match the pair bound to that session; 00 §9.1/§9.2, 02.3.2-T1) and `account_disabled` (a live session whose user is no longer active).
+     */
+    403: ErrorEnvelope;
+    /**
+     * 404 not found — also for other-tenant ids (00 §9.2)
+     */
+    404: ErrorEnvelope;
+    /**
+     * 409 conflict — e.g. `idempotency_conflict`, `run_closed` (00 §9.1/§9.2)
+     */
+    409: ErrorEnvelope;
+    /**
+     * 429 — `rate_limited` (bursts) or `quota_exceeded` (tenant/project limit); always `Retry-After` (00 §9.2)
+     */
+    429: ErrorEnvelope;
+    /**
+     * 503 unavailable — always `Retry-After` (00 §9.2)
+     */
+    503: ErrorEnvelope;
+};
+
+export type DisconnectGitHubInstallError = DisconnectGitHubInstallErrors[keyof DisconnectGitHubInstallErrors];
+
+export type DisconnectGitHubInstallResponses = {
+    /**
+     * Installation disconnected
+     */
+    204: void;
+};
+
+export type DisconnectGitHubInstallResponse = DisconnectGitHubInstallResponses[keyof DisconnectGitHubInstallResponses];
 
 export type ListIngestTokensData = {
     body?: never;

@@ -224,6 +224,17 @@ public sealed class SecretRedactor
         MatchTimeout);
 
     /// <summary>
+    /// Masks a GitHub credential by its shape: installation (<c>ghs_</c>), user (<c>ghu_</c>), refresh
+    /// (<c>ghr_</c>), OAuth (<c>gho_</c>) and personal-access tokens, and a three-segment JWT. These appear in a
+    /// log line with no key naming them — an interpolated token, a header dump — so the assignment patterns
+    /// cannot see them, and a bare value has to be recognised by its own shape.
+    /// </summary>
+    private readonly Regex _githubTokenShapes = new(
+        @"\b(?:gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{20,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant,
+        MatchTimeout);
+
+    /// <summary>
     /// Redacts a structured state value by its key (10.3.1-T1.4): a key that names a whole
     /// secret yields <see cref="Mask"/> whatever the value was, and anything else is rendered
     /// to text with its own secrets masked — a nested dictionary is walked by key (bounded in
@@ -256,7 +267,7 @@ public sealed class SecretRedactor
             return text ?? string.Empty;
         }
 
-        if (!MayContainSecret(text))
+        if (!MayContainSecret(text) && !MayContainTokenShape(text))
         {
             return text;
         }
@@ -265,6 +276,7 @@ public sealed class SecretRedactor
             ? string.Concat(text.AsSpan(0, MaxTextLength), Ellipsis)
             : text;
 
+        subject = Replace(_githubTokenShapes, subject, Mask);
         subject = Replace(_cookieHeader, subject, HeaderReplacement);
         subject = Replace(_authorizationHeader, subject, HeaderReplacement);
 
@@ -328,6 +340,16 @@ public sealed class SecretRedactor
 
         return false;
     }
+
+    /// <summary>Cheap span test so only text carrying a GitHub/JWT prefix reaches the shape regex.</summary>
+    private static bool MayContainTokenShape(ReadOnlySpan<char> text) =>
+        text.Contains("ghs_", StringComparison.Ordinal)
+        || text.Contains("ghu_", StringComparison.Ordinal)
+        || text.Contains("ghr_", StringComparison.Ordinal)
+        || text.Contains("gho_", StringComparison.Ordinal)
+        || text.Contains("ghp_", StringComparison.Ordinal)
+        || text.Contains("github_pat_", StringComparison.Ordinal)
+        || text.Contains("eyJ", StringComparison.Ordinal);
 
     private static bool IsIdentifierCharacter(char value) =>
         char.IsAsciiLetterOrDigit(value) || value is '_' or '.' or '-';

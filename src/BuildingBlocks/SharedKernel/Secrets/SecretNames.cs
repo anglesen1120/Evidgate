@@ -57,6 +57,12 @@ public static class SecretNames
     public const string GitHubAppPrivateKey = "EVIDGATE__GITHUB__PRIVATEKEY";
 
     /// <summary>
+    /// OAuth client secret of the platform's GitHub App, used only by the install callback's code exchange. Resolved
+    /// through <see cref="ISecretProvider"/> after the binder; never bound, logged or stored.
+    /// </summary>
+    public const string GitHubAppClientSecret = "EVIDGATE__GITHUB__CLIENTSECRET";
+
+    /// <summary>
     /// API key the healing adapter presents to its provider. Deployments name it in
     /// <c>EVIDGATE__HEALING__LLM__APIKEYSECRET</c>; the value is resolved per request and never stored.
     /// </summary>
@@ -103,6 +109,7 @@ public static class SecretNames
         OidcGoogleClientSecret,
         OauthGithubClientSecret,
         GitHubAppPrivateKey,
+        GitHubAppClientSecret,
         HealingLlmApiKey,
         SessionPepper,
         SessionPreviousPepper,

@@ -35,6 +35,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Identity.Contracts\Evidgate.Modules.Identity.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\GitHub\Evidgate.BuildingBlocks.GitHub.csproj" />
     <!-- 02.2.1-T1.2: the Dapper read path over the ambient tenant scope (00 §5.5 C5). -->
     <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <!-- 02.2.1-T2.2: the C2 authorization seam the module implements

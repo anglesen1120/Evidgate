@@ -236,6 +236,7 @@ public static partial class ApiHost
         // 02.2.1-T1.2 (00 §5.5 C8): the module maps its /v1 read routes and the host
         // applies the envelope filter, so a Result becomes the 00 §9.2 body once.
         app.MapIdentityEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
+        app.MapGitHubInstallationEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();
         // 02.1.2-T1.2 (00 §5.5 C8): the membership routes of 02.1.2 and the same
         // single Result → 00 §9.2 envelope filter.
         app.MapMembershipEndpoints().AddEndpointFilter<TenantResolutionFilter>().AddEndpointFilter<ResultEndpointFilter>();

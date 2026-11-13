@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 
 namespace Evidgate.Modules.Catalog.Infrastructure.GitHub;

@@ -1,4 +1,5 @@
 using System.Net;
+using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Microsoft.Extensions.Configuration;
@@ -50,7 +51,7 @@ public sealed class GitHubCompositionTests
         using var provider = BuildProvider();
         var handlers = provider.GetRequiredService<IHttpMessageHandlerFactory>();
 
-        foreach (var clientName in new[] { GitHubHttpClients.Api, GitHubHttpClients.Token })
+        foreach (var clientName in new[] { GitHubHttpClients.Api, GitHubHttpClients.Token, GitHubHttpClients.OAuth })
         {
             var primary = PrimaryHandler(handlers.CreateHandler(clientName));
             primary.AllowAutoRedirect.ShouldBeFalse(clientName);
@@ -67,7 +68,7 @@ public sealed class GitHubCompositionTests
         using var provider = BuildProvider(stub);
         var client = BuildClient(provider, stub);
 
-        var result = await client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var result = await client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.RateLimited);
         result.Error.Details!.Single().Actual.ShouldBe(200_000L);
@@ -93,7 +94,7 @@ public sealed class GitHubCompositionTests
         using var provider = BuildProvider(stub);
         var client = BuildClient(provider, stub);
 
-        var result = await client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var result = await client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         gets.ShouldBe(3);
@@ -130,11 +131,13 @@ public sealed class GitHubCompositionTests
         var appTokens = new GitHubAppTokenSource(options, time, new ListLogger<GitHubAppTokenSource>());
         var plain = new HttpClient(stub) { BaseAddress = new Uri("https://api.github.com") };
         var tokens = new GitHubInstallationTokenSource(
+            GitHubTestBench.Meters,
             new StubClientFactory(plain),
             appTokens,
             options,
             time,
-            new ListLogger<GitHubInstallationTokenSource>());
+            new ListLogger<GitHubInstallationTokenSource>(),
+            new StubInstallationResolver());
 
         return new GitHubClient(
             provider.GetRequiredService<IHttpClientFactory>().CreateClient(GitHubHttpClients.Api),
