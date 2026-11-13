@@ -16,7 +16,9 @@ import {
   sparseGridRevision,
 } from './suite-composition.testing';
 
-describe('SuiteCompositionComponent members', () => {
+// Heaviest test here takes ~190 ms on an idle machine; under the smoke container's CPU
+// contention (after the fuzz stage) the 5000 ms default was exceeded.
+describe('SuiteCompositionComponent members', { timeout: 30_000 }, () => {
   const getRevision = vi.fn<(id: string) => Promise<SuiteRevisionDto>>();
   beforeEach(() => {
     getRevision.mockReset().mockResolvedValue(revision);

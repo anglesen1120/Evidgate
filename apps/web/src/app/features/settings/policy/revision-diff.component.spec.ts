@@ -45,7 +45,9 @@ class FakePolicyStore {
     Promise.resolve(id === 'a' ? previous : head),
   );
 }
-describe('RevisionDiffComponent', () => {
+// Heaviest test here takes ~330 ms on an idle machine; under the smoke container's CPU
+// contention (after the fuzz stage) the 5000 ms default was exceeded.
+describe('RevisionDiffComponent', { timeout: 30_000 }, () => {
   let store: FakePolicyStore;
   beforeEach(() => {
     store = new FakePolicyStore();
