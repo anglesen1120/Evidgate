@@ -620,6 +620,12 @@ closed by #818 (4f8a2362)
 
 closed by #820 (68358713)
 
+## Moved from status-carried.md by S411 (2026-11-13)
+
+| Cursor page shape not delivered (04.1.3-T1, S251) | AC4-AC6 of 04.1.3 are not delivered (#520 landed the caps half only, COORDINATOR-DECISION 251): no `{items, next_cursor}` page shape on the run-detail executions section, on the comparison list (04.4.1-T6) or on a `case-attempts` list route, no HMAC cursor, no reconciler paging. No migration needed. Task 04.1.3-T1 stays partial in STATUS §5. | receiver: coordinator (next slice for 04.1.3-T1); plan `plans/features/04-ingestion-adapters/04.1.3-large-report-caps-and-streaming.md` AC4-AC6 |
+
+closed by #830 (1cc3b9be)
+
 ## Moved from status-carried.md by S409 (2026-11-13)
 
 | Sixth bounded JSON reader copy (S404) | `GitHubResponseReader` in `src/Modules/Evidgate.Modules.Catalog/Infrastructure/GitHub/` is the sixth hand-written bounded-JSON body reader (same shape as the other five); agent-code-rules §7 calls a second copy of protocol logic a defect. Extract one shared reader when the next HTTP client lands. | next HTTP-client task (T1.4 or 10.x) |

@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
-using Evidgate.BuildingBlocks.SharedKernel.Serialization;
+using Evidgate.BuildingBlocks.Pipeline.Serialization;
 using Evidgate.Modules.Identity.Options;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
