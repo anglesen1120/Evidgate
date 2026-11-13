@@ -16,21 +16,28 @@ namespace Tenancy.IntegrationTests;
 /// the implementation.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class CreateRunIdentityQaTests
+public sealed class CreateRunIdentityQaTests : IClassFixture<TenancyHostPool>
 {
     private const string Sha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string OtherSha = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     private readonly PostgresTenancyFixture _fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts;
 
-    public CreateRunIdentityQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public CreateRunIdentityQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     // ------------------------------------------------------------------ AC3: claim wins, body never rejected
 
     [Fact]
     public async Task Qa_VerifiedBranchClaim_ConflictingBodyValuesAreIgnoredNotRejected()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
 
         // kind/name/pr_number/head_sha are covered by the branch claim: the body must not win, and must not reject.
@@ -55,7 +62,7 @@ public sealed class CreateRunIdentityQaTests
     [Fact]
     public async Task Qa_VerifiedBranchClaim_BodyIsForkAloneDoesNotLabelTheRunUnverified()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
 
         // is_fork is a claim-covered field (verified runs store false). A body fork value is ignored, and since no
@@ -73,7 +80,7 @@ public sealed class CreateRunIdentityQaTests
     [Fact]
     public async Task Qa_UnparseableClaim_BodyKindNameAndPrNumberIgnored_HeadAndTriggerKept()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/foo/bar", Sha);
 
         // refs/foo/bar covers nothing: kind/name/pr_number are null and the body is ignored for them. head_sha is not
@@ -98,7 +105,7 @@ public sealed class CreateRunIdentityQaTests
     [Fact]
     public async Task Qa_RefName_255CodePointsWithAstralRunes_IsAccepted_AndCountedAsCodePoints()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         // 255 code points but 510 UTF-16 units: a UTF-16 length check would wrongly reject this.
         var name = string.Concat(Enumerable.Repeat("\U0001F600", 255));
@@ -112,7 +119,7 @@ public sealed class CreateRunIdentityQaTests
     [Fact]
     public async Task Qa_RefName_256CodePointsWithAstralRunes_IsRequestInvalid_AndWritesNothing()
     {
-        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture);
+        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture, hosts: _hosts);
 
         var name = string.Concat(Enumerable.Repeat("\U0001F600", 256));
         var answer = await RunCreationTests.CreateRunAsync(world, BodyWithRef(world, $$"""{"kind":"branch","name":"{{name}}"}"""));
@@ -127,7 +134,7 @@ public sealed class CreateRunIdentityQaTests
     [Fact]
     public async Task Qa_PrNumber_Int32MaxIsAccepted()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await RunCreationTests.CreateRunAsync(
             world, BodyWithRef(world, """{"kind":"pull_request","pr_number":2147483647}"""));
@@ -144,7 +151,7 @@ public sealed class CreateRunIdentityQaTests
     [InlineData("1e400")]
     public async Task Qa_PrNumber_OutOfRangeOrWrongJsonType_IsRequestInvalid_NotA500(string prNumber)
     {
-        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture);
+        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture, hosts: _hosts);
 
         var answer = await RunCreationTests.CreateRunAsync(
             world, BodyWithRef(world, $$"""{"kind":"pull_request","pr_number":{{prNumber}}}"""));
@@ -162,7 +169,7 @@ public sealed class CreateRunIdentityQaTests
     [InlineData("""{"kind":"branch","name":"main","trigger_event":"push\u0000"}""")]
     public async Task Qa_NulOrLoneSurrogate_InsideRef_IsRequestInvalid_AndWritesNothing(string refJson)
     {
-        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture);
+        await using var world = await RunCreationTests.StartRefusalWorldAsync(_fixture, hosts: _hosts);
 
         var answer = await RunCreationTests.CreateRunAsync(world, BodyWithRef(world, refJson));
 
@@ -177,7 +184,7 @@ public sealed class CreateRunIdentityQaTests
     public async Task Qa_OwnerUpdate_SettingIdentityOnARunWithoutIdentity_FailsWithP0001()
     {
         // A NULL -> value change on a row without identity: a naive `old <> new` is NULL here and would let it pass.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var answer = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
         var runId = answer.Id("run_id");
@@ -199,7 +206,7 @@ public sealed class CreateRunIdentityQaTests
     public async Task Qa_OwnerUpdate_NullToNullOnAnIdentityColumn_Succeeds()
     {
         // The other half of NULL safety: `is distinct from` must not treat NULL = NULL as a change.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var answer = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
         var runId = answer.Id("run_id");
@@ -218,7 +225,7 @@ public sealed class CreateRunIdentityQaTests
     [InlineData("DELETE")]
     public async Task Qa_RunRoute_HasNoMutationVerb_AndTheIdentityIsUnchanged(string verb)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await SeedClaimAsync(world.Database, world.Org, world.Project, "refs/heads/main", Sha);
         var result = await RunCreationSeams.SendDirectAsync(
             world.Api, world.Org, world.Project, Producer(world.Project, "token-qa-route"), BodyWithRef(world, """{"trigger_event":"push"}"""));

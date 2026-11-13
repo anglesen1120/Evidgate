@@ -16,7 +16,7 @@ namespace Tenancy.IntegrationTests;
 /// leaves no reservation behind.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class UsageQuotaGateTests
+public sealed partial class UsageQuotaGateTests : IClassFixture<TenancyHostPool>
 {
     private const string Period = "2026-10";
     private const string NextPeriod = "2026-11";
@@ -26,8 +26,15 @@ public sealed partial class UsageQuotaGateTests
     private static readonly DateTimeOffset OccurredAt = new(2026, 10, 12, 9, 30, 0, TimeSpan.Zero);
 
     private readonly PostgresTenancyFixture _fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts;
 
-    public UsageQuotaGateTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public UsageQuotaGateTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     private static QuotaCheckRequest Request(
         UsageQuotaWorld world,
@@ -60,7 +67,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_WarnThenBlock()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m);
 
         var below = await world.CheckAsync(Request(world, 5m));
@@ -100,7 +107,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_ExactlyAtLimit_Boundary()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 9m);
 
         var lastUnit = await world.CheckAsync(Request(world, 1m));
@@ -122,7 +129,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_ConcurrentBatches_NoOvershoot()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m);
 
         var answers = await Task.WhenAll(Enumerable.Range(0, 50).Select(
@@ -141,7 +148,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_ZeroOrNegativeQuantity_Refused()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m);
 
         await Should.ThrowAsync<ArgumentOutOfRangeException>(() => world.CheckAsync(Request(world, 0m)));
@@ -160,7 +167,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_NoCounterRow_IsOk_NoWrite()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await world.CheckAsync(Request(world, 3m));
 
@@ -179,7 +186,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_AcceptedCall_IsOneStatement()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m);
 
         world.ClearStatementLog();
@@ -192,7 +199,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_RepeatedRefusal_StampsOnceAndKeepsTheVersion()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: Limit);
 
         var first = await world.CheckAsync(Request(world, 1m));
@@ -221,7 +228,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_PeriodUpperBound_BlockStillAnswersRetry()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         const string lastPeriod = "2999-12";
         await SeedAsync(world, used: Limit, period: lastPeriod);
 
@@ -237,7 +244,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_RaiseBeforeTheStamp_LeavesNoBlockOnTheRaisedCounter()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: Limit - 1m);
 
         // The operator's raise commits between the gate reading the scope and its refusal stamp: here the
@@ -268,7 +275,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_PeriodRollover_UsesFreshCounter()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: Limit, blockedAt: OccurredAt);
 
         var nextMonth = await world.CheckAsync(Request(world, 4m, period: NextPeriod));
@@ -287,7 +294,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_CrossOrg_CountersIsolated()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         var (otherOrg, otherProject) = await world.AddOtherOrgAsync();
         await SeedAsync(world, used: 0m);
         await world.SeedCounterAsync(new CounterSeed(
@@ -313,7 +320,7 @@ public sealed partial class UsageQuotaGateTests
             configuration: new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Usage:QuotaGate:Enabled"] = "false",
-            });
+            }, hosts: _hosts);
         await SeedAsync(world, used: Limit);
 
         var answer = await world.CheckAsync(Request(world, 1m));
@@ -332,7 +339,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_RolledBackCaller_LeavesUsedUnchanged()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m);
 
         var rolledBack = await world.CheckAsync(Request(world, 3m), commit: false);
@@ -347,7 +354,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_CommittedBatch_Completes()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m);
 
         var accepted = await world.CheckAndRecordAsync(

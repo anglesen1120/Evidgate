@@ -18,7 +18,7 @@ namespace Tenancy.IntegrationTests;
 /// writes a counter, stamps one or carries a limit forward.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class UsageQuotaPeekTests
+public sealed class UsageQuotaPeekTests : IClassFixture<TenancyHostPool>
 {
     private const string Period = "2026-10";
     private const string PreviousPeriod = "2026-09";
@@ -26,8 +26,15 @@ public sealed class UsageQuotaPeekTests
     private const decimal WarnRatio = 0.8m;
 
     private readonly PostgresTenancyFixture _fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts;
 
-    public UsageQuotaPeekTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public UsageQuotaPeekTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     private static QuotaCheckRequest Request(
         UsageQuotaWorld world,
@@ -62,7 +69,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_ProjectCounterFull_Blocks()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: Limit, projectId: world.Project);
 
         var blocked = await world.PeekAsync(Request(world, 1m));
@@ -82,7 +89,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_BlockedCounter_ReportsWhetherItsStampIsStillUnwritten()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         var counterId = await SeedAsync(world, used: Limit, projectId: world.Project);
 
         var fresh = await world.PeekAsync(Request(world, 1m));
@@ -105,7 +112,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_OnlyTheSecondRefusingScopeUnstamped_StillReportsUnstamped()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         var tenantId = await SeedAsync(world, used: Limit);
         var projectId = await SeedAsync(world, used: Limit, projectId: world.Project);
         await _fixture.ExecuteAsync(
@@ -130,7 +137,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_TenantCounterFull_BlocksTenantScope()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: Limit, projectId: null);
         await SeedAsync(world, used: 0m, projectId: world.Project);
 
@@ -148,7 +155,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_ForeignOrgFullCounters_DoNotBlock()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         var (otherOrg, otherProject) = await world.AddOtherOrgAsync();
         await SeedAsync(world, used: Limit, projectId: otherProject, org: otherOrg);
         await SeedAsync(world, used: Limit, projectId: null, org: otherOrg);
@@ -179,7 +186,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_RoomOrExactFit_ReturnsClear()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 9m, projectId: world.Project);
 
         var exactFit = await world.PeekAsync(Request(world, 1m));
@@ -193,7 +200,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_NoCounterOfThePeriod_ReturnsClearWithoutCarry()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: Limit, period: PreviousPeriod, projectId: world.Project);
 
         var answer = await world.PeekAsync(Request(world, 1m));
@@ -211,7 +218,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_Block_LeavesTheCounterUntouched()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 5m, projectId: world.Project);
         var before = (await world.CounterAsync(project: world.Project)).ShouldNotBeNull();
         world.ClearStatementLog();
@@ -233,7 +240,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_InvalidRequest_RefusedBeforeAnyStatement()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m, projectId: world.Project);
         world.ClearStatementLog();
 
@@ -252,7 +259,7 @@ public sealed class UsageQuotaPeekTests
             configuration: new Dictionary<string, string?>(StringComparer.Ordinal)
             {
                 ["EVIDGATE:Usage:QuotaGate:Enabled"] = "false",
-            });
+            }, hosts: _hosts);
         await SeedAsync(world, used: Limit, projectId: world.Project, blockedAt: DateTimeOffset.UnixEpoch);
         var before = (await world.CounterAsync(project: world.Project)).ShouldNotBeNull();
         world.ClearStatementLog();
@@ -274,7 +281,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_NullPeriod_BlocksAndNamesTheTransactionsMonth()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         var token = TestContext.Current.CancellationToken;
         await using var services = world.Api.Services.CreateAsyncScope();
         var provider = services.ServiceProvider;
@@ -303,7 +310,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_NullPeriod_NoCounterOrRoomLeft_IsClear()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         var noCounter = await world.PeekAsync(Request(world, 1m, period: null));
 
@@ -322,7 +329,7 @@ public sealed class UsageQuotaPeekTests
     [Fact]
     public async Task QuotaGatePeek_NullPeriod_IsOneStatement()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         var (month, _) = await world.DatabaseMonthsAsync();
         await SeedAsync(world, used: 0m, period: month, projectId: world.Project);
         world.ClearStatementLog();

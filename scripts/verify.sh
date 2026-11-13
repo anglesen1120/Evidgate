@@ -136,25 +136,26 @@ run_stage() {
     # EVIDGATE_VERIFY_SKIP_DOCKER=1 skips the Category=Docker integration tests
     # (Testcontainers). Only smoke-clean-build.sh sets it: its container has no
     # Docker daemon, and mounting the host socket would hand it the host. The
-    # skip path runs one assembly per call because an assembly whose whole suite
-    # is Docker tests legitimately runs none there, and MTP reports that for the
-    # assembly as exit code 8 — a solution-wide call would turn it into one
-    # failed run. Per assembly the code is legible: 8 is "this assembly had no
-    # test left", anything else is the assembly's own verdict, and a stage where
+    # skip path runs one assembly per call: an assembly whose whole suite is
+    # Docker tests runs none there, which MTP reports as exit code 8, and a
+    # solution-wide call would turn that into one failed run. So 8 means "no test
+    # left in this assembly", anything else is its own verdict, and a stage where
     # no assembly ran a test at all still fails.
     if [[ "${EVIDGATE_VERIFY_SKIP_DOCKER:-}" == "1" ]]; then
       stage "dotnet test (unit + architecture; Docker integration tests skipped)"
-      tests_ran=0
+      tests_ran=0 && class_timing_begin
       for test_project in tests/*/*.csproj; do
         status=0
+        class_timing_flags "$(basename "$(dirname "$test_project")")" # per-class timing reports
         dotnet test --no-build -c Release --project "$test_project" \
-          --filter-not-trait "Category=Docker" || status=$?
+          --filter-not-trait "Category=Docker" ${CT_FLAGS[@]+"${CT_FLAGS[@]}"} || status=$?
         case "$status" in
         0) tests_ran=1 ;;
         8) echo "   $test_project: no test runs with Docker skipped (the assembly needs a daemon)" ;;
-        *) exit "$status" ;;
+        *) class_timing_report; exit "$status" ;;
         esac
       done
+      class_timing_report
       if [[ "$tests_ran" -eq 0 ]]; then
         echo "verify: the Docker-skipped test stage ran no test in any assembly" >&2
         exit 1
@@ -169,26 +170,25 @@ run_stage() {
     # isolation suite as its own stage, so CI can point at one job as proof that
     # tenant isolation held for the merge. The assembly is run directly because a
     # project-scoped `dotnet test <csproj>` discovers zero tests under
-    # Microsoft.Testing.Platform (01.4.2-T1.6); the built runner is the xUnit v3
-    # in-process console runner, whose own `-result-junit` option writes the T48
-    # JUnit report (the MTP `--report-*` flags exist only under `dotnet test`).
+    # Microsoft.Testing.Platform (01.4.2-T1.6); the xUnit v3 console runner's own
+    # `-result-junit` writes the T48 report (MTP `--report-*` is `dotnet test` only).
     # Every class carries [Trait("Category","Docker")], so
     # EVIDGATE_VERIFY_SKIP_DOCKER=1 (smoke-clean-build.sh only) skips the stage
     # exactly as the `test` stage skips its Docker tests.
-    # The `test` stage stays unchanged and still runs this suite inside the
-    # solution: excluding one project from `dotnet test --solution` needs a
-    # solution filter, and a trait filter cannot tell assemblies apart — it would
-    # leave the assembly with zero runnable tests (exit 8), the very check the
-    # skip path relies on. The duplicate run is accepted rather than weakening it.
+    # The `test` stage still runs this suite inside the solution: a solution filter
+    # would be needed to exclude one project, and a trait filter cannot tell
+    # assemblies apart (zero runnable tests, exit 8, the check the skip path relies
+    # on). The duplicate run is accepted. Slowest classes: class-timing-isolation.tsv.
     if [[ "${EVIDGATE_VERIFY_SKIP_DOCKER:-}" == "1" ]]; then
       stage "isolation (skipped: EVIDGATE_VERIFY_SKIP_DOCKER=1)"
     else
       stage "isolation (M1 gate: RLS, composite FK, API isolation; JUnit report)"
-      mkdir -p artifacts/test-results
+      status=0 && mkdir -p artifacts/test-results && rm -f artifacts/test-results/isolation.junit.xml
       # $ROOT-absolute: the console runner resolves the report path against the
       # process cwd, which `dotnet run` does not guarantee to be the repo root.
       dotnet run --project tests/Isolation.Tests -c Release --no-build -- \
-        -result-junit "$ROOT/artifacts/test-results/isolation.junit.xml"
+        -result-junit "$ROOT/artifacts/test-results/isolation.junit.xml" || status=$?
+      class_timing_report_isolation; exit "$status"
     fi
     ;;
   fixtures-hostile)
@@ -422,7 +422,7 @@ run_stage() {
       scripts/tests/test_verify_scope.py \
       scripts/tests/test_verify_refusal.py scripts/tests/test_verify_shards.py \
       scripts/tests/test_verify_test_parallel.py scripts/tests/test_verify_stage_time.py scripts/tests/test_verify_fuzz_shards.py \
-      scripts/tests/test_smoke_mktemp.py
+      scripts/tests/test_smoke_mktemp.py scripts/tests/test_class_timing.py
     ;;
   image-pins)
     # 10.2.1-T1.1: builder tag == global.json SDK, digest-pinned bases, the three

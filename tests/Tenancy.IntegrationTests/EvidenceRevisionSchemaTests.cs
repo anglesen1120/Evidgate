@@ -33,7 +33,7 @@ namespace Tenancy.IntegrationTests;
 /// </para>
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class EvidenceRevisionSchemaTests
+public sealed class EvidenceRevisionSchemaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
     /// <summary>The migration under test, re-run by the idempotency case.</summary>
     private const string MigrationFile = "0049_orchestration_evidence_revision.sql";
@@ -58,9 +58,9 @@ public sealed class EvidenceRevisionSchemaTests
     /// <summary>A well-formed manifest hash: the 00 §7 RFC 8785 content address.</summary>
     private static readonly string ManifestHash = "sha256:" + new string('e', 64);
 
-    private readonly PostgresTenancyFixture _fixture;
-
-    public EvidenceRevisionSchemaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly PostgresTenancyFixture _fixture = fixture;
+    // Reuse one API host per class; each world still owns its tenant data. Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts = hosts;
 
     // ------------------------------------------------------------------ (a) AC9: append-only
 
@@ -72,7 +72,7 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task EvidenceRevision_UpdateDelete_Revoked()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
         await AppendRevisionAsync(world, world.Org, runId, revisionNo: 1);
 
@@ -118,7 +118,7 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task EvidenceRevision_ConcurrentInserts_ProduceAGapFreeSequence()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
 
         const int Writers = 8;
@@ -146,7 +146,7 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task EvidenceRevision_RevisionNo_MustBeTheNextOneForTheRun()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
 
         // The column's own floor.
@@ -176,7 +176,7 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task EvidenceRevision_CompletenessAndMissingCodes_AreEnforced()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
 
         var completeWithMissing = await CaptureInsertErrorAsync(
@@ -223,7 +223,7 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task EvidenceRevision_CrossTenant_IsInvisibleAndRefused()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
         await AppendRevisionAsync(world, world.Org, runId, revisionNo: 1);
 
@@ -265,7 +265,7 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task RunPointer_MovesToTheLatestRevision_AndGetRunReportsIt()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
 
         var first = await AppendRevisionAsync(world, world.Org, runId, revisionNo: 1);
@@ -297,7 +297,7 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task RunPointer_RefusesStaleCrossRunCrossOrgAndNull()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
         var first = await AppendRevisionAsync(world, world.Org, runId, revisionNo: 1);
         var second = await AppendRevisionAsync(world, world.Org, runId, revisionNo: 2);
@@ -358,7 +358,7 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task EvidenceRevision_InsertGuard_SerialisesTwoWritersOfOneRun()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
 
         await using var holding = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org);
@@ -398,7 +398,7 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task EvidenceRevision_MissingArrayAndWatermark_Boundaries()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
 
         var negativeWatermark = await CaptureInsertErrorAsync(
@@ -446,7 +446,7 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task RunPointer_InsertWithAPointer_IsRefused()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var template = await CreateRunAsync(world);
         var revision = await AppendRevisionAsync(world, world.Org, template, revisionNo: 1);
 
@@ -474,7 +474,7 @@ public sealed class EvidenceRevisionSchemaTests
     [Fact]
     public async Task RunPointer_ClearingIsTheOwnerErasureStep()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
         var revision = await AppendRevisionAsync(world, world.Org, runId, revisionNo: 1);
         (await MovePointerAsync(world, world.Org, runId, revision)).ShouldBe(1);

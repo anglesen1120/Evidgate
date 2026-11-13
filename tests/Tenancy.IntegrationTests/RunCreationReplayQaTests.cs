@@ -10,11 +10,18 @@ using static Tenancy.IntegrationTests.RegistryApi;
 namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
-public sealed class RunCreationReplayQaTests
+public sealed class RunCreationReplayQaTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts;
 
-    public RunCreationReplayQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public RunCreationReplayQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     private static string Body(Guid manifestId, string extra = "") =>
         "{\"manifest_id\":\"" + manifestId + "\"" + extra + "}";
@@ -41,7 +48,7 @@ public sealed class RunCreationReplayQaTests
     [Fact]
     public async Task Purpose_IsCaseSensitiveAndExact_OtherSpellingsAreRequestInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var before = await CountsAsync(world);
 
         foreach (var spelling in new[] { "Replay", "REPLAY", "replay ", " replay", "Regular", "" })
@@ -62,7 +69,7 @@ public sealed class RunCreationReplayQaTests
     [Fact]
     public async Task Replay_MissingManifestId_IsRequestInvalidNotGrantInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await RunCreationTests.CreateRunAsync(
             world,
@@ -75,7 +82,7 @@ public sealed class RunCreationReplayQaTests
     [Fact]
     public async Task Replay_UnknownManifest_IsRefusedBeforeManifestReadNotNotFound()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var before = await CountsAsync(world);
 
         // AC8 refuses before any manifest read, so an unknown manifest id is replay_grant_invalid, not 404 not_found.
@@ -91,7 +98,7 @@ public sealed class RunCreationReplayQaTests
     [Fact]
     public async Task Replay_ReleaseNonStringOrEmpty_IsReleaseRequestInvalidNotReplayCode()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var before = await CountsAsync(world);
 
         // The release shape check runs before the replay checks, so a malformed release is request_invalid even on replay.
@@ -115,7 +122,7 @@ public sealed class RunCreationReplayQaTests
     [Fact]
     public async Task Replay_ComponentsNotAnObject_IsRefusedBeforeComponentChecks()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var before = await CountsAsync(world);
 
         // The replay refusal sits before the components check, so a bad components value still returns replay_grant_invalid.
@@ -133,7 +140,7 @@ public sealed class RunCreationReplayQaTests
     [Fact]
     public async Task ReplayGrantId_NilAndUppercaseUuid_ParseThenRefusedAsGrantInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var nil = await RunCreationTests.CreateRunAsync(
             world,
@@ -151,7 +158,7 @@ public sealed class RunCreationReplayQaTests
     [Fact]
     public async Task ReplayGrantId_NonStringOrEmpty_IsRequestInvalidOnGrantPath()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var before = await CountsAsync(world);
 
         foreach (var raw in new[] { "7", "\"\"", "null", "true" })
@@ -172,7 +179,7 @@ public sealed class RunCreationReplayQaTests
     [Fact]
     public async Task DuplicatePurposeMembers_PinnedOutcome()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         // JsonDocument.Parse accepts duplicate names and JsonElement.TryGetProperty matches the LAST one (documented:
         // "the last such definition"), so the handler reads the final "purpose" and the two orderings diverge. The
@@ -203,7 +210,7 @@ public sealed class RunCreationReplayQaTests
     [Fact]
     public async Task AfterReplayRefusals_RegularRunStillCreatesAndStoresRegular()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var refused = await RunCreationTests.CreateRunAsync(
             world,

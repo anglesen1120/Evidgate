@@ -16,7 +16,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task CommittedStateChanges_RecordEveryEdgeWithoutSequenceGaps()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         var expected = new List<string> { "(insert)->queued" };
         var previous = "queued";
@@ -36,7 +36,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task ConcurrentSameEdge_RecordsOneAppliedTransitionAndNineNoOps()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var applied = 0;
@@ -69,7 +69,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task StaleExpectedVersion_DoesNotAppendHistory()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await RunningRunAsync(world);
         var before = await HistoryAsync(world, runId);
         await using (var scope = await RunTransitionScope.BeginAsync(world.Api, world.Org, world.Project))
@@ -87,7 +87,7 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task RolledBackTransition_DiscardsItsHistoryAlongsideStateAuditAndOutbox()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
         await using (var scope = await RunTransitionScope.BeginAsync(world.Api, world.Org, world.Project))
         {
@@ -143,8 +143,8 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task ForeignOrgRunId_HasNoVisibleHistoryAndReturnsNotFound()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
-        await using var rival = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        await using var rival = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await RunningRunAsync(world);
         await using (var own = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
         {
@@ -170,7 +170,7 @@ public sealed partial class RunStateEventTests
     [InlineData("delete from public.run_state_event")]
     public async Task AppHistoryMutation_IsDeniedWithoutChangingReadableRows(string statement)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await RunningRunAsync(world);
         var before = await HistoryAsync(world, runId);
         await using (var scope = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))

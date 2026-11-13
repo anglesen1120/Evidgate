@@ -27,6 +27,7 @@ FAKE_DOTNET = textwrap.dedent("""\
       echo "  Tenancy.IntegrationTests.AaTests.Second"; exit 0
     fi
     echo START >>"$FAKE_DIR/calls"
+    echo "$*" >>"$FAKE_DIR/args"
     touch "$FAKE_DIR/alive.$$"
     ls "$FAKE_DIR" | grep -c '^alive\\.' >>"$FAKE_DIR/concurrency"
     sleep "${FAKE_SLEEP:-0.6}"
@@ -66,6 +67,7 @@ class TestParallelCap(unittest.TestCase):
             state = tmp_path / "state"
             calls = (state / "calls").read_text().split() if (state / "calls").exists() else []
             conc = (state / "concurrency").read_text().split() if (state / "concurrency").exists() else []
+            self.args = (state / "args").read_text().splitlines() if (state / "args").exists() else []
             return done, calls, [int(c) for c in conc]
 
     def test_the_cap_bounds_concurrent_processes(self):
@@ -120,3 +122,27 @@ class TestParallelCap(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestClassTiming(unittest.TestCase):
+    run_stage = TestParallelCap.run_stage
+
+    def test_every_test_run_writes_its_own_junit_report(self):
+        done, calls, _ = self.run_stage(FAKE_SLEEP="0")
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)  # the fake B.Tests always fails
+        names = sorted(a.split("--report-xunit-junit-filename ")[1].split()[0] for a in self.args)
+        self.assertEqual(names, ["A.Tests.junit.xml", "B.Tests.junit.xml", "C.Tests.junit.xml", "D.Tests.junit.xml", "tenancy-0.junit.xml"])
+
+    def test_a_summary_that_finds_no_report_does_not_change_the_verdict(self):
+        # The fake dotnet writes no report: the summary warns, and the verdict stays the
+        # fake B.Tests failure (1), neither masked nor turned into another code.
+        done, _, _ = self.run_stage(FAKE_SLEEP="0")
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+        self.assertIn("no *.junit.xml", done.stderr)
+
+    def test_unwritable_timing_directory_does_not_stop_the_tests(self):
+        done, calls, _ = self.run_stage(FAKE_SLEEP="0", ROOT="/dev/null")
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)  # the fake B.Tests always fails
+        self.assertEqual(calls.count("START"), 5)
+        self.assertIn("class timing disabled", done.stderr)
+        self.assertFalse(any("--report-xunit-junit" in a for a in self.args))
