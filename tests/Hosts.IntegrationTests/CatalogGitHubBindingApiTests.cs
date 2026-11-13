@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.GitHub;
+using Npgsql;
 using Shouldly;
 using Xunit;
 
@@ -47,6 +48,42 @@ public sealed class CatalogGitHubBindingApiTests
     }
 
     /// <summary>
+    /// The write unit proves ownership with a share lock held until commit: a disconnect that has not committed yet
+    /// parks the registration, and once it commits the registration is refused without a binding or an audit row.
+    /// </summary>
+    [Fact]
+    public async Task UncommittedDisconnect_BlocksTheRegistration_AndRefusesItAfterCommit()
+    {
+        await using var site = await CatalogGitHubBindingSite.StartAsync(_postgres, cancellationToken: Token);
+
+        await using var disconnect = new NpgsqlConnection(site.Admin);
+        await disconnect.OpenAsync(Token);
+        await using var pid = disconnect.CreateCommand();
+        pid.CommandText = "select pg_backend_pid()";
+        var disconnectPid = (int)(await pid.ExecuteScalarAsync(Token))!;
+        await using var transaction = await disconnect.BeginTransactionAsync(Token);
+        await using var markDeleted = disconnect.CreateCommand();
+        markDeleted.Transaction = transaction;
+        markDeleted.CommandText =
+            "update public.github_installation set state = 'deleted' where installation_id = @installation";
+        markDeleted.Parameters.AddWithValue("installation", site.InstallationId);
+        (await markDeleted.ExecuteNonQueryAsync(Token)).ShouldBe(1);
+
+        var registration = site.RegisterAsync("binding-uncommitted-disconnect", Token);
+
+        await WaitForBlockedRegistrationAsync(site.Admin, disconnectPid, registration);
+        registration.IsCompleted.ShouldBeFalse("the registration waited on the installation row");
+
+        await transaction.CommitAsync(Token);
+
+        using var response = await registration;
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await ErrorCodeAsync(response)).ShouldBe("installation_not_owned");
+        (await site.ProjectBindingCountAsync()).ShouldBe(0);
+        (await site.AuditCountAsync()).ShouldBe(0);
+    }
+
+    /// <summary>
     /// 00 §9.1 through this route: the same key replays the stored answer verbatim and reaches no further GitHub call,
     /// even when the upstream renamed the branch and went down since — the retry must never depend on the verification
     /// it replaces.
@@ -69,6 +106,39 @@ public sealed class CatalogGitHubBindingApiTests
         using var replayBody = await ReadJsonAsync(replay);
         replayBody.RootElement.GetProperty("id").GetGuid().ShouldBe(id);
         replayBody.RootElement.GetProperty("default_branch").GetString().ShouldBe("main");
+        site.GitHub.Requests.Length.ShouldBe(callsAfterFirst);
+        (await site.BindingCountAsync()).ShouldBe(1);
+        (await site.AuditCountAsync()).ShouldBe(1);
+    }
+
+    /// <summary>
+    /// A replay re-checks ownership before it answers: once the installation is disconnected, the same key is refused
+    /// with <c>installation_not_owned</c> instead of replaying the stored 201, and the binding it wrote stays.
+    /// </summary>
+    [Fact]
+    public async Task Replay_AfterTheInstallationWasDisconnected_Is403_AndKeepsTheStoredBinding()
+    {
+        await using var site = await CatalogGitHubBindingSite.StartAsync(_postgres, cancellationToken: Token);
+        using var first = await site.RegisterAsync("binding-stale-replay", Token);
+        first.StatusCode.ShouldBe(HttpStatusCode.Created);
+        var callsAfterFirst = site.GitHub.Requests.Length;
+
+        await using (var connection = new NpgsqlConnection(site.Admin))
+        {
+            await connection.OpenAsync(Token);
+            await using var markDeleted = connection.CreateCommand();
+            markDeleted.CommandText =
+                "update public.github_installation set state = 'deleted' where installation_id = @installation";
+            markDeleted.Parameters.AddWithValue("installation", site.InstallationId);
+            (await markDeleted.ExecuteNonQueryAsync(Token)).ShouldBe(1);
+        }
+
+        // Fail closed: ownership is proven before the replay record is read, so a disconnected installation cannot
+        // replay its stored answer.
+        using var replay = await site.RegisterAsync("binding-stale-replay", Token);
+
+        replay.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        (await ErrorCodeAsync(replay)).ShouldBe("installation_not_owned");
         site.GitHub.Requests.Length.ShouldBe(callsAfterFirst);
         (await site.BindingCountAsync()).ShouldBe(1);
         (await site.AuditCountAsync()).ShouldBe(1);
@@ -274,6 +344,34 @@ public sealed class CatalogGitHubBindingApiTests
         site.GitHub.Requests.ShouldBeEmpty();
         (await site.BindingCountAsync()).ShouldBe(0);
         (await site.AuditCountAsync()).ShouldBe(0);
+    }
+
+    private const string BlockedRegistrationSql = """
+        select count(*)::int
+        from pg_stat_activity
+        where datname = current_database()
+          and wait_event_type = 'Lock'
+          and @blocker = any(pg_blocking_pids(pid))
+          and query ilike '%github_installation%'
+          and query ilike '%for share%'
+        """;
+
+    /// <summary>Polls, within a deadline, until a session blocked by <paramref name="blockerPid"/> runs the proof.</summary>
+    private static async Task WaitForBlockedRegistrationAsync(string admin, int blockerPid, Task registration)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        await using var connection = new NpgsqlConnection(admin);
+        await connection.OpenAsync(Token);
+        await using var command = connection.CreateCommand();
+        command.CommandText = BlockedRegistrationSql;
+        command.Parameters.AddWithValue("blocker", blockerPid);
+
+        while ((int)(await command.ExecuteScalarAsync(Token))! == 0)
+        {
+            registration.IsCompleted.ShouldBeFalse("the registration finished while the installation row was held");
+            DateTime.UtcNow.ShouldBeLessThan(deadline, "the registration never waited on the installation row");
+            await Task.Delay(25, Token);
+        }
     }
 
     private static async Task<JsonDocument> ReadJsonAsync(HttpResponseMessage response) =>

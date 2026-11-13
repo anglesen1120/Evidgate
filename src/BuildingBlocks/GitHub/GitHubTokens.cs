@@ -67,4 +67,13 @@ public interface IGitHubInstallationOwnership
     /// <param name="installationId">The installation id the request supplied.</param>
     /// <param name="cancellationToken">Cancels the lookup.</param>
     Task<bool> OwnsActiveAsync(Guid orgId, long installationId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// <see cref="OwnsActiveAsync"/> that also holds a share lock on the installation row until the caller's
+    /// transaction ends, so a disconnect cannot commit between this proof and the write that relies on it.
+    /// </summary>
+    /// <param name="orgId">The tenant whose installation must match.</param>
+    /// <param name="installationId">The installation id the request supplied.</param>
+    /// <param name="cancellationToken">Cancels the lookup.</param>
+    Task<bool> LockActiveAsync(Guid orgId, long installationId, CancellationToken cancellationToken);
 }

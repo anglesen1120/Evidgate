@@ -205,10 +205,10 @@ internal sealed class RegisterGitRepoBindingCommandHandler(
                 ApiErrorCode.IdempotencyConflict, "the stored response expired; retry registration"));
         }
 
-        // The verification ran outside this transaction against the installation this proves; re-checking here keeps
-        // the write bound to the same org even if the row moved in between.
+        // Verification ran outside this transaction, so hold the installation proof until commit: no binding commits
+        // after a disconnect committed. A later disconnect waits for this binding commit and does not touch bindings.
         if (!await installations
-                .OwnsActiveAsync(orgId, command.InstallationId, cancellationToken)
+                .LockActiveAsync(orgId, command.InstallationId, cancellationToken)
                 .ConfigureAwait(false))
         {
             return Result.Failure<GitRepoBindingDto>(GitRepoBindingErrors.InstallationNotOwned);
