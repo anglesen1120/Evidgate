@@ -16,17 +16,22 @@ namespace Tenancy.IntegrationTests;
 /// every write verb, and the app role holds no write grant on the table at all.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsTemplateTests
+public sealed class AiSettingsTemplateTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsTemplateTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsTemplateTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>AC5: the catalogue answers both locales with one default each and all eight fields in every document.</summary>
     [Fact]
     public async Task Catalogue_Is_Bilingual_WithOneDefaultPerLocale()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var catalogue = await AiSettingsCalls.GetAsync(world.Client, world.As, world.Templates);
 
@@ -67,6 +72,7 @@ public sealed class AiSettingsTemplateTests
     [Fact]
     public async Task SeededTemplates_SaveTheirOwnDocument_Unchanged()
     {
+        // Private: this world outlives the loop, so a lease would block the pool for every save world.
         await using var catalogueWorld = await AiSettingsCalls.StartAsync(_fixture);
 
         var catalogue = await AiSettingsCalls.GetAsync(
@@ -83,7 +89,7 @@ public sealed class AiSettingsTemplateTests
                 + $" v{item.GetProperty("version").GetInt32()}";
             var settings = JsonNode.Parse(item.GetProperty("settings").GetRawText())!.AsObject();
 
-            await using var world = await AiSettingsCalls.StartAsync(_fixture);
+            await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
             var saved = await AiSettingsCalls.SaveAsync(
                 world.Client, world.As, world, AiSettingsCalls.Body(settings), "\"0\"");
 
@@ -97,7 +103,7 @@ public sealed class AiSettingsTemplateTests
     [Fact]
     public async Task Catalogue_RefusesWrites()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         foreach (var method in new[] { HttpMethod.Post, HttpMethod.Put })
         {
@@ -117,7 +123,7 @@ public sealed class AiSettingsTemplateTests
     [Fact]
     public async Task CopyingATemplate_IsNotALiveReference()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var template = AiSettingsCalls.Document();
         template["description"] = "Edited after the copy";
@@ -146,7 +152,7 @@ public sealed class AiSettingsTemplateTests
     [Fact]
     public async Task UnknownTemplate_Is422_OnThePair()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         foreach (var pair in new[] { AiSettingsCalls.Template("no-such-template", 1), AiSettingsCalls.Template("default", 999) })
         {

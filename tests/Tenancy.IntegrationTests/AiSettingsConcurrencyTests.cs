@@ -16,17 +16,22 @@ namespace Tenancy.IntegrationTests;
 /// begin row rolls back with the failed transaction (01.5.1-T6).
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsConcurrencyTests
+public sealed class AiSettingsConcurrencyTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsConcurrencyTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsConcurrencyTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>AC6: a stale tag is 412 <c>precondition_failed</c> naming the head, and writes nothing anywhere.</summary>
     [Fact]
     public async Task StaleIfMatch_Is412_AndWritesNothing()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var head = DocumentWith("Head guidance");
 
         await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(head), "\"0\"");
@@ -60,7 +65,7 @@ public sealed class AiSettingsConcurrencyTests
     [Fact]
     public async Task MissingOrUnparsableIfMatch_Is422()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var body = AiSettingsCalls.Body(DocumentWith("Unconditional"));
 
         var absent = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, body);
@@ -88,7 +93,7 @@ public sealed class AiSettingsConcurrencyTests
     [Fact]
     public async Task ZeroIfMatch_IsAcceptedBeforeFirstSave_AndStaleAfter()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var created = await AiSettingsCalls.SaveAsync(
             world.Client, world.As, world, AiSettingsCalls.Body(DocumentWith("First")), "\"0\"");
@@ -111,7 +116,7 @@ public sealed class AiSettingsConcurrencyTests
     [Fact]
     public async Task WeakAndBareIfMatch_AreTheSameVersion()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var first = await AiSettingsCalls.SaveAsync(
             world.Client, world.As, world, AiSettingsCalls.Body(DocumentWith("Weak tag")), "W/\"0\"");
@@ -130,7 +135,7 @@ public sealed class AiSettingsConcurrencyTests
     [Fact]
     public async Task MissingIdempotencyKey_Is400()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var refused = await AiSettingsCalls.SaveAsync(
             world.Client, world.As, world, AiSettingsCalls.Body(DocumentWith("No key")), "\"0\"", withIdempotencyKey: false);

@@ -16,11 +16,16 @@ namespace Tenancy.IntegrationTests;
 /// case in <see cref="AiSettingsTextTests"/> pins separately.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsLimitTests
+public sealed class AiSettingsLimitTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsLimitTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsLimitTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>Each contractual cap, with the column that stores its field.</summary>
     public static TheoryData<string, int> Boundaries => new()
@@ -38,7 +43,7 @@ public sealed class AiSettingsLimitTests
     [MemberData(nameof(Boundaries))]
     public async Task FieldCap_IsInclusive_AndRefusesOneOver(string field, int limit)
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var over = AiSettingsCalls.Document();
         over[field] = AiSettingsCalls.ProseOfLength(limit + 1);
@@ -67,7 +72,7 @@ public sealed class AiSettingsLimitTests
     [Fact]
     public async Task DescriptionCap_IsInclusive()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var over = AiSettingsCalls.Document();
         over["description"] = AiSettingsCalls.ProseOfLength(AiSettingsCalls.DescriptionLimit + 1);
@@ -90,7 +95,7 @@ public sealed class AiSettingsLimitTests
     [Fact]
     public async Task CriterionCaps_AreInclusive_OnTheNestedPointer()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         foreach (var criterion in new[] { "critical", "high", "medium", "low" })
         {
@@ -116,7 +121,7 @@ public sealed class AiSettingsLimitTests
     [Fact]
     public async Task EnvironmentUrlCap_IsInclusive()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         const string Prefix = "https://example.test/";
 
         var over = AiSettingsCalls.Document();
@@ -144,7 +149,7 @@ public sealed class AiSettingsLimitTests
     [Fact]
     public async Task PayloadTooLarge_Is413()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var document = AiSettingsCalls.Document();
         document["description"] = new string('a', 2 * 1024 * 1024);
