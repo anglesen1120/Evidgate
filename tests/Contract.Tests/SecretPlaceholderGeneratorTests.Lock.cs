@@ -175,43 +175,25 @@ public sealed partial class SecretPlaceholderGeneratorTests
         return gate;
     }
 
-    [Fact]
-    public async Task GateLeftByACrashedTaker_DoesNotBlockTheTakeover()
+    [Theory]
+    [InlineData("dead")]
+    [InlineData("live")]
+    [InlineData("")]
+    public async Task TakeoverGate_IsNeverReclaimed_WhateverItsOwnerOrAge(string owner)
     {
-        var gate = await StaleLockWithGateAsync((await DeadPidAsync()).ToString(CultureInfo.InvariantCulture), TimeSpan.Zero);
-
-        var run = await RunAsync("dev");
-
-        run.ExitCode.ShouldBe(0, run.Output);
-        Directory.Exists(gate).ShouldBeFalse();
-        Directory.Exists(LockDir).ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task GateWithoutAPid_IsReclaimedOnlyOnceItIsOld()
-    {
-        var fresh = await StaleLockWithGateAsync(null, TimeSpan.Zero);
-        var blocked = await RunAsync("dev");
-        blocked.ExitCode.ShouldNotBe(0);
-        Directory.Exists(fresh).ShouldBeTrue();
-        File.Exists(EnvFile).ShouldBeFalse();
-
-        Directory.SetLastWriteTimeUtc(fresh, DateTime.UtcNow - TimeSpan.FromMinutes(1));
-        var run = await RunAsync("dev");
-
-        run.ExitCode.ShouldBe(0, run.Output);
-    }
-
-    [Fact]
-    public async Task GateOfALiveButPausedTaker_IsNeverReclaimed()
-    {
-        var gate = await StaleLockWithGateAsync(Environment.ProcessId.ToString(CultureInfo.InvariantCulture), TimeSpan.FromMinutes(5));
+        var gatePid = owner switch
+        {
+            "dead" => (await DeadPidAsync()).ToString(CultureInfo.InvariantCulture),
+            "live" => Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
+            _ => null,
+        };
+        var gate = await StaleLockWithGateAsync(gatePid, TimeSpan.FromMinutes(5));
 
         var run = await RunAsync("dev");
 
         run.ExitCode.ShouldNotBe(0);
         run.Output.ShouldContain("another run is in progress");
-        Directory.Exists(gate).ShouldBeTrue("a live taker keeps its gate however long it takes");
+        Directory.Exists(gate).ShouldBeTrue("a gate held by anyone is left to its owner or the operator");
         Directory.Exists(LockDir).ShouldBeTrue("the lock judged dead stays until the gate owner decides");
         File.Exists(EnvFile).ShouldBeFalse();
     }

@@ -32,7 +32,6 @@ import {
   readFileSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -168,58 +167,16 @@ function holderIsGone(lock) {
   }
 }
 
-// A takeover gate is held for microseconds. One whose owner pid is dead, or, when it records no
-// usable pid, one older than this, was left by a crashed run. A live owner's gate is never
-// reclaimed, however long it has been held: a paused taker must not lose it to a rival.
-const GATE_STALE_MS = 10_000;
-
-function gateIsStale(gate) {
-  let recorded;
-  try {
-    recorded = readFileSync(join(gate, 'pid'), 'utf8');
-  } catch {
-    recorded = '';
-  }
-  if (Number.isInteger(Number(recorded)) && Number(recorded) > 0 && recorded.trim() !== '')
-    return holderIsGone(gate);
-  try {
-    return Date.now() - statSync(gate).mtimeMs >= GATE_STALE_MS;
-  } catch {
-    return false;
-  }
-}
-
-// Moves a stale gate aside before deleting it and re-checks what was moved, so a fresh gate a
-// rival created in between is put back instead of deleted.
-function reclaimGate(gate) {
-  if (!gateIsStale(gate)) return;
-  const aside = `${gate}.reclaim.${process.pid}`;
-  try {
-    renameSync(gate, aside);
-  } catch {
-    return;
-  }
-  if (gateIsStale(aside)) {
-    rmSync(aside, { recursive: true, force: true });
-    return;
-  }
-  try {
-    renameSync(aside, gate);
-  } catch {
-    rmSync(aside, { recursive: true, force: true });
-  }
-}
-
 // Removes a lock whose holder is dead. Takers serialise on a gate directory and re-judge the
 // holder inside it: a dead holder never removes its own lock and a live run only creates the
 // lock while it is absent, so the lock judged dead cannot be swapped for a fresh one before the
 // remove. Renaming the lock without the gate could move a fresh lock a rival had just taken.
+// The gate is never reclaimed, whatever its age: reclaiming it would reopen the same window one
+// level up. A taker killed inside the gate (a few microseconds) leaves it for the operator, as
+// the failure message says.
 function takeOverStale(lock) {
   const gate = `${lock}.takeover`;
-  if (!tryLock(gate)) {
-    reclaimGate(gate);
-    if (!tryLock(gate)) return;
-  }
+  if (!tryLock(gate)) return;
   try {
     if (holderIsGone(lock)) rmSync(lock, { recursive: true, force: true });
   } finally {
@@ -242,7 +199,9 @@ function withLock(path, action) {
     // without a readable pid (empty, garbage, zero) is treated as held.
     if (holderIsGone(lock)) takeOverStale(lock);
     if (!tryLock(lock))
-      fail(`${lock} exists: another run is in progress (remove the directory if none is)`);
+      fail(
+        `${lock} exists: another run is in progress (remove ${lock} and ${lock}.takeover if none is)`,
+      );
   }
   // fail() exits the process, so the lock is released on exit rather than in a finally.
   process.on('exit', () => rmSync(lock, { recursive: true, force: true }));
