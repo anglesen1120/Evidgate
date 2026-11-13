@@ -7,10 +7,11 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { TestCase, TestResult } from '@playwright/test/reporter';
+import type { Suite, TestCase, TestResult } from '@playwright/test/reporter';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { EventEnvelope } from './envelope.js';
+import { computeExecutionKey } from './executionKey.js';
 import { PLACEHOLDER_EXECUTION_KEY, type IdentityResolver } from './identity.js';
 import { EvidgateReporter, type EvidgateReporterOptions } from './reporter.js';
 
@@ -72,7 +73,7 @@ describe('execution_key identity', () => {
     expect(PLACEHOLDER_EXECUTION_KEY).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('uses the placeholder by default for test and run.log envelopes', () => {
+  it('keeps the unresolved sentinel for a test with no resolvable identity (server refuses it)', () => {
     const { reporter, spool } = makeReporter();
     reporter.onBegin();
     reporter.onTestBegin(fakeTest(), fakeResult());
@@ -83,11 +84,11 @@ describe('execution_key identity', () => {
     }
   });
 
-  it('uses the injected resolver for test envelopes and keeps the placeholder for run.log', () => {
+  it('uses the injected resolver for test envelopes and borrows its key for run.log', () => {
     const resolved = 'a'.repeat(64);
     const identity: IdentityResolver = () => ({ execution_key: resolved });
     const { reporter, spool } = makeReporter({ identity });
-    reporter.onBegin();
+    reporter.onBegin(undefined, { allTests: () => [fakeTest()] } as unknown as Suite);
     reporter.onTestBegin(fakeTest(), fakeResult());
     reporter.onTestEnd(fakeTest(), fakeResult());
     void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
@@ -97,11 +98,11 @@ describe('execution_key identity', () => {
       expect(envelope.execution_key).toBe(resolved);
     }
     for (const envelope of envelopes.filter((item) => item.type === 'run.log')) {
-      expect(envelope.execution_key).toBe(PLACEHOLDER_EXECUTION_KEY);
+      expect(envelope.execution_key).toBe(resolved);
     }
   });
 
-  it('AC4: the built-in resolver emits ext.case_id/variant_hash/target_env, never hashes execution_key', () => {
+  it('AC4: the built-in resolver emits ext.case_id/variant_hash/target_env and the real execution_key', () => {
     const { reporter, spool } = makeReporter();
     const annotated = {
       id: 'test-annotated',
@@ -110,7 +111,7 @@ describe('execution_key identity', () => {
       annotations: [{ type: 'evidgate.id', description: '11111111-1111-1111-1111-111111111111' }],
       parent: { project: () => ({ name: 'chromium' }) },
     } as unknown as TestCase;
-    reporter.onBegin();
+    reporter.onBegin(undefined, { allTests: () => [annotated] } as unknown as Suite);
     reporter.onTestBegin(annotated, fakeResult());
     reporter.onTestEnd(annotated, fakeResult());
     void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
@@ -119,6 +120,15 @@ describe('execution_key identity', () => {
     expect(finished?.ext.case_id).toBe('11111111-1111-1111-1111-111111111111');
     expect(finished?.ext.variant_hash).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(finished?.ext.target_env).toBe('chromium');
-    expect(finished?.execution_key).toBe(PLACEHOLDER_EXECUTION_KEY);
+    const key = computeExecutionKey(
+      '11111111-1111-1111-1111-111111111111',
+      String(finished?.ext.variant_hash),
+      'chromium',
+    );
+    expect(finished?.execution_key).toBe(key);
+    expect(key).not.toBe(PLACEHOLDER_EXECUTION_KEY);
+    for (const envelope of readEnvelopes(spool).filter((item) => item.type === 'run.log')) {
+      expect(envelope.execution_key).toBe(key);
+    }
   });
 });

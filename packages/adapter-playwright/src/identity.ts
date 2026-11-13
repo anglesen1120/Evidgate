@@ -2,14 +2,16 @@
 // identity (the `evidgate.id` annotation first, else the sidecar manifest of the test file's own
 // directory or an ancestor directory up to the suite's common ancestor), the variant hash (the
 // server `VariantNormalizer` semantics over the project's declared params) and the target env,
-// and emits them as `ext.case_id`, `ext.variant_hash` and `ext.target_env`. `execution_key` stays
-// the schema-valid placeholder behind the injectable resolver seam: the reporter never hashes it.
+// and emits them as `ext.case_id`, `ext.variant_hash` and `ext.target_env`. `execution_key` is
+// derived from that triple (the server's layout, see executionKey.ts) once all three resolve, and
+// stays the unresolved sentinel otherwise; the server recomputes it and refuses any other value.
 import type { TestCase } from '@playwright/test/reporter';
 
 import { brief, isCanonicalCaseId, type SidecarIndex } from './sidecar.js';
+import { computeExecutionKey } from './executionKey.js';
 import { normalizeVariant } from './variant.js';
 
-/** 64 hex zeros — a schema-valid stand-in until the server derives the real key. */
+/** 64 hex zeros: schema-valid, names no planned execution; marks an identity that did not resolve. */
 export const PLACEHOLDER_EXECUTION_KEY = '0'.repeat(64);
 
 /** The manifest `targetEnv` shape (contracts/manifest/manifest.v1.json `$defs.targetEnv`). */
@@ -193,6 +195,18 @@ export function resolveIdentity(test: TestCase, deps: IdentityResolverDeps): Ide
         path: location,
       });
     }
+  }
+
+  if (
+    identity.case_id !== undefined &&
+    identity.variant_hash !== undefined &&
+    identity.target_env !== undefined
+  ) {
+    identity.execution_key = computeExecutionKey(
+      identity.case_id,
+      identity.variant_hash,
+      identity.target_env,
+    );
   }
 
   return identity;
