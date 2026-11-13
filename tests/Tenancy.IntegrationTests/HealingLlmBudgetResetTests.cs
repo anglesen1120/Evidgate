@@ -1,4 +1,8 @@
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
+using Evidgate.Modules.Healing;
 using Evidgate.Modules.Healing.Application;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Npgsql;
 using Shouldly;
 using Xunit;
@@ -69,6 +73,67 @@ public sealed class HealingLlmBudgetResetTests
         // The hold is swapped for the real usage on its own day; the new day neither inherited nor lost it.
         (await ReadRowAsync(dedicated.Name, project, $"{Today} - 1")).ShouldBe((1.0m, 5000, 0.01m, 20));
         (await ReadRowAsync(dedicated.Name, project, $"{Today}")).ShouldBe((1.0m, 5000, 0m, 0));
+    }
+
+    /// <summary>
+    /// A hold taken on one day and settled after the day turned goes through the real ledger and a tenant transaction:
+    /// the settlement lands on the row the hold was taken on, not on the row of the day it runs.
+    /// </summary>
+    [Fact]
+    public async Task Settle_AfterTheDayTurned_MovesTheReservedDaysRowNotTodays()
+    {
+        await using var dedicated = await _fixture.CreateDedicatedDatabaseAsync();
+        var (org, project) = await SeedProjectAsync(dedicated.Name);
+        await SeedRowAsync(dedicated.Name, org, project, Today, 1.0m, 5000, 0m, 0);
+
+        await using var dataSource = NpgsqlDataSource.Create(_fixture.AppConnectionString(dedicated.Name));
+        var services = new ServiceCollection();
+        services.AddSingleton(dataSource);
+        services.AddEvidgateTenancy();
+        services.AddHealingModule(
+            HealingLlmTestConfiguration.Build(HealingProviderSelection.Mock),
+            HealingLlmTestConfiguration.Host(Environments.Development));
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var transactions = scope.ServiceProvider.GetRequiredService<HealingLlmTransactions>();
+        var ledger = scope.ServiceProvider.GetRequiredService<HealingLlmBudgetLedger>();
+        var token = TestContext.Current.CancellationToken;
+
+        var (verdict, reservation) = await transactions.RunAsync(
+            org, project, ct => ledger.ReserveAsync(project, 1035, 0.05m, ct), token);
+        verdict.ShouldBe(HealingLlmBudgetVerdict.Reserved);
+        reservation.ShouldNotBeNull();
+
+        // The database's own clock decides the reserve day and cannot be moved, so the turn of the day is staged by
+        // re-dating the held row to yesterday and letting the real roll open today's: from here on the hold belongs
+        // to a past day, and its reservation names that day.
+        await using (var connection = await _fixture.OpenSuperuserAsync(dedicated.Name))
+        {
+            await ExecuteAsync(connection, "update public.healing_llm_budget set period_start = period_start - 1");
+        }
+
+        (await RollAsWorkerAsync(dedicated.Name)).ShouldBe(1);
+        var held = reservation with { PeriodStart = (await ScalarTextAsync(dedicated.Name, $"select ({Today} - 1)::text"))! };
+
+        await transactions.RunAsync(
+            org,
+            project,
+            async ct =>
+            {
+                await ledger.SettleAsync(project, held, 20, 0.01m, ct);
+                return 0;
+            },
+            token);
+
+        (await ReadRowAsync(dedicated.Name, project, $"{Today} - 1")).ShouldBe((1.0m, 5000, 0.01m, 20));
+        (await ReadRowAsync(dedicated.Name, project, $"{Today}")).ShouldBe((1.0m, 5000, 0m, 0));
+    }
+
+    private async Task<string?> ScalarTextAsync(string database, string sql)
+    {
+        await using var connection = await _fixture.OpenSuperuserAsync(database);
+        await using var command = new NpgsqlCommand(sql, connection);
+        return (string?)await command.ExecuteScalarAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
