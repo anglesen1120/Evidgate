@@ -54,7 +54,7 @@ Counted by expanding task ranges in merged PR bodies, close-out rows and plan No
 | 04.1.3-T1 | T1.2 | #520 |
 | 04.4.2-T1 | T1.3 | #556, #601, #609 |
 | 04.6.1-T1 | T1.4 | #523, #525 |
-| 05.2.1-T3 | T3.1 | none |
+| 05.2.1-T3 | none open (T3.1 remainder landed #846, 12e9a9db; the parent is credited at the next roll-up recount) | #846 |
 | 05.3.2-T3 | T3.1, T3.2 | none |
 | 05.3.2-T4 | T4.2 | none |
 | 06.2.2-T1 | T1.2 | #503 |
