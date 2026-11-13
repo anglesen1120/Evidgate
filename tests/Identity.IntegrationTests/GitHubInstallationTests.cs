@@ -430,4 +430,5 @@ public sealed partial class GitHubInstallationTests(DatabaseFixture fixture) : T
         using var start = await SendAsync(client, HttpMethod.Post, "/v1/github/installations/start", org);
         start.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
+
 }

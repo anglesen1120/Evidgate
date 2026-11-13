@@ -240,7 +240,7 @@ public sealed class SecretRedactorShapeTests
     [Theory]
     [InlineData("minted ghs_1234567890abcdefABCDEF123456 for repo 42")]
     [InlineData("X-GitHub-Token: gho_1234567890abcdefABCDEF123456")]
-    [InlineData("app jwt eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiIxMjM0NSJ9.c2lnbmF0dXJlLXZhbHVl")]
+    [InlineData("app jwt eyJhbGciOiJSUzI1NiJ9." + "eyJpc3MiOiIxMjM0NSJ9.c2lnbmF0dXJlLXZhbHVl")]
     public void A_GitHub_Credential_Shape_Is_Masked(string text)
     {
         var redacted = Redactor.RedactText(text);

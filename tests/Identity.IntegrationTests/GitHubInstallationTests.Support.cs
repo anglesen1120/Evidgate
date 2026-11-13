@@ -61,13 +61,18 @@ public sealed partial class GitHubInstallationTests
     /// The host with the caller the module's pipeline authenticates: the tenant is NOT published, so the host's own
     /// filter has to resolve it — the property the browser callback depends on.
     /// </summary>
-    private IdentityApiFactory Host(Guid org, Guid user, FakeGitHubOAuth oauth, FakeGitHubAppInstallations app) =>
+    private IdentityApiFactory Host(
+        Guid org,
+        Guid user,
+        FakeGitHubOAuth oauth,
+        FakeGitHubAppInstallations app,
+        bool productionEvaluator = false) =>
         IdentityApiFactory.Start(
             Fixture,
             new IdentityHostSetup(
                 org,
                 Principal: RequestPrincipal.Member(user),
-                Evaluator: new GrantAllPermissionEvaluator(),
+                Evaluator: productionEvaluator ? null : new GrantAllPermissionEvaluator(),
                 ResolveTenant: true,
                 Services: services =>
                 {

@@ -20,9 +20,6 @@ public static class GitHubInstallationEndpoints
     /// <summary>The callback route, whose query carries the one-time state.</summary>
     internal const string CallbackPath = "/v1/github/installations/callback";
 
-    /// <summary>The 400 the host answers for a callback whose state names no organization.</summary>
-    public static Error CallbackStateInvalid => GitHubInstallationErrors.StateInvalid;
-
     /// <summary>Maps the routes and returns the group so the host applies its filters.</summary>
     /// <param name="routes">The route builder.</param>
     public static RouteGroupBuilder MapGitHubInstallationEndpoints(this IEndpointRouteBuilder routes)

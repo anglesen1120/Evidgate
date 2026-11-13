@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Evidgate.BuildingBlocks.Observability;
 using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 using Evidgate.BuildingBlocks.SharedKernel.Modules;
@@ -31,19 +29,13 @@ internal sealed partial class GitHubInstallCompletion(
     IGitHubAppInstallations installations,
     ILogger<GitHubInstallCompletion> logger)
 {
-    /// <summary>The longest state value the callback accepts.</summary>
-    internal const int MaxStateLength = 256;
-
-    /// <summary>The longest nonce the state may carry; the start route writes 64 hex characters.</summary>
-    internal const int MaxNonceLength = 128;
-
     /// <summary>The longest authorization code the callback accepts.</summary>
     internal const int MaxCodeLength = 512;
 
     /// <summary>Runs the callback: consume, verify outside the database, then insert.</summary>
     /// <param name="callback">The installation, code and state the browser carried.</param>
     /// <param name="cancellationToken">Cancels the callback.</param>
-    /// <returns>The bound installation, or the 00 §9.2 error to answer.</returns>
+    /// <returns>The bound installation, or the error to answer.</returns>
     public async ValueTask<Result<GitHubInstallationDto>> CompleteAsync(
         GitHubInstallCallback callback,
         CancellationToken cancellationToken)
@@ -52,18 +44,10 @@ internal sealed partial class GitHubInstallCompletion(
 
         using var activity = EvidgateTelemetry.StartModuleActivity(ModuleName.Identity, nameof(GitHubInstallCompletion));
 
-        // The state is `<org>.<nonce>` and only the nonce was hashed at start, so the envelope is validated here and
-        // the digest is taken over the nonce alone — the same bytes the start route consumed from.
-        if (callback.State is not { Length: > 0 and <= MaxStateLength } state
-            || NonceOf(state) is not { } nonce)
-        {
-            return Result.Failure<GitHubInstallationDto>(GitHubInstallationErrors.StateInvalid);
-        }
-
-        var stateHash = SHA256.HashData(Encoding.ASCII.GetBytes(nonce));
-
-        // Unit one: a refusal here consumes nothing, and a success here is committed before anything else runs.
-        var consumed = await mediator.Send(new ConsumeGitHubInstallStateCommand(stateHash), cancellationToken)
+        // Unit one: the consume command owns the `<org>.<nonce>` envelope and its permission, so a caller without
+        // ci_binding:write is refused before any parse and a malformed state is refused without consuming
+        // anything. A success here is committed before anything else runs.
+        var consumed = await mediator.Send(new ConsumeGitHubInstallStateCommand(callback.State), cancellationToken)
             .ConfigureAwait(false);
         if (!consumed.IsSuccess)
         {
@@ -74,6 +58,14 @@ internal sealed partial class GitHubInstallCompletion(
         {
             return Result.Failure<GitHubInstallationDto>(GitHubInstallationErrors.StateInvalid);
         }
+
+        // Unit one accepted the envelope, so the parse cannot fail here: unit two re-reads the nonce's digest.
+        if (!GitHubInstallStateEnvelope.TryParse(callback.State, out _, out var nonce))
+        {
+            return Result.Failure<GitHubInstallationDto>(GitHubInstallationErrors.StateInvalid);
+        }
+
+        var stateHash = GitHubInstallStateEnvelope.Digest(nonce);
 
         // No transaction is open here: the GitHub calls hold no connection and no row lock.
         var verified = await VerifyAsync(callback, cancellationToken).ConfigureAwait(false);
@@ -125,8 +117,10 @@ internal sealed partial class GitHubInstallCompletion(
         }
         finally
         {
-            // Best effort: the user token authorized one callback and is not needed again.
-            await RevokeAsync(token.Value, cancellationToken).ConfigureAwait(false);
+            // Best effort: the user token authorized one callback and is not needed again. A callback already
+            // cancelled must still revoke, so the revoke carries no request token — the HTTP client's own timeout
+            // bounds it, and a failure only logs.
+            await RevokeAsync(token.Value, CancellationToken.None).ConfigureAwait(false);
         }
     }
 
@@ -170,20 +164,6 @@ internal sealed partial class GitHubInstallCompletion(
             : Result.Failure<GitHubAppInstallation>(GitHubInstallationErrors.NotOwned);
     }
 
-    /// <summary>
-    /// The nonce of an <c>&lt;org&gt;.&lt;nonce&gt;</c> state, or null when the envelope is not the shape the start
-    /// route wrote. The org prefix is only checked for shape: the tenant resolution already proved the caller's
-    /// membership of the org it names.
-    /// </summary>
-    /// <param name="state">The untrusted <c>state</c> query value.</param>
-    private static string? NonceOf(string state) =>
-        state.Length > 37
-        && state[36] == '.'
-        && Guid.TryParseExact(state[..36], "D", out _)
-        && state[37..] is { Length: > 0 and <= MaxNonceLength } nonce
-            ? nonce
-            : null;
-
     /// <summary>Revokes the callback's user token; a refusal is logged and never changes the answer.</summary>
     private async Task RevokeAsync(string userToken, CancellationToken cancellationToken)
     {
@@ -191,7 +171,12 @@ internal sealed partial class GitHubInstallCompletion(
         {
             await oauth.RevokeUserTokenAsync(userToken, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            // The client's own timeout: the token still expires on its own and must not fail a bound callback.
+            LogRevokeFailed("Timeout");
+        }
+        catch (Exception exception)
         {
             LogRevokeFailed(exception.GetType().Name);
         }

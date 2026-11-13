@@ -33,9 +33,12 @@ internal sealed record StartGitHubInstallCommand : ICommand<Result<GitHubInstall
 /// <param name="State">The state value the install URL carried; only its hash exists in the database.</param>
 internal sealed record GitHubInstallCallback(long InstallationId, string? Code, string? State);
 
-/// <summary>Consumes a callback nonce in its own committed unit, before any GitHub call.</summary>
-/// <param name="StateHash">SHA-256 of the state the callback carried.</param>
-internal sealed record ConsumeGitHubInstallStateCommand(byte[] StateHash) : ICommand<Result<bool>>;
+/// <summary>
+/// Consumes the one-time state of an install flow: the handler validates the <c>&lt;org&gt;.&lt;nonce&gt;</c>
+/// envelope under the binding permission, so a caller without it is refused before anything is parsed or consumed.
+/// </summary>
+/// <param name="State">The untrusted <c>state</c> query value, validated inside the authorized unit.</param>
+internal sealed record ConsumeGitHubInstallStateCommand(string? State) : ICommand<Result<bool>>;
 
 /// <summary>Persists an installation already verified outside the database transaction.</summary>
 /// <param name="Installation">The installation the App and the OAuth user both vouch for.</param>
@@ -136,21 +139,25 @@ internal sealed class ConsumeGitHubInstallStateCommandHandler(
     IGitHubInstallStateStore states)
     : ICommandHandler<ConsumeGitHubInstallStateCommand, Result<bool>>
 {
-    /// <summary>The length of the SHA-256 digest the callback hands over (32 bytes).</summary>
-    private const int MaxStateHashLength = 32;
-
     /// <inheritdoc />
     public async ValueTask<Result<bool>> Handle(
         ConsumeGitHubInstallStateCommand command,
         CancellationToken cancellationToken)
     {
         var orgId = scopes.Require().OrgId;
+
+        // Nothing is parsed before this point: the [Permission] stage above already refused a caller without
+        // ci_binding:write, so a malformed state answers with the denial it deserves, not with a 400 that would
+        // tell an unauthorized caller which states are well-formed.
         if (principals.Current?.UserId is not { } userId)
         {
             return Result.Success(false);
         }
 
-        if (command.StateHash.Length != MaxStateHashLength)
+        // The state must name the org the request resolved to: the filter took that org from this same state, so a
+        // mismatch means a header or a scope the callback must not honour. Shape, org and nonce in one parse.
+        if (!GitHubInstallStateEnvelope.TryParse(command.State, out var stateOrg, out var nonce)
+            || stateOrg != orgId)
         {
             return Result.Success(false);
         }
@@ -158,7 +165,7 @@ internal sealed class ConsumeGitHubInstallStateCommandHandler(
         // A refusal is a successful, committed unit that consumed nothing: reporting it as a failure would
         // roll the transaction back and leave the nonce replayable after the checks that follow refuse.
         var consumed = await states
-            .ConsumeAsync(command.StateHash, orgId, userId, cancellationToken)
+            .ConsumeAsync(GitHubInstallStateEnvelope.Digest(nonce), orgId, userId, cancellationToken)
             .ConfigureAwait(false);
 
         return Result.Success(consumed);

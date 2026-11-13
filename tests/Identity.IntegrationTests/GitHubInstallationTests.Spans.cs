@@ -32,6 +32,25 @@ public sealed partial class GitHubInstallationTests
         }
     }
 
+    [Theory]
+    [InlineData(CallbackPath)]
+    [InlineData(CallbackPath + "/")]
+    public void The_Callback_Route_Is_Recognised_With_And_Without_A_Trailing_Slash(string path)
+    {
+        // Routing serves both forms, so a rule keyed on the exact path would leak the code and the state on one of
+        // them while passing on the other.
+        using var activity = CallbackActivity();
+
+        LoginTraceRedaction.Redact(activity, path).ShouldBeTrue();
+
+        activity.GetTagItem(LoginTraceRedaction.QueryTag).ShouldBeNull();
+
+        foreach (var tag in LoginTraceRedaction.UrlTags)
+        {
+            activity.GetTagItem(tag).ShouldBe("https://app.evidgate.test" + path);
+        }
+    }
+
     [Fact]
     public void No_Remaining_Tag_Of_An_Install_Callback_Span_Carries_The_Code_Or_The_State()
     {

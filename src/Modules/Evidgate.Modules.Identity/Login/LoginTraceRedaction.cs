@@ -38,7 +38,19 @@ internal static class LoginTraceRedaction
     internal static bool IsLoginRoute(string? path) =>
         !string.IsNullOrEmpty(path)
         && (path.StartsWith(LoginPathPrefix, StringComparison.OrdinalIgnoreCase)
-            || path.Equals(GitHubCallbackPath, StringComparison.OrdinalIgnoreCase));
+            || WithoutTrailingSlash(path).Equals(GitHubCallbackPath, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// <paramref name="path"/> without a trailing slash, so <c>/v1/github/installations/callback/</c> is the same
+    /// route as the form without it — routing accepts both, and so must every rule keyed on the path.
+    /// </summary>
+    /// <param name="path">A request path or route constant.</param>
+    internal static string WithoutTrailingSlash(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        return path.Length > 1 ? path.TrimEnd('/') : path;
+    }
 
     /// <summary>
     /// Removes the query of a login request from <paramref name="activity"/>: the dedicated

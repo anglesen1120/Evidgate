@@ -1008,6 +1008,109 @@
       "note": "`EVIDGATE:GITHUB:MaxTokenCacheEntries` (03.4.1-T1.3): largest number of installation tokens kept in memory, default 128; the cache never grows past it and never persists a token; no environment overrides it."
     },
     {
+      "key": "EVIDGATE__GITHUB__CLIENTID",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "`EVIDGATE:GITHUB:ClientId`: OAuth client id of the platform's GitHub App, used by the install callback's code exchange (a user access token proves who completes the install). Plain configuration, safe to log by name only. Absent leaves the install callback unconfigured (`github_not_configured`, no outbound call)."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__CLIENTSECRET",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "`EVIDGATE:GITHUB:ClientSecret`: client secret of the platform's GitHub App, declared once in `SecretNames`, resolved through `ISecretProvider` by `GitHubOptionsSecretPostConfigure` (internal setter, never bound from configuration) and never logged or put in an exception message. Staging and prod hold it in the provider secret store; dev leaves it unset."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__APPSLUG",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "`EVIDGATE:GITHUB:AppSlug`: public slug of the GitHub App, used to build the install URL. Plain configuration; the validator accepts only a URL-safe path segment."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__OAUTHBASEURL",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:GITHUB:OAuthBaseUrl`: web/OAuth host of the install flow, default `https://github.com`. The validator pins it to that https host with no userinfo, path or non-default port, so no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__MAXINSTALLATIONPAGES",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 50
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:GITHUB:MaxInstallationPages`: most pages the ownership check reads from the paginated `GET /user/installations`, default 10; a longer list fails closed as not owned. No environment overrides it."
+    },
+    {
       "key": "EVIDGATE__OAUTH__GITHUB__AUTHORIZEURL",
       "scope": "runtime",
       "consumers": ["api", "migrator", "worker"],

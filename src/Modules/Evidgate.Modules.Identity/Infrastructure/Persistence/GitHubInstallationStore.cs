@@ -89,6 +89,15 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
         returning installation_id
         """;
 
+    /// <summary>
+    /// Takes the per-(org,user) state lock of the running transaction before the cap is counted: two starts of one
+    /// user serialize here, so the count below cannot both read the same under-cap number and both insert. The lock
+    /// ends with the transaction, and the count is a later statement, which sees every row committed while waiting.
+    /// </summary>
+    private const string StateLockSql = """
+        select 1 from (select pg_advisory_xact_lock(hashtextextended(@key, 0))) as state_lock
+        """;
+
     private const string AddStateSql = """
         insert into public.github_install_state (state_hash, org_id, user_id, expires_at)
         select @state_hash, @org_id, @user_id, @expires_at
@@ -135,6 +144,13 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
         DateTimeOffset expiresAt,
         CancellationToken cancellationToken)
     {
+        // Serialize this user's starts first, then count and insert in one statement; without the lock two
+        // concurrent starts both read the same live count and the cap is exceeded.
+        await db.ScalarAsync<int?>(
+            StateLockSql,
+            new { key = string.Concat(orgId.ToString("D"), ":", userId.ToString("D")) },
+            cancellationToken).ConfigureAwait(false);
+
         var added = await db.ScalarAsync<byte[]>(
             AddStateSql,
             new
