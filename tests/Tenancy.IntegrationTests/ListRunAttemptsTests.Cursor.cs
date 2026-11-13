@@ -1,6 +1,7 @@
 #pragma warning disable CA1861
 using System.Net;
 using System.Text.Json;
+using Evidgate.Modules.Orchestrator.Domain;
 using Shouldly;
 using Xunit;
 using static Tenancy.IntegrationTests.RegistryApi;
@@ -115,14 +116,18 @@ public sealed partial class ListRunAttemptsTests
     public async Task GetRun_ReturnsCountsByNormalisedStatusAndFirstPage()
     {
         await using var world = await StartAsync();
-        var plan = await SeedPlanAsync(world, 3);
+        var plan = await SeedPlanAsync(world, 6);
         await InsertAttemptsAsync(
             world,
             plan.RunId,
             new Attempt(plan.Executions[0].ExecutionKey, plan.Executions[0].CaseId, 1, "passed"),
             new Attempt(plan.Executions[1].ExecutionKey, plan.Executions[1].CaseId, 1, "failed"),
             new Attempt(plan.Executions[1].ExecutionKey, plan.Executions[1].CaseId, 2, "failed"),
-            new Attempt(plan.Executions[2].ExecutionKey, plan.Executions[2].CaseId, 1, "skipped"));
+            new Attempt(plan.Executions[2].ExecutionKey, plan.Executions[2].CaseId, 1, "skipped"),
+            new Attempt(plan.Executions[3].ExecutionKey, plan.Executions[3].CaseId, 1, "timed_out", Normalized: CaseAttemptStatus.TimedOut),
+            new Attempt(plan.Executions[4].ExecutionKey, plan.Executions[4].CaseId, 1, "error", Normalized: CaseAttemptStatus.Error),
+            new Attempt(plan.Executions[4].ExecutionKey, plan.Executions[4].CaseId, 2, "error", Normalized: CaseAttemptStatus.Error),
+            new Attempt(plan.Executions[5].ExecutionKey, plan.Executions[5].CaseId, 1, "blocked", Normalized: CaseAttemptStatus.Blocked));
 
         var answer = await GetRunAsync(world, plan.RunId);
 
@@ -131,11 +136,11 @@ public sealed partial class ListRunAttemptsTests
         counts.GetProperty("passed").GetInt32().ShouldBe(1);
         counts.GetProperty("failed").GetInt32().ShouldBe(2);
         counts.GetProperty("skipped").GetInt32().ShouldBe(1);
-        counts.GetProperty("timed_out").GetInt32().ShouldBe(0);
-        counts.GetProperty("error").GetInt32().ShouldBe(0);
-        counts.GetProperty("blocked").GetInt32().ShouldBe(0);
+        counts.GetProperty("timed_out").GetInt32().ShouldBe(1);
+        counts.GetProperty("error").GetInt32().ShouldBe(2);
+        counts.GetProperty("blocked").GetInt32().ShouldBe(1);
         var page = answer.Body.GetProperty("executions_page");
-        page.GetProperty("items").GetArrayLength().ShouldBe(4);
+        page.GetProperty("items").GetArrayLength().ShouldBe(8);
         page.GetProperty("next_cursor").ValueKind.ShouldBe(JsonValueKind.Null);
     }
 

@@ -199,7 +199,8 @@ internal static class ListRunAttemptsSql
     /// <summary>
     /// The one aggregate of the page: the run's artifacts in state <c>ready</c> counted per
     /// <c>(execution_key, attempt_no)</c> — the slot the artifact's own key carries (0028/0032) — in a single grouped
-    /// pass over the run's rows, left-joined to the page rows on that same pair. One scan serves the whole page
+    /// pass, restricted to the page's own slots (the <c>page</c> CTE of the statements below) so the grouping never
+    /// covers the rest of the run, and left-joined to the page rows on that same pair. One pass serves the whole page
     /// instead of one aggregate per page row, the group by makes at most one row per slot so the join never
     /// multiplies a page row, and <see cref="Columns"/>'s <c>coalesce</c> keeps an attempt with no ready artifact at
     /// 0 rather than null. <c>org_id</c> is left to RLS exactly as in the page statements.
@@ -212,6 +213,7 @@ internal static class ListRunAttemptsSql
               from public.artifact ar
              where ar.run_id = @run_id
                and ar.state = 'ready'
+               and (ar.execution_key, ar.attempt_no) in (select p.execution_key, p.attempt_no from page p)
              group by ar.execution_key,
                       ar.attempt_no
         ) art
@@ -224,25 +226,37 @@ internal static class ListRunAttemptsSql
 
     /// <summary>First page of a run's attempts, in <c>(execution_key, attempt_no)</c> ascending order.</summary>
     internal const string FirstPage = $"""
+        with page as (
+            select a.*
+              from public.case_attempt a
+             where a.run_id = @run_id
+             order by a.execution_key,
+                      a.attempt_no
+             limit @limit
+        )
         select {Columns}
-          from public.case_attempt a
+          from page a
           {ReadyArtifacts}
-         where a.run_id = @run_id
          order by a.execution_key,
                   a.attempt_no
-         limit @limit
         """;
 
     /// <summary>The next page: the same projection and order with the row-comparison cursor (00 §9.1).</summary>
     internal const string NextPage = $"""
+        with page as (
+            select a.*
+              from public.case_attempt a
+             where a.run_id = @run_id
+               and (a.execution_key, a.attempt_no) > (@cursor_execution_key::text, @cursor_attempt_no::int)
+             order by a.execution_key,
+                      a.attempt_no
+             limit @limit
+        )
         select {Columns}
-          from public.case_attempt a
+          from page a
           {ReadyArtifacts}
-         where a.run_id = @run_id
-           and (a.execution_key, a.attempt_no) > (@cursor_execution_key::text, @cursor_attempt_no::int)
          order by a.execution_key,
                   a.attempt_no
-         limit @limit
         """;
 
     /// <summary>
