@@ -15,6 +15,7 @@ namespace Tenancy.IntegrationTests;
 /// <c>BindAtRunCreate_ForkIdentity_422NoRun</c>), the evaluator's own rule in <c>AdvisoryOnlyRunTests</c>.
 /// </summary>
 [Trait("Category", "Docker")]
+[Collection(ProcessGlobalRunMetricsSuite.Name)]
 public sealed class ForkRunAdvisoryTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
@@ -63,9 +64,9 @@ public sealed class ForkRunAdvisoryTests : IClassFixture<TenancyHostPool>
     }
 
     [Fact]
-    public async Task CreateRun_CountsTheRunWithItsForkAndUnverifiedLabels()
+    public async Task CreateRun_CountsEachCommittedRunOnceWithItsForkAndUnverifiedLabels()
     {
-        var seen = new ConcurrentQueue<(string? Trigger, bool IsFork, bool Unverified)>();
+        var counted = new ConcurrentQueue<(string? Trigger, bool IsFork, bool Unverified, long Value)>();
         using var listener = new MeterListener
         {
             InstrumentPublished = (instrument, publisher) =>
@@ -76,7 +77,7 @@ public sealed class ForkRunAdvisoryTests : IClassFixture<TenancyHostPool>
                 }
             },
         };
-        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        listener.SetMeasurementEventCallback<long>((_, value, tags, _) =>
         {
             string? trigger = null;
             var isFork = false;
@@ -97,21 +98,42 @@ public sealed class ForkRunAdvisoryTests : IClassFixture<TenancyHostPool>
                 }
             }
 
-            seen.Enqueue((trigger, isFork, unverified));
+            counted.Enqueue((trigger, isFork, unverified, value));
         });
         listener.Start();
 
         await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        var forkBody = Body(world.ManifestId, """{"kind":"pull_request","name":"9/merge","pr_number":9,"trigger_event":"pull_request","is_fork":true}""");
+        var forkKey = NewKey();
 
-        var fork = await RunCreationTests.CreateRunAsync(
-            world,
-            Body(world.ManifestId, """{"kind":"pull_request","name":"9/merge","pr_number":9,"trigger_event":"pull_request","is_fork":true}"""));
+        var fork = await RunCreationTests.CreateRunAsync(world, forkBody, idempotencyKey: forkKey);
         var plain = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
+        var replay = await RunCreationTests.CreateRunAsync(world, forkBody, idempotencyKey: forkKey);
+        var malformed = await RunCreationTests.CreateRunAsync(world, "{\"manifest_id\":");
+        var unknownManifest = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(Guid.NewGuid()));
+
         fork.Status.ShouldBe(HttpStatusCode.Created, fork.ErrorMessage);
         plain.Status.ShouldBe(HttpStatusCode.Created, plain.ErrorMessage);
+        replay.Status.ShouldBe(HttpStatusCode.Created, replay.ErrorMessage);
+        replay.Id("run_id").ShouldBe(fork.Id("run_id"));
+        ((int)malformed.Status).ShouldBeInRange(400, 499);
+        ((int)unknownManifest.Status).ShouldBeInRange(400, 499);
 
-        var all = seen.ToArray();
-        all.ShouldContain(entry => entry.Trigger == "pull_request" && entry.IsFork && entry.Unverified);
-        all.ShouldContain(entry => entry.Trigger == "none" && !entry.IsFork && !entry.Unverified);
+        // Exactly the two committed runs: the replay, the malformed body and the unknown manifest add nothing.
+        counted.OrderBy(entry => entry.Trigger).ShouldBe(
+        [
+            ("none", false, false, 1L),
+            ("pull_request", true, true, 1L),
+        ]);
     }
+}
+
+/// <summary>
+/// The run-created counter lives on a process-global meter, so a listener hears every host in the process. Tests
+/// that assert exact counts join this collection, which xunit runs with nothing else in parallel.
+/// </summary>
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class ProcessGlobalRunMetricsSuite
+{
+    public const string Name = "process-global-run-metrics";
 }
