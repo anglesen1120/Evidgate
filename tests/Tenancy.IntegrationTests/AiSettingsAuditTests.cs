@@ -16,17 +16,22 @@ namespace Tenancy.IntegrationTests;
 /// the concurrency suite.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsAuditTests
+public sealed class AiSettingsAuditTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsAuditTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsAuditTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>AC13: the create row names the settings row, the caller and the new hash, with no text anywhere.</summary>
     [Fact]
     public async Task Save_Writes_OneRow_WithHashesOnly()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var document = AiSettingsCalls.Document();
         document["description"] = "Prose that must never reach the trail";
 
@@ -55,7 +60,7 @@ public sealed class AiSettingsAuditTests
     [Fact]
     public async Task NoOp_IsAudited_WithTheSameHashOnBothSides()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var body = AiSettingsCalls.Body(AiSettingsCalls.Document());
 
         var created = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, body, "\"0\"");
@@ -77,7 +82,7 @@ public sealed class AiSettingsAuditTests
     [Fact]
     public async Task ReplayedKey_AuditsNothing()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var key = RegistryApi.NewKey();
         var body = AiSettingsCalls.Body(AiSettingsCalls.Document());
 

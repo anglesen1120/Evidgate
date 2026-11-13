@@ -15,17 +15,22 @@ namespace Tenancy.IntegrationTests;
 /// two clients that type the same document must converge on one row.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsNoOpTests
+public sealed class AiSettingsNoOpTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsNoOpTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsNoOpTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>AC4: the same document again is 200 with the head's ETag and hash, and no row is appended.</summary>
     [Fact]
     public async Task IdenticalContent_Is200_AndAddsNoVersion()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var document = DocumentWith("Guidance");
 
         var created = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, AiSettingsCalls.Body(document), "\"0\"");
@@ -49,7 +54,7 @@ public sealed class AiSettingsNoOpTests
     [Fact]
     public async Task ConcurrentIdenticalSaves_AppendOneRow()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var body = AiSettingsCalls.Body(DocumentWith("Concurrent"));
 
         var first = AiSettingsCalls.SaveAsync(world.Client, world.As, world, body, "\"0\"");
@@ -71,7 +76,7 @@ public sealed class AiSettingsNoOpTests
     [Fact]
     public async Task RevertToOlderContent_AppendsANewVersion()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var first = DocumentWith("First");
         var second = DocumentWith("Second");
 

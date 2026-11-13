@@ -14,17 +14,22 @@ namespace Tenancy.IntegrationTests;
 /// save is the only route that legitimately reads more than it writes (it validates the template, then inserts).
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsCommandCounterTests
+public sealed class AiSettingsCommandCounterTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsCommandCounterTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsCommandCounterTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>The three reads stay within their statement budget.</summary>
     [Fact]
     public async Task AiSettingsReads_StayWithinTheirBudget()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         (await CountAsync(world, () => AiSettingsCalls.GetAsync(world.Client, world.As, world.Settings)))
             .ShouldBeLessThanOrEqualTo(2, "the head is one row: one statement, plus at most one scope query");
@@ -40,7 +45,7 @@ public sealed class AiSettingsCommandCounterTests
     [Fact]
     public async Task Save_StaysWithinItsBudget()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var statements = await CountAsync(
             world,

@@ -15,17 +15,22 @@ namespace Tenancy.IntegrationTests;
 /// the codes.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsAuthorizationTests
+public sealed class AiSettingsAuthorizationTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsAuthorizationTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsAuthorizationTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>AC10: a qa engineer reads the head and is refused a save; the founder's save is a 201.</summary>
     [Fact]
     public async Task QaEngineer_Reads_ButCannotSave()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var qa = await AiSettingsCalls.AddMemberAsync(_fixture, world, "qa_engineer");
 
         var read = await AiSettingsCalls.GetAsync(world.Client, world.CallerFor(qa), world.Settings);
@@ -50,7 +55,7 @@ public sealed class AiSettingsAuthorizationTests
     [Fact]
     public async Task ReadOnlyRoles_Read_AndCannotSave()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         foreach (var role in new[] { "viewer", "release_approver" })
         {
@@ -77,7 +82,7 @@ public sealed class AiSettingsAuthorizationTests
     [Fact]
     public async Task ServicePrincipal_IsRefused()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var service = TenancyApiFactory.Resolved(
             serviceOrg: world.Org, serviceProject: world.Project, servicePermissions: ["authoring:read"]);
@@ -97,7 +102,7 @@ public sealed class AiSettingsAuthorizationTests
     [Fact]
     public async Task ForeignOrgMember_Sees404()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var otherOrg = await RegistryApi.CreateOrgAsync(world.Client, world.User, Unique.Slug("globex"));
         var otherProject = await RegistryApi.CreateProjectAsync(world.Client, world.User, otherOrg, Unique.Slug("billing"));
 
