@@ -42,7 +42,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_TenantCapBelowProjectCap_Returns429()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         // The project has room for the two events; the organization's counter has room for one.
         await SeedAsync(counters, world, used: 0m, limit: 100m);
@@ -68,7 +68,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_ProjectCapBelowTenantCap_Returns429()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         await SeedAsync(counters, world, used: 9m, limit: 10m);
         await SeedTenantAsync(counters, world, used: 0m, limit: 100m);
@@ -97,7 +97,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_TenantCapShared_AcrossTwoProjects()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         await SeedAsync(counters, world, used: 0m, limit: 100m);
         await SeedTenantAsync(counters, world, used: 0m, limit: 3m);
@@ -175,7 +175,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_FirstQuotaBlock_StampsBlockedAtDurably()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 10m, limit: 10m);
 
         var refused = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L));
@@ -196,7 +196,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_FirstBatchOfANewPeriod_StampsTheCarriedCounter()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         // The period has no counter yet: its limit is the previous month's, and that limit has room for one of the
         // batch's two units.
@@ -225,7 +225,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_RepeatedBlock_DoesNotRewriteTheStamp()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 10m, limit: 10m);
 
         (await PostBatchAsync(world, (Guid.CreateVersion7(), 1L))).Status.ShouldBe(HttpStatusCode.TooManyRequests);
@@ -256,7 +256,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_BlockedByTenantScope_StampsTheTenantCounter()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 0m, limit: 100m);
         await SeedTenantAsync(counters, world, used: 10m, limit: 10m);
 
@@ -277,7 +277,7 @@ public sealed partial class IngestQuotaTests
     {
         await using var world = await StartIngestAsync(
             services: services => services.AddSingleton<IQuotaBlockStamp>(new ThrowingQuotaBlockStamp()));
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 10m, limit: 10m);
 
         var refused = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L));
@@ -295,7 +295,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_RaiseClearsBlockAndAdmitsAgain()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 10m, limit: 10m);
 
         (await PostBatchAsync(world, (Guid.CreateVersion7(), 1L))).Status.ShouldBe(HttpStatusCode.TooManyRequests);

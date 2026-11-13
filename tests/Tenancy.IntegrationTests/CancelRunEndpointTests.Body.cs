@@ -15,7 +15,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_AbsentBody_AcceptedWithNoReason()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
         var answer = await CancelRunTestData.CancelAsync(world, runId, reason: null);
@@ -33,7 +33,7 @@ public sealed partial class CancelRunEndpointTests
     [InlineData("""{"reason":null}""")]
     public async Task CancelRun_NoReasonMember_AcceptedWithNoReason(string rawBody)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
         var answer = await CancelRunTestData.CancelRawAsync(world.Client, runId, rawBody, world.Admin);
@@ -52,7 +52,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_BlankReason_422InvalidValue()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
         var answer = await CancelRunTestData.CancelRawAsync(
@@ -71,7 +71,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_ReasonTooLong_422TooLong()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
         var answer = await CancelRunTestData.CancelRawAsync(
@@ -95,7 +95,7 @@ public sealed partial class CancelRunEndpointTests
     [InlineData("not json", "", "request_invalid")]
     public async Task CancelRun_UnusableBody_422NothingRecorded(string rawBody, string path, string reason)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
         var answer = await CancelRunTestData.CancelRawAsync(world.Client, runId, rawBody, world.Admin);
@@ -115,7 +115,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_BodyOverEdgeCap_413PayloadTooLarge()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
         var answer = await CancelRunTestData.CancelRawAsync(

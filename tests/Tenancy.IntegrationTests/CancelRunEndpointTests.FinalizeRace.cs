@@ -18,7 +18,7 @@ public sealed partial class CancelRunEndpointTests
     {
         await using var database = await _fixture.CreateDedicatedDatabaseAsync();
         await using var world = await IngestTestWorld.StartAsync(_fixture, IngestTestWorld.Writer(),
-            boundJti: IngestTestWorld.Jti, database: database);
+            boundJti: IngestTestWorld.Jti, database: database, hosts: _hosts);
         await world.SetRunStateAsync("running");
         using var admin = world.Api.CreateClient();
         var hash = await world.ScalarAsync<string>("select m.manifest_hash from public.manifest m "
