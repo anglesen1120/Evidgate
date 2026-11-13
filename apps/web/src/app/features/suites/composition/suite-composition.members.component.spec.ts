@@ -17,7 +17,7 @@ import {
 } from './suite-composition.testing';
 
 // Applies to every test in this file. Idle wall of the slowest is 190 ms; the smoke run hit the
-// 5000 ms default here after the fuzz stage (CPU contention), so 15 s keeps a ~45x margin only.
+// 5000 ms default here after the fuzz stage (CPU contention), so 15 s keeps a ~1.3x margin only (11.3 s of 15 s under smoke load).
 describe('SuiteCompositionComponent members', { timeout: 15_000 }, () => {
   const getRevision = vi.fn<(id: string) => Promise<SuiteRevisionDto>>();
   beforeEach(() => {

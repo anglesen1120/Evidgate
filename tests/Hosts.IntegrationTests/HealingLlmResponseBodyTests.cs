@@ -110,6 +110,26 @@ public sealed class HealingLlmResponseBodyTests
         result.Content.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task A_Send_That_Never_Answers_Is_Aborted_By_The_Total_Budget()
+    {
+        var options = new HealingLlmOptions { AttemptTimeout = TimeSpan.FromMilliseconds(100) };
+        using var guard = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        guard.CancelAfter(options.TotalTimeout + TimeSpan.FromSeconds(10));
+        using var client = new HttpClient(new NeverAnswers()) { BaseAddress = new Uri("https://api.provider.example/v1/") };
+        var provider = new HttpHealingLlmProvider(client, Options.Create(options));
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var result = await provider.InvokeAsync(
+            new HealingLlmRequest(Guid.NewGuid(), HealingLlmPurposes.AuthoringGeneration, null, null, "m", "v1", "{}", null),
+            guard.Token);
+        clock.Stop();
+
+        result.Status.ShouldBe(HealingLlmStatuses.Timeout);
+        result.Content.ShouldBeNull();
+        clock.Elapsed.ShouldBeLessThan(options.TotalTimeout + TimeSpan.FromSeconds(5), "the deadline covers the send, not only the body");
+    }
+
     private static StringContent Json(string body) => new StringContent(body, Encoding.UTF8, "application/json");
 
     private static async Task<HealingLlmResult> InvokeAsync(HttpContent responseBody, HealingLlmOptions? options = null)
@@ -134,6 +154,15 @@ public sealed class HealingLlmResponseBodyTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+    }
+
+    private sealed class NeverAnswers : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("unreachable");
+        }
     }
 
     /// <summary>
