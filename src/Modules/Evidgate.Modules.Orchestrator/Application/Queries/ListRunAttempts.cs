@@ -77,26 +77,45 @@ internal sealed class ListRunAttemptsQueryHandler(
             return Result.Failure<RunAttemptPage>(RunNotFound);
         }
 
-        var firstPage = query.Cursor is null;
+        return await ReadPageAsync(db, query.RunId, query.Cursor, query.Limit, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// One page of a run's attempts, shared by this route and the first page of the run detail. The cursor is decoded
+    /// against <paramref name="runId"/>: one minted for another run is refused like a malformed one.
+    /// </summary>
+    /// <param name="db">The ambient tenant scope.</param>
+    /// <param name="runId">The run the caller already resolved as visible.</param>
+    /// <param name="cursor">The previous page's <c>next_cursor</c>, or null for the first page.</param>
+    /// <param name="limit">Page size, 1–200.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    internal static async ValueTask<Result<RunAttemptPage>> ReadPageAsync(
+        ITenantDb db,
+        Guid runId,
+        string? cursor,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var firstPage = cursor is null;
         string cursorExecutionKey = string.Empty;
         var cursorAttemptNo = 0;
-        if (!firstPage && !RunAttemptCursor.TryDecode(query.Cursor, out cursorExecutionKey, out cursorAttemptNo))
+        if (!firstPage && !RunAttemptCursor.TryDecode(cursor, runId, out cursorExecutionKey, out cursorAttemptNo))
         {
             return Result.Failure<RunAttemptPage>(Error.Invalid(
-                "the cursor is not a value this endpoint issued",
+                "the cursor is not a value this endpoint issued for this run",
                 [new ErrorDetail("cursor", "malformed")]));
         }
 
         var rows = await db.QueryAsync<RunAttemptRow>(
                 firstPage ? ListRunAttemptsSql.FirstPage : ListRunAttemptsSql.NextPage,
                 firstPage
-                    ? ListRunAttemptsSql.Parameters(query.RunId, null, 0, query.Limit + 1)
-                    : ListRunAttemptsSql.Parameters(query.RunId, cursorExecutionKey, cursorAttemptNo, query.Limit + 1),
+                    ? ListRunAttemptsSql.Parameters(runId, null, 0, limit + 1)
+                    : ListRunAttemptsSql.Parameters(runId, cursorExecutionKey, cursorAttemptNo, limit + 1),
                 cancellationToken)
             .ConfigureAwait(false);
 
-        var hasMore = rows.Count > query.Limit;
-        IReadOnlyList<RunAttemptRow> page = hasMore ? [.. rows.Take(query.Limit)] : rows;
+        var hasMore = rows.Count > limit;
+        IReadOnlyList<RunAttemptRow> page = hasMore ? [.. rows.Take(limit)] : rows;
 
         return Result.Success(new RunAttemptPage(
             [.. page.Select(row => new RunAttemptSummary(
@@ -111,7 +130,7 @@ internal sealed class ListRunAttemptsQueryHandler(
                 row.DurationMs,
                 row.ArtifactCount,
                 HealingCandidate: null))],
-            hasMore ? RunAttemptCursor.Encode(page[^1].ExecutionKey, page[^1].AttemptNo) : null));
+            hasMore ? RunAttemptCursor.Encode(runId, page[^1].ExecutionKey, page[^1].AttemptNo) : null));
     }
 
     /// <summary>
@@ -238,33 +257,48 @@ internal static class ListRunAttemptsSql
 }
 
 /// <summary>
-/// The opaque cursor of the attempts page (00 §9.1): the keyset pair <c>(execution_key, attempt_no)</c> of the page's
-/// last row, encoded as <c>&lt;64 hex execution key&gt;-&lt;attempt_no&gt;</c>. Opaque to clients — no meaning is
-/// promised beyond "hand it back verbatim" — and decoded to typed values so the SQL never compares a client string
-/// against a key. A value that is well formed but not this codec's canonical spelling (an uppercase key, a padded
-/// attempt number) is refused exactly like a malformed one, so a cursor can only ever be one this endpoint issued.
+/// The opaque cursor of the attempts page (00 §9.1): the run it was minted for and the keyset pair
+/// <c>(execution_key, attempt_no)</c> of the page's last row, encoded as
+/// <c>&lt;run uuid&gt;-&lt;64 hex execution key&gt;-&lt;attempt_no&gt;</c>. Opaque to clients, and decoded to typed
+/// values so the SQL never compares a client string against a key. It is not signed: binding it to the run it names
+/// makes a cursor taken from another run refused, and the query's run predicate plus forced RLS keep any well-formed
+/// cursor inside the caller's own tenant. A value that is well formed but not this codec's canonical spelling (an
+/// uppercase key, a padded attempt number) is refused exactly like a malformed one.
 /// </summary>
 internal static class RunAttemptCursor
 {
+    /// <summary>The length of the canonical run uuid half (<c>D</c> format).</summary>
+    private const int RunIdLength = 36;
+
     /// <summary>The length of the <c>execution_key</c> half: the 00 §7 sha256 hex.</summary>
     private const int KeyLength = 64;
 
-    /// <summary>Encodes one row's keyset position.</summary>
-    internal static string Encode(string executionKey, int attemptNo) =>
-        string.Create(CultureInfo.InvariantCulture, $"{executionKey}-{attemptNo}");
+    /// <summary>Encodes one row's keyset position for <paramref name="runId"/>.</summary>
+    internal static string Encode(Guid runId, string executionKey, int attemptNo) =>
+        string.Create(CultureInfo.InvariantCulture, $"{runId:D}-{executionKey}-{attemptNo}");
 
-    /// <summary>Decodes a cursor. False for anything this codec did not produce — the caller answers 422 rather than guessing.</summary>
-    internal static bool TryDecode(string? cursor, out string executionKey, out int attemptNo)
+    /// <summary>
+    /// Decodes a cursor minted for <paramref name="runId"/>. False for anything this codec did not produce, or that
+    /// names another run — the caller answers 422 rather than guessing.
+    /// </summary>
+    internal static bool TryDecode(string? cursor, Guid runId, out string executionKey, out int attemptNo)
     {
         executionKey = string.Empty;
         attemptNo = 0;
 
-        if (string.IsNullOrEmpty(cursor) || cursor.Length <= KeyLength || cursor[KeyLength] != '-')
+        const int keyStart = RunIdLength + 1;
+        const int numberStart = keyStart + KeyLength + 1;
+        if (string.IsNullOrEmpty(cursor)
+            || cursor.Length <= numberStart
+            || cursor[RunIdLength] != '-'
+            || cursor[numberStart - 1] != '-'
+            || !Guid.TryParseExact(cursor.AsSpan(0, RunIdLength), "D", out var cursorRun)
+            || cursorRun != runId)
         {
             return false;
         }
 
-        var key = cursor.AsSpan(0, KeyLength);
+        var key = cursor.AsSpan(keyStart, KeyLength);
         foreach (var character in key)
         {
             if (!((character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')))
@@ -274,7 +308,7 @@ internal static class RunAttemptCursor
         }
 
         if (!int.TryParse(
-                cursor.AsSpan(KeyLength + 1),
+                cursor.AsSpan(numberStart),
                 NumberStyles.None,
                 CultureInfo.InvariantCulture,
                 out var parsed)
@@ -284,7 +318,7 @@ internal static class RunAttemptCursor
         }
 
         var decoded = key.ToString();
-        if (!string.Equals(Encode(decoded, parsed), cursor, StringComparison.Ordinal))
+        if (!string.Equals(Encode(runId, decoded, parsed), cursor, StringComparison.Ordinal))
         {
             return false;
         }
