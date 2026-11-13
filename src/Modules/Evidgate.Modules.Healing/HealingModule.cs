@@ -113,13 +113,12 @@ internal static class HealingModule
         // The time budget lives in the pipeline, so the client timeout is infinite: a finite client timeout would abort
         // the whole pipeline — including a retry — before the per-attempt timeout inside it could ever fire. The
         // handler follows the Identity precedent: no redirect (a redirect would leave the configured endpoint) and a
-        // connection lifetime that keeps DNS fresh in a client that lives as long as the host. The response buffer is
-        // capped, so a runaway body fails the read instead of being buffered.
+        // connection lifetime that keeps DNS fresh in a client that lives as long as the host. The adapter reads the body
+        // itself under a byte cap, so the client's own buffer limit is not what bounds it.
         services
             .AddHttpClient<HttpHealingLlmProvider>((provider, client) =>
             {
                 client.Timeout = Timeout.InfiniteTimeSpan;
-                client.MaxResponseContentBufferSize = HealingLlmHttpClients.MaxResponseBytes;
 
                 // A base address that does not parse leaves the client unconfigured: the request then fails as an error
                 // result instead of taking the host down on the first call. A booted host has a validated one.

@@ -1,5 +1,7 @@
 using System.Text;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Pipeline.Serialization;
+using Evidgate.BuildingBlocks.SharedKernel.Serialization;
 using Evidgate.Modules.Healing.Contracts;
 using Microsoft.Extensions.Options;
 using Polly.Timeout;
@@ -51,8 +53,8 @@ internal static class HealingLlmHttpClients
     internal const string Pipeline = "healing-llm";
 
     /// <summary>
-    /// Hard ceiling on the response body the client buffers. An answer is a small JSON envelope, so anything above
-    /// this is a fault: the read fails and the adapter maps that failure to <c>error</c> instead of buffering it.
+    /// Hard ceiling on the response body, checked against <c>Content-Length</c> and again while streaming. An answer is a
+    /// small JSON envelope, so anything above this is a fault the adapter maps to <c>error</c> without buffering it.
     /// </summary>
     internal const int MaxResponseBytes = 1024 * 1024;
 
@@ -73,8 +75,10 @@ internal static class HealingLlmHttpClients
 /// <remarks>
 /// The adapter maps its own transport failure, time budget and non-success status into
 /// <see cref="HealingLlmStatuses"/> instead of throwing, so the gateway records every attempt; only the caller's own
-/// cancellation propagates. A response body above the client's buffer ceiling fails the read, and that failure — like
-/// any other read fault — is an <c>error</c> result, never an exception. It holds no API key, logs nothing, and never
+/// cancellation propagates. A response body above <see cref="HealingLlmHttpClients.MaxResponseBytes"/>, one that is not
+/// a JSON object, and any other read fault are an <c>error</c> result, never an exception; one deadline of
+/// <see cref="HealingLlmOptions.TotalTimeout"/> covers the send and the body read, because the headers-only send leaves
+/// the body outside the resilience pipeline. It holds no API key, logs nothing, and never
 /// puts the payload or the response in an exception message (S3, AC6).
 /// </remarks>
 internal sealed class HttpHealingLlmProvider(HttpClient client, IOptions<HealingLlmOptions> options) : IHealingLlmProvider
@@ -101,8 +105,16 @@ internal sealed class HttpHealingLlmProvider(HttpClient client, IOptions<Healing
 
         try
         {
+            // One deadline over the send and the body read, so a provider cannot spend the budget on the headers and then
+            // trickle the body for a second one; the pipeline bounds the send, this bounds the whole exchange.
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(options.Value.TotalTimeout);
+
+            using var message = new HttpRequestMessage(HttpMethod.Post, HealingLlmHttpClients.GeneratePath) { Content = content };
+
+            // Headers only: the body is then read under the byte cap instead of being buffered whole by the client.
             using var response = await client
-                .PostAsync(HealingLlmHttpClients.GeneratePath, content, cancellationToken)
+                .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, deadline.Token)
                 .ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
@@ -112,8 +124,11 @@ internal sealed class HttpHealingLlmProvider(HttpClient client, IOptions<Healing
                 return Failure(HealingLlmStatuses.Error);
             }
 
-            var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-            return Answer(text);
+            var read = await BoundedHttpBody
+                .ReadJsonAsync(response.Content, HealingLlmHttpClients.MaxResponseBytes, requireObject: true, deadline.Token)
+                .ConfigureAwait(false);
+
+            return read.Status == BoundedBodyStatus.Ok ? Answer(read.Document!) : Failure(HealingLlmStatuses.Error);
         }
         catch (TimeoutRejectedException)
         {
@@ -132,7 +147,7 @@ internal sealed class HttpHealingLlmProvider(HttpClient client, IOptions<Healing
         }
         catch (HttpRequestException)
         {
-            // A transport fault, or the response buffer ceiling the client enforces: nothing to validate, nothing spent.
+            // A transport fault: nothing to validate, nothing spent.
             return Failure(HealingLlmStatuses.Error);
         }
         catch (HealingLlmNotSentException)
@@ -157,20 +172,14 @@ internal sealed class HttpHealingLlmProvider(HttpClient client, IOptions<Healing
     private static HealingLlmResult Failure(string status) => new(status, null, 0, 0m);
 
     /// <summary>
-    /// Maps a success body to a result. A body that is not the adapter's envelope is an <c>error</c>, not an empty
+    /// Maps a parsed success body to a result. A body that is not the adapter's envelope is an <c>error</c>, not an empty
     /// answer: the gateway must not mistake a broken adapter for a provider that said nothing.
     /// </summary>
-    private static HealingLlmResult Answer(string body)
+    private static HealingLlmResult Answer(JsonDocument document)
     {
-        try
+        using (document)
         {
-            using var document = JsonDocument.Parse(body);
             var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return Failure(HealingLlmStatuses.Error);
-            }
-
             var tokens = root.TryGetProperty("tokens", out var tokensValue) && tokensValue.TryGetInt32(out var parsedTokens)
                 ? parsedTokens
                 : 0;
@@ -194,10 +203,6 @@ internal sealed class HttpHealingLlmProvider(HttpClient client, IOptions<Healing
             };
 
             return new HealingLlmResult(HealingLlmStatuses.Ok, content, tokens, cost);
-        }
-        catch (JsonException)
-        {
-            return Failure(HealingLlmStatuses.Error);
         }
     }
 }
