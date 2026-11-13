@@ -27,9 +27,9 @@ function run(index: number, changes: Partial<RunSummary> = {}): RunSummary {
   };
 }
 
-// Heaviest test here renders 250 rows in ~330 ms on an idle machine; the smoke container runs
-// vitest right after the 5 min fuzz stage and CPU contention made the 5000 ms default flaky.
-describe('RunListTableComponent', { timeout: 30_000 }, () => {
+// Applies to every test in this file. Idle wall of the slowest is 330 ms (250-row test); the smoke run hit the
+// 5000 ms default here after the fuzz stage (CPU contention), so 15 s keeps a ~45x margin only.
+describe('RunListTableComponent', { timeout: 15_000 }, () => {
   beforeEach(() =>
     TestBed.configureTestingModule({
       imports: [RunListTableComponent],
