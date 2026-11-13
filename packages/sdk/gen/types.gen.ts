@@ -94,6 +94,23 @@ export type RunStateDto = {
      * The run's recorded state transitions, oldest first (`run_state_event.seq` ascending). The creation row — the one with no from state — is the marker that the history is known, so it is never served, and its absence is what makes the whole member `null`: a run created before the table existed cannot have its history reconstructed. `[]` is a run whose history is known and which has not transitioned yet; `null` is an unknown history. Bounded to 64 items, which no run can reach: the forward ranks are fixed (`created` 0, `queued` 1, `running` 2, `collecting` 3) and a terminal state has no outgoing edge, so the longest declared path is four transitions (`created → queued → running → collecting → complete`/`incomplete`); a run is inserted already `queued`, so a served history holds at most three.
      */
     state_history: Array<RunStateTransition> | null;
+    counts: RunAttemptCounts;
+    /**
+     * First page (50) of the run's attempts, the 00 §9.1 envelope of `GET /v1/runs/{r}/attempts`; `next_cursor` is that route's `cursor` for the run, `null` on a run with at most 50 attempts.
+     */
+    executions_page: RunAttemptPage;
+};
+
+/**
+ * The run's case attempts counted by normalised status (00 §8.5) in one grouped pass; a status with no attempt is 0.
+ */
+export type RunAttemptCounts = {
+    passed: number;
+    failed: number;
+    skipped: number;
+    timed_out: number;
+    error: number;
+    blocked: number;
 };
 
 /**

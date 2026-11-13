@@ -150,6 +150,8 @@ export function runState(runId: string, evidenceRevisionId: string | null): RunS
     releases: [],
     after_cancel_events: 0,
     state_history: null,
+    counts: { passed: 0, failed: 0, skipped: 0, timed_out: 0, error: 0, blocked: 0 },
+    executions_page: { items: [], next_cursor: null },
   };
 }
 
