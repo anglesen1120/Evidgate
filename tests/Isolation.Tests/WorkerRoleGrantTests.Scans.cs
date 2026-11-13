@@ -58,6 +58,14 @@ public sealed partial class WorkerRoleGrantTests
         // The positive control: the same query reports a grant on the queue table when one exists.
         await _fixture.ExecuteAsync(database, "grant references on public.task to evidgate_worker");
         (await WorkerDdlPrivilegedRelationsAsync(database)).ShouldBe(["public.task"]);
+
+        // The other two verbs and a non-table relkind (a view) are visible to the same query.
+        await _fixture.ExecuteAsync(database, "revoke references on public.task from evidgate_worker");
+        await _fixture.ExecuteAsync(database, "grant truncate, trigger on public.outbox to evidgate_worker");
+        await _fixture.ExecuteAsync(database, "create view public.worker_role_probe_view as select 1 as x");
+        await _fixture.ExecuteAsync(database, "grant trigger on public.worker_role_probe_view to evidgate_worker");
+        (await WorkerDdlPrivilegedRelationsAsync(database)).ShouldBe(
+            ["public.outbox", "public.worker_role_probe_view"]);
     }
 
     private Task<IReadOnlyList<string>> WorkerDdlPrivilegedRelationsAsync(string database) =>
@@ -77,7 +85,7 @@ public sealed partial class WorkerRoleGrantTests
 
     /// <summary>
     /// Functions in any non-system schema the worker role can EXECUTE through any path (its own
-    /// ACL, PUBLIC or the default ACL), minus extension members and the explicit allow-list.
+    /// ACL, PUBLIC or the default ACL), minus extension members (their ACLs belong to the extension). A PUBLIC EXECUTE found here is revoked, never allow-listed.
     /// </summary>
     private Task<IReadOnlyList<string>> WorkerExecutableFunctionsAsync(string database) =>
         _fixture.ColumnAsync<string>(
