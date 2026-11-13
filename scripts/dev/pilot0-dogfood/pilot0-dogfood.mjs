@@ -11,7 +11,7 @@
 // built output, so the empty parameter set hashes once, the same way the server does
 // (fixtures/variant-hash/vectors.json, "empty-object"). The server still owns the real
 // key; this copy only tells the reporter which planned execution it is producing.
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import {
   mkdirSync,
   readdirSync,
@@ -110,18 +110,10 @@ function secondTargetEnv(env) {
   return candidate;
 }
 
-/** One length-prefixed UTF-8 field of the key (ExecutionKey.Write). */
-function field(text) {
-  const bytes = Buffer.from(text, 'utf8');
-  const length = Buffer.alloc(4);
-  length.writeUInt32BE(bytes.length);
-  return Buffer.concat([length, bytes]);
-}
-
-function executionKey(caseId, variantHash, env) {
-  return createHash('sha256')
-    .update(Buffer.concat([field(caseId), field(variantHash), field(env)]))
-    .digest('hex');
+/** The adapter's own key function, so the manifest identity and the reporter share one layout. */
+async function executionKeyOf(adapterDist, caseId, variantHash, env) {
+  const module = await import(pathToFileURL(join(adapterDist, 'executionKey.js')).href);
+  return module.computeExecutionKey(caseId, variantHash, env);
 }
 
 async function variantHashOfEmptyParams(adapterDist) {
@@ -188,9 +180,9 @@ function prepare(values) {
   const app = required(values, 'app');
 
   mkdirSync(join(work, 'red'), { recursive: true });
-  return variantHashOfEmptyParams(adapterDist).then((variantHash) => {
+  return variantHashOfEmptyParams(adapterDist).then(async (variantHash) => {
     const identity = {
-      execution_key: executionKey(caseId, variantHash, env),
+      execution_key: await executionKeyOf(adapterDist, caseId, variantHash, env),
       case_id: caseId,
       variant_hash: variantHash,
       target_env: env,
@@ -378,43 +370,6 @@ function parse(values) {
   });
 }
 
-// The reporter stamps its run-level `run.log` markers with an all-zero placeholder key and the
-// server accepts only planned keys (a gap the adapter's plan row owns). Until then the spool
-// is rewritten line by line before `events send`; nothing else in an envelope changes.
-function rekey(values) {
-  const dir = required(values, 'dir');
-  const placeholder = '0'.repeat(64);
-  const key = required(values, 'key');
-  let changed = 0;
-  for (const name of readdirSync(dir).filter((file) => file.endsWith('.jsonl'))) {
-    const path = join(dir, name);
-    const original = readFileSync(path, 'utf8');
-    const out = [];
-    for (const [index, line] of original.split(/\r?\n/).entries()) {
-      if (line.trim() === '') continue;
-      let envelope;
-      try {
-        envelope = JSON.parse(line);
-      } catch {
-        fail(`spool line ${index + 1} of ${name} is not JSON`);
-      }
-      if (typeof envelope !== 'object' || envelope === null) {
-        fail(`spool line ${index + 1} of ${name} is not a JSON object`);
-      }
-      if (envelope.execution_key !== placeholder) {
-        out.push(line);
-        continue;
-      }
-      envelope.execution_key = key;
-      changed += 1;
-      out.push(JSON.stringify(envelope));
-    }
-    const body = out.length === 0 ? '' : `${out.join('\n')}${original.endsWith('\n') ? '\n' : ''}`;
-    writeAtomically(path, body);
-  }
-  process.stdout.write(`${changed}\n`);
-}
-
 const [command, ...rest] = process.argv.slice(2);
 const values = flags(rest);
 try {
@@ -426,8 +381,6 @@ try {
     await decision(values);
   } else if (command === 'parse') {
     parse(values);
-  } else if (command === 'rekey') {
-    rekey(values);
   } else if (command === 'invocation') {
     // One id per script invocation, so `runs create --idempotency-key` never replays an
     // earlier run's 201 (contracts/cli.md §9: the key, not the body, is what replays).
