@@ -1528,9 +1528,10 @@ paths:
         `started_at`/`finished_at`/`duration_ms` (`null` where unrecorded), the
         attempt's artifact count (its `artifact` rows in state `ready`) and
         `healing_candidate`, which is `null` until the candidate model exists
-        (08.3.1; shadow rows 08.3.3). The opaque `cursor` is not signed and is
-        bound to the caller's own run and tenant by the query; a cursor this
-        endpoint did not issue is 422 `request_invalid`
+        (08.3.1; shadow rows 08.3.3). The opaque `cursor` is not signed; it
+        names the run it was minted for and the query binds it to the caller's
+        own run and tenant, so a cursor of another run, or one this
+        endpoint did not issue, is 422 `request_invalid`
         (`details[].path` = `cursor`), as is an out-of-range `limit`
         (`limit`). An unknown run, another tenant's run and, for a
         project-scoped credential, a sibling project's run are the one 404
@@ -9901,6 +9902,8 @@ components:
           releases,
           after_cancel_events,
           state_history,
+          counts,
+          executions_page,
         ]
       properties:
         run_id:
@@ -10009,6 +10012,25 @@ components:
             inserted already `queued`, so a served history holds at most three.
           items:
             $ref: '#/components/schemas/RunStateTransition'
+        counts:
+          $ref: '#/components/schemas/RunAttemptCounts'
+        executions_page:
+          description: >-
+            First page (50) of the run's attempts, the 00 §9.1 envelope of `GET /v1/runs/{r}/attempts`;
+            `next_cursor` is that route's `cursor` for the run, `null` on a run with at most 50 attempts.
+          $ref: '#/components/schemas/RunAttemptPage'
+    RunAttemptCounts:
+      type: object
+      description: >-
+        The run's case attempts counted by normalised status (00 §8.5) in one grouped pass; a status with no attempt is 0.
+      required: [passed, failed, skipped, timed_out, error, blocked]
+      properties:
+        passed: { type: integer, minimum: 0 }
+        failed: { type: integer, minimum: 0 }
+        skipped: { type: integer, minimum: 0 }
+        timed_out: { type: integer, minimum: 0 }
+        error: { type: integer, minimum: 0 }
+        blocked: { type: integer, minimum: 0 }
     RunStateTransition:
       type: object
       description: One recorded transition of a run (`run_state_event`), appended by the trigger on `public.run`.
