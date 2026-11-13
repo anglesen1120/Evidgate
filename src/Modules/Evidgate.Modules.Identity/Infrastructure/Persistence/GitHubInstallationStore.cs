@@ -13,25 +13,31 @@ namespace Evidgate.Modules.Identity.Infrastructure.Persistence;
 /// <param name="AccountId">Numeric id of that account.</param>
 /// <param name="State"><c>active</c>, <c>suspended</c> or <c>deleted</c>.</param>
 /// <param name="Permissions">Granted repository permission map.</param>
+/// <param name="SuspendedAt">When GitHub suspended the installation, or null for an active one.</param>
 internal sealed record GitHubInstallationRow(
     Guid Id,
     long InstallationId,
     string AccountLogin,
     long AccountId,
     string State,
-    IReadOnlyDictionary<string, string> Permissions);
+    IReadOnlyDictionary<string, string> Permissions,
+    DateTimeOffset? SuspendedAt);
 
 /// <summary>The one-time install nonce store. Only the SHA-256 of the nonce is ever written.</summary>
 internal interface IGitHubInstallStateStore
 {
-    /// <summary>Stores the hash bound to the org, the user and the expiry.</summary>
-    Task AddAsync(byte[] stateHash, Guid orgId, Guid userId, DateTimeOffset expiresAt, CancellationToken cancellationToken);
+    /// <summary>Stores the hash bound to the org, the user and the expiry; false when the user's live states are full.</summary>
+    /// <returns><c>true</c> when the state was written.</returns>
+    Task<bool> AddAsync(byte[] stateHash, Guid orgId, Guid userId, DateTimeOffset expiresAt, CancellationToken cancellationToken);
 
     /// <summary>
     /// Marks the nonce used and reports whether this caller may proceed. One conditional UPDATE is the whole
     /// check, so two concurrent callbacks cannot both succeed.
     /// </summary>
     Task<bool> ConsumeAsync(byte[] stateHash, Guid orgId, Guid userId, CancellationToken cancellationToken);
+
+    /// <summary>Whether this org and user consumed <paramref name="stateHash"/>; read inside the insert transaction.</summary>
+    Task<bool> ExistsUsedAsync(byte[] stateHash, Guid orgId, Guid userId, CancellationToken cancellationToken);
 }
 
 /// <summary>The org's installation rows, scoped by RLS to the ambient tenant.</summary>
@@ -50,6 +56,9 @@ internal interface IGitHubInstallationStore
 /// <summary>Dapper implementation of both stores and of the token source's installation resolver.</summary>
 internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStateStore, IGitHubInstallationStore, IGitHubInstallationResolver
 {
+    /// <summary>How many unspent install states one user may hold; each start route call adds one.</summary>
+    internal const int MaxLiveStatesPerUser = 20;
+
     private const string CurrentSql = """
         select id,
                installation_id as InstallationId,
@@ -65,9 +74,10 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
 
     private const string InsertSql = """
         insert into public.github_installation
-            (id, org_id, installation_id, account_login, account_id, permissions, state, installed_by)
+            (id, org_id, installation_id, account_login, account_id, permissions, state, suspended_at, installed_by)
         values
-            (@id, @org_id, @installation_id, @account_login, @account_id, @permissions::jsonb, 'active', @installed_by)
+            (@id, @org_id, @installation_id, @account_login, @account_id, @permissions::jsonb, @state,
+             @suspended_at, @installed_by)
         on conflict do nothing
         returning id
         """;
@@ -81,7 +91,12 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
 
     private const string AddStateSql = """
         insert into public.github_install_state (state_hash, org_id, user_id, expires_at)
-        values (@state_hash, @org_id, @user_id, @expires_at)
+        select @state_hash, @org_id, @user_id, @expires_at
+        where (select count(*)
+                 from public.github_install_state
+                where org_id = @org_id and user_id = @user_id and used_at is null and expires_at > now())
+              < @max_live
+        returning state_hash
         """;
 
     private const string ConsumeStateSql = """
@@ -95,11 +110,13 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
         returning state_hash
         """;
 
-    private const string ActiveInstallationSql = """
-        select installation_id
-        from public.github_installation
-        where org_id = @org_id and state <> 'deleted'
-        limit 1
+    private const string UsedStateSql = """
+        select state_hash
+        from public.github_install_state
+        where state_hash = @state_hash
+          and org_id = @org_id
+          and user_id = @user_id
+          and used_at is not null
         """;
 
     private sealed record Row(
@@ -111,11 +128,27 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
         string Permissions);
 
     /// <inheritdoc />
-    public Task AddAsync(byte[] stateHash, Guid orgId, Guid userId, DateTimeOffset expiresAt, CancellationToken cancellationToken) =>
-        db.ExecuteAsync(
+    public async Task<bool> AddAsync(
+        byte[] stateHash,
+        Guid orgId,
+        Guid userId,
+        DateTimeOffset expiresAt,
+        CancellationToken cancellationToken)
+    {
+        var added = await db.ScalarAsync<byte[]>(
             AddStateSql,
-            new { state_hash = stateHash, org_id = orgId, user_id = userId, expires_at = expiresAt },
-            cancellationToken);
+            new
+            {
+                state_hash = stateHash,
+                org_id = orgId,
+                user_id = userId,
+                expires_at = expiresAt,
+                max_live = MaxLiveStatesPerUser,
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return added is not null;
+    }
 
     /// <inheritdoc />
     public async Task<bool> ConsumeAsync(byte[] stateHash, Guid orgId, Guid userId, CancellationToken cancellationToken)
@@ -126,6 +159,17 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
             cancellationToken).ConfigureAwait(false);
 
         return consumed is not null;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> ExistsUsedAsync(byte[] stateHash, Guid orgId, Guid userId, CancellationToken cancellationToken)
+    {
+        var found = await db.ScalarAsync<byte[]>(
+            UsedStateSql,
+            new { state_hash = stateHash, org_id = orgId, user_id = userId },
+            cancellationToken).ConfigureAwait(false);
+
+        return found is not null;
     }
 
     /// <inheritdoc />
@@ -150,6 +194,8 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
                 account_login = row.AccountLogin,
                 account_id = row.AccountId,
                 permissions = JsonSerializer.Serialize(row.Permissions),
+                state = row.State,
+                suspended_at = row.SuspendedAt,
                 installed_by = installedBy,
             },
             cancellationToken).ConfigureAwait(false);
@@ -184,6 +230,7 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
             row.AccountLogin,
             row.AccountId,
             row.State,
-            permissions);
+            permissions,
+            SuspendedAt: null);
     }
 }

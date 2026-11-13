@@ -23,18 +23,24 @@ namespace Evidgate.Modules.Identity.Application.Commands;
 
 /// <summary>
 /// <c>POST /v1/github/installations/start</c>: draws a single-use install nonce, stores only its SHA-256 bound to the
-/// caller's org and user, and answers the GitHub install URL carrying the nonce. Nothing is bound by this call.
+/// caller's org and user, and answers the GitHub install URL carrying the org and the nonce. Nothing is bound.
 /// </summary>
 internal sealed record StartGitHubInstallCommand : ICommand<Result<GitHubInstallStartResponse>>;
 
-/// <summary>
-/// <c>GET /v1/github/installations/callback</c>: consumes the nonce, verifies the installation with the App JWT,
-/// exchanges the OAuth code and binds the row only when the user reaches the installation and administers its account.
-/// </summary>
+/// <summary>The callback inputs: the installation to verify and the one-time state the server issued.</summary>
 /// <param name="InstallationId">Numeric installation id from the callback query.</param>
 /// <param name="Code">The OAuth authorization code, used once and discarded.</param>
-/// <param name="State">The nonce this server issued; only its hash exists in the database.</param>
-internal sealed record CompleteGitHubInstallCommand(long InstallationId, string? Code, string? State)
+/// <param name="State">The state value the install URL carried; only its hash exists in the database.</param>
+internal sealed record GitHubInstallCallback(long InstallationId, string? Code, string? State);
+
+/// <summary>Consumes a callback nonce in its own committed unit, before any GitHub call.</summary>
+/// <param name="StateHash">SHA-256 of the state the callback carried.</param>
+internal sealed record ConsumeGitHubInstallStateCommand(byte[] StateHash) : ICommand<Result<bool>>;
+
+/// <summary>Persists an installation already verified outside the database transaction.</summary>
+/// <param name="Installation">The installation the App and the OAuth user both vouch for.</param>
+/// <param name="StateHash">The digest of the state whose consumption authorised this insert.</param>
+internal sealed record CompleteGitHubInstallCommand(GitHubAppInstallation Installation, byte[] StateHash)
     : ICommand<Result<GitHubInstallationDto>>;
 
 /// <summary><c>DELETE /v1/github/installations/{i}</c>: marks the row deleted; the App itself stays installed at GitHub.</summary>
@@ -91,15 +97,22 @@ internal sealed partial class StartGitHubInstallCommandHandler(
 
         var nonce = RandomNumberGenerator.GetHexString(NonceHexLength, lowercase: true);
         var hash = SHA256.HashData(Encoding.ASCII.GetBytes(nonce));
-        await states
+        if (!await states
             .AddAsync(hash, orgId, userId, clock.GetUtcNow() + StateLifetime, cancellationToken)
-            .ConfigureAwait(false);
+            .ConfigureAwait(false))
+        {
+            return Result.Failure<GitHubInstallStartResponse>(GitHubInstallationErrors.TooManyFlows);
+        }
 
+        // The org rides inside the state so the browser callback, which carries no tenant header of its own,
+        // can be resolved to this org and the filter can still prove the session user's membership of it.
         var url = string.Concat(
             configuration.OAuthBaseUrl.TrimEnd('/'),
             "/apps/",
             configuration.AppSlug,
             "/installations/new?state=",
+            orgId.ToString("D", CultureInfo.InvariantCulture),
+            ".",
             nonce);
 
         return Result.Success(new GitHubInstallStartResponse(url));
@@ -112,7 +125,50 @@ internal sealed partial class StartGitHubInstallCommandHandler(
     private partial void LogNotConfigured();
 }
 
-/// <summary>Handler of <see cref="CompleteGitHubInstallCommand"/>; every check fails closed and the nonce is consumed first.</summary>
+/// <summary>
+/// Handler of <see cref="ConsumeGitHubInstallStateCommand"/>: one conditional update, in its own transaction, so
+/// the nonce is spent even when the GitHub checks that follow refuse the callback.
+/// </summary>
+[Permission(Permissions.CiBinding.Write)]
+internal sealed class ConsumeGitHubInstallStateCommandHandler(
+    ITenantScopeAccessor scopes,
+    IRequestPrincipalAccessor principals,
+    IGitHubInstallStateStore states)
+    : ICommandHandler<ConsumeGitHubInstallStateCommand, Result<bool>>
+{
+    /// <summary>The length of the SHA-256 digest the callback hands over (32 bytes).</summary>
+    private const int MaxStateHashLength = 32;
+
+    /// <inheritdoc />
+    public async ValueTask<Result<bool>> Handle(
+        ConsumeGitHubInstallStateCommand command,
+        CancellationToken cancellationToken)
+    {
+        var orgId = scopes.Require().OrgId;
+        if (principals.Current?.UserId is not { } userId)
+        {
+            return Result.Success(false);
+        }
+
+        if (command.StateHash.Length != MaxStateHashLength)
+        {
+            return Result.Success(false);
+        }
+
+        // A refusal is a successful, committed unit that consumed nothing: reporting it as a failure would
+        // roll the transaction back and leave the nonce replayable after the checks that follow refuse.
+        var consumed = await states
+            .ConsumeAsync(command.StateHash, orgId, userId, cancellationToken)
+            .ConfigureAwait(false);
+
+        return Result.Success(consumed);
+    }
+}
+
+/// <summary>
+/// Handler of <see cref="CompleteGitHubInstallCommand"/>: writes the verified installation and its audit row in one
+/// transaction, and re-reads the consumed nonce so the insert stays inside the binding consumption proved.
+/// </summary>
 [Permission(Permissions.CiBinding.Write)]
 [AuditedAction("github_installation.create")]
 internal sealed class CompleteGitHubInstallCommandHandler(
@@ -120,8 +176,6 @@ internal sealed class CompleteGitHubInstallCommandHandler(
     IRequestPrincipalAccessor principals,
     IGitHubInstallStateStore states,
     IGitHubInstallationStore installations,
-    IGitHubOAuthClient oauth,
-    IGitHubAppInstallations appInstallations,
     IAuditTrail audit)
     : ICommandHandler<CompleteGitHubInstallCommand, Result<GitHubInstallationDto>>
 {
@@ -139,44 +193,19 @@ internal sealed class CompleteGitHubInstallCommandHandler(
                 Error.Denied(ApiErrorCode.NoMembership, "the install flow is completed by an active member of the org"));
         }
 
-        if (command.InstallationId <= 0
-            || string.IsNullOrWhiteSpace(command.Code)
-            || command.Code.Length > 512
-            || string.IsNullOrWhiteSpace(command.State)
-            || command.State.Length > 256)
+        if (!await states.ExistsUsedAsync(command.StateHash, orgId, userId, cancellationToken).ConfigureAwait(false))
         {
             return Result.Failure<GitHubInstallationDto>(GitHubInstallationErrors.StateInvalid);
-        }
-
-        // The nonce is consumed before any GitHub call: a replay, an expired state or another org's state never
-        // reaches the network, and a failed ownership check cannot be retried with the same nonce.
-        var stateHash = SHA256.HashData(Encoding.ASCII.GetBytes(command.State));
-        if (!await states.ConsumeAsync(stateHash, orgId, userId, cancellationToken).ConfigureAwait(false))
-        {
-            return Result.Failure<GitHubInstallationDto>(GitHubInstallationErrors.StateInvalid);
-        }
-
-        var installation = await appInstallations.GetAsync(command.InstallationId, cancellationToken).ConfigureAwait(false);
-        if (!installation.IsSuccess)
-        {
-            return installation.Error!.Code == GitHubErrorCodes.NotFound
-                ? Result.Failure<GitHubInstallationDto>(GitHubInstallationErrors.NotOwned)
-                : Result.Failure<GitHubInstallationDto>(installation.Error!);
-        }
-
-        var verified = await VerifyOwnerAsync(command, installation.Value, cancellationToken).ConfigureAwait(false);
-        if (!verified.IsSuccess)
-        {
-            return Result.Failure<GitHubInstallationDto>(verified.Error!);
         }
 
         var row = new GitHubInstallationRow(
             Guid.CreateVersion7(),
-            installation.Value.Id,
-            installation.Value.AccountLogin,
-            installation.Value.AccountId,
-            "active",
-            installation.Value.Permissions);
+            command.Installation.Id,
+            command.Installation.AccountLogin,
+            command.Installation.AccountId,
+            command.Installation.SuspendedAt is null ? "active" : "suspended",
+            command.Installation.Permissions,
+            command.Installation.SuspendedAt);
 
         var created = await installations
             .CreateAsync(orgId, row, userId, cancellationToken)
@@ -189,46 +218,6 @@ internal sealed class CompleteGitHubInstallCommandHandler(
         audit.Describe(new AuditObject("github_installation", row.Id.ToString("D")));
 
         return Result.Success(ToDto(row));
-    }
-
-    private async Task<Result> VerifyOwnerAsync(
-        CompleteGitHubInstallCommand command,
-        GitHubAppInstallation installation,
-        CancellationToken cancellationToken)
-    {
-        var token = await oauth.ExchangeCodeAsync(command.Code!, cancellationToken).ConfigureAwait(false);
-        if (!token.IsSuccess)
-        {
-            return token.Error!.Code == "github_oauth_refused"
-                ? Result.Failure(GitHubInstallationErrors.CodeRefused)
-                : Result.Failure(token.Error!);
-        }
-
-        var user = await oauth.GetUserAsync(token.Value, cancellationToken).ConfigureAwait(false);
-        if (!user.IsSuccess)
-        {
-            return Result.Failure(user.Error!);
-        }
-
-        var reachable = await oauth.ListInstallationsAsync(token.Value, cancellationToken).ConfigureAwait(false);
-        if (!reachable.IsSuccess)
-        {
-            return Result.Failure(reachable.Error!);
-        }
-
-        var match = reachable.Value.FirstOrDefault(entry => entry.Id == installation.Id);
-        if (match is null)
-        {
-            return Result.Failure(GitHubInstallationErrors.NotOwned);
-        }
-
-        var administers = await oauth.AdministersAsync(token.Value, user.Value, match, cancellationToken).ConfigureAwait(false);
-        if (!administers.IsSuccess)
-        {
-            return Result.Failure(administers.Error!);
-        }
-
-        return administers.Value ? Result.Success() : Result.Failure(GitHubInstallationErrors.NotOwned);
     }
 
     internal static GitHubInstallationDto ToDto(GitHubInstallationRow row) =>

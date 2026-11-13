@@ -215,17 +215,22 @@ public sealed class GitHubInstallationTokenTests
         var bench = new GitHubTestBench(TokenHandler("ghs_first", OneHour));
         await bench.MintAsync(feature: GitHubFeature.Catalog);
         await bench.MintAsync(feature: GitHubFeature.Checks);
+        await bench.Tokens.GetAsync(GitHubTestBench.OrgId, GitHubFeature.Catalog, [5], CancellationToken.None);
 
         bench.Tokens.InvalidateAll(7);
-        await bench.MintAsync(feature: GitHubFeature.Catalog);
 
-        bench.Handler.Requests.Count.ShouldBe(3);
+        (await bench.MintAsync(feature: GitHubFeature.Catalog)).IsSuccess.ShouldBeTrue();
+        (await bench.MintAsync(feature: GitHubFeature.Checks)).IsSuccess.ShouldBeTrue();
+        (await bench.Tokens.GetAsync(GitHubTestBench.OrgId, GitHubFeature.Catalog, [5], CancellationToken.None))
+            .IsSuccess.ShouldBeTrue();
+
+        bench.Handler.Requests.Count.ShouldBe(6);
     }
 
     [Fact]
     public async Task Token_OrgKeyedWithoutAResolver_FailsClosed()
     {
-        var bench = new GitHubTestBench(TokenHandler("ghs_first", OneHour));
+        var bench = new GitHubTestBench(TokenHandler("ghs_first", OneHour), withResolver: false);
 
         var result = await bench.Tokens.GetAsync(
             Guid.CreateVersion7(),
@@ -291,7 +296,8 @@ public sealed class GitHubInstallationTokenTests
     public async Task Token_OrgKeyedAfterDisconnect_RefusesMint()
     {
         var bench = new GitHubTestBench(TokenHandler("ghs_first", OneHour));
-        (await bench.MintAsync()).IsSuccess.ShouldBeTrue();
+        (await bench.Tokens.GetAsync(GitHubTestBench.OrgId, GitHubFeature.Catalog, [5], CancellationToken.None))
+            .IsSuccess.ShouldBeTrue();
         var exchangesBefore = bench.Handler.Requests.Count(request => request.Method == HttpMethod.Post);
 
         bench.Resolver.Failure = Result.Failure<long>(Error.Conflict("installation_unavailable", "the org has no active installation"));

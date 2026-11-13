@@ -1028,6 +1028,14 @@
           "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )"
         }
       },
+      "evidgate.buildingblocks.github": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Microsoft.Extensions.Http.Resilience": "[10.10.0, )",
+          "Microsoft.IdentityModel.JsonWebTokens": "[8.23.0, )"
+        }
+      },
       "evidgate.buildingblocks.objectstorage": {
         "type": "Project",
         "dependencies": {
@@ -1074,11 +1082,7 @@
         }
       },
       "evidgate.buildingblocks.sharedkernel": {
-        "type": "Project",
-        "dependencies": {
-          "Microsoft.Extensions.Http.Resilience": "[10.10.0, )",
-          "Microsoft.IdentityModel.JsonWebTokens": "[8.23.0, )"
-        }
+        "type": "Project"
       },
       "evidgate.evaluation": {
         "type": "Project",
@@ -1133,6 +1137,7 @@
         "dependencies": {
           "Evidgate.BuildingBlocks.Canonicalization": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Contracts.Validation": "[1.0.0, )",
+          "Evidgate.BuildingBlocks.GitHub": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",
@@ -1194,6 +1199,7 @@
       "evidgate.modules.identity": {
         "type": "Project",
         "dependencies": {
+          "Evidgate.BuildingBlocks.GitHub": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Observability": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Persistence": "[1.0.0, )",
           "Evidgate.BuildingBlocks.Pipeline": "[1.0.0, )",

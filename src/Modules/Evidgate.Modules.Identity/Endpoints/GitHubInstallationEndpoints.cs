@@ -1,4 +1,5 @@
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Identity.Application;
 using Evidgate.Modules.Identity.Application.Commands;
 using Evidgate.Modules.Identity.Application.Queries;
 using Evidgate.Modules.Identity.Contracts;
@@ -11,11 +12,17 @@ namespace Evidgate.Modules.Identity.Endpoints;
 
 /// <summary>
 /// The GitHub App installation routes. Delegates only bind, send one message and map the <see cref="Result"/>:
-/// authorization is each handler's <c>[Permission]</c>, the tenant is the pipeline's, and neither a nonce nor an
+/// authorization is each handler's <c>[Permission]</c>, the tenant is the pipeline's, and neither a nonce nor a
 /// OAuth code is ever echoed back.
 /// </summary>
 public static class GitHubInstallationEndpoints
 {
+    /// <summary>The callback route, whose query carries the one-time state.</summary>
+    internal const string CallbackPath = "/v1/github/installations/callback";
+
+    /// <summary>The 400 the host answers for a callback whose state names no organization.</summary>
+    public static Error CallbackStateInvalid => GitHubInstallationErrors.StateInvalid;
+
     /// <summary>Maps the routes and returns the group so the host applies its filters.</summary>
     /// <param name="routes">The route builder.</param>
     public static RouteGroupBuilder MapGitHubInstallationEndpoints(this IEndpointRouteBuilder routes)
@@ -40,6 +47,19 @@ public static class GitHubInstallationEndpoints
         return group;
     }
 
+    /// <summary>
+    /// Reads the organization a callback state names. The prefix is what the start route wrote; the caller's
+    /// membership of it is proven by the tenant resolution that follows, never by this parse.
+    /// </summary>
+    /// <param name="state">The untrusted <c>state</c> query value.</param>
+    /// <returns>The org it names, or null when it names none.</returns>
+    public static Guid? CallbackOrg(string? state) =>
+        state is { Length: > 37 and <= 256 }
+        && state[36] == '.'
+        && Guid.TryParseExact(state[..36], "D", out var org)
+            ? org
+            : null;
+
     private static async Task<Result<GitHubInstallStartResponse>> StartAsync(
         HttpContext context,
         IMediator mediator,
@@ -52,7 +72,7 @@ public static class GitHubInstallationEndpoints
 
     private static async Task<Result<GitHubInstallationDto>> CallbackAsync(
         HttpContext context,
-        IMediator mediator,
+        GitHubInstallCompletion completion,
         CancellationToken cancellationToken)
     {
         context.Response.Headers.CacheControl = "no-store";
@@ -60,8 +80,8 @@ public static class GitHubInstallationEndpoints
         var query = context.Request.Query;
         var installationId = long.TryParse(query["installation_id"], out var parsed) ? parsed : 0;
 
-        return await mediator.Send(
-            new CompleteGitHubInstallCommand(installationId, query["code"], query["state"]),
+        return await completion.CompleteAsync(
+            new GitHubInstallCallback(installationId, query["code"], query["state"]),
             cancellationToken).ConfigureAwait(false);
     }
 

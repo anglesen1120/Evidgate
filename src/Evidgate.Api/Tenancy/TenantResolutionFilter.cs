@@ -3,6 +3,7 @@ using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.Pipeline.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Identity.Endpoints;
 
 namespace Evidgate.Api.Tenancy;
 
@@ -64,6 +65,12 @@ public sealed class TenantResolutionFilter(
 
         if (RequestedOrg(http, allowHeader: caller.Principal.Kind == PrincipalKind.Member) is not { } requested)
         {
+            // The install callback names its org only inside the one-time state: none means the state is unusable.
+            if (http.Request.Path.Equals(new PathString(GitHubInstallationEndpoints.CallbackPath)))
+            {
+                return Result.Failure(GitHubInstallationEndpoints.CallbackStateInvalid).ToHttpResult(http);
+            }
+
             // An org named but not a uuid: leave it to the framework's own 400.
             return await next(context).ConfigureAwait(false);
         }
@@ -120,6 +127,13 @@ public sealed class TenantResolutionFilter(
     /// </summary>
     private static (Guid? Org, bool Named)? RequestedOrg(HttpContext http, bool allowHeader)
     {
+        if (http.Request.Path.Equals(new PathString(GitHubInstallationEndpoints.CallbackPath)))
+        {
+            return GitHubInstallationEndpoints.CallbackOrg(http.Request.Query["state"]) is { } callbackOrg
+                ? (callbackOrg, true)
+                : null;
+        }
+
         if (http.Request.RouteValues.TryGetValue("o", out var route))
         {
             return Guid.TryParse(route?.ToString(), out var routeOrg) ? (routeOrg, true) : null;

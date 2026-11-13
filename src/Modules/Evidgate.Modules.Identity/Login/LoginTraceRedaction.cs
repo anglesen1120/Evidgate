@@ -7,18 +7,22 @@ namespace Evidgate.Modules.Identity.Login;
 /// authorization code and no <c>state</c> is ever logged). The browser arrives at
 /// <c>/v1/auth/oidc/{provider}/callback?code=…&amp;state=…</c>; the ASP.NET Core instrumentation copies the
 /// query into the server span — <c>url.query</c> on its own, and inside <c>url.full</c>/<c>http.url</c> —
-/// so the two login routes have both taken away from the activity before it is exported.
+/// the two login routes have both taken away from the activity before it is exported.
 /// </summary>
 /// <remarks>
 /// The rule is a path prefix on a code constant, not a tag-value pattern: the redaction has to hold for a
-/// value the routes themselves receive from the client, and only these two routes carry an
-/// <c>authorization code</c>. Nothing else about the span changes, so a login span is still traceable by
-/// route, method, status code and duration.
+/// value the routes themselves receive from the client, and only these routes carry an
+/// <c>authorization code</c>. The GitHub install callback is included for the same reason: its query
+/// carries the OAuth <c>code</c> and the install <c>state</c>. Nothing else about the span changes, so a
+/// covered span is still traceable by route, method, status code and duration.
 /// </remarks>
 internal static class LoginTraceRedaction
 {
     /// <summary>The route prefix both federated-login routes are mounted under (<c>LoginEndpoints</c>).</summary>
     internal const string LoginPathPrefix = "/v1/auth/oidc/";
+
+    /// <summary>The GitHub install callback, whose query carries the OAuth <c>code</c> and the one-time <c>state</c>.</summary>
+    internal const string GitHubCallbackPath = "/v1/github/installations/callback";
 
     /// <summary>The span tag that carries the query string on its own.</summary>
     internal const string QueryTag = "url.query";
@@ -29,10 +33,12 @@ internal static class LoginTraceRedaction
     /// </summary>
     internal static readonly string[] UrlTags = ["url.full", "http.url"];
 
-    /// <summary>Whether <paramref name="path"/> is one of the two federated-login routes (their query is sensitive).</summary>
+    /// <summary>Whether <paramref name="path"/> is a route whose query carries an authorization code and a state.</summary>
     /// <param name="path">The request path (never the query string).</param>
     internal static bool IsLoginRoute(string? path) =>
-        !string.IsNullOrEmpty(path) && path.StartsWith(LoginPathPrefix, StringComparison.OrdinalIgnoreCase);
+        !string.IsNullOrEmpty(path)
+        && (path.StartsWith(LoginPathPrefix, StringComparison.OrdinalIgnoreCase)
+            || path.Equals(GitHubCallbackPath, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Removes the query of a login request from <paramref name="activity"/>: the dedicated

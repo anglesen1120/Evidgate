@@ -4,9 +4,8 @@ using Microsoft.Extensions.Options;
 namespace Evidgate.BuildingBlocks.SharedKernel.GitHub;
 
 /// <summary>
-/// Boot validation of the App client: both base addresses must stay on their pinned hosts, the App id must be the
-/// numeric id GitHub issued, and the client id and slug must be safe path segments. A message names the configuration
-/// key only — never a value.
+/// Boot validation of the App client's pinned hosts, numeric App id, OAuth client id and URL path slug.
+/// A message names the configuration key only — never a value.
 /// </summary>
 /// <remarks>
 /// A null, empty or whitespace App id counts as ABSENT: the client reports itself unconfigured and sends nothing, which
@@ -29,7 +28,7 @@ public sealed class GitHubOptionsValidator : IValidateOptions<GitHubOptions>
         CheckBaseUrl(failures, options.ApiBaseUrl, nameof(GitHubOptions.ApiBaseUrl), GitHubEndpoints.ApiHost, GitHubEndpoints.IsAllowedApiBase);
         CheckBaseUrl(failures, options.OAuthBaseUrl, nameof(GitHubOptions.OAuthBaseUrl), GitHubEndpoints.OAuthHost, GitHubEndpoints.IsAllowedOAuthBase);
         CheckAppId(failures, options.AppId);
-        CheckSegment(failures, options.ClientId, nameof(GitHubOptions.ClientId), MaxClientIdLength);
+        CheckClientId(failures, options.ClientId);
         CheckSegment(failures, options.AppSlug, nameof(GitHubOptions.AppSlug), MaxSlugLength);
 
         if (options.InstallationTokenSafetyMarginSeconds * 2 >= 3600)
@@ -68,6 +67,20 @@ public sealed class GitHubOptionsValidator : IValidateOptions<GitHubOptions>
             || id <= 0)
         {
             failures.Add($"{GitHubOptions.SectionName}:{nameof(GitHubOptions.AppId)} must be the numeric App id GitHub issued, of at most {MaxAppIdDigits} digits");
+        }
+    }
+
+    private static void CheckClientId(List<string> failures, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        if (value.Length > MaxClientIdLength
+            || value.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not ('.' or '-' or '_')))
+        {
+            failures.Add($"{GitHubOptions.SectionName}:{nameof(GitHubOptions.ClientId)} must be at most {MaxClientIdLength} characters of ASCII letters, digits, '.', '-' or '_'");
         }
     }
 

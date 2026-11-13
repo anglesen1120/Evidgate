@@ -150,11 +150,6 @@
           "Corvus.HighPerformance": "1.0.0"
         }
       },
-      "Microsoft.Bcl.Cryptography": {
-        "type": "Transitive",
-        "resolved": "10.0.2",
-        "contentHash": "LG9Yll3B5aNpxv0+D47g6LiOiKBIlodhcHdQwcYzo8VeexFLGqx5ymetmA2aBRyo9cCcWsQWrFsdbsr8LvmWDw=="
-      },
       "Microsoft.CodeAnalysis.Analyzers": {
         "type": "Transitive",
         "resolved": "5.3.0-2.25625.1",
@@ -237,28 +232,6 @@
         "contentHash": "I76SAZ95I5lYh4whVZvLpKhpvHI1o21FfGqiASU85GtIVA4ULv+TVIE5+swKhnC63+xI4XjCcIWa9LbyR3pFNw==",
         "dependencies": {
           "Microsoft.Extensions.Compliance.Abstractions": "10.10.0"
-        }
-      },
-      "Microsoft.IdentityModel.Abstractions": {
-        "type": "Transitive",
-        "resolved": "8.23.0",
-        "contentHash": "JjiBkKj12OKvuWr+kB5sQwb7fmWW5bi03Mq/rd2Fu/7YwZ1RWQO9KhI9lBxki4o1VvY0wzqny8c7nwx1uuZzVg=="
-      },
-      "Microsoft.IdentityModel.Logging": {
-        "type": "Transitive",
-        "resolved": "8.23.0",
-        "contentHash": "wSXXOoV4b4hhRcC492jyNBZkO0LWrcWtWP5Cl5ujrON3vTMlufXDT39gTZfBhFAZCV2XJtNU6DLHMDR6E9YpUg==",
-        "dependencies": {
-          "Microsoft.IdentityModel.Abstractions": "8.23.0"
-        }
-      },
-      "Microsoft.IdentityModel.Tokens": {
-        "type": "Transitive",
-        "resolved": "8.23.0",
-        "contentHash": "PUowLq8gqICt+oepHWmKBOJmnVmWoQ5dOVn2CgwFMBZZOAEMHgCQLWs8ONYdsjAyjhDHaFy+AAx0OMG/oV06Zw==",
-        "dependencies": {
-          "Microsoft.Bcl.Cryptography": "10.0.2",
-          "Microsoft.IdentityModel.Logging": "8.23.0"
         }
       },
       "NodaTime": {
@@ -351,11 +324,7 @@
         }
       },
       "evidgate.buildingblocks.sharedkernel": {
-        "type": "Project",
-        "dependencies": {
-          "Microsoft.Extensions.Http.Resilience": "[10.10.0, )",
-          "Microsoft.IdentityModel.JsonWebTokens": "[8.23.0, )"
-        }
+        "type": "Project"
       },
       "evidgate.modules.healing.contracts": {
         "type": "Project"
@@ -428,15 +397,6 @@
           "Microsoft.Extensions.AmbientMetadata.Application": "10.10.0",
           "Microsoft.Extensions.DependencyInjection.AutoActivation": "10.10.0",
           "Microsoft.Extensions.Telemetry.Abstractions": "10.10.0"
-        }
-      },
-      "Microsoft.IdentityModel.JsonWebTokens": {
-        "type": "CentralTransitive",
-        "requested": "[8.23.0, )",
-        "resolved": "8.23.0",
-        "contentHash": "ePEm+mv5iswzckE3mygh52uFUeQpVlHa1B10nS4jpEyNV5tL1mLgRS9U5sMaRlhsPRsZ1DJP0+FhxSrOIfMGIg==",
-        "dependencies": {
-          "Microsoft.IdentityModel.Tokens": "8.23.0"
         }
       },
       "Npgsql": {

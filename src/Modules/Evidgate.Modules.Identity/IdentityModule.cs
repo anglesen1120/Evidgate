@@ -3,6 +3,7 @@ using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
 using Evidgate.BuildingBlocks.SharedKernel.GitHub;
+using Evidgate.Modules.Identity.Application;
 using Evidgate.Modules.Identity.Application.Commands;
 using Evidgate.Modules.Identity.Authorization;
 using Evidgate.Modules.Identity.Ci;
@@ -188,6 +189,7 @@ internal static class IdentityModule
 
         services.TryAddSingleton<IGitHubOAuthClient, GitHubOAuthClient>();
         services.TryAddSingleton<IGitHubAppInstallations, GitHubAppInstallationsClient>();
+        services.TryAddScoped<GitHubInstallCompletion>();
 
         services.AddTaskHandler<GitHubInstallStatePurgePayload, GitHubInstallStatePurgeTaskHandler>();
         services.AddTaskSchedule(GitHubInstallStatePurges.Purge);

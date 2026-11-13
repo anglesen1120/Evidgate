@@ -1,10 +1,13 @@
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
+using Evidgate.Modules.Identity.Application;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Polly;
 
 namespace Evidgate.Modules.Identity.Infrastructure.GitHub;
 
@@ -65,7 +68,7 @@ internal sealed partial class GitHubOAuthClient(
         if (!GitHubJson.TryGetString(parsed.RootElement, "access_token", MaxTokenLength, out var token))
         {
             // GitHub answers 200 with an `error` member when it refuses a code; that is client input, not an outage.
-            return Result.Failure<string>(new("github_oauth_refused", "GitHub refused the authorization code.", 400));
+            return Result.Failure<string>(new(GitHubInstallationErrorCodes.OAuthRefused, "GitHub refused the authorization code.", 400));
         }
 
         return Result.Success(token);
@@ -135,6 +138,62 @@ internal sealed partial class GitHubOAuthClient(
         }
 
         return Result.Success<IReadOnlyList<GitHubUserInstallation>>(found);
+    }
+
+    /// <inheritdoc />
+    public async Task RevokeUserTokenAsync(string userToken, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(userToken);
+
+        var configuration = options.Value;
+        if (string.IsNullOrWhiteSpace(configuration.ClientId)
+            || string.IsNullOrWhiteSpace(configuration.ClientSecret)
+            || !TryBaseUri(configuration.ApiBaseUrl, GitHubEndpoints.IsAllowedApiBase, out var baseUri))
+        {
+            return;
+        }
+
+        using var deadline = Deadline(configuration, cancellationToken);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            new Uri(baseUri, string.Create(
+                CultureInfo.InvariantCulture,
+                $"applications/{configuration.ClientId}/token")))
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["access_token"] = userToken,
+                }),
+                Encoding.UTF8,
+                GitHubEndpoints.ApiMediaType),
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue(
+            "Basic",
+            Convert.ToBase64String(Encoding.UTF8.GetBytes(
+                string.Create(CultureInfo.InvariantCulture, $"{configuration.ClientId}:{configuration.ClientSecret}"))));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(GitHubEndpoints.ApiMediaType));
+        request.Headers.Add("X-GitHub-Api-Version", GitHubEndpoints.ApiVersion);
+        request.Headers.UserAgent.Add(new ProductInfoHeaderValue(GitHubEndpoints.UserAgent, "1.0"));
+
+        var client = clients.CreateClient(GitHubHttpClients.Api);
+
+        try
+        {
+            using var response = await client
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token)
+                .ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                LogRevokeFailed((int)response.StatusCode);
+            }
+        }
+        catch (Exception exception) when (
+            exception is HttpRequestException or TimeoutException or OperationCanceledException or ExecutionRejectedException)
+        {
+            LogRevokeFailed(0);
+        }
     }
 
     /// <inheritdoc />
@@ -215,7 +274,8 @@ internal sealed partial class GitHubOAuthClient(
                 .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadlineToken)
                 .ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is HttpRequestException or TimeoutException or OperationCanceledException)
+        catch (Exception exception) when (
+            exception is HttpRequestException or TimeoutException or OperationCanceledException or ExecutionRejectedException)
         {
             response = null;
         }
@@ -292,4 +352,10 @@ internal sealed partial class GitHubOAuthClient(
         Level = LogLevel.Warning,
         Message = "GitHub call {Operation} failed with {Status} (code {Code}).")]
     private partial void LogCallFailed(string operation, int status, string code);
+
+    [LoggerMessage(
+        EventId = 4712,
+        Level = LogLevel.Debug,
+        Message = "The OAuth user token revoke answered {Status}; the token expires on its own.")]
+    private partial void LogRevokeFailed(int status);
 }

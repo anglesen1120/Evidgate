@@ -5,6 +5,7 @@ using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Polly;
 
 namespace Evidgate.Modules.Identity.Infrastructure.GitHub;
 
@@ -64,7 +65,8 @@ internal sealed partial class GitHubAppInstallationsClient(
                 .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token)
                 .ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is HttpRequestException or TimeoutException or OperationCanceledException)
+        catch (Exception exception) when (
+            exception is HttpRequestException or TimeoutException or OperationCanceledException or ExecutionRejectedException)
         {
             response = null;
         }
@@ -138,7 +140,18 @@ internal sealed partial class GitHubAppInstallationsClient(
             granted[entry.Name] = level;
         }
 
-        return new GitHubAppInstallation(id, login, accountId, type, granted);
+        DateTimeOffset? suspendedAt = null;
+        if (root.TryGetProperty("suspended_at", out var suspended) && suspended.ValueKind != JsonValueKind.Null)
+        {
+            if (suspended.ValueKind != JsonValueKind.String || !suspended.TryGetDateTimeOffset(out var parsed))
+            {
+                return null;
+            }
+
+            suspendedAt = parsed;
+        }
+
+        return new GitHubAppInstallation(id, login, accountId, type, granted) { SuspendedAt = suspendedAt };
     }
 
     [LoggerMessage(

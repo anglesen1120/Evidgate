@@ -25,7 +25,11 @@ internal sealed record GitHubAppInstallation(
     string AccountLogin,
     long AccountId,
     string AccountType,
-    IReadOnlyDictionary<string, string> Permissions);
+    IReadOnlyDictionary<string, string> Permissions)
+{
+    /// <summary>When GitHub reports the installation suspended, or null while it is live.</summary>
+    public DateTimeOffset? SuspendedAt { get; init; }
+}
 
 /// <summary>
 /// The OAuth half of the install callback: exchange the code, then prove the user reaches the installation and
@@ -43,6 +47,12 @@ internal interface IGitHubOAuthClient
     Task<Result<IReadOnlyList<GitHubUserInstallation>>> ListInstallationsAsync(
         string userToken,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Revokes a user access token at GitHub (<c>DELETE /applications/{client_id}/token</c>). Best effort: the
+    /// callback has already decided its answer, and GitHub expires the token on its own.
+    /// </summary>
+    Task RevokeUserTokenAsync(string userToken, CancellationToken cancellationToken);
 
     /// <summary>
     /// The two-part ownership rule: a User account must equal the OAuth user, an Organization account must report an

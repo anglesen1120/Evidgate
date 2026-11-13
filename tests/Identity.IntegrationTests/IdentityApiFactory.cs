@@ -26,6 +26,11 @@ namespace Identity.IntegrationTests;
 /// <param name="Principal">The resolved caller, or null when the host resolved none.</param>
 /// <param name="Evaluator">A substitute evaluator, or null to keep the module's own (02.2.1-T2.2).</param>
 /// <param name="CustomRolesEnabled">The <c>EVIDGATE__IDENTITY__CUSTOMROLESENABLED</c> value the host binds.</param>
+/// <param name="ResolveTenant">
+/// When true the host's own resolution does its job: the test middleware publishes neither the tenant nor the
+/// principal, and the authenticated caller arrives through a registered <c>ICallerAuthenticator</c> instead — the
+/// deployed path. The default keeps the older substitution for the suites that act before 02.6.2.
+/// </param>
 /// <param name="Services">Last-minute registrations of this host only; the last registration wins a single resolve.</param>
 internal sealed record IdentityHostSetup(
     Guid OrgId,
@@ -33,6 +38,7 @@ internal sealed record IdentityHostSetup(
     IRequestPrincipal? Principal = null,
     IPermissionEvaluator? Evaluator = null,
     bool CustomRolesEnabled = false,
+    bool ResolveTenant = false,
     Action<IServiceCollection>? Services = null);
 
 /// <summary>
@@ -149,6 +155,13 @@ internal sealed class IdentityApiFactory : WebApplicationFactory<Program>
         {
             services.AddSingleton<IStartupFilter>(new RequestContextStartupFilter(_setup));
 
+            if (_setup.ResolveTenant && _setup.Principal is { } resolved)
+            {
+                // The deployed path: no published tenant, no published principal — the host's filter authenticates
+                // the caller and resolves the org, then publishes both for the pipeline.
+                services.AddSingleton<ICallerAuthenticator>(new FixedCallerAuthenticator(resolved));
+            }
+
             if (_setup.Evaluator is { } evaluator)
             {
                 // Appended after the module's Replace, so a substituted evaluator
@@ -180,6 +193,12 @@ internal sealed class IdentityApiFactory : WebApplicationFactory<Program>
         {
             app.Use(async (context, nextMiddleware) =>
             {
+                if (setup.ResolveTenant)
+                {
+                    await nextMiddleware().ConfigureAwait(false);
+                    return;
+                }
+
                 var tenant = context.RequestServices.GetRequiredService<IRequestTenantContextSetter>();
                 using var tenantScope = tenant.Publish(setup.OrgId, setup.ProjectId);
 
@@ -251,4 +270,17 @@ internal sealed class FixedPermissionEvaluator(string denyCode) : IPermissionEva
         IRequestPrincipal principal,
         CancellationToken cancellationToken) =>
         ValueTask.FromResult(new CallerAccess(null, new HashSet<string>(StringComparer.Ordinal)));
+}
+
+/// <summary>
+/// The member credential of a <see cref="IdentityHostSetup.ResolveTenant"/> host: it vouches for one fixed
+/// principal and lets the host's own filter resolve the org, so a route that only works on a pre-published tenant
+/// fails here. A request with no tenant header and no route org therefore has no org, which is the point.
+/// </summary>
+/// <param name="principal">The caller every request of the host acts as.</param>
+internal sealed class FixedCallerAuthenticator(IRequestPrincipal principal) : ICallerAuthenticator
+{
+    /// <inheritdoc />
+    public ValueTask<AuthenticatedCaller?> AuthenticateAsync(ICallerRequest request, CancellationToken cancellationToken) =>
+        ValueTask.FromResult<AuthenticatedCaller?>(new AuthenticatedCaller(principal));
 }

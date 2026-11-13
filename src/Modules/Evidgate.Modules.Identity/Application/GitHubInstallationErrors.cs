@@ -20,6 +20,12 @@ internal static class GitHubInstallationErrorCodes
 
     /// <summary>409: the org already has an installation to disconnect first.</summary>
     public const string AlreadyInstalled = "already_installed";
+
+    /// <summary>429: this user already holds the maximum number of unspent install states.</summary>
+    public const string TooManyFlows = "install_flow_limited";
+
+    /// <summary>400: GitHub refused the authorization code, or the code exchange answered no token.</summary>
+    public const string OAuthRefused = "github_oauth_refused";
 }
 
 /// <summary>The refusals of the GitHub installation routes, in one place so their codes cannot drift apart.</summary>
@@ -39,7 +45,9 @@ internal static class GitHubInstallationErrors
     /// <summary>409: another org, or this org with another installation, already holds the binding.</summary>
     public static Error Bound { get; } = Error.Conflict(
         GitHubInstallationErrorCodes.InstallationBound,
-        "this installation or this org is already bound; disconnect the existing installation first");
+        "this installation is already bound to another org, this org already holds a live installation, or a "
+        + "disconnected row still holds this GitHub installation id; disconnect the live one, or install the App "
+        + "again at GitHub");
 
     /// <summary>409: the installation exists but may not mint tokens or be read.</summary>
     public static Error Unavailable { get; } = Error.Conflict(
@@ -63,4 +71,11 @@ internal static class GitHubInstallationErrors
         "request_invalid",
         "GitHub refused the authorization code; start the install flow again",
         StatusCodes.Status400BadRequest);
+
+    /// <summary>429: the user holds the maximum number of unspent install states; one expires or is spent.</summary>
+    public static Error TooManyFlows { get; } = new(
+        GitHubInstallationErrorCodes.TooManyFlows,
+        "this user has too many open install flows; finish one or wait for one to expire",
+        StatusCodes.Status429TooManyRequests,
+        Retryable: true);
 }

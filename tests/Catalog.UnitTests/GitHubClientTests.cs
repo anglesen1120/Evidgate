@@ -124,7 +124,11 @@ public sealed class GitHubClientTests
 
             // A concurrent call replaced the cached token while the refused call was in flight.
             bench.Tokens.Invalidate("ghs_1").ShouldBeTrue();
-            var refreshed = await bench.Tokens.GetAsync(7, GitHubFeature.Catalog, [5], null, CancellationToken.None);
+            var refreshed = await bench.Tokens.GetAsync(
+                GitHubTestBench.OrgId,
+                GitHubFeature.Catalog,
+                [5],
+                CancellationToken.None);
             refreshed.Value.Token.ShouldBe("ghs_2");
 
             return GitHubResponses.Status(HttpStatusCode.Unauthorized);
@@ -422,12 +426,14 @@ public sealed class GitHubClientTests
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json(GitHubResponses.RepositoryJson)));
         (await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None)).IsSuccess.ShouldBeTrue();
 
+        var requestsBefore = bench.Handler.Requests.Count;
+
         bench.Resolver.Failure = Result.Failure<long>(Error.Conflict("installation_unavailable", "the org has no active installation"));
         var result = await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe("installation_unavailable");
-        bench.Handler.Requests.ShouldNotContain(request => request.Method == HttpMethod.Get && request.Uri.AbsolutePath == "/repositories/5");
+        bench.Handler.Requests.Count.ShouldBe(requestsBefore);
     }
 
 }

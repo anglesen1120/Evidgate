@@ -226,7 +226,11 @@ internal sealed class GitHubTestBench
 
     private const string AppId = "12345";
 
-    internal GitHubTestBench(StubHandler handler, GitHubOptions? options = null, string? pem = null)
+    /// <param name="handler">The stub every GitHub call reaches.</param>
+    /// <param name="options">The bound App options; the configured default when null.</param>
+    /// <param name="pem">A private key to use instead of the process-local one.</param>
+    /// <param name="withResolver">False builds the token source a host has when it only mints for an installation id it already holds.</param>
+    internal GitHubTestBench(StubHandler handler, GitHubOptions? options = null, string? pem = null, bool withResolver = true)
     {
         Handler = handler;
         Options = options ?? DefaultOptions(pem: pem ?? TestPem);
@@ -247,7 +251,7 @@ internal sealed class GitHubTestBench
             Microsoft.Extensions.Options.Options.Create(Options),
             Time,
             TokenLogs,
-            Resolver);
+            withResolver ? Resolver : null);
         Client = new GitHubClient(http, Tokens, AppTokens, Microsoft.Extensions.Options.Options.Create(Options), Time, ClientLogs);
     }
 
