@@ -157,6 +157,7 @@ export const RUN_STATE: RunStateDto = {
     is_fork: false,
   },
   unverified_ref: false,
+  advisory_only: false,
   manifest_hash: 'sha256:018f000000000000000000000000000000000000000000000000000000000000',
   suite_revision_id: '018f0000-0000-7000-8000-00000000b001',
   policy_revision_id: '018f0000-0000-7000-8000-00000000a004',

@@ -147,6 +147,13 @@ internal static class CoreEvaluation
             return (EvaluationDecision.Inconclusive, ReasonSet.Normalize(reasons));
         }
 
+        if (evidence.AdvisoryOnly)
+        {
+            // Complete, clean evidence from a fork run still cannot release anything: the verdict stays open and says why.
+            reasons.Add(EvaluationReason.AdvisoryOnlyRun);
+            return (EvaluationDecision.Inconclusive, ReasonSet.Normalize(reasons));
+        }
+
         reasons.Add(evidence.ExpectedExecutionCount == 0
             ? EvaluationReason.EmptySuiteAllowed
             : EvaluationReason.ScopeBuildPolicyPinned);

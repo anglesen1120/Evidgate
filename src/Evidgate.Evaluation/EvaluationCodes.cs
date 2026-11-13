@@ -64,6 +64,7 @@ public static class EvaluationCodes
         EvaluationReason.CriticalNotExecuted => "critical_not_executed",
         EvaluationReason.UnknownRequiredArtifactKind => "unknown_required_artifact_kind",
         EvaluationReason.FlakyBudgetExceeded => "flaky_budget_exceeded",
+        EvaluationReason.AdvisoryOnlyRun => "advisory_only_run",
         _ => throw new ArgumentOutOfRangeException(nameof(value), value, "not a reason code"),
     };
 

@@ -54,6 +54,10 @@ export type RunStateDto = {
      */
     unverified_ref: boolean;
     /**
+     * Derived from `ref.is_fork`, never stored separately (05.2.2-T3.2). True marks a fork run: it is shown and evaluated, but it is never bound to a release (422 `fork_run_not_bindable`) and its evaluation never passes (reason `advisory_only_run`). No setting turns this off.
+     */
+    advisory_only: boolean;
+    /**
      * The pinned manifest's `manifest_hash` (F44, S143), joined from `manifest` through the run's `manifest_id`. Not null for any stored run: `run.manifest_id` is not null and its FK targets `manifest`.
      */
     manifest_hash: string;
