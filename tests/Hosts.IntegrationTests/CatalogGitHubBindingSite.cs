@@ -263,6 +263,9 @@ internal static class CatalogGitHubBindingSeed
 
         if (setup.RepositoryBoundByAnotherProject)
         {
+            var siblingProject = Guid.CreateVersion7();
+            await ExecuteAsync(connection, "insert into public.project (id, org_id, name, slug) values (@id, @org, 'sibling', @slug)", cancellationToken,
+                ("id", siblingProject), ("org", org), ("slug", "sibling-" + siblingProject.ToString("N")));
             await ExecuteAsync(
                 connection,
                 """
@@ -271,7 +274,7 @@ internal static class CatalogGitHubBindingSeed
                 values (@id, @org, @project, @installation_id, @repository_id, 'main', @secret_ref)
                 """,
                 cancellationToken,
-                ("id", Guid.CreateVersion7()), ("org", org), ("project", otherProject),
+                ("id", Guid.CreateVersion7()), ("org", org), ("project", siblingProject),
                 ("installation_id", CatalogGitHubBindingSite.InstallationNumber.ToString(CultureInfo.InvariantCulture)),
                 ("repository_id", CatalogGitHubBindingSite.RepositoryNumber.ToString(CultureInfo.InvariantCulture)),
                 ("secret_ref", string.Create(CultureInfo.InvariantCulture, $"secret:gh_wh_{Guid.CreateVersion7():N}")));
