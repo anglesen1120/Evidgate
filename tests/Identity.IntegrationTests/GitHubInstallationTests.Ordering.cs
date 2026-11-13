@@ -79,7 +79,7 @@ public sealed partial class GitHubInstallationTests
         try
         {
             responses.Count(response => response.StatusCode == HttpStatusCode.OK).ShouldBe(1);
-            responses.Count(response => response.StatusCode == HttpStatusCode.Conflict).ShouldBe(7);
+            responses.Count(response => response.StatusCode == HttpStatusCode.TooManyRequests).ShouldBe(7);
         }
         finally
         {

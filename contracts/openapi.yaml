@@ -4426,7 +4426,7 @@ paths:
       summary: Complete the install — consume the state, verify the installation and bind it (02.4.3)
       description: >-
         The browser lands here after GitHub's install and authorization steps. The `state` must be one this
-        server issued to this org and this user, unused and unexpired (400 `state_invalid` otherwise); the
+        server issued to this org and this user, unused and unexpired (400 `state_invalid` otherwise; a `state` that names no org leaves the request without a tenant and answers 401); the
         installation is then verified through `GET /app/installations/{id}` with the App JWT, the code is
         exchanged once for a user token, and the row is written only when the user reaches the installation in
         `GET /user/installations` AND administers its account (403 `installation_not_owned`). A binding already

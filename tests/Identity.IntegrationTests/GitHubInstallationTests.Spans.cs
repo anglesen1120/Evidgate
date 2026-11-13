@@ -39,7 +39,7 @@ public sealed partial class GitHubInstallationTests
     {
         // Routing serves both forms, so a rule keyed on the exact path would leak the code and the state on one of
         // them while passing on the other.
-        using var activity = CallbackActivity();
+        using var activity = CallbackActivity(path);
 
         LoginTraceRedaction.Redact(activity, path).ShouldBeTrue();
 
@@ -93,10 +93,10 @@ public sealed partial class GitHubInstallationTests
     }
 
     /// <summary>An activity shaped like the instrumentation's callback span: query tag plus both URL tags.</summary>
-    private static Activity CallbackActivity()
+    private static Activity CallbackActivity(string path = CallbackPath)
     {
-        var url = "https://app.evidgate.test" + CallbackPath + "?code=" + SpanCode + "&state=" + SpanState;
-        var activity = new Activity("HTTP GET " + CallbackPath);
+        var url = "https://app.evidgate.test" + path + "?code=" + SpanCode + "&state=" + SpanState;
+        var activity = new Activity("HTTP GET " + path);
         activity.SetTag(LoginTraceRedaction.QueryTag, "?code=" + SpanCode + "&state=" + SpanState);
         activity.SetTag("url.full", url);
         activity.SetTag("http.url", url);
