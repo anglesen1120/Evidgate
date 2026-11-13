@@ -124,6 +124,142 @@ public sealed class ManagementListenerProcessTests
         Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Management_Address_Can_Be_IPv6_Loopback()
+    {
+        var publicPort = HostLocator.FreePort();
+        var managementPort = HostLocator.FreePort();
+        using var process = StartApi(
+            publicPort,
+            managementPort,
+            configure: environment => environment["EVIDGATE__API__MANAGEMENTADDRESS"] = "::1");
+
+        try
+        {
+            await WaitForLiveAsync(publicPort);
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+
+            using var managementMetrics = await client.GetAsync(
+                $"http://[::1]:{managementPort}/metrics",
+                TestContext.Current.CancellationToken);
+            using var managementIpv4 = await TryGetAsync(client, $"http://127.0.0.1:{managementPort}/metrics");
+
+            Assert.Equal(HttpStatusCode.OK, managementMetrics.StatusCode);
+            Assert.Null(managementIpv4);
+        }
+        finally
+        {
+            await ProcessRunner.StopAsync(process);
+        }
+    }
+
+    [Fact]
+    public async Task Management_Listener_Keeps_The_HTTPS_PORTS_Listener()
+    {
+        var publicPort = HostLocator.FreePort();
+        var managementPort = HostLocator.FreePort();
+        var pfxPath = Path.Combine(Path.GetTempPath(), $"evidgate-https-{Guid.NewGuid():N}.pfx");
+        const string pfxPassword = "test-only";
+        using (var key = System.Security.Cryptography.RSA.Create(2048))
+        {
+            var request = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                "CN=localhost",
+                key,
+                System.Security.Cryptography.HashAlgorithmName.SHA256,
+                System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+            using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+            await File.WriteAllBytesAsync(
+                pfxPath,
+                certificate.Export(System.Security.Cryptography.X509Certificates.X509ContentType.Pfx, pfxPassword),
+                TestContext.Current.CancellationToken);
+        }
+
+        using var process = StartApi(
+            publicPort,
+            managementPort,
+            configure: environment =>
+            {
+                environment.Remove("ASPNETCORE_URLS");
+                environment["ASPNETCORE_HTTPS_PORTS"] = publicPort.ToString(CultureInfo.InvariantCulture);
+                environment["ASPNETCORE_Kestrel__Certificates__Default__Path"] = pfxPath;
+                environment["ASPNETCORE_Kestrel__Certificates__Default__Password"] = pfxPassword;
+            });
+
+        try
+        {
+            using var handler = new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) };
+            await WaitForAsync(client, $"https://127.0.0.1:{publicPort}/internal/health/live");
+
+            using var publicMetrics = await client.GetAsync(
+                $"https://127.0.0.1:{publicPort}/metrics",
+                TestContext.Current.CancellationToken);
+            using var managementMetrics = await client.GetAsync(
+                $"http://127.0.0.1:{managementPort}/metrics",
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(HttpStatusCode.NotFound, publicMetrics.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, managementMetrics.StatusCode);
+        }
+        finally
+        {
+            await ProcessRunner.StopAsync(process);
+            File.Delete(pfxPath);
+        }
+    }
+
+    [Fact]
+    public async Task Management_Port_With_Kestrel_Endpoints_Is_Refused_Not_Merged()
+    {
+        var publicPort = HostLocator.FreePort();
+        var managementPort = HostLocator.FreePort();
+        using var process = StartApi(
+            publicPort,
+            managementPort,
+            configure: environment =>
+            {
+                environment.Remove("ASPNETCORE_URLS");
+                environment["Kestrel__Endpoints__Public__Url"] = $"http://127.0.0.1:{publicPort}";
+            });
+
+        var result = await ProcessRunner.WaitForExitAsync(process, TestContext.Current.CancellationToken);
+
+        var output = result.Stdout + result.Stderr;
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Configuration invalid:", output, StringComparison.Ordinal);
+        Assert.Contains("Kestrel:Endpoints", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
+    }
+
+    private static async Task<HttpResponseMessage?> TryGetAsync(HttpClient client, string url)
+    {
+        try
+        {
+            return await client.GetAsync(url, TestContext.Current.CancellationToken);
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+    }
+
+    private static async Task WaitForAsync(HttpClient client, string url)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (DateTime.UtcNow < deadline)
+        {
+            using var response = await TryGetAsync(client, url);
+            if (response is { IsSuccessStatusCode: true })
+            {
+                return;
+            }
+
+            await Task.Delay(250, TestContext.Current.CancellationToken);
+        }
+
+        throw new TimeoutException($"the Api did not answer {url} within 30 s");
+    }
+
     private static async Task<string> SendHeadersOnlyAsync(int port, long contentLength)
     {
         using var socket = new TcpClient();
@@ -142,7 +278,11 @@ public sealed class ManagementListenerProcessTests
         return Encoding.UTF8.GetString(buffer, 0, read);
     }
 
-    private static System.Diagnostics.Process StartApi(int publicPort, int? managementPort, bool httpPorts = false)
+    private static System.Diagnostics.Process StartApi(
+        int publicPort,
+        int? managementPort,
+        bool httpPorts = false,
+        Action<Dictionary<string, string>>? configure = null)
     {
         var environment = new Dictionary<string, string>
         {
@@ -169,6 +309,8 @@ public sealed class ManagementListenerProcessTests
         {
             environment["EVIDGATE__API__MANAGEMENTPORT"] = port.ToString(CultureInfo.InvariantCulture);
         }
+
+        configure?.Invoke(environment);
 
         return ProcessRunner.Start(HostLocator.AppHost("Evidgate.Api"), environment);
     }
