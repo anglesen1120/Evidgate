@@ -1,4 +1,4 @@
-using System.Globalization;
+using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 
 namespace Evidgate.Modules.Catalog.Infrastructure.GitHub;
 
@@ -33,15 +33,4 @@ internal sealed record GitHubTree(string Sha, bool Truncated, IReadOnlyList<GitH
 /// <param name="Content">The decoded content, at most <see cref="GitHubOptions.MaxBlobBytes"/>.</param>
 internal sealed record GitHubBlob(string Sha, long Size, byte[] Content);
 
-/// <summary>
-/// One installation access token. The value is derived, short-lived state: it is never persisted,
-/// and <see cref="ToString"/> redacts it so an interpolated log line cannot leak it.
-/// </summary>
-/// <param name="Token">The bearer value GitHub issued.</param>
-/// <param name="ExpiresAt">Expiry GitHub declared.</param>
-internal sealed record GitHubInstallationToken(string Token, DateTimeOffset ExpiresAt)
-{
-    /// <inheritdoc />
-    public override string ToString() =>
-        string.Create(CultureInfo.InvariantCulture, $"GitHubInstallationToken(expires_at={ExpiresAt:O}, redacted)");
-}
+

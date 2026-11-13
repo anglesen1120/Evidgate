@@ -2,4 +2,16 @@
   <PropertyGroup>
     <RootNamespace>Evidgate.BuildingBlocks.SharedKernel</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- The one GitHub App client lives here so Catalog and Identity share one JWT source, one token cache and one
+         response reader. The framework reference supplies HttpClient, options, logging and the meter factory; the
+         resilience handler and the RS256 JWT library are the two packages the client needs. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Catalog.UnitTests" />
+    <InternalsVisibleTo Include="Identity.IntegrationTests" />
+  </ItemGroup>
 </Project>

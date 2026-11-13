@@ -233,4 +233,22 @@ public sealed class SecretRedactorShapeTests
 
         Assert.Equal(once, Redactor.RedactText(once));
     }
+    /// <summary>
+    /// 02.4.3 AC4: an installation token, a user token or the App JWT never survive a redacted log line, in free
+    /// text or behind a header name.
+    /// </summary>
+    [Theory]
+    [InlineData("minted ghs_1234567890abcdefABCDEF123456 for repo 42")]
+    [InlineData("X-GitHub-Token: gho_1234567890abcdefABCDEF123456")]
+    [InlineData("app jwt eyJhbGciOiJSUzI1NiJ9.eyJpc3MiOiIxMjM0NSJ9.c2lnbmF0dXJlLXZhbHVl")]
+    public void A_GitHub_Credential_Shape_Is_Masked(string text)
+    {
+        var redacted = Redactor.RedactText(text);
+
+        Assert.DoesNotContain("ghs_1234567890abcdefABCDEF123456", redacted, StringComparison.Ordinal);
+        Assert.DoesNotContain("gho_1234567890abcdefABCDEF123456", redacted, StringComparison.Ordinal);
+        Assert.DoesNotContain("eyJhbGciOiJSUzI1NiJ9", redacted, StringComparison.Ordinal);
+        Assert.Contains(SecretRedactor.Mask, redacted, StringComparison.Ordinal);
+    }
+
 }

@@ -4379,6 +4379,169 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /github/installations/start:
+    post:
+      operationId: startGitHubInstall
+      tags: [identity]
+      summary: Start the GitHub App install flow; answers the install URL carrying a single-use state (02.4.3)
+      description: >-
+        Draws a single-use `state` nonce, stores only its SHA-256 bound to the caller's org and user for ten
+        minutes, and answers the GitHub install URL carrying it. Nothing is bound by this call: the callback
+        consumes the state, so a replay answers 400 `state_invalid`. Answers 409 `already_installed` when the
+        org already has an installation to disconnect first, and 503 `github_not_configured` when this host has
+        no App id, client id or slug.
+      x-permission: ci_binding:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '200':
+          description: The install URL; the nonce it carries is never logged or stored in clear
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              description: Always `no-store`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubInstallStartResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /github/installations/callback:
+    get:
+      operationId: completeGitHubInstall
+      tags: [identity]
+      summary: Complete the install — consume the state, verify the installation and bind it (02.4.3)
+      description: >-
+        The browser lands here after GitHub's install and authorization steps. The `state` must be one this
+        server issued to this org and this user, unused and unexpired (400 `state_invalid` otherwise); the
+        installation is then verified through `GET /app/installations/{id}` with the App JWT, the code is
+        exchanged once for a user token, and the row is written only when the user reaches the installation in
+        `GET /user/installations` AND administers its account (403 `installation_not_owned`). A binding already
+        held by another org, or a second live installation for this org, answers 409 `installation_bound`.
+        Neither the code nor any token is stored or echoed.
+      x-permission: ci_binding:write
+      x-version: v1
+      parameters:
+        - name: installation_id
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+            maxLength: 512
+        - name: state
+          in: query
+          required: true
+          description: The nonce the start route issued; only its SHA-256 exists in the database.
+          schema:
+            type: string
+            maxLength: 256
+      responses:
+        '200':
+          description: The bound installation
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubInstallationView'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /github/installations:
+    get:
+      operationId: getGitHubInstallation
+      tags: [identity]
+      summary: The org's GitHub installation (02.4.3)
+      description: >-
+        Answers the bound installation, or 404 when the org has none. A suspended or deleted installation
+        answers 409 `installation_unavailable`, because a binding that cannot mint tokens must not read as
+        healthy. The row is scoped to the caller's tenant by RLS, so another org's installation is the same 404.
+      x-permission: project:read
+      x-version: v1
+      responses:
+        '200':
+          description: The installation
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitHubInstallationView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+  /github/installations/{i}:
+    delete:
+      operationId: disconnectGitHubInstall
+      tags: [identity]
+      summary: Disconnect the installation from this org (02.4.3)
+      description: >-
+        Marks the row deleted, which is terminal: reinstalling creates a new row. The cached installation
+        tokens of this installation are flushed in the same request. The App itself stays installed at GitHub;
+        uninstalling there is the customer's action. An unknown or already disconnected id answers 404.
+      x-permission: ci_binding:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/GitHubInstallationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      responses:
+        '204':
+          description: Installation disconnected
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/ingest-tokens:
     post:
       operationId: createIngestToken
@@ -9516,6 +9679,16 @@ components:
         current tag in `error.details`, and nothing is written.
       schema:
         type: string
+    GitHubInstallationId:
+      name: i
+      in: path
+      required: true
+      description: >-
+        The row id the view route returns as `id` (02.4.3). A value that is not a uuid, or names no non-deleted
+        installation of the caller's org, answers 404 `not_found`; disconnect never answers the binding 400.
+      schema:
+        type: string
+        format: uuid
   headers:
     XRequestId:
       description: Server request id; echoed in `error.request_id` (00 §9.1/§9.2).
@@ -14270,6 +14443,46 @@ components:
           format: int64
           minimum: 0
           description: Projects whose counter for this metric warned without blocking, that is `warned_at` is set and `blocked_at` is null.
+    GitHubInstallStartResponse:
+      type: object
+      description: >-
+        The install URL the caller's browser is sent to (02.4.3). It carries the single-use `state`; the nonce is never
+        returned separately, logged, or stored in clear text.
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: The GitHub install URL, `https://github.com/apps/{slug}/installations/new?state={nonce}`.
+    GitHubInstallationView:
+      type: object
+      description: >-
+        The org's bound GitHub App installation (02.4.3). No secret exists in the row, so every member with
+        `project:read` may read it.
+      additionalProperties: false
+      required: [id, installation_id, account_login, state, permissions]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The row id to disconnect with; it changes when the org reinstalls.
+        installation_id:
+          type: integer
+          format: int64
+          description: The numeric GitHub installation id.
+        account_login:
+          type: string
+          description: Login of the user or organization account the App is installed on.
+        state:
+          type: string
+          enum: [active, suspended, deleted]
+          description: Only `active` is served by the view route; the other two answer 409.
+        permissions:
+          type: object
+          additionalProperties:
+            type: string
+          description: The repository permission map GitHub reported when the installation was verified.
 
 security:
   - sessionCookie: []

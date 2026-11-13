@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Microsoft.Extensions.Options;
 using Shouldly;

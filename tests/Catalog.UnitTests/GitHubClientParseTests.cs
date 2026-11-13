@@ -1,4 +1,5 @@
 using System.Text;
+using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Shouldly;
 using Xunit;
@@ -17,7 +18,7 @@ public sealed class GitHubClientParseTests
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json(
             $$"""{"sha":"{{GitHubReadStubs.ObjectSha}}","truncated":true,"tree":[{{GitHubReadStubs.Entry("src/a.ts")}}]}""")));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(GitHubTestBench.OrgId, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         result.Value.Truncated.ShouldBeTrue();
@@ -32,7 +33,7 @@ public sealed class GitHubClientParseTests
                 $$"""{"sha":"{{GitHubReadStubs.ObjectSha}}","truncated":false,"tree":[{{GitHubReadStubs.Entry("a")}},{{GitHubReadStubs.Entry("b")}},{{GitHubReadStubs.Entry("c")}}]}""")),
             new GitHubOptions { AppId = "12345", MaxTreeEntries = 2 });
 
-        var result = await bench.Client.GetTreeAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(GitHubTestBench.OrgId, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.ResponseTooLarge);
     }
@@ -43,7 +44,7 @@ public sealed class GitHubClientParseTests
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json(
             $$"""{"sha":"{{GitHubReadStubs.ObjectSha}}","truncated":false,"tree":[{{GitHubReadStubs.Entry("../../etc/passwd")}}]}""")));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(GitHubTestBench.OrgId, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.ResponseInvalid);
     }
@@ -55,7 +56,7 @@ public sealed class GitHubClientParseTests
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json(
             $$"""{"sha":"{{GitHubReadStubs.ObjectSha}}","encoding":"base64","size":5,"content":"{{content}}"}""")));
 
-        var result = await bench.Client.GetBlobAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetBlobAsync(GitHubTestBench.OrgId, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         result.Value.Size.ShouldBe(5);
@@ -69,7 +70,7 @@ public sealed class GitHubClientParseTests
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json(
             $$"""{"sha":"{{GitHubReadStubs.ObjectSha}}","encoding":"base64","size":100,"content":"{{oversized}}"}""")));
 
-        var result = await bench.Client.GetBlobAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetBlobAsync(GitHubTestBench.OrgId, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.ResponseTooLarge);
     }
@@ -84,7 +85,7 @@ public sealed class GitHubClientParseTests
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json(
             $$"""{"sha":"{{GitHubReadStubs.ObjectSha}}","encoding":"base64","size":64,"content":"{{content.Replace("\n", "\\n", StringComparison.Ordinal)}}"}""")));
 
-        var result = await bench.Client.GetBlobAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetBlobAsync(GitHubTestBench.OrgId, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         result.Value.Content.Length.ShouldBe(64);
@@ -99,7 +100,7 @@ public sealed class GitHubClientParseTests
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json(
             $$"""{"sha":"{{GitHubReadStubs.ObjectSha}}","encoding":"base64","size":64,"content":"{{oversized}}"}""")));
 
-        var result = await bench.Client.GetBlobAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetBlobAsync(GitHubTestBench.OrgId, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.ResponseTooLarge);
     }

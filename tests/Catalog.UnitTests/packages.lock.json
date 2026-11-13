@@ -553,7 +553,11 @@
         }
       },
       "evidgate.buildingblocks.sharedkernel": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Http.Resilience": "[10.10.0, )",
+          "Microsoft.IdentityModel.JsonWebTokens": "[8.23.0, )"
+        }
       },
       "evidgate.modules.catalog": {
         "type": "Project",

@@ -1,5 +1,8 @@
+using System.Diagnostics.Metrics;
 using System.Net;
 using System.Text;
+using Evidgate.BuildingBlocks.SharedKernel.GitHub;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Microsoft.Extensions.Http;
@@ -38,6 +41,26 @@ internal sealed class StubClientFactory(HttpClient client) : IHttpClientFactory
 {
     /// <inheritdoc />
     public HttpClient CreateClient(string name) => client;
+}
+
+/// <summary>
+/// A resolver stub: reports one active installation, or the typed failure a disconnected org answers, so a test can
+/// flip the boundary after a mint has already been cached.
+/// </summary>
+internal sealed class StubInstallationResolver(long installationId = 7) : IGitHubInstallationResolver
+{
+    /// <summary>The failure to answer instead of an id; <c>null</c> answers <see cref="installationId"/>.</summary>
+    internal Result<long>? Failure { get; set; }
+
+    /// <summary>How many times the seam consulted the resolver.</summary>
+    internal int Calls { get; private set; }
+
+    /// <inheritdoc />
+    public Task<Result<long>> ResolveAsync(Guid orgId, CancellationToken cancellationToken)
+    {
+        Calls++;
+        return Task.FromResult(Failure ?? Result.Success(installationId));
+    }
 }
 
 internal sealed class StubHandler : HttpMessageHandler
@@ -112,6 +135,36 @@ internal sealed class StubPrimaryHandlerFilter(HttpMessageHandler primary, strin
     };
 }
 
+/// <summary>A meter factory for one test process: it keeps every meter it created so they can be disposed.</summary>
+internal sealed class ServiceProviderMeterFactory : IMeterFactory
+{
+    private readonly List<Meter> _meters = [];
+
+    public Meter Create(MeterOptions options)
+    {
+        var meter = new Meter(options.Name, options.Version);
+        lock (_meters)
+        {
+            _meters.Add(meter);
+        }
+
+        return meter;
+    }
+
+    public void Dispose()
+    {
+        lock (_meters)
+        {
+            foreach (var meter in _meters)
+            {
+                meter.Dispose();
+            }
+
+            _meters.Clear();
+        }
+    }
+}
+
 /// <summary>An <see cref="ISecretProvider"/> over one private-key value; every other name is unset.</summary>
 internal sealed class MapSecretProvider : ISecretProvider
 {
@@ -165,6 +218,12 @@ internal sealed class GitHubTestBench
     /// <summary>A private key that exists only in this process.</summary>
     internal static readonly string TestPem = CreatePem();
 
+    /// <summary>The tenant the client reads for; the stub resolver answers the installation id of this org.</summary>
+    internal static readonly Guid OrgId = Guid.CreateVersion7();
+
+    /// <summary>The host meter factory the token source's counter is created on.</summary>
+    internal static readonly IMeterFactory Meters = new ServiceProviderMeterFactory();
+
     private const string AppId = "12345";
 
     internal GitHubTestBench(StubHandler handler, GitHubOptions? options = null, string? pem = null)
@@ -180,7 +239,15 @@ internal sealed class GitHubTestBench
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.com") };
         var clients = new StubClientFactory(http);
         AppTokens = new GitHubAppTokenSource(Microsoft.Extensions.Options.Options.Create(Options), Time, AppTokenLogs);
-        Tokens = new GitHubInstallationTokenSource(clients, AppTokens, Microsoft.Extensions.Options.Options.Create(Options), Time, TokenLogs);
+        Resolver = new StubInstallationResolver();
+        Tokens = new GitHubInstallationTokenSource(
+            Meters,
+            clients,
+            AppTokens,
+            Microsoft.Extensions.Options.Options.Create(Options),
+            Time,
+            TokenLogs,
+            Resolver);
         Client = new GitHubClient(http, Tokens, AppTokens, Microsoft.Extensions.Options.Options.Create(Options), Time, ClientLogs);
     }
 
@@ -192,6 +259,8 @@ internal sealed class GitHubTestBench
 
     internal GitHubAppTokenSource AppTokens { get; }
 
+    internal StubInstallationResolver Resolver { get; }
+
     internal GitHubInstallationTokenSource Tokens { get; }
 
     internal GitHubClient Client { get; }
@@ -201,6 +270,16 @@ internal sealed class GitHubTestBench
     internal ListLogger<GitHubInstallationTokenSource> TokenLogs { get; }
 
     internal ListLogger<GitHubAppTokenSource> AppTokenLogs { get; }
+
+    /// <summary>Mints the catalog feature's token for one installation and repository, as the client does.</summary>
+    /// <param name="installationId">The installation id.</param>
+    /// <param name="feature">The consuming feature; the catalog row by default.</param>
+    /// <param name="repositoryIds">The stored repository ids, one by default.</param>
+    internal Task<Result<GitHubInstallationToken>> MintAsync(
+        long installationId = 7,
+        GitHubFeature feature = GitHubFeature.Catalog,
+        IReadOnlyList<long>? repositoryIds = null) =>
+        Tokens.GetAsync(installationId, feature, repositoryIds ?? [5], null, CancellationToken.None);
 
     /// <summary>The default options: configured App, short tree cap so a capped tree is cheap to build.</summary>
     internal static GitHubOptions DefaultOptions(string? appId = AppId, string? pem = null) => new()

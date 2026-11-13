@@ -26,12 +26,14 @@ namespace Identity.IntegrationTests;
 /// <param name="Principal">The resolved caller, or null when the host resolved none.</param>
 /// <param name="Evaluator">A substitute evaluator, or null to keep the module's own (02.2.1-T2.2).</param>
 /// <param name="CustomRolesEnabled">The <c>EVIDGATE__IDENTITY__CUSTOMROLESENABLED</c> value the host binds.</param>
+/// <param name="Services">Last-minute registrations of this host only; the last registration wins a single resolve.</param>
 internal sealed record IdentityHostSetup(
     Guid OrgId,
     Guid? ProjectId = null,
     IRequestPrincipal? Principal = null,
     IPermissionEvaluator? Evaluator = null,
-    bool CustomRolesEnabled = false);
+    bool CustomRolesEnabled = false,
+    Action<IServiceCollection>? Services = null);
 
 /// <summary>
 /// The real Api composition (<c>Program</c> → <c>ApiHost</c>) over the harness's
@@ -165,6 +167,8 @@ internal sealed class IdentityApiFactory : WebApplicationFactory<Program>
                     services.AddSingleton(callerSet);
                 }
             }
+
+            _setup.Services?.Invoke(services);
         });
     }
 

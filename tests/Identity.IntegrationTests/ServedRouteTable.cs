@@ -679,6 +679,16 @@ internal static class RouteRequests
         Add("POST", "/v1/ci/token", _ => new(HttpMethod.Post, "/v1/ci/token",
             new JsonObject { ["ingest_token"] = "egt_probe" }));
 
+        // ---- GitHub App installation (GitHubInstallationEndpoints) -------------------------------------------
+        // The probes carry no state the server issued and no code GitHub would accept: a service token is refused
+        // by the permission gate before the handler, and the member cases are the installation suite's own.
+        Add("POST", "/v1/github/installations/start", _ => new(HttpMethod.Post, "/v1/github/installations/start"));
+        Add("GET", "/v1/github/installations", _ => new(HttpMethod.Get, "/v1/github/installations"));
+        Add("GET", "/v1/github/installations/callback", _ => new(HttpMethod.Get,
+            "/v1/github/installations/callback?installation_id=1&code=probe&state=probe"));
+        Add("DELETE", "/v1/github/installations/{i}", _ => new(HttpMethod.Delete,
+            $"/v1/github/installations/{Guid.CreateVersion7()}"));
+
         // ---- Federated login (LoginEndpoints.cs, 02.3.1-T1.1: pre-tenant, x-permission 'none') ---------------
         // This host configures no provider credential and no public base URL, so both routes answer the typed
         // 503 `unavailable`; the builders only have to be shape-valid: `google` is a registered route value and

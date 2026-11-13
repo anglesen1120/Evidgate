@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;

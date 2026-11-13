@@ -5,22 +5,21 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
-namespace Evidgate.Modules.Catalog.Infrastructure.GitHub;
+namespace Evidgate.BuildingBlocks.SharedKernel.GitHub;
 
 /// <summary>
-/// Mints the RS256 App JWT that authenticates the App itself (installation lookup and the token
-/// exchange). The key is read from <see cref="ISecretProvider"/> by name and parsed in place; the
-/// PEM and the JWT never leave this type except as the returned token, and no exception message
-/// repeats either.
+/// Mints the RS256 App JWT that authenticates the App itself (installation lookup and the token exchange). The key is
+/// resolved into startup-bound options through the secret provider; the PEM and the JWT never leave this type except
+/// as the returned token, and no exception message repeats either.
 /// </summary>
 /// <remarks>
-/// The JWT is minted per call with a ten-minute lifetime from <c>iat</c>, backdated for clock skew.
-/// The private key is resolved into startup-bound options; rotating it requires a host restart.
+/// The JWT is minted per call with a ten-minute lifetime from <c>iat</c>, backdated for clock skew. Rotating the key
+/// requires a host restart. Callers outside this type never receive the App JWT: features mint installation tokens.
 /// </remarks>
-internal sealed class GitHubAppTokenSource : IDisposable
+public sealed class GitHubAppTokenSource : IDisposable
 {
     /// <summary>GitHub accepts an App JWT for at most ten minutes.</summary>
-    internal static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
+    public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
 
     private static readonly JsonWebTokenHandler Handler = new() { MapInboundClaims = false };
 
@@ -48,8 +47,8 @@ internal sealed class GitHubAppTokenSource : IDisposable
     }
 
     /// <summary>
-    /// Returns a fresh App JWT, or <c>github_not_configured</c> when the App id or the key is
-    /// absent or unusable. Nothing about the key's value reaches the error.
+    /// Returns a fresh App JWT, or <c>github_not_configured</c> when the App id or the key is absent or unusable.
+    /// Nothing about the key's value reaches the error.
     /// </summary>
     public Result<string> Create()
     {
@@ -99,6 +98,10 @@ internal sealed class GitHubAppTokenSource : IDisposable
         }
     }
 
+    /// <summary>The one "no App is configured" failure, used for a missing id and a missing key alike.</summary>
+    public static Error NotConfigured() =>
+        new(GitHubErrorCodes.NotConfigured, "No GitHub App is configured on this host.", 503);
+
     private void ReportSigningFailure(string? pem, Exception exception)
     {
         if (string.Equals(_reportedKeyPem, pem, StringComparison.Ordinal))
@@ -109,10 +112,6 @@ internal sealed class GitHubAppTokenSource : IDisposable
         _reportedKeyPem = pem;
         GitHubLog.TokenSigningFailed(_logger, exception.GetType().Name);
     }
-
-    /// <summary>The one "no App is configured" failure, used for a missing id and a missing key alike.</summary>
-    internal static Error NotConfigured() =>
-        new(GitHubErrorCodes.NotConfigured, "No GitHub App is configured on this host.", 503);
 
     private RSA? LoadKey(GitHubOptions options)
     {
