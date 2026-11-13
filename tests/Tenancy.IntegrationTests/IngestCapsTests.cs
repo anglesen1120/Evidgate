@@ -24,9 +24,12 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 [Trait("Category", "Docker")]
 [Collection(ExclusiveTenancySuite.Name)]
-public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture)
+public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture = fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts = hosts;
 
     // ------------------------------------------------------------------ body reader, on its own
 
@@ -148,7 +151,7 @@ public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task UploadManifest_BodyAtTheCap_IsAccepted()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var manifest = ManifestBody(world);
         var cap = Encoding.UTF8.GetByteCount(manifest);
@@ -168,7 +171,7 @@ public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task UploadManifest_BodyOverTheCap_413WithCapDetail_NoManifestCreated()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         // A plan of its own, so an accepted upload would add a manifest row the assertion below can see.
         var manifest = ManifestBody(world, variants: 1, shards: 1);
@@ -196,7 +199,7 @@ public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task UploadManifest_ChunkedBodyOverTheCap_413WithMeasuredDetail_NoManifestCreated()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var manifest = ManifestBody(world, variants: 1, shards: 1);
         var cap = Encoding.UTF8.GetByteCount(manifest) / 2;
@@ -229,7 +232,7 @@ public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CreateRun_ChunkedBodyOverTheCap_413WithCapDetail_NoRowCreated()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var body = RunCreationTests.RunBody(world.ManifestId) + new string(' ', OrchestratorEndpoints.MaxRunBytes);
         Encoding.UTF8.GetByteCount(body).ShouldBeGreaterThan(OrchestratorEndpoints.MaxRunBytes, "the body must exceed the transport cap");
@@ -262,7 +265,7 @@ public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture)
     public async Task CreateRun_ExecutionsAtTheCap_IsAccepted()
     {
         // Two cases × two variants × one environment is four planned executions.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await using var capped = CappedHost(world, ("MaxManifestExecutions", 4));
 
         var answer = await RunCreationTests.CreateRunAsync(
@@ -280,7 +283,7 @@ public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CreateRun_OneExecutionOverTheCap_422CapExceeded_NoRowCreated()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await using var capped = CappedHost(world, ("MaxManifestExecutions", 3));
 
         var answer = await RunCreationTests.CreateRunAsync(
@@ -306,7 +309,7 @@ public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CreateRun_VariantsOverTheCap_422CapExceeded_NoRowCreated()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await using var capped = CappedHost(world, ("MaxManifestVariants", 1));
 
         var answer = await RunCreationTests.CreateRunAsync(
@@ -328,7 +331,7 @@ public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CreateRun_VariantsAtTheCap_IsAccepted()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await using var capped = CappedHost(world, ("MaxManifestVariants", 2));
 
         var answer = await RunCreationTests.CreateRunAsync(
@@ -348,7 +351,7 @@ public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture)
     [Fact]
     public async Task CapRefusals_CountEachCapExactlyOnce()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var manifest = ManifestBody(world);
         await using var capped = CappedHost(
@@ -379,7 +382,7 @@ public sealed partial class IngestCapsTests(PostgresTenancyFixture fixture)
     public async Task UploadManifest_TenThousandAndOneExecutions_IsAccepted()
     {
         // 73 cases × 137 variants × one environment is 10 001 planned executions, each covered once.
-        await using var world = await RunCreationTests.StartAsync(_fixture, cases: 73);
+        await using var world = await RunCreationTests.StartAsync(_fixture, cases: 73, hosts: _hosts);
 
         var manifest = RunCreationTests.Manifest(world.SuiteRevision, world.Cases, variants: 137, shards: 1);
         manifest["environment_revision_id"] = world.EnvironmentRevision.ToString();

@@ -10,11 +10,18 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>QA cases for the run-create <c>Idempotency-Key</c> (05.2.1-T2 AC3/AC4) through the real host and PostgreSQL.</summary>
 [Trait("Category", "Docker")]
-public sealed class RunCreationIdempotencyQaTests
+public sealed class RunCreationIdempotencyQaTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts;
 
-    public RunCreationIdempotencyQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public RunCreationIdempotencyQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     private Task<long> RecordCountAsync(RunCreationTests.World world) =>
         _fixture.ScalarAsync<long>(
@@ -28,7 +35,7 @@ public sealed class RunCreationIdempotencyQaTests
     [Fact]
     public async Task Key_WhitespaceOnly_Is400_AndWritesNoRecord()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId), idempotencyKey: "   ");
 
@@ -42,7 +49,7 @@ public sealed class RunCreationIdempotencyQaTests
     [Fact]
     public async Task InvalidJson_ThenValidBody_SameKey_Succeeds()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
 
         var broken = await RunCreationTests.CreateRunAsync(world, "{\"manifest_id\":", idempotencyKey: key);
@@ -57,7 +64,7 @@ public sealed class RunCreationIdempotencyQaTests
     [Fact]
     public async Task UnknownMember_ThenValidBody_SameKey_Succeeds()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
         var withExtra = $"{{\"manifest_id\":\"{world.ManifestId}\",\"bogus\":1}}";
 
@@ -74,7 +81,7 @@ public sealed class RunCreationIdempotencyQaTests
     {
         // Duplicate member names make the canonical JSON fail, so the request hash falls back to raw-sha256. Whatever the
         // handler decides (accept with last-wins or refuse), the same key and the same raw bytes must answer the same way.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
         var body = $"{{\"manifest_id\":\"{world.ManifestId}\",\"manifest_id\":\"{world.ManifestId}\"}}";
 
@@ -95,7 +102,7 @@ public sealed class RunCreationIdempotencyQaTests
     public async Task CallerWithoutRunCreate_WithKey_Is403_AndBurnsNoKey()
     {
         // Authorization sits before Idempotency in the pipeline: an unauthorized caller must not claim or replay the key.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
         var noPermission = TenancyApiFactory.Resolved(
             serviceOrg: world.Org,
@@ -113,7 +120,7 @@ public sealed class RunCreationIdempotencyQaTests
     [Fact]
     public async Task AnonymousCaller_WithKey_Is401_AndWritesNoRecord()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await RunCreationTests.CreateRunAsync(
             world,
@@ -131,7 +138,7 @@ public sealed class RunCreationIdempotencyQaTests
     public async Task Conflict_DoesNotOverwriteTheStoredResponse()
     {
         // A 409 on a mismatched body must leave the original response in place: a later replay still returns the first run.
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
 
         var original = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId), idempotencyKey: key);
@@ -149,7 +156,7 @@ public sealed class RunCreationIdempotencyQaTests
     [Fact]
     public async Task RecordRetention_IsAtLeastTwentyFourHours()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var answer = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
 

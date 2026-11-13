@@ -13,7 +13,7 @@ namespace Tenancy.IntegrationTests;
 /// as <c>evidgate_app</c> in a tenant-scoped transaction unless a case speaks as the owner on purpose.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class EvaluationSchemaTests
+public sealed partial class EvaluationSchemaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) : IClassFixture<TenancyHostPool>
 {
     /// <summary>The evaluator's version token, stored verbatim.</summary>
     private const string EvaluatorVersion = "1.0.0";
@@ -21,9 +21,9 @@ public sealed partial class EvaluationSchemaTests
     /// <summary>A well-formed manifest hash, well inside the 1..200 bound.</summary>
     private static readonly string ManifestHash = "sha256:" + new string('e', 64);
 
-    private readonly PostgresTenancyFixture _fixture;
-
-    public EvaluationSchemaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly PostgresTenancyFixture _fixture = fixture;
+    // Reuse one API host per class; each world still owns its tenant data. Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts = hosts;
 
     // ------------------------------------------------------------------ (a) the migration
 
@@ -31,7 +31,7 @@ public sealed partial class EvaluationSchemaTests
     [Fact]
     public async Task Evaluation_Migration_AppliesTheTable_WithForcedRls()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         (await _fixture.TableExistsAsync(world.Database, "evaluation")).ShouldBeTrue();
         (await _fixture.RowSecurityAsync(world.Database, "evaluation"))
@@ -50,7 +50,7 @@ public sealed partial class EvaluationSchemaTests
     [Fact]
     public async Task Evaluation_AppRole_IsSelectAndInsertOnly()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
 
         (await _fixture.HasTablePrivilegeAsync(world.Database, "evidgate_app", "evaluation", "select")).ShouldBeTrue();
@@ -93,7 +93,7 @@ public sealed partial class EvaluationSchemaTests
     [Fact]
     public async Task Evaluation_OwnerRole_TriggerRefusesUpdateAndDelete()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
 
         // One transaction per refused statement: once the UPDATE is refused its transaction is aborted (25P02), so
@@ -128,7 +128,7 @@ public sealed partial class EvaluationSchemaTests
     [Fact]
     public async Task Evaluation_ResultKey_RefusesTheSameVerdictTwice()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
         var first = await SeedAsync(world, runId: runId);
 
@@ -176,7 +176,7 @@ public sealed partial class EvaluationSchemaTests
     [Fact]
     public async Task Evaluation_LiveIndex_AllowsOneLiveRowPerEvidenceRevision()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
         var first = await SeedAsync(world, runId: runId);
 
@@ -209,7 +209,7 @@ public sealed partial class EvaluationSchemaTests
     [Fact]
     public async Task Evaluation_ConcurrentSameVerdict_StoresOneRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
 
         // The verdict is not stored before the race: the two racers must be the first writers of this key, or the
@@ -246,7 +246,7 @@ public sealed partial class EvaluationSchemaTests
     [Fact]
     public async Task Evaluation_ClosedTokenSets_AreEnforced()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
         var spec = await SeedAsync(world, runId: runId);
 
@@ -302,7 +302,7 @@ public sealed partial class EvaluationSchemaTests
     [Fact]
     public async Task Evaluation_CompleteWithMissing_OwnerInsertIsRefused()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var spec = await BuildSpecAsync(world);
 
         var error = await CaptureOwnerErrorAsync(
@@ -328,7 +328,7 @@ public sealed partial class EvaluationSchemaTests
     [Fact]
     public async Task Evaluation_PassOverIncomplete_OwnerInsertIsRefused()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var spec = await BuildSpecAsync(world);
 
         var error = await CaptureOwnerErrorAsync(
@@ -350,7 +350,7 @@ public sealed partial class EvaluationSchemaTests
     [Fact]
     public async Task Evaluation_CrossTenant_IsInvisibleAndRefused()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CreateRunAsync(world);
         var seed = await SeedAsync(world, runId: runId);
 

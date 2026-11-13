@@ -23,7 +23,7 @@ namespace Tenancy.IntegrationTests;
 /// pin is read from the same row the 05.2.1 suite writes.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class PolicyRunPinningTests
+public sealed class PolicyRunPinningTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>A body the <c>policy-revision.v1</c> schema accepts with neither timing value set (both optional).</summary>
     private const string PolicyPlain = """{"required_suites":["smoke"],"flaky_budget":3}""";
@@ -32,8 +32,15 @@ public sealed class PolicyRunPinningTests
     private const string PolicyOther = """{"required_suites":["smoke"],"flaky_budget":4}""";
 
     private readonly PostgresTenancyFixture _fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts;
 
-    public PolicyRunPinningTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public PolicyRunPinningTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>Creates a policy revision through <c>POST /v1/projects/{p}/policies</c> (07.1.1-T3) and returns its id.</summary>
     private static async Task<Guid> CreatePolicyAsync(
@@ -137,7 +144,7 @@ public sealed class PolicyRunPinningTests
     [Fact]
     public async Task Activation_PinsTheRevision_AndALaterActivationDoesNotMoveTheRun()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var r1 = await CreatePolicyAsync(world, PolicyPlain);
         var activation = await ActivateAsync(world, r1, mode: "advisory");
@@ -169,7 +176,7 @@ public sealed class PolicyRunPinningTests
     [Fact]
     public async Task NoActivePolicy_RunKeepsNullPinAndDefaults()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         answer.Status.ShouldBe(HttpStatusCode.Created, answer.ErrorMessage);
@@ -184,7 +191,7 @@ public sealed class PolicyRunPinningTests
     [Fact]
     public async Task DraftRevisionWithoutActivation_DoesNotPin()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         await CreatePolicyAsync(world, PolicyPlain);
 
@@ -198,7 +205,7 @@ public sealed class PolicyRunPinningTests
     [Fact]
     public async Task PolicyValues_ReplaceTheRunDefaults()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         // late_window_minutes 0 is valid (migration 0033 widens the run CHECK to 0..525600): no late evidence accepted.
         var timed = await CreatePolicyAsync(
@@ -234,7 +241,7 @@ public sealed class PolicyRunPinningTests
     [Fact]
     public async Task FloatLiteralPolicyValues_AreAcceptedAndPinnedAsIntegers()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         // Sent verbatim: jsonb keeps the literal's scale, so the stored body still reads back "30.0".
         var created = await SendRawAsync(
@@ -261,7 +268,7 @@ public sealed class PolicyRunPinningTests
     [Fact]
     public async Task AnotherProjectsRevision_IsNeverPinned()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var other = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
 
         // The other project has an active revision; this project has none.
@@ -289,7 +296,7 @@ public sealed class PolicyRunPinningTests
     [Fact]
     public async Task ConcurrentActivationAndRunCreate_PinIsARevisionThatWasActive()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var r1 = await CreatePolicyAsync(world, PolicyPlain);
         (await ActivateAsync(world, r1)).Status.ShouldBe(HttpStatusCode.OK);
@@ -314,7 +321,7 @@ public sealed class PolicyRunPinningTests
     [Fact]
     public async Task Activation_OnlyReleaseApprover()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var revision = await CreatePolicyAsync(world, PolicyPlain);
         var qaEngineer = await AddMemberAsync(world, "qa_engineer");
 
