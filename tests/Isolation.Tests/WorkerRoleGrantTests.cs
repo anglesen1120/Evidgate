@@ -11,7 +11,7 @@ namespace Isolation.Tests;
 /// </summary>
 [Collection(IsolationSuite.Name)]
 [Trait("Category", "Docker")]
-public sealed class WorkerRoleGrantTests
+public sealed partial class WorkerRoleGrantTests
 {
     private readonly PostgresIsolationFixture _fixture;
 
@@ -192,12 +192,32 @@ public sealed class WorkerRoleGrantTests
             database,
             "grant usage, select, update on sequence public.worker_role_probe_seq to evidgate_worker");
         (await WorkerSequencesAsync(database)).ShouldBe(
-            ["worker_role_probe_seq"],
+            ["public.worker_role_probe_seq"],
             "a sequence the worker holds must be reported by the same query");
         await _fixture.ExecuteAsync(
             database,
             "revoke all on sequence public.worker_role_probe_seq from evidgate_worker");
         (await WorkerSequencesAsync(database)).ShouldBeEmpty("the revoke removes it again");
+
+        // The scan covers every non-system schema: a sequence outside public, whether granted to
+        // the worker or reachable through PUBLIC, is reported too.
+        await _fixture.ExecuteAsync(database, "create schema worker_role_probe");
+        await _fixture.ExecuteAsync(database, "create sequence worker_role_probe.other_seq");
+        await _fixture.ExecuteAsync(
+            database,
+            "grant usage on sequence worker_role_probe.other_seq to evidgate_worker");
+        (await WorkerSequencesAsync(database)).ShouldBe(
+            ["worker_role_probe.other_seq"],
+            "a worker sequence outside public must be reported");
+        await _fixture.ExecuteAsync(
+            database,
+            "revoke all on sequence worker_role_probe.other_seq from evidgate_worker");
+        await _fixture.ExecuteAsync(
+            database,
+            "grant select on sequence worker_role_probe.other_seq to public");
+        (await WorkerSequencesAsync(database)).ShouldBe(
+            ["worker_role_probe.other_seq"],
+            "a sequence reachable through PUBLIC must be reported");
     }
 
     /// <summary>
@@ -358,28 +378,28 @@ public sealed class WorkerRoleGrantTests
             """);
 
         granted.ShouldBeEmpty("no evidgate function names the worker in its ACL");
-    }
 
-    /// <summary>
-    /// The <c>public</c> sequences on which the worker role holds any sequence privilege. The
-    /// sequence set is MATERIALIZED before <c>has_sequence_privilege</c> runs: without the barrier
-    /// the planner attaches the function to the <c>pg_class</c> scan ahead of the <c>relkind</c>
-    /// test and raises 42809 on the first TOAST relation (PostgreSQL 18.6).
-    /// </summary>
-    private Task<IReadOnlyList<string>> WorkerSequencesAsync(string database) =>
-        _fixture.ColumnAsync<string>(
+        // The ACL scan above cannot see PUBLIC (OID 0, no pg_roles row) or a NULL ACL (the
+        // default, which is PUBLIC EXECUTE). The effective probe answers for both. The function
+        // set is MATERIALIZED first so the privilege function never runs ahead of the filters.
+        var reachable = await WorkerExecutableFunctionsAsync(database);
+        reachable.ShouldBeEmpty("no function the worker can execute, directly or through PUBLIC");
+
+        // The positive control: a PUBLIC grant on a fresh function is reported by the same query.
+        await _fixture.ExecuteAsync(
             database,
-            """
-            with sequences as materialized (
-                select c.relname, c.oid
-                  from pg_class c
-                  join pg_namespace n on n.oid = c.relnamespace
-                 where n.nspname = 'public' and c.relkind = 'S'
-            )
-            select relname
-              from sequences
-             where has_sequence_privilege('evidgate_worker', oid, 'USAGE,SELECT,UPDATE')
-            """);
+            "create function evidgate.worker_role_probe() returns int language sql as 'select 1'");
+        await _fixture.ExecuteAsync(
+            database,
+            "revoke all on function evidgate.worker_role_probe() from public");
+        (await WorkerExecutableFunctionsAsync(database)).ShouldBeEmpty("a revoked function is not reported");
+        await _fixture.ExecuteAsync(
+            database,
+            "grant execute on function evidgate.worker_role_probe() to public");
+        (await WorkerExecutableFunctionsAsync(database)).ShouldBe(
+            ["evidgate.worker_role_probe()"],
+            "EXECUTE reached through PUBLIC must be reported");
+    }
 
     /// <summary>
     /// Column-level grants the ACL records for one grantee on one table, as <c>column:privilege</c>.
