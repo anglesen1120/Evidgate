@@ -15,7 +15,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_OnlyApprovedUnexpiredWaiversAreInTheSnapshot()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         var active = await InsertWaiverAsync(world, seed, "approved", "now() + interval '1 hour'");
         await InsertWaiverAsync(world, seed, "approved", "now() - interval '1 hour'");
@@ -36,7 +36,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_DifferentWaiverSetsDifferInHashAndIdenticalSetsMatch()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         var cancellationToken = TestContext.Current.CancellationToken;
 
@@ -67,7 +67,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task ExceptionsSnapshot_FollowsTheCapturedInstantNotTheClock()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         var cancellationToken = TestContext.Current.CancellationToken;
         var waiver = await InsertWaiverAsync(world, seed, "approved", "now() + interval '1 hour'");
@@ -90,7 +90,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_RegularRun_StillStoresLiveRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
 
         var record = await EvaluateAsync(world, seed, EvaluationMode.Live, TestContext.Current.CancellationToken);
@@ -102,7 +102,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_WaiverOfAnotherProject_IsNotInTheSnapshot()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         var other = await InsertProjectAsync(world, seed);
         await InsertWaiverAsync(world, seed, "approved", "now() + interval '1 hour'", other);
@@ -117,7 +117,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_IdenticalSetsOnTwoInvocations_StoreTheSameHash()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         var cancellationToken = TestContext.Current.CancellationToken;
         await InsertWaiverAsync(world, seed, "approved", "now() + interval '1 hour'");
@@ -134,7 +134,7 @@ public sealed partial class EvaluationTaskTests
     [Fact]
     public async Task Evaluate_ReadsTheClockOnceAndStoresThatInstant()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var seed = await SeedAsync(world);
         var cancellationToken = TestContext.Current.CancellationToken;
         var clock = new CountingClock(DateTimeOffset.UtcNow.AddMinutes(-5));

@@ -27,6 +27,7 @@
     <InternalsVisibleTo Include="Evidgate.Worker" />
     <InternalsVisibleTo Include="Hosts.IntegrationTests" />
     <InternalsVisibleTo Include="Tenancy.IntegrationTests" />
+    <InternalsVisibleTo Include="Tasks.IntegrationTests" />
     <InternalsVisibleTo Include="Architecture.Tests" />
   </ItemGroup>
 </Project>

@@ -554,6 +554,9 @@ public sealed class SchemaConventionAllowListTests
                 ("public.raw_report", SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.raw_report_reprocess", SchemaRule.CompositeForeignKey | SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
                 ("public.run_state_event", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+                ("public.platform_operator_audit", SchemaRule.VersionTrigger),
+                ("public.webhook_delivery", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
+                ("public.catalog_sync", SchemaRule.AuditColumns | SchemaRule.VersionTrigger),
             ]);
 
         // Every exclusion carries its reason: an exemption without one is a silencer,

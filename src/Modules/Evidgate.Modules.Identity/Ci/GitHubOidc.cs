@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.Pipeline.Serialization;
 using Evidgate.Modules.Identity.Options;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
@@ -318,12 +319,8 @@ internal sealed class HttpGitHubJwksProvider(
             .ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
-        if (response.Content.Headers.ContentLength is > MaxDocumentBytes)
-        {
-            throw new HttpRequestException("the JWKS document is unreasonably large");
-        }
-
-        var json = await ReadCappedAsync(response.Content, timeout.Token).ConfigureAwait(false);
+        var json = await BoundedHttpBody.ReadTextAsync(response.Content, MaxDocumentBytes, timeout.Token).ConfigureAwait(false)
+                   ?? throw new HttpRequestException("the JWKS document is unreasonably large");
         var set = new JsonWebKeySet(json);
         var keys = new Dictionary<string, SecurityKey>(StringComparer.Ordinal);
         foreach (var key in set.GetSigningKeys())
@@ -341,26 +338,6 @@ internal sealed class HttpGitHubJwksProvider(
     }
 
     private const int MaxDocumentBytes = 256 * 1024;
-
-    /// <summary>Reads at most <see cref="MaxDocumentBytes"/>; a longer body is refused before it is all buffered.</summary>
-    private static async Task<string> ReadCappedAsync(HttpContent content, CancellationToken cancellationToken)
-    {
-        await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var buffer = new MemoryStream();
-        var chunk = new byte[8192];
-        int read;
-        while ((read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false)) > 0)
-        {
-            if (buffer.Length + read > MaxDocumentBytes)
-            {
-                throw new HttpRequestException("the JWKS document is unreasonably large");
-            }
-
-            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-        }
-
-        return System.Text.Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
-    }
 
     private sealed record Snapshot(Dictionary<string, SecurityKey> Keys, DateTimeOffset FetchedAt, DateTimeOffset LastFailureAt)
     {

@@ -3,17 +3,17 @@ using System.Text.Json;
 using System.Xml;
 using Evidgate.Modules.Evidence.Contracts;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing;
+using Evidgate.Modules.Evidence.Infrastructure.Parsing.Junit;
 using Shouldly;
 using Xunit;
 
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// Evidgate's own CI reports (xUnit v3, Vitest, Playwright; committed under scripts/dogfood/testdata exactly as the
+/// Evidgate's own CI reports (xUnit v3, Vitest, Playwright; committed under fixtures/reports/own-ci exactly as the
 /// runners emitted them) go through the parser profile customers' XML takes, <see cref="IParsing.ParseXmlReport"/>,
-/// and the streamed document must use only the elements of the committed JUnit sample corpus. The report mapper
-/// (plan 04) is not written yet: until it lands this is the strongest check the bytes can pass, and the same files
-/// are the mapper's regression input.
+/// and through the real JUnit mapper, which must report no discrepancy. The streamed document must also use only the
+/// elements of the committed JUnit sample corpus.
 /// </summary>
 public sealed class DogfoodReportTests
 {
@@ -22,7 +22,7 @@ public sealed class DogfoodReportTests
     /// <summary>The elements the committed fixtures/reports/junit/sample document uses.</summary>
     private static readonly HashSet<string> SampleElements = ["testsuites", "testsuite", "testcase", "failure", "skipped"];
 
-    private static readonly string TestData = Path.Combine(RlsExceptionFile.RepositoryRoot, "scripts", "dogfood", "testdata");
+    private static readonly string TestData = Path.Combine(RlsExceptionFile.RepositoryRoot, "fixtures", "reports", "own-ci");
 
     /// <summary>One row per producer.</summary>
     public static TheoryData<string> Producers => [.. ProducerNames];
@@ -67,6 +67,33 @@ public sealed class DogfoodReportTests
         names.Distinct().ShouldBeSubsetOf(SampleElements);
         cases.ShouldBeGreaterThan(0);
         cases.ShouldBe(declared);
+    }
+
+    /// <summary>Evidgate's own xUnit v3 report maps through the real JUnit mapper with no discrepancy.</summary>
+    [Fact]
+    public void Dogfood_XunitReport_Parses() => AssertMapsCleanly("xunit");
+
+    /// <summary>Evidgate's own Vitest report maps through the real JUnit mapper with no discrepancy.</summary>
+    [Fact]
+    public void Dogfood_VitestReport_Parses() => AssertMapsCleanly("vitest");
+
+    /// <summary>Evidgate's own Playwright report (two suites) maps through the real JUnit mapper with no discrepancy.</summary>
+    [Fact]
+    public void Dogfood_PlaywrightReport_Parses() => AssertMapsCleanly("playwright");
+
+    private static void AssertMapsCleanly(string producer)
+    {
+        var xml = File.ReadAllText(Path.Combine(TestData, producer + ".junit.xml"));
+        var expected = System.Text.RegularExpressions.Regex.Count(xml, "<testcase[ >]");
+
+        var result = PytestJUnitMapperReplay.Map(xml);
+
+        result.Discrepancies.ShouldBeEmpty();
+        result.Cases.Count.ShouldBe(expected);
+        result.Cases.Count.ShouldBeGreaterThan(0);
+        result.Declared.Tests.ShouldBe(expected);
+        result.Declared.Failures.ShouldBe(0);
+        result.Cases.All(c => c.Normalized == "passed").ShouldBeTrue();
     }
 
     /// <summary>A truncated report ends as the profile's documented refusal, never an exception.</summary>

@@ -848,6 +848,15 @@ internal sealed class TenantRowFactory
             ("public.billing_statement", "period") => "2026-10",
             ("public.billing_statement", "currency") => "USD",
             ("public.billing_statement", "content_hash") => new string('a', 64),
+            // The commit-registration tables (0106) close three shapes the generic text candidate fails: the
+            // provider enumeration, the RFC 8785 payload address and the `secret:<name>` reference. Each value
+            // is inside its own CHECK and none is part of a unique key, so a constant serves every generated row.
+            ("public.webhook_delivery", "provider") => "github",
+            ("public.webhook_delivery", "payload_hash") => "sha256:" + new string('a', 64),
+            ("public.git_repo_binding", "webhook_secret_ref") => "secret:probe",
+            // commit_sha is a lowercase hex run; a fresh one per row keeps the (org_id, binding_id, commit_sha)
+            // key from colliding with the valid row a corrupt sibling is generated next to.
+            ("public.catalog_sync", "commit_sha") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
             _ => (object?)null,
         };
 

@@ -1,6 +1,7 @@
 using Evidgate.Api.Endpoints;
 using Evidgate.Api.Forwarding;
 using Evidgate.Api.Json;
+using Evidgate.Api.Management;
 using Evidgate.Api.Middleware;
 using Evidgate.Api.Tenancy;
 using Evidgate.BuildingBlocks.Contracts.Validation;
@@ -73,6 +74,11 @@ public static partial class ApiHost
         builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = ShutdownTimeout);
+
+        // N9: the host-wide body limit of a route that declares none, applied by Kestrel before a handler reads.
+        builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = RequestBodyLimitMiddleware.DefaultBodyBytes);
+        ManagementListener.Configure(builder);
+        builder.Services.Configure<ManagementOptions>(builder.Configuration.GetSection(ManagementOptions.SectionName));
         builder.Services.AddTrustedForwardedHeaders(builder.Configuration);
 
         builder.Services.AddEvidgatePersistence(builder.Configuration);
@@ -204,6 +210,9 @@ public static partial class ApiHost
         app.UseRouting();
         app.UseMiddleware<RequestIdMiddleware>();
         app.UseMiddleware<EnvelopeExceptionMiddleware>();
+        // Before any body is read: the route's limit, then the management/public listener split.
+        app.UseMiddleware<ManagementPortMiddleware>();
+        app.UseMiddleware<RequestBodyLimitMiddleware>();
 
         // D6: a route/method the pipeline rejects on its own (404/405) leaves the
         // response body-less, so wrap those statuses in the 00 §9.2 envelope too.
@@ -335,6 +344,7 @@ public static partial class ApiHost
         _ = app.Services.GetRequiredService<IOptions<DatabaseOptions>>().Value;
         _ = app.Services.GetRequiredService<IOptions<IsolationSelfCheckOptions>>().Value;
         _ = app.Services.GetRequiredService<IOptions<TelemetryOptions>>().Value;
+        app.Services.GetRequiredService<IOptions<ManagementOptions>>().Value.Validate();
         // The cancel windows belong to the Orchestrator module and are read through its seam; the database group comes
         // first so a missing connection string is still the key a host with no configuration at all reports.
         app.Services.ValidateOrchestratorOptions();

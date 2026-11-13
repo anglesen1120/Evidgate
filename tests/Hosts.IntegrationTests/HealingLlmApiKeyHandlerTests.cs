@@ -65,6 +65,24 @@ public sealed partial class HealingLlmApiKeyHandlerTests
     }
 
     [Fact]
+    public async Task A_Foreign_Target_Through_The_Composed_Client_Reads_No_Key_And_Sends_Nothing()
+    {
+        var endpoint = new RecordingHandler();
+        var secrets = new CountingSecrets();
+        await using var provider = Compose(new CaptureLoggerProvider(), secrets, endpoint).BuildServiceProvider();
+
+        using var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(HttpHealingLlmProvider));
+
+        await Should.ThrowAsync<HealingLlmNotSentException>(() => client.PostAsync(
+            "https://elsewhere.invalid/v1/llm/generate",
+            new StringContent("{}"),
+            TestContext.Current.CancellationToken));
+
+        secrets.Reads.ShouldBe(0);
+        endpoint.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task A_Key_That_Resolves_To_Nothing_Sends_No_Request()
     {
         var endpoint = new RecordingHandler(HttpStatusCode.OK, "{}");
@@ -72,11 +90,12 @@ public sealed partial class HealingLlmApiKeyHandlerTests
 
         await using var provider = Compose(capture, new FixedSecrets(null), endpoint).BuildServiceProvider();
 
-        var result = await provider
+        // A refusal before the send is not a provider outcome: it reaches the gateway as a not-sent failure, which gives
+        // the budget hold back.
+        await Should.ThrowAsync<HealingLlmNotSentException>(() => provider
             .GetRequiredService<HttpHealingLlmProvider>()
-            .InvokeAsync(Request(), TestContext.Current.CancellationToken);
+            .InvokeAsync(Request(), TestContext.Current.CancellationToken));
 
-        result.Status.ShouldBe(HealingLlmStatuses.Error);
         endpoint.Requests.ShouldBeEmpty();
         capture.Logs.ShouldNotContain(log => log.Text.Contains("Bearer", StringComparison.Ordinal));
     }
@@ -92,7 +111,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         };
         using var invoker = new HttpMessageInvoker(handler);
 
-        var failure = await Should.ThrowAsync<InvalidOperationException>(() => invoker.SendAsync(
+        var failure = await Should.ThrowAsync<HealingLlmNotSentException>(() => invoker.SendAsync(
             new HttpRequestMessage(HttpMethod.Post, "https://provider.invalid/v1/llm/generate"),
             TestContext.Current.CancellationToken));
 
@@ -129,7 +148,7 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         };
         using var invoker = new HttpMessageInvoker(handler);
 
-        var failure = await Should.ThrowAsync<InvalidOperationException>(() => invoker.SendAsync(
+        var failure = await Should.ThrowAsync<HealingLlmNotSentException>(() => invoker.SendAsync(
             new HttpRequestMessage(HttpMethod.Post, "https://provider.invalid/v1/llm/generate"),
             TestContext.Current.CancellationToken));
 
@@ -189,13 +208,24 @@ public sealed partial class HealingLlmApiKeyHandlerTests
         Payload: "Design the checkout checklist for the shop.",
         ResponseSchema: null);
 
-    /// <summary>A secret provider that answers every name with the same value.</summary>
     private static partial class Log
     {
         [LoggerMessage(EventId = 1, Level = LogLevel.Information, Message = "capture probe {Probe}")]
         public static partial void CaptureProbe(ILogger logger, string probe);
     }
 
+    private sealed class CountingSecrets : ISecretProvider
+    {
+        internal int Reads { get; private set; }
+
+        public ValueTask<string?> GetSecretAsync(string name, CancellationToken cancellationToken = default)
+        {
+            Reads++;
+            return ValueTask.FromResult<string?>("unused");
+        }
+    }
+
+    /// <summary>A secret provider that answers every name with the same value.</summary>
     private sealed class FixedSecrets(string? value) : ISecretProvider
     {
         public ValueTask<string?> GetSecretAsync(string name, CancellationToken cancellationToken = default) =>

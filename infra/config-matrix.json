@@ -787,6 +787,227 @@
       "note": "`EVIDGATE:OAUTH:GITHUB:ClientSecret` (02.3.1-T1.3): OAuth client secret of the GitHub login client, declared once in `SecretNames` (`OauthGithubClientSecret`), resolved through `ISecretProvider` by `GitHubLoginOptionsSecretPostConfigure` — the property has an internal setter, so the binder never reads it from configuration — and never logged or put in an exception message. Absent with the client id, both GitHub routes answer 503 `unavailable` + `Retry-After` (no flag); staging and prod hold it in the provider secret store (10.1.1-T3), dev does not set it because the dev stack has no https origin to complete a login on."
     },
     {
+      "key": "EVIDGATE__GITHUB__APPID",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "environment",
+        "prod": "environment"
+      },
+      "note": "`EVIDGATE:GITHUB:AppId` (03.4.1-T1.1): numeric id of the platform's GitHub App, the JWT issuer. Plain configuration, safe to log by name only. Absent leaves the App client unconfigured (`github_not_configured`, no outbound call), so a host with no App starts normally; present but not numeric is refused at boot by `GitHubOptionsValidator`, whose message names the key only."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__PRIVATEKEY",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "secret-store",
+        "prod": "secret-store"
+      },
+      "note": "`EVIDGATE:GITHUB:PrivateKey` (03.4.1-T1.3): PEM private key of the platform's GitHub App, declared once in `SecretNames` (`GitHubAppPrivateKey`), resolved through `ISecretProvider` by `GitHubOptionsSecretPostConfigure` - the property has an internal setter, so the binder never reads it from configuration - and never logged or put in an exception message. Absent with the App id leaves the client unconfigured (`github_not_configured`, no outbound call); staging and prod hold it in the provider secret store (10.1.1-T3) and dev leaves it unset until an App is installed against the dev stack."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__APIBASEURL",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:GITHUB:ApiBaseUrl` (03.4.1-T1.3): base address of the REST API, default `https://api.github.com`. The validator refuses at boot a value that is not https on that host with no userinfo, path, query or non-default port (S4), and the client re-checks the allowlist before every call, so no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__HTTPTIMEOUTSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 60
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:GITHUB:HttpTimeoutSeconds` (03.4.1-T1.3): budget of one outbound attempt, in seconds, default 10. The resilience pipeline wraps it in a total budget of three attempts plus two seconds, so a rate-limited call still honours `Retry-After`; no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__INSTALLATIONTOKENSAFETYMARGINSECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 0,
+        "max": 1800
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:GITHUB:InstallationTokenSafetyMarginSeconds` (03.4.1-T1.3): how long before an installation token expires the in-memory cache stops serving it, default 300. The validator refuses a margin at or past half of the one-hour token lifetime; no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__APPJWTBACKDATESECONDS",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 0,
+        "max": 120
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:GITHUB:AppJwtBackdateSeconds` (03.4.1-T1.3): how far the App JWT `iat` is backdated so a small clock difference at GitHub does not refuse it, default 60; the resulting `exp` stays within GitHub's ten-minute maximum. No environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__MAXRESPONSEBYTES",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1024,
+        "max": 8388608
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:GITHUB:MaxResponseBytes` (03.4.1-T1.3): largest response body the client reads, in bytes, default 2097152. The reader streams and refuses a longer body unread, with or without a declared length; no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__MAXBLOBBYTES",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1024,
+        "max": 4194304
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:GITHUB:MaxBlobBytes` (03.4.1-T1.3): largest decoded git blob the client accepts, in bytes, default 1048576; a larger blob is refused before decoding; no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__MAXTREEENTRIES",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 1000000
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:GITHUB:MaxTreeEntries` (03.4.1-T1.3): largest tree the client accepts, default 100000 (the point where GitHub truncates a recursive tree); an over-cap tree is refused and the `truncated` flag is surfaced on the result; no environment overrides it."
+    },
+    {
+      "key": "EVIDGATE__GITHUB__MAXTOKENCACHEENTRIES",
+      "scope": "runtime",
+      "consumers": ["api", "migrator", "worker"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {
+        "min": 1,
+        "max": 1024
+      },
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "`EVIDGATE:GITHUB:MaxTokenCacheEntries` (03.4.1-T1.3): largest number of installation tokens kept in memory, default 128; the cache never grows past it and never persists a token; no environment overrides it."
+    },
+    {
       "key": "EVIDGATE__OAUTH__GITHUB__AUTHORIZEURL",
       "scope": "runtime",
       "consumers": ["api", "migrator", "worker"],
@@ -2046,6 +2267,46 @@
       "note": "the `service.version` resource attribute of traces, metrics and logs (10.3.1-T1.3); unset means the entry assembly's informational version, which in this repository is the SDK default (`1.0.0`): no build sets `Version` or `SourceRevisionId`, so the fallback does not tell two commits apart. A deployment sets the key per environment to the image tag or digest, so two builds of one commit, or a rollback, are distinguishable in the backend; the value is set by the deployment, never in the repository. A blank value fails the boot naming this key. The companion `deployment.environment` attribute is not a key of its own: it is the host environment name (`ASPNETCORE_ENVIRONMENT`/`DOTNET_ENVIRONMENT`, dev/staging/prod)."
     },
     {
+      "key": "EVIDGATE__API__MANAGEMENTPORT",
+      "scope": "runtime",
+      "consumers": ["api", "dev-stack"],
+      "type": "integer",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "TCP port of the Api's management listener, which serves /metrics and the detailed /internal/health/ready body (reason and journal heads) and nothing else; the public listener answers 404 for /metrics and a status-only readiness body. Unset means the management surface is off: /metrics is not served at all and the readiness detail is not shown anywhere. The listener is added next to the public ones (ASPNETCORE_URLS / ASPNETCORE_HTTP_PORTS keep working), so the port must differ from every public port, or the boot fails naming this key. Which listener a request used is read from the connection's local port, never from a header. A deployment that sets it must keep the port off the public ingress and reachable by the metrics scraper only (00 §9.1, N9)."
+    },
+    {
+      "key": "EVIDGATE__API__MANAGEMENTADDRESS",
+      "scope": "runtime",
+      "consumers": ["api"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": false,
+      "required": {
+        "dev": false,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "default",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "IP address the Api's management listener binds when EVIDGATE__API__MANAGEMENTPORT is set; default 127.0.0.1, so the surface is unreachable off-host until a deployment names the instance's own interface for a scraper on another host (a container sets 0.0.0.0 and keeps the port off the published ports). A value that is not an IP literal fails the boot naming this key."
+    },
+    {
       "key": "EVIDGATE__WORKER__HEALTHADDRESS",
       "scope": "runtime",
       "consumers": ["dev-stack", "worker"],
@@ -2491,6 +2752,26 @@
         "prod": "default"
       },
       "note": "dev-stack only: password of the evidgate_owner migration role, generated by scripts/dev/up.sh; it is what makes EVIDGATE_MIGRATOR__CONNECTIONSTRING concrete in dev."
+    },
+    {
+      "key": "EVIDGATE_PLATFORM_OPERATOR_PASSWORD",
+      "scope": "dev-stack",
+      "consumers": ["dev-stack"],
+      "type": "string",
+      "requiredAtBoot": false,
+      "constraints": {},
+      "secret": true,
+      "required": {
+        "dev": true,
+        "staging": false,
+        "prod": false
+      },
+      "source": {
+        "dev": "env-file",
+        "staging": "default",
+        "prod": "default"
+      },
+      "note": "dev-stack only: password of the evidgate_platform_operator role, the sole grantee of evidgate.healing_switch_set_system. Operator-run psql only: no host consumes it and there is no connection-string key for it, so the Api and Worker are started with it unset (scripts/dev/up.sh) and the person setting the platform switch supplies it to psql alone. Staging and prod keep the same role's password in the provider secret store for the runbook's operator, never for a process."
     },
     {
       "key": "EVIDGATE_S3_ACCESS_KEY",

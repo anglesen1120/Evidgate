@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using System.Globalization;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -76,6 +77,7 @@ public static class CatalogEndpoints
 
         // The delegate reads the raw JSON (strict, capped) so unknown members are refused; the documented body is the DTO.
         group.MapPost("/suites/{s}/revisions", CreateSuiteRevisionAsync)
+            .WithBodyLimit(MaxRevisionBodyBytes)
             .Accepts<CreateSuiteRevisionRequest>("application/json")
             .Produces<SuiteRevisionHead>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status200OK)

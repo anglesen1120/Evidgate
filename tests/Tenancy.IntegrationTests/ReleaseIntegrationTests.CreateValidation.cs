@@ -13,7 +13,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_NameValidation_RefusesUntrimmed_AndAcceptsTheTrimmedBoundary()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var boundary = new string('n', 128);
 
         // The name is declared, not repaired: surrounding whitespace is refused rather than trimmed.
@@ -30,7 +30,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_OneHundredComponentsIsAccepted_OneHundredOneIsReleaseInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         static Component[] Build(RunCreationTests.World world, int count) =>
             [.. Enumerable.Range(0, count)
                 .Select(index => new Component($"component-{index}", Digest((char)('a' + (index % 6))), world.EnvironmentRevision))];
@@ -47,7 +47,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_MalformedDigest_422ReleaseInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         string[] malformed =
         [
             "sha256:" + new string('a', 63),
@@ -73,7 +73,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_ComponentKeyValidation_RefusesMalformed_AndAcceptsTheGrammarBoundaries()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         string[] malformed = ["Web", "-web", "web.x", "web space", new string('a', 65), string.Empty];
 
         foreach (var key in malformed)
@@ -98,7 +98,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_InvalidName_422ReleaseInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         string[] malformed = [string.Empty, "   ", new string('n', 129), "bad\u0001name", "bad\nname"];
 
         foreach (var name in malformed)
@@ -112,7 +112,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_InvalidState_422ReleaseInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await CreateAsync(world, Body("release-state", OneComponent(world), state: "retired"));
 
@@ -123,7 +123,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_EmptyComponents_422ReleaseInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await CreateAsync(world, Body("release-empty", []));
 
@@ -134,7 +134,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_DuplicateComponentKey_422ReleaseInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var body = Body(
             "release-duplicate",
             [
@@ -149,7 +149,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_MissingOrForeignEnvironmentRevision_422ReleaseInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var (_, _, foreignRevision) = await SeedForeignTenantAsync(world.Database);
 
         var missing = await CreateAsync(
@@ -168,7 +168,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_UnknownOrRepeatedMember_422RequestInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var topLevel = $$"""
             {"name":"release-extra","components":[],"note":"not a member"}
             """;
@@ -189,7 +189,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_WrongMemberType_422RequestInvalid_ForDeclaredShapeMembers()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var revision = $"{world.EnvironmentRevision:D}";
         string[] bodies =
         [
@@ -210,7 +210,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_ComponentItemWrongType_422ReleaseInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var revision = $"{world.EnvironmentRevision:D}";
         string[] bodies =
         [
@@ -228,7 +228,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_MalformedJson_400RequestInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         ShouldBeRequestInvalid(await CreateAsync(world, "{\"name\":"));
         (await ReleaseCountAsync(world)).ShouldBe(0);
@@ -237,7 +237,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_NonObjectComponentItems_422ReleaseInvalid_WithIndex()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var revision = $"{world.EnvironmentRevision:D}";
         string valid = $$"""{"component_key":"web","digest":"{{Digest('a')}}","environment_revision_id":"{{revision}}"}""";
         (string Body, string Path)[] cases =
@@ -261,7 +261,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_NameWithInvisibleOrFormatCharacters_422ReleaseInvalid_AndUnicodeLettersAccepted()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         foreach (var name in new[] { "release\u2028line", "release\u200Bzero", "release\u202Ebidi" })
         {

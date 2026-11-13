@@ -1,3 +1,5 @@
+using Evidgate.BuildingBlocks.Persistence.Tasks;
+using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.BuildingBlocks.SharedKernel.Secrets;
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Healing.Contracts;
@@ -70,6 +72,13 @@ internal static class HealingModule
         // Defaults live in code: there is no configuration key for this slice.
         services.AddOptions<HealingLlmOptions>();
 
+        // The daily budget roll runs as the sweep role through an owner function; `AddTaskSchedule` is idempotent per
+        // host and the schedule's unique (schedule_name, fire_at) key makes one fire run once.
+        services.TryAddSingleton<IWorkerSchedDataSource, WorkerSchedDataSource>();
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddTaskHandler<HealingLlmBudgetResetPayload, HealingLlmBudgetResetTaskHandler>();
+        services.AddTaskSchedule(HealingLlmBudgetResetSweeps.Reset);
+
         // The selected kind is settled before validation runs, so a host that states a provider it may not run refuses to
         // start naming the key. The group is validated on start as well as by the host's own materialisation.
         services
@@ -95,9 +104,10 @@ internal static class HealingModule
         services.AddTransient<IHealingLlmProvider>(ProviderFor);
 
         // Every attempt is recorded through the module's tenant Dapper path, so all three are scoped like the switch
-        // store; the gateway refuses a call before it is placed, so it reads the period budget through the same seam.
+        // store; the gateway reserves the period budget before it places a call, through the same seam.
         services.TryAddScoped<HealingLlmCallRecorder>();
-        services.TryAddScoped<HealingLlmBudgetReader>();
+        services.TryAddScoped<HealingLlmBudgetLedger>();
+        services.TryAddScoped<HealingLlmTransactions>();
         services.TryAddScoped<HealingLlmGateway>();
 
         // The time budget lives in the pipeline, so the client timeout is infinite: a finite client timeout would abort
@@ -125,7 +135,11 @@ internal static class HealingModule
                 PooledConnectionLifetime = TimeSpan.FromMinutes(5),
             })
 
-            // Outermost, so the key is read and presented once per call and a refused key is not retried by the
+            // Outermost: a request that is not for the configured endpoint is refused before a key is resolved for it.
+            .AddHttpMessageHandler(provider => new HealingLlmEgressHandler(
+                provider.GetRequiredService<IOptions<HealingProviderOptions>>().Value))
+
+            // Next, so the key is read and presented once per call and a refused key is not retried by the
             // pipeline. The handler resolves it through the secret provider and keeps no copy.
             .AddHttpMessageHandler(provider => new HealingLlmApiKeyHandler(
                 provider.GetRequiredService<ISecretProvider>(),

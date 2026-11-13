@@ -1,6 +1,7 @@
 using Evidgate.BuildingBlocks.Persistence.Tenancy;
 using Evidgate.Modules.Healing.Application;
 using Evidgate.Modules.Healing.Contracts;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Shouldly;
@@ -21,6 +22,7 @@ namespace Tenancy.IntegrationTests;
 public sealed class HealingLlmGatewayAvailabilityTests
 {
     private static readonly Guid Project = Guid.CreateVersion7();
+    private static readonly Guid Org = Guid.CreateVersion7();
 
     /// <summary>
     /// An unavailable provider refuses as <c>healing_disabled</c> before the budget is read or the adapter is asked: no
@@ -35,7 +37,7 @@ public sealed class HealingLlmGatewayAvailabilityTests
         var gateway = Gateway(db, scopes, provider, HealingAvailability.Unavailable);
 
         using var listener = HealingTelemetryCapture.RefusedCalls(out var reasons);
-        var result = await gateway.InvokeAsync(Request(), TestContext.Current.CancellationToken);
+        var result = await gateway.InvokeAsync(Org, Request(), TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeFalse("an unavailable healing provider must refuse the call");
         result.Error!.Details!.ShouldHaveSingleItem().Reason.ShouldBe(HealingLlmRefusals.HealingDisabled);
@@ -60,11 +62,12 @@ public sealed class HealingLlmGatewayAvailabilityTests
         var gateway = Gateway(db, scopes, provider, HealingAvailability.Shadow);
 
         using var listener = HealingTelemetryCapture.RefusedCalls(out var reasons);
-        var result = await gateway.InvokeAsync(Request(), TestContext.Current.CancellationToken);
+        var result = await gateway.InvokeAsync(Org, Request(), TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         provider.Calls.ShouldBe(1);
-        await db.Received(1).ExecuteAsync(
+        // The attempt row and the settlement of the hold.
+        await db.Received(2).ExecuteAsync(
             Arg.Any<string>(),
             Arg.Any<object?>(),
             Arg.Any<CancellationToken>());
@@ -81,26 +84,29 @@ public sealed class HealingLlmGatewayAvailabilityTests
             provider,
             new HealingLlmCallRecorder(db, scopes),
             new FixedAvailability(availability),
-            new HealingLlmBudgetReader(db, scopes),
-            Options.Create(new HealingProviderOptions { Kind = HealingProviderKind.Mock, Provider = "mock" }));
+            new HealingLlmBudgetLedger(db, scopes),
+            new HealingLlmTransactions((ITenantScopeFactory)scopes),
+            Options.Create(new HealingProviderOptions { Kind = HealingProviderKind.Mock, Provider = "mock" }),
+            Options.Create(new HealingLlmOptions()),
+            NullLogger<HealingLlmGateway>.Instance);
 
     private static (ITenantDb Db, ITenantScopeAccessor Scopes) Database()
     {
         var db = Substitute.For<ITenantDb>();
-        var scopes = Substitute.For<ITenantScopeAccessor>();
+        var factory = Substitute.For<ITenantScopeFactory>();
         var tenant = Substitute.For<ITenantScope>();
-        tenant.OrgId.Returns(Guid.CreateVersion7());
-        scopes.Require().Returns(tenant);
-        return (db, scopes);
+        tenant.OrgId.Returns(Org);
+        factory.Current.Returns((ITenantScope?)null);
+        factory.Require().Returns(tenant);
+        factory.BeginAsync(Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(tenant));
+        return (db, factory);
     }
 
     /// <summary>A budget row with room under both caps, so only availability can refuse.</summary>
     private static void StubBudgetRow(ITenantDb db) =>
-        db.QuerySingleOrDefaultAsync<HealingLlmBudgetRow>(
-                Arg.Any<string>(),
-                Arg.Any<object?>(),
-                Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<HealingLlmBudgetRow?>(new HealingLlmBudgetRow(1.0m, 100, 0.4m, 40)));
+        db.ScalarAsync<string?>(Arg.Any<string>(), Arg.Any<object?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<string?>("2026-11-13"));
 
     private static HealingLlmRequest Request() =>
         new(Project, HealingLlmPurposes.AuthoringGeneration, null, null, "healing-test-model", "v1", "payload", null);

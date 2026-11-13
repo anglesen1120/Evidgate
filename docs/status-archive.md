@@ -596,3 +596,39 @@ The S299 recount added 33 tasks / 31.0 d to the S189 figures (201 / 205.0; none 
 ```text
  (T2.1 merged #216, 1742764; T2.2 S146 #302 fbb2fe91; T2.3 + T2.4 PARTIAL, S272 #564 fd230b78: release panel and run-state timeline built, release id, state history and after_cancel count render unavailable until GET /v1/runs/{r} serves them, D-S272-Q1; T2 stays partial. Update S276 #568: the run read now serves `after_cancel_events` (#566) and the timeline shows it; release id and state history still unavailable; S278 #572: T2.3 landed, the panel reads `releases[]`, T2.4 still waits for state history, S277; S283 #583: T2.4 landed, timeline reads `state_history`; all four sub-rows landed, parent credited by the S299 recount, nothing left to build)
 ```
+
+## Moved from status-carried.md and replaced in STATUS.md by S401 (2026-11-13)
+
+Closed carried row, verbatim (closed by #811, c932d98c; decision D-S401-A: the 409 is documented as a defensive refusal on `createRun`, proven at registry level by `ProducerSlotTests`, wire-unreachable while run create issues a fresh run id; a future idempotent create path owns the wire test):
+
+| `producer_slot` write path wiring (04.1.2-T4 hand-over, from S22) | Run-create registration and finalize slot-close wiring have landed. Remaining: document producer_slots_conflict (409) on the run-create contract; the original combined delivery claim is not reopened. | receiver: 04.1.2-T3; hand-over Notes: `plans/features/04-ingestion-adapters/04.1.2-quota-epochs-and-observability.md:191` |
+
+STATUS §5 row replaced text (04.1.2-T3):
+
+| 04.1.2-T3 | M | OpenAPI + integration tests for both stories. Partial: events operation documented (`contracts/openapi.yaml:1009,6848,7182`) and the 04.1.1+04.1.2 suite is on develop; the run-create 409 `producer_slots_conflict` still needs documenting. | yes | no | S97: `contracts/openapi.yaml`, `packages/sdk` | n/a | yes — remainder only |
+
+## Moved from status-carried.md by S405 (2026-11-13)
+
+| check-no-secret-literals hits in S398 files (S403) | `scripts/check-no-secret-literals.sh` reports 3 connstr-password hits (`tests/Hosts.IntegrationTests/ManagementListenerProcessTests.cs:19`, `ManagementSurfaceTests.cs:14`, `RequestBodyLimitTests.cs:17`), so the check-env-matrix stage exits 1 on the wave head; the matrix and inventory sub-check pass. Medium. | coordinator |
+
+closed by #818 (4f8a2362)
+
+## Moved from status-carried.md by S407 (2026-11-13)
+
+| Secret inventory dev-stack runbook links (S250) | 10.1.2 AC1 asks for runbook links into 10.7.1-T4 sections; 13 rows in `infra/secrets-inventory.json` do, ten dev-stack rows link `docs/runbooks/environments.md` without an anchor because no 10.7.1-T4 section covers dev-stack credentials. AC1 is PARTIAL (#516). Add a dev-stack section or accept the file link. | 10.7.1-T4 |
+| Secret inventory slug edge cases (S250) | `scripts/secrets-inventory.mjs` heading-anchor parser: a 3-backtick line closes a 4-backtick fence (accepts a ghost anchor, rejects a real one) and a duplicate-heading suffix collides with an existing `-1` heading. No referenced runbook triggers either today. Also split-token value evasion is an accepted heuristic limit. | 10.1.2-T3.2 or next owner of `scripts/secrets-inventory.mjs` |
+
+closed by #820 (68358713)
+
+## Moved from status-carried.md by S409 (2026-11-13)
+
+| Sixth bounded JSON reader copy (S404) | `GitHubResponseReader` in `src/Modules/Evidgate.Modules.Catalog/Infrastructure/GitHub/` is the sixth hand-written bounded-JSON body reader (same shape as the other five); agent-code-rules §7 calls a second copy of protocol logic a defect. Extract one shared reader when the next HTTP client lands. | next HTTP-client task (T1.4 or 10.x) |
+
+closed by #826 (88ca42cf)
+
+## Moved from status-carried.md by S406 (2026-11-13)
+
+| Hard-kill reservation leak until budget reset (S402) | A process killed between the reserve and settle commits of a healing LLM call leaves that call's estimate counted in `healing_llm_budget` until the period resets; it only over-counts (the next reservation refuses sooner), never lets spend pass a cap. The reset is not built yet. Source: 08.5.1-T1.4 (#814, decision 402 A). | 08.5.1-T1.7 |
+| Provider output ceiling and estimate overshoot (S402) | The adapter sends no max-tokens field, so the held `ReservedOutputTokens` is not enforced on the wire; real usage above the estimate is charged at settlement and a call can overshoot a cap by its excess. Source: security review F2, #814. | 08.5.1-T1.5 |
+
+closed by #822 (c0609f31: `max_tokens` on the wire) and #828 (b66504d0: a leaked hold sits on its own day's row and the daily roll starts the next day at zero, so the leak is bounded to one period)

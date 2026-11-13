@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Evidgate.Modules.Healing.Contracts;
+using Microsoft.Extensions.Options;
 using Polly.Timeout;
 
 namespace Evidgate.Modules.Healing.Application;
@@ -21,6 +22,19 @@ internal sealed class HealingLlmOptions
     /// value — the pipeline then adds the retry strategy, because Polly's retry strategy requires at least one attempt.
     /// </summary>
     internal int MaxTransportRetries { get; set; }
+
+    /// <summary>
+    /// The output tokens one call may produce, held in the budget together with the prompt's estimate before the provider
+    /// is called. A deployment-neutral ceiling: the real per-model limit arrives with the provider contract.
+    /// </summary>
+    internal int ReservedOutputTokens { get; set; } = 1024;
+
+    /// <summary>
+    /// The cost held in the budget for one call before it is placed, replaced by the provider's reported cost afterwards.
+    /// A conservative placeholder until the price table of a real provider exists; real usage above the hold is
+    /// charged at settlement, so a call can overshoot the cap by its excess until the real price table exists.
+    /// </summary>
+    internal decimal ReservedCostPerCall { get; set; } = 0.05m;
 
     /// <summary>
     /// Budget of one whole call: one attempt per allowed retry, plus the retry delays and a little slack — with the
@@ -52,7 +66,7 @@ internal static class HealingLlmHttpClients
 /// <summary>
 /// The real-provider adapter seam, over a typed <see cref="HttpClient"/> whose base address, resilience policy and key
 /// the host configures. Its wire shape is this adapter's own, provider-neutral request/answer envelope:
-/// <c>{ "model", "prompt_version", "prompt", "response_schema" }</c> out, <c>{ "content", "tokens", "cost" }</c> back,
+/// <c>{ "model", "prompt_version", "prompt", "response_schema", "max_tokens" }</c> out, <c>{ "content", "tokens", "cost" }</c> back,
 /// where <c>content</c> is the answer body as a JSON string or a nested JSON value. A concrete provider's mapping lands
 /// with O4 without changing the gateway contract.
 /// </summary>
@@ -63,7 +77,7 @@ internal static class HealingLlmHttpClients
 /// any other read fault — is an <c>error</c> result, never an exception. It holds no API key, logs nothing, and never
 /// puts the payload or the response in an exception message (S3, AC6).
 /// </remarks>
-internal sealed class HttpHealingLlmProvider(HttpClient client) : IHealingLlmProvider
+internal sealed class HttpHealingLlmProvider(HttpClient client, IOptions<HealingLlmOptions> options) : IHealingLlmProvider
 {
     /// <inheritdoc />
     public async Task<HealingLlmResult> InvokeAsync(HealingLlmRequest request, CancellationToken cancellationToken)
@@ -77,6 +91,10 @@ internal sealed class HttpHealingLlmProvider(HttpClient client) : IHealingLlmPro
             prompt_version = request.PromptVersion,
             prompt = request.Payload,
             response_schema = request.ResponseSchema,
+
+            // The output ceiling the gateway held in the budget: the provider stops there, so the output a call can
+            // bill never exceeds what the reservation counted for it.
+            max_tokens = options.Value.ReservedOutputTokens,
         });
 
         using var content = new StringContent(body, Encoding.UTF8, "application/json");
@@ -116,6 +134,11 @@ internal sealed class HttpHealingLlmProvider(HttpClient client) : IHealingLlmPro
         {
             // A transport fault, or the response buffer ceiling the client enforces: nothing to validate, nothing spent.
             return Failure(HealingLlmStatuses.Error);
+        }
+        catch (HealingLlmNotSentException)
+        {
+            // Refused by a handler before the send: the gateway gives the hold back, so this is not an error result.
+            throw;
         }
         catch (InvalidOperationException)
         {

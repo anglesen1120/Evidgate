@@ -147,6 +147,10 @@
       "origin": "environment",
       "from": "the prod collector endpoint injected at deploy (10.3.1-T2). Required: alerts (FR-10-6) and the SLIs (FR-10-7) are measured from it, and 00 §11 forbids a secret in a log field or metric label. Backend and endpoint are [OPEN]"
     },
+    "EVIDGATE__API__MANAGEMENTPORT": {
+      "origin": "default",
+      "from": "not set: the management listener is off until the deployment (10.2.1-T1) names a port and keeps it off the public ingress; /metrics is then not served"
+    },
     "EVIDGATE__WORKER__HEALTHADDRESS": {
       "origin": "default",
       "from": "not set: the listener binds 0.0.0.0 inside the instance, as in staging — reachable on the internal path the probe uses, never publicly, because only /v1/* is forwarded (00 §9.1). ⚠️ settled with 10.2.1-T1's image and edge configuration"
@@ -198,6 +202,10 @@
     "EVIDGATE_OWNER_PASSWORD": {
       "origin": "default",
       "from": "dev-stack only: prod holds the same role's password in the provider secret store, referenced by EVIDGATE_MIGRATOR__CONNECTIONSTRING"
+    },
+    "EVIDGATE_PLATFORM_OPERATOR_PASSWORD": {
+      "origin": "default",
+      "from": "dev-stack only: prod holds the same role's password in the provider secret store for the operator who runs the kill-switch runbook; no process receives it, and there is no connection-string key for it"
     },
     "EVIDGATE_S3_ACCESS_KEY": {
       "origin": "default",

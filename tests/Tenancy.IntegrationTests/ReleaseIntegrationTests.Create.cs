@@ -12,7 +12,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_StoresExactDigests_AndGetReturnsTheDocumentedShape()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var digestApi = Digest('b');
         var digestWeb = Digest('c');
         var body = Body(
@@ -59,7 +59,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_DefaultStateIsDraft_AndActiveIsStored()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var draftId = await CreateReleaseAsync(world, "release-default", state: null, OneComponent(world));
         var activeId = await CreateReleaseAsync(world, "release-active", "active", OneComponent(world, fill: 'b'));
@@ -71,7 +71,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_DuplicateName_409ReleaseNameConflict_AndOtherProjectNameIsFree()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var first = await CreateAsync(world, Body("release-one", OneComponent(world)));
         first.Status.ShouldBe(HttpStatusCode.Created, first.ErrorMessage);
 
@@ -98,7 +98,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReplaySameIdempotencyKey_ReturnsOriginalOneAuditRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
         var body = Body("release-replay", OneComponent(world), state: null);
 
@@ -120,7 +120,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task ReplayDifferentPayload_409IdempotencyConflict()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
 
         var first = await CreateAsync(world, Body("release-bound", OneComponent(world)), idempotencyKey: key);
@@ -140,7 +140,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_MissingIdempotencyKey_400RequestInvalid_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await CreateAsync(world, Body("release-keyless", OneComponent(world)), omitIdempotencyKey: true);
 
@@ -151,7 +151,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_CrossTenantProject_404NotFound_NoLeak()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var (foreignOrg, foreignProject, _) = await SeedForeignTenantAsync(world.Database);
 
         var answer = await CreateAsync(world, Body("release-cross-tenant", OneComponent(world)), project: foreignProject);
@@ -165,8 +165,8 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Get_CrossTenantAndUnknownId_404SameEnvelope()
     {
-        await using var worldA = await RunCreationTests.StartAsync(_fixture, slug: "alpha");
-        await using var worldB = await RunCreationTests.StartAsync(_fixture, slug: "beta");
+        await using var worldA = await RunCreationTests.StartAsync(_fixture, slug: "alpha", hosts: _hosts);
+        await using var worldB = await RunCreationTests.StartAsync(_fixture, slug: "beta", hosts: _hosts);
         var releaseId = await CreateReleaseAsync(worldA, "release-alpha", state: null, OneComponent(worldA));
 
         var crossTenant = await GetReleaseAsync(worldA, releaseId, caller: worldB.Admin);
@@ -181,7 +181,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_ServicePrincipalWithMatchingProjectScope_201()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var caller = TenancyApiFactory.Resolved(
             serviceOrg: world.Org,
             serviceProject: world.Project,
@@ -199,7 +199,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_ServiceSiblingProjectScope_403ProjectScopeMismatch()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("sibling"));
         var caller = TenancyApiFactory.Resolved(
             serviceOrg: world.Org,
@@ -216,7 +216,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Create_UnknownSoftDeletedAndForeignProject_404SameEnvelope()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var (_, foreignProject, foreignRevision) = await SeedForeignTenantAsync(world.Database);
 
         var softDeleted = await CreateProjectAsync(world.Client, world.User, world.Org, Unique.Slug("gone"));

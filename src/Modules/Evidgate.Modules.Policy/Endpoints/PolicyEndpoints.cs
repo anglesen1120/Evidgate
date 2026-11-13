@@ -1,3 +1,4 @@
+using Evidgate.BuildingBlocks.Contracts.Validation;
 using System.Globalization;
 using System.Text.Json;
 using Evidgate.BuildingBlocks.Pipeline.Authorization;
@@ -43,6 +44,7 @@ public static class PolicyEndpoints
         var group = routes.MapGroup("/v1").WithTags("policies");
 
         group.MapPost("/projects/{p}/policies", CreatePolicyRevisionAsync)
+            .WithContractBodyLimit(ContractSchemaKeys.PolicyRevision)
             .Produces<PolicyRevisionDto>(StatusCodes.Status201Created)
             .Produces<PolicyRevisionDto>(StatusCodes.Status200OK)
             .WithSummary("Create an immutable, hashed policy revision (07.1.1)");

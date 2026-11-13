@@ -38,7 +38,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Bind_EmptyBody_400RequestInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-error-empty", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
 
@@ -51,7 +51,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Bind_BodyThatIsNotJson_400RequestInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-error-notjson", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
 
@@ -64,7 +64,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Bind_EmptyObject_422RequestInvalid_NamesTheRequiredMember()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-error-emptyobject", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
 
@@ -77,7 +77,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Bind_BodyThatIsNotAnObject_422RequestInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-error-array", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
 
@@ -90,7 +90,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Bind_MalformedRunId_422RequestInvalid_NamesTheMember()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-error-malformed", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
 
@@ -103,7 +103,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Bind_RepeatedMember_422RequestInvalid()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-error-repeat", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
         var body = $$"""{"run_id":"{{runId:D}}","run_id":"{{Guid.CreateVersion7():D}}"}""";
@@ -117,7 +117,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Bind_UnknownMember_422RequestInvalid_NamesIt()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-error-unknown", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
         var body = $$"""{"run_id":"{{runId:D}}","release_id":"{{releaseId:D}}"}""";
@@ -135,7 +135,7 @@ public sealed partial class ReleaseIntegrationTests
     [Fact]
     public async Task Bind_BodyAtTheCapReachesTheShapeRules_OneByteMoreIs413()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await ReleaseWithAsync(world, "bind-error-cap", "active", ("web", 'a'));
         var runId = await RunWithAsync(world, Components(("web", 'a')));
 
