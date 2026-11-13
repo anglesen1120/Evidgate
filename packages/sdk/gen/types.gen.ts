@@ -3000,7 +3000,7 @@ export type GitHubInstallStartResponse = {
 /**
  * The org's bound GitHub App installation (02.4.3). No secret exists in the row, so every member with `project:read` may read it.
  */
-export type GitHubInstallationView = {
+export type GitHubInstallationDto = {
     /**
      * The row id to disconnect with; it changes when the org reinstalls.
      */
@@ -3014,7 +3014,7 @@ export type GitHubInstallationView = {
      */
     account_login: string;
     /**
-     * Only `active` is served by the view route; the other two answer 409.
+     * Only `active` is served by the GET route; the other two answer 409.
      */
     state: 'active' | 'suspended' | 'deleted';
     /**
@@ -8138,7 +8138,7 @@ export type CompleteGitHubInstallResponses = {
     /**
      * The bound installation
      */
-    200: GitHubInstallationView;
+    200: GitHubInstallationDto;
 };
 
 export type CompleteGitHubInstallResponse = CompleteGitHubInstallResponses[keyof CompleteGitHubInstallResponses];
@@ -8183,7 +8183,7 @@ export type GetGitHubInstallationResponses = {
     /**
      * The installation
      */
-    200: GitHubInstallationView;
+    200: GitHubInstallationDto;
 };
 
 export type GetGitHubInstallationResponse = GetGitHubInstallationResponses[keyof GetGitHubInstallationResponses];

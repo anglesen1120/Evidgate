@@ -37,8 +37,12 @@ public static class GitHubInstallationEndpoints
         group.MapGet("/", GetAsync)
             .Produces<GitHubInstallationDto>(StatusCodes.Status200OK)
             .WithSummary("The org's GitHub installation");
+        // The delegate returns the C8 `Result`, which ASP.NET would infer as a 200 body next to the declared 204;
+        // the bodiless `.Produces(200)` replaces that inference so Result/Error/ErrorDetail stay out of the served
+        // OpenAPI document (it is diffed against contracts/openapi.yaml).
         group.MapDelete("/{i}", DisconnectAsync)
             .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status200OK)
             .WithSummary("Disconnect the installation from this org (the App stays installed at GitHub)");
 
         return group;

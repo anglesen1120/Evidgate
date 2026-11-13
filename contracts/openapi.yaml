@@ -4464,7 +4464,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GitHubInstallationView'
+                $ref: '#/components/schemas/GitHubInstallationDto'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -4497,7 +4497,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/GitHubInstallationView'
+                $ref: '#/components/schemas/GitHubInstallationDto'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -14485,7 +14485,7 @@ components:
           type: string
           format: uri
           description: The GitHub install URL, `https://github.com/apps/{slug}/installations/new?state={nonce}`.
-    GitHubInstallationView:
+    GitHubInstallationDto:
       type: object
       description: >-
         The org's bound GitHub App installation (02.4.3). No secret exists in the row, so every member with
@@ -14507,7 +14507,7 @@ components:
         state:
           type: string
           enum: [active, suspended, deleted]
-          description: Only `active` is served by the view route; the other two answer 409.
+          description: Only `active` is served by the GET route; the other two answer 409.
         permissions:
           type: object
           additionalProperties:

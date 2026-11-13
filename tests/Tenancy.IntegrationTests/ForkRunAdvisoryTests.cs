@@ -14,6 +14,7 @@ namespace Tenancy.IntegrationTests;
 /// bind refusals are pinned beside the release tests (<c>ExplicitBind_ForkRun_422ForkRunNotBindable_NoRows</c>,
 /// <c>BindAtRunCreate_ForkIdentity_422NoRun</c>), the evaluator's own rule in <c>AdvisoryOnlyRunTests</c>.
 /// </summary>
+[Trait("Category", "Docker")]
 public sealed class ForkRunAdvisoryTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
