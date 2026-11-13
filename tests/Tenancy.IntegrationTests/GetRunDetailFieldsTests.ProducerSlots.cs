@@ -32,7 +32,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ProducerSlots_MixedStates_ComeFromTheStoredRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await NewRunAsync(world);
         await _fixture.ExecuteAsync(world.Database, $"""
             update public.producer_slot
@@ -98,7 +98,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ProducerSlots_TokenIdentityBoundsAndTheBindingIsNeverServed()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var manifest = RunCreationTests.Manifest(world.SuiteRevision, world.Cases, variants: 3, shards: 3);
         manifest["environment_revision_id"] = world.EnvironmentRevision.ToString();
         var manifestId = await RunCreationTests.UploadAsync(world.Client, world.Admin, world.Project, manifest);
@@ -128,7 +128,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ProducerSlots_FinalizedCountMismatch_ServedAsStored()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await NewRunAsync(world);
         await _fixture.ExecuteAsync(world.Database, $"""
             update public.producer_slot
@@ -155,7 +155,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ProducerSlots_AfterCancelEvent_CountedOnTheSlot()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await NewRunAsync(world);
         var canceled = await CancelRunTestData.CancelAsync(world, runId);
         canceled.Status.ShouldBe(HttpStatusCode.Accepted, canceled.ErrorMessage);
@@ -178,7 +178,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ProducerSlots_RunWithoutSlots_EmptyArray()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await NewRunAsync(world);
         await _fixture.ExecuteAsync(
             world.Database,
@@ -200,7 +200,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ProducerSlots_CrossTenant_404WithNoSlotLeak()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await NewRunAsync(world);
         await _fixture.ExecuteAsync(world.Database, $"""
             update public.producer_slot set bound_token_jti = '{SlotJti}'

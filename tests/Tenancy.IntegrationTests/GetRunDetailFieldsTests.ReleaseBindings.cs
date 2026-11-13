@@ -39,7 +39,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_Releases_ComeFromTheStoredBindingRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "detail-bound", "web");
         var runId = await CreateBoundRunAsync(world, releaseId);
 
@@ -61,7 +61,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_UnboundRun_ServesAnEmptyReleasesArrayAndZeroLateEvents()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
@@ -86,7 +86,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_TwoReleases_AreOrderedByBindingCreatedAtThenId()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
@@ -115,7 +115,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_SiblingProjectBinding_IsNotListed()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
@@ -150,7 +150,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_AfterCancelEvents_CountsOnlyTheFlaggedEvents()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
@@ -178,7 +178,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ReleaseMembers_NeedOnlyRunRead()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");

@@ -24,7 +24,7 @@ namespace Tenancy.IntegrationTests;
 /// </summary>
 [Trait("Category", "Docker")]
 [Collection(ExclusiveTenancySuite.Name)]
-public sealed partial class IngestQuotaTests
+public sealed partial class IngestQuotaTests : IClassFixture<TenancyHostPool>
 {
     private const decimal WarnRatio = 0.8m;
 
@@ -35,8 +35,15 @@ public sealed partial class IngestQuotaTests
     private static readonly ConditionalWeakTable<IngestTestWorld, Task<string>> Months = new();
 
     private readonly PostgresTenancyFixture _fixture;
+    // Reuse the counter world's API host across cases instead of rebuilding it for each test.
+    // Each world keeps its tenant-specific data; overlapping leases and customized hosts stay private.
+    private readonly TenancyHostPool _hosts;
 
-    public IngestQuotaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public IngestQuotaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     // ---------------------------------------------------------------- one call per batch (T53)
 
@@ -45,7 +52,7 @@ public sealed partial class IngestQuotaTests
     {
         var spy = new QuotaGateSpy();
         await using var world = await StartIngestAsync(spy);
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 0m, limit: 10m);
 
         var answer = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L), (Guid.CreateVersion7(), 3L));
@@ -72,7 +79,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_QuotaBlock_Returns429QuotaExceededWithRetryAfter()
     {
         await using var world = await StartIngestAsync(runState: "queued");
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         // One unit of room for a batch of two: the batch is refused as a whole, never partly admitted.
         await SeedAsync(counters, world, used: 9m, limit: 10m);
@@ -112,7 +119,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_QuotaBlock_RefusesAStraddlingBatchWhole()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         // Two units of room for a batch of three, which would also cross the 80 % warning line: the batch is one
         // refusal, so neither half of it commits and the counter is charged nothing.
@@ -145,7 +152,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_QuotaBlock_CountsTheDenialMetricAndOneBatchRejection()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 1m, limit: 1m);
 
         using var quotaListener = IngestTelemetryCapture.QuotaDeniedBatches(out var kinds);
@@ -164,7 +171,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_CommittedBatch_CompletesAfterABlock()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 0m, limit: 2m);
 
         var committed = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L));
@@ -191,7 +198,7 @@ public sealed partial class IngestQuotaTests
         const decimal limit = 20m;
 
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 0m, limit: limit);
 
         var answers = await Task.WhenAll(Enumerable.Range(1, batches).Select(sequence =>
@@ -217,7 +224,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_QuotaWarn_Proceeds()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         // 7 of 10 with a batch of two crosses the 80 % warn ratio and still fits: a warn is advice, and the
         // batch it warns about is admitted.
@@ -236,7 +243,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_ForeignOrgCounter_Untouched()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         await SeedAsync(counters, world, used: 0m, limit: 10m);
         var (otherOrg, otherProject) = await world.CreateOtherOrgAsync(Unique.Slug("quota-other"));
@@ -260,7 +267,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_GateThrows_RefusesTheBatch()
     {
         await using var world = await StartIngestAsync(services: services => services.AddSingleton<IQuotaGate>(new ThrowingQuotaGate()));
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 0m, limit: 10m);
 
         var answer = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L));
@@ -293,8 +300,9 @@ public sealed partial class IngestQuotaTests
             };
         }
 
+        // The class shares one host per variant; a case that passes its own services or configuration gets a private one.
         var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), planned: 1, configuration: configuration, services: extra);
+            _fixture, IngestTestWorld.Writer(), planned: 1, configuration: configuration, services: extra, hosts: _hosts);
 
         // The batches of this suite contend on the counter (the unit under test) and not on the queued -> running
         // transition, so the run starts in the state the case is about; a block rolls an applied transition back.

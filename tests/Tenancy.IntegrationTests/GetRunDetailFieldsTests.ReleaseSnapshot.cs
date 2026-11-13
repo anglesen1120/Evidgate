@@ -36,7 +36,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_MoreBindingsThanTheCeiling_ServesTheOldestRowsAndDropsTheNewest()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         ReleaseSql.MaxBoundReleases.ShouldBe(ServedBindingBound, "the read's ceiling is the pinned implementation value");
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
@@ -74,7 +74,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_BoundRun_ReadsTheBindingsInTheStatementThatReadsTheRun()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "detail-statement", "web");
         var runId = await CreateBoundRunAsync(world, releaseId);
 
@@ -108,7 +108,7 @@ public sealed partial class GetRunDetailFieldsTests
     {
         // Dedicated: disabling the append-only guard is DDL and takes a table-wide lock no sibling class may share.
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await RunCreationTests.StartAsync(_fixture, database: owned.Name);
+        await using var world = await RunCreationTests.StartAsync(_fixture, database: owned.Name, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "detail-legacy", "web");
         var runId = await CreateBoundRunAsync(world, releaseId);
         await RemoveStateHistoryAsync(world, runId);
@@ -136,7 +136,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_AnotherTenantsRun_RefusesWithoutNamingItsReleases()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "detail-private", "web");
         var runId = await CreateBoundRunAsync(world, releaseId);
 

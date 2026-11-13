@@ -11,7 +11,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ExactlyFiveHundredBindings_ServesEveryStoredRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
@@ -31,7 +31,7 @@ public sealed partial class GetRunDetailFieldsTests
     [InlineData(false)]
     public async Task GetRun_UncommittedCancelAndBinding_SeesOnlyCommittedStateAndReleases(bool commit)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
@@ -83,7 +83,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_OnlySiblingProjectBinding_HidesItUntilAnOwnProjectBindingExists()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
@@ -111,7 +111,7 @@ public sealed partial class GetRunDetailFieldsTests
     public async Task GetRun_LegacyRunWithoutBindings_KeepsUnknownHistoryAndEmptyReleasesDistinct()
     {
         await using var owned = await _fixture.CreateDedicatedDatabaseAsync();
-        await using var world = await RunCreationTests.StartAsync(_fixture, database: owned.Name);
+        await using var world = await RunCreationTests.StartAsync(_fixture, database: owned.Name, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");

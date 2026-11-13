@@ -34,7 +34,7 @@ public sealed partial class ReconcileRunTests
             claimedPermissions: [Permissions.Event.Write],
             credentialId: IngestTestWorld.Jti,
             ciRun: new CiRunReference("github_actions", 1L, 7L, 2));
-        var world = await IngestTestWorld.StartAsync(_fixture, writer, planned: 2, slots: 1, database: database);
+        var world = await IngestTestWorld.StartAsync(_fixture, writer, planned: 2, slots: 1, database: database, hosts: _hosts);
         world = await AnswerPlanOrDisposeAsync(world);
         await _fixture.ExecuteAsync(
             world.Database, $"update public.run set ci_run_ref = '{RunCiRunRefJson}'::jsonb where id = '{world.RunId:D}'");

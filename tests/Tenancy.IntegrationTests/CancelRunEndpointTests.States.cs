@@ -26,7 +26,7 @@ public sealed partial class CancelRunEndpointTests
     [InlineData("canceled", true)]
     public async Task CancelRun_EveryState_RepeatedCallPreservesSingleSchedule(string state, bool terminal)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var run = await CancelRunTestData.RunInStateAsync(_fixture, world, state);
         var version = await CancelRunTestData.VersionAsync(_fixture, world, run);
         (await CancelRunTestData.CancelAsync(world, run)).Status.ShouldBe(HttpStatusCode.Accepted);
@@ -44,7 +44,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_ConcurrentDistinctKeys_QueuesOneKill()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var run = await CancelRunTestData.RunInStateAsync(_fixture, world, "running");
         var calls = Enumerable.Range(0, 8)
             .Select(index => CancelRunTestData.CancelAsync(world, run, reason: $"caller {index}"))
@@ -66,7 +66,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_ForeignTenantOrViewer_DoesNotEnqueueKill()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var run = await CancelRunTestData.RunInStateAsync(_fixture, world, "running");
         var viewer = await AddMemberAsync(_fixture, world.Database, world.Org, "viewer");
         (await CancelRunTestData.CancelAsync(world, run,

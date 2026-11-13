@@ -27,7 +27,7 @@ public sealed partial class IngestQuotaTests
     {
         var spy = new QuotaGateSpy();
         await using var world = await StartIngestAsync(spy);
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 0m, limit: 10m);
 
         var json = IngestQaRequests.Json(StepBatch(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L)));
@@ -57,7 +57,7 @@ public sealed partial class IngestQuotaTests
     {
         var spy = new QuotaGateSpy();
         await using var world = await StartIngestAsync(spy);
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 0m, limit: 10m);
 
         var answer = await PostBatchAsync(world, (Guid.CreateVersion7(), 1L), (Guid.CreateVersion7(), 2L));
@@ -88,7 +88,7 @@ public sealed partial class IngestQuotaTests
     {
         var spy = new QuotaGateSpy();
         await using var world = await StartIngestAsync(spy);
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 0m, limit: 10m);
 
         // One event_id twice inside one batch, identical envelopes: one row is committed and one ack is a
@@ -115,7 +115,7 @@ public sealed partial class IngestQuotaTests
         await using var world = await StartIngestAsync(
             spy,
             services: services => ReplaceWith<IRunEventScope>(services, inner => new SynchronizedScope(inner, barrier)));
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: initialUsed, limit: 10m);
         var json = IngestQaRequests.Json(StepBatch(world, (Guid.CreateVersion7(), 1L)));
 

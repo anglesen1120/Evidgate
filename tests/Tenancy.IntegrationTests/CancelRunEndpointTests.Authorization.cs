@@ -19,7 +19,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_NoPermission_403()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
         var viewerId = await AddMemberAsync(_fixture, world.Database, world.Org, "viewer");
         var qaId = await AddMemberAsync(_fixture, world.Database, world.Org, "qa_engineer");
@@ -49,7 +49,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_ServiceCredentialWithoutCancel_403()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
         var denied = await CancelRunTestData.CancelAsync(
@@ -74,7 +74,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task Cancel_CrossTenant_404()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
         var otherUser = Guid.CreateVersion7();
@@ -104,7 +104,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task Cancel_CrossProject_404SharedNotFoundBody()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
         var sibling = await CreateProjectAsync(world.Client, world.User, world.Org, "other");
 
