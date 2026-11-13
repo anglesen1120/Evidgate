@@ -123,6 +123,8 @@ otherwise the envelope filter's default `60` (00 §9.2).
   response bodies, and a secret must never be stored in the clear (00 §5.7 S3), so
   these responses are never replayed and no key is honoured; a retried create makes
   a second secret the admin can revoke (02.4.1, 02.4.2, 02.4.4).
+- `POST /v1/dev/session` — Development-only route: it only sets the
+  session cookies of one fixed development user, so a repeat replaces the caller's own session.
 - `POST /v1/webhooks/github` — replay-safe by provider `delivery_id` dedupe
   (00 §9.3).
 - `POST /v1/runs/{r}/events` — per-event `event_id` dedupe is the arbiter; a

@@ -10,6 +10,7 @@ import ajvFormats from 'ajv-formats';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { EventEnvelope } from './envelope.js';
+import { computeExecutionKey } from './executionKey.js';
 import type { WarningPayload } from './identity.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -83,7 +84,13 @@ describe('independent reporter real CLI QA', () => {
       expect(event.ext.variant_hash).toMatch(/^sha256:[a-f0-9]{64}$/);
       expect(event.ext.target_env).toBe('qa-local');
       expect(event.ext.identity_conflict).toBeUndefined();
-      expect(event.execution_key).toBe('0'.repeat(64));
+      expect(event.execution_key).toBe(
+        computeExecutionKey(
+          String(event.ext.case_id),
+          String(event.ext.variant_hash),
+          String(event.ext.target_env),
+        ),
+      );
     }
     // C3: a fully mapped run trips no gate, so no `[evidgate]` line reaches stderr.
     expect(stderr).not.toContain('[evidgate]');

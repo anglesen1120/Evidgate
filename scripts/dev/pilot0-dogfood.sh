@@ -10,12 +10,6 @@
 # cache rules. The decision is never computed here: it is read from
 # GET /v1/runs/{r}/decision, and `evidgate gate` supplies the exit code.
 #
-# The reporter stamps its run-level capability/run_begin markers with an all-zero placeholder
-# execution key (packages/adapter-playwright/src/reporter.ts), and ingest accepts only planned
-# execution keys (IngestEventBatch, unknown_execution_key), so the script rewrites that key in
-# the spool before `events send`; a rewrite of zero lines fails the run instead of sending
-# envelopes the server would answer 422.
-#
 # usage: scripts/dev/pilot0-dogfood.sh
 #
 # Required environment (the dev token is printed once by `scripts/dev/up.sh --with-token`;
@@ -157,7 +151,7 @@ curl -fsS --max-time 5 "$API_URL/internal/health/ready" >/dev/null \
   || die "GET $API_URL/internal/health/ready is not healthy; start the stack with scripts/dev/up.sh --with-token"
 
 info "building packages (incremental tsc -b when a dist is missing)"
-if [ ! -f "$CLI_BIN" ] || [ ! -f "$ADAPTER_DIST/index.js" ] || [ ! -f "$ROOT/packages/sdk/dist/src/index.js" ]; then
+if [ ! -f "$CLI_BIN" ] || [ ! -f "$ADAPTER_DIST/index.js" ] || [ ! -f "$ADAPTER_DIST/executionKey.js" ] || [ ! -f "$ROOT/packages/sdk/dist/src/index.js" ]; then
   ( cd "$ROOT" && "$TSC" -b )
 fi
 [ -f "$CLI_BIN" ] || die "the CLI build produced no $CLI_BIN"
@@ -220,7 +214,7 @@ run_once() {
   local spool="$WORK/spool-$label"
   local output="$WORK/results-$label"
   local port=$((40000 + RANDOM % 20000))
-  local run_id config gate_exit play_exit decision_json rekeyed
+  local run_id config gate_exit play_exit decision_json
   # A, B and C upload the same manifests, so the CLI's derived run key would be identical
   # and the server would replay A's stored 201 for B (contracts/cli.md §9: the
   # Idempotency-Key is the arbiter). One invocation id plus the label keeps every run,
@@ -250,14 +244,6 @@ run_once() {
   fi
 
   info "run $label: sending the spool and finalizing shard $shard"
-  # Without a rewritten key ingest answers 422 unknown_execution_key, so a zero count means
-  # the placeholder markers moved (or the spool is empty) and the run would fail later anyway.
-  rekeyed="$("$NODE" "$HELPER" rekey --dir "$spool/$run_id/shard-1" --key "$EXECUTION_KEY")" \
-    || die "run $label: the spool rekey failed"
-  case "$rekeyed" in
-    '' | 0) die "run $label: the spool rekey rewrote no line; the reporter's placeholder execution key was not found" ;;
-    *[!0-9]*) die "run $label: the spool rekey printed a non-numeric count" ;;
-  esac
   spooled "$spool" events send --run "$run_id" --producer shard-1 --json >/dev/null
   spooled "$spool" runs finalize --run "$run_id" --producer shard-1 --shard "$shard" \
     --manifest-hash "$manifest_hash" --json >/dev/null
