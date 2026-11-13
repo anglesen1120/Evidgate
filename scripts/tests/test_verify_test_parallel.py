@@ -139,3 +139,10 @@ class TestClassTiming(unittest.TestCase):
         done, _, _ = self.run_stage(FAKE_SLEEP="0")
         self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
         self.assertIn("no *.junit.xml", done.stderr)
+
+    def test_unwritable_timing_directory_does_not_stop_the_tests(self):
+        done, calls, _ = self.run_stage(FAKE_SLEEP="0", ROOT="/dev/null")
+        self.assertEqual(done.returncode, 1, done.stdout + done.stderr)  # the fake B.Tests always fails
+        self.assertEqual(calls.count("START"), 5)
+        self.assertIn("class timing disabled", done.stderr)
+        self.assertFalse(any("--report-xunit-junit" in a for a in self.args))

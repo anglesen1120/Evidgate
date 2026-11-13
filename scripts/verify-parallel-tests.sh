@@ -35,8 +35,11 @@ PT_PIDS=() PT_NAMES=() PT_FILES=() PT_STARTS=() PT_LOGS= PT_CAP=0 PT_FAILED=0
 CT_DIR="" CT_FLAGS=() CT_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/class-timing.mjs"
 class_timing_begin() {
   CT_DIR="${ROOT:-$PWD}/artifacts/test-results/junit"
-  rm -rf "$CT_DIR"
-  mkdir -p "$CT_DIR"
+  if ! { rm -rf "$CT_DIR" && mkdir -p "$CT_DIR"; } 2>/dev/null; then
+    echo "   class timing disabled: cannot prepare $CT_DIR" >&2
+    CT_DIR=""
+  fi
+  return 0
 }
 # `class_timing_flags <run name>`: sets CT_FLAGS to the report options (empty when off).
 class_timing_flags() {
@@ -51,7 +54,7 @@ class_timing_report() {
   CT_DIR=""
 }
 class_timing_report_isolation() {
-  class_timing_report "$ROOT/artifacts/test-results/isolation.junit.xml" "$ROOT/artifacts/test-results/class-timing-isolation.tsv"
+  class_timing_report "$ROOT/artifacts/test-results/isolation.junit.xml" "$ROOT/artifacts/test-results/class-timing-isolation.tsv" || true
 }
 
 # `format_duration <seconds>`: "<m>m<ss>s".

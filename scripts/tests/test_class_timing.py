@@ -85,6 +85,32 @@ class ClassTimingTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertIn("cannot write", r.stderr)
 
+    def test_inert_xml_and_attribute_forms(self) -> None:
+        body = (
+            '<failure><![CDATA[<testcase classname="N.Fake" time="900"/>]]></failure><!-- <testcase classname="N.C" time="5"/> -->'
+            "<testcase classname='N.Single' time='1.5'/>"
+            '<testcase classname="N.Gen&lt;T&gt;" time="2"/>'
+            '<testcase classname="N.Blank" time=""/><testcase classname="N.Blank" time="0"/>'
+        )
+        (self.dir / "a.junit.xml").write_text(f"<testsuites>{body}</testsuites>")
+        tsv = self.dir / "t.tsv"
+        r = self.run_script("--out", str(tsv), str(self.dir))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(
+            tsv.read_text().splitlines()[1:],
+            ["N.Gen<T>\t1\t2.000", "N.Single\t1\t1.500", "N.Blank\t1\t0.000"],
+        )
+        self.assertIn("1 testcase(s) without a usable", r.stderr)
+
+    def test_unreadable_directory_only_warns(self) -> None:
+        locked = self.dir / "locked"
+        locked.mkdir()
+        locked.chmod(0)
+        self.addCleanup(locked.chmod, 0o700)
+        r = self.run_script(str(locked))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("at ", r.stderr)
+
     def test_bad_command_line_is_the_only_failure(self) -> None:
         for args in ([], ["--top", "0", str(self.dir)], ["--bogus", str(self.dir)], ["--out"]):
             with self.subTest(args=args):

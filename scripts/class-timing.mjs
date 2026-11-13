@@ -14,7 +14,11 @@ import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'n
 import { dirname, join } from 'node:path';
 
 const TESTCASE_TAG = /<testcase\b([^>]*?)\/?>/g;
-const ATTRIBUTE = /([A-Za-z_][\w-]*)="([^"]*)"/g;
+const ATTRIBUTE = /([A-Za-z_][\w-]*)=(?:"([^"]*)"|'([^']*)')/g;
+// Failure text may quote XML: drop CDATA and comments so a fake <testcase> inside one is not counted.
+const INERT = /<!\[CDATA\[[\s\S]*?\]\]>|<!--[\s\S]*?-->/g;
+const ENTITIES = { '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&amp;': '&' };
+const decode = (v) => v.replace(/&(?:lt|gt|quot|apos|amp);/g, (e) => ENTITIES[e]);
 
 function parseArgs(argv) {
   const args = { top: 20, out: null, inputs: [] };
@@ -45,10 +49,16 @@ function reportFiles(input, warn) {
     return [];
   }
   if (!stat.isDirectory()) return [input];
-  const files = readdirSync(input)
-    .filter((n) => n.endsWith('.junit.xml'))
-    .sort()
-    .map((n) => join(input, n));
+  let files;
+  try {
+    files = readdirSync(input)
+      .filter((n) => n.endsWith('.junit.xml'))
+      .sort()
+      .map((n) => join(input, n));
+  } catch (e) {
+    warn(`${input}: ${e.message}`);
+    return [];
+  }
   if (files.length === 0) warn(`${input}: no *.junit.xml report`);
   return files;
 }
@@ -56,10 +66,10 @@ function reportFiles(input, warn) {
 /** Adds the testcases of one report to `classes`; returns the number it could not read. */
 export function addReport(xml, classes) {
   let unreadable = 0;
-  for (const tag of xml.matchAll(TESTCASE_TAG)) {
+  for (const tag of xml.replace(INERT, '').matchAll(TESTCASE_TAG)) {
     const attrs = {};
-    for (const m of tag[1].matchAll(ATTRIBUTE)) attrs[m[1]] = m[2];
-    const seconds = Number(attrs.time);
+    for (const m of tag[1].matchAll(ATTRIBUTE)) attrs[m[1]] = decode(m[2] ?? m[3]);
+    const seconds = attrs.time?.trim() ? Number(attrs.time) : NaN;
     if (!attrs.classname || !Number.isFinite(seconds) || seconds < 0) {
       unreadable++;
       continue;

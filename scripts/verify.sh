@@ -183,12 +183,12 @@ run_stage() {
       stage "isolation (skipped: EVIDGATE_VERIFY_SKIP_DOCKER=1)"
     else
       stage "isolation (M1 gate: RLS, composite FK, API isolation; JUnit report)"
-      status=0 && mkdir -p artifacts/test-results
+      status=0 && mkdir -p artifacts/test-results && rm -f artifacts/test-results/isolation.junit.xml
       # $ROOT-absolute: the console runner resolves the report path against the
       # process cwd, which `dotnet run` does not guarantee to be the repo root.
       dotnet run --project tests/Isolation.Tests -c Release --no-build -- \
         -result-junit "$ROOT/artifacts/test-results/isolation.junit.xml" || status=$?
-      class_timing_report_isolation && exit "$status"
+      class_timing_report_isolation; exit "$status"
     fi
     ;;
   fixtures-hostile)
