@@ -176,11 +176,24 @@ export function resolveIdentity(test: TestCase, deps: IdentityResolverDeps): Ide
   const variant = variantOutcome(test, deps);
   if (variant.hash !== undefined) identity.variant_hash = variant.hash;
 
+  const targetEnv = resolveTargetEnv(test, deps, location);
+  if (targetEnv !== undefined) identity.target_env = targetEnv;
+
+  completeExecutionKey(identity);
+
+  return identity;
+}
+
+/** The target env: the explicit option, else the project name; warns once per project when neither is valid. */
+function resolveTargetEnv(
+  test: TestCase,
+  deps: IdentityResolverDeps,
+  location: string,
+): string | undefined {
   const project = test.parent?.project?.();
   const targetEnv = deps.targetEnv ?? validTargetEnv(project?.name);
-  if (targetEnv !== undefined) {
-    identity.target_env = targetEnv;
-  } else if (deps.targetEnv === undefined && project !== undefined) {
+  if (targetEnv !== undefined) return targetEnv;
+  if (deps.targetEnv === undefined && project !== undefined) {
     // Both EVIDGATE_TARGET_ENV and the project name are invalid, so no target_env is
     // emitted. Warn once per project (the project object is the memo key) and never echo
     // the rejected name.
@@ -196,10 +209,7 @@ export function resolveIdentity(test: TestCase, deps: IdentityResolverDeps): Ide
       });
     }
   }
-
-  completeExecutionKey(identity);
-
-  return identity;
+  return undefined;
 }
 
 /** Derives the real key once the whole triple resolved; otherwise the sentinel stays. */

@@ -7,10 +7,11 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Suite, TestCase, TestResult } from '@playwright/test/reporter';
+import type { TestCase, TestResult } from '@playwright/test/reporter';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { EventEnvelope } from './envelope.js';
+import { fakeSuite, fakeTest as resolvableTest } from './identity-resolve.testing.js';
 import { computeExecutionKey } from './executionKey.js';
 import { PLACEHOLDER_EXECUTION_KEY, type IdentityResolver } from './identity.js';
 import { EvidgateReporter, type EvidgateReporterOptions } from './reporter.js';
@@ -88,7 +89,7 @@ describe('execution_key identity', () => {
     const resolved = 'a'.repeat(64);
     const identity: IdentityResolver = () => ({ execution_key: resolved });
     const { reporter, spool } = makeReporter({ identity });
-    reporter.onBegin(undefined, { allTests: () => [fakeTest()] } as unknown as Suite);
+    reporter.onBegin(undefined, fakeSuite([fakeTest()]));
     reporter.onTestBegin(fakeTest(), fakeResult());
     reporter.onTestEnd(fakeTest(), fakeResult());
     void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
@@ -111,7 +112,7 @@ describe('execution_key identity', () => {
       annotations: [{ type: 'evidgate.id', description: '11111111-1111-1111-1111-111111111111' }],
       parent: { project: () => ({ name: 'chromium' }) },
     } as unknown as TestCase;
-    reporter.onBegin(undefined, { allTests: () => [annotated] } as unknown as Suite);
+    reporter.onBegin(undefined, fakeSuite([annotated]));
     reporter.onTestBegin(annotated, fakeResult());
     reporter.onTestEnd(annotated, fakeResult());
     void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
@@ -137,18 +138,16 @@ describe('execution_key identity', () => {
     const CASE_TWO = '22222222-2222-2222-2222-222222222222';
 
     function annotatedTest(id: string, caseId: string): TestCase {
-      return {
+      return resolvableTest({
         id,
-        title: id,
-        location: { file: `tests/${id}.spec.ts`, line: 1, column: 1 },
+        file: `tests/${id}.spec.ts`,
         annotations: [{ type: 'evidgate.id', description: caseId }],
-        parent: { project: () => ({ name: 'chromium' }) },
-      } as unknown as TestCase;
+      });
     }
 
     function runLevelKeys(tests: TestCase[]): string[] {
       const { reporter, spool } = makeReporter();
-      reporter.onBegin(undefined, { allTests: () => tests } as unknown as Suite);
+      reporter.onBegin(undefined, fakeSuite(tests));
       void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
       return readEnvelopes(spool)
         .filter((item) => item.type === 'run.log')
