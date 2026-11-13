@@ -142,7 +142,12 @@ function tryLock(lock) {
   } catch {
     return false;
   }
-  writeFileSync(join(lock, 'pid'), String(process.pid));
+  try {
+    writeFileSync(join(lock, 'pid'), String(process.pid));
+  } catch (error) {
+    rmSync(lock, { recursive: true, force: true });
+    throw error;
+  }
   return true;
 }
 
@@ -175,13 +180,22 @@ function withLock(path, action) {
   if (!tryLock(lock)) {
     // A SIGKILL leaves the lock behind; its owner pid tells a dead holder from a live one. A lock
     // without a readable pid is treated as held.
-    if (holderIsGone(lock)) rmSync(lock, { recursive: true, force: true });
+    // The rename is atomic: of two runs that both saw a dead holder only one moves the directory,
+    // so the loser can never delete the winner's fresh lock.
+    if (holderIsGone(lock)) {
+      const stale = `${lock}.stale.${process.pid}`;
+      try {
+        renameSync(lock, stale);
+        rmSync(stale, { recursive: true, force: true });
+      } catch {
+        // another run took it over first
+      }
+    }
     if (!tryLock(lock))
       fail(`${lock} exists: another run is in progress (remove the directory if none is)`);
   }
   // fail() exits the process, so the lock is released on exit rather than in a finally.
   process.on('exit', () => rmSync(lock, { recursive: true, force: true }));
-  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => process.exit(1));
   action();
 }
 
@@ -244,6 +258,7 @@ function generateDev(root, rules, file, template) {
   const templateContent = existsSync(template) ? readFileSync(template, 'utf8') : '';
   for (const rule of rules) {
     const committed = valueOf(templateContent, rule.name);
+    // Template values are plain strings; the quoting only guards spaces, quotes and shell syntax.
     if (rule.kind === 'template-provided' && missing(rule.name) && committed)
       append(rule.name, shellValue(committed));
   }

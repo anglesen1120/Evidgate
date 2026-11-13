@@ -298,6 +298,21 @@ public sealed class SecretPlaceholderGeneratorTests : IDisposable
         (await RunShellAsync($"set -a; . '{EnvFile}'; printf '%s' \"$EVIDGATE_S3_ACCESS_KEY\"")).ShouldBe(Value);
     }
 
+    [Fact]
+    public async Task TemplateValueWithApostrophe_IsWrittenQuotedAndSourcesBack()
+    {
+        const string Value = "owner's key";
+        var template = Path.Combine(_root, ".env.dev.template");
+        var lines = (await File.ReadAllLinesAsync(template, TestContext.Current.CancellationToken))
+            .Select(line => line.StartsWith("EVIDGATE_S3_ACCESS_KEY=", StringComparison.Ordinal) ? "EVIDGATE_S3_ACCESS_KEY=owner's key" : line);
+        await File.WriteAllLinesAsync(template, lines, TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(EnvFile, "EVIDGATE_DB_PORT=5432\n", TestContext.Current.CancellationToken);
+
+        (await RunAsync("dev")).ExitCode.ShouldBe(0);
+
+        (await RunShellAsync($"set -a; . '{EnvFile}'; printf '%s' \"$EVIDGATE_S3_ACCESS_KEY\"")).ShouldBe(Value);
+    }
+
     private static async Task<int> DeadPidAsync()
     {
         var start = new ProcessStartInfo("node") { RedirectStandardOutput = true };
