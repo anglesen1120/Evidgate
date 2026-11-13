@@ -354,12 +354,18 @@ public sealed class ManagementListenerProcessTests
 
         configure?.Invoke(environment);
 
-        // A listener setting inherited from the test runner must not override the one this test chose.
-        string[] listenerKeys = ["ASPNETCORE_URLS", "ASPNETCORE_HTTP_PORTS", "ASPNETCORE_HTTPS_PORTS"];
+        // A listener or management setting inherited from the test runner must not override the one this test chose.
+        string[] inheritedKeys =
+        [
+            "ASPNETCORE_URLS",
+            "ASPNETCORE_HTTP_PORTS",
+            "ASPNETCORE_HTTPS_PORTS",
+            "EVIDGATE__API__MANAGEMENTPORT",
+        ];
         return ProcessRunner.Start(
             HostLocator.AppHost("Evidgate.Api"),
             environment,
-            [.. listenerKeys.Where(key => !environment.ContainsKey(key))]);
+            [.. inheritedKeys.Where(key => !environment.ContainsKey(key))]);
     }
 
     private static async Task WaitForLiveAsync(int port)
