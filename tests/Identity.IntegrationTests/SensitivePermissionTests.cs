@@ -116,6 +116,11 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         // among them — and its body and effective discrepancy codes are asserted in Tenancy.IntegrationTests'
         // ReportComparisonTests.
         "/v1/runs/{r}/reports/{report_id}/comparison",
+
+        // The install callback consumes one-time state and verifies a GitHub OAuth code, not a repeatable resource read.
+        // GitHubInstallationTests covers permission/refusal in Callback_MalformedState_IsRefusedByThePermissionStage and
+        // redaction in Start_Callback_HappyPath and FullFlow_WritesNoSecretToAnyTable; the shared DTO is scanned below.
+        "/v1/github/installations/callback",
     ];
 
     /// <summary>The wire shape of the create bodies (snake_case, like the API).</summary>
@@ -467,6 +472,9 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
             ["/v1/orgs/{o}/memberships/{m}"] = $"/v1/orgs/{org}/memberships/{membership}",
             ["/v1/permissions"] = "/v1/permissions",
             ["/v1/roles"] = "/v1/roles",
+            // An active installation is seeded through the owner seam because the install flow needs GitHub;
+            // the real read answers its ids, account, state and granted permissions without contacting GitHub.
+            ["/v1/github/installations"] = "/v1/github/installations",
             ["/v1/orgs/{o}/audit"] = $"/v1/orgs/{org}/audit",
             ["/v1/orgs/{o}/audit/export"] = $"/v1/orgs/{org}/audit/export",
             ["/v1/orgs/{o}/usage/summary"] = $"/v1/orgs/{org}/usage/summary",
@@ -556,7 +564,8 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
     /// creates its environment), and a policy revision through the harness's owner
     /// seam (<c>tenant_admin</c> does not hold <c>policy:write</c>, 00 §2). The run of
     /// 05.3.1 needs a verified manifest, so one is uploaded and one run created
-    /// through the served routes.
+    /// through the served routes. An active GitHub installation is seeded through the owner seam so
+    /// its metadata read is covered without running the external OAuth install flow.
     /// </summary>
     private async Task<SeededResources> SeedReadableResourcesAsync(
         CiProducerJwtFactory factory,
@@ -564,6 +573,21 @@ public sealed partial class SensitivePermissionTests : CatalogueTestBase
         Guid org,
         Guid project)
     {
+        // The read requires an active row (an empty org answers 404), while the writer verifies against GitHub.
+        // Use GitHubInstallationTests' owner-seam fixture so the real read and its redaction stay in this scan.
+        await Fixture.SeedAsync(
+            """
+            insert into public.github_installation
+                (id, org_id, installation_id, account_login, account_id, permissions, state)
+            values (@id, @org, @installation_id, 'acme', 1, '{"metadata":"read"}'::jsonb, 'active')
+            """,
+            [
+                ("id", Guid.CreateVersion7()),
+                ("org", org),
+                ("installation_id", Random.Shared.NextInt64(1, long.MaxValue)),
+            ],
+            Token);
+
         var (caseId, caseRevisionId) = await SeedCaseAsync(factory, org, project);
 
         var suiteId = await CreateSuiteAsync(client, project);
