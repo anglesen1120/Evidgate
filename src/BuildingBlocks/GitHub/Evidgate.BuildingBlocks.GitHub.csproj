@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Evidgate.BuildingBlocks.SharedKernel.GitHub</RootNamespace>
+  </PropertyGroup>
+  <!-- The one GitHub App client, in its own block so only Catalog and Identity carry its JWT and resilience packages:
+       the parser child references SharedKernel and must not inherit them. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+  </ItemGroup>
+  <!-- The installation-id overload and the permission table are internal: only the callers' tests open them. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Catalog.UnitTests" />
+    <InternalsVisibleTo Include="Identity.IntegrationTests" />
+  </ItemGroup>
+</Project>

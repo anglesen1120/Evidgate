@@ -253,6 +253,31 @@ public sealed class TenantGucTests
             ("project_id", projectId),
             ("binding_id", gitBindingId),
             ("commit_sha", "0123456789abcdef0123456789abcdef01234567"));
+        // The installation tables (migration 0108): the org's one installation and one pending OAuth state, both
+        // owner-written so the fail-closed-zero assertions below have a row of each to hide. The state names a real
+        // account because its FK requires one, the same owner seam the founder membership above uses.
+        var installer = Guid.CreateVersion7();
+        await scope.ExecuteAsync(
+            "insert into public.\"user\" (id, email) values (@id, 'installer@example.test')",
+            ("id", installer));
+        await scope.ExecuteAsync(
+            """
+            insert into public.github_installation
+                (id, org_id, installation_id, account_login, account_id, permissions, installed_by)
+            values (@id, @org_id, @installation_id, 'acme', 1, '{"metadata":"read"}'::jsonb, @installed_by)
+            """,
+            ("id", Guid.CreateVersion7()),
+            ("org_id", orgId),
+            ("installation_id", 7000000001L),
+            ("installed_by", installer));
+        await scope.ExecuteAsync(
+            """
+            insert into public.github_install_state (state_hash, org_id, user_id, expires_at)
+            values (@state_hash, @org_id, @user_id, now() + interval '10 minutes')
+            """,
+            ("state_hash", new byte[32]),
+            ("org_id", orgId),
+            ("user_id", installer));
         await scope.ExecuteAsync(
             """
             insert into public.retention_policy (id, org_id, project_id, artifact_days, metadata_days)

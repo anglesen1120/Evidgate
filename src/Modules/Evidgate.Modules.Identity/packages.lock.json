@@ -187,6 +187,14 @@
       "evidgate.buildingblocks.canonicalization": {
         "type": "Project"
       },
+      "evidgate.buildingblocks.github": {
+        "type": "Project",
+        "dependencies": {
+          "Evidgate.BuildingBlocks.SharedKernel": "[1.0.0, )",
+          "Microsoft.Extensions.Http.Resilience": "[10.10.0, )",
+          "Microsoft.IdentityModel.JsonWebTokens": "[8.23.0, )"
+        }
+      },
       "evidgate.buildingblocks.observability": {
         "type": "Project",
         "dependencies": {

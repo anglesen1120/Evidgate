@@ -620,6 +620,12 @@ closed by #818 (4f8a2362)
 
 closed by #820 (68358713)
 
+## Moved from status-carried.md by S411 (2026-11-13)
+
+| Cursor page shape not delivered (04.1.3-T1, S251) | AC4-AC6 of 04.1.3 are not delivered (#520 landed the caps half only, COORDINATOR-DECISION 251): no `{items, next_cursor}` page shape on the run-detail executions section, on the comparison list (04.4.1-T6) or on a `case-attempts` list route, no HMAC cursor, no reconciler paging. No migration needed. Task 04.1.3-T1 stays partial in STATUS §5. | receiver: coordinator (next slice for 04.1.3-T1); plan `plans/features/04-ingestion-adapters/04.1.3-large-report-caps-and-streaming.md` AC4-AC6 |
+
+closed by #830 (1cc3b9be)
+
 ## Moved from status-carried.md by S409 (2026-11-13)
 
 | Sixth bounded JSON reader copy (S404) | `GitHubResponseReader` in `src/Modules/Evidgate.Modules.Catalog/Infrastructure/GitHub/` is the sixth hand-written bounded-JSON body reader (same shape as the other five); agent-code-rules §7 calls a second copy of protocol logic a defect. Extract one shared reader when the next HTTP client lands. | next HTTP-client task (T1.4 or 10.x) |
@@ -632,3 +638,15 @@ closed by #826 (88ca42cf)
 | Provider output ceiling and estimate overshoot (S402) | The adapter sends no max-tokens field, so the held `ReservedOutputTokens` is not enforced on the wire; real usage above the estimate is charged at settlement and a call can overshoot a cap by its excess. Source: security review F2, #814. | 08.5.1-T1.5 |
 
 closed by #822 (c0609f31: `max_tokens` on the wire) and #828 (b66504d0: a leaked hold sits on its own day's row and the daily roll starts the next day at zero, so the leak is bounded to one period)
+
+## Moved from status-carried.md by S410 (2026-11-13)
+
+| Install-callback ownership check in 02.4.3 AC2 (from S21, 02.4.3-T1) | DECISIONS §8 O12 `[OPEN]` (recommended `[INFERENCE]`, ADR-0007 §Install binding): bind only when `installation_id` appears in `GET /user/installations` for the user who completed OAuth and that user administers the installation account, else 403 `installation_not_owned`; OAuth user token used once, never stored; what the install-time redirect carries is ⚠️ to confirm in 02.4.3-T2. AC2 and T2.2 in the 02.4.3 plan carry the recommendation | receiver: 02.4.3-T2; hand-over Notes: `plans/features/02-identity-tenancy/02.4.3-github-app-installation.md:110` |
+
+closed by #835 (33cd2497)
+
+## Moved from status-carried.md by S412 (2026-11-14)
+
+| Run identity fork rules (05.2.2-T1 hand-over, S45) | `fork_run_not_bindable`, `advisory_only`, the `runs_created_total` counter and the no-opt-out test stay with T3 (the `run_project_ref_idx` index landed with 05.2.2-T2.2, migration `0038`, PR #106). Plan 05.2.2 Notes (line 163) | receiver: 05.2.2-T3; hand-over Notes: `plans/features/05-runs-orchestration/05.2.2-branch-pr-and-commit-identity-of-a-run.md:137` |
+
+closed by #837 (f865f6bf)

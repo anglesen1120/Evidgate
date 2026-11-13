@@ -97,6 +97,43 @@ internal sealed class GetRunQueryHandler(
          where r.id = @run_id
         """;
 
+    /// <summary>Size of the run detail's first page of attempts: the 00 §9.1 default.</summary>
+    internal const int ExecutionsPageSize = 50;
+
+    /// <summary>
+    /// The run's attempts counted by normalised status in one grouped pass (at most six rows), so the detail's size
+    /// does not grow with the test count. <c>org_id</c> is left to RLS.
+    /// </summary>
+    internal const string AttemptCountsByStatus = """
+        select a.normalized_status as status, count(*)::int as total
+          from public.case_attempt a
+         where a.run_id = @run_id
+         group by a.normalized_status
+        """;
+
+    private async ValueTask<RunAttemptCounts> ReadCountsAsync(Guid runId, CancellationToken cancellationToken)
+    {
+        var rows = await db.QueryAsync<AttemptCountRow>(AttemptCountsByStatus, new { run_id = runId }, cancellationToken)
+            .ConfigureAwait(false);
+        int Of(string status) => rows.FirstOrDefault(r => r.Status == status)?.Total ?? 0;
+
+        return new RunAttemptCounts(
+            Of("passed"),
+            Of("failed"),
+            Of("skipped"),
+            Of("timed_out"),
+            Of("error"),
+            Of("blocked"));
+    }
+
+    /// <summary>One group of <see cref="AttemptCountsByStatus"/>.</summary>
+    private sealed class AttemptCountRow
+    {
+        public string Status { get; set; } = string.Empty;
+
+        public int Total { get; set; }
+    }
+
     /// <inheritdoc />
     public async ValueTask<Result<RunStateDto>> Handle(GetRunQuery query, CancellationToken cancellationToken)
     {
@@ -120,6 +157,11 @@ internal sealed class GetRunQueryHandler(
         var releases = BoundReleasesFromRow(row.BoundReleases);
         var producers = ProducersFromRow(row.ProducerSlots);
         var stateHistory = RunStateHistoryReader.FromRow(row.StateHistoryKnown, row.StateHistory);
+
+        var counts = await ReadCountsAsync(row.RunId, cancellationToken).ConfigureAwait(false);
+        var executionsPage = await ListRunAttemptsQueryHandler
+            .ReadPageAsync(db, row.RunId, cursor: null, ExecutionsPageSize, cancellationToken)
+            .ConfigureAwait(false);
 
         return Result.Success(new RunStateDto(
             row.RunId,
@@ -150,7 +192,9 @@ internal sealed class GetRunQueryHandler(
             producers,
             releases,
             row.AfterCancelEvents,
-            stateHistory));
+            stateHistory,
+            counts,
+            executionsPage.Value));
     }
 
     /// <summary>The bindings column of <see cref="RunStateById"/>: one item per stored binding, already ordered and bounded.</summary>

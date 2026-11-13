@@ -112,6 +112,7 @@ export function runState(runId: string, evidenceRevisionId: string | null): RunS
     purpose: 'regular',
     ref: RUN_REF,
     unverified_ref: false,
+    advisory_only: false,
     manifest_hash: 'sha256:018f000000000000000000000000000000000000000000000000000000000000',
     suite_revision_id: '018f0000-0000-7000-8000-00000000b001',
     policy_revision_id: '018f0000-0000-7000-8000-00000000a004',
@@ -149,6 +150,8 @@ export function runState(runId: string, evidenceRevisionId: string | null): RunS
     releases: [],
     after_cancel_events: 0,
     state_history: null,
+    counts: { passed: 0, failed: 0, skipped: 0, timed_out: 0, error: 0, blocked: 0 },
+    executions_page: { items: [], next_cursor: null },
   };
 }
 

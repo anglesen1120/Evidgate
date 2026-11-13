@@ -119,7 +119,10 @@ internal sealed class EvaluationInputReader(
                     suite.SuiteKey,
                     CaseStatusOf(row.Status),
                     row.Required))
-                .ToArray());
+                .ToArray())
+        {
+            AdvisoryOnly = plan.IsFork,
+        };
 
         return new LoadedEvaluationInputs(
             evidence,

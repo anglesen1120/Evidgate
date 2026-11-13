@@ -398,6 +398,28 @@ public static partial class EvidgateTelemetry
     public static void RecordAiSettingsWrite(string outcome) =>
         AiSettingsWrites.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
 
+    /// <summary>Counter of runs created, tagged by trigger event, fork flag and unverified-ref flag.</summary>
+    public const string RunsCreatedMetricName = "evidgate_runs_created_total";
+
+    private static readonly Counter<long> RunsCreated = Meter.CreateCounter<long>(
+        RunsCreatedMetricName,
+        unit: "{run}",
+        description: "Runs created, by trigger_event (closed vocabulary or none), is_fork and unverified_ref. Never a ref name, a sha or an id, so the series count stays bounded.");
+
+    /// <summary>
+    /// Counts one committed run creation. A fork run is advisory-only, so its share is the signal that fork traffic
+    /// reaches the API at all.
+    /// </summary>
+    /// <param name="triggerEvent">The validated trigger event, or null when the run recorded none.</param>
+    /// <param name="isFork">Whether the run's identity says fork.</param>
+    /// <param name="unverifiedRef">Whether any identity value came from the request body.</param>
+    public static void RecordRunCreated(string? triggerEvent, bool isFork, bool unverifiedRef) =>
+        RunsCreated.Add(
+            1,
+            new KeyValuePair<string, object?>("trigger_event", triggerEvent ?? "none"),
+            new KeyValuePair<string, object?>("is_fork", isFork),
+            new KeyValuePair<string, object?>("unverified_ref", unverifiedRef));
+
     /// <summary>Counter of queued authoring changes, tagged by the closed change-type vocabulary.</summary>
     public const string AuthoringChangeQueuedMetricName = "evidgate_authoring_change_queued_total";
 

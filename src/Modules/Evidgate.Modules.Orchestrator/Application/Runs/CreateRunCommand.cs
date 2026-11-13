@@ -586,6 +586,9 @@ internal sealed class CreateRunCommandHandler(
             activity?.SetTag("evidgate.run.ref_kind", refKind);
         }
 
+        scopes.Require().AfterCommit(() =>
+            EvidgateTelemetry.RecordRunCreated(identity.TriggerEvent, identity.IsFork, identity.UnverifiedRef));
+
         return Result.Success(new RunCreated(runId, "queued", identity.UnverifiedRef), 201);
     }
 

@@ -336,6 +336,7 @@ public sealed class RlsIsolationTests : HarnessTest
     {
         Guid idA, idB;
         Guid[] projects;
+        Guid[] users;
         await using (var owner = await TenantScope.BeginAsync(Fixture.OwnerConnectionString))
         {
             var factory = new TenantRowFactory(scan.Schema, (sql, parameters) => owner.ExecuteAsync(sql, parameters));
@@ -344,16 +345,28 @@ public sealed class RlsIsolationTests : HarnessTest
 
             idA = IdOf(rowA);
             idB = IdOf(rowB);
-            projects = [(Guid)rowA.Values["project_id"], (Guid)rowB.Values["project_id"]];
+            projects = SeededIds(rowA, rowB, "project_id");
+            // A table whose row needs a platform identity parent (TenantRowFactory.OwnerProvisionedTables) gets one
+            // generated per org; the cleanup removes them with the rows so the shared database is left as found.
+            users = SeededIds(rowA, rowB, "user_id");
             await owner.CommitAsync();
         }
 
-        return (idA, idB, new SeededRowCleanup(Fixture.OwnerConnectionString, table, [idA, idB], projects, [OrgA, OrgB]));
+        return (idA, idB, new SeededRowCleanup(Fixture.OwnerConnectionString, table, [idA, idB], projects, users, [OrgA, OrgB]));
     }
 
+    /// <summary>The values both generated rows carry for one parent column; empty when the table has no such column.</summary>
+    private static Guid[] SeededIds(GeneratedRow rowA, GeneratedRow rowB, string column) =>
+    [
+        .. new[] { rowA, rowB }
+            .Where(row => row.Values.ContainsKey(column))
+            .Select(row => (Guid)row.Values[column])
+            .Distinct(),
+    ];
+
     /// <summary>
-    /// Removes a committed owner seed child first — the seeded rows, their projects, then the two
-    /// organization roots the generator created — so the case leaves the shared harness database as it
+    /// Removes a committed owner seed child first — the seeded rows, their platform parent, their projects, then
+    /// the two organization roots the generator created — so the case leaves the shared harness database as it
     /// found it and the later <c>organization</c> assertions see only the rows they expect.
     /// </summary>
     private sealed class SeededRowCleanup(
@@ -361,12 +374,18 @@ public sealed class RlsIsolationTests : HarnessTest
         string table,
         Guid[] rowIds,
         Guid[] projectIds,
+        Guid[] userIds,
         Guid[] orgIds) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {
             await using var owner = await TenantScope.BeginAsync(connectionString);
             await owner.ExecuteAsync($"delete from {table} where id = any(@ids)", ("ids", rowIds));
+            if (userIds.Length > 0)
+            {
+                await owner.ExecuteAsync("delete from public.\"user\" where id = any(@ids)", ("ids", userIds));
+            }
+
             await owner.ExecuteAsync("delete from public.project where id = any(@ids)", ("ids", projectIds));
             await owner.ExecuteAsync("delete from public.organization where id = any(@ids)", ("ids", orgIds));
             await owner.CommitAsync();

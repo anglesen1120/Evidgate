@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Evidgate.Modules.Catalog.Contracts\Evidgate.Modules.Catalog.Contracts.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
+    <ProjectReference Include="..\..\BuildingBlocks\GitHub\Evidgate.BuildingBlocks.GitHub.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Persistence\Evidgate.BuildingBlocks.Persistence.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Pipeline\Evidgate.BuildingBlocks.Pipeline.csproj" />
     <ProjectReference Include="..\..\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
