@@ -644,3 +644,9 @@ closed by #822 (c0609f31: `max_tokens` on the wire) and #828 (b66504d0: a leaked
 | Install-callback ownership check in 02.4.3 AC2 (from S21, 02.4.3-T1) | DECISIONS §8 O12 `[OPEN]` (recommended `[INFERENCE]`, ADR-0007 §Install binding): bind only when `installation_id` appears in `GET /user/installations` for the user who completed OAuth and that user administers the installation account, else 403 `installation_not_owned`; OAuth user token used once, never stored; what the install-time redirect carries is ⚠️ to confirm in 02.4.3-T2. AC2 and T2.2 in the 02.4.3 plan carry the recommendation | receiver: 02.4.3-T2; hand-over Notes: `plans/features/02-identity-tenancy/02.4.3-github-app-installation.md:110` |
 
 closed by #835 (33cd2497)
+
+## Moved from status-carried.md by S412 (2026-11-14)
+
+| Run identity fork rules (05.2.2-T1 hand-over, S45) | `fork_run_not_bindable`, `advisory_only`, the `runs_created_total` counter and the no-opt-out test stay with T3 (the `run_project_ref_idx` index landed with 05.2.2-T2.2, migration `0038`, PR #106). Plan 05.2.2 Notes (line 163) | receiver: 05.2.2-T3; hand-over Notes: `plans/features/05-runs-orchestration/05.2.2-branch-pr-and-commit-identity-of-a-run.md:137` |
+
+closed by #837 (f865f6bf)
