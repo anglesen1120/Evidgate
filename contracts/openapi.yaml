@@ -5257,6 +5257,56 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '503':
           $ref: '#/components/responses/Unavailable'
+  /projects/{p}/git-repo-bindings:
+    post:
+      operationId: registerGitRepoBinding
+      tags: [catalog]
+      summary: Register a repository binding after the customer installs the GitHub App (03.4.1)
+      description: >-
+        Records that a project's catalog is synchronized from one GitHub repository. The installation must be the
+        calling org's own live one, and GitHub must list the repository through it, so an installation the org does not
+        own answers 403 `installation_not_owned`, a repository that installation cannot read answers 422
+        `repository_unreachable`, and a host with no App configured answers 503 `github_not_configured` before any
+        outbound call. The webhook secret reference is assigned by the server: `secret:gh_wh_<binding id>`, with the
+        value kept in the secret store, so no member of the request or answer names it. 409 `binding_exists` when the
+        project already binds the repository, and 409 `binding_conflict` when another org binds it in the same
+        installation. A retry with the same `Idempotency-Key` and the same body replays the original `201`.
+      x-permission: project:write
+      x-version: v1
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterGitRepoBindingRequest'
+      responses:
+        '201':
+          description: The created binding
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GitRepoBindingDto'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
   /projects/{p}/fixtures:
     post:
       operationId: createFixture
@@ -11868,6 +11918,40 @@ components:
           oneOf:
             - $ref: '#/components/schemas/FixtureRevisionDto'
             - type: 'null'
+    RegisterGitRepoBindingRequest:
+      type: object
+      required: [installation_id, repository_id]
+      additionalProperties: false
+      properties:
+        installation_id:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            description: 'Numeric id of the GitHub App installation the customer made on its own account.',
+          }
+        repository_id:
+          {
+            type: integer,
+            format: int64,
+            minimum: 1,
+            description: 'Numeric id GitHub gives the repository; verified through the installation before the write.',
+          }
+    GitRepoBindingDto:
+      type: object
+      required: [id, project_id, installation_id, repository_id, default_branch, sync_state]
+      properties:
+        id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        installation_id: { type: integer, format: int64 }
+        repository_id: { type: integer, format: int64 }
+        default_branch: { type: string, maxLength: 255 }
+        sync_state:
+          {
+            type: string,
+            enum: [active, disabled],
+            description: 'active while the installation is live; disabled by a suspend event, keeping every row.',
+          }
     CreateFixtureRequest:
       type: object
       required: [fixture_key, seed_version, body_ref]

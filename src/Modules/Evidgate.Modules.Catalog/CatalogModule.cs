@@ -48,6 +48,11 @@ internal static class CatalogModule
         // tenant transaction, like every other catalog read.
         services.TryAddScoped<IFixtureRegistry, FixtureRegistry>();
 
+        // Repository bindings: the store writes inside the caller's tenant transaction, and the registration flow
+        // calls GitHub between its two units, so it is resolved per request rather than owned by a handler.
+        services.TryAddScoped<IGitRepoBindingStore, GitRepoBindingStore>();
+        services.TryAddScoped<GitRepoBindingRegistration>();
+
         return services;
     }
 }

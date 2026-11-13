@@ -100,6 +100,25 @@ public sealed class GitHubInstallationTokenSource : IGitHubInstallationTokens
     }
 
     /// <summary>
+    /// The cached token for an installation id the caller already validated, without resolving one from the tenant.
+    /// </summary>
+    /// <remarks>
+    /// A caller that proved the installation belongs to the org in its own unit holds the id across a boundary that has
+    /// no tenant scope open — the verification call of a repository binding, for instance, which must not keep a
+    /// transaction open while it waits on GitHub.
+    /// </remarks>
+    /// <param name="installationId">Numeric installation id, already validated by the caller.</param>
+    /// <param name="feature">The consuming feature; its compiled permission row is the ceiling.</param>
+    /// <param name="repositoryIds">Numeric repository ids the token may act on.</param>
+    /// <param name="cancellationToken">Cancels this caller's wait, not the shared exchange.</param>
+    public Task<Result<GitHubInstallationToken>> GetAsync(
+        long installationId,
+        GitHubFeature feature,
+        IReadOnlyList<long>? repositoryIds,
+        CancellationToken cancellationToken) =>
+        GetAsync(installationId, feature, repositoryIds, orgId: null, cancellationToken);
+
+    /// <summary>
     /// The cached token for <paramref name="installationId"/> and this feature's key, or a fresh exchange. Callers that
     /// already hold a validated installation id use this overload; <paramref name="orgId"/> only widens the cache key
     /// for the org-keyed entry point.

@@ -54,7 +54,8 @@ internal interface IGitHubInstallationStore
 }
 
 /// <summary>Dapper implementation of both stores and of the token source's installation resolver.</summary>
-internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStateStore, IGitHubInstallationStore, IGitHubInstallationResolver
+internal sealed class GitHubInstallationStore(ITenantDb db)
+    : IGitHubInstallStateStore, IGitHubInstallationStore, IGitHubInstallationResolver, IGitHubInstallationOwnership
 {
     /// <summary>How many unspent install states one user may hold; each start route call adds one.</summary>
     internal const int MaxLiveStatesPerUser = 20;
@@ -87,6 +88,12 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
         set state = 'deleted', suspended_at = null
         where org_id = @org_id and id = @id and state <> 'deleted'
         returning installation_id
+        """;
+
+    private const string OwnedActiveSql = """
+        select 1
+        from public.github_installation
+        where org_id = @org_id and installation_id = @installation_id and state = 'active'
         """;
 
     /// <summary>
@@ -233,6 +240,21 @@ internal sealed class GitHubInstallationStore(ITenantDb db) : IGitHubInstallStat
         }
 
         return Result.Success(row.InstallationId);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> OwnsActiveAsync(Guid orgId, long installationId, CancellationToken cancellationToken)
+    {
+        if (installationId <= 0)
+        {
+            return false;
+        }
+
+        var owned = await db
+            .ScalarAsync<int?>(OwnedActiveSql, new { org_id = orgId, installation_id = installationId }, cancellationToken)
+            .ConfigureAwait(false);
+
+        return owned is not null;
     }
 
     private static GitHubInstallationRow ToRow(Row row)
