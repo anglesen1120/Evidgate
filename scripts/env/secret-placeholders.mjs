@@ -168,8 +168,47 @@ function holderIsGone(lock) {
   }
 }
 
-// A takeover gate is held for microseconds; one older than this was left by a crashed run.
+// A takeover gate is held for microseconds. One whose owner pid is dead, or, when it records no
+// usable pid, one older than this, was left by a crashed run. A live owner's gate is never
+// reclaimed, however long it has been held: a paused taker must not lose it to a rival.
 const GATE_STALE_MS = 10_000;
+
+function gateIsStale(gate) {
+  let recorded;
+  try {
+    recorded = readFileSync(join(gate, 'pid'), 'utf8');
+  } catch {
+    recorded = '';
+  }
+  if (Number.isInteger(Number(recorded)) && Number(recorded) > 0 && recorded.trim() !== '')
+    return holderIsGone(gate);
+  try {
+    return Date.now() - statSync(gate).mtimeMs >= GATE_STALE_MS;
+  } catch {
+    return false;
+  }
+}
+
+// Moves a stale gate aside before deleting it and re-checks what was moved, so a fresh gate a
+// rival created in between is put back instead of deleted.
+function reclaimGate(gate) {
+  if (!gateIsStale(gate)) return;
+  const aside = `${gate}.reclaim.${process.pid}`;
+  try {
+    renameSync(gate, aside);
+  } catch {
+    return;
+  }
+  if (gateIsStale(aside)) {
+    rmSync(aside, { recursive: true, force: true });
+    return;
+  }
+  try {
+    renameSync(aside, gate);
+  } catch {
+    rmSync(aside, { recursive: true, force: true });
+  }
+}
 
 // Removes a lock whose holder is dead. Takers serialise on a gate directory and re-judge the
 // holder inside it: a dead holder never removes its own lock and a live run only creates the
@@ -178,14 +217,7 @@ const GATE_STALE_MS = 10_000;
 function takeOverStale(lock) {
   const gate = `${lock}.takeover`;
   if (!tryLock(gate)) {
-    let age;
-    try {
-      age = Date.now() - statSync(gate).mtimeMs;
-    } catch {
-      return;
-    }
-    if (age < GATE_STALE_MS) return;
-    rmSync(gate, { recursive: true, force: true });
+    reclaimGate(gate);
     if (!tryLock(gate)) return;
   }
   try {

@@ -158,4 +158,61 @@ public sealed partial class SecretPlaceholderGeneratorTests
         File.Exists(EnvFile).ShouldBeTrue();
         Directory.Exists(LockDir).ShouldBeFalse();
     }
+
+    private async Task<string> StaleLockWithGateAsync(string? gatePid, TimeSpan gateAge)
+    {
+        var deadPid = await DeadPidAsync();
+        Directory.CreateDirectory(LockDir);
+        await File.WriteAllTextAsync(Path.Combine(LockDir, "pid"), deadPid.ToString(CultureInfo.InvariantCulture), TestContext.Current.CancellationToken);
+        var gate = LockDir + ".takeover";
+        Directory.CreateDirectory(gate);
+        if (gatePid is not null)
+        {
+            await File.WriteAllTextAsync(Path.Combine(gate, "pid"), gatePid, TestContext.Current.CancellationToken);
+        }
+
+        Directory.SetLastWriteTimeUtc(gate, DateTime.UtcNow - gateAge);
+        return gate;
+    }
+
+    [Fact]
+    public async Task GateLeftByACrashedTaker_DoesNotBlockTheTakeover()
+    {
+        var gate = await StaleLockWithGateAsync((await DeadPidAsync()).ToString(CultureInfo.InvariantCulture), TimeSpan.Zero);
+
+        var run = await RunAsync("dev");
+
+        run.ExitCode.ShouldBe(0, run.Output);
+        Directory.Exists(gate).ShouldBeFalse();
+        Directory.Exists(LockDir).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task GateWithoutAPid_IsReclaimedOnlyOnceItIsOld()
+    {
+        var fresh = await StaleLockWithGateAsync(null, TimeSpan.Zero);
+        var blocked = await RunAsync("dev");
+        blocked.ExitCode.ShouldNotBe(0);
+        Directory.Exists(fresh).ShouldBeTrue();
+        File.Exists(EnvFile).ShouldBeFalse();
+
+        Directory.SetLastWriteTimeUtc(fresh, DateTime.UtcNow - TimeSpan.FromMinutes(1));
+        var run = await RunAsync("dev");
+
+        run.ExitCode.ShouldBe(0, run.Output);
+    }
+
+    [Fact]
+    public async Task GateOfALiveButPausedTaker_IsNeverReclaimed()
+    {
+        var gate = await StaleLockWithGateAsync(Environment.ProcessId.ToString(CultureInfo.InvariantCulture), TimeSpan.FromMinutes(5));
+
+        var run = await RunAsync("dev");
+
+        run.ExitCode.ShouldNotBe(0);
+        run.Output.ShouldContain("another run is in progress");
+        Directory.Exists(gate).ShouldBeTrue("a live taker keeps its gate however long it takes");
+        Directory.Exists(LockDir).ShouldBeTrue("the lock judged dead stays until the gate owner decides");
+        File.Exists(EnvFile).ShouldBeFalse();
+    }
 }
