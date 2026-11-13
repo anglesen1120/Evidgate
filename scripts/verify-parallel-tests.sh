@@ -29,6 +29,31 @@ test_log_total() {
 # (0 = no cap).
 PT_PIDS=() PT_NAMES=() PT_FILES=() PT_STARTS=() PT_LOGS= PT_CAP=0 PT_FAILED=0
 
+# Per-class timing (scripts/class-timing.mjs). While CT_DIR is set, every run started by
+# `start_test_run` also writes a JUnit report there; `class_timing_report` prints the slowest
+# classes and writes the TSV. Reporting only: it never changes a stage's exit code.
+CT_DIR="" CT_FLAGS=() CT_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/class-timing.mjs"
+class_timing_begin() {
+  CT_DIR="${ROOT:-$PWD}/artifacts/test-results/junit"
+  rm -rf "$CT_DIR"
+  mkdir -p "$CT_DIR"
+}
+# `class_timing_flags <run name>`: sets CT_FLAGS to the report options (empty when off).
+class_timing_flags() {
+  CT_FLAGS=()
+  [[ -z "$CT_DIR" ]] || CT_FLAGS=(--report-xunit-junit --report-xunit-junit-filename "$1.junit.xml" --results-directory "$CT_DIR")
+}
+# `class_timing_report [<report path> [<tsv>]]`: the summary of CT_DIR, or of the given report.
+class_timing_report() {
+  local source="${1:-$CT_DIR}" tsv="${2:-${ROOT:-$PWD}/artifacts/test-results/class-timing.tsv}"
+  [[ -z "$source" ]] || node "$CT_SCRIPT" --out "$tsv" "$source" ||
+    echo "   class timing summary unavailable" >&2
+  CT_DIR=""
+}
+class_timing_report_isolation() {
+  class_timing_report "$ROOT/artifacts/test-results/isolation.junit.xml" "$ROOT/artifacts/test-results/class-timing-isolation.tsv"
+}
+
 # `format_duration <seconds>`: "<m>m<ss>s".
 format_duration() { printf '%dm%02ds' "$(($1 / 60))" "$(($1 % 60))"; }
 
@@ -73,7 +98,8 @@ start_test_run() {
     sleep 0.2
     reap_test_runs
   done
-  dotnet test --no-build -c Release --no-progress "$@" >"$log" 2>&1 &
+  class_timing_flags "$name"
+  dotnet test --no-build -c Release --no-progress "$@" ${CT_FLAGS[@]+"${CT_FLAGS[@]}"} >"$log" 2>&1 &
   PT_PIDS+=("$!") PT_NAMES+=("$name") PT_FILES+=("$log") PT_STARTS+=("$SECONDS")
 }
 
@@ -143,6 +169,7 @@ run_parallel_tests() {
   else
     echo "   build-server shutdown failed; continuing"
   fi
+  class_timing_begin
   start_tenancy_shards "$shards" "$logs" "$classes"
   for project in tests/*/*.csproj; do
     [[ "$project" == "$TENANCY_PROJECT"/* ]] && continue
@@ -164,6 +191,7 @@ run_parallel_tests() {
     echo "verify: the tenancy shards ran $total tests but discovery found $discovered" >&2
     failed=1
   fi
+  class_timing_report
   stop_parallel_tests
   trap - EXIT INT TERM
   eval "$saved_traps"
