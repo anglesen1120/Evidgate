@@ -15,7 +15,8 @@ namespace Tenancy.IntegrationTests;
 /// missing), the database-level immutability, RLS, and the catalog routes with their 00 §9 envelope.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class CatalogIdentityTests
+public sealed class CatalogIdentityTests(PostgresTenancyFixture fixture, CatalogIdentityDatabase database)
+    : IClassFixture<CatalogIdentityDatabase>
 {
     private const string IdA = "018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e5f";
     private const string IdB = "018f2f0e-8a52-7c4b-9d3e-5a1b2c3d4e60";
@@ -24,62 +25,37 @@ public sealed class CatalogIdentityTests
     private const string Commit2 = "bbbbbbb2222222";
     private const string Commit3 = "ccccccc3333333";
 
-    private static readonly string[] AppendOnlyViolations =
+    private static string[] AppendOnlyViolations(World world) =>
     [
-        "delete from public.test_case",
-        "update public.case_identity_source set raw_key = 'x'",
-        "delete from public.case_identity_source",
-        "update public.case_rename_history set to_path = 'x'",
-        "delete from public.case_rename_history",
+        $"delete from public.test_case where org_id = '{world.Org}'",
+        $"update public.case_identity_source set raw_key = 'x' where org_id = '{world.Org}'",
+        $"delete from public.case_identity_source where org_id = '{world.Org}'",
+        $"update public.case_rename_history set to_path = 'x' where org_id = '{world.Org}'",
+        $"delete from public.case_rename_history where org_id = '{world.Org}'",
     ];
 
     private static readonly string[] DuplicateLabels = ["smoke", "smoke", " p1 "];
     private static readonly int[] NotAnObject = [1, 2];
 
-    private readonly PostgresTenancyFixture _fixture;
-
-    public CatalogIdentityTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly PostgresTenancyFixture _fixture = fixture;
 
     private sealed record World(
-        TenancyApiFactory Api,
-        HttpClient Client,
-        string Database,
-        Guid User,
-        Guid Org,
-        Guid Project,
-        DedicatedDatabase Dedicated) : IAsyncDisposable
+        TenancyApiFactory Api, HttpClient Client, string Database, Guid User, Guid Org, Guid Project) : IAsyncDisposable
     {
         public Action<System.Net.Http.Headers.HttpRequestHeaders> Admin => TenancyApiFactory.Resolved(user: User, orgHeader: Org);
 
-        public async ValueTask DisposeAsync()
-        {
-            Client.Dispose();
-            try
-            {
-                await Api.DisposeAsync();
-            }
-            finally
-            {
-                // The database is this world's to drop even when the host's own disposal throws.
-                await Dedicated.DisposeAsync();
-            }
-        }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    // Dedicated: the identity resolver's annotation lookup and the cross-tenant assertions read
-    // rows no single tenant scope would own, so the class needs an empty database of its own.
-    private Task<World> StartAsync() =>
-        _fixture.StartDedicatedAsync(async dedicated =>
-        {
-            var database = dedicated.Name;
-            var api = TenancyApiFactory.RealResolver(_fixture.AppConnectionString(database));
-            var client = api.CreateClient();
-            var user = Guid.CreateVersion7();
-            var org = await CreateOrgAsync(client, user, "acme");
-            var project = await CreateProjectAsync(client, user, org, "checkout");
+    // The class shares one database and host, so a test isolates itself with a fresh org and project.
+    private async Task<World> StartAsync()
+    {
+        var user = Guid.CreateVersion7();
+        var org = await CreateOrgAsync(database.Client, user, Unique.Slug("acme"));
+        var project = await CreateProjectAsync(database.Client, user, org, "checkout");
 
-            return new World(api, client, database, user, org, project, dedicated);
-        });
+        return new World(database.Api, database.Client, database.Name, user, org, project);
+    }
 
     private static SourceFile Annotated(string path, string id) => new(path, $"// evidgate.id: {id}\ntest('x', () => {{}});", "playwright", "typescript");
 
@@ -100,7 +76,13 @@ public sealed class CatalogIdentityTests
     }
 
     private Task<long> CountAsync(World world, string table) =>
-        _fixture.ScalarAsync<long>(world.Database, $"select count(*) from public.{table}");
+        _fixture.ScalarAsync<long>(world.Database, Scoped(world, $"select count(*) from public.{table}"));
+
+    // This class's database is shared by its tests, so every raw statement names the org it may touch.
+    private static string Scoped(World world, string sql, string? and = null) => Scoped(world.Org, sql, and);
+
+    private static string Scoped(Guid org, string sql, string? and = null) =>
+        $"{sql} where org_id = '{org}'" + (and is null ? string.Empty : $" and {and}");
 
     // ------------------------------------------------------------------ AC1 identity survives a rename
 
@@ -116,9 +98,9 @@ public sealed class CatalogIdentityTests
         (entry.Path, entry.Result).ShouldBe(("tests/login.spec.ts", CaseSyncResults.Registered));
 
         (await CountAsync(world, "test_case")).ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(world.Database, "select annotation_id::text || '|' || file_path || '|' || status || '|' || first_seen_commit || '|' || framework from public.test_case"))
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select annotation_id::text || '|' || file_path || '|' || status || '|' || first_seen_commit || '|' || framework from public.test_case")))
             .ShouldBe($"{IdA}|tests/login.spec.ts|active|{Commit1}|playwright");
-        (await _fixture.ScalarAsync<string>(world.Database, "select source || '|' || commit_sha from public.case_identity_source")).ShouldBe($"annotation|{Commit1}");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select source || '|' || commit_sha from public.case_identity_source"))).ShouldBe($"annotation|{Commit1}");
     }
 
     [Fact]
@@ -126,16 +108,16 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("tests/login.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
 
         var report = await RegisterAsync(world, Commit2, Annotated("tests/auth/login.spec.ts", IdA));
 
         (report.Registered, report.Renamed).ShouldBe((0, 1));
         report.Entries.Single().ShouldBe(new CaseSyncEntry("tests/auth/login.spec.ts", CaseSyncResults.Renamed, caseId));
         (await CountAsync(world, "test_case")).ShouldBe(1);
-        (await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case")).ShouldBe(caseId);
-        (await _fixture.ScalarAsync<string>(world.Database, "select file_path from public.test_case")).ShouldBe("tests/auth/login.spec.ts");
-        (await _fixture.ScalarAsync<string>(world.Database, "select from_path || '>' || to_path || '@' || commit_sha from public.case_rename_history"))
+        (await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"))).ShouldBe(caseId);
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select file_path from public.test_case"))).ShouldBe("tests/auth/login.spec.ts");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select from_path || '>' || to_path || '@' || commit_sha from public.case_rename_history")))
             .ShouldBe($"tests/login.spec.ts>tests/auth/login.spec.ts@{Commit2}");
         (await CountAsync(world, "case_rename_history")).ShouldBe(1);
     }
@@ -145,13 +127,13 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA), Annotated("b.spec.ts", IdB));
-        var before = await _fixture.ScalarAsync<string>(world.Database, "select string_agg(version::text || last_seen_commit, ',') from public.test_case");
+        var before = await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select string_agg(version::text || last_seen_commit, ',') from public.test_case"));
 
         var report = await RegisterAsync(world, Commit2, Annotated("a.spec.ts", IdA), Annotated("b.spec.ts", IdB));
 
         (report.Registered, report.Renamed, report.Unchanged, report.Missing).ShouldBe((0, 0, 2, 0));
         report.Entries.ShouldBeEmpty();
-        (await _fixture.ScalarAsync<string>(world.Database, "select string_agg(version::text || last_seen_commit, ',') from public.test_case")).ShouldBe(before);
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select string_agg(version::text || last_seen_commit, ',') from public.test_case"))).ShouldBe(before);
         (await CountAsync(world, "case_identity_source")).ShouldBe(2);
     }
 
@@ -178,7 +160,7 @@ public sealed class CatalogIdentityTests
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("tests/a.spec.ts", IdA), Annotated("tests/b.spec.ts", IdB));
         var before = await _fixture.ScalarAsync<string>(
-            world.Database, "select string_agg(annotation_id::text || file_path || status || version::text, ',' order by annotation_id) from public.test_case");
+            world.Database, Scoped(world, "select string_agg(annotation_id::text || file_path || status || version::text, ',' order by annotation_id) from public.test_case"));
 
         var report = await RegisterAsync(
             world,
@@ -194,7 +176,7 @@ public sealed class CatalogIdentityTests
 
         // The stored case is untouched, neither moved nor marked missing, and nothing new was written.
         (await _fixture.ScalarAsync<string>(
-            world.Database, "select string_agg(annotation_id::text || file_path || status || version::text, ',' order by annotation_id) from public.test_case")).ShouldBe(before);
+            world.Database, Scoped(world, "select string_agg(annotation_id::text || file_path || status || version::text, ',' order by annotation_id) from public.test_case"))).ShouldBe(before);
         (await CountAsync(world, "case_rename_history")).ShouldBe(0);
     }
 
@@ -211,8 +193,8 @@ public sealed class CatalogIdentityTests
         var report = await RegisterAsync(world, Commit1, new SourceFile("tests/checkout.spec.ts", "test('x')", "playwright", "typescript"), sidecar);
 
         report.Registered.ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(world.Database, "select source || '|' || raw_key from public.case_identity_source")).ShouldBe("sidecar|checkout.spec.ts");
-        (await _fixture.ScalarAsync<string>(world.Database, "select name from public.test_case")).ShouldBe("Checkout works");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select source || '|' || raw_key from public.case_identity_source"))).ShouldBe("sidecar|checkout.spec.ts");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select name from public.test_case"))).ShouldBe("Checkout works");
     }
 
     [Fact]
@@ -253,7 +235,7 @@ public sealed class CatalogIdentityTests
             ("bad.spec.ts", CaseSyncCodes.InvalidAnnotation),
             ("ghost.spec.ts", CaseSyncCodes.InvalidSidecarEntry),
         ]);
-        (await _fixture.ScalarAsync<string>(world.Database, "select file_path from public.test_case")).ShouldBe("good.spec.ts");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select file_path from public.test_case"))).ShouldBe("good.spec.ts");
     }
 
     // ------------------------------------------------------------------ §6 missing / returning / archived
@@ -266,12 +248,12 @@ public sealed class CatalogIdentityTests
 
         var gone = await RegisterAsync(world, Commit2, Annotated("a.spec.ts", IdA));
         gone.Missing.ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(world.Database, $"select status || '|' || last_seen_commit from public.test_case where annotation_id = '{IdB}'"))
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select status || '|' || last_seen_commit from public.test_case", $"annotation_id = '{IdB}'")))
             .ShouldBe($"missing|{Commit2}");
 
         var back = await RegisterAsync(world, Commit3, Annotated("a.spec.ts", IdA), Annotated("b.spec.ts", IdB));
         (back.Reactivated, back.Renamed, back.Missing).ShouldBe((1, 0, 0));
-        (await _fixture.ScalarAsync<string>(world.Database, $"select status from public.test_case where annotation_id = '{IdB}'")).ShouldBe("active");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select status from public.test_case", $"annotation_id = '{IdB}'"))).ShouldBe("active");
         (await CountAsync(world, "test_case")).ShouldBe(2);
     }
 
@@ -285,7 +267,7 @@ public sealed class CatalogIdentityTests
         var report = await RegisterAsync(world, Commit3, Annotated("new.spec.ts", IdA), Annotated("stay.spec.ts", IdB));
 
         (report.Reactivated, report.Renamed).ShouldBe((1, 1));
-        (await _fixture.ScalarAsync<string>(world.Database, $"select status || '|' || file_path from public.test_case where annotation_id = '{IdA}'")).ShouldBe("active|new.spec.ts");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select status || '|' || file_path from public.test_case", $"annotation_id = '{IdA}'"))).ShouldBe("active|new.spec.ts");
     }
 
     [Fact]
@@ -298,7 +280,7 @@ public sealed class CatalogIdentityTests
         var report = await RegisterAsync(world, Commit2, new SourceFile("a.spec.ts", "// evidgate.id: broken", "playwright"));
 
         (report.Warnings, report.Missing).ShouldBe((1, 0));
-        (await _fixture.ScalarAsync<string>(world.Database, "select status from public.test_case")).ShouldBe("active");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select status from public.test_case"))).ShouldBe("active");
     }
 
     [Fact]
@@ -306,12 +288,12 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        await _fixture.ExecuteAsync(world.Database, "update public.test_case set status = 'archived'");
+        await _fixture.ExecuteAsync(world.Database, $"update public.test_case set status = 'archived' where org_id = '{world.Org}'");
 
         var report = await RegisterAsync(world, Commit2, Annotated("a.spec.ts", IdA));
 
         (report.Unchanged, report.Reactivated, report.Missing).ShouldBe((1, 0, 0));
-        (await _fixture.ScalarAsync<string>(world.Database, "select status from public.test_case")).ShouldBe("archived");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select status from public.test_case"))).ShouldBe("archived");
     }
 
     [Fact]
@@ -323,7 +305,7 @@ public sealed class CatalogIdentityTests
         var outcome = await TryRegisterAsync(world, Commit2);
 
         (outcome.Succeeded, outcome.Failure).ShouldBe((false, "empty_tree"));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.test_case where status = 'active'")).ShouldBe(2);
+        (await _fixture.ScalarAsync<long>(world.Database, Scoped(world, "select count(*) from public.test_case", "status = 'active'"))).ShouldBe(2);
 
         // A project with nothing active can sync an empty tree.
         var empty = await StartAsync();
@@ -340,7 +322,7 @@ public sealed class CatalogIdentityTests
 
         var halfPlusOne = await TryRegisterAsync(world, Commit2, full[..9]);
         (halfPlusOne.Succeeded, halfPlusOne.Failure).ShouldBe((false, "incomplete_tree"));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.test_case where status = 'active'")).ShouldBe(20);
+        (await _fixture.ScalarAsync<long>(world.Database, Scoped(world, "select count(*) from public.test_case", "status = 'active'"))).ShouldBe(20);
 
         // Exactly half may vanish (a big cleanup is legitimate); under ten cases the guard does not apply.
         (await TryRegisterAsync(world, Commit2, full[..10])).Report!.Missing.ShouldBe(10);
@@ -362,7 +344,7 @@ public sealed class CatalogIdentityTests
         var report = await RegisterAsync(world, Commit2, new SourceFile("tests/a.spec.ts", "x", "playwright"), new SourceFile("tests/b.spec.ts", "x", "playwright"), broken, plain);
 
         (report.Warnings, report.Missing).ShouldBe((1, 0));
-        (await _fixture.ScalarAsync<long>(world.Database, "select count(*) from public.test_case where status = 'active'")).ShouldBe(3);
+        (await _fixture.ScalarAsync<long>(world.Database, Scoped(world, "select count(*) from public.test_case", "status = 'active'"))).ShouldBe(3);
     }
 
     [Fact]
@@ -444,7 +426,7 @@ public sealed class CatalogIdentityTests
 
         // Vanishing from one project's tree never touches the other project's cases.
         await RegisterAsync(world.Api, world.Org, second, Commit2, Annotated("other.spec.ts", IdB));
-        (await _fixture.ScalarAsync<string>(world.Database, $"select status from public.test_case where project_id = '{world.Project}'")).ShouldBe("active");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select status from public.test_case", $"project_id = '{world.Project}'"))).ShouldBe("active");
     }
 
     // ------------------------------------------------------------------ AC6 immutability at the database
@@ -457,9 +439,9 @@ public sealed class CatalogIdentityTests
 
         var changes = new List<string>
         {
-            $"update public.test_case set annotation_id = '{IdB}'",
-            "update public.test_case set first_seen_commit = '0000000'",
-            $"update public.test_case set project_id = '{Guid.CreateVersion7()}'",
+            $"update public.test_case set annotation_id = '{IdB}' where org_id = '{world.Org}'",
+            $"update public.test_case set first_seen_commit = '0000000' where org_id = '{world.Org}'",
+            $"update public.test_case set project_id = '{Guid.CreateVersion7()}' where org_id = '{world.Org}'",
         };
         foreach (var change in changes)
         {
@@ -472,8 +454,8 @@ public sealed class CatalogIdentityTests
         }
 
         // Metadata stays writable and bumps the version through the shared trigger.
-        await AsAppAsync(world, "update public.test_case set name = 'Renamed', file_path = 'z.spec.ts', labels = '{smoke}'");
-        (await _fixture.ScalarAsync<string>(world.Database, "select name || '|' || file_path || '|' || version::text from public.test_case")).ShouldBe("Renamed|z.spec.ts|2");
+        await AsAppAsync(world, $"update public.test_case set name = 'Renamed', file_path = 'z.spec.ts', labels = '{{smoke}}' where org_id = '{world.Org}'");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select name || '|' || file_path || '|' || version::text from public.test_case"))).ShouldBe("Renamed|z.spec.ts|2");
     }
 
     [Fact]
@@ -483,7 +465,7 @@ public sealed class CatalogIdentityTests
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
         await RegisterAsync(world, Commit2, Annotated("b.spec.ts", IdA));
 
-        foreach (var statement in AppendOnlyViolations)
+        foreach (var statement in AppendOnlyViolations(world))
         {
             var denied = await Should.ThrowAsync<PostgresException>(async () => await AsAppAsync(world, statement));
             denied.SqlState.ShouldBe("42501", statement);
@@ -499,7 +481,7 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
 
         var insert = $"insert into public.test_case (id, org_id, project_id, annotation_id, name, framework, first_seen_commit) values ('{Guid.CreateVersion7()}', '{world.Org}', '{otherProject}', '{IdA}', 'x', 'pw', '{Commit1}')";
@@ -515,23 +497,26 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
         await RegisterAsync(world.Api, otherOrg, otherProject, Commit1, Annotated("a.spec.ts", IdA));
 
+        // The class shares one database, so these raw checks cover exactly the two orgs this test created;
+        // RLS must still hide the other org's rows from world.Org, and everything from an unset tenant.
+        var createdOrgs = $"('{world.Org}', '{otherOrg}')";
         await using var services = world.Api.Services.CreateAsyncScope();
         var scopes = services.ServiceProvider.GetRequiredService<ITenantScopeFactory>();
         var db = services.ServiceProvider.GetRequiredService<ITenantDb>();
         await using (await scopes.BeginAsync(world.Org, null, true, TestContext.Current.CancellationToken))
         {
-            (await db.QueryAsync<Guid>("select org_id from public.test_case", null, TestContext.Current.CancellationToken)).ShouldAllBe(id => id == world.Org);
-            (await db.QueryAsync<Guid>("select org_id from public.case_identity_source", null, TestContext.Current.CancellationToken)).ShouldAllBe(id => id == world.Org);
+            (await db.QueryAsync<Guid>($"select org_id from public.test_case where org_id in {createdOrgs}", null, TestContext.Current.CancellationToken)).ShouldAllBe(id => id == world.Org);
+            (await db.QueryAsync<Guid>($"select org_id from public.case_identity_source where org_id in {createdOrgs}", null, TestContext.Current.CancellationToken)).ShouldAllBe(id => id == world.Org);
         }
 
         await using var connection = new NpgsqlConnection(_fixture.AppConnectionString(world.Database));
         await connection.OpenAsync(TestContext.Current.CancellationToken);
-        await using var command = new NpgsqlCommand("select count(*) from public.test_case", connection);
+        await using var command = new NpgsqlCommand($"select count(*) from public.test_case where org_id in {createdOrgs}", connection);
         ((long)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!).ShouldBe(0);
     }
 
@@ -555,7 +540,7 @@ public sealed class CatalogIdentityTests
         for (var index = 0; index < 3; index++)
         {
             ids.Add(await _fixture.ScalarAsync<Guid>(
-                world.Database, $"select id from public.test_case order by created_at, id offset {index} limit 1"));
+                world.Database, $"select id from public.test_case where org_id = '{world.Org}' order by created_at, id offset {index} limit 1"));
         }
 
         return ids;
@@ -594,7 +579,7 @@ public sealed class CatalogIdentityTests
         page2.Body.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetGuid()).ShouldBe([third]);
         page2.Body.GetProperty("next_cursor").ValueKind.ShouldBe(System.Text.Json.JsonValueKind.Null);
 
-        await _fixture.ExecuteAsync(world.Database, $"update public.test_case set status = 'archived' where id = '{second}'");
+        await _fixture.ExecuteAsync(world.Database, $"update public.test_case set status = 'archived' where org_id = '{world.Org}' and id = '{second}'");
         var live = await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/cases", world.Admin);
         live.Body.GetProperty("items").GetArrayLength().ShouldBe(2);
         var archived = await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/cases?status=archived", world.Admin);
@@ -608,7 +593,7 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
 
         (await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/cases?limit=0", world.Admin)).Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
@@ -655,7 +640,7 @@ public sealed class CatalogIdentityTests
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("old.spec.ts", IdA));
         await RegisterAsync(world, Commit2, Annotated("new.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
 
         world.Api.Statements.Clear();
         var answer = await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseId}", world.Admin);
@@ -677,10 +662,10 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
         await RegisterAsync(world.Api, otherOrg, otherProject, Commit1, Annotated("a.spec.ts", IdA));
-        var theirs = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var theirs = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(otherOrg, "select id from public.test_case"));
 
         var cross = await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{theirs}", world.Admin);
         var missing = await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{Guid.CreateVersion7()}", world.Admin);
@@ -696,7 +681,7 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
 
         var answer = await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseId}/revisions", world.Admin);
 
@@ -710,8 +695,8 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
-        var membership = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.membership where user_id = '{world.User}'");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
+        var membership = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.membership", $"user_id = '{world.User}'"));
         var etag = (await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseId}", world.Admin)).ETag!;
 
         var patched = await world.Client.SendAsync(
@@ -737,8 +722,8 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
-        await _fixture.ExecuteAsync(world.Database, $"update public.test_case set name = 'changed elsewhere' where id = '{caseId}'");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
+        await _fixture.ExecuteAsync(world.Database, $"update public.test_case set name = 'changed elsewhere' where org_id = '{world.Org}' and id = '{caseId}'");
 
         var stale = await world.Client.SendAsync(HttpMethod.Patch, $"/v1/cases/{caseId}", world.Admin, new { name = "mine" }, NewKey(), "\"1\"");
         stale.Status.ShouldBe(HttpStatusCode.PreconditionFailed);
@@ -764,14 +749,14 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
 
         var body = new Dictionary<string, object?> { ["name"] = "sneaky", [field] = IdB };
         var answer = await world.Client.SendAsync(HttpMethod.Patch, $"/v1/cases/{caseId}", world.Admin, body, NewKey(), "\"1\"");
 
         answer.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         answer.ErrorCode.ShouldBe("case_field_immutable");
-        (await _fixture.ScalarAsync<string>(world.Database, "select name || version::text from public.test_case")).ShouldBe("a.spec1");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select name || version::text from public.test_case"))).ShouldBe("a.spec1");
     }
 
     [Fact]
@@ -779,7 +764,7 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
 
         async Task<ApiAnswer> Patch(object body) =>
             await world.Client.SendAsync(HttpMethod.Patch, $"/v1/cases/{caseId}", world.Admin, body, NewKey(), "\"1\"");
@@ -797,7 +782,7 @@ public sealed class CatalogIdentityTests
         var stranger = await Patch(new { owner_membership_id = Guid.CreateVersion7() });
         stranger.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
         stranger.Body.GetProperty("error").GetProperty("details").EnumerateArray().Single().GetProperty("path").GetString().ShouldBe("owner_membership_id");
-        (await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case")).ShouldBe(1);
+        (await _fixture.ScalarAsync<int>(world.Database, Scoped(world, "select version from public.test_case"))).ShouldBe(1);
     }
 
     [Fact]
@@ -805,7 +790,7 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
 
         async Task<ApiAnswer> Move(string status, int version) =>
             await world.Client.SendAsync(HttpMethod.Patch, $"/v1/cases/{caseId}", world.Admin, new { status }, NewKey(), $"\"{version}\"");
@@ -817,8 +802,8 @@ public sealed class CatalogIdentityTests
         (await Move("active", 2)).Text("status").ShouldBe("active");
 
         // active -> missing is the system's move; a missing case can be archived but not "reactivated" by hand.
-        await _fixture.ExecuteAsync(world.Database, "update public.test_case set status = 'missing'");
-        var version = await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case");
+        await _fixture.ExecuteAsync(world.Database, $"update public.test_case set status = 'missing' where org_id = '{world.Org}'");
+        var version = await _fixture.ScalarAsync<int>(world.Database, Scoped(world, "select version from public.test_case"));
         var blocked = await Move("active", version);
         blocked.Status.ShouldBe(HttpStatusCode.Conflict);
         blocked.ErrorCode.ShouldBe("invalid_transition");
@@ -830,17 +815,17 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
         await RegisterAsync(world.Api, otherOrg, otherProject, Commit1, Annotated("a.spec.ts", IdA));
-        var mine = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{world.Org}'");
-        var theirs = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{otherOrg}'");
+        var mine = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
+        var theirs = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(otherOrg, "select id from public.test_case"));
 
         var stranger = TenancyApiFactory.Resolved(user: Guid.CreateVersion7(), orgHeader: world.Org);
         (await world.Client.SendAsync(HttpMethod.Patch, $"/v1/cases/{mine}", stranger, new { name = "x" }, NewKey(), "\"1\"")).Status.ShouldBe(HttpStatusCode.Forbidden);
         (await world.Client.SendAsync(HttpMethod.Patch, $"/v1/cases/{theirs}", world.Admin, new { name = "x" }, NewKey(), "\"1\"")).Status.ShouldBe(HttpStatusCode.NotFound);
-        (await _fixture.ScalarAsync<string>(world.Database, $"select name from public.test_case where id = '{theirs}'")).ShouldBe("a.spec");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(otherOrg, "select name from public.test_case", $"id = '{theirs}'"))).ShouldBe("a.spec");
     }
 
     [Fact]
@@ -848,7 +833,7 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
         var key = NewKey();
 
         var first = await world.Client.SendAsync(HttpMethod.Patch, $"/v1/cases/{caseId}", world.Admin, new { name = "Once" }, key, "\"1\"");
@@ -856,7 +841,7 @@ public sealed class CatalogIdentityTests
 
         first.Status.ShouldBe(HttpStatusCode.OK);
         replay.Status.ShouldBe(HttpStatusCode.OK);
-        (await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case")).ShouldBe(2);
+        (await _fixture.ScalarAsync<int>(world.Database, Scoped(world, "select version from public.test_case"))).ShouldBe(2);
     }
 
     [Fact]
@@ -864,7 +849,7 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
 
         async Task<HttpStatusCode> Send(string text)
         {
@@ -888,18 +873,18 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
 
         var initial = await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{caseId}", world.Admin);
         initial.Status.ShouldBe(HttpStatusCode.OK);
         initial.Body.GetProperty("case").GetProperty("requirement_ref").ValueKind.ShouldBe(JsonValueKind.Null);
-        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
+        (await _fixture.ScalarAsync<string?>(world.Database, Scoped(world, "select requirement_ref from public.test_case"))).ShouldBeNull();
 
         var padded = await PatchRequirementAsync(world, caseId, new { requirement_ref = "  REQ-1042  " });
         padded.Status.ShouldBe(HttpStatusCode.OK);
         padded.Body.GetProperty("requirement_ref").GetString().ShouldBe("REQ-1042");
         padded.Body.GetProperty("version").GetInt32().ShouldBe(2);
-        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case")).ShouldBe("REQ-1042");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select requirement_ref from public.test_case"))).ShouldBe("REQ-1042");
 
         // 128 characters is the limit (D-A6), and it is measured after trimming.
         var longest = await PatchRequirementAsync(world, caseId, new { requirement_ref = " " + new string('r', 128) + " " });
@@ -923,9 +908,9 @@ public sealed class CatalogIdentityTests
         tooLongDetail.GetProperty("reason").GetString().ShouldBe("invalid_length");
 
         // The refused value changed nothing, so the accepted one is still stored.
-        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case"))
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select requirement_ref from public.test_case")))
             .ShouldBe("https://jira.example.com/browse/PROJ-1#criteria");
-        (await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case")).ShouldBe(4);
+        (await _fixture.ScalarAsync<int>(world.Database, Scoped(world, "select version from public.test_case"))).ShouldBe(4);
     }
 
     [Theory]
@@ -945,7 +930,7 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
 
         var answer = await PatchRequirementAsync(world, caseId, new { requirement_ref = value });
 
@@ -953,8 +938,8 @@ public sealed class CatalogIdentityTests
         answer.ErrorCode.ShouldBe("request_invalid");
         answer.Body.GetProperty("error").GetProperty("details").EnumerateArray().Single()
             .GetProperty("reason").GetString().ShouldBe(reason);
-        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
-        (await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case")).ShouldBe(1);
+        (await _fixture.ScalarAsync<string?>(world.Database, Scoped(world, "select requirement_ref from public.test_case"))).ShouldBeNull();
+        (await _fixture.ScalarAsync<int>(world.Database, Scoped(world, "select version from public.test_case"))).ShouldBe(1);
     }
 
     [Fact]
@@ -962,7 +947,7 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
 
         var absent = await PatchRequirementAsync(world, caseId, new { });
         absent.Status.ShouldBe(HttpStatusCode.UnprocessableEntity);
@@ -981,8 +966,8 @@ public sealed class CatalogIdentityTests
             .Single().GetProperty("path").GetString().ShouldBe("name");
 
         // The name the extra member tried to change is untouched: this route writes the pointer only.
-        (await _fixture.ScalarAsync<string>(world.Database, "select name from public.test_case")).ShouldBe("a.spec");
-        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select name from public.test_case"))).ShouldBe("a.spec");
+        (await _fixture.ScalarAsync<string?>(world.Database, Scoped(world, "select requirement_ref from public.test_case"))).ShouldBeNull();
     }
 
     [Fact]
@@ -990,10 +975,10 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
-        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, "select id from public.test_case");
+        var caseId = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
         var before = await _fixture.ScalarAsync<string>(
             world.Database,
-            "select string_agg(revision_hash || '|' || assertion_hash || '|' || content_sha256, ',' order by created_at) from public.test_revision");
+            Scoped(world, "select string_agg(revision_hash || '|' || assertion_hash || '|' || content_sha256, ',' order by created_at) from public.test_revision"));
         var revisions = await CountAsync(world, "test_revision");
         revisions.ShouldBeGreaterThan(0);
 
@@ -1002,7 +987,7 @@ public sealed class CatalogIdentityTests
 
         // Replaying the same value is a no-op, and clearing it is another metadata write.
         (await PatchRequirementAsync(world, caseId, new { requirement_ref = "REQ-1042" })).Status.ShouldBe(HttpStatusCode.OK);
-        (await _fixture.ScalarAsync<int>(world.Database, "select version from public.test_case")).ShouldBe(2);
+        (await _fixture.ScalarAsync<int>(world.Database, Scoped(world, "select version from public.test_case"))).ShouldBe(2);
         var cleared = await PatchRequirementAsync(world, caseId, new { requirement_ref = (string?)null });
         cleared.Status.ShouldBe(HttpStatusCode.OK);
         cleared.Body.GetProperty("requirement_ref").ValueKind.ShouldBe(JsonValueKind.Null);
@@ -1010,9 +995,9 @@ public sealed class CatalogIdentityTests
         (await CountAsync(world, "test_revision")).ShouldBe(revisions);
         (await _fixture.ScalarAsync<string>(
             world.Database,
-            "select string_agg(revision_hash || '|' || assertion_hash || '|' || content_sha256, ',' order by created_at) from public.test_revision"))
+            Scoped(world, "select string_agg(revision_hash || '|' || assertion_hash || '|' || content_sha256, ',' order by created_at) from public.test_revision")))
             .ShouldBe(before);
-        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
+        (await _fixture.ScalarAsync<string?>(world.Database, Scoped(world, "select requirement_ref from public.test_case"))).ShouldBeNull();
     }
 
     [Fact]
@@ -1020,13 +1005,13 @@ public sealed class CatalogIdentityTests
     {
         await using var world = await StartAsync();
         var otherUser = Guid.CreateVersion7();
-        var otherOrg = await CreateOrgAsync(world.Client, otherUser, "rival");
+        var otherOrg = await CreateOrgAsync(world.Client, otherUser, Unique.Slug("rival"));
         var otherProject = await CreateProjectAsync(world.Client, otherUser, otherOrg, "theirs");
         var siblingProject = await CreateProjectAsync(world.Client, world.User, world.Org, "returns");
         await RegisterAsync(world, Commit1, Annotated("a.spec.ts", IdA));
         await RegisterAsync(world.Api, otherOrg, otherProject, Commit1, Annotated("a.spec.ts", IdA));
-        var mine = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{world.Org}'");
-        var theirs = await _fixture.ScalarAsync<Guid>(world.Database, $"select id from public.test_case where org_id = '{otherOrg}'");
+        var mine = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(world, "select id from public.test_case"));
+        var theirs = await _fixture.ScalarAsync<Guid>(world.Database, Scoped(otherOrg, "select id from public.test_case"));
 
         var stranger = TenancyApiFactory.Resolved(user: Guid.CreateVersion7(), orgHeader: world.Org);
         (await world.Client.SendAsync(HttpMethod.Patch, $"/v1/projects/{world.Project}/cases/{mine}", stranger, new { requirement_ref = "REQ-1" }, NewKey()))
@@ -1040,15 +1025,15 @@ public sealed class CatalogIdentityTests
         wrongProject.Status.ShouldBe(HttpStatusCode.NotFound);
         wrongProject.ErrorCode.ShouldBe("not_found");
 
-        (await _fixture.ScalarAsync<string?>(world.Database, $"select requirement_ref from public.test_case where id = '{mine}'")).ShouldBeNull();
-        (await _fixture.ScalarAsync<string?>(world.Database, $"select requirement_ref from public.test_case where id = '{theirs}'")).ShouldBeNull();
-        (await _fixture.ScalarAsync<int>(world.Database, $"select version from public.test_case where id = '{mine}'")).ShouldBe(1);
+        (await _fixture.ScalarAsync<string?>(world.Database, Scoped(world, "select requirement_ref from public.test_case", $"id = '{mine}'"))).ShouldBeNull();
+        (await _fixture.ScalarAsync<string?>(world.Database, Scoped(otherOrg, "select requirement_ref from public.test_case", $"id = '{theirs}'"))).ShouldBeNull();
+        (await _fixture.ScalarAsync<int>(world.Database, Scoped(world, "select version from public.test_case", $"id = '{mine}'"))).ShouldBe(1);
 
         // The owner still can, and the other org's row stays invisible to every read of this tenant.
         var stored = await PatchRequirementAsync(world, mine, new { requirement_ref = "REQ-1" });
         stored.Status.ShouldBe(HttpStatusCode.OK);
         (await world.Client.SendAsync(HttpMethod.Get, $"/v1/cases/{theirs}", world.Admin)).Status.ShouldBe(HttpStatusCode.NotFound);
-        (await _fixture.ScalarAsync<string>(world.Database, $"select requirement_ref from public.test_case where id = '{theirs}'"))
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(otherOrg, "select requirement_ref from public.test_case", $"id = '{theirs}'")))
             .ShouldBeNull();
     }
 
@@ -1066,15 +1051,15 @@ public sealed class CatalogIdentityTests
         var source = new SourceFile("tests/checkout.spec.ts", "test('x')", "playwright", "typescript");
         await RegisterAsync(world, Commit1, source, Sidecar("\" REQ-1042 \""));
 
-        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case")).ShouldBe("REQ-1042");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select requirement_ref from public.test_case"))).ShouldBe("REQ-1042");
 
         // A later sync with another value, and then with none, leaves the stored pointer alone: after
         // registration the explicit route is its only writer, so a sidecar edit cannot silently re-point a case.
         await RegisterAsync(world, Commit2, source, Sidecar("REQ-9999"));
-        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case")).ShouldBe("REQ-1042");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select requirement_ref from public.test_case"))).ShouldBe("REQ-1042");
 
         await RegisterAsync(world, Commit3, source, Sidecar(null));
-        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case")).ShouldBe("REQ-1042");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select requirement_ref from public.test_case"))).ShouldBe("REQ-1042");
         (await CountAsync(world, "test_case")).ShouldBe(1);
     }
 
@@ -1095,7 +1080,7 @@ public sealed class CatalogIdentityTests
         report.Conflicts.ShouldBe(0);
         report.Registered.ShouldBe(1);
         report.Entries.Single(entry => entry.Result == CaseSyncResults.Warning).Code.ShouldBe(CaseSyncCodes.InvalidSidecarEntry);
-        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case")).ShouldBeNull();
+        (await _fixture.ScalarAsync<string?>(world.Database, Scoped(world, "select requirement_ref from public.test_case"))).ShouldBeNull();
         (await CountAsync(world, "test_case")).ShouldBe(1);
     }
 
@@ -1111,7 +1096,7 @@ public sealed class CatalogIdentityTests
 
         report.Warnings.ShouldBe(0);
         report.Registered.ShouldBe(1);
-        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case")).ShouldBe("1042");
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select requirement_ref from public.test_case"))).ShouldBe("1042");
     }
 
     [Theory]
@@ -1142,8 +1127,8 @@ public sealed class CatalogIdentityTests
         report.Registered.ShouldBe(2);
         report.Entries.Single(entry => entry.Result == CaseSyncResults.Warning).Path.ShouldBe("tests/bad.spec.ts");
         (await CountAsync(world, "test_case")).ShouldBe(2);
-        (await _fixture.ScalarAsync<string>(world.Database, "select requirement_ref from public.test_case where file_path = 'tests/good.spec.ts'")).ShouldBe("REQ-1042");
-        (await _fixture.ScalarAsync<string?>(world.Database, "select requirement_ref from public.test_case where file_path = 'tests/bad.spec.ts'")).ShouldBeNull();
+        (await _fixture.ScalarAsync<string>(world.Database, Scoped(world, "select requirement_ref from public.test_case", "file_path = 'tests/good.spec.ts'"))).ShouldBe("REQ-1042");
+        (await _fixture.ScalarAsync<string?>(world.Database, Scoped(world, "select requirement_ref from public.test_case", "file_path = 'tests/bad.spec.ts'"))).ShouldBeNull();
     }
 
     [Fact]
