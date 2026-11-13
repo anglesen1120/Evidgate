@@ -201,7 +201,9 @@ The recorded runs live in `docs/security/evidence/fork-pr-fixture-outputs.md`, w
 
 ## 13. Fork runs are advisory-only
 
-Owner: 05.2.2-T3.3. A fork pull request has no supported token path: GitHub issues its workflow no OIDC token and no secret (§2), and the exchange refuses a fork-shaped token (§12), so a fork run cannot create a run through the verified-CI route. If a maintainer relays fork-produced results through a trusted job, the run is recorded from the request body (`ref.is_fork = true`, `unverified_ref = true`) and stays **advisory-only**:
+Owner: 05.2.2-T3.3. A fork pull request has no supported token path: GitHub issues its workflow no OIDC token and no secret (§2), and the exchange refuses a fork-shaped token (§12), so a fork run cannot create a run through the verified-CI route.
+
+The label is **caller-attested**. A run created with a verified CI credential always stores `ref.is_fork = false`, whatever the body says (claims win over the body), so the trusted upload job of §4 does **not** carry fork provenance and a run it creates is not advisory-only. To keep fork-produced results advisory, relay them through a caller without verified CI claims (for example an ingest token, §5) and send `ref.is_fork: true`; that run is recorded from the request body (`unverified_ref = true`) and stays **advisory-only**:
 
 - `GET /v1/runs/{r}` returns `advisory_only: true` (derived from `ref.is_fork`, never stored separately).
 - The run is never pinned to a release: create with a `release` field, or the explicit bind, answers 422 `fork_run_not_bindable`.
@@ -209,4 +211,4 @@ Owner: 05.2.2-T3.3. A fork pull request has no supported token path: GitHub issu
 - No project setting or permission turns this off (V1, DECISIONS §8.1 D-A11).
 - `evidgate_runs_created_total{trigger_event,is_fork,unverified_ref}` counts the runs, so fork traffic is visible.
 
-Ingest tokens (02.4.2) are not a fork path either: use one only in a trusted non-fork context (§5).
+An ingest token (02.4.2, §5) is not a way for fork code to authenticate: the relay job runs in a trusted context and only forwards the fork's results.

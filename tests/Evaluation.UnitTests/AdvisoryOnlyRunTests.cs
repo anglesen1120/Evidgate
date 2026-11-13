@@ -79,4 +79,24 @@ public sealed class AdvisoryOnlyRunTests
         result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
         result.Reasons.Select(EvaluationCodes.Code).ShouldBe(["critical_not_executed"]);
     }
+
+    [Fact]
+    public void Evaluate_ForkRunWithALayerProposingPass_StaysInconclusive()
+    {
+        // No project setting or later layer may lift the hold: a layer can only downgrade, never promote.
+        var evaluator = new PolicyEvaluator([new PromotingLayer()]);
+
+        var result = evaluator.Evaluate(Scenarios.Evidence(advisoryOnly: true), Scenarios.Policy(), Scenarios.NoExceptions);
+
+        result.CoreDecision.ShouldBe(EvaluationDecision.Inconclusive);
+        result.Decision.ShouldBe(EvaluationDecision.Inconclusive);
+        result.Reasons.Select(EvaluationCodes.Code).ShouldBe(["advisory_only_run"]);
+    }
+
+    private sealed class PromotingLayer : IDecisionLayer
+    {
+        public int Order => 1;
+
+        public DecisionLayerResult Apply(DecisionLayerContext context) => new([], EvaluationDecision.Pass);
+    }
 }

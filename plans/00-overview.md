@@ -287,7 +287,7 @@ Evidence revision `completeness ∈ {complete, incomplete}` with `missing[]` rea
 | Missing shard, build mismatch, unknown status, setup error, expected count 0 (unless the suite is declared empty and the policy allows it) | INCONCLUSIVE |
 | Critical case skipped or blocked | not PASS |
 | Retry fail → pass | flaky policy: pilot default blocks critical cases, warns otherwise; a non-critical fail → pass beyond the flaky budget ⇒ INCONCLUSIVE with reason `flaky_budget_exceeded` (TL T27) |
-| Fork run (`run.is_fork`) | advisory-only (D-A11): never bound to a release (422 `fork_run_not_bindable`); otherwise-passing evidence ⇒ INCONCLUSIVE with reason `advisory_only_run`; a confirmed failure stays FAIL (05.2.2-T3, S412) |
+| Fork run (`run.is_fork`) | advisory-only (D-A11): never bound to a release (422 `fork_run_not_bindable`); otherwise-passing evidence ⇒ INCONCLUSIVE with reason `advisory_only_run`; a confirmed failure stays FAIL; the label follows `ref.is_fork`, which is caller-attested (a verified CI claim always stores `false`) (05.2.2-T3, S412) |
 | Case on the policy's critical list | can never be quarantined (422 `critical_case_not_quarantinable`); only a new policy revision by a `release_approver` removes it from the list (TL T23) |
 | Candidate passes only in shadow | original decision kept |
 
