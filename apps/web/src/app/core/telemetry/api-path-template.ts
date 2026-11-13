@@ -69,6 +69,7 @@ export const KNOWN_API_SEGMENTS: ReadonlySet<string> = new Set<string>([
   'import',
   'incidents',
   'ingest-tokens',
+  'installations',
   'invite-token',
   'item',
   'jobs',
