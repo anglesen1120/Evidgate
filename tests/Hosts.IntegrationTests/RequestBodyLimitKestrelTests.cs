@@ -6,6 +6,8 @@ using Evidgate.Api.Middleware;
 using Evidgate.BuildingBlocks.Contracts.Validation;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
@@ -79,9 +81,8 @@ public sealed class RequestBodyLimitKestrelTests
 
     private static async Task<ProbeHost> StartAsync()
     {
-        var port = HostLocator.FreePort();
         var builder = WebApplication.CreateSlimBuilder();
-        builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.WebHost.ConfigureKestrel(kestrel =>
             kestrel.Limits.MaxRequestBodySize = RequestBodyLimitMiddleware.DefaultBodyBytes);
         builder.Services.TryAddEvidgateContractValidation();
@@ -92,7 +93,10 @@ public sealed class RequestBodyLimitKestrelTests
         app.MapPost("/limited", DrainAsync).WithBodyLimit(RouteLimit);
         app.MapPost("/default", DrainAsync);
         await app.StartAsync(TestContext.Current.CancellationToken);
-        return new ProbeHost(app, port);
+
+        // Port 0 lets the OS pick at bind time; the bound address is read back, so no free-port probe can race.
+        var bound = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
+        return new ProbeHost(app, new Uri(bound).Port);
     }
 
     private static async Task DrainAsync(HttpContext context)
