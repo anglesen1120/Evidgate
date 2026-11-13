@@ -32,6 +32,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -167,6 +168,33 @@ function holderIsGone(lock) {
   }
 }
 
+// A takeover gate is held for microseconds; one older than this was left by a crashed run.
+const GATE_STALE_MS = 10_000;
+
+// Removes a lock whose holder is dead. Takers serialise on a gate directory and re-judge the
+// holder inside it: a dead holder never removes its own lock and a live run only creates the
+// lock while it is absent, so the lock judged dead cannot be swapped for a fresh one before the
+// remove. Renaming the lock without the gate could move a fresh lock a rival had just taken.
+function takeOverStale(lock) {
+  const gate = `${lock}.takeover`;
+  if (!tryLock(gate)) {
+    let age;
+    try {
+      age = Date.now() - statSync(gate).mtimeMs;
+    } catch {
+      return;
+    }
+    if (age < GATE_STALE_MS) return;
+    rmSync(gate, { recursive: true, force: true });
+    if (!tryLock(gate)) return;
+  }
+  try {
+    if (holderIsGone(lock)) rmSync(lock, { recursive: true, force: true });
+  } finally {
+    rmSync(gate, { recursive: true, force: true });
+  }
+}
+
 // One run at a time per target: two concurrent runs would each generate and overwrite.
 function withLock(path, action) {
   // A symlinked target (also a dangling one) is refused before any read, write or chmod.
@@ -179,18 +207,8 @@ function withLock(path, action) {
   mkdirSync(dirname(path), { recursive: true });
   if (!tryLock(lock)) {
     // A SIGKILL leaves the lock behind; its owner pid tells a dead holder from a live one. A lock
-    // without a readable pid is treated as held.
-    // The rename is atomic: of two runs that both saw a dead holder only one moves the directory,
-    // so the loser can never delete the winner's fresh lock.
-    if (holderIsGone(lock)) {
-      const stale = `${lock}.stale.${process.pid}`;
-      try {
-        renameSync(lock, stale);
-        rmSync(stale, { recursive: true, force: true });
-      } catch {
-        // another run took it over first
-      }
-    }
+    // without a readable pid (empty, garbage, zero) is treated as held.
+    if (holderIsGone(lock)) takeOverStale(lock);
     if (!tryLock(lock))
       fail(`${lock} exists: another run is in progress (remove the directory if none is)`);
   }

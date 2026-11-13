@@ -16,7 +16,7 @@ namespace Contract.Tests;
 /// <see cref="ISecretProvider"/>, a rerun changes nothing, no value reaches the output and an
 /// inventory entry without a rule fails before anything is written.
 /// </summary>
-public sealed class SecretPlaceholderGeneratorTests : IDisposable
+public sealed partial class SecretPlaceholderGeneratorTests : IDisposable
 {
     private static readonly string Script = Path.Combine(ContractPaths.RepoRoot, "scripts", "env", "secret-placeholders.mjs");
 
