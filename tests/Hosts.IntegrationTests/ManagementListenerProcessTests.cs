@@ -160,6 +160,7 @@ public sealed class ManagementListenerProcessTests
         var publicPort = HostLocator.FreePort();
         var managementPort = HostLocator.FreePort();
         var pfxPath = Path.Combine(Path.GetTempPath(), $"evidgate-https-{Guid.NewGuid():N}.pfx");
+        using var pfxCleanup = new DeleteOnDispose(pfxPath);
         const string pfxPassword = "test-only";
         using (var key = System.Security.Cryptography.RSA.Create(2048))
         {
@@ -205,7 +206,36 @@ public sealed class ManagementListenerProcessTests
         finally
         {
             await ProcessRunner.StopAsync(process);
-            File.Delete(pfxPath);
+        }
+    }
+
+    [Fact]
+    public async Task Kestrel_Endpoints_Without_A_Management_Port_Still_Start_And_Serve()
+    {
+        var publicPort = HostLocator.FreePort();
+        using var process = StartApi(
+            publicPort,
+            managementPort: null,
+            configure: environment =>
+            {
+                environment.Remove("ASPNETCORE_URLS");
+                environment["Kestrel__Endpoints__Public__Url"] = $"http://127.0.0.1:{publicPort}";
+            });
+
+        try
+        {
+            await WaitForLiveAsync(publicPort);
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+
+            using var live = await client.GetAsync(
+                $"http://127.0.0.1:{publicPort}/internal/health/live",
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, live.StatusCode);
+        }
+        finally
+        {
+            await ProcessRunner.StopAsync(process);
         }
     }
 
@@ -356,5 +386,10 @@ public sealed class ManagementListenerProcessTests
         }
 
         throw new TimeoutException($"the Api did not answer /internal/health/live on port {port} within 30 s");
+    }
+
+    private sealed class DeleteOnDispose(string path) : IDisposable
+    {
+        public void Dispose() => File.Delete(path);
     }
 }
