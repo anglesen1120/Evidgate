@@ -15,13 +15,20 @@ namespace Tenancy.IntegrationTests;
 
 /// <summary>05.2.2-T2 AC6 QA matrix (S48Qa): the run list's boundaries through the real host and PostgreSQL.</summary>
 [Trait("Category", "Docker")]
-public sealed class ListRunsQaTests
+public sealed class ListRunsQaTests : IClassFixture<TenancyHostPool>
 {
     private const string ShaOne = "1111111111111111111111111111111111111111";
 
     private readonly PostgresTenancyFixture _fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts;
 
-    public ListRunsQaTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public ListRunsQaTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>
     /// AC6: a row with no identity at all still matches <c>is_fork=false</c> (the column defaults false) and no
@@ -31,7 +38,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_MissingIdentityRows_OnlyIsForkFalseMatches()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var identified = await CreateRefRunAsync(world, Branch("main", ShaOne));
         var anonymous = await CreateRefRunAsync(world, null);
 
@@ -54,7 +61,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_PrNumberOnBranchRow_IsStoredAndFilterable()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var branchWithPr = await CreateRefRunAsync(world, """{"kind":"branch","name":"main","pr_number":9}""");
 
         var item = Items(await ListAsync(world, "pr_number=9")).Single();
@@ -70,7 +77,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_HeadShaSha256_ExactAndCaseSensitive()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var sha256 = string.Concat(Enumerable.Repeat("0123456789abcdef", 4)); // 64 lowercase hex chars
         var run = await CreateRefRunAsync(world, Branch("main", sha256));
 
@@ -90,7 +97,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_RefName_UnicodePercentAndMaximumLength()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var unicode = await CreateRefRunAsync(world, Branch("nhánh-☃-2024", ShaOne));
         var percent = await CreateRefRunAsync(world, Branch("a%b", ShaOne));
         var nonPercent = await CreateRefRunAsync(world, Branch("axb", ShaOne));
@@ -114,7 +121,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_RefName_SqlMetacharacters_AreLiteral()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var quoted = await CreateRefRunAsync(world, Branch("x' or '1'='1", ShaOne));
         var comment = await CreateRefRunAsync(world, Branch("main--9", ShaOne));
 
@@ -131,7 +138,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_LimitBoundaries()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateRefRunAsync(world, Branch("main", ShaOne));
 
         (await ListAsync(world, "limit=1")).Status.ShouldBe(HttpStatusCode.OK);
@@ -152,7 +159,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_CursorReusedUnderAnotherFilter_IsJustAPosition()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var main = await CreateRefRunAsync(world, Branch("main", ShaOne));
         var feature = await CreateRefRunAsync(world, Branch("feature", ShaOne));
 
@@ -172,7 +179,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_CursorTickExtremes()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var run = await CreateRefRunAsync(world, Branch("main", ShaOne));
 
         OrderedIds(await ListAsync(world, "cursor=" + Uri.EscapeDataString(Cursor(0)))).ShouldBe(new[] { run });
@@ -194,7 +201,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_SoftDeletedProject_404()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateRefRunAsync(world, Branch("main", ShaOne));
         await _fixture.ExecuteAsync(world.Database, $"update public.project set status = 'deleted' where id = '{world.Project:D}'");
 
@@ -208,7 +215,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_ServiceClaimingRunRead_403()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateRefRunAsync(world, Branch("main", ShaOne));
 
         var service = TenancyApiFactory.Resolved(serviceOrg: world.Org, serviceProject: world.Project, servicePermissions: ["run:read"]);
@@ -221,7 +228,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_Unauthenticated_401()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
 
         var answer = await world.Client.SendAsync(HttpMethod.Get, $"/v1/projects/{world.Project}/runs", _ => { });
 
@@ -237,7 +244,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_UnknownQueryParameter_Ignored()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var run = await CreateRefRunAsync(world, Branch("main", ShaOne));
 
         var answer = await ListAsync(world, "rerun_label=x&reprocess_label=y");
@@ -253,7 +260,7 @@ public sealed class ListRunsQaTests
     [Fact]
     public async Task ListRunsQa_SecondPage_InsertAtSameCreatedAt()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         await CreateRefRunAsync(world, Branch("main", ShaOne));
         await CreateRefRunAsync(world, Branch("feature", ShaOne));
         await CreateRefRunAsync(world, Branch("release", ShaOne));

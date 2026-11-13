@@ -36,7 +36,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_TenantCapBelowProjectCap_BlocksAndLeaksNothing()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m, limit: 100m);
         await SeedTenantAsync(world, used: 8m, limit: Limit);
 
@@ -66,7 +66,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_ProjectCapBelowTenantCap_BlocksAndLeaksNothing()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 9m, limit: Limit);
         await SeedTenantAsync(world, used: 0m, limit: 100m);
 
@@ -92,7 +92,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_BothScopes_AdmittedIncrementsBoth()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m, limit: 100m);
         await SeedTenantAsync(world, used: 0m, limit: 100m);
 
@@ -113,7 +113,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_TenantOnlyCounter_AppliesToAProjectCall()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedTenantAsync(world, used: 0m, limit: Limit);
 
         var admitted = await world.CheckAsync(OrgRequest(world, 4m));
@@ -132,7 +132,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_ConcurrentCallers_TenantCap_NeverOvershootsEitherScope()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m, limit: 100m);
         await SeedTenantAsync(world, used: 0m, limit: Limit);
 
@@ -156,7 +156,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_NewPeriod_CarriesBothScopesIndependently()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m, limit: 10m);
         await SeedTenantAsync(world, used: 0m, limit: 20m);
 
@@ -175,7 +175,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_WarnLine_EachScopeWarnsOncePerPeriod()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m, limit: Limit);
         await SeedTenantAsync(world, used: 0m, limit: Limit);
         var tenantCounter = (await world.CounterIdAsync(project: null)).ShouldNotBeNull();
@@ -204,7 +204,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_CurrentTenantCounterAndPreviousProjectCounter_ChargesTheTenantOnce()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedTenantAsync(world, used: 0m, limit: 100m);
         await world.SeedCounterAsync(new CounterSeed(
             Guid.CreateVersion7(), world.Project, PreviousPeriod, "results", 0m, 10m, WarnRatio));
@@ -223,7 +223,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_CurrentProjectCounterAndPreviousTenantCounter_ChargesTheProjectOnce()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m, limit: 100m);
         await world.SeedCounterAsync(new CounterSeed(
             Guid.CreateVersion7(), ProjectId: null, PreviousPeriod, "results", 0m, 10m, WarnRatio));
@@ -242,7 +242,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_CarriedScopeTooSmall_ChargesNeitherScope()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedTenantAsync(world, used: 0m, limit: 100m);
         await world.SeedCounterAsync(new CounterSeed(
             Guid.CreateVersion7(), world.Project, PreviousPeriod, "results", 0m, 1m, WarnRatio));
@@ -269,7 +269,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_Rollover_CreatesTheOrganizationCounterBeforeItTakesTheProjectLock()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(world, used: 0m, limit: Limit);
         await world.SeedCounterAsync(new CounterSeed(
             Guid.CreateVersion7(), ProjectId: null, PreviousPeriod, "results", 0m, Limit, WarnRatio));
@@ -317,7 +317,7 @@ public sealed partial class UsageQuotaGateTests
     [Fact]
     public async Task QuotaGate_CurrentScopeTooSmall_CarriedScopeHasRoom_ChargesNeither()
     {
-        await using var world = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var world = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedTenantAsync(world, used: 0m, limit: 1m);
         await world.SeedCounterAsync(new CounterSeed(
             Guid.CreateVersion7(), world.Project, PreviousPeriod, "results", 0m, 100m, WarnRatio));

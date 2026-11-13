@@ -12,8 +12,8 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task TablePolicy_ScopesRowsToTheCallingOrgAndYieldsNoneWithoutOne()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
-        await using var rival = await RunCreationTests.StartAsync(_fixture, slug: "history-rls-rival");
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        await using var rival = await RunCreationTests.StartAsync(_fixture, slug: "history-rls-rival", hosts: _hosts);
         var runId = await RunningRunAsync(world);
 
         await using (var own = await TenantScope.BeginAsync(_fixture.AppConnectionString(world.Database), world.Org))
@@ -51,8 +51,8 @@ public sealed partial class RunStateEventTests
     [Fact]
     public async Task OwnerSeamInsert_WithARunOfAnotherOrg_IsRefusedByTheCompositeForeignKey()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
-        await using var rival = await RunCreationTests.StartAsync(_fixture, slug: "history-fk-rival");
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        await using var rival = await RunCreationTests.StartAsync(_fixture, slug: "history-fk-rival", hosts: _hosts);
         var runId = await CreateQueuedRunAsync(world);
 
         await using var owner = await TenantScope.BeginAsync(_fixture.OwnerConnectionString(world.Database));

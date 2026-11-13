@@ -21,11 +21,18 @@ namespace Tenancy.IntegrationTests;
 /// <c>idempotency_conflict</c>; a failed attempt leaves no record, so the key is reusable.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class RunCreationIdempotencyTests
+public sealed class RunCreationIdempotencyTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts;
 
-    public RunCreationIdempotencyTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public RunCreationIdempotencyTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>The four row counts a replay must leave untouched (run, planned execution, producer slot, outbox).</summary>
     private async Task<long[]> CountsAsync(RunCreationTests.World world)
@@ -48,7 +55,7 @@ public sealed class RunCreationIdempotencyTests
     [Fact]
     public async Task CreateRun_SameKeySamePayload_ReturnsSameRunId()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
         var body = RunCreationTests.RunBody(world.ManifestId);
 
@@ -75,7 +82,7 @@ public sealed class RunCreationIdempotencyTests
     [Fact]
     public async Task CreateRun_SameKey_CanonicallyEquivalentBody_Replays()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
 
         var first = await RunCreationTests.CreateRunAsync(
@@ -104,7 +111,7 @@ public sealed class RunCreationIdempotencyTests
     [Fact]
     public async Task CreateRun_SameKeyDifferentPayload_409()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
 
         var first = await RunCreationTests.CreateRunAsync(
@@ -128,7 +135,7 @@ public sealed class RunCreationIdempotencyTests
     [Fact]
     public async Task CreateRun_KeyReusable_AfterFailedAttempt()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
 
         var failed = await RunCreationTests.CreateRunAsync(
@@ -151,7 +158,7 @@ public sealed class RunCreationIdempotencyTests
     [Fact]
     public async Task CreateRun_KeyValidation_MissingAndTooLong_400_NoRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var body = RunCreationTests.RunBody(world.ManifestId);
 
         var missing = await RunCreationTests.CreateRunAsync(world, body, omitIdempotencyKey: true);
@@ -209,7 +216,7 @@ public sealed class RunCreationIdempotencyTests
     [Fact]
     public async Task CreateRun_FailureAfterSlotRegistration_LeavesNoRecord_KeyRetryable()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
         await using var crashing = world.Api.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
@@ -239,7 +246,7 @@ public sealed class RunCreationIdempotencyTests
     [Fact]
     public async Task CreateRun_Record_HasOperationProjectHashStatusAndRetention()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
 
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId), idempotencyKey: key);
@@ -269,7 +276,7 @@ public sealed class RunCreationIdempotencyTests
     [Fact]
     public async Task CreateRun_ConcurrentSameKey_OneRunBothAnswers()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
         var body = RunCreationTests.RunBody(world.ManifestId);
 
@@ -289,7 +296,7 @@ public sealed class RunCreationIdempotencyTests
     [Fact]
     public async Task CreateRun_Replay_AddsNoSecondAuditRow()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
         var body = RunCreationTests.RunBody(world.ManifestId);
 
@@ -307,7 +314,7 @@ public sealed class RunCreationIdempotencyTests
     [Fact]
     public async Task CreateRun_Anonymous_401_NoRecord()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var key = NewKey();
 
         var answer = await RunCreationTests.CreateRunAsync(world, "{ not json", _ => { }, idempotencyKey: key);
