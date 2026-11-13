@@ -6,9 +6,8 @@ using Xunit;
 namespace Tenancy.IntegrationTests;
 
 /// <summary>
-/// The binding write unit's installation proof against a real database and two connections: the proof holds a share
-/// lock, so a disconnect either commits first (the binding is refused) or waits for the binding to commit. Either order
-/// leaves no active binding that the disconnect did not see.
+/// The installation share lock ensures no binding commits after a disconnect committed. A disconnect arriving later
+/// waits for the binding commit; the disconnect does not touch bindings.
 /// </summary>
 [Trait("Category", "Docker")]
 public sealed class GitRepoBindingInstallationLockTests(PostgresTenancyFixture fixture)
@@ -53,15 +52,18 @@ public sealed class GitRepoBindingInstallationLockTests(PostgresTenancyFixture f
         var seeded = await SeedAsync();
 
         await using var bind = await BeginAsync(seeded);
+        var bindPid = await bind.ScalarAsync<int>("select pg_backend_pid()");
         (await bind.ScalarAsync<int?>(
             GitHubInstallationStore.LockActiveSql,
             ("org_id", seeded.Org),
             ("installation_id", seeded.InstallationId))).ShouldBe(1);
 
+        var disconnectPid = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var disconnect = Task.Run(
             async () =>
             {
                 await using var scope = await BeginAsync(seeded);
+                disconnectPid.SetResult(await scope.ScalarAsync<int>("select pg_backend_pid()"));
                 var moved = await scope.ScalarAsync<long?>(
                     GitHubInstallationStore.DisconnectSql, ("org_id", seeded.Org), ("id", seeded.Installation));
                 await scope.CommitAsync();
@@ -70,7 +72,11 @@ public sealed class GitRepoBindingInstallationLockTests(PostgresTenancyFixture f
             },
             TestContext.Current.CancellationToken);
 
-        await AwaitParkedAsync(seeded.Database, disconnect);
+        await AwaitParkedAsync(
+            seeded.Database,
+            await disconnectPid.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken),
+            bindPid,
+            disconnect);
 
         var binding = Guid.CreateVersion7();
         await bind.ExecuteAsync(
@@ -90,14 +96,16 @@ public sealed class GitRepoBindingInstallationLockTests(PostgresTenancyFixture f
     private Task<TenantScope> BeginAsync(Seeded seeded) =>
         TenantScope.BeginAsync(_fixture.AppConnectionString(seeded.Database), seeded.Org);
 
-    /// <summary>Waits until another session of the database is blocked on a lock; the disconnect must not finish first.</summary>
-    private async Task AwaitParkedAsync(string database, Task<long?> disconnect)
+    /// <summary>Waits for this disconnect session to be blocked by this binding transaction.</summary>
+    private async Task AwaitParkedAsync(string database, int disconnectPid, int bindPid, Task<long?> disconnect)
     {
         var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (await _fixture.ScalarAsync<int>(
+        while (!await _fixture.ScalarAsync<bool>(
                    database,
-                   "select count(*)::int from pg_stat_activity where datname = current_database() "
-                   + "and wait_event_type = 'Lock' and pid <> pg_backend_pid() and query ilike '%github_installation%'") == 0)
+                   string.Create(
+                       System.Globalization.CultureInfo.InvariantCulture,
+                       $"select cardinality(pg_blocking_pids({disconnectPid})) > 0 "
+                       + $"and {bindPid} = any(pg_blocking_pids({disconnectPid}))")))
         {
             disconnect.IsCompleted.ShouldBeFalse("the disconnect finished while the binding transaction held the proof");
             DateTime.UtcNow.ShouldBeLessThan(deadline, "the disconnect never waited on the installation row");
