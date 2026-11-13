@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Net;
+using Evidgate.BuildingBlocks.SharedKernel.GitHub;
+using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Shouldly;
 using Xunit;
@@ -38,7 +40,7 @@ public sealed class GitHubClientTests
     {
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Status(HttpStatusCode.NotFound)));
 
-        var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var result = await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         result.IsSuccess.ShouldBeFalse();
         result.Error!.Code.ShouldBe(GitHubErrorCodes.NotFound);
@@ -50,7 +52,7 @@ public sealed class GitHubClientTests
     {
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Status(HttpStatusCode.TooManyRequests, retryAfterSeconds: 7)));
 
-        var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var result = await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.RateLimited);
         result.Error.Retryable.ShouldBeTrue();
@@ -62,7 +64,7 @@ public sealed class GitHubClientTests
     {
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Status(HttpStatusCode.BadGateway)));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(GitHubTestBench.OrgId, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.Unavailable);
         result.Error.Retryable.ShouldBeTrue();
@@ -90,7 +92,7 @@ public sealed class GitHubClientTests
     {
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json(json)));
 
-        var repository = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var repository = await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
         var installation = await bench.Client.GetInstallationAsync(7, CancellationToken.None);
 
         repository.IsSuccess.ShouldBeFalse();
@@ -121,14 +123,18 @@ public sealed class GitHubClientTests
             }
 
             // A concurrent call replaced the cached token while the refused call was in flight.
-            bench.Tokens.Invalidate(7, "ghs_1").ShouldBeTrue();
-            var refreshed = await bench.Tokens.GetAsync(7, CancellationToken.None);
+            bench.Tokens.Invalidate("ghs_1").ShouldBeTrue();
+            var refreshed = await bench.Tokens.GetAsync(
+                GitHubTestBench.OrgId,
+                GitHubFeature.Catalog,
+                [5],
+                CancellationToken.None);
             refreshed.Value.Token.ShouldBe("ghs_2");
 
             return GitHubResponses.Status(HttpStatusCode.Unauthorized);
         };
 
-        var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var result = await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         posts.ShouldBe(2);
@@ -147,7 +153,7 @@ public sealed class GitHubClientTests
             return response;
         }));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(GitHubTestBench.OrgId, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.RateLimited);
         result.Error.Details!.Single().Actual.ShouldBe(90L);
@@ -172,7 +178,7 @@ public sealed class GitHubClientTests
             return response;
         }));
 
-        var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var result = await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.RateLimited);
         result.Error.Details!.Single().Actual.ShouldBe(200_000L);
@@ -189,7 +195,7 @@ public sealed class GitHubClientTests
             return response;
         }));
 
-        var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var result = await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.RateLimited);
         result.Error.Details!.Single().Actual.ShouldBe(1L);
@@ -204,8 +210,8 @@ public sealed class GitHubClientTests
             : GitHubResponses.Status(HttpStatusCode.Unauthorized));
         var bench = new GitHubTestBench(handler);
 
-        await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
-        await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
+        await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         // A refused bearer is never sent again: each call mints its own token and spends it once.
         var bearers = bench.Handler.Requests
@@ -221,7 +227,7 @@ public sealed class GitHubClientTests
     {
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json("{}")));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, "not-a-sha", CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(GitHubTestBench.OrgId, 5, "not-a-sha", CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.RequestInvalid);
         bench.Handler.Requests.ShouldBeEmpty();
@@ -234,7 +240,7 @@ public sealed class GitHubClientTests
             GitHubReadStubs.Handler(_ => GitHubResponses.Json(GitHubResponses.RepositoryJson)),
             new GitHubOptions { AppId = "12345", ApiBaseUrl = "https://evil.example.com" });
 
-        var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var result = await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.RequestInvalid);
         bench.Handler.Requests.ShouldBeEmpty();
@@ -260,7 +266,7 @@ public sealed class GitHubClientTests
         });
         var bench = new GitHubTestBench(handler);
 
-        var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var result = await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue(result.Error?.Message);
         posts.ShouldBe(2);
@@ -278,7 +284,7 @@ public sealed class GitHubClientTests
             return response;
         }));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(GitHubTestBench.OrgId, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.RateLimited);
         result.Error.Status.ShouldBe(429);
@@ -291,7 +297,7 @@ public sealed class GitHubClientTests
     {
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Status(HttpStatusCode.Forbidden)));
 
-        var result = await bench.Client.GetTreeAsync(7, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
+        var result = await bench.Client.GetTreeAsync(GitHubTestBench.OrgId, 5, GitHubReadStubs.ObjectSha, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.Forbidden);
         result.Error.Status.ShouldBe(403);
@@ -317,7 +323,7 @@ public sealed class GitHubClientTests
             : GitHubResponses.Status(HttpStatusCode.Unauthorized));
         var bench = new GitHubTestBench(handler);
 
-        var result = await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        var result = await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         result.Error!.Code.ShouldBe(GitHubErrorCodes.Unauthorized);
         posts.ShouldBe(2);
@@ -391,7 +397,7 @@ public sealed class GitHubClientTests
     {
         var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Status(HttpStatusCode.InternalServerError)));
 
-        await bench.Client.GetRepositoryAsync(7, 5, CancellationToken.None);
+        await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
 
         var lines = bench.ClientLogs.Lines.Concat(bench.TokenLogs.Lines).ToList();
         lines.ShouldNotBeEmpty();
@@ -410,4 +416,24 @@ public sealed class GitHubClientTests
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         return new HttpResponseMessage(HttpStatusCode.OK);
     }
+    /// <summary>
+    /// The auth boundary the disconnect creates: the client reads through the org entry point, so a disconnected
+    /// installation refuses before a single GitHub request, even when a token was cached earlier.
+    /// </summary>
+    [Fact]
+    public async Task Repository_AfterDisconnect_RefusesWithoutHttp()
+    {
+        var bench = new GitHubTestBench(GitHubReadStubs.Handler(_ => GitHubResponses.Json(GitHubResponses.RepositoryJson)));
+        (await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None)).IsSuccess.ShouldBeTrue();
+
+        var requestsBefore = bench.Handler.Requests.Count;
+
+        bench.Resolver.Failure = Result.Failure<long>(Error.Conflict("installation_unavailable", "the org has no active installation"));
+        var result = await bench.Client.GetRepositoryAsync(GitHubTestBench.OrgId, 5, CancellationToken.None);
+
+        result.IsSuccess.ShouldBeFalse();
+        result.Error!.Code.ShouldBe("installation_unavailable");
+        bench.Handler.Requests.Count.ShouldBe(requestsBefore);
+    }
+
 }

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Evidgate.BuildingBlocks.SharedKernel.GitHub;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.BuildingBlocks.SharedKernel.Security;
 using Microsoft.Extensions.Logging;
@@ -83,22 +84,23 @@ internal sealed partial class GitHubClient
         return ParseInstallation(parsed.RootElement, installationId);
     }
 
-    /// <summary><c>GET /repositories/{id}</c> with an installation token.</summary>
-    /// <param name="installationId">Installation the token is minted for.</param>
+    /// <summary><c>GET /repositories/{id}</c> with an installation token of the org's active installation.</summary>
+    /// <param name="orgId">Tenant whose active installation mints the token; a suspended, deleted or absent
+    /// installation refuses the call before any GitHub request.</param>
     /// <param name="repositoryId">Numeric repository id.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     public async Task<Result<GitHubRepository>> GetRepositoryAsync(
-        long installationId,
+        Guid orgId,
         long repositoryId,
         CancellationToken cancellationToken)
     {
-        if (installationId <= 0 || repositoryId <= 0)
+        if (orgId == Guid.Empty || repositoryId <= 0)
         {
             return Result.Failure<GitHubRepository>(InvalidParameters());
         }
 
         var path = string.Create(CultureInfo.InvariantCulture, $"repositories/{repositoryId}");
-        var document = await SendWithInstallationTokenAsync(installationId, path, "get-repository", cancellationToken)
+        var document = await SendWithInstallationTokenAsync(orgId, repositoryId, path, "get-repository", cancellationToken)
             .ConfigureAwait(false);
         if (!document.IsSuccess)
         {
@@ -113,17 +115,17 @@ internal sealed partial class GitHubClient
     /// <c>GET /repositories/{id}/git/trees/{sha}?recursive=1</c> with an installation token. The
     /// <c>truncated</c> flag is surfaced unchanged so the caller can refuse an incomplete tree.
     /// </summary>
-    /// <param name="installationId">Installation the token is minted for.</param>
+    /// <param name="orgId">Tenant whose active installation mints the token.</param>
     /// <param name="repositoryId">Numeric repository id.</param>
     /// <param name="treeSha">Git object id of the tree; validated as lowercase hex.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     public async Task<Result<GitHubTree>> GetTreeAsync(
-        long installationId,
+        Guid orgId,
         long repositoryId,
         string treeSha,
         CancellationToken cancellationToken)
     {
-        if (installationId <= 0 || repositoryId <= 0 || !IsObjectId(treeSha))
+        if (orgId == Guid.Empty || repositoryId <= 0 || !IsObjectId(treeSha))
         {
             return Result.Failure<GitHubTree>(InvalidParameters());
         }
@@ -131,7 +133,7 @@ internal sealed partial class GitHubClient
         var path = string.Create(
             CultureInfo.InvariantCulture,
             $"repositories/{repositoryId}/git/trees/{treeSha}?recursive=1");
-        var document = await SendWithInstallationTokenAsync(installationId, path, "get-tree", cancellationToken)
+        var document = await SendWithInstallationTokenAsync(orgId, repositoryId, path, "get-tree", cancellationToken)
             .ConfigureAwait(false);
         if (!document.IsSuccess)
         {
@@ -143,17 +145,17 @@ internal sealed partial class GitHubClient
     }
 
     /// <summary><c>GET /repositories/{id}/git/blobs/{sha}</c> with an installation token, decoded and capped.</summary>
-    /// <param name="installationId">Installation the token is minted for.</param>
+    /// <param name="orgId">Tenant whose active installation mints the token.</param>
     /// <param name="repositoryId">Numeric repository id.</param>
     /// <param name="blobSha">Git object id of the blob; validated as lowercase hex.</param>
     /// <param name="cancellationToken">Cancels the call.</param>
     public async Task<Result<GitHubBlob>> GetBlobAsync(
-        long installationId,
+        Guid orgId,
         long repositoryId,
         string blobSha,
         CancellationToken cancellationToken)
     {
-        if (installationId <= 0 || repositoryId <= 0 || !IsObjectId(blobSha))
+        if (orgId == Guid.Empty || repositoryId <= 0 || !IsObjectId(blobSha))
         {
             return Result.Failure<GitHubBlob>(InvalidParameters());
         }
@@ -161,7 +163,7 @@ internal sealed partial class GitHubClient
         var path = string.Create(
             CultureInfo.InvariantCulture,
             $"repositories/{repositoryId}/git/blobs/{blobSha}");
-        var document = await SendWithInstallationTokenAsync(installationId, path, "get-blob", cancellationToken)
+        var document = await SendWithInstallationTokenAsync(orgId, repositoryId, path, "get-blob", cancellationToken)
             .ConfigureAwait(false);
         if (!document.IsSuccess)
         {
@@ -173,12 +175,16 @@ internal sealed partial class GitHubClient
     }
 
     private async Task<Result<JsonDocument>> SendWithInstallationTokenAsync(
-        long installationId,
+        Guid orgId,
+        long repositoryId,
         string path,
         string operation,
         CancellationToken cancellationToken)
     {
-        var token = await _tokens.GetAsync(installationId, cancellationToken).ConfigureAwait(false);
+        // The catalog row is repository-scoped, so the mint names the one repository this read may touch. The org
+        // entry point resolves the active installation first, so a suspended, deleted or disconnected installation
+        // refuses here before any GitHub request or cached token is used.
+        var token = await MintAsync(orgId, repositoryId, cancellationToken).ConfigureAwait(false);
         if (!token.IsSuccess)
         {
             return Result.Failure<JsonDocument>(token.Error!);
@@ -190,12 +196,12 @@ internal sealed partial class GitHubClient
             return first;
         }
 
-        if (_tokens.Invalidate(installationId, token.Value.Token))
+        if (_tokens.Invalidate(token.Value.Token))
         {
-            GitHubLog.TokenEvicted(_logger, installationId);
+            GitHubLog.TokenEvicted(_logger, orgId);
         }
 
-        var refreshed = await _tokens.GetAsync(installationId, cancellationToken).ConfigureAwait(false);
+        var refreshed = await MintAsync(orgId, repositoryId, cancellationToken).ConfigureAwait(false);
         if (!refreshed.IsSuccess)
         {
             return Result.Failure<JsonDocument>(refreshed.Error!);
@@ -206,11 +212,17 @@ internal sealed partial class GitHubClient
         {
             // A fresh token that GitHub refuses again is not kept: the next call mints once instead of
             // spending a refused request on it first.
-            _tokens.Invalidate(installationId, refreshed.Value.Token);
+            _tokens.Invalidate(refreshed.Value.Token);
         }
 
         return retried;
     }
+
+    private Task<Result<GitHubInstallationToken>> MintAsync(
+        Guid orgId,
+        long repositoryId,
+        CancellationToken cancellationToken) =>
+        _tokens.GetAsync(orgId, GitHubFeature.Catalog, [repositoryId], cancellationToken);
 
     private async Task<Result<JsonDocument>> SendAsync(
         string relativePath,

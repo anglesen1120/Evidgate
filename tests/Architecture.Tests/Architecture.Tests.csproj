@@ -34,6 +34,7 @@
     <ProjectReference Include="..\..\src\BuildingBlocks\Contracts.Validation\Evidgate.BuildingBlocks.Contracts.Validation.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\ObjectStorage\Evidgate.BuildingBlocks.ObjectStorage.csproj" />
     <ProjectReference Include="..\..\src\BuildingBlocks\Observability\Evidgate.BuildingBlocks.Observability.csproj" />
+    <ProjectReference Include="..\..\src\BuildingBlocks\GitHub\Evidgate.BuildingBlocks.GitHub.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Identity\Evidgate.Modules.Identity.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Identity.Contracts\Evidgate.Modules.Identity.Contracts.csproj" />
     <ProjectReference Include="..\..\src\Modules\Evidgate.Modules.Tenancy\Evidgate.Modules.Tenancy.csproj" />
