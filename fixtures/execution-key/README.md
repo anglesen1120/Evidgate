@@ -3,7 +3,7 @@
 Golden vectors for `execution_key`, asserted by both runtimes from this one file:
 
 - `packages/adapter-playwright/src/executionKey.test.ts` — the reporter (`computeExecutionKey`);
-- `tests/Orchestrator.UnitTests` — the server (`ExecutionKey.Compute`).
+- `tests/Tenancy.IntegrationTests/ExecutionKeyTests.cs` — the server (`ExecutionKey.Compute`).
 
 Layout (defined once in `src/Modules/Evidgate.Modules.Orchestrator/Domain/ExecutionKey.cs`): lowercase-hex
 SHA-256 over three fields, each a 4-byte big-endian UTF-8 byte length followed by its UTF-8 bytes, in the

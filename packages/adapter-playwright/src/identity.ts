@@ -197,19 +197,16 @@ export function resolveIdentity(test: TestCase, deps: IdentityResolverDeps): Ide
     }
   }
 
-  if (
-    identity.case_id !== undefined &&
-    identity.variant_hash !== undefined &&
-    identity.target_env !== undefined
-  ) {
-    identity.execution_key = computeExecutionKey(
-      identity.case_id,
-      identity.variant_hash,
-      identity.target_env,
-    );
-  }
+  completeExecutionKey(identity);
 
   return identity;
+}
+
+/** Derives the real key once the whole triple resolved; otherwise the sentinel stays. */
+function completeExecutionKey(identity: Identity): void {
+  const { case_id: caseId, variant_hash: variantHash, target_env: targetEnv } = identity;
+  if (caseId === undefined || variantHash === undefined || targetEnv === undefined) return;
+  identity.execution_key = computeExecutionKey(caseId, variantHash, targetEnv);
 }
 
 /**

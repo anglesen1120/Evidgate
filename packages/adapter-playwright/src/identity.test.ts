@@ -131,4 +131,47 @@ describe('execution_key identity', () => {
       expect(envelope.execution_key).toBe(key);
     }
   });
+
+  describe('run-level key selection', () => {
+    const CASE_ONE = '11111111-1111-1111-1111-111111111111';
+    const CASE_TWO = '22222222-2222-2222-2222-222222222222';
+
+    function annotatedTest(id: string, caseId: string): TestCase {
+      return {
+        id,
+        title: id,
+        location: { file: `tests/${id}.spec.ts`, line: 1, column: 1 },
+        annotations: [{ type: 'evidgate.id', description: caseId }],
+        parent: { project: () => ({ name: 'chromium' }) },
+      } as unknown as TestCase;
+    }
+
+    function runLevelKeys(tests: TestCase[]): string[] {
+      const { reporter, spool } = makeReporter();
+      reporter.onBegin(undefined, { allTests: () => tests } as unknown as Suite);
+      void reporter.onEnd({ status: 'passed', startTime: new Date(), duration: 1 });
+      return readEnvelopes(spool)
+        .filter((item) => item.type === 'run.log')
+        .map((item) => item.execution_key);
+    }
+
+    it('skips an unresolved first test and takes the first resolvable one', () => {
+      const first = annotatedTest('one', CASE_ONE);
+      const second = annotatedTest('two', CASE_TWO);
+      const alone = runLevelKeys([first]);
+      const other = runLevelKeys([second]);
+
+      expect(alone[0]).toMatch(/^[0-9a-f]{64}$/);
+      expect(alone[0]).not.toBe(PLACEHOLDER_EXECUTION_KEY);
+      expect(other[0]).not.toBe(alone[0]);
+      expect(runLevelKeys([fakeTest(), first, second])).toEqual(alone);
+    });
+
+    it('keeps the sentinel when no listed test resolves', () => {
+      const keys = runLevelKeys([fakeTest(), fakeTest()]);
+
+      expect(keys.length).toBeGreaterThan(0);
+      for (const key of keys) expect(key).toBe(PLACEHOLDER_EXECUTION_KEY);
+    });
+  });
 });
