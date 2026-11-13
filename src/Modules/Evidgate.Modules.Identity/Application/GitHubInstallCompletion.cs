@@ -54,11 +54,6 @@ internal sealed partial class GitHubInstallCompletion(
             return Result.Failure<GitHubInstallationDto>(consumed.Error!);
         }
 
-        if (!consumed.Value)
-        {
-            return Result.Failure<GitHubInstallationDto>(GitHubInstallationErrors.StateInvalid);
-        }
-
         // Unit one accepted the envelope, so the parse cannot fail here: unit two re-reads the nonce's digest.
         if (!GitHubInstallStateEnvelope.TryParse(callback.State, out _, out var nonce))
         {

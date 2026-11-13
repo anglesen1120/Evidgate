@@ -153,7 +153,7 @@ internal sealed class ConsumeGitHubInstallStateCommandHandler(
         // tell an unauthorized caller which states are well-formed.
         if (principals.Current?.UserId is not { } userId)
         {
-            return Result.Success(false);
+            return Result.Failure<bool>(GitHubInstallationErrors.StateInvalid);
         }
 
         // The state must name the org the request resolved to: the filter took that org from this same state, so a
@@ -161,16 +161,18 @@ internal sealed class ConsumeGitHubInstallStateCommandHandler(
         if (!GitHubInstallStateEnvelope.TryParse(command.State, out var stateOrg, out var nonce)
             || stateOrg != orgId)
         {
-            return Result.Success(false);
+            return Result.Failure<bool>(GitHubInstallationErrors.StateInvalid);
         }
 
-        // A refusal is a successful, committed unit that consumed nothing: reporting it as a failure would
-        // roll the transaction back and leave the nonce replayable after the checks that follow refuse.
+        // Only a spent nonce is a success, so only it commits and audits; a refusal consumed nothing, and rolling
+        // back an empty unit loses nothing. The checks that follow run after this commit and cannot undo it.
         var consumed = await states
             .ConsumeAsync(GitHubInstallStateEnvelope.Digest(nonce), orgId, userId, cancellationToken)
             .ConfigureAwait(false);
 
-        return Result.Success(consumed);
+        return consumed
+            ? Result.Success(true)
+            : Result.Failure<bool>(GitHubInstallationErrors.StateInvalid);
     }
 }
 

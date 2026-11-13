@@ -31,6 +31,27 @@ public sealed partial class GitHubInstallationTests
         Convert.ToHexString(stored).ShouldBe(Convert.ToHexString(expected));
     }
 
+    /// <summary>
+    /// Only a spent nonce is audited: the replay is refused, consumed nothing and adds no consume row.
+    /// </summary>
+    [Fact]
+    public async Task Callback_ReplayedState_AddsNoConsumeAuditRow()
+    {
+        var (host, client, _, _, state, org) = await StartedAsync();
+        await using var _host = host;
+        const string countSql =
+            "select count(*) from public.audit_log where org_id = @org and action = 'github_installation.state_consume'";
+
+        using var first = await CallbackAsync(client, state);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await ScalarAsync<long>(countSql, ("org", org))).ShouldBe(1, "the spent nonce is one entry");
+
+        using var replay = await CallbackAsync(client, state);
+        replay.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        (await ScalarAsync<long>(countSql, ("org", org))).ShouldBe(1, "a refused replay consumed nothing");
+    }
+
     /// <summary>One create audit row, with the caller as its actor and the new row as its object.</summary>
     [Fact]
     public async Task Create_WritesExactlyOneAuditRow()
