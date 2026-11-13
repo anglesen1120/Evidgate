@@ -10,8 +10,8 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ForeignOrgRelease_CannotBeBoundOrDisclosed()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
-        await using var foreign = await RunCreationTests.StartAsync(_fixture, slug: "foreign-release");
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
+        await using var foreign = await RunCreationTests.StartAsync(_fixture, slug: "foreign-release", hosts: _hosts);
         var ownRelease = await CreateReleaseAsync(world, "own-release", "web");
         var runId = await CreateBoundRunAsync(world, ownRelease);
         var foreignRelease = await CreateReleaseAsync(foreign, "foreign-release", "web");
@@ -38,7 +38,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_CanceledRun_CountsLateEventsWithoutReopeningOrAttemptRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "canceled-release", "web");
         var runId = await CreateBoundRunAsync(world, releaseId);
         var canceled = await CancelRunTestData.CancelAsync(world, runId);
@@ -59,7 +59,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_RunReadWithoutDecisionRead_PreservesNonemptyReleaseAndLateEventMembers()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var releaseId = await CreateReleaseAsync(world, "reader-release", "web");
         var runId = await CreateBoundRunAsync(world, releaseId);
         (await CancelRunTestData.CancelAsync(world, runId)).Status.ShouldBe(HttpStatusCode.Accepted);

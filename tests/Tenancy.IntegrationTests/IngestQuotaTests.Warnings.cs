@@ -20,7 +20,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_SpentMonthBefore_CarriesItsLimitIntoTheNewOne()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         // The month the route gates and meters in is the database clock's, so the boundary case seeds the real month
         // before this one: spent to its limit, blocked, and its warning already announced.
@@ -57,7 +57,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_ReplayedWarningBatch_DoesNotChargeOrAnnounceAgain()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 7m, limit: 10m);
         var body = EventBatch(world, 1, 1);
 
@@ -87,7 +87,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_WarningCrossing_LeavesForeignOrgCounterAndOutboxUntouched()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 7m, limit: 10m);
         var (otherOrg, otherProject) = await world.CreateOtherOrgAsync(Unique.Slug("quota-foreign"));
 
@@ -111,7 +111,7 @@ public sealed partial class IngestQuotaTests
     public async Task IngestEvents_UnknownExecutionKeyRefusal_LeavesCounterAndWarningsUntouched()
     {
         await using var world = await StartIngestAsync();
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
         await SeedAsync(counters, world, used: 7m, limit: 10m);
 
         // One planned execution, so a key of this shape is not one of the run's: the batch is refused before its
@@ -145,7 +145,7 @@ public sealed partial class IngestQuotaTests
             ["EVIDGATE:Usage:QuotaGate:Enabled"] = enabled.ToString(CultureInfo.InvariantCulture),
         };
         await using var world = await StartIngestAsync(configuration: configuration);
-        await using var counters = await UsageQuotaWorld.StartAsync(_fixture);
+        await using var counters = await UsageQuotaWorld.StartAsync(_fixture, hosts: _hosts);
 
         // A scope with no room at all: only the switch can let the batch through, and it may not write a counter.
         await SeedAsync(counters, world, used: 10m, limit: 10m);

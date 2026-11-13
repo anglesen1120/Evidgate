@@ -15,11 +15,19 @@ namespace Tenancy.IntegrationTests;
 /// repeated, late or racing cancel can produce neither a second row nor a resurrected terminal run.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class CancelRunEndpointTests
+public sealed partial class CancelRunEndpointTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
 
-    public CancelRunEndpointTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts;
+
+    public CancelRunEndpointTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>
     /// AC1: a <c>queued</c> run accepts the cancel with an empty <c>202</c>, stores exactly one
@@ -30,7 +38,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_Accepted_202_RequestRowPersisted()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.CreateQueuedRunAsync(world);
 
         var answer = await CancelRunTestData.CancelAsync(world, runId, reason: "stuck shard on checkout");
