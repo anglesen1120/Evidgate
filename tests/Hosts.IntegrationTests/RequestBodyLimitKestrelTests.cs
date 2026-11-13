@@ -14,10 +14,9 @@ using Xunit;
 namespace Hosts.IntegrationTests;
 
 /// <summary>
-/// N9 on a real Kestrel socket: the middleware pushes the route's limit into the server, so a chunked body (which
-/// has no declared length to refuse on) is stopped while it is read, and a body of exactly the limit is accepted.
-/// The host is the production middleware over the production default limit with two probe routes that read the
-/// whole body; the full Api cannot be used because no anonymous route reads a body under the default limit.
+/// N9 on a real Kestrel socket: the middleware pushes the route's limit into the server, so a chunked body is
+/// stopped while it is read and a declared Content-Length of exactly the limit is accepted. The probe host runs the
+/// production middleware; the full Api has no anonymous route that reads a body under the default limit.
 /// </summary>
 public sealed class RequestBodyLimitKestrelTests
 {

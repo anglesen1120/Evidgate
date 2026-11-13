@@ -124,6 +124,7 @@ public sealed class ManagementListenerProcessTests
         Assert.DoesNotContain("   at ", output, StringComparison.Ordinal);
     }
 
+    /// <summary>Needs an IPv6 loopback (::1) on the machine running the test.</summary>
     [Fact]
     public async Task Management_Address_Can_Be_IPv6_Loopback()
     {
@@ -222,7 +223,18 @@ public sealed class ManagementListenerProcessTests
                 environment["Kestrel__Endpoints__Public__Url"] = $"http://127.0.0.1:{publicPort}";
             });
 
-        var result = await ProcessRunner.WaitForExitAsync(process, TestContext.Current.CancellationToken);
+        ProcessRunner.Result result;
+        try
+        {
+            // A regression that serves instead of refusing must fail within the deadline, not hang with the Api up.
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            deadline.CancelAfter(TimeSpan.FromSeconds(60));
+            result = await ProcessRunner.WaitForExitAsync(process, deadline.Token);
+        }
+        finally
+        {
+            await ProcessRunner.StopAsync(process);
+        }
 
         var output = result.Stdout + result.Stderr;
         Assert.Equal(1, result.ExitCode);
@@ -312,7 +324,12 @@ public sealed class ManagementListenerProcessTests
 
         configure?.Invoke(environment);
 
-        return ProcessRunner.Start(HostLocator.AppHost("Evidgate.Api"), environment);
+        // A listener setting inherited from the test runner must not override the one this test chose.
+        string[] listenerKeys = ["ASPNETCORE_URLS", "ASPNETCORE_HTTP_PORTS", "ASPNETCORE_HTTPS_PORTS"];
+        return ProcessRunner.Start(
+            HostLocator.AppHost("Evidgate.Api"),
+            environment,
+            [.. listenerKeys.Where(key => !environment.ContainsKey(key))]);
     }
 
     private static async Task WaitForLiveAsync(int port)
