@@ -143,6 +143,10 @@ internal sealed class TenantRowFactory
     // evidence_revision), and the corrupt row reuses the valid row's run.
     private static int _evaluationRevision;
 
+    // A fresh GitHub installation id per generated installation row: 0108 keeps it unique across every org, so a
+    // constant would answer 23505 before the suite's tenant assertions are reached.
+    private static long _githubInstallationId;
+
     private readonly TenantSchema _schema;
     private readonly TenantInsertExecutor _insert;
     private readonly Dictionary<(string Table, Guid Org), GeneratedRow> _created = [];
@@ -158,8 +162,13 @@ internal sealed class TenantRowFactory
     /// reads on <c>evidgate_app</c>; the moment the provisioning path lands with an app-callable seam,
     /// this entry is what has to be removed.
     /// </summary>
+    /// <remarks>
+    /// <c>github_install_state</c> (0108) is the second entry for a different reason: its <c>user_id</c> is
+    /// NOT NULL and references <c>public."user"</c>, which the app role deliberately holds no INSERT on
+    /// (02.9.1 §8 T1), so the generated row needs a platform identity parent only the owner can write.
+    /// </remarks>
     internal static readonly IReadOnlySet<string> OwnerProvisionedTables =
-        new HashSet<string>(StringComparer.Ordinal) { "public.healing_llm_budget" };
+        new HashSet<string>(StringComparer.Ordinal) { "public.healing_llm_budget", "public.github_install_state" };
 
     /// <summary>
     /// The tenant tables a generated row cannot be written for at all: the parent table's trigger writes
@@ -857,6 +866,13 @@ internal sealed class TenantRowFactory
             // commit_sha is a lowercase hex run; a fresh one per row keeps the (org_id, binding_id, commit_sha)
             // key from colliding with the valid row a corrupt sibling is generated next to.
             ("public.catalog_sync", "commit_sha") => Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture)[..12],
+            // The installation tables (0108) carry two global keys the generic rules would collide on: GitHub's
+            // installation id is unique across every org, and the OAuth state's primary key is its 32-byte digest,
+            // so both are fresh per row and the RLS suite's two orgs never collide on them.
+            ("public.github_installation", "installation_id") =>
+                8_000_000_000L + Interlocked.Increment(ref _githubInstallationId),
+            ("public.github_install_state", "state_hash") =>
+                (byte[])[.. Guid.NewGuid().ToByteArray(), .. Guid.NewGuid().ToByteArray()],
             _ => (object?)null,
         };
 

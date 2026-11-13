@@ -590,6 +590,36 @@ public static class IsolationRouteCases
                 OrgBAdmin(w),
                 new(HttpMethod.Patch, $"/v1/roles/{Guid.CreateVersion7()}", new JsonObject { ["name"] = "Intruder" })))),
 
+        // ---- GitHub App installation (GitHubInstallationEndpoints; 02.4.3-T2) ---------------------------------
+        // The install routes are header-scoped: an org-B member naming org A is refused at tenant resolution
+        // before the handler, and a service credential cannot select an org at all. The GET case reads org B's
+        // own seeded installation (IsolationWorld), which is why its positive control answers 200.
+        HeaderCase("POST", "/v1/github/installations/start", _ => new(HttpMethod.Post, "/v1/github/installations/start")),
+        HeaderCase("GET", "/v1/github/installations", _ => new(HttpMethod.Get, "/v1/github/installations"),
+            ownOrg: (route, w) => OwnObject(route, "own installation answers 200", OrgBAdmin(w), new(HttpMethod.Get, "/v1/github/installations"))),
+        // The callback carries the single-use state, not an org: a forged state is refused identically whether the
+        // caller names org A or a random org, and the answer carries no org-A id.
+        Case("GET", "/v1/github/installations/callback", (route, w) =>
+        [
+            Pair(route, "forged state", ProbeExpect.NotSuccess, OrgBAdmin(w),
+                new(HttpMethod.Get, "/v1/github/installations/callback?installation_id=1&code=probe&state=forged-a"),
+                new(HttpMethod.Get, "/v1/github/installations/callback?installation_id=1&code=probe&state=forged-b")),
+        ]),
+        // Disconnect names the row: org A's installation id and a random id must answer the same 404, and org B's
+        // own row disconnects (204). The positive control runs last so the GET case above still sees a row.
+        Case("DELETE", "/v1/github/installations/{i}", (route, w) =>
+        [
+            Pair(route, "org A installation id in {i}", ProbeExpect.NotFound, OrgBAdmin(w),
+                new(HttpMethod.Delete, $"/v1/github/installations/{w.Acme.InstallationId}"),
+                new(HttpMethod.Delete, $"/v1/github/installations/{Guid.CreateVersion7()}")),
+            new(route, "own installation disconnects 204", runner => runner.OwnObjectAsync(
+                route,
+                "own installation disconnects 204",
+                OrgBAdmin(w),
+                new(HttpMethod.Delete, $"/v1/github/installations/{w.Acme2.InstallationId}"),
+                StatusCodes.Status204NoContent)),
+        ]),
+
         // ---- Audit (AuditEndpoints.cs:42-46) -------------------------------------------------------------------
         OrgCase("GET", "/v1/orgs/{o}/audit", o => new(HttpMethod.Get, $"/v1/orgs/{o}/audit")),
         OrgCase("GET", "/v1/orgs/{o}/audit/export", o => new(HttpMethod.Get, $"/v1/orgs/{o}/audit/export")),

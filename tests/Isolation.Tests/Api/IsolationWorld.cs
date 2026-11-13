@@ -213,6 +213,12 @@ public sealed class IsolationOrg
     /// <summary>The two projects, slugs <c>web</c> then <c>api</c>.</summary>
     public required IReadOnlyList<IsolationProject> Projects { get; init; }
 
+    /// <summary>The org's one <c>github_installation</c> row (<c>{i}</c>), owner-seeded because binding needs GitHub.</summary>
+    public required Guid InstallationId { get; init; }
+
+    /// <summary>The GitHub installation id (bigint) that row carries.</summary>
+    public required long GithubInstallationId { get; init; }
+
     /// <summary>The role ids this org can name: the built-in catalogue (custom roles are off, see <see cref="IsolationWorld.CustomRoleId"/>).</summary>
     public required IReadOnlyDictionary<string, Guid> RoleIds { get; init; }
 
@@ -506,6 +512,7 @@ public sealed class IsolationWorld
             }
 
             await SeedSecurityEventsAsync(org, projects[0]).ConfigureAwait(false);
+            var (installationId, githubInstallationId) = await SeedInstallationAsync(org, adminUser, 7000 + orgIndex).ConfigureAwait(false);
 
             return new IsolationOrg
             {
@@ -517,8 +524,42 @@ public sealed class IsolationWorld
                 InviteEmails = inviteEmails,
                 ExtraGrant = new IsolationRoleGrant(approver.MembershipId, roles["viewer"]),
                 Projects = seeded,
+                InstallationId = installationId,
+                GithubInstallationId = githubInstallationId,
                 RoleIds = roles,
             };
+        }
+
+        /// <summary>
+        /// The org's one installation (migration 0108), owner-written because binding it needs the live GitHub App:
+        /// the disconnect probes delete this row and the read route serves it, so it must exist before any probe runs.
+        /// </summary>
+        /// <param name="org">The org the installation belongs to.</param>
+        /// <param name="installedBy">The founder who would have installed it.</param>
+        /// <param name="sequence">A per-org offset so the global GitHub installation id never collides.</param>
+        private async Task<(Guid Id, long GithubInstallationId)> SeedInstallationAsync(Guid org, Guid installedBy, int sequence)
+        {
+            var id = Guid.CreateVersion7();
+            var githubInstallationId = 900_000_000L + sequence;
+
+            await using var connection = await OpenOwnerAsync().ConfigureAwait(false);
+            await using var insert = new NpgsqlCommand(
+                """
+                insert into public.github_installation
+                    (id, org_id, installation_id, account_login, account_id, permissions, installed_by)
+                values (@id, @org_id, @installation_id, @account_login, @account_id, '{"metadata":"read"}'::jsonb, @installed_by)
+                """,
+                connection);
+
+            insert.Parameters.AddWithValue("id", id);
+            insert.Parameters.AddWithValue("org_id", org);
+            insert.Parameters.AddWithValue("installation_id", githubInstallationId);
+            insert.Parameters.AddWithValue("account_login", "acme");
+            insert.Parameters.AddWithValue("account_id", 1L);
+            insert.Parameters.AddWithValue("installed_by", installedBy);
+            await insert.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            return (id, githubInstallationId);
         }
 
         /// <summary>
