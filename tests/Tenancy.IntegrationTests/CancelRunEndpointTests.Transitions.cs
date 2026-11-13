@@ -18,7 +18,7 @@ public sealed partial class CancelRunEndpointTests
     [InlineData("queued")]
     public async Task CancelRun_FromCreatedOrQueued_StraightToCanceled(string from)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.RunInStateAsync(_fixture, world, from);
         (await CancelRunTestData.StateAsync(_fixture, world, runId)).ShouldBe(from);
 
@@ -40,7 +40,7 @@ public sealed partial class CancelRunEndpointTests
     [InlineData("collecting")]
     public async Task CancelRun_FromRunningOrCollecting_TransitionsToCanceled(string from)
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.RunInStateAsync(_fixture, world, from);
         var version = await CancelRunTestData.VersionAsync(_fixture, world, runId);
 
@@ -69,7 +69,7 @@ public sealed partial class CancelRunEndpointTests
     [Fact]
     public async Task CancelRun_RaceWithReconcilerComplete_StaysCanceled()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await CancelRunTestData.RunInStateAsync(_fixture, world, "collecting");
 
         var canceled = await CancelRunTestData.CancelAsync(world, runId, reason: "cancel wins the race");

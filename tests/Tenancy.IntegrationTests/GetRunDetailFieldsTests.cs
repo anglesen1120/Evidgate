@@ -19,14 +19,21 @@ namespace Tenancy.IntegrationTests;
 /// another tenant, a credential scoped to a sibling project) stay the one <c>404 not_found</c> answer.
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed partial class GetRunDetailFieldsTests
+public sealed partial class GetRunDetailFieldsTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>A body <c>policy-revision.v1</c> accepts, both timing values unset (the shape 07.1.1's suite uses).</summary>
     private const string PolicyBody = """{"required_suites":["smoke"],"flaky_budget":3}""";
 
     private readonly PostgresTenancyFixture _fixture;
+    // Reuse one API host per class; each world still owns its tenant data.
+    // Dedicated databases and overlapping worlds keep private hosts.
+    private readonly TenancyHostPool _hosts;
 
-    public GetRunDetailFieldsTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public GetRunDetailFieldsTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>
     /// F44: every member of the detail block is the stored value — the manifest's own hash, the run's suite and
@@ -36,7 +43,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_DetailFields_ComeFromTheStoredRows()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture, cases: 2);
+        await using var world = await RunCreationTests.StartAsync(_fixture, cases: 2, hosts: _hosts);
         // 2 cases × 3 variants × 1 environment = 6 planned executions, and the builder sizes shards at
         // ceil(6 / 3) = 2, so `shards: 3` really declares three of them (the shape 05.2.1's slot test uses).
         var manifest = RunCreationTests.Manifest(world.SuiteRevision, world.Cases, variants: 3, shards: 3);
@@ -99,7 +106,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_PolicyRevision_NullUntilTheColumnIsPinned()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
@@ -127,7 +134,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_DeclaredProducers_FollowShardIndex()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");
@@ -163,7 +170,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_NotFound_IsTheSameAnswerForUnknownCrossTenantAndSiblingProject()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var created = await RunCreationTests.CreateRunAsync(world, RunCreationTests.RunBody(world.ManifestId));
         created.Status.ShouldBe(HttpStatusCode.Created, created.ErrorMessage);
         var runId = created.Id("run_id");

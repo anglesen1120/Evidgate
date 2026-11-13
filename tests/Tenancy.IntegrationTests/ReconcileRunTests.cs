@@ -34,7 +34,7 @@ namespace Tenancy.IntegrationTests;
 
 [Trait("Category", "Docker")]
 [Collection(ExclusiveTenancySuite.Name)]
-public sealed partial class ReconcileRunTests
+public sealed partial class ReconcileRunTests : IClassFixture<TenancyHostPool>
 {
     /// <summary>The producer id of the seeded shard (05.2.1 registers <c>shard-N</c> per manifest shard).</summary>
     private const string Producer = "shard-1";
@@ -63,8 +63,8 @@ public sealed partial class ReconcileRunTests
         bool Stale = false);
 
     private readonly PostgresTenancyFixture _fixture;
-
-    public ReconcileRunTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    private readonly TenancyHostPool _hosts; // shared-DB worlds reuse a host; overrides and dedicated DBs stay private
+    public ReconcileRunTests(PostgresTenancyFixture fixture, TenancyHostPool hosts) => (_fixture, _hosts) = (fixture, hosts);
 
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -88,7 +88,7 @@ public sealed partial class ReconcileRunTests
         string? database = null)
     {
         var world = await IngestTestWorld.StartAsync(
-            _fixture, IngestTestWorld.Writer(), slots: slots, services: services, database: database);
+            _fixture, IngestTestWorld.Writer(), slots: slots, services: services, database: database, hosts: _hosts);
 
         return attempts ? await AnswerPlanOrDisposeAsync(world) : world;
     }
@@ -2305,7 +2305,7 @@ public sealed partial class ReconcileRunTests
         var world = await IngestTestWorld.StartAsync(
             _fixture,
             IngestTestWorld.Writer(),
-            slots: 1,
+            slots: 1, hosts: _hosts,
             services: services =>
             {
                 services.RemoveAll<IOutboxWriter>();

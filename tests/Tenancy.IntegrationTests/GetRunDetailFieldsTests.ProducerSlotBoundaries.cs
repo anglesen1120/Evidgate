@@ -22,7 +22,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ProducerSlots_MaximumShardCount_ServesEverySlotAndRefusesTheNext()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await NewRunAsync(world);
         await _fixture.ExecuteAsync(world.Database, $"""
             delete from public.producer_slot where run_id = '{runId:D}';
@@ -62,7 +62,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ProducerSlots_SiblingRunWithSameProducer_ServesItsOwnEventCounts()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var first = await NewRunAsync(world);
         var second = await NewRunAsync(world);
         await SeedEventAsync(world, first, "shard-1", sequence: 1);
@@ -95,7 +95,7 @@ public sealed partial class GetRunDetailFieldsTests
     [Fact]
     public async Task GetRun_ProducerSlots_CanceledRun_OverlappingLateFlagsCountInBothMembers()
     {
-        await using var world = await RunCreationTests.StartAsync(_fixture);
+        await using var world = await RunCreationTests.StartAsync(_fixture, hosts: _hosts);
         var runId = await NewRunAsync(world);
         var canceled = await CancelRunTestData.CancelAsync(world, runId);
         canceled.Status.ShouldBe(HttpStatusCode.Accepted, canceled.ErrorMessage);
