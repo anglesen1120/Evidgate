@@ -167,6 +167,23 @@ function holderIsGone(lock) {
   }
 }
 
+// Removes a lock whose holder is dead. Takers serialise on a gate directory and re-judge the
+// holder inside it: a dead holder never removes its own lock and a live run only creates the
+// lock while it is absent, so the lock judged dead cannot be swapped for a fresh one before the
+// remove. Renaming the lock without the gate could move a fresh lock a rival had just taken.
+// The gate is never reclaimed, whatever its age: reclaiming it would reopen the same window one
+// level up. A taker killed inside the gate (a few microseconds) leaves it for the operator, as
+// the failure message says.
+function takeOverStale(lock) {
+  const gate = `${lock}.takeover`;
+  if (!tryLock(gate)) return;
+  try {
+    if (holderIsGone(lock)) rmSync(lock, { recursive: true, force: true });
+  } finally {
+    rmSync(gate, { recursive: true, force: true });
+  }
+}
+
 // One run at a time per target: two concurrent runs would each generate and overwrite.
 function withLock(path, action) {
   // A symlinked target (also a dangling one) is refused before any read, write or chmod.
@@ -179,20 +196,12 @@ function withLock(path, action) {
   mkdirSync(dirname(path), { recursive: true });
   if (!tryLock(lock)) {
     // A SIGKILL leaves the lock behind; its owner pid tells a dead holder from a live one. A lock
-    // without a readable pid is treated as held.
-    // The rename is atomic: of two runs that both saw a dead holder only one moves the directory,
-    // so the loser can never delete the winner's fresh lock.
-    if (holderIsGone(lock)) {
-      const stale = `${lock}.stale.${process.pid}`;
-      try {
-        renameSync(lock, stale);
-        rmSync(stale, { recursive: true, force: true });
-      } catch {
-        // another run took it over first
-      }
-    }
+    // without a readable pid (empty, garbage, zero) is treated as held.
+    if (holderIsGone(lock)) takeOverStale(lock);
     if (!tryLock(lock))
-      fail(`${lock} exists: another run is in progress (remove the directory if none is)`);
+      fail(
+        `${lock} exists: another run is in progress (remove ${lock} and ${lock}.takeover if none is)`,
+      );
   }
   // fail() exits the process, so the lock is released on exit rather than in a finally.
   process.on('exit', () => rmSync(lock, { recursive: true, force: true }));
