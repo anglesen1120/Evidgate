@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
-using Evidgate.BuildingBlocks.Pipeline.Serialization;
 using Evidgate.BuildingBlocks.SharedKernel.Api;
 using Evidgate.BuildingBlocks.SharedKernel.Results;
 using Evidgate.BuildingBlocks.SharedKernel.Serialization;
@@ -71,8 +70,23 @@ public static class GitHubResponseReader
     {
         ArgumentNullException.ThrowIfNull(response);
 
-        var read = await BoundedHttpBody.ReadJsonAsync(response.Content, maxBytes, requireObject: true, cancellationToken)
-            .ConfigureAwait(false);
+        ArgumentOutOfRangeException.ThrowIfNegative(maxBytes);
+
+        // A declared length over the cap is refused before the stream is opened.
+        var declared = response.Content.Headers.ContentLength;
+        if (declared > maxBytes)
+        {
+            return Result.Failure<JsonDocument>(TooLarge());
+        }
+
+        BoundedJsonBody read;
+        var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using (stream.ConfigureAwait(false))
+        {
+            read = await BoundedStreamBody
+                .ReadJsonAsync(stream, maxBytes, requireObject: true, cancellationToken, declared)
+                .ConfigureAwait(false);
+        }
 
         return read.Status switch
         {
