@@ -206,9 +206,10 @@ internal sealed class RegisterGitRepoBindingCommandHandler(
         }
 
         // The verification ran outside this transaction against the installation this proves; re-checking here keeps
-        // the write bound to the same org even if the row moved in between.
+        // the write bound to the same org even if the row moved in between. The lock outlives the check until commit,
+        // so a concurrent disconnect either lands first (refused here) or waits for this binding to commit.
         if (!await installations
-                .OwnsActiveAsync(orgId, command.InstallationId, cancellationToken)
+                .LockActiveAsync(orgId, command.InstallationId, cancellationToken)
                 .ConfigureAwait(false))
         {
             return Result.Failure<GitRepoBindingDto>(GitRepoBindingErrors.InstallationNotOwned);

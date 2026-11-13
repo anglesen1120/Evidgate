@@ -83,7 +83,7 @@ internal sealed class GitHubInstallationStore(ITenantDb db)
         returning id
         """;
 
-    private const string DisconnectSql = """
+    internal const string DisconnectSql = """
         update public.github_installation
         set state = 'deleted', suspended_at = null
         where org_id = @org_id and id = @id and state <> 'deleted'
@@ -95,6 +95,12 @@ internal sealed class GitHubInstallationStore(ITenantDb db)
         from public.github_installation
         where org_id = @org_id and installation_id = @installation_id and state = 'active'
         """;
+
+    /// <summary>
+    /// The same proof, holding a share lock that conflicts with the disconnect's update until the transaction ends.
+    /// A disconnect that commits first makes this answer no row; one that arrives later waits for the caller's commit.
+    /// </summary>
+    internal const string LockActiveSql = OwnedActiveSql + "\n        for share";
 
     /// <summary>
     /// Takes the per-(org,user) state lock of the running transaction before the cap is counted: two starts of one
@@ -252,6 +258,21 @@ internal sealed class GitHubInstallationStore(ITenantDb db)
 
         var owned = await db
             .ScalarAsync<int?>(OwnedActiveSql, new { org_id = orgId, installation_id = installationId }, cancellationToken)
+            .ConfigureAwait(false);
+
+        return owned is not null;
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> LockActiveAsync(Guid orgId, long installationId, CancellationToken cancellationToken)
+    {
+        if (installationId <= 0)
+        {
+            return false;
+        }
+
+        var owned = await db
+            .ScalarAsync<int?>(LockActiveSql, new { org_id = orgId, installation_id = installationId }, cancellationToken)
             .ConfigureAwait(false);
 
         return owned is not null;
