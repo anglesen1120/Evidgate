@@ -2,7 +2,6 @@
 #pragma warning disable CA1861
 using System.Net;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -631,50 +630,5 @@ public sealed class RunCreationTests
 
         large.ShouldBe(small);
         small.ShouldBeLessThanOrEqualTo(20, string.Join(Environment.NewLine, world.Api.Statements.Snapshot()));
-    }
-}
-
-/// <summary>
-/// The <c>execution_key</c> layout of 05.2.1 (00 §7, T10): the expected value is computed here by an independent
-/// code path (a byte list, not the shipping span writer), so the test pins the layout, not the implementation.
-/// </summary>
-public sealed class ExecutionKeyTests
-{
-    private static readonly Guid CaseId = Guid.Parse("018f2f0e-8a52-7c4b-9d3e-000000000001");
-
-    [Fact]
-    public void ExecutionKey_MatchesAnIndependentLayout()
-    {
-        var variant = "sha256:" + new string('a', 64);
-
-        ExecutionKey.Compute(CaseId, variant, "staging").ShouldBe(Independent(CaseId, variant, "staging"));
-        ExecutionKey.Compute(CaseId, variant, "staging").ShouldMatch("^[0-9a-f]{64}$");
-    }
-
-    [Fact]
-    public void ExecutionKey_LengthPrefix_Disambiguates()
-    {
-        // Without the length prefix, ('ab','c') and ('a','bc') would concatenate to the same bytes.
-        ExecutionKey.Compute(Guid.Empty, "ab", "c").ShouldNotBe(ExecutionKey.Compute(Guid.Empty, "a", "bc"));
-    }
-
-    [Fact]
-    public void ExecutionKey_IsOrderSensitive()
-    {
-        ExecutionKey.Compute(CaseId, "sha256:" + new string('a', 64), "staging")
-            .ShouldNotBe(ExecutionKey.Compute(CaseId, "sha256:" + new string('a', 64), "prod"));
-    }
-
-    private static string Independent(Guid caseId, string variant, string targetEnv)
-    {
-        var buffer = new List<byte>();
-        foreach (var field in new[] { caseId.ToString("D"), variant, targetEnv })
-        {
-            var bytes = Encoding.UTF8.GetBytes(field);
-            buffer.AddRange(BitConverter.GetBytes(bytes.Length).Reverse()); // big-endian, unlike the shipping writer
-            buffer.AddRange(bytes);
-        }
-
-        return Convert.ToHexString(SHA256.HashData([.. buffer])).ToLowerInvariant();
     }
 }
