@@ -12,8 +12,10 @@
   <ItemGroup>
     <ProjectReference Include="..\SharedKernel\Evidgate.BuildingBlocks.SharedKernel.csproj" />
   </ItemGroup>
-  <!-- The installation-id overload and the permission table are internal: only the callers' tests open them. -->
+  <!-- The installation-id entry point and the permission table are internal: Catalog reaches them after its own
+       ownership proof, and the tests of the two callers open them. -->
   <ItemGroup>
+    <InternalsVisibleTo Include="Evidgate.Modules.Catalog" />
     <InternalsVisibleTo Include="Catalog.UnitTests" />
     <InternalsVisibleTo Include="Identity.IntegrationTests" />
   </ItemGroup>

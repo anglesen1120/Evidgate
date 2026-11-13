@@ -29,6 +29,7 @@ using Evidgate.Modules.Ingestion.Endpoints;
 using Evidgate.Modules.Orchestrator;
 using Evidgate.Modules.Policy;
 using Evidgate.Modules.Catalog.Endpoints;
+using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Evidgate.Modules.Evidence.Endpoints;
 using Evidgate.Modules.Healing;
 using Evidgate.Modules.Healing.Endpoints;
@@ -150,6 +151,9 @@ public static partial class ApiHost
         // Mediator's source generator registered the handlers themselves.
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
+        // The catalog's typed GitHub App client: the repository verification of a binding runs in this host, between
+        // the binding command's two units. The same extension is composed by the Worker; it sends nothing at start-up.
+        builder.Services.AddCatalogGitHub(builder.Configuration);
         // 13.1.1-T2.1 (D-S55-Q1): the authoring module — the feature tree's EF write model, the one version
         // writer, the code allocator and the steps validator. Api only: nothing in the Worker authors content.
         builder.Services.AddAuthoringModule();

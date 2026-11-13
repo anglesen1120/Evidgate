@@ -93,6 +93,8 @@ public static class CatalogEndpoints
 
         group.MapFixtureEndpoints();
 
+        group.MapGitRepoBindingEndpoints();
+
         return group;
     }
 

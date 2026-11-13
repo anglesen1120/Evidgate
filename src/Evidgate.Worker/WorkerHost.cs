@@ -7,6 +7,7 @@ using Evidgate.BuildingBlocks.Persistence.Secrets;
 using Evidgate.BuildingBlocks.Persistence.Tasks;
 using Evidgate.BuildingBlocks.Pipeline;
 using Evidgate.Modules.Catalog;
+using Evidgate.Modules.Catalog.Infrastructure.GitHub;
 using Evidgate.Modules.Evidence;
 using Evidgate.Modules.Evidence.Infrastructure.Parsing.Runner;
 using Evidgate.Modules.Healing;
@@ -80,6 +81,10 @@ public static class WorkerHost
 
         builder.Services.AddIngestionModule();
         builder.Services.AddCatalogModule();
+        // The catalog's repository verification resolves in this host too, so the module's binding flow never depends on
+        // which composition root resolves it. The extension sends nothing at start-up and an absent App id stays
+        // unconfigured rather than failing the boot.
+        builder.Services.AddCatalogGitHub(builder.Configuration);
         builder.Services.AddOrchestratorModule();
         // 06.1.1-T1: the evidence module, so every handler the Api composes resolves here too.
         builder.Services.AddEvidenceModule(builder.Configuration);

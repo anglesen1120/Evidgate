@@ -17,6 +17,9 @@ namespace Evidgate.BuildingBlocks.SharedKernel.GitHub;
 /// </summary>
 public static class GitHubServiceCollectionExtensions
 {
+    // One marker per collection: a second module calling in must not stack a second resilience pipeline on the client.
+    private sealed class RegistrationMarker;
+
     /// <summary>Registers the options, the clients and the two token sources.</summary>
     /// <param name="services">The host's service collection.</param>
     /// <param name="configuration">The host configuration the options bind from.</param>
@@ -24,6 +27,13 @@ public static class GitHubServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
+
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(RegistrationMarker)))
+        {
+            return services;
+        }
+
+        services.AddSingleton<RegistrationMarker>();
 
         services
             .AddOptions<GitHubOptions>()

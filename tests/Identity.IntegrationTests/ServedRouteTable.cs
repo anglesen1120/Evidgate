@@ -768,6 +768,11 @@ internal static class RouteRequests
             $"/v1/fixtures/{ctx.FixtureId}/revisions",
             new JsonObject { ["seed_version"] = "v2", ["body_ref"] = "fixtures/probe-v2.json" },
             IdempotencyKey: Key()));
+        // The deny matrices stop at the authorization stage, so these placeholder ids never buy GitHub verification.
+        Add("POST", "/v1/projects/{p}/git-repo-bindings", ctx => new(HttpMethod.Post,
+            $"/v1/projects/{ctx.ProjectId}/git-repo-bindings",
+            new JsonObject { ["installation_id"] = 1, ["repository_id"] = 1 },
+            IdempotencyKey: Key()));
 
         // ---- Orchestrator ------------------------------------------------------------------------------------
         Add("POST", "/v1/projects/{p}/manifests", ctx => new(HttpMethod.Post, $"/v1/projects/{ctx.ProjectId}/manifests",

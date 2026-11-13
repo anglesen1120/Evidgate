@@ -100,6 +100,37 @@ public sealed class GitHubCompositionTests
         gets.ShouldBe(3);
     }
 
+    [Fact]
+    public void AddCatalogGitHub_Twice_InstallsOneResilienceHandler()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{GitHubOptions.SectionName}:AppId"] = "12345",
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<ISecretProvider>(new MapSecretProvider(GitHubTestBench.TestPem));
+        // Catalog and Identity both compose the shared App seam in one host; the second call must add nothing.
+        services.AddCatalogGitHub(configuration);
+        services.AddCatalogGitHub(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        var chain = new List<HttpMessageHandler>();
+        for (var current = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(GitHubHttpClients.Api);
+             current is not null;
+             current = (current as DelegatingHandler)?.InnerHandler)
+        {
+            chain.Add(current);
+        }
+
+        chain.Count(handler => handler.GetType().Namespace == "Microsoft.Extensions.Http.Resilience")
+            .ShouldBe(1, "a second registration must not stack a second retry pipeline on the read client");
+        chain.ShouldContain(handler => handler is SocketsHttpHandler, "the chain still ends at the transport");
+    }
+
     private static readonly DateTimeOffset TokenExpiry = new(2026, 1, 1, 1, 0, 0, TimeSpan.Zero);
 
     private static ServiceProvider BuildProvider(HttpMessageHandler? primary = null)
