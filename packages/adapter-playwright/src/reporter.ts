@@ -328,7 +328,7 @@ export class EvidgateReporter implements Reporter {
       this.draft({
         type: 'run.log',
         attempt_no: 1,
-        execution_key: PLACEHOLDER_EXECUTION_KEY,
+        execution_key: this.identity.runKey,
         ext: { schema: EXT_SCHEMA, warn: warning },
       }),
     );
@@ -375,6 +375,10 @@ export class EvidgateReporter implements Reporter {
         targetEnvWarned: this.identity.targetEnvWarned,
       }),
     );
+    this.identity.pickRunLevelKey(
+      suite?.allTests() ?? [],
+      createIdentityResolver({ sidecar: index, targetEnv: this.settings.targetEnv }),
+    );
     const capability = buildCapabilityDocument({
       engineVersion: this.settings.engineVersion,
       stepEvents: this.settings.stepsEnabled,
@@ -384,13 +388,13 @@ export class EvidgateReporter implements Reporter {
       this.draft({
         type: 'run.log',
         attempt_no: 1,
-        execution_key: PLACEHOLDER_EXECUTION_KEY,
+        execution_key: this.identity.runKey,
         ext: { schema: EXT_SCHEMA, capability },
       }),
       this.draft({
         type: 'run.log',
         attempt_no: 1,
-        execution_key: PLACEHOLDER_EXECUTION_KEY,
+        execution_key: this.identity.runKey,
         ext: { schema: EXT_SCHEMA, marker: 'run_begin' },
       }),
     ]);

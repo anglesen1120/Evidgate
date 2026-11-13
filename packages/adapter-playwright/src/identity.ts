@@ -2,14 +2,16 @@
 // identity (the `evidgate.id` annotation first, else the sidecar manifest of the test file's own
 // directory or an ancestor directory up to the suite's common ancestor), the variant hash (the
 // server `VariantNormalizer` semantics over the project's declared params) and the target env,
-// and emits them as `ext.case_id`, `ext.variant_hash` and `ext.target_env`. `execution_key` stays
-// the schema-valid placeholder behind the injectable resolver seam: the reporter never hashes it.
+// and emits them as `ext.case_id`, `ext.variant_hash` and `ext.target_env`. `execution_key` is
+// derived from that triple (the server's layout, see executionKey.ts) once all three resolve, and
+// stays the unresolved sentinel otherwise; the server recomputes it and refuses any other value.
 import type { TestCase } from '@playwright/test/reporter';
 
 import { brief, isCanonicalCaseId, type SidecarIndex } from './sidecar.js';
+import { computeExecutionKey } from './executionKey.js';
 import { normalizeVariant } from './variant.js';
 
-/** 64 hex zeros — a schema-valid stand-in until the server derives the real key. */
+/** 64 hex zeros: schema-valid, names no planned execution; marks an identity that did not resolve. */
 export const PLACEHOLDER_EXECUTION_KEY = '0'.repeat(64);
 
 /** The manifest `targetEnv` shape (contracts/manifest/manifest.v1.json `$defs.targetEnv`). */
@@ -174,11 +176,24 @@ export function resolveIdentity(test: TestCase, deps: IdentityResolverDeps): Ide
   const variant = variantOutcome(test, deps);
   if (variant.hash !== undefined) identity.variant_hash = variant.hash;
 
+  const targetEnv = resolveTargetEnv(test, deps, location);
+  if (targetEnv !== undefined) identity.target_env = targetEnv;
+
+  completeExecutionKey(identity);
+
+  return identity;
+}
+
+/** The target env: the explicit option, else the project name; warns once per project when neither is valid. */
+function resolveTargetEnv(
+  test: TestCase,
+  deps: IdentityResolverDeps,
+  location: string,
+): string | undefined {
   const project = test.parent?.project?.();
   const targetEnv = deps.targetEnv ?? validTargetEnv(project?.name);
-  if (targetEnv !== undefined) {
-    identity.target_env = targetEnv;
-  } else if (deps.targetEnv === undefined && project !== undefined) {
+  if (targetEnv !== undefined) return targetEnv;
+  if (deps.targetEnv === undefined && project !== undefined) {
     // Both EVIDGATE_TARGET_ENV and the project name are invalid, so no target_env is
     // emitted. Warn once per project (the project object is the memo key) and never echo
     // the rejected name.
@@ -194,8 +209,14 @@ export function resolveIdentity(test: TestCase, deps: IdentityResolverDeps): Ide
       });
     }
   }
+  return undefined;
+}
 
-  return identity;
+/** Derives the real key once the whole triple resolved; otherwise the sentinel stays. */
+function completeExecutionKey(identity: Identity): void {
+  const { case_id: caseId, variant_hash: variantHash, target_env: targetEnv } = identity;
+  if (caseId === undefined || variantHash === undefined || targetEnv === undefined) return;
+  identity.execution_key = computeExecutionKey(caseId, variantHash, targetEnv);
 }
 
 /**

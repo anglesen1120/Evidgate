@@ -322,11 +322,14 @@ Every test envelope carries the resolved identity. The full contract is
   a run that lost identity or evidence fails the CI job instead of passing with partial
   evidence.
 
-`execution_key` stays server-owned (00 §7): the reporter emits
-`PLACEHOLDER_EXECUTION_KEY = '0'.repeat(64)` (valid per the schema pattern
-`^[0-9a-f]{64}$`) for test and `run.log` envelopes and never hashes it. 05.2.1-T3.1
-defines the byte layout and owns the real wiring; until then an adapter batch cannot
-match a planned execution (T10 `unknown_execution_key`). A caller may inject an
+`execution_key` is server-authoritative (00 §7): the server derives it per planned execution and
+refuses an event whose key is not planned (T10 `unknown_execution_key`). The reporter computes
+the same key (`computeExecutionKey`, sha256 over length-prefixed `case_id`, `variant_hash`,
+`target_env`; layout in the server's `ExecutionKey`, pinned by `fixtures/execution-key/vectors.json`)
+for every test envelope whose identity resolves. The run-level `run.log` envelopes (capability,
+`run_begin`, `run_end`, warnings) carry the first resolvable test's key. `PLACEHOLDER_EXECUTION_KEY
+= '0'.repeat(64)` (schema-valid) marks an identity that did not resolve; the server refuses it.
+A caller may inject an
 `identity` resolver, which wins over the built-in mapping. The injected resolver is held
 to the **same completeness gate**: every identity it returns must carry `case_id`,
 `variant_hash` and `target_env`, or the run fails at `onEnd` unless
