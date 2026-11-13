@@ -17,8 +17,9 @@ public sealed partial class IngestQuotaTests
         [Fact]
         public async Task Ingest_ApplicationCrossesMonthEnd_GateBatchAndLedgerKeepTheDatabaseTransactionMonth()
         {
-            // The host carries a services override, so it is private and the pool never leases one.
-            var subject = new IngestQuotaTests(fixture, new TenancyHostPool(fixture));
+            // A pool of its own, disposed with the test: the resolver host is leased from it, only the principal host is private.
+            await using var hosts = new TenancyHostPool(fixture);
+            var subject = new IngestQuotaTests(fixture, hosts);
             // A host clock at a month end the database is not in: were the month read from the application clock, the
             // gate would look for a counter of 2020-03 and admit the batch without charging the real one.
             var clock = new FakeTimeProvider(new DateTimeOffset(2020, 3, 31, 23, 59, 59, TimeSpan.Zero));
