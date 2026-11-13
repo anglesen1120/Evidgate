@@ -8,6 +8,7 @@ import {
   createIdentityResolver,
   testKey,
   type Identity,
+  PLACEHOLDER_EXECUTION_KEY,
   type IdentityResolver,
   type VariantOutcome,
   type WarningPayload,
@@ -30,6 +31,7 @@ export class IdentityBookkeeping {
   readonly targetEnvWarned = new WeakSet<object>();
   private readonly seenTests = new Set<string>();
   private resolver: IdentityResolver | undefined;
+  private runLevelKey = PLACEHOLDER_EXECUTION_KEY;
   private unidentified = 0;
   private conflicted = 0;
   private noCaseId = 0;
@@ -41,6 +43,26 @@ export class IdentityBookkeeping {
   /** Installs the resolver built at `onBegin`, which carries the suite's sidecar index. */
   install(resolver: IdentityResolver): void {
     this.resolver = resolver;
+  }
+
+  /**
+   * The key the run-level `run.log` envelopes carry: the server accepts only planned keys, and
+   * these markers belong to no test, so they borrow the first resolvable test's key. Resolved
+   * through `probe` (a silent resolver) so no warning fires out of order; the unresolved sentinel
+   * stays when no test resolves, which the server refuses like any unplanned key.
+   */
+  pickRunLevelKey(tests: readonly TestCase[], probe: IdentityResolver): void {
+    for (const test of tests) {
+      const key = (this.deps.injected ?? probe)(test).execution_key;
+      if (key !== PLACEHOLDER_EXECUTION_KEY) {
+        this.runLevelKey = key;
+        return;
+      }
+    }
+  }
+
+  get runKey(): string {
+    return this.runLevelKey;
   }
 
   /** The resolved identity: the injected resolver wins, else the built-in mapping. */
