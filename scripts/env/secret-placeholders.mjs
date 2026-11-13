@@ -117,6 +117,10 @@ function dsnValue(value) {
 
 const shellSingleQuoted = (value) => `'${value.replaceAll("'", "'\\''")}'`;
 
+// A plain token stays as the template wrote it; anything the shell would split or expand is quoted.
+const shellValue = (value) =>
+  /^[A-Za-z0-9_.,:/@%+=-]*$/.test(value) ? value : shellSingleQuoted(value);
+
 // A mode-600 temp file with an unpredictable name, then rename: a crash never leaves a half
 // file, and a leftover temp file is removed on failure.
 function writePrivate(path, content) {
@@ -132,6 +136,32 @@ function writePrivate(path, content) {
   }
 }
 
+function tryLock(lock) {
+  try {
+    mkdirSync(lock);
+  } catch {
+    return false;
+  }
+  writeFileSync(join(lock, 'pid'), String(process.pid));
+  return true;
+}
+
+function holderIsGone(lock) {
+  let pid;
+  try {
+    pid = Number(readFileSync(join(lock, 'pid'), 'utf8'));
+  } catch {
+    return false;
+  }
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return error.code === 'ESRCH';
+  }
+}
+
 // One run at a time per target: two concurrent runs would each generate and overwrite.
 function withLock(path, action) {
   // A symlinked target (also a dangling one) is refused before any read, write or chmod.
@@ -142,13 +172,16 @@ function withLock(path, action) {
   }
   const lock = `${path}.lock`;
   mkdirSync(dirname(path), { recursive: true });
-  try {
-    mkdirSync(lock);
-  } catch {
-    fail(`${lock} exists: another run is in progress (remove the directory if none is)`);
+  if (!tryLock(lock)) {
+    // A SIGKILL leaves the lock behind; its owner pid tells a dead holder from a live one. A lock
+    // without a readable pid is treated as held.
+    if (holderIsGone(lock)) rmSync(lock, { recursive: true, force: true });
+    if (!tryLock(lock))
+      fail(`${lock} exists: another run is in progress (remove the directory if none is)`);
   }
   // fail() exits the process, so the lock is released on exit rather than in a finally.
   process.on('exit', () => rmSync(lock, { recursive: true, force: true }));
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => process.exit(1));
   action();
 }
 
@@ -212,7 +245,7 @@ function generateDev(root, rules, file, template) {
   for (const rule of rules) {
     const committed = valueOf(templateContent, rule.name);
     if (rule.kind === 'template-provided' && missing(rule.name) && committed)
-      append(rule.name, committed);
+      append(rule.name, shellValue(committed));
   }
   const absent = rules
     .filter((r) => r.kind === 'template-provided' && missing(r.name))
