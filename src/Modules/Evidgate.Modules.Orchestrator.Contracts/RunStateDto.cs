@@ -94,7 +94,21 @@ public sealed record RunStateDto(
     IReadOnlyList<RunProducerSlot> Producers,
     IReadOnlyList<RunReleaseRef> Releases,
     int AfterCancelEvents,
-    IReadOnlyList<RunStateTransition>? StateHistory);
+    IReadOnlyList<RunStateTransition>? StateHistory,
+    RunAttemptCounts Counts,
+    RunAttemptPage ExecutionsPage);
+
+/// <summary>
+/// The run's case attempts counted by normalised status (00 §8.5), in one grouped pass so the run detail stays
+/// constant-size however many tests the run holds. Every member is required and a status with no attempt is zero.
+/// </summary>
+/// <param name="Passed">Attempts normalised to <c>passed</c>.</param>
+/// <param name="Failed">Attempts normalised to <c>failed</c>.</param>
+/// <param name="Skipped">Attempts normalised to <c>skipped</c>.</param>
+/// <param name="TimedOut">Attempts normalised to <c>timed_out</c>.</param>
+/// <param name="Error">Attempts normalised to <c>error</c>.</param>
+/// <param name="Blocked">Attempts normalised to <c>blocked</c>.</param>
+public sealed record RunAttemptCounts(int Passed, int Failed, int Skipped, int TimedOut, int Error, int Blocked);
 
 /// <summary>
 /// One producer slot of a run (<c>GET /v1/runs/{r}</c>): the slot's recorded state and what its producers actually

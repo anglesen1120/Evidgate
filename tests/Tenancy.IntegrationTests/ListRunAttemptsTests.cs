@@ -22,7 +22,7 @@ namespace Tenancy.IntegrationTests;
 /// 404 <c>not_found</c> of <c>GET /v1/runs/{r}</c> (00 §5.4: no existence oracle).
 /// </summary>
 [Trait("Category", "Docker")]
-public sealed class ListRunAttemptsTests : IClassFixture<TenancyHostPool>
+public sealed partial class ListRunAttemptsTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
     private readonly TenancyHostPool _hosts;

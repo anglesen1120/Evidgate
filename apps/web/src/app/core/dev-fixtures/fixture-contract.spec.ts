@@ -73,9 +73,11 @@ describe('Fixture contract check (09.1.1-T12.2, AC10)', () => {
       if (document.status === 200) {
         expect(Object.keys(document.body as object).sort()).toEqual([
           'after_cancel_events',
+          'counts',
           'current_evidence_revision_id',
           'declared_producers',
           'environment',
+          'executions_page',
           'manifest_hash',
           'policy_revision_id',
           'producers',
