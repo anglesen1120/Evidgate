@@ -17,38 +17,42 @@ public enum BoundedBodyStatus
     Invalid,
 }
 
-/// <summary>The outcome of <see cref="BoundedHttpBody.ReadJsonAsync"/>; the document is the caller's to dispose.</summary>
+/// <summary>The outcome of <see cref="BoundedStreamBody.ReadJsonAsync"/>; the document is the caller's to dispose.</summary>
 /// <param name="Status">Whether a document was produced.</param>
 /// <param name="Document">The parsed document when <paramref name="Status"/> is <see cref="BoundedBodyStatus.Ok"/>.</param>
 public readonly record struct BoundedJsonBody(BoundedBodyStatus Status, JsonDocument? Document);
 
 /// <summary>
-/// Reads an outbound HTTP client's response body under a byte cap. The cap is checked against
-/// <c>Content-Length</c> before any read and again while streaming, so a chunked body or a header that
-/// lies is refused once a read crosses the cap instead of being buffered.
+/// Reads a stream under a byte cap, checking an optional declared length before reading and
+/// counting streamed bytes so an inaccurate or missing length cannot bypass the cap.
+/// The caller owns the input stream.
 /// </summary>
-public static class BoundedHttpBody
+public static class BoundedStreamBody
 {
     private const int ChunkBytes = 8192;
     private const int MaxJsonDepth = 64;
 
     /// <summary>Reads at most <paramref name="maxBytes"/> bytes; returns null when the body is longer.</summary>
-    /// <param name="content">The body. Its stream is disposed.</param>
+    /// <param name="stream">The body stream, which remains open.</param>
     /// <param name="maxBytes">Largest accepted body, in bytes.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
-    public static async Task<byte[]?> ReadBytesAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
+    /// <param name="declaredLength">Optional untrusted length used for early refusal and buffer sizing.</param>
+    public static async Task<byte[]?> ReadBytesAsync(
+        Stream stream, int maxBytes, CancellationToken cancellationToken, long? declaredLength = null)
     {
-        var buffer = await ReadBufferAsync(content, maxBytes, cancellationToken).ConfigureAwait(false);
+        using var buffer = await ReadBufferAsync(stream, maxBytes, declaredLength, cancellationToken).ConfigureAwait(false);
         return buffer?.ToArray();
     }
 
     /// <summary>Reads at most <paramref name="maxBytes"/> bytes as UTF-8 text (invalid bytes become U+FFFD); null when longer.</summary>
-    /// <param name="content">The body. Its stream is disposed.</param>
+    /// <param name="stream">The body stream, which remains open.</param>
     /// <param name="maxBytes">Largest accepted body, in bytes.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
-    public static async Task<string?> ReadTextAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
+    /// <param name="declaredLength">Optional untrusted length used for early refusal and buffer sizing.</param>
+    public static async Task<string?> ReadTextAsync(
+        Stream stream, int maxBytes, CancellationToken cancellationToken, long? declaredLength = null)
     {
-        var buffer = await ReadBufferAsync(content, maxBytes, cancellationToken).ConfigureAwait(false);
+        var buffer = await ReadBufferAsync(stream, maxBytes, declaredLength, cancellationToken).ConfigureAwait(false);
         if (buffer is null)
         {
             return null;
@@ -63,17 +67,19 @@ public static class BoundedHttpBody
     /// <summary>
     /// Reads at most <paramref name="maxBytes"/> bytes and parses them as one JSON document (nesting depth 64).
     /// </summary>
-    /// <param name="content">The body. Its stream is disposed.</param>
+    /// <param name="stream">The body stream, which remains open.</param>
     /// <param name="maxBytes">Largest accepted body, in bytes.</param>
     /// <param name="requireObject">Refuse a document whose root is not a JSON object.</param>
     /// <param name="cancellationToken">Cancels the read.</param>
+    /// <param name="declaredLength">Optional untrusted length used for early refusal and buffer sizing.</param>
     public static async Task<BoundedJsonBody> ReadJsonAsync(
-        HttpContent content,
+        Stream stream,
         int maxBytes,
         bool requireObject,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long? declaredLength = null)
     {
-        var buffer = await ReadBufferAsync(content, maxBytes, cancellationToken).ConfigureAwait(false);
+        var buffer = await ReadBufferAsync(stream, maxBytes, declaredLength, cancellationToken).ConfigureAwait(false);
         if (buffer is null)
         {
             return new BoundedJsonBody(BoundedBodyStatus.TooLarge, null);
@@ -111,50 +117,47 @@ public static class BoundedHttpBody
         }
     }
 
-    private static int InitialCapacity(HttpContent content, int maxBytes) =>
-        content.Headers.ContentLength is >= 0 and var declared
+    private static int InitialCapacity(long? declaredLength, int maxBytes) =>
+        declaredLength is >= 0 and var declared
             ? (int)Math.Min(declared, maxBytes)
             : Math.Min(maxBytes, 4096);
 
-    private static async Task<MemoryStream?> ReadBufferAsync(HttpContent content, int maxBytes, CancellationToken cancellationToken)
+    private static async Task<MemoryStream?> ReadBufferAsync(
+        Stream stream, int maxBytes, long? declaredLength, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(stream);
         ArgumentOutOfRangeException.ThrowIfNegative(maxBytes);
 
-        if (content.Headers.ContentLength is { } declared && declared > maxBytes)
+        if (declaredLength is { } declared && declared > maxBytes)
         {
             return null;
         }
 
-        var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        await using (stream.ConfigureAwait(false))
+        var buffer = new MemoryStream(InitialCapacity(declaredLength, maxBytes));
+        var chunk = new byte[ChunkBytes];
+        try
         {
-            var buffer = new MemoryStream(InitialCapacity(content, maxBytes));
-            var chunk = new byte[ChunkBytes];
-            try
+            while (true)
             {
-                while (true)
+                var read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false);
+                if (read == 0)
                 {
-                    var read = await stream.ReadAsync(chunk, cancellationToken).ConfigureAwait(false);
-                    if (read == 0)
-                    {
-                        return buffer;
-                    }
-
-                    if (buffer.Length + read > maxBytes)
-                    {
-                        await buffer.DisposeAsync().ConfigureAwait(false);
-                        return null;
-                    }
-
-                    await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                    return buffer;
                 }
+
+                if (buffer.Length + read > maxBytes)
+                {
+                    await buffer.DisposeAsync().ConfigureAwait(false);
+                    return null;
+                }
+
+                await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             }
-            catch
-            {
-                await buffer.DisposeAsync().ConfigureAwait(false);
-                throw;
-            }
+        }
+        catch
+        {
+            await buffer.DisposeAsync().ConfigureAwait(false);
+            throw;
         }
     }
 }
