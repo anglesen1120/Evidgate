@@ -7,12 +7,15 @@
 -- existing rows only hold tokens of the old list, so the new, wider list accepts all of them and the ADD validates
 -- without a rewrite of the data (the `evaluation` table is insert-only and small per run).
 --
+-- VALIDATION: the add is validated in place rather than NOT VALID plus VALIDATE; the table is insert-only and small, and
+-- ACCESS EXCLUSIVE is held to the commit either way.
+--
 -- LOCKS: ACCESS EXCLUSIVE on `evaluation` for the drop and the add, one transaction, `lock_timeout` 5 s so the file
 -- fails instead of queuing behind a long reader.
 
 set local lock_timeout = '5s';
 
-alter table public.evaluation drop constraint evaluation_reasons_check;
+alter table public.evaluation drop constraint if exists evaluation_reasons_check;
 
 alter table public.evaluation add constraint evaluation_reasons_check check (
   case
