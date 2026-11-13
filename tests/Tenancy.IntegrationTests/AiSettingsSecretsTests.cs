@@ -16,11 +16,16 @@ namespace Tenancy.IntegrationTests;
 /// text" without failing here.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsSecretsTests
+public sealed class AiSettingsSecretsTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsSecretsTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsSecretsTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>The credential shapes AC11 names, each in a field a client would paste it into.</summary>
     /// <remarks>
@@ -44,7 +49,7 @@ public sealed class AiSettingsSecretsTests
     [MemberData(nameof(Credentials))]
     public async Task Refuses_Credentials_AndNeverLogsText(string field, string text)
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var document = AiSettingsCalls.Document();
 
         if (field.StartsWith("priority_criteria.", StringComparison.Ordinal))
@@ -74,7 +79,7 @@ public sealed class AiSettingsSecretsTests
     [Fact]
     public async Task Url_RefusesUserInfo_AndMalformedValues()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var withUserInfo = AiSettingsCalls.Document();
         withUserInfo["environment_url"] = AiSettingsCalls.Secrets.UserInfoUrl("preview.example.test") + "/checkout";
@@ -112,7 +117,7 @@ public sealed class AiSettingsSecretsTests
     [Fact]
     public async Task Prose_WithDigitsAndAnEmail_IsAccepted()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var document = AiSettingsCalls.Document();
         document["writing_style"] = "Viết bước nào cũng rõ ràng; tránh 2 lần bấm liên tiếp.";
         document["coverage_strategy"] = "Cover the checkout flow at 375px and at 1440px; ask qa@example.test for the matrix.";
@@ -133,7 +138,7 @@ public sealed class AiSettingsSecretsTests
     [Fact]
     public async Task Reason_SpacedPasswordAssignment_Is422SecretNot500()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var body = AiSettingsCalls.Body(AiSettingsCalls.Document(), reason: AiSettingsCalls.Secrets.SpacedPasswordAssignment());
 
         var refused = await AiSettingsCalls.SaveAsync(world.Client, world.As, world, body, "\"0\"");

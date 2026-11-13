@@ -16,17 +16,22 @@ namespace Tenancy.IntegrationTests;
 /// different document than the one it hashed fails — the response body alone cannot prove that.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsVersionTests
+public sealed class AiSettingsVersionTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsVersionTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsVersionTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>AC2/AC3: one save, one row, numbered from 1, hashed over the stored document and attributed to the caller.</summary>
     [Fact]
     public async Task Appends_ExactlyOneVersion_PerSave()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var first = DocumentWith("First guidance");
         var created = await AiSettingsCalls.SaveAsync(
@@ -68,7 +73,7 @@ public sealed class AiSettingsVersionTests
     [Fact]
     public async Task HistoryDetail_Returns_TheStoredVersion()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var first = DocumentWith("First guidance");
         var second = DocumentWith("Second guidance");
 
@@ -96,7 +101,7 @@ public sealed class AiSettingsVersionTests
     [Fact]
     public async Task VersionPage_Lists_NewestFirst_WithoutTheDocument()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         for (var i = 0; i < 3; i++)
         {
@@ -137,7 +142,7 @@ public sealed class AiSettingsVersionTests
     [Fact]
     public async Task VersionPage_Refuses_BadLimitAndCursor()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         (await AiSettingsCalls.GetAsync(world.Client, world.As, $"{world.Versions}?limit=201")).Status
             .ShouldBe(HttpStatusCode.UnprocessableEntity, "200 is the maximum page size");

@@ -16,17 +16,22 @@ namespace Tenancy.IntegrationTests;
 /// text. This suite therefore pins the behaviour where it matters — on the stored row — not on a helper.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsTextTests
+public sealed class AiSettingsTextTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsTextTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsTextTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>AC1: the unit is the code point, so 250 emoji fit the 250-cap and 251 do not.</summary>
     [Fact]
     public async Task CodePoints_AreTheLengthUnit()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var over = AiSettingsCalls.Document();
         over["writing_style"] = string.Concat(Enumerable.Repeat("\U0001F600", AiSettingsCalls.WritingStyleLimit + 1));
@@ -61,7 +66,7 @@ public sealed class AiSettingsTextTests
     [Fact]
     public async Task Normalisation_ComposesNfc_TrimsEnds_AndHashesTheNormalisedForm()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         const string Composed = "\u00e1";
         const string Decomposed = "a\u0301";
         var composedText = string.Concat(Enumerable.Repeat(Composed, AiSettingsCalls.WritingStyleLimit));

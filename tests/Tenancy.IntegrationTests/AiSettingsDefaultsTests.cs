@@ -17,17 +17,22 @@ namespace Tenancy.IntegrationTests;
 /// projection a real read of the seeded row rather than an empty document.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsDefaultsTests
+public sealed class AiSettingsDefaultsTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsDefaultsTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsDefaultsTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>AC5: version 0 is the default template's document, with no row and no author behind it.</summary>
     [Fact]
     public async Task VersionZero_IsThePlatformDefaultTemplate()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         var head = await AiSettingsCalls.GetAsync(world.Client, world.As, world.Settings);
 
@@ -57,7 +62,7 @@ public sealed class AiSettingsDefaultsTests
     [Fact]
     public async Task FirstSave_FromVersionZero_IsVersionOne()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var before = await AiSettingsCalls.GetAsync(world.Client, world.As, world.Settings);
 
         var saved = await AiSettingsCalls.SaveAsync(
@@ -78,7 +83,7 @@ public sealed class AiSettingsDefaultsTests
     [Fact]
     public async Task Defaults_Are_LocaleIndependent()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         Action<System.Net.Http.Headers.HttpRequestHeaders> In(string language) => headers =>
         {

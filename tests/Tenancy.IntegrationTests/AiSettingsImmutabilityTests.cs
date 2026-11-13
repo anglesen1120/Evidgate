@@ -16,17 +16,22 @@ namespace Tenancy.IntegrationTests;
 /// the server says so. The CHECK that pairs the template columns is exercised by direct owner inserts.
 /// </remarks>
 [Trait("Category", "Docker")]
-public sealed class AiSettingsImmutabilityTests
+public sealed class AiSettingsImmutabilityTests : IClassFixture<TenancyHostPool>
 {
     private readonly PostgresTenancyFixture _fixture;
+    private readonly TenancyHostPool _hosts;
 
-    public AiSettingsImmutabilityTests(PostgresTenancyFixture fixture) => _fixture = fixture;
+    public AiSettingsImmutabilityTests(PostgresTenancyFixture fixture, TenancyHostPool hosts)
+    {
+        _fixture = fixture;
+        _hosts = hosts;
+    }
 
     /// <summary>AC2: an UPDATE by any role is 42501 or the guard's 23514, and only the owner's DELETE removes a row.</summary>
     [Fact]
     public async Task AppCannotRewriteHistory_OwnerUpdateIsGuarded_OwnerDeleteWorks()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         await AiSettingsCalls.SaveAsync(
             world.Client, world.As, world, AiSettingsCalls.Body(AiSettingsCalls.Document()), "\"0\"");
 
@@ -48,7 +53,7 @@ public sealed class AiSettingsImmutabilityTests
         (await AsAppAsync(world.Database, "delete from public.project_ai_settings"))
             .ShouldStartWith("42501", customMessage: "the app role may not delete a version");
 
-        (await AsOwnerAsync(world.Database, "delete from public.project_ai_settings"))
+        (await AsOwnerAsync(world.Database, $"delete from public.project_ai_settings where org_id = '{world.Org}'"))
             .ShouldBeNull("the owner keeps DELETE for the expand/contract path");
 
         (await AiSettingsCalls.SettingsCountAsync(_fixture, world)).ShouldBe(0);
@@ -58,7 +63,7 @@ public sealed class AiSettingsImmutabilityTests
     [Fact]
     public async Task Catalogue_IsReadOnly_ForRuntimeRoles()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
 
         foreach (var privilege in new[] { "INSERT", "UPDATE", "DELETE" })
         {
@@ -89,7 +94,7 @@ public sealed class AiSettingsImmutabilityTests
     [Fact]
     public async Task TemplatePair_IsAllOrNothing()
     {
-        await using var world = await AiSettingsCalls.StartAsync(_fixture);
+        await using var world = await AiSettingsCalls.StartAsync(_fixture, hosts: _hosts);
         var author = await AiSettingsCalls.MembershipAsync(_fixture, world, world.User);
 
         (await AsOwnerAsync(world.Database, Insert(world, author, "'web-form', null", 10)))
