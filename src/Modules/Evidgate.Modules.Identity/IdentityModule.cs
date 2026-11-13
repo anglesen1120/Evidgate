@@ -186,6 +186,8 @@ internal static class IdentityModule
             provider => provider.GetRequiredService<GitHubInstallationStore>());
         services.TryAddSingleton<IGitHubInstallationResolver>(
             provider => provider.GetRequiredService<GitHubInstallationStore>());
+        services.TryAddSingleton<IGitHubInstallationOwnership>(
+            provider => provider.GetRequiredService<GitHubInstallationStore>());
 
         services.TryAddSingleton<IGitHubOAuthClient, GitHubOAuthClient>();
         services.TryAddSingleton<IGitHubAppInstallations, GitHubAppInstallationsClient>();

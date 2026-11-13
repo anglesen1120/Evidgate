@@ -20,17 +20,28 @@ public sealed class EvidgateApiFactory : WebApplicationFactory<Program>
     private readonly string? _connectionString;
     private readonly Action<IServiceCollection>? _configureServices;
     private readonly int? _managementPort;
+    private readonly IReadOnlyDictionary<string, string?>? _extraConfiguration;
 
     /// <summary>Creates a factory; <paramref name="connectionString"/> feeds EVIDGATE__DATABASE__CONNECTIONSTRING.</summary>
+    /// <param name="connectionString">The app role's connection string.</param>
+    /// <param name="capture">Optional log capture behind the redaction layer.</param>
+    /// <param name="configureServices">Extra registrations, applied after the app's own.</param>
+    /// <param name="managementPort">The port the management listener reports.</param>
+    /// <param name="extraConfiguration">
+    /// Configuration a test suite needs on the booting host (e.g. a GitHub App's id and key); applied last, so it wins
+    /// over the settings this factory writes for every host.
+    /// </param>
     public EvidgateApiFactory(
         string? connectionString,
         CaptureLoggerProvider? capture = null,
         Action<IServiceCollection>? configureServices = null,
-        int? managementPort = null)
+        int? managementPort = null,
+        IReadOnlyDictionary<string, string?>? extraConfiguration = null)
     {
         _managementPort = managementPort;
         _connectionString = connectionString;
         _configureServices = configureServices;
+        _extraConfiguration = extraConfiguration;
         Capture = capture;
     }
 
@@ -87,6 +98,14 @@ public sealed class EvidgateApiFactory : WebApplicationFactory<Program>
             if (_managementPort is { } managementPort)
             {
                 settings["EVIDGATE:Api:ManagementPort"] = managementPort.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            if (_extraConfiguration is not null)
+            {
+                foreach (var (key, value) in _extraConfiguration)
+                {
+                    settings[key] = value;
+                }
             }
 
             configuration.AddInMemoryCollection(settings);

@@ -25,6 +25,9 @@ public static class GitHubErrorCodes
     /// <summary>GitHub refused the call's permission on the resource (403, not a rate limit).</summary>
     public const string Forbidden = "github_forbidden";
 
+    /// <summary>GitHub refused the requested resource scope (422).</summary>
+    public const string Unprocessable = "github_unprocessable";
+
     /// <summary>GitHub rate-limited the call; the error carries the <c>Retry-After</c> delay.</summary>
     public const string RateLimited = "github_rate_limited";
 
@@ -141,6 +144,10 @@ public static class GitHubResponseReader
                 GitHubErrorCodes.Forbidden,
                 "GitHub refused this App's permission on the addressed resource.",
                 403),
+            HttpStatusCode.UnprocessableEntity => new(
+                GitHubErrorCodes.Unprocessable,
+                "GitHub refused the requested resource scope.",
+                422),
             HttpStatusCode.TooManyRequests => RateLimited(response, now),
             HttpStatusCode.RequestTimeout or HttpStatusCode.InternalServerError
                 or HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout => new(
