@@ -49,10 +49,21 @@ describe('RunTimelineComponent', () => {
     expect(root.querySelectorAll('ol > li')).toHaveLength(5);
     expect(root.querySelectorAll('[aria-current="step"]')).toHaveLength(1);
     expect(root.querySelector('[aria-current="step"]')?.getAttribute('data-step')).toBe('running');
-    expect(stepStatus(root, 'created')).toContain('Reached');
+    expect(stepStatus(root, 'created')).toContain('Inferred from current state');
     expect(stepStatus(root, 'running')).toContain('Current step');
     expect(stepStatus(root, 'collecting')).toContain('Not reached yet');
     expect(stepStatus(root, 'complete')).toContain('Not reached yet');
+  });
+
+  it('binds labels and status into compact aligned tracks rather than opposite card edges', async () => {
+    const { root } = await render('complete');
+    const row = root.querySelector('ol > li');
+    expect(
+      row?.classList.contains('min-[768px]:grid-cols-[12ch_minmax(0,28ch)_minmax(0,1fr)]'),
+    ).toBe(true);
+    expect(row?.classList.contains('justify-between')).toBe(false);
+    expect(row?.children[0]?.hasAttribute('data-step-label')).toBe(true);
+    expect(row?.children[1]?.hasAttribute('data-step-status')).toBe(true);
   });
 
   it.each(ALL_STATES.map((state) => ({ state })))(
@@ -68,10 +79,10 @@ describe('RunTimelineComponent', () => {
     },
   );
 
-  it('marks every earlier main-path step reached for a collecting run', async () => {
+  it('labels earlier main-path steps as inferred rather than recorded for a legacy run', async () => {
     const { root } = await render('collecting');
     for (const state of ['created', 'queued', 'running'] as const) {
-      expect(stepStatus(root, state)).toContain('Reached');
+      expect(stepStatus(root, state)).toContain('Inferred from current state');
     }
     expect(stepStatus(root, 'complete')).toContain('Not reached yet');
   });
@@ -87,7 +98,7 @@ describe('RunTimelineComponent', () => {
       'complete',
       'incomplete',
     ]);
-    expect(stepStatus(root, 'created')).toContain('Reached');
+    expect(stepStatus(root, 'created')).toContain('Inferred from current state');
     // The deadline can close the run straight from queued or running, so no intermediate step is
     // claimed as served.
     for (const state of ['queued', 'running', 'collecting'] as const) {
@@ -108,7 +119,7 @@ describe('RunTimelineComponent', () => {
     expect(completeStatus).not.toContain('Reached');
     expect(completeStatus).not.toContain('Complete');
     expect(root.querySelector('[aria-current="step"]')?.getAttribute('data-step')).toBe('canceled');
-    expect(stepStatus(root, 'created')).toContain('Reached');
+    expect(stepStatus(root, 'created')).toContain('Inferred from current state');
     expect(stepStatus(root, 'running')).toContain('Not recorded');
   });
 
@@ -132,7 +143,8 @@ describe('RunTimelineComponent', () => {
     const { root } = await render('canceled', null);
     const count = root.querySelector('[data-after-cancel-count]');
     expect(count?.textContent).toContain('After-cancel events');
-    expect(count?.textContent).toContain('Status unavailable');
+    expect(count?.textContent).toContain('Not provided');
+    expect(count?.querySelector('app-status-pill')).toBeNull();
     expect(count?.textContent).not.toMatch(/\d+ events/);
   });
 
@@ -198,6 +210,9 @@ describe('RunTimelineComponent', () => {
     expect(root.querySelector('[data-step="created"] time')).toBeNull();
     expect(root.querySelector('[data-step="queued"] time')).toBeNull();
     expect(root.querySelector('[data-step-times]')).toBeNull();
+    expect(stepStatus(root, 'queued').trim()).toBe('Reached');
+    expect(stepStatus(root, 'created')).toContain('Inferred from current state');
+    expect(stepStatus(root, 'running').trim()).toBe('Reached');
   });
 
   it('preserves after-cancel information while suppressing late completion times', async () => {

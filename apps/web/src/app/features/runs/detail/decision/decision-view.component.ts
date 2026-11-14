@@ -21,6 +21,8 @@ import { NotFoundPatternComponent } from '../../../../shared/ui/states/not-found
 import { patternForError } from '../../../../shared/ui/states/state-pattern';
 import type { DecisionViewModel } from './decision-view-model';
 import { refusesAccess } from './decision-refusal';
+import { runValueLabel } from '../run-value-label';
+import { decisionReasonExplanation } from '../reason-explanation';
 
 /**
  * The live-decision region. Every value comes from one accepted body; the component decides how to
@@ -59,6 +61,8 @@ export class DecisionViewComponent {
   readonly retry = output<void>();
   /** Asks the page to pin evidence to the revision this decision was evaluated at. */
   readonly viewDecisionEvidence = output<number>();
+  protected readonly valueLabel = runValueLabel;
+  protected readonly reasonExplanation = decisionReasonExplanation;
 
   protected readonly copy = {
     title: $localize`:@@runs.decision.title:Latest live decision`,

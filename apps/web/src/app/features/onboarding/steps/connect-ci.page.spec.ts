@@ -253,7 +253,9 @@ describe('ConnectCiPage', () => {
     const reason = root.querySelector('#connect-repo-name-error')!;
     expect(reason.textContent).toContain('That repository is not visible to the app.');
     expect(input.getAttribute('aria-invalid')).toBe('true');
-    expect(input.getAttribute('aria-describedby')).toBe('connect-repo-name-error');
+    expect(input.getAttribute('aria-describedby')).toBe(
+      'connect-repo-name-hint connect-repo-name-error',
+    );
     // The details alert says the same sentence; a live region here would say it twice.
     expect(reason.hasAttribute('aria-live')).toBe(false);
     for (const field of root.querySelectorAll<HTMLElement>('[aria-describedby]')) {
@@ -297,7 +299,8 @@ describe('ConnectCiPage', () => {
     await fill({ 'connect-token-name': 'Build upload' });
     await submit('token');
     const details = root.querySelector('[data-testid="connect-ci-details"]')!;
-    expect(details.textContent).toContain('/name');
+    expect(details.textContent).toContain('Token name:');
+    expect(details.textContent).not.toContain('/name');
     expect(details.textContent).toContain('Name must not embed separators.');
     // The row still names its field, so the reason also appears beside that control.
     expect(root.querySelector('#connect-token-name-error')?.textContent).toContain(
@@ -489,7 +492,8 @@ describe('ConnectCiPage', () => {
       expect(pageHeading?.closest('[role="alert"]')).toBeNull();
       expect(error?.querySelector('h4.state-panel__title')).not.toBeNull();
       expect(error?.querySelector('h2')).toBeNull();
-      expect(error?.textContent).toContain('/repository_id');
+      expect(error?.textContent).toContain('GitHub numeric repository ID: Exact field reason.');
+      expect(error?.textContent).not.toContain('/repository_id');
       expect(error?.textContent).toContain('Exact field reason.');
       expect(
         root.querySelector<HTMLButtonElement>('[data-testid="connect-token-submit"]')?.disabled,
@@ -753,6 +757,10 @@ describe('ConnectCiPage', () => {
       await fixture.whenStable();
       const button = root.querySelector<HTMLButtonElement>('[data-testid="connect-token-submit"]')!;
       expect(button.disabled).toBe(false);
+      expect(
+        root.querySelector<HTMLInputElement>('[data-testid="connect-token-name"]')?.value,
+      ).toBe('');
+      await fill({ 'connect-token-name': 'Build upload in the new scope' });
       await submit('token');
       expect(createIngestToken).toHaveBeenCalledTimes(2);
       resolveOld({ token: TOKEN, secret: SECRET });

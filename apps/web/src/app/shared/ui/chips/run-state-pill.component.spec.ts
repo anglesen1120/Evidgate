@@ -61,6 +61,21 @@ describe('RunStatePillComponent', () => {
     },
   );
 
+  it('omits only the redundant dimension in compact tables and preserves status semantics', () => {
+    const fixture = TestBed.createComponent(RunStatePillComponent);
+    fixture.componentRef.setInput('state', 'complete');
+    fixture.componentRef.setInput('compact', true);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.textContent?.trim()).toBe('Complete');
+    expect(root.querySelector('.status-pill__dimension')).toBeNull();
+    expect(root.querySelector('.status-pill--success')).not.toBeNull();
+    fixture.componentRef.setInput('state', 'future_state');
+    fixture.detectChanges();
+    expect(root.textContent?.trim()).toBe('future_state');
+    expect(root.querySelector('.status-pill--neutral')).not.toBeNull();
+  });
+
   it.each(['future_state', '__proto__', 'constructor', '<img src=x onerror=alert(1)>'])(
     'preserves unknown value %s verbatim with a neutral tone',
     (state) => {

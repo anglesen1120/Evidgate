@@ -261,14 +261,6 @@
         <source>Agents</source>
         <target>Tác nhân</target>
       </trans-unit>
-      <trans-unit id="shell.overview.arriving" datatype="html">
-        <source> This project&apos;s runs, authoring and releases arrive with their own stories. For now this page shows the project the URL resolved to. </source>
-        <target>Các lượt chạy, phần soạn kiểm thử và bản phát hành của dự án này sẽ ra mắt cùng câu chuyện riêng của chúng. Hiện tại trang này chỉ hiển thị dự án mà URL đã phân giải.</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/features/project/overview.page.ts</context>
-          <context context-type="linenumber">23,29</context>
-        </context-group>
-      </trans-unit>
       <trans-unit id="shell.overview.no-project" datatype="html">
         <source>No project selected</source>
         <target>Chưa chọn dự án</target>
@@ -2014,8 +2006,8 @@
         <target>Phiên bản chính sách đã kích hoạt</target>
       </trans-unit>
       <trans-unit id="onboarding.evidence.activated-at" datatype="html">
-        <source>Activated at</source>
-        <target>Thời điểm kích hoạt</target>
+        <source>Activated at (UTC)</source>
+        <target>Kích hoạt lúc (UTC)</target>
       </trans-unit>
       <trans-unit id="onboarding.evidence.activation-unavailable" datatype="html">
         <source>Activation details are unavailable with your current access.</source>
@@ -2835,7 +2827,6 @@
       <trans-unit id="runs.detail.timeline.upcoming" datatype="html"><source>Not reached yet</source><target>Chưa tới bước này</target></trans-unit>
       <trans-unit id="runs.detail.timeline.not-reached" datatype="html"><source>Not reached</source><target>Không đạt tới</target></trans-unit>
       <trans-unit id="runs.detail.timeline.unrecorded" datatype="html"><source>Not recorded</source><target>Không được ghi nhận</target></trans-unit>
-      <trans-unit id="runs.detail.timeline.step-status" datatype="html"><source>Step status</source><target>Trạng thái bước</target></trans-unit>
       <trans-unit id="runs.detail.timeline.history-unavailable" datatype="html"><source>History unavailable for this run</source><target>Không có lịch sử cho lượt chạy này</target></trans-unit>
       <trans-unit id="runs.detail.timeline.history-empty" datatype="html"><source>No state changes recorded yet</source><target>Chưa ghi nhận thay đổi trạng thái nào</target></trans-unit>
       <trans-unit id="runs.detail.timeline.after-cancel-note" datatype="html"><source>Events that arrive after cancel are kept as evidence and never complete the run.</source><target>Các sự kiện đến sau khi hủy vẫn được giữ làm bằng chứng và không bao giờ làm lượt chạy hoàn tất.</target></trans-unit>
@@ -3303,6 +3294,68 @@
       <trans-unit id="healingswitch.read-only" datatype="html"><source>Read-only: changing the switch needs permission to configure healing.</source><target>Chỉ đọc: muốn thay đổi công tắc cần quyền cấu hình tự phục hồi.</target></trans-unit>
       <trans-unit id="healingswitch.blocked-by-system" datatype="html"><source>Read-only: the system scope takes precedence over every lower scope.</source><target>Chỉ đọc: phạm vi hệ thống ưu tiên hơn mọi phạm vi thấp hơn.</target></trans-unit>
       <trans-unit id="healingswitch.blocked-by-tenant" datatype="html"><source>Read-only: the tenant scope takes precedence over the project scope.</source><target>Chỉ đọc: phạm vi tổ chức ưu tiên hơn phạm vi dự án.</target></trans-unit>
+      <trans-unit id="auth.dev.failed" datatype="html"><source>Sign-in could not be completed or your session could not be verified. Check your connection and try again.</source><target>Không thể hoàn tất đăng nhập hoặc xác minh phiên đăng nhập. Hãy kiểm tra kết nối và thử lại.</target></trans-unit>
+      <trans-unit id="onboarding.connect.repo-id-hint" datatype="html"><source>Enter the repository&apos;s numeric GitHub ID, not its owner/repo name.</source><target>Nhập mã số kho mã GitHub, không phải tên dạng chủ sở hữu/kho mã.</target></trans-unit>
+      <trans-unit id="onboarding.connect.repo-name-hint" datatype="html"><source>Use the GitHub owner and repository name, for example acme/web.</source><target>Nhập tên chủ sở hữu và kho mã trên GitHub, ví dụ acme/web.</target></trans-unit>
+      <trans-unit id="onboarding.connect.token-name-hint" datatype="html"><source>Choose a name that identifies this token in your CI setup.</source><target>Đặt tên để dễ nhận biết token này trong cấu hình CI.</target></trans-unit>
+      <trans-unit id="onboarding.fields.generic" datatype="html"><source>Submitted value</source><target>Giá trị đã gửi</target></trans-unit>
+      <trans-unit id="onboarding.fields.reason" datatype="html"><source><x id="FIELD_LABEL" equiv-text="label"/>: <x id="SERVER_REASON" equiv-text="reason"/></source><target><x id="FIELD_LABEL"/>: <x id="SERVER_REASON"/></target></trans-unit>
+      <trans-unit id="onboarding.fields.required" datatype="html"><source>Fields marked * are required.</source><target>Các trường có dấu * là bắt buộc.</target></trans-unit>
+      <trans-unit id="onboarding.pending.no-evidence" datatype="html"><source>No evidence revision is recorded for this run yet. Setup does not display a report comparison; open Runs to check the run&apos;s progress.</source><target>Lượt chạy này chưa có phiên bản bằng chứng nào được ghi nhận. Phần thiết lập không hiển thị đối chiếu báo cáo; hãy mở Lượt chạy để kiểm tra tiến trình.</target></trans-unit>
+      <trans-unit id="onboarding.pending.no-run" datatype="html"><source>No run is recorded for this project yet. This setup step cannot start a sample run. Run your connected CI, then reopen setup to refresh progress.</source><target>Dự án này chưa có lượt chạy nào được ghi nhận. Bước thiết lập này không thể khởi tạo lượt chạy mẫu. Hãy chạy CI đã kết nối, rồi mở lại phần thiết lập để cập nhật tiến trình.</target></trans-unit>
+      <trans-unit id="onboarding.pending.open-runs" datatype="html"><source>Open Runs</source><target>Mở Lượt chạy</target></trans-unit>
+      <trans-unit id="onboarding.pending.recorded-evidence" datatype="html"><source>The server has recorded an evidence revision for this run. Setup does not display a report comparison; open Runs to inspect the run and its evidence.</source><target>Máy chủ đã ghi nhận một phiên bản bằng chứng cho lượt chạy này. Phần thiết lập không hiển thị đối chiếu báo cáo; hãy mở Lượt chạy để xem chi tiết và bằng chứng.</target></trans-unit>
+      <trans-unit id="onboarding.pending.recorded-run" datatype="html"><source>The server has recorded a run for this project. This setup step does not run CI; open Runs to review the run&apos;s status, results and evidence.</source><target>Máy chủ đã ghi nhận một lượt chạy cho dự án này. Bước thiết lập này không thực thi CI; hãy mở Lượt chạy để xem trạng thái, kết quả và bằng chứng.</target></trans-unit>
+      <trans-unit id="onboarding.pending.summary-title" datatype="html"><source>Recorded setup progress</source><target>Tiến trình thiết lập đã ghi nhận</target></trans-unit>
+      <trans-unit id="onboarding.shell.open-project" datatype="html"><source>Open project</source><target>Mở dự án</target></trans-unit>
+      <trans-unit id="quota.panel.not-measured" datatype="html"><source>Not measured yet.</source><target>Chưa có số liệu đo lường.</target></trans-unit>
+      <trans-unit id="retention.validation-error" datatype="html"><source>Retention was not saved. Review the highlighted fields.</source><target>Chưa lưu thời hạn lưu trữ. Hãy kiểm tra các trường được đánh dấu.</target></trans-unit>
+      <trans-unit id="runs.decision.reason.advisory-only-run" datatype="html"><source>This fork run is advisory only and cannot produce a passing decision.</source><target>Lượt chạy từ fork này chỉ có giá trị tham khảo và không thể đưa ra quyết định đạt.</target></trans-unit>
+      <trans-unit id="runs.decision.reason.critical-not-executed" datatype="html"><source>A test required by the policy was skipped or blocked.</source><target>Một kiểm thử bắt buộc theo chính sách đã bị bỏ qua hoặc bị chặn.</target></trans-unit>
+      <trans-unit id="runs.decision.reason.empty-suite-allowed" datatype="html"><source>The suite is empty, as permitted by the policy.</source><target>Bộ kiểm thử rỗng và được chính sách cho phép.</target></trans-unit>
+      <trans-unit id="runs.decision.reason.expected-count-zero" datatype="html"><source>The required scope expects no tests, and the policy does not allow an empty suite.</source><target>Phạm vi bắt buộc không có kiểm thử nào, nhưng chính sách không cho phép bộ kiểm thử rỗng.</target></trans-unit>
+      <trans-unit id="runs.decision.reason.flaky-budget-exceeded" datatype="html"><source>Non-critical retry changes exceeded the policy&apos;s flaky-test budget.</source><target>Số lần kết quả thay đổi khi chạy lại các kiểm thử không trọng yếu đã vượt mức cho phép của chính sách.</target></trans-unit>
+      <trans-unit id="runs.decision.reason.required-assertion-failed" datatype="html"><source>A required assertion failed.</source><target>Một điều kiện kiểm tra bắt buộc không đạt.</target></trans-unit>
+      <trans-unit id="runs.decision.reason.scope-build-policy-pinned" datatype="html"><source>The pinned scope, build and policy passed evaluation.</source><target>Phạm vi, bản dựng và chính sách đã ghim đều đạt yêu cầu đánh giá.</target></trans-unit>
+      <trans-unit id="runs.decision.reason.stale-epoch-only" datatype="html"><source>Only evidence from stale producer epochs was received.</source><target>Chỉ nhận được bằng chứng thuộc các kỳ producer đã cũ.</target></trans-unit>
+      <trans-unit id="runs.decision.reason.unknown-required-artifact-kind" datatype="html"><source>The policy requires an unrecognized artifact kind.</source><target>Chính sách yêu cầu một loại artifact không được nhận diện.</target></trans-unit>
+      <trans-unit id="runs.detail.not-provided" datatype="html"><source>Not provided</source><target>Chưa được cung cấp</target></trans-unit>
+      <trans-unit id="runs.detail.timeline.inferred" datatype="html"><source>Inferred from current state</source><target>Suy ra từ trạng thái hiện tại</target></trans-unit>
+      <trans-unit id="runs.list.active-filters" datatype="html"><source>Active filters: <x id="count" equiv-text="count"/></source><target>Bộ lọc đang áp dụng: <x id="count"/></target></trans-unit>
+      <trans-unit id="runs.list.evidence-hint" datatype="html"><source>Open the run for evidence completeness.</source><target>Mở lượt chạy để xem độ đầy đủ của bằng chứng.</target></trans-unit>
+      <trans-unit id="runs.list.evidence-unavailable" datatype="html"><source>Unavailable</source><target>Chưa có thông tin</target></trans-unit>
+      <trans-unit id="runs.list.utc" datatype="html"><source>UTC</source><target>UTC</target></trans-unit>
+      <trans-unit id="runs.value.decision-evaluated" datatype="html"><source>Evaluated</source><target>Đã đánh giá</target></trans-unit>
+      <trans-unit id="runs.value.decision-live" datatype="html"><source>Live evaluation</source><target>Đánh giá trực tiếp</target></trans-unit>
+      <trans-unit id="runs.value.decision-pending" datatype="html"><source>Not evaluated</source><target>Chưa đánh giá</target></trans-unit>
+      <trans-unit id="runs.value.decision-unavailable" datatype="html"><source>Unavailable</source><target>Chưa có thông tin</target></trans-unit>
+      <trans-unit id="runs.value.identity-bound" datatype="html"><source>Bound</source><target>Đã liên kết</target></trans-unit>
+      <trans-unit id="runs.value.identity-unbound" datatype="html"><source>Unbound</source><target>Chưa liên kết</target></trans-unit>
+      <trans-unit id="runs.value.producer-finalized" datatype="html"><source>Finalized</source><target>Đã chốt</target></trans-unit>
+      <trans-unit id="runs.value.producer-open" datatype="html"><source>Open</source><target>Đang mở</target></trans-unit>
+      <trans-unit id="runs.value.purpose-regular" datatype="html"><source>Regular run</source><target>Lượt chạy thông thường</target></trans-unit>
+      <trans-unit id="runs.value.purpose-replay" datatype="html"><source>Replay</source><target>Chạy lại từ dữ liệu</target></trans-unit>
+      <trans-unit id="runs.value.status-blocked" datatype="html"><source>Blocked</source><target>Bị chặn</target></trans-unit>
+      <trans-unit id="runs.value.status-error" datatype="html"><source>Error</source><target>Lỗi</target></trans-unit>
+      <trans-unit id="runs.value.status-failed" datatype="html"><source>Failed</source><target>Không đạt</target></trans-unit>
+      <trans-unit id="runs.value.status-passed" datatype="html"><source>Passed</source><target>Đạt</target></trans-unit>
+      <trans-unit id="runs.value.status-skipped" datatype="html"><source>Skipped</source><target>Đã bỏ qua</target></trans-unit>
+      <trans-unit id="runs.value.status-timed-out" datatype="html"><source>Timed out</source><target>Quá thời gian</target></trans-unit>
+      <trans-unit id="settings.audit.action-hint" datatype="html"><source>Use the exact action code, for example auth.login or run.create.</source><target>Nhập đúng mã hành động, ví dụ auth.login hoặc run.create.</target></trans-unit>
+      <trans-unit id="settings.audit.details" datatype="html"><source>Event details</source><target>Chi tiết sự kiện</target></trans-unit>
+      <trans-unit id="settings.audit.export-any" datatype="html"><source>Any</source><target>Tất cả</target></trans-unit>
+      <trans-unit id="settings.audit.export-from" datatype="html"><source>From (inclusive, UTC)</source><target>Từ (bao gồm, UTC)</target></trans-unit>
+      <trans-unit id="settings.audit.export-organization" datatype="html"><source>Organization</source><target>Tổ chức</target></trans-unit>
+      <trans-unit id="settings.audit.export-scope" datatype="html"><source>Applied export scope</source><target>Phạm vi xuất đang áp dụng</target></trans-unit>
+      <trans-unit id="settings.audit.export-to" datatype="html"><source>To (exclusive, UTC)</source><target>Đến (không bao gồm, UTC)</target></trans-unit>
+      <trans-unit id="settings.audit.export-unapplied" datatype="html"><source>Filters have unapplied changes. Apply or clear them before exporting.</source><target>Bộ lọc có thay đổi chưa áp dụng. Hãy áp dụng hoặc xóa bộ lọc trước khi xuất.</target></trans-unit>
+      <trans-unit id="settings.audit.export-unbounded" datatype="html"><source>No time limit</source><target>Không giới hạn thời gian</target></trans-unit>
+      <trans-unit id="settings.audit.object-hint" datatype="html"><source>Use the exact object type, for example run or policy_revision.</source><target>Nhập đúng loại đối tượng, ví dụ run hoặc policy_revision.</target></trans-unit>
+      <trans-unit id="settings.audit.row-range" datatype="html"><source>Rows <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="total" equiv-text="formatNumber(total, this.locale)"/> loaded.</source><target>Dòng <x id="start"/>–<x id="end"/> trên <x id="total"/> dòng đã tải.</target></trans-unit>
+      <trans-unit id="settings.members.show-full-matrix" datatype="html"><source>Show all roles</source><target>Xem tất cả vai trò</target></trans-unit>
+      <trans-unit id="settings.members.show-granted-only" datatype="html"><source>Show granted roles only</source><target>Chỉ xem vai trò đã cấp</target></trans-unit>
+      <trans-unit id="shell.overview.choose-next-step" datatype="html"><source> Choose a next step for this project. </source><target>Chọn bước tiếp theo cho dự án này.</target></trans-unit>
+      <trans-unit id="shell.overview.next-steps" datatype="html"><source> Next steps </source><target>Bước tiếp theo</target></trans-unit>
     </body>
   </file>
 </xliff>

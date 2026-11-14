@@ -4,6 +4,7 @@
   [attr.aria-busy]="busy()"
 >
   <p>{{ intro }}</p>
+  <p>{{ requiredFields }}</p>
   <p data-testid="connect-reveal-status" role="status" [attr.aria-live]="'polite'">
     @if (slot.current()) {
       {{ revealShownLabel }}
@@ -56,7 +57,7 @@
           <p id="connect-details-label" class="text-destructive">{{ detailsLabel }}</p>
           <ul class="text-destructive">
             @for (detail of details(); track $index) {
-              <li>{{ detail.path }} {{ detail.reason }}</li>
+              <li>{{ detail.message }}</li>
             }
           </ul>
         </div>
@@ -137,7 +138,9 @@
       <form class="grid min-w-0 gap-(--eg-space-5)" (ngSubmit)="createBinding()">
         <div class="grid min-w-0 gap-(--eg-space-3)">
           @let repoIdShown = (oidcSubmitted() && repoIdInvalid()) || serverRepoIdError() !== null;
-          <label hlmLabel for="connect-oidc-repo-id">{{ repoIdLabel }}</label>
+          <label hlmLabel for="connect-oidc-repo-id"
+            >{{ repoIdLabel }} <span aria-hidden="true">*</span></label
+          >
           <input
             hlmInput
             class="min-h-(--eg-control-touch)"
@@ -147,13 +150,17 @@
             type="text"
             [attr.inputmode]="'numeric'"
             autocomplete="off"
+            required
             [(ngModel)]="repositoryId"
             (input)="dismissServerReason('repository_id')"
             [disabled]="busy() || !bindingPermitted()"
             [forceInvalid]="repoIdShown"
             [attr.aria-invalid]="repoIdShown ? 'true' : null"
-            [aria-describedby]="describedBy(repoIdShown ? 'connect-repo-id-error' : null)"
+            [aria-describedby]="
+              describedBy('connect-repo-id-hint', repoIdShown ? 'connect-repo-id-error' : null)
+            "
           />
+          <p id="connect-repo-id-hint">{{ repoIdHint }}</p>
           <p
             id="connect-repo-id-error"
             class="text-destructive"
@@ -169,7 +176,9 @@
         <div class="grid min-w-0 gap-(--eg-space-3)">
           @let repoNameShown =
             (oidcSubmitted() && repoNameInvalid()) || serverRepoNameError() !== null;
-          <label hlmLabel for="connect-oidc-repo-name">{{ repoNameLabel }}</label>
+          <label hlmLabel for="connect-oidc-repo-name"
+            >{{ repoNameLabel }} <span aria-hidden="true">*</span></label
+          >
           <input
             hlmInput
             class="min-h-(--eg-control-touch)"
@@ -180,13 +189,20 @@
             autocomplete="off"
             [attr.autocapitalize]="'none'"
             spellcheck="false"
+            required
             [(ngModel)]="repositoryName"
             (input)="dismissServerReason('repository_full_name')"
             [disabled]="busy() || !bindingPermitted()"
             [forceInvalid]="repoNameShown"
             [attr.aria-invalid]="repoNameShown ? 'true' : null"
-            [aria-describedby]="describedBy(repoNameShown ? 'connect-repo-name-error' : null)"
+            [aria-describedby]="
+              describedBy(
+                'connect-repo-name-hint',
+                repoNameShown ? 'connect-repo-name-error' : null
+              )
+            "
           />
+          <p id="connect-repo-name-hint">{{ repoNameHint }}</p>
           <p
             id="connect-repo-name-error"
             class="text-destructive"
@@ -201,7 +217,9 @@
         </div>
         <div class="grid min-w-0 gap-(--eg-space-3)">
           @let refsShown = (oidcSubmitted() && refsInvalid()) || serverRefsError() !== null;
-          <label hlmLabel for="connect-oidc-refs">{{ refsLabel }}</label>
+          <label hlmLabel for="connect-oidc-refs"
+            >{{ refsLabel }} <span aria-hidden="true">*</span></label
+          >
           <textarea
             hlmInput
             class="h-auto min-h-(--eg-control-touch) resize-y"
@@ -211,6 +229,7 @@
             [rows]="3"
             [attr.autocapitalize]="'none'"
             spellcheck="false"
+            required
             [(ngModel)]="refs"
             (input)="dismissServerReason('allowed_ref_patterns')"
             [disabled]="busy() || !bindingPermitted()"
@@ -236,7 +255,9 @@
         <div class="grid min-w-0 gap-(--eg-space-3)">
           @let workflowsShown =
             (oidcSubmitted() && workflowsInvalid()) || serverWorkflowsError() !== null;
-          <label hlmLabel for="connect-oidc-workflows">{{ workflowsLabel }}</label>
+          <label hlmLabel for="connect-oidc-workflows"
+            >{{ workflowsLabel }} <span aria-hidden="true">*</span></label
+          >
           <textarea
             hlmInput
             class="h-auto min-h-(--eg-control-touch) resize-y"
@@ -246,6 +267,7 @@
             [rows]="3"
             [attr.autocapitalize]="'none'"
             spellcheck="false"
+            required
             [(ngModel)]="workflows"
             (input)="dismissServerReason('allowed_workflow_refs')"
             [disabled]="busy() || !bindingPermitted()"
@@ -341,7 +363,9 @@
         <div class="grid min-w-0 gap-(--eg-space-3)">
           @let tokenNameShown =
             (tokenSubmitted() && tokenNameInvalid()) || serverTokenNameError() !== null;
-          <label hlmLabel for="connect-token-name">{{ tokenNameLabel }}</label>
+          <label hlmLabel for="connect-token-name"
+            >{{ tokenNameLabel }} <span aria-hidden="true">*</span></label
+          >
           <input
             hlmInput
             class="min-h-(--eg-control-touch)"
@@ -350,13 +374,20 @@
             name="tokenName"
             type="text"
             autocomplete="off"
+            required
             [(ngModel)]="tokenName"
             (input)="dismissServerReason('name')"
             [disabled]="busy() || !tokenPermitted()"
             [forceInvalid]="tokenNameShown"
             [attr.aria-invalid]="tokenNameShown ? 'true' : null"
-            [aria-describedby]="describedBy(tokenNameShown ? 'connect-token-name-error' : null)"
+            [aria-describedby]="
+              describedBy(
+                'connect-token-name-hint',
+                tokenNameShown ? 'connect-token-name-error' : null
+              )
+            "
           />
+          <p id="connect-token-name-hint">{{ tokenNameHint }}</p>
           <p
             id="connect-token-name-error"
             class="text-destructive"

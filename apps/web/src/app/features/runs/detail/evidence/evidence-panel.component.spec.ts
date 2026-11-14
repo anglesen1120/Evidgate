@@ -115,6 +115,13 @@ describe('EvidencePanelComponent', () => {
     expect(region?.hasAttribute('hlmCard')).toBe(true);
     expect(root.querySelector('#evidence-title')?.getAttribute('tabindex')).toBe('-1');
     expect(root.querySelector('#evidence-title')?.textContent?.trim()).toBe('Evidence');
+    expect(
+      root
+        .querySelector('#evidence-title')
+        ?.classList.contains(
+          'scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))]',
+        ),
+    ).toBe(true);
   });
 
   it('shows the neutral badge and unavailable reasons while the revision is not known', async () => {

@@ -209,8 +209,8 @@ export const MEMBERS_COPY = {
                     @if (member.status !== 'removed') {
                       <button
                         hlmBtn
-                        [variant]="'outline'"
-                        class="h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal wrap-anywhere"
+                        [variant]="'destructive'"
+                        class="ms-3 h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal wrap-anywhere"
                         type="button"
                         data-members-remove
                         (click)="requestRemove(member, $event)"

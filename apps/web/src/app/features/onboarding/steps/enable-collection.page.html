@@ -8,6 +8,8 @@
   <!-- The disabled confirm hands focus to this persistent status line until its answer arrives. -->
   <p
     class="min-h-(--eg-leading-sm) focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+    [class.sr-only]="!busy() && !reading() && enabled() !== null"
+    data-testid="enable-collection-busy"
     role="status"
     tabindex="-1"
     #busyStatus
@@ -300,7 +302,7 @@
           <p id="enable-details-label" class="text-destructive">{{ detailsLabel }}</p>
           <ul class="text-destructive">
             @for (detail of details(); track $index) {
-              <li>{{ clean(detail.path) }} {{ clean(detail.reason) }}</li>
+              <li>{{ detail.message }}</li>
             }
           </ul>
         </div>

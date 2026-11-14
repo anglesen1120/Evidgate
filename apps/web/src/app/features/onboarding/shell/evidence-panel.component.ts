@@ -1,10 +1,12 @@
+import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { HlmCardImports } from '@evidgate/ui/card';
 import type { OnboardingProgress } from '../data/onboarding-progress.service';
+import { activationInstantLabel } from '../steps/default-policy';
 
 @Component({
   selector: 'app-onboarding-evidence-panel',
-  imports: [HlmCardImports],
+  imports: [DatePipe, HlmCardImports],
   host: { class: 'block min-w-0' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -44,7 +46,13 @@ import type { OnboardingProgress } from '../data/onboarding-progress.service';
               <dt>{{ activationLabel }}</dt>
               <dd class="font-mono text-xs">{{ active.policy_revision_id }}</dd>
               <dt>{{ activatedAtLabel }}</dt>
-              <dd>{{ active.activated_at }}</dd>
+              <dd>
+                @if (activatedAt(); as instant) {
+                  <time [attr.datetime]="instant">{{ instant | date: 'medium' : '+0000' }}</time>
+                } @else {
+                  {{ unavailable }}
+                }
+              </dd>
             }
           </dl>
           @if (resources.activation.kind === 'forbidden') {
@@ -80,6 +88,9 @@ import type { OnboardingProgress } from '../data/onboarding-progress.service';
 export class EvidencePanelComponent {
   readonly progress = input<OnboardingProgress | null>(null);
   readonly refreshFailed = input(false);
+  protected readonly activatedAt = computed(() =>
+    activationInstantLabel(this.activation()?.activated_at),
+  );
   protected readonly activation = computed(() => {
     const activation = this.progress()?.activation;
     return activation?.kind === 'active' ? activation.state : null;
@@ -95,6 +106,6 @@ export class EvidencePanelComponent {
   protected readonly sampleLabel = $localize`:@@onboarding.evidence.sample:Sample run ID`;
   protected readonly evidenceLabel = $localize`:@@onboarding.evidence.revision:Evidence revision ID`;
   protected readonly activationLabel = $localize`:@@onboarding.evidence.activation:Activated policy revision`;
-  protected readonly activatedAtLabel = $localize`:@@onboarding.evidence.activated-at:Activated at`;
+  protected readonly activatedAtLabel = $localize`:@@onboarding.evidence.activated-at:Activated at (UTC)`;
   protected readonly activationUnavailable = $localize`:@@onboarding.evidence.activation-unavailable:Activation details are unavailable with your current access.`;
 }

@@ -229,6 +229,7 @@ describe('CreateProjectPage', () => {
     const input = root.querySelector<HTMLInputElement>('[name="name"]')!;
     const error = root.querySelector('#onboarding-project-name-error')!;
     expect(error.textContent).toContain('A project with this name already exists.');
+    expect(error.textContent).toContain('Project name:');
     expect(input.getAttribute('aria-invalid')).toBe('true');
     expect(input.getAttribute('aria-describedby')).toContain('onboarding-project-name-error');
     // The details alert speaks the same sentence; the field's own live region must stay off.
@@ -237,6 +238,7 @@ describe('CreateProjectPage', () => {
     expect(alert.getAttribute('role')).toBe('alert');
     const label = alert.getAttribute('aria-labelledby')!;
     expect(root.querySelector(`#${label}`)?.textContent).toContain('The server refused');
+    expect(alert.textContent).toContain('Project name: A project with this name already exists.');
     // Nothing described may point outside the document once the refusal is replaced.
     createProject.mockResolvedValueOnce(PROJECT);
     await submit();

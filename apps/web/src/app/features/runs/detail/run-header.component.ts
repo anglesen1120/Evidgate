@@ -8,6 +8,7 @@ import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.compon
 import { EvidenceBadgeComponent } from '../../../shared/ui/verdict/evidence-badge.component';
 import type { Completeness } from '../../../shared/ui/verdict/verdict-values';
 import { escapeFormatChars } from '../list/ref-name-display';
+import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from './run-value-label';
 
 @Component({
   selector: 'app-run-header',
@@ -38,11 +39,13 @@ export class RunHeaderComponent {
    */
   readonly runCompleteness = input<Completeness | null>(null);
   protected readonly display = escapeFormatChars;
+  protected readonly valueLabel = runValueLabel;
   protected readonly copy = {
     id: $localize`:@@runs.detail.id:Run id`,
     state: $localize`:@@runs.detail.state:Collection state`,
     version: $localize`:@@runs.detail.version:Version`,
     purpose: $localize`:@@runs.detail.purpose:Purpose`,
+    notProvided: RUN_DETAIL_NOT_PROVIDED,
     ref: $localize`:@@runs.detail.ref:Ref`,
     refKind: $localize`:@@runs.detail.ref-kind:Ref kind`,
     pr: $localize`:@@runs.detail.pr:Pull request number`,

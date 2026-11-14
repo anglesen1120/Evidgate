@@ -117,6 +117,63 @@ describe('Spartan theme contract', () => {
     expect(Number.parseFloat(rootTokens.get('--eg-focus-offset') ?? '0')).toBeGreaterThan(0);
   });
 
+  it('resets only adopted button faces and anchors at the base layer, preserving authored variants', () => {
+    const base = postcss.parse(source('spartan-base.css'));
+    for (const selector of ['a[hlmBtn]', 'button.spartan-button']) {
+      const rules: postcss.Rule[] = [];
+      base.walkRules((rule) => {
+        if (rule.selectors.includes(selector)) rules.push(rule);
+      });
+      expect(rules, selector).toHaveLength(1);
+      expect(rules[0]?.parent?.type).toBe('atrule');
+      expect((rules[0]?.parent as postcss.AtRule).name).toBe('layer');
+      expect((rules[0]?.parent as postcss.AtRule).params).toBe('base');
+    }
+    expect(declarations(base.toString(), 'a[hlmBtn]')).toEqual(
+      new Map([
+        ['color', 'inherit'],
+        ['text-decoration', 'none'],
+      ]),
+    );
+    expect(declarations(base.toString(), 'button.spartan-button')).toEqual(
+      new Map([
+        ['color', 'inherit'],
+        ['background-color', 'transparent'],
+      ]),
+    );
+    expect(declarations(base.toString(), 'a').size).toBe(0);
+    expect(base.toString()).not.toContain('!important');
+    const buttons = source('helm/button.css');
+    expect(buttons).toContain('text-primary underline-offset-4 hover:underline');
+    expect(buttons).toContain('bg-primary text-primary-foreground');
+    expect(buttons).toContain('aria-expanded:bg-muted aria-expanded:text-foreground');
+  });
+
+  it('maps outline controls and card boundaries to their distinct semantic borders', () => {
+    const buttons = source('helm/button.css');
+    const outline = buttons.match(/\.spartan-button-variant-outline\s*\{([^}]+)\}/)?.[1];
+    expect(outline).toContain('border-input');
+    expect(outline).not.toContain('border-border');
+    expect(declarations(theme, ':root').get('--input')).toBe('var(--eg-border-control)');
+    expect(declarations(theme, "html[data-theme='dark']").get('--input')).toBe(
+      'var(--eg-border-control)',
+    );
+    const card = source('helm/card.css');
+    expect(card).toContain('border border-border');
+    expect(card).not.toMatch(/ring-(foreground|1)/);
+  });
+
+  it('assigns four-pixel control and eight-pixel card roles without changing radius tokens', () => {
+    expect(rootTokens.get('--eg-radius-sm')).toBe('4px');
+    expect(rootTokens.get('--eg-radius-md')).toBe('8px');
+    for (const name of ['button', 'input', 'select', 'tabs']) {
+      expect(source(`helm/${name}.css`)).toContain('rounded-sm');
+    }
+    expect(source('helm/button.css')).not.toContain('rounded-md');
+    expect(source('helm/card.css')).toContain('rounded-md');
+    expect(source('helm/card.css')).not.toContain('rounded-xl');
+  });
+
   it('rejects a raw value, a non-Evidgate reference and a missing token', () => {
     expect(invalidAliases(new Map([['--background', 'var(--eg-bg)']]), rootTokens)).toEqual([]);
     for (const value of ['red', 'var(--background)', 'var(--eg-not-defined)']) {

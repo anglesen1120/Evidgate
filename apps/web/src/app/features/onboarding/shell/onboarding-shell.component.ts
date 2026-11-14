@@ -4,6 +4,7 @@ import {
   Injector,
   afterNextRender,
   afterRenderEffect,
+  computed,
   inject,
   signal,
   viewChild,
@@ -16,6 +17,7 @@ import {
   NavigationEnd,
   NavigationError,
   Router,
+  RouterLink,
 } from '@angular/router';
 import { combineLatest, distinctUntilChanged, filter, map } from 'rxjs';
 import { HlmButton } from '@evidgate/ui/button';
@@ -39,6 +41,7 @@ import { StepPendingComponent } from './step-pending.component';
   selector: 'app-onboarding-shell',
   imports: [
     HlmButton,
+    RouterLink,
     HlmCardImports,
     CreateProjectPage,
     ConnectCiPage,
@@ -117,6 +120,13 @@ export class OnboardingShellComponent {
   protected readonly incompleteLabel = $localize`:@@onboarding.shell.incomplete:Not complete`;
   protected readonly backLabel = $localize`:@@onboarding.shell.back:Back`;
   protected readonly nextLabel = $localize`:@@onboarding.shell.next:Next`;
+  protected readonly openProjectLabel = $localize`:@@onboarding.shell.open-project:Open project`;
+  protected readonly completionLink = computed(() => {
+    const project = this.store.project();
+    return this.store.viewStep() === 5 && this.store.currentStep() === 'enabled' && project
+      ? ['/orgs', this.orgId(), 'projects', project.id, 'overview']
+      : null;
+  });
   protected readonly retryLabel = $localize`:@@onboarding.shell.retry:Retry loading setup`;
   protected readonly gatedReason = $localize`:@@onboarding.shell.next-disabled:Complete this step before continuing.`;
   protected readonly finalReason = $localize`:@@onboarding.shell.final-step:There is no next setup step.`;

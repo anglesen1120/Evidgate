@@ -13,6 +13,7 @@ export const RETENTION_COPY = {
   hint: $localize`:@@retention.hint:Enter whole days. Metadata must be kept at least as long as artifacts. The server validates the configured limits.`,
   integer: $localize`:@@retention.integer:Enter a whole number of days.`,
   crossRule: $localize`:@@retention.cross-rule:Metadata retention must be at least as long as artifact retention.`,
+  validationError: $localize`:@@retention.validation-error:Retention was not saved. Review the highlighted fields.`,
   retrySave: $localize`:@@retention.retry-save:Retry saving retention`,
   save: $localize`:@@retention.save:Save retention`,
   saving: $localize`:@@retention.saving:Saving retention…`,

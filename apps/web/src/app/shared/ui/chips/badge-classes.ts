@@ -2,9 +2,9 @@ import { hlm } from '@evidgate/ui/utils';
 
 import type { StatusTone } from './status-pill.component';
 
-/** Domain badges wrap rather than clipping translated labels at Helm's default height. */
+/** Soft corners and visible overflow keep wrapped labels clear of the badge's curved edge. */
 export const BADGE_CLASSES =
-  'h-auto min-h-[var(--eg-space-6)] max-w-full min-w-0 flex-wrap justify-start gap-[var(--eg-space-1)] whitespace-normal rounded-full px-[var(--eg-space-3)] py-[var(--eg-space-1)] font-sans font-semibold [overflow-wrap:anywhere]';
+  'h-auto min-h-[var(--eg-space-6)] max-w-full min-w-0 flex-wrap justify-start gap-[var(--eg-space-1)] whitespace-normal rounded-(--eg-radius-sm) overflow-visible px-[var(--eg-space-3)] py-[var(--eg-space-1)] font-sans font-semibold leading-(--eg-leading-sm) [overflow-wrap:anywhere]';
 
 export const IDENTITY_BADGE_CLASSES = hlm(
   BADGE_CLASSES,

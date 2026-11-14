@@ -28,19 +28,28 @@ describe('RetentionFormComponent', () => {
   });
 
   it.each([
-    ['', '90'],
-    ['1.5', '90'],
-    ['30', '29'],
-  ])('blocks invalid integer or ordered windows %s / %s', async (artifact, metadata) => {
-    const h = mountRetention();
-    await h.load();
-    await h.edit(artifact, metadata);
-    submit(h.root);
-    await h.settle();
-    expect(h.root.querySelector('[aria-invalid="true"]')).not.toBeNull();
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
-    h.http.expectNone((request) => request.method === 'PUT');
-  });
+    ['', '90', 'retention-artifact'],
+    ['', '', 'retention-artifact'],
+    ['1.5', '90', 'retention-artifact'],
+    ['14', '', 'retention-metadata'],
+    ['30', '29', 'retention-metadata'],
+  ])(
+    'blocks invalid integer or ordered windows %s / %s and focuses %s',
+    async (artifact, metadata, field) => {
+      const h = mountRetention();
+      await h.load();
+      await h.edit(artifact, metadata);
+      submit(h.root);
+      await h.settle();
+      expect(h.root.querySelector('[aria-invalid="true"]')).not.toBeNull();
+      expect(document.activeElement).toBe(h.root.querySelector(`#${field}`));
+      expect(
+        h.root.querySelector('#retention-validation-error[role="alert"]')?.textContent,
+      ).toContain('Retention was not saved');
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      h.http.expectNone((request) => request.method === 'PUT');
+    },
+  );
 
   it('does not impose deployment bounds and submits larger integer windows directly', async () => {
     const h = mountRetention();
@@ -144,6 +153,7 @@ describe('RetentionFormComponent', () => {
         expect(h.root.querySelector('#retention-artifact')?.getAttribute('aria-invalid')).toBe(
           'true',
         );
+        expect(document.activeElement).toBe(h.root.querySelector('#retention-artifact'));
       }
     },
   );

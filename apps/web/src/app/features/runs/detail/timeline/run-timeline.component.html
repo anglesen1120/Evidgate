@@ -12,7 +12,7 @@
   >
     @for (step of steps(); track step.state) {
       <li
-        class="flex min-w-0 flex-wrap items-center justify-between gap-(--eg-space-3)"
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start gap-x-(--eg-space-3) gap-y-(--eg-space-2) min-[768px]:grid-cols-[12ch_minmax(0,28ch)_minmax(0,1fr)]"
         [attr.data-step]="step.state"
         [attr.data-status]="step.status"
         [attr.aria-current]="step.status === 'current' ? 'step' : null"
@@ -20,17 +20,23 @@
         <span class="min-w-0 font-(weight:--eg-weight-medium)" data-step-label>{{
           stepLabel(step.state)
         }}</span>
-        @if (step.at; as at) {
-          <time class="min-w-0" data-step-time [attr.datetime]="at">{{
-            at | date: 'medium' : '+0000'
-          }}</time>
-        }
         <app-status-pill
           data-step-status
           [tone]="stepTone(step.status, step.state)"
-          [label]="statusLabel(step.status)"
-          [dimension]="copy.stepStatus"
+          [label]="
+            step.status === 'reached' && (stateHistory() === null || step.state === 'created')
+              ? copy.inferred
+              : statusLabel(step.status)
+          "
         />
+        @if (step.at; as at) {
+          <time
+            class="col-span-full min-w-0 tabular-nums min-[768px]:col-span-1"
+            data-step-time
+            [attr.datetime]="at"
+            >{{ at | date: 'medium' : '+0000' }}</time
+          >
+        }
       </li>
     }
   </ol>
@@ -53,7 +59,9 @@
         @if (afterCancelLabel(); as label) {
           {{ label }}
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" [dimension]="copy.afterCancelEvents" />
+          <span class="text-muted-foreground"
+            >{{ copy.afterCancelEvents }}: {{ copy.notProvided }}</span
+          >
         }
       </p>
     </div>

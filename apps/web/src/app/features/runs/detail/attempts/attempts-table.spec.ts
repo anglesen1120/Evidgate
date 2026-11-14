@@ -8,6 +8,14 @@ import { render, row, rows } from './attempts-table.test-support';
 type AttemptStatus = 'passed' | 'failed' | 'skipped' | 'timed_out' | 'error' | 'blocked';
 
 const statuses: AttemptStatus[] = ['passed', 'failed', 'skipped', 'timed_out', 'error', 'blocked'];
+const statusLabels: Record<AttemptStatus, string> = {
+  passed: 'Passed',
+  failed: 'Failed',
+  skipped: 'Skipped',
+  timed_out: 'Timed out',
+  error: 'Error',
+  blocked: 'Blocked',
+};
 
 describe('retry-chain grouping', () => {
   it('preserves first-seen execution keys, sorts retries and never mutates caller input', () => {
@@ -94,7 +102,7 @@ describe('AttemptsTableComponent', () => {
   });
 
   it.each(statuses)(
-    'renders %s verbatim next to raw status and only passed has success tone',
+    'labels normalized %s next to unchanged raw status and only passed has success tone',
     async (status) => {
       const { root } = await render([
         row({ rawStatus: 'provider:' + status, normalisedStatus: status }),
@@ -104,7 +112,7 @@ describe('AttemptsTableComponent', () => {
         'provider:' + status,
       );
       expect(attempt.querySelector('[data-attempt-normalised] bdi')?.textContent?.trim()).toBe(
-        status,
+        statusLabels[status],
       );
       expect(attempt.querySelectorAll('.status-pill--success')).toHaveLength(
         status === 'passed' ? 1 : 0,
@@ -132,7 +140,7 @@ describe('AttemptsTableComponent', () => {
         'raw-' + statuses[index],
       );
       expect(attempt.querySelector('[data-attempt-normalised]')?.textContent).toContain(
-        statuses[index],
+        statusLabels[statuses[index] ?? 'blocked'],
       );
     });
   });
@@ -152,7 +160,8 @@ describe('AttemptsTableComponent', () => {
       const attempt = { ...row(), durationMs: duration } as AttemptRow;
       const { root } = await render([attempt]);
       const cell = root.querySelector('[data-attempt-duration] [data-attempt-value]')!;
-      expect(cell.textContent?.trim()).toBe('Status unavailable');
+      expect(cell.textContent?.trim()).toBe('Not provided');
+      expect(cell.querySelector('app-status-pill')).toBeNull();
       expect(cell.textContent).not.toContain('0');
     },
   );
@@ -178,7 +187,8 @@ describe('AttemptsTableComponent', () => {
       const attempt = { ...row(), artifactCount } as AttemptRow;
       const { root } = await render([attempt, row({ attemptNo: 2, artifactCount: 0 })]);
       const cells = root.querySelectorAll('[data-attempt-artifacts] [data-attempt-value]');
-      expect(cells[0]?.textContent?.trim()).toBe('Status unavailable');
+      expect(cells[0]?.textContent?.trim()).toBe('Not provided');
+      expect(cells[0]?.querySelector('app-status-pill')).toBeNull();
       expect(cells[1]?.textContent?.trim()).toBe('0');
     },
   );
@@ -257,11 +267,12 @@ describe('AttemptsTableComponent', () => {
     expect(root.querySelector('script')).toBeNull();
   });
 
-  it('renders null as shared unavailable, not empty or a table', async () => {
+  it('renders absent attempts as not provided, not empty or a table', async () => {
     const { root } = await render(null);
-    expect(
-      root.querySelector('[data-attempts-unavailable] app-status-pill')?.textContent,
-    ).toContain('Status unavailable');
+    expect(root.querySelector('[data-attempts-unavailable]')?.textContent).toContain(
+      'Not provided',
+    );
+    expect(root.querySelector('[data-attempts-unavailable] app-status-pill')).toBeNull();
     expect(root.querySelector('app-empty-pattern, table')).toBeNull();
   });
   it('renders an empty array as the shared empty state, not unavailable', async () => {
@@ -269,11 +280,12 @@ describe('AttemptsTableComponent', () => {
     expect(root.querySelector('app-empty-pattern')?.textContent).toContain('No attempts recorded');
     expect(root.querySelector('[data-attempts-unavailable], table')).toBeNull();
   });
-  it('renders the healing marker as the shared unavailable state while no row has a candidate', async () => {
+  it('renders absent healing facts as plain not provided text', async () => {
     const { root } = await render([row()]);
-    expect(
-      root.querySelector('[data-attempts-healing-unavailable] app-status-pill')?.textContent,
-    ).toContain('Status unavailable');
+    expect(root.querySelector('[data-attempts-healing-unavailable]')?.textContent).toContain(
+      'Not provided',
+    );
+    expect(root.querySelector('[data-attempts-healing-unavailable] app-status-pill')).toBeNull();
     expect(root.querySelector('[data-pre-healing], [data-healing-candidate]')).toBeNull();
   });
   it('renders loading and a retryable first-page failure instead of a table or unavailable', async () => {
@@ -346,7 +358,14 @@ describe('AttemptsTableComponent', () => {
     expect(root.querySelectorAll('tbody th[scope="row"]')).toHaveLength(1);
     expect(root.querySelector('.table-scroll')?.getAttribute('tabindex')).toBe('0');
     expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe('attempts-title');
-    expect(root.querySelector('#attempts-title')?.textContent).toBe('Attempts');
+    expect(root.querySelector('#attempts-title')?.textContent?.trim()).toBe('Attempts');
+    expect(
+      root
+        .querySelector('#attempts-title')
+        ?.classList.contains(
+          'scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))]',
+        ),
+    ).toBe(true);
     expect(root.querySelector('section')?.hasAttribute('aria-label')).toBe(false);
     expect(root.querySelector('[role="region"]')?.getAttribute('aria-label')).toBe(
       'Attempts table',

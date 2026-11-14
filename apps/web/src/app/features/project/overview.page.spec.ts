@@ -2,11 +2,14 @@
 
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import type { ProjectDto } from '@evidgate/sdk';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { SessionStore } from '../../core/session/session.store';
+import { NavViewService } from '../../shell/nav/nav-view';
+import type { NavItemView } from '../../shell/nav/nav.models';
 import { ProjectOverviewPage } from './overview.page';
 
 /** One project, as `fixtures/web-api/projects-list/input.json` serves it. */
@@ -25,12 +28,38 @@ const PROJECT: ProjectDto = {
   case_prefix: 'STOR',
 };
 
+const NEXT_STEPS: readonly NavItemView[] = [
+  {
+    id: 'authoring',
+    label: 'Feature tree',
+    icon: 'tree',
+    link: ['/orgs', PROJECT.org_id, 'projects', PROJECT.id, 'authoring'],
+  },
+  {
+    id: 'onboarding',
+    label: 'Onboarding',
+    icon: 'compass',
+    link: ['/orgs', PROJECT.org_id, 'onboarding'],
+  },
+  {
+    id: 'runs',
+    label: 'Runs',
+    icon: 'play',
+    link: ['/orgs', PROJECT.org_id, 'projects', PROJECT.id, 'runs'],
+  },
+];
+
 /** Mount the page against a store whose current project is `project`. */
-function renderWith(project: ProjectDto | null): HTMLElement {
+function renderWith(project: ProjectDto | null, steps = NEXT_STEPS): HTMLElement {
   TestBed.configureTestingModule({
     imports: [ProjectOverviewPage],
     providers: [
       provideZonelessChangeDetection(),
+      provideRouter([]),
+      {
+        provide: NavViewService,
+        useValue: { groups: signal([{ id: 'design', label: 'Test design', items: steps }]) },
+      },
       { provide: SessionStore, useValue: { currentProject: signal(project) } },
     ],
   });
@@ -45,6 +74,53 @@ describe('ProjectOverviewPage', () => {
 
     expect(root.querySelector('h1')?.textContent?.trim()).toBe(PROJECT.name);
     expect(root.querySelector('.slug')?.textContent?.trim()).toBe(PROJECT.slug);
+  });
+
+  it('links to the existing permitted next steps without development-status prose or invented metrics', () => {
+    const root = renderWith(PROJECT);
+    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('nav a'));
+    expect(links.map((link) => link.textContent?.trim())).toEqual([
+      'Runs',
+      'Onboarding',
+      'Feature tree',
+    ]);
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      `/orgs/${PROJECT.org_id}/projects/${PROJECT.id}/runs`,
+      `/orgs/${PROJECT.org_id}/onboarding`,
+      `/orgs/${PROJECT.org_id}/projects/${PROJECT.id}/authoring`,
+    ]);
+    expect(root.querySelector('nav')?.getAttribute('aria-labelledby')).toBe('project-next-steps');
+    expect(root.textContent).not.toContain('arrive with their own stories');
+    expect(root.textContent).not.toMatch(/\d+ (runs|releases)/);
+  });
+
+  it('does not offer destinations omitted by the shared permitted navigation view', () => {
+    const root = renderWith(
+      PROJECT,
+      NEXT_STEPS.filter((item) => item.id === 'runs'),
+    );
+    expect(root.querySelectorAll('nav a')).toHaveLength(1);
+    expect(root.querySelector('nav a')?.textContent?.trim()).toBe('Runs');
+    expect(root.textContent).not.toContain('Onboarding');
+    expect(root.textContent).not.toContain('Feature tree');
+  });
+
+  it('makes the first available next step primary when runs are not available', () => {
+    const root = renderWith(
+      PROJECT,
+      NEXT_STEPS.filter((item) => item.id !== 'runs'),
+    );
+    const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('nav a'));
+    expect(links.map((link) => link.textContent?.trim())).toEqual(['Onboarding', 'Feature tree']);
+    expect(links[0]?.classList.contains('spartan-button-variant-default')).toBe(true);
+    expect(root.querySelectorAll('.spartan-button-variant-default')).toHaveLength(1);
+  });
+
+  it('keeps the truthful project summary when no next step is permitted', () => {
+    const root = renderWith(PROJECT, []);
+    expect(root.querySelector('h1')?.textContent).toBe(PROJECT.name);
+    expect(root.querySelector('nav')).toBeNull();
+    expect(root.textContent).not.toContain('Next steps');
   });
 
   it.each([PROJECT, null])('labels the card section with its h1 for project %j', (project) => {
@@ -84,5 +160,6 @@ describe('ProjectOverviewPage', () => {
     expect(root.querySelector('h1')?.textContent?.trim()).not.toBe('');
     expect(root.querySelector('h1')?.textContent).not.toContain(PROJECT.name);
     expect(root.querySelector('.slug')).toBeNull();
+    expect(root.querySelector('nav')).toBeNull();
   });
 });

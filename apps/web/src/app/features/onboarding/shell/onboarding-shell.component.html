@@ -101,6 +101,15 @@
           >
             {{ steps[store.viewStep() - 1]?.label }}
           </h2>
+          @if (store.project(); as project) {
+            <div [hidden]="store.viewStep() !== 2">
+              <app-onboarding-connect-ci
+                [orgId]="orgId()"
+                [projectId]="project.id"
+                [active]="store.viewStep() === 2"
+              />
+            </div>
+          }
           @if (store.viewStep() === 1) {
             @if (store.project(); as project) {
               <p class="mt-(--eg-space-3) text-sm text-muted-foreground">
@@ -109,10 +118,6 @@
               <p class="mt-(--eg-space-3) [overflow-wrap:anywhere]">{{ project.name }}</p>
             } @else {
               <app-onboarding-create-project [orgId]="orgId()" />
-            }
-          } @else if (store.viewStep() === 2) {
-            @if (store.project(); as project) {
-              <app-onboarding-connect-ci [orgId]="orgId()" [projectId]="project.id" />
             }
           } @else if (store.viewStep() === 5) {
             <!-- Keep an explicit unavailable state when no confirmed project exists. -->
@@ -125,11 +130,15 @@
             } @else {
               <app-onboarding-step-pending />
             }
-          } @else {
-            <app-onboarding-step-pending />
+          } @else if (store.viewStep() !== 2) {
+            <app-onboarding-step-pending
+              [orgId]="orgId()"
+              [progress]="store.progress()"
+              [step]="store.viewStep()"
+            />
           }
           <footer class="mt-(--eg-space-7) border-t border-border pt-(--eg-space-5)">
-            @if (!store.canGoNext()) {
+            @if (!store.canGoNext() && completionLink() === null) {
               <p id="onboarding-next-reason" class="m-0 text-sm text-muted-foreground">
                 {{ store.viewStep() === 5 ? finalReason : gatedReason }}
               </p>
@@ -146,17 +155,28 @@
               >
                 {{ backLabel }}
               </button>
-              <button
-                type="button"
-                hlmBtn
-                class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
-                data-testid="onboarding-next"
-                [disabled]="!store.canGoNext()"
-                [attr.aria-describedby]="!store.canGoNext() ? 'onboarding-next-reason' : null"
-                (click)="store.next()"
-              >
-                {{ nextLabel }}
-              </button>
+              @if (completionLink(); as link) {
+                <a
+                  hlmBtn
+                  class="h-auto min-h-(--eg-control-touch) max-w-full whitespace-normal"
+                  data-testid="onboarding-complete"
+                  [routerLink]="link"
+                >
+                  {{ openProjectLabel }}
+                </a>
+              } @else {
+                <button
+                  type="button"
+                  hlmBtn
+                  class="min-h-(--eg-control-touch) max-w-full whitespace-normal"
+                  data-testid="onboarding-next"
+                  [disabled]="!store.canGoNext()"
+                  [attr.aria-describedby]="!store.canGoNext() ? 'onboarding-next-reason' : null"
+                  (click)="store.next()"
+                >
+                  {{ nextLabel }}
+                </button>
+              }
             </div>
           </footer>
         </section>

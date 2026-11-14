@@ -74,7 +74,7 @@
                   [attr.data-unavailable]="slot.identityState === null ? '' : null"
                 >
                   @if (slot.identityState !== null) {
-                    <bdi>{{ display(slot.identityState) }}</bdi>
+                    <bdi>{{ valueLabel('identity', slot.identityState) }}</bdi>
                   } @else {
                     <app-status-pill [tone]="'neutral'" [label]="''" />
                   }
@@ -85,7 +85,7 @@
                   [attr.data-unavailable]="slot.finalizeStatus === null ? '' : null"
                 >
                   @if (slot.finalizeStatus !== null) {
-                    <bdi>{{ display(slot.finalizeStatus) }}</bdi>
+                    <bdi>{{ valueLabel('producer', slot.finalizeStatus) }}</bdi>
                   } @else {
                     <app-status-pill [tone]="'neutral'" [label]="''" />
                   }
@@ -98,7 +98,7 @@
                   @if (slot.lastSequence !== null) {
                     <span class="font-mono">{{ slot.lastSequence }}</span>
                   } @else {
-                    <app-status-pill [tone]="'neutral'" [label]="''" />
+                    <span class="text-muted-foreground">{{ copy.notProvided }}</span>
                   }
                 </td>
                 <td
@@ -129,12 +129,12 @@
                       </span>
                     }
                   } @else {
-                    <app-status-pill [tone]="'neutral'" [label]="''" />
+                    <span class="text-muted-foreground">{{ copy.notProvided }}</span>
                   }
                 </td>
                 <td hlmTd class="space-y-(--eg-space-2)">
                   @if (slot.staleEpochEvents === null || slot.afterCancelEvents === null) {
-                    <app-status-pill [tone]="'neutral'" [label]="''" />
+                    <span class="text-muted-foreground">{{ copy.notProvided }}</span>
                   }
                   @if (slot.staleEpochEvents !== null && slot.staleEpochEvents > 0) {
                     <app-status-pill
@@ -191,8 +191,8 @@
       }
     }
   } @else {
-    <p [attr.data-state]="'unavailable'" class="m-0">
-      <app-status-pill [tone]="'neutral'" [label]="''" />
+    <p [attr.data-state]="'unavailable'" class="m-0 text-muted-foreground">
+      {{ copy.notProvided }}
     </p>
   }
 </section>

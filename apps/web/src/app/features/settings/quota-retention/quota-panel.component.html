@@ -63,9 +63,9 @@
               </dd>
             </div>
           </dl>
-          @if (metric.unavailable_reason) {
+          @if (metric.used === null) {
             <p data-quota-reason class="text-sm text-muted-foreground">
-              {{ metric.unavailable_reason }}
+              {{ notMeasured }}
             </p>
           }
           @if (metric.used !== null) {

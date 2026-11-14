@@ -72,10 +72,20 @@ describe('ConnectCiPage Helm controls', () => {
     for (const field of fields) {
       expect(field.getAttribute('data-slot')).toBe('input');
       expect(field.labels?.item(0)?.htmlFor).toBe(field.id);
+      expect(field.required).toBe(true);
+      expect(field.labels?.item(0)?.textContent).toContain('*');
+      const hintId = field.getAttribute('aria-describedby');
+      expect(hintId).not.toBeNull();
+      expect(root.querySelector(`#${hintId}`)?.textContent?.trim()).not.toBe('');
       field.focus();
       expect(document.activeElement).toBe(field);
       expect(field.tabIndex).toBe(0);
     }
+  });
+
+  it('explains required fields once across the two alternative methods', () => {
+    expect(root.textContent?.match(/Fields marked \* are required\./g)).toHaveLength(1);
+    expect(root.querySelectorAll('label [aria-hidden="true"]')).toHaveLength(5);
   });
 
   it('keeps field validation visible to Brain and names the error after form submission', async () => {
@@ -87,7 +97,9 @@ describe('ConnectCiPage Helm controls', () => {
     const field = requiredElement(root, '#connect-oidc-repo-id');
     expect(field.getAttribute('aria-invalid')).toBe('true');
     expect(field.getAttribute('data-matches-spartan-invalid')).toBe('true');
-    expect(field.getAttribute('aria-describedby')).toBe('connect-repo-id-error');
+    expect(field.getAttribute('aria-describedby')).toBe(
+      'connect-repo-id-hint connect-repo-id-error',
+    );
     expect(createCiBinding).not.toHaveBeenCalled();
   });
 

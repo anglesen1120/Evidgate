@@ -39,6 +39,7 @@ describe('CreateProjectPage Helm controls', () => {
       expect(field.getAttribute('data-slot')).toBe('input');
       expect(field.required).toBe(true);
       expect(field.labels?.item(0)?.htmlFor).toBe(id);
+      expect(field.labels?.item(0)?.textContent).toContain('*');
       field.focus();
       expect(document.activeElement).toBe(field);
       expect(field.tabIndex).toBe(0);
@@ -46,6 +47,13 @@ describe('CreateProjectPage Helm controls', () => {
     const submit = requiredElement<HTMLButtonElement>(root, 'button[type="submit"]');
     expect(submit.getAttribute('data-slot')).toBe('button');
     expect(submit.disabled).toBe(false);
+  });
+
+  it('explains the required marker once without adding it to accessible label text', () => {
+    expect(root.textContent?.match(/Fields marked \* are required\./g)).toHaveLength(1);
+    for (const label of root.querySelectorAll('label')) {
+      expect(label.querySelector('[aria-hidden="true"]')?.textContent).toBe('*');
+    }
   });
 
   it('maps visible validation into the Helm invalid state and its description', async () => {

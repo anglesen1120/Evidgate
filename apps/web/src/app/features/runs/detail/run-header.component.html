@@ -19,7 +19,7 @@
           @if (run().ref.name; as ref) {
             <bdi>{{ display(ref) }}</bdi>
           } @else {
-            <app-status-pill [tone]="'neutral'" label="" />
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
           @if (run().unverified_ref) {
             <app-status-pill [tone]="'warning'" [label]="copy.unverified" />
@@ -75,7 +75,7 @@
       <div>
         <dt>{{ copy.purpose }}</dt>
         <dd data-run-purpose>
-          <bdi>{{ display(run().purpose) }}</bdi>
+          <bdi>{{ valueLabel('purpose', run().purpose) }}</bdi>
         </dd>
       </div>
       <div>
@@ -85,7 +85,7 @@
           @if (ref !== null) {
             <bdi>{{ display(ref) }}</bdi>
           } @else {
-            <app-status-pill [tone]="'neutral'" label="" />
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
           @if (run().unverified_ref) {
             <app-status-pill [tone]="'warning'" [label]="copy.unverified" data-run-unverified />
@@ -99,7 +99,7 @@
           @if (kind !== null) {
             <bdi>{{ display(kind) }}</bdi>
           } @else {
-            <app-status-pill [tone]="'neutral'" label="" />
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
         </dd>
       </div>
@@ -109,7 +109,7 @@
           @if (run().ref.pr_number !== null) {
             {{ run().ref.pr_number }}
           } @else {
-            <app-status-pill [tone]="'neutral'" label="" />
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
         </dd>
       </div>
@@ -120,7 +120,7 @@
           @if (head !== null) {
             <bdi class="font-mono">{{ display(head) }}</bdi>
           } @else {
-            <app-status-pill [tone]="'neutral'" label="" />
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
         </dd>
       </div>
@@ -131,7 +131,7 @@
           @if (base !== null) {
             <bdi class="font-mono">{{ display(base) }}</bdi>
           } @else {
-            <app-status-pill [tone]="'neutral'" label="" />
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
         </dd>
       </div>
@@ -142,7 +142,7 @@
           @if (trigger !== null) {
             <bdi>{{ display(trigger) }}</bdi>
           } @else {
-            <app-status-pill [tone]="'neutral'" label="" />
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
         </dd>
       </div>
@@ -152,7 +152,7 @@
           @if (run().ref.is_fork !== null) {
             {{ run().ref.is_fork ? copy.yes : copy.no }}
           } @else {
-            <app-status-pill [tone]="'neutral'" label="" />
+            <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
         </dd>
       </div>

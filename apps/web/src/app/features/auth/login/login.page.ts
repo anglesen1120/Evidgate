@@ -16,6 +16,10 @@ import { HlmCard, HlmCardHeader, HlmCardTitle, HlmCardDescription } from '@evidg
 
 import { ShellIconComponent } from '../../../shell/layout/shell-icon.component';
 import { ThemeService } from '../../../shell/layout/theme.service';
+import {
+  LocaleSwitcherComponent,
+  localeBundlePath,
+} from '../../../shell/layout/locale-switcher.component';
 import { AuthFlow, LOCATION_NAVIGATE } from '../auth-flow';
 import { LOGIN_EXTENSION_LOADER } from './login-extension';
 
@@ -26,6 +30,7 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
   imports: [
     NgComponentOutlet,
     ShellIconComponent,
+    LocaleSwitcherComponent,
     HlmAlert,
     HlmAlertDescription,
     HlmButton,
@@ -50,19 +55,7 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
       </div>
       <div class="login-preferences flex items-center gap-(--eg-space-3)">
         @if (canSwitchLocale) {
-          <button
-            type="button"
-            hlmBtn
-            [variant]="'outline'"
-            class="locale-toggle min-h-(--eg-control-touch)"
-            [disabled]="auth.redirecting()"
-            [attr.aria-label]="localeLabel"
-            (click)="switchLocale()"
-          >
-            <span lang="en" i18n="@@auth.login.locale-en">EN</span>
-            <span aria-hidden="true"> / </span>
-            <span lang="vi" i18n="@@auth.login.locale-vi">VI</span>
-          </button>
+          <app-locale-switcher [disabled]="auth.redirecting()" (switchRequested)="switchLocale()" />
         }
         <button
           type="button"
@@ -211,11 +204,9 @@ export class LoginPage {
   private readonly document = inject(DOCUMENT);
   private readonly locale = inject(LOCALE_ID);
   private readonly navigate = inject(LOCATION_NAVIGATE);
-  private readonly localeBase = new URL(this.document.baseURI).pathname;
-  private readonly localeSegment = /(?:^|\/)(?:en|vi)\/$/.exec(this.localeBase);
-  readonly canSwitchLocale = this.localeSegment !== null;
+  private readonly localeBase = this.document.baseURI;
+  readonly canSwitchLocale = localeBundlePath(this.localeBase, this.locale, '/login') !== null;
   readonly darkLabel = $localize`:@@shell.theme.dark-mode:Dark mode`;
-  readonly localeLabel = $localize`:@@auth.login.switch-language:EN / VI: Switch language between English and Vietnamese`;
   private readonly loadExtension = inject(LOGIN_EXTENSION_LOADER);
   protected readonly extension = resource({ loader: () => this.loadExtension() });
   private readonly router = inject(Router);
@@ -245,13 +236,15 @@ export class LoginPage {
   }
 
   switchLocale(): void {
-    if (this.auth.redirecting() || this.localeSegment === null) return;
-    const target = this.locale.startsWith('vi') ? 'en' : 'vi';
-    // Localized builds are siblings; retain a deployment prefix when one is present.
-    const prefix = this.localeBase.slice(0, this.localeSegment.index);
+    if (this.auth.redirecting()) return;
     const query = new URLSearchParams({ returnUrl: this.auth.returnUrl() });
     if (this.auth.reason() !== 'none') query.set('reason', this.auth.reason());
-    this.navigate(`${prefix}/${target}/login?${query.toString()}`);
+    const destination = localeBundlePath(
+      this.localeBase,
+      this.locale,
+      `/login?${query.toString()}`,
+    );
+    if (destination !== null) this.navigate(destination);
   }
 
   readonly introduction = $localize`:@@auth.login.introduction:Return to your workspace to review evidence and make informed release decisions.`;

@@ -123,9 +123,12 @@
           >
             @for (reason of decision.reasons; track $index) {
               <li
-                class="rounded-(--eg-radius-sm) border border-solid border-(--eg-border) bg-(--eg-surface-raised) p-(--eg-space-4)"
+                class="grid gap-(--eg-space-2) rounded-(--eg-radius-sm) border border-solid border-(--eg-border) bg-(--eg-surface-raised) p-(--eg-space-4)"
               >
                 <bdi class="font-(family-name:--eg-font-mono)">{{ reason }}</bdi>
+                @if (reasonExplanation(reason); as explanation) {
+                  <p class="m-0">{{ explanation }}</p>
+                }
               </li>
             }
           </ol>
@@ -143,13 +146,13 @@
         <div data-decision-status>
           <dt>{{ copy.status }}</dt>
           <dd>
-            <code>{{ decision.kind }}</code>
+            <bdi>{{ valueLabel('decision', decision.kind) }}</bdi>
           </dd>
         </div>
         <div data-decision-mode>
           <dt>{{ copy.mode }}</dt>
           <dd>
-            <code>{{ decision.mode }}</code>
+            <bdi>{{ valueLabel('mode', decision.mode) }}</bdi>
           </dd>
         </div>
         <div class="col-span-full" data-decision-policy>

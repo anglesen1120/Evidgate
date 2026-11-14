@@ -27,7 +27,6 @@ import {
 } from '../../../shared/a11y/step-focus';
 import { RequestStateComponent } from '../../../shared/ui/states';
 import { OnboardingStore } from '../onboarding.store';
-import { sanitizeLabel } from './default-policy';
 import { describedBy, fieldDetails, reasonFor } from './field-details';
 import {
   NO_DISMISSED_REASONS,
@@ -49,6 +48,7 @@ import {
       (ngSubmit)="submit(form)"
       [attr.aria-busy]="busy()"
     >
+      <p>{{ requiredFields }}</p>
       <!-- The request disables both fields and the submit, so the pressed control cannot keep
            focus: the page moves it here first, which is also where the waiting state is spoken. -->
       <p
@@ -65,7 +65,9 @@ import {
       <div class="grid min-w-0 gap-(--eg-space-3)">
         @let nameError =
           (nameField.touched || submitted()) && !name().trim() ? nameRequired : serverNameError();
-        <label hlmLabel for="onboarding-project-name">{{ nameLabel }}</label>
+        <label hlmLabel for="onboarding-project-name"
+          >{{ nameLabel }} <span aria-hidden="true">*</span></label
+        >
         <input
           hlmInput
           class="min-h-(--eg-control-touch)"
@@ -106,7 +108,9 @@ import {
       <div class="grid min-w-0 gap-(--eg-space-3)">
         @let slugError =
           (slugField.touched || submitted()) && !slug().trim() ? slugRequired : serverSlugError();
-        <label hlmLabel for="onboarding-project-slug">{{ slugLabel }}</label>
+        <label hlmLabel for="onboarding-project-slug"
+          >{{ slugLabel }} <span aria-hidden="true">*</span></label
+        >
         <input
           hlmInput
           class="min-h-(--eg-control-touch)"
@@ -201,7 +205,7 @@ import {
               </p>
               <ul class="text-destructive">
                 @for (detail of details(); track $index) {
-                  <li>{{ detail.path }} {{ detail.reason }}</li>
+                  <li>{{ detail.message }}</li>
                 }
               </ul>
             </div>
@@ -266,15 +270,7 @@ export class CreateProjectPage {
 
   /** The envelope's field rows, so a refusal points at the control it names. */
   protected readonly details = computed(() =>
-    // Sanitised before the field is read, so an invisible character cannot stop a row from
-    // matching its control. The values are still rendered by interpolation only.
-    fieldDetails(
-      (this.creation.error()?.details ?? []).map((detail) =>
-        detail.path === undefined
-          ? { ...detail, reason: sanitizeLabel(detail.reason) }
-          : { ...detail, path: sanitizeLabel(detail.path), reason: sanitizeLabel(detail.reason) },
-      ),
-    ),
+    fieldDetails(this.creation.error()?.details ?? [], 'project'),
   );
   /** The reasons the visitor has answered by editing a field; see `server-reasons.ts`. */
   private readonly dismissed = signal<DismissedReasons>(NO_DISMISSED_REASONS);
@@ -311,6 +307,7 @@ export class CreateProjectPage {
   private readonly announceFailure = signal(false);
 
   protected readonly nameLabel = $localize`:@@onboarding.create.name:Project name`;
+  protected readonly requiredFields = $localize`:@@onboarding.fields.required:Fields marked * are required.`;
   protected readonly nameHint = $localize`:@@onboarding.create.name-hint:Choose a name your team will recognise.`;
   protected readonly nameRequired = $localize`:@@onboarding.create.name-required:Enter a project name.`;
   protected readonly slugLabel = $localize`:@@onboarding.create.slug:Project slug`;

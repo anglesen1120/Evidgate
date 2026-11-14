@@ -19,7 +19,7 @@
             {{ copy.copyHash }}
           </button>
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
+          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
       </dd>
     </div>
@@ -30,7 +30,7 @@
         @if (suite !== null) {
           <bdi>{{ display(suite) }}</bdi>
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
+          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
       </dd>
     </div>
@@ -41,7 +41,7 @@
         @if (policy !== null) {
           <bdi>{{ display(policy) }}</bdi>
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
+          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
       </dd>
     </div>
@@ -51,7 +51,7 @@
         @if (summary().shardCount !== null) {
           {{ summary().shardCount }}
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
+          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
       </dd>
     </div>
@@ -71,7 +71,7 @@
             </ul>
           }
         } @else {
-          <app-status-pill [tone]="'neutral'" label="" />
+          <span class="text-muted-foreground">{{ copy.notProvided }}</span>
         }
       </dd>
     </div>

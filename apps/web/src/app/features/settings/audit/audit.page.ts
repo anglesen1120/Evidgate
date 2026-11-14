@@ -1,4 +1,4 @@
-import { formatNumber } from '@angular/common';
+import { formatNumber, NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -26,10 +26,13 @@ import { AuditExportComponent } from './audit-export.component';
 import { AuditTableComponent } from './audit-table.component';
 import { AuditStore, EMPTY_AUDIT_FILTERS, type AuditFilters } from './audit.store';
 
+const VISIBLE_ROW_LIMIT = 25;
+
 @Component({
   selector: 'app-audit-page',
   imports: [
     FormsModule,
+    NgTemplateOutlet,
     HlmAlertImports,
     HlmButton,
     HlmCardImports,
@@ -64,13 +67,32 @@ export class AuditPage {
    */
   protected readonly ownsPageHeading =
     inject(ActivatedRoute).snapshot.data['pageHeadingLevel'] === 1;
-  protected draft: AuditFilters = { ...EMPTY_AUDIT_FILTERS };
+  protected readonly draft = signal<AuditFilters>({ ...EMPTY_AUDIT_FILTERS });
   protected readonly invalidRange = signal(false);
   protected readonly offset = signal(0);
   protected readonly visibleRows = computed(() =>
-    this.store.rows().slice(this.offset(), this.offset() + 200),
+    this.store.rows().slice(this.offset(), this.offset() + VISIBLE_ROW_LIMIT),
   );
-  protected readonly nextWindow = computed(() => this.offset() + 200 < this.store.rows().length);
+  protected readonly nextWindow = computed(
+    () => this.offset() + VISIBLE_ROW_LIMIT < this.store.rows().length,
+  );
+  protected readonly unappliedFilters = computed(() => {
+    const draft = this.draft();
+    const applied = this.store.filters();
+    return (
+      draft.actorType !== applied.actorType ||
+      draft.action !== applied.action ||
+      draft.objectType !== applied.objectType ||
+      this.toIso(draft.from) !== applied.from ||
+      this.toIso(draft.to) !== applied.to
+    );
+  });
+  protected readonly rowRange = computed(() => {
+    const total = this.store.rows().length;
+    const start = formatNumber(total === 0 ? 0 : this.offset() + 1, this.locale);
+    const end = formatNumber(Math.min(this.offset() + VISIBLE_ROW_LIMIT, total), this.locale);
+    return $localize`:@@settings.audit.row-range:Rows ${start}:start:–${end}:end: of ${formatNumber(total, this.locale)}:total: loaded.`;
+  });
   protected readonly filtered = computed(() =>
     Object.values(this.store.filters()).some((value) => value !== ''),
   );
@@ -102,6 +124,8 @@ export class AuditPage {
     system: AUDIT_ACTOR_TYPE_LABELS.system,
     action: $localize`:@@settings.audit.filter-action:Action`,
     objectType: $localize`:@@settings.audit.object-type:Object type`,
+    actionHint: $localize`:@@settings.audit.action-hint:Use the exact action code, for example auth.login or run.create.`,
+    objectHint: $localize`:@@settings.audit.object-hint:Use the exact object type, for example run or policy_revision.`,
     from: $localize`:@@settings.audit.from:From (inclusive)`,
     to: $localize`:@@settings.audit.to:To (exclusive)`,
     dateHint: $localize`:@@settings.audit.date-hint:Enter times in your local time zone; results and exports use UTC.`,
@@ -125,7 +149,7 @@ export class AuditPage {
     effect(() => {
       const org = this.session.currentOrg();
       untracked(() => {
-        this.draft = { ...EMPTY_AUDIT_FILTERS };
+        this.draft.set({ ...EMPTY_AUDIT_FILTERS });
         this.invalidRange.set(false);
         this.resetWindow();
         this.store.resetExport();
@@ -142,9 +166,15 @@ export class AuditPage {
     });
   }
 
+  protected updateDraft(change: Partial<AuditFilters>): void {
+    this.draft.update((draft) => ({ ...draft, ...change }));
+    this.store.resetExport();
+  }
+
   protected apply(): void {
-    const from = this.toIso(this.draft.from);
-    const to = this.toIso(this.draft.to);
+    const draft = this.draft();
+    const from = this.toIso(draft.from);
+    const to = this.toIso(draft.to);
     if (from === null || to === null || (from && to && from > to)) {
       this.invalidRange.set(true);
       return;
@@ -153,17 +183,18 @@ export class AuditPage {
     const org = this.session.currentOrg();
     if (!org) return;
     this.resetWindow();
+    this.store.resetExport();
     void this.store.load(org.id, {
-      actorType: this.draft.actorType,
-      action: this.draft.action.slice(0, 128),
-      objectType: this.draft.objectType.slice(0, 64),
+      actorType: draft.actorType,
+      action: draft.action.slice(0, 128),
+      objectType: draft.objectType.slice(0, 64),
       from,
       to,
     });
   }
 
   protected clear(): void {
-    this.draft = { ...EMPTY_AUDIT_FILTERS };
+    this.draft.set({ ...EMPTY_AUDIT_FILTERS });
     this.apply();
   }
 
@@ -176,12 +207,12 @@ export class AuditPage {
   }
 
   protected previous(): void {
-    this.offset.update((value) => Math.max(0, value - 200));
+    this.offset.update((value) => Math.max(0, value - VISIBLE_ROW_LIMIT));
     this.focusRows();
   }
   protected next(): void {
     if (this.nextWindow()) {
-      this.offset.update((value) => value + 200);
+      this.offset.update((value) => value + VISIBLE_ROW_LIMIT);
       this.focusRows();
     }
   }

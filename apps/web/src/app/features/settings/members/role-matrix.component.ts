@@ -1,18 +1,51 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import type { MembershipView, RoleView } from '@evidgate/sdk';
+import { HlmButton } from '@evidgate/ui/button';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { MEMBERS_COPY } from './member-list.component';
 
 @Component({
   selector: 'app-role-matrix',
-  imports: [HlmTableImports],
+  imports: [HlmButton, HlmTableImports],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
     @if (matrix().columns.length) {
+      <section class="mb-3 grid min-w-0 gap-3 md:hidden" [attr.aria-label]="copy.matrix">
+        <h3 class="m-0 text-base font-semibold">{{ copy.matrix }}</h3>
+        @if (!fullMatrix()) {
+          <dl class="m-0 grid min-w-0 gap-3" data-members-granted-summary>
+            @for (row of grantedRows(); track row.membership.id) {
+              <div class="grid min-w-0 gap-1">
+                <dt class="font-semibold wrap-anywhere">{{ row.membership.invited_email }}</dt>
+                <dd class="m-0 flex flex-wrap gap-2 wrap-anywhere">
+                  @for (role of row.roles; track role.id) {
+                    <span>{{ role.name }}</span>
+                  } @empty {
+                    {{ copy.noRoles }}
+                  }
+                </dd>
+              </div>
+            }
+          </dl>
+        }
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          type="button"
+          class="min-h-[var(--eg-control-touch)] w-fit max-w-full whitespace-normal"
+          [attr.aria-expanded]="fullMatrix()"
+          [attr.aria-controls]="'members-full-matrix'"
+          (click)="fullMatrix.set(!fullMatrix())"
+        >
+          {{ fullMatrix() ? grantedOnly : showFullMatrix }}
+        </button>
+      </section>
       <div
         hlmTableContainer
         class="table-scroll min-w-0 max-w-full rounded-md border border-solid border-border bg-card max-md:overflow-visible focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
+        id="members-full-matrix"
+        [class.max-md:hidden]="!fullMatrix()"
         tabindex="0"
         role="region"
         [attr.aria-label]="copy.matrix"
@@ -95,4 +128,13 @@ export class RoleMatrixComponent {
     rows: readonly { membership: MembershipView; granted: ReadonlySet<string> }[];
   }>();
   protected readonly copy = MEMBERS_COPY;
+  protected readonly fullMatrix = signal(false);
+  protected readonly grantedRows = computed(() =>
+    this.matrix().rows.map((row) => ({
+      membership: row.membership,
+      roles: this.matrix().columns.filter((role) => row.granted.has(role.id)),
+    })),
+  );
+  protected readonly showFullMatrix = $localize`:@@settings.members.show-full-matrix:Show all roles`;
+  protected readonly grantedOnly = $localize`:@@settings.members.show-granted-only:Show granted roles only`;
 }

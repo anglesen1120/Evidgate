@@ -104,3 +104,16 @@ a decision refresh or any other polling update never moves focus again.
 A target on a page the visitor has not loaded yet is not fetched on its own: there is no automatic
 pagination. The landing is retried when a visitor-requested page arrives (Load more), and a
 fragment that still names nothing rendered leaves focus where it was.
+
+## Presentation contracts
+
+Run-list dates use localized short dates and UTC times; `<time datetime>` and its title retain
+the exact server instant. Below 768 px the native filter disclosure starts collapsed and shows
+the count of applied filters; larger views start expanded.
+
+Known application enum values have localized labels. Reporter-original statuses and caller-written
+identifiers remain unchanged, and absent facts use plain “Not provided” text rather than a status.
+Decision and Evidence share missing-reason explanations while preserving diagnostic codes.
+
+Timeline steps inferred from the current state are labelled as inferred, not recorded history.
+Programmatic heading landings use the measured `--eg-topbar-height` scroll offset.

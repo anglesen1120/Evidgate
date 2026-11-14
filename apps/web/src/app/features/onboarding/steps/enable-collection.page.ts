@@ -197,7 +197,9 @@ export class EnableCollectionPage {
   /** The failure the panel renders: a failed read first, then a refused confirm. */
   protected readonly failureView = computed(() => this.readFailure() ?? this.failure());
   /** The envelope's field rows of whichever failure is on screen. */
-  protected readonly details = computed(() => fieldDetails(this.failureView()?.details ?? []));
+  protected readonly details = computed(() =>
+    fieldDetails(this.failureView()?.details ?? [], 'collection'),
+  );
   /**
    * The terminal panel's sentence. Only this page's own confirm can report what changed, and its
    * answer is always the default policy in `advisory` mode; a read-only panel says where it came
@@ -255,10 +257,6 @@ export class EnableCollectionPage {
       ? appended.revision.revision_no
       : null;
   });
-  /** The page renders the envelope's detail paths itself, so it renders them sanitised. */
-  protected clean(value: string | null | undefined): string {
-    return sanitizeLabel(value ?? '');
-  }
   /** The terminal heading takes focus on success (see the focus effect in the constructor). */
   private readonly enabledHeadingRef = viewChild<ElementRef<HTMLElement>>('enabledHeadingTarget');
 

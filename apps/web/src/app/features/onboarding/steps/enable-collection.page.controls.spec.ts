@@ -92,6 +92,7 @@ describe('EnableCollectionPage Helm controls', () => {
     expect(status.textContent).toContain('Reading');
     expect(status.getAttribute('tabindex')).toBe('-1');
     expect(status.classList).toContain('min-h-(--eg-leading-sm)');
+    expect(status.classList).not.toContain('sr-only');
     expect(
       requiredElement<HTMLButtonElement>(root, '[data-testid="enable-collection-confirm"]')
         .disabled,
@@ -126,8 +127,43 @@ describe('EnableCollectionPage Helm controls', () => {
     expect(enabled.classList).toContain('bg-(--eg-success-bg)');
     expect(enabled.classList).toContain('text-(--eg-success-fg)');
     expect(requiredElement(root, '#enable-enabled-heading').getAttribute('tabindex')).toBe('-1');
+    const status = requiredElement(root, '[data-testid="enable-collection-busy"]');
+    expect(status.getAttribute('role')).toBe('status');
+    expect(status.textContent?.trim()).toBe('');
+    expect(status.classList).toContain('sr-only');
     expect(root.querySelector('[data-testid="enable-collection-confirm"]')).toBeNull();
     expect(root.textContent).not.toMatch(/\bPASS\b|\bFAIL\b/);
+  });
+
+  it('announces localized policy labels and a generic fallback without exposing server paths', async () => {
+    createPolicyRevision.mockRejectedValueOnce(
+      new ApiRequestError({
+        kind: 'validation',
+        status: 422,
+        code: 'validation_failed',
+        message: 'Invalid policy.',
+        requestId: null,
+        retryable: false,
+        details: [
+          { path: '/mode', reason: 'invalid_value' },
+          { path: '/late_evidence_window_minutes', reason: 'Out of range.' },
+          { path: '/internal/private/path', reason: 'Not\u0007 accepted.' },
+        ],
+        retryAfterSeconds: null,
+      }),
+    );
+    await mount();
+    requiredElement<HTMLButtonElement>(root, '[data-testid="enable-collection-confirm"]').click();
+    await vi.waitFor(() => {
+      fixture.detectChanges();
+      const details = requiredElement(root, '[data-testid="enable-collection-details"]');
+      expect(details.textContent).toContain('Mode: invalid_value');
+      expect(details.textContent).toContain('Late-evidence window: Out of range.');
+      expect(details.textContent).toContain('Submitted value: Not accepted.');
+      expect(details.textContent).not.toContain('/mode');
+      expect(details.textContent).not.toContain('/internal/private/path');
+      expect(details.textContent).not.toMatch(/[\p{Cc}\p{Cf}]/u);
+    });
   });
 
   it('keeps missing-permission feedback connected to the disabled Helm confirm', async () => {

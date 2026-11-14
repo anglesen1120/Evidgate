@@ -20,6 +20,14 @@ function row(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
   };
 }
 
+function supportTrigger(root: HTMLElement): HTMLButtonElement {
+  const chip = root.querySelector<HTMLButtonElement>('.support-access');
+  if (!chip) throw new Error('Expected support trigger');
+  const disclosure = chip.closest('details');
+  if (disclosure) disclosure.open = true;
+  return chip;
+}
+
 describe('AuditTableComponent', () => {
   beforeEach(() =>
     TestBed.configureTestingModule({
@@ -61,8 +69,7 @@ describe('AuditTableComponent', () => {
       row('operator', { actor_type: 'platform_operator' }),
       row('other', { metadata: { support_grant_id: 'grant-other' } }),
     ]);
-    const chip = root.querySelector<HTMLButtonElement>('.support-access');
-    if (!chip) throw new Error('Expected support trigger');
+    const chip = supportTrigger(root);
     chip.focus();
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -86,8 +93,7 @@ describe('AuditTableComponent', () => {
   });
   it('shows the support description on hover without changing the audit row', async () => {
     const { fixture, root } = await render([row('operator', { actor_type: 'platform_operator' })]);
-    const chip = root.querySelector<HTMLButtonElement>('.support-access');
-    if (!chip) throw new Error('Expected support trigger');
+    const chip = supportTrigger(root);
     chip.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -118,15 +124,14 @@ describe('AuditTableComponent', () => {
     expect(first.getAttribute('data-audit-support')).not.toBe('true');
     expect(first.querySelector('.support-access')).toBeNull();
     expect(second.getAttribute('data-audit-support')).toBe('true');
-    const chip = second.querySelector<HTMLButtonElement>('.support-access');
-    if (!chip) throw new Error('Expected support trigger');
+    const chip = supportTrigger(root);
     expect(chip.textContent).toContain('Support access');
     expect(chip.tabIndex).toBe(0);
     const mobileDescription = chip.nextElementSibling;
     expect(mobileDescription?.textContent).toContain(
       'Platform staff access under support grant grant-42',
     );
-    expect(mobileDescription?.classList.contains('md:hidden')).toBe(true);
+    expect(chip.closest('details')?.open).toBe(true);
     chip.focus();
     await vi.waitFor(() => {
       fixture.detectChanges();
@@ -143,7 +148,7 @@ describe('AuditTableComponent', () => {
     expect(root.querySelector('.support-access')?.nextElementSibling?.textContent).toContain(
       'Platform staff access (grant id not recorded on this row)',
     );
-    root.querySelector<HTMLButtonElement>('.support-access')?.focus();
+    supportTrigger(root).focus();
     await vi.waitFor(() => {
       fixture.detectChanges();
       expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
@@ -165,29 +170,63 @@ describe('AuditTableComponent', () => {
     expect(root.textContent).toContain(long);
     expect(root.querySelector('b')).toBeNull();
   });
-  it('renders null objects as em dashes and absolute timestamps in a semantic scrollable table', async () => {
+  it('keeps UTC datetime exact, formats time on two unbroken lines, and uses a bounded sticky table', async () => {
     const { root } = await render([row('ordinary')]);
     expect(root.querySelector('tbody td:nth-of-type(3)')?.textContent).toContain('—');
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-25T00:00:00Z');
-    expect(root.querySelector('time')?.textContent).toBe('2026-10-25T00:00:00Z');
+    const time = root.querySelector('time');
+    expect(time?.getAttribute('title')).toBe('2026-10-25T00:00:00Z');
+    expect(time?.textContent).toContain('Oct 25, 2026');
+    expect(time?.textContent?.replace(/\s/g, ' ')).toContain('12:00:00 AM');
+    const parts = [...(time?.querySelectorAll('span') ?? [])];
+    expect(parts).toHaveLength(2);
+    expect(parts.every((part) => part.classList.contains('whitespace-nowrap'))).toBe(true);
+    const region = root.querySelector('[role="region"]');
+    expect(
+      region?.classList.contains(
+        'md:max-h-[calc(100dvh-var(--eg-topbar-height)-var(--eg-space-8))]',
+      ),
+    ).toBe(true);
+    expect(root.querySelector('thead')?.classList.contains('md:sticky')).toBe(true);
+    expect(root.querySelector('thead')?.classList.contains('md:top-0')).toBe(true);
+    expect(root.querySelector('table')?.classList.contains('table-auto')).toBe(true);
+    expect(
+      root.querySelector('table')?.classList.contains('md:min-w-[calc(var(--eg-rail-width)*3)]'),
+    ).toBe(true);
     expect(root.querySelector('caption')?.textContent).toContain('Audit activity');
     expect(root.querySelector('caption')?.classList.contains('max-md:block')).toBe(true);
     expect(root.querySelector('caption')?.classList.contains('max-md:w-full')).toBe(true);
-    expect(root.querySelectorAll('thead th[scope="col"]')).toHaveLength(6);
+    expect(root.querySelectorAll('thead th[scope="col"]')).toHaveLength(5);
     expect(root.querySelector<HTMLElement>('[role="region"]')?.tabIndex).toBe(0);
     expect(root.querySelector('table')?.getAttribute('role')).toBe('table');
-    expect(root.querySelectorAll('tbody [role="cell"]')).toHaveLength(5);
+    expect(root.querySelectorAll('tbody [role="cell"]')).toHaveLength(4);
     const labels = [...root.querySelectorAll('tbody span[aria-hidden="true"]')].map((item) =>
       item.textContent?.trim(),
     );
-    expect(labels).toEqual([
-      'Time (UTC)',
-      'Actor',
-      'Action',
-      'Object',
-      'Request id',
-      'Support access',
-    ]);
+    expect(labels).toEqual(['Time (UTC)', 'Actor', 'Action', 'Object']);
     expect(root.querySelector('[data-audit-row]')?.classList.contains('max-md:grid')).toBe(true);
+  });
+  it('keeps mobile metadata closed per row and omits empty request, support and object values', async () => {
+    const { root } = await render([
+      row('with-request', { request_id: 'request-visible-in-details' }),
+      row('empty', { request_id: null, object_type: null, object_id: null }),
+    ]);
+    const rows = root.querySelectorAll('[data-audit-row]');
+    const disclosure = rows[0]?.querySelector<HTMLDetailsElement>('details');
+    expect(disclosure?.open).toBe(false);
+    expect(disclosure?.querySelector('summary')?.textContent).toContain('Event details');
+    expect(disclosure?.textContent).toContain('request-visible-in-details');
+    expect(disclosure?.textContent).not.toContain('Support access');
+    if (!disclosure) throw new Error('Expected row disclosure');
+    disclosure.open = true;
+    expect(disclosure.open).toBe(true);
+    expect(rows[1]?.querySelector('details')).toBeNull();
+    expect(rows[1]?.querySelector('td:nth-of-type(3)')?.classList.contains('max-md:hidden')).toBe(
+      true,
+    );
+    expect(rows[1]?.querySelector('td:nth-of-type(4)')?.classList.contains('max-md:hidden')).toBe(
+      true,
+    );
+    expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(2);
   });
 });

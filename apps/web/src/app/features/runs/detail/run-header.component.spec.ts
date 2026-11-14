@@ -65,6 +65,44 @@ describe('RunHeaderComponent', () => {
     expect(root.querySelector('[data-run-missing-summary]')).toBeNull();
   });
 
+  it.each([
+    ['regular', 'Regular run'],
+    ['replay', 'Replay'],
+  ] as const)(
+    'labels the %s purpose without translating the environment identifier',
+    async (purpose, label) => {
+      const { root } = await render({ ...run, purpose }, 'context');
+      expect(root.querySelector('[data-run-purpose]')?.textContent?.trim()).toBe(label);
+      expect(root.querySelector('[data-run-environment] bdi')?.textContent).toBe(
+        run.environment.environment_key,
+      );
+    },
+  );
+
+  it('presents absent provenance as plain facts, not unavailable statuses', async () => {
+    const value: RunStateDto = {
+      ...run,
+      ref: {
+        name: null,
+        kind: null,
+        pr_number: null,
+        head_sha: null,
+        base_sha: null,
+        trigger_event: null,
+        is_fork: false,
+      },
+      unverified_ref: false,
+    };
+    const { root } = await render(value, 'context');
+    expect(root.textContent?.match(/Not provided/g)).toHaveLength(6);
+    expect(root.querySelector('[data-run-fork]')?.textContent?.trim()).toBe('No');
+    expect(root.textContent).not.toContain('Status unavailable');
+    expect(root.querySelector('[data-run-ref] app-status-pill')).toBeNull();
+    const summary = await render(value);
+    expect(summary.root.textContent).toContain('Not provided');
+    expect(summary.root.querySelector('app-run-state-pill')).not.toBeNull();
+  });
+
   it('preserves complete provenance in one context card and escapes long untrusted refs', async () => {
     const ref = 'release-'.repeat(80) + '\u202e<script>';
     const { root } = await render(

@@ -4,6 +4,7 @@ import { Router, provideRouter } from '@angular/router';
 import { NotFoundPage } from '../pages/not-found.page';
 import { NavComponent } from './nav.component';
 import type { NavGroupView } from '../nav/nav.models';
+import { stubScopeBrowserApis } from './scope.fixture';
 
 const groups: readonly NavGroupView[] = [
   {
@@ -15,6 +16,20 @@ const groups: readonly NavGroupView[] = [
 ];
 
 describe('NavComponent', () => {
+  let attachedRoot: HTMLElement | null = null;
+  let restoreBrowserApis: () => void;
+
+  beforeEach(() => {
+    restoreBrowserApis = stubScopeBrowserApis();
+  });
+
+  afterEach(() => {
+    attachedRoot?.remove();
+    attachedRoot = null;
+    restoreBrowserApis();
+    vi.unstubAllGlobals();
+  });
+
   beforeEach(() =>
     TestBed.configureTestingModule({
       imports: [NavComponent],
@@ -67,9 +82,49 @@ describe('NavComponent', () => {
     expect(root.classList.contains('rail')).toBe(true);
     expect(root.querySelector('a')?.getAttribute('aria-label')).toBe('Overview');
     expect(root.getAttribute('data-collapsed')).toBe('true');
-    expect(root.querySelector('a')?.getAttribute('title')).toBe('Overview');
+    expect(root.querySelector('a')?.hasAttribute('title')).toBe(false);
     fixture.componentRef.setInput('groups', []);
     await fixture.whenStable();
     expect(root.querySelectorAll('a')).toHaveLength(0);
+  });
+
+  it.each(['hover', 'focus'])(
+    'shows the full rail label on %s and dismisses it with Escape',
+    async (trigger) => {
+      const fixture = TestBed.createComponent(NavComponent);
+      fixture.componentRef.setInput('groups', groups);
+      fixture.componentRef.setInput('collapsed', true);
+      attachedRoot = fixture.nativeElement as HTMLElement;
+      document.body.append(attachedRoot);
+      await fixture.whenStable();
+      const link = attachedRoot.querySelector<HTMLAnchorElement>('a')!;
+      if (trigger === 'focus') link.focus();
+      else {
+        const event = new Event('pointerenter');
+        Object.defineProperty(event, 'pointerType', { value: 'mouse' });
+        link.dispatchEvent(event);
+      }
+
+      await vi.waitFor(() => {
+        expect(document.querySelector('[role="tooltip"]')?.textContent?.trim()).toBe('Overview');
+      });
+      expect(link.getAttribute('aria-label')).toBe('Overview');
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await vi.waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
+      if (trigger === 'focus') expect(document.activeElement).toBe(link);
+    },
+  );
+
+  it('keeps expanded navigation labels visible without a redundant tooltip', async () => {
+    const fixture = TestBed.createComponent(NavComponent);
+    fixture.componentRef.setInput('groups', groups);
+    attachedRoot = fixture.nativeElement as HTMLElement;
+    document.body.append(attachedRoot);
+    await fixture.whenStable();
+    const link = attachedRoot.querySelector<HTMLAnchorElement>('a')!;
+    link.focus();
+    await fixture.whenStable();
+    expect(link.textContent?.trim()).toBe('Overview');
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
   });
 });

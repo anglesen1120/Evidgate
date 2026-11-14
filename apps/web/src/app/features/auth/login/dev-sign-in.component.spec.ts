@@ -1,4 +1,5 @@
 import { BrowserPlatformLocation, PlatformLocation } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -178,15 +179,13 @@ describe('DevSignInComponent', () => {
       );
       expect(element('#dev-sign-in-note').textContent).toContain(fixture.componentInstance.note);
       expect(element('#dev-sign-in-error').textContent).toContain(
-        status === 401
-          ? fixture.componentInstance.wrongSecret
-          : fixture.componentInstance.unavailable,
+        status === 401 ? fixture.componentInstance.wrongSecret : fixture.componentInstance.failed,
       );
     },
   );
 
-  it.each([404, 500, 503, 0])(
-    'unavailable: maps status %s to the disabled-server message',
+  it.each([500, 503, 0])(
+    'offers truthful retry guidance for server or network status %s',
     async (status) => {
       open();
       submit();
@@ -197,12 +196,40 @@ describe('DevSignInComponent', () => {
         request.flush({}, { status, statusText: 'Unavailable' });
       }
       await settle();
-      expect(element('[role="alert"]').textContent).toContain(
-        fixture.componentInstance.unavailable,
-      );
+      expect(element('[role="alert"]').textContent).toContain(fixture.componentInstance.failed);
       expect(element('[role="status"]').textContent?.trim()).toBe('');
       expect(element<HTMLButtonElement>('button').disabled).toBe(false);
       expect(session.reload).not.toHaveBeenCalled();
+    },
+  );
+
+  it('identifies the disabled endpoint only when the dev-session request returns 404', async () => {
+    open();
+    submit();
+    http.expectOne('/v1/dev/session').flush({}, { status: 404, statusText: 'Not Found' });
+    await settle();
+    expect(element('[role="alert"]').textContent).toContain(fixture.componentInstance.unavailable);
+    expect(element<HTMLButtonElement>('button').disabled).toBe(false);
+  });
+
+  it.each(['rejected', 'unauthenticated'])(
+    'does not misdiagnose %s session verification as a disabled endpoint or wrong secret',
+    async (failure) => {
+      if (failure === 'rejected') {
+        session.reload.mockRejectedValueOnce(
+          new HttpErrorResponse({ status: 401, url: '/v1/session' }),
+        );
+      } else {
+        session.sessionState.set('anonymous');
+      }
+      open();
+      submit();
+      http.expectOne('/v1/dev/session').flush(null, { status: 204, statusText: 'No Content' });
+      await settle();
+      expect(element('[role="alert"]').textContent).toContain(fixture.componentInstance.failed);
+      expect(element('input').getAttribute('aria-invalid')).toBeNull();
+      expect(element<HTMLButtonElement>('button').disabled).toBe(false);
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
     },
   );
 

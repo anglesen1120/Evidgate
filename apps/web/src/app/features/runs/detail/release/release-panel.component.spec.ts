@@ -96,6 +96,17 @@ describe('ReleasePanelComponent', () => {
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
 
+  it('keeps the sibling-card inset for both bound and unbound release content', async () => {
+    const { root, fixture } = await render();
+    const section = root.querySelector('[data-release-panel]');
+    expect(section?.classList.contains('p-(--eg-space-5)')).toBe(true);
+    expect(section?.classList.contains('gap-(--eg-space-5)')).toBe(true);
+    fixture.componentRef.setInput('releases', []);
+    await fixture.whenStable();
+    expect(root.querySelector('[data-release-unbound]')).not.toBeNull();
+    expect(section?.classList.contains('p-(--eg-space-5)')).toBe(true);
+  });
+
   it('lists every served component digest in order and marks the bound component', async () => {
     const { root } = await render();
     const rows = [...root.querySelectorAll('[data-release-component]')];

@@ -95,6 +95,11 @@ describe('StatusPillComponent', () => {
     );
     expect(root.querySelector('img')).toBeNull();
     expect(root.querySelector('.status-pill__label.text-truncate, [title]')).toBeNull();
+    const badge = root.querySelector('.status-pill');
+    expect(badge?.classList.contains('h-auto')).toBe(true);
+    expect(badge?.classList.contains('overflow-visible')).toBe(true);
+    expect(badge?.classList.contains('rounded-(--eg-radius-sm)')).toBe(true);
+    expect(badge?.classList.contains('overflow-hidden')).toBe(false);
   });
 
   it('updates supplied label and tone in the zoneless tree', async () => {

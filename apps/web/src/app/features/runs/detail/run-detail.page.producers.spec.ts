@@ -67,7 +67,12 @@ describe('RunDetailPage producer region', () => {
     expect(rows.map((row) => row.dataset['producerSlot'])).toEqual(['shard-9', 'shard-2']);
     for (const row of rows) {
       expect(row.querySelectorAll('td[data-fact][data-unavailable]')).toHaveLength(4);
-      expect(row.querySelectorAll('td[data-fact] app-status-pill')).toHaveLength(4);
+      expect(row.querySelectorAll('td[data-fact] app-status-pill')).toHaveLength(2);
+      for (const fact of ['last-sequence', 'count']) {
+        const cell = row.querySelector(`td[data-fact="${fact}"]`);
+        expect(cell?.textContent?.trim()).toBe('Not provided');
+        expect(cell?.querySelector('app-status-pill')).toBeNull();
+      }
       expect(row.querySelector('th')?.id).toBe(producerAnchorId(row.dataset['producerSlot'] ?? ''));
     }
     expect(region?.querySelector('[data-count-mismatch]')).toBeNull();
@@ -100,8 +105,8 @@ describe('RunDetailPage producer region', () => {
     const row = (id: string) => root.querySelector<HTMLElement>(`tr[data-producer-slot="${id}"]`);
     const text = (id: string, fact: string) =>
       row(id)?.querySelector(`td[data-fact="${fact}"]`)?.textContent?.replace(/\s+/g, ' ').trim();
-    expect(text('shard-1', 'identity')).toBe('bound');
-    expect(text('shard-1', 'finalize')).toBe('finalized');
+    expect(text('shard-1', 'identity')).toBe('Bound');
+    expect(text('shard-1', 'finalize')).toBe('Finalized');
     expect(text('shard-1', 'last-sequence')).toBe(String(base.last_sequence));
     expect(text('shard-1', 'count')).toBe(`${base.count} / ${base.expected}`);
     expect(row('shard-1')?.querySelector('[data-count-mismatch], [data-badge]')).toBeNull();
@@ -110,7 +115,7 @@ describe('RunDetailPage producer region', () => {
     expect(row('shard-2')?.querySelector('[data-badge="stale-epoch"]')?.textContent).toContain(
       '2 stale-epoch events',
     );
-    expect(text('shard-3', 'identity')).toBe('unbound');
+    expect(text('shard-3', 'identity')).toBe('Unbound');
     expect(text('shard-3', 'last-sequence')).toBe('4');
     expect(text('shard-3', 'count')).toBe('4 (expected not set)');
     expect(row('shard-3')?.querySelectorAll('td[data-unavailable]')).toHaveLength(0);

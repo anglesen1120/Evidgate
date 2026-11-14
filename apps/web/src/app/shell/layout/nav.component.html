@@ -24,7 +24,9 @@
                 [routerLinkActive]="'active'"
                 [ariaCurrentWhenActive]="'page'"
                 [attr.aria-label]="item.label"
-                [attr.title]="collapsed() ? item.label : null"
+                [hlmTooltip]="collapsed() ? itemLabel : null"
+                [tooltipDisabled]="!collapsed()"
+                [position]="'right'"
                 (click)="itemSelected.emit(item.link)"
               >
                 <app-shell-icon [name]="item.icon" />
@@ -32,6 +34,12 @@
                   item.label
                 }}</span>
               </a>
+              <ng-template #itemLabel>
+                <span
+                  class="block max-w-[calc(100vw-var(--eg-nav-rail)-var(--eg-space-8))] whitespace-normal [overflow-wrap:anywhere]"
+                  >{{ item.label }}</span
+                >
+              </ng-template>
             </li>
           }
         </ul>

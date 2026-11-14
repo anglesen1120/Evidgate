@@ -8,7 +8,7 @@
   >Skip to main content</a
 >
 <div
-  class="shell group/shell grid min-h-dvh grid-cols-[var(--eg-nav-width)_minmax(0,1fr)] [&.rail]:grid-cols-[var(--eg-nav-rail)_minmax(0,1fr)] [&.mobile]:grid-cols-[minmax(0,1fr)] [&.drawer-open]:h-dvh [&.drawer-open]:overflow-clip"
+  class="shell group/shell grid min-h-dvh grid-cols-[var(--eg-nav-width)_minmax(0,1fr)] [&.rail]:grid-cols-[var(--eg-nav-rail)_minmax(0,1fr)] [&.mobile]:grid-cols-[minmax(0,1fr)]"
   [class.rail]="collapsed()"
   [class.mobile]="mobile()"
   [class.drawer-open]="drawerOpen()"
@@ -68,8 +68,10 @@
       >
         <span i18n="@@shell.layout.organization">Organization</span>
         <strong class="text-sm text-foreground">{{ session.currentOrg()?.name }}</strong>
-        <span i18n="@@shell.layout.project">Project</span>
-        <strong class="text-sm text-foreground">{{ session.currentProject()?.name }}</strong>
+        @if (session.currentProject(); as project) {
+          <span i18n="@@shell.layout.project">Project</span>
+          <strong class="text-sm text-foreground">{{ project.name }}</strong>
+        }
       </div>
     }
     @if (mobile()) {
@@ -91,9 +93,9 @@
         >
           @for (scope of [session.currentOrg(), session.currentProject()]; track $index) {
             <div class="grid min-w-0 gap-(--eg-space-1)">
-              <span class="h-(--eg-leading-xs) w-(--eg-space-12) rounded-md bg-muted"></span>
+              <span class="h-(--eg-leading-xs) w-(--eg-space-12) rounded-sm bg-muted"></span>
               <span
-                class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-md bg-muted px-(--eg-space-3)"
+                class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-sm bg-muted px-(--eg-space-3)"
                 ><span class="truncate">{{ scope?.name }}</span></span
               >
             </div>
@@ -107,6 +109,13 @@
       [collapsed]="collapsed()"
       (itemSelected)="onNavigationSelected($event)"
     />
+    @if (mobile() && canSwitchLocale) {
+      <div
+        class="drawer-preferences flex shrink-0 flex-wrap gap-(--eg-space-3) border-0 border-t-(length:--eg-border-width) border-solid border-border p-(--eg-space-4)"
+      >
+        <app-locale-switcher (switchRequested)="switchLocale()" />
+      </div>
+    }
   </aside>
   <div class="main-stack flex min-w-0 flex-col" [attr.inert]="mobile() && drawerOpen() ? '' : null">
     <header
@@ -146,7 +155,7 @@
           >
             @for (scope of [session.currentOrg(), session.currentProject()]; track $index) {
               <span
-                class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-md bg-muted px-(--eg-space-3)"
+                class="box-border flex h-(--eg-control-touch) min-w-0 items-center rounded-sm bg-muted px-(--eg-space-3)"
                 ><span class="truncate">{{ scope?.name }}</span></span
               >
             }
@@ -154,6 +163,9 @@
         }
       }
       <app-quota-badge class="min-w-0 max-w-full" />
+      @if (!mobile() && canSwitchLocale) {
+        <app-locale-switcher (switchRequested)="switchLocale()" />
+      }
       <button
         type="button"
         hlmBtn

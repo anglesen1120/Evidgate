@@ -1,6 +1,12 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, convertToParamMap, Router, type ParamMap } from '@angular/router';
+import {
+  ActivatedRoute,
+  convertToParamMap,
+  Router,
+  RouterLink,
+  type ParamMap,
+} from '@angular/router';
 import type { ProjectDto } from '@evidgate/sdk';
 import { By } from '@angular/platform-browser';
 import { BehaviorSubject } from 'rxjs';
@@ -20,11 +26,13 @@ import {
   CreateProjectStub,
   EnableCollectionStub,
   finishedRouter,
+  ShellRouterLinkStub,
   mountShell,
   shellStore,
   type MountOptions,
   type ShellStore,
 } from './onboarding-shell.spec-support';
+import { StepPendingComponent } from './step-pending.component';
 
 describe('OnboardingShellComponent', () => {
   let fixture: ComponentFixture<OnboardingShellComponent>;
@@ -229,12 +237,17 @@ describe('OnboardingShellComponent', () => {
     );
   });
 
-  it.each([3, 4] as const)('keeps step %s as the placeholder', async (step) => {
-    store.viewStep.set(step);
-    await fixture.whenStable();
-    expect(root.querySelector('[data-testid="onboarding-step-pending"]')).not.toBeNull();
-    expect(root.querySelector('[data-testid="connect-ci-page"]')).toBeNull();
-  });
+  it.each([3, 4] as const)(
+    'keeps step %s truthful without inventing a report body',
+    async (step) => {
+      store.viewStep.set(step);
+      await fixture.whenStable();
+      expect(root.querySelector('[data-testid="onboarding-step-pending"]')).not.toBeNull();
+      expect(
+        root.querySelector('[data-testid="connect-ci-page"]')?.closest('[hidden]'),
+      ).not.toBeNull();
+    },
+  );
 
   it('renders the enable step at step 5 with the wizard scope', async () => {
     store.done.set({ 1: true, 2: true, 3: true, 4: true, 5: false });
@@ -282,13 +295,31 @@ describe('OnboardingShellComponent', () => {
     expect(document.activeElement?.id).not.toBe('onboarding-step-title');
   });
 
-  it('keeps Next disabled on the final step even when all resources are done', async () => {
+  it('replaces terminal Next with a project overview link and keeps Back available', async () => {
     store.currentStep.set('enabled');
     store.viewStep.set(5);
     store.done.set({ 1: true, 2: true, 3: true, 4: true, 5: true });
     await fixture.whenStable();
-    expect(button('next').disabled).toBe(true);
+    const complete = root.querySelector<HTMLAnchorElement>('[data-testid="onboarding-complete"]');
+    expect(complete?.textContent?.trim()).toBe('Open project');
+    expect(complete?.getAttribute('href')).toBe('/orgs/org-1/projects/project-1/overview');
+    expect(root.querySelector('[data-testid="onboarding-next"]')).toBeNull();
+    expect(root.querySelector('#onboarding-next-reason')).toBeNull();
+    expect(button('back').disabled).toBe(false);
+    button('back').click();
+    await fixture.whenStable();
+    expect(store.viewStep()).toBe(4);
+    expect(root.querySelector('[data-testid="onboarding-complete"]')).toBeNull();
     expect(root.textContent).not.toMatch(/\bPASS\b|\bFAIL\b/);
+  });
+
+  it('does not offer completion without a confirmed project', async () => {
+    store.currentStep.set('enabled');
+    store.viewStep.set(5);
+    store.project.set(null);
+    await fixture.whenStable();
+    expect(root.querySelector('[data-testid="onboarding-complete"]')).toBeNull();
+    expect(button('next').disabled).toBe(true);
   });
 });
 
@@ -347,9 +378,16 @@ describe('OnboardingShellComponent over the real store', () => {
         },
       ],
     })
+      .overrideDirective(ShellRouterLinkStub, { set: { selector: '[routerLink]' } })
       .overrideComponent(OnboardingShellComponent, {
-        remove: { imports: [CreateProjectPage, ConnectCiPage, EnableCollectionPage] },
-        add: { imports: [CreateProjectStub, ConnectCiStub, EnableCollectionStub] },
+        remove: { imports: [CreateProjectPage, ConnectCiPage, EnableCollectionPage, RouterLink] },
+        add: {
+          imports: [CreateProjectStub, ConnectCiStub, EnableCollectionStub, ShellRouterLinkStub],
+        },
+      })
+      .overrideComponent(StepPendingComponent, {
+        remove: { imports: [RouterLink] },
+        add: { imports: [ShellRouterLinkStub] },
       })
       .compileComponents();
     const activate = async (): Promise<ComponentFixture<OnboardingShellComponent>> => {

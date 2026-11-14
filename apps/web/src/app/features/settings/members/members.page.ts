@@ -9,6 +9,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmAlertImports } from '@evidgate/ui/alert';
 import type { MembershipView } from '@evidgate/sdk';
@@ -50,6 +51,8 @@ export class MembersPage {
   protected readonly store = inject(MembersStore);
   protected readonly session = inject(SessionStore);
   protected readonly copy = MEMBERS_COPY;
+  protected readonly ownsPageHeading =
+    inject(ActivatedRoute, { optional: true })?.snapshot.data['pageHeadingLevel'] === 1;
   protected readonly canWrite = computed(() => this.session.has('membership:write'));
   protected readonly status = computed<'loading' | 'ready' | 'error'>(() => {
     const phase = this.store.phase();

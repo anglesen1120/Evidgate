@@ -122,11 +122,14 @@
     </a>
   </th>
   <td hlmTd role="cell" [class]="cellClasses" [attr.data-label]="copy.state">
-    <app-run-state-pill [state]="row.state" />
+    <app-run-state-pill [state]="row.state" [compact]="true" />
   </td>
   <!-- List evidence stays unavailable; a collection state or verdict is not completeness. -->
   <td hlmTd role="cell" [class]="cellClasses" data-run-evidence [attr.data-label]="copy.evidence">
-    <app-evidence-badge />
+    <div class="grid justify-items-start gap-(--eg-space-2)">
+      <app-status-pill [tone]="'neutral'" [label]="copy.evidenceUnavailable" />
+      <span class="text-xs text-muted-foreground">{{ copy.evidenceHint }}</span>
+    </div>
   </td>
   <td hlmTd role="cell" [class]="cellClasses" data-run-decision [attr.data-label]="copy.decision">
     <app-decision-chip
@@ -181,6 +184,16 @@
     </div>
   </td>
   <td hlmTd role="cell" [class]="cellClasses" [attr.data-label]="copy.created">
-    <time [attr.datetime]="row.created_at">{{ row.created_at }}</time>
+    <time
+      class="block tabular-nums [overflow-wrap:normal]"
+      [attr.datetime]="row.created_at"
+      [attr.title]="row.created_at"
+    >
+      <span class="block whitespace-nowrap">{{ row.created_at | date: 'shortDate' : 'UTC' }}</span
+      >{{ ' '
+      }}<span class="block whitespace-nowrap"
+        >{{ row.created_at | date: 'shortTime' : 'UTC' }} {{ copy.utc }}</span
+      >
+    </time>
   </td>
 </ng-template>

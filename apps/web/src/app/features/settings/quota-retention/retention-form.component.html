@@ -43,12 +43,28 @@
         [attr.aria-describedby]="!store.writable() ? 'retention-read-only' : null"
       >
         <p id="retention-hint" class="m-0 text-sm text-muted-foreground">{{ copy.hint }}</p>
+        @if (invalidSubmit() && form().invalid) {
+          <div
+            role="alert"
+            id="retention-validation-error"
+            class="grid gap-1 text-sm text-destructive"
+          >
+            <p class="m-0">{{ copy.validationError }}</p>
+            @if (fieldError('artifact_days'); as error) {
+              <p class="m-0">{{ copy.artifact }}: {{ error }}</p>
+            }
+            @if (fieldError('metadata_days'); as error) {
+              <p class="m-0">{{ copy.metadata }}: {{ error }}</p>
+            }
+          </div>
+        }
         <div class="grid min-w-0 gap-4 lg:grid-cols-2">
           <div class="grid min-w-0 content-start gap-2">
             <label hlmLabel for="retention-artifact">{{ copy.artifact }}</label>
             <input
               hlmInput
               id="retention-artifact"
+              #artifactInput
               type="number"
               step="1"
               required
@@ -71,6 +87,7 @@
             <input
               hlmInput
               id="retention-metadata"
+              #metadataInput
               type="number"
               step="1"
               required

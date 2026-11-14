@@ -112,6 +112,25 @@ describe('MemberListComponent status labels (09.7.1-T2 F3)', () => {
     expect(roles?.textContent?.trim()).toBe('No roles assigned');
   });
 
+  it('separates the destructive remove trigger from editing and still emits a confirmation opener', () => {
+    const membership = member('active');
+    const remove = vi.fn();
+    fixture.componentInstance.remove.subscribe(remove);
+    fixture.componentRef.setInput('canWrite', true);
+    fixture.componentRef.setInput('members', [membership]);
+    fixture.detectChanges();
+    const opener = root.querySelector<HTMLButtonElement>('[data-members-remove]');
+    if (!opener) throw new Error('Expected remove trigger');
+    expect(opener.classList.contains('spartan-button-variant-destructive')).toBe(true);
+    expect(opener.classList.contains('ms-3')).toBe(true);
+    expect(
+      root
+        .querySelector('[data-members-edit-open]')
+        ?.classList.contains('spartan-button-variant-outline'),
+    ).toBe(true);
+    opener.click();
+    expect(remove).toHaveBeenCalledWith({ member: membership, opener });
+  });
   it.each(['active', 'pending'] as const)(
     'offers editing for a writable %s member and emits its opener',
     (status) => {

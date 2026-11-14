@@ -9,6 +9,7 @@ import { ErrorPatternComponent } from '../../../../shared/ui/states/error-patter
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
 import { escapeFormatChars } from '../../list/ref-name-display';
 import { producerAnchorId } from '../evidence/run-evidence-anchors';
+import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from '../run-value-label';
 import type { ProducerSlot, ProducerStatus } from './producer-slots';
 
 @Component({
@@ -72,7 +73,9 @@ export class ProducerStatusTableComponent {
 
   protected readonly producerAnchorId = producerAnchorId;
   protected readonly display = escapeFormatChars;
+  protected readonly valueLabel = runValueLabel;
   protected readonly copy = {
+    notProvided: RUN_DETAIL_NOT_PROVIDED,
     title: $localize`:@@runs.detail.producers.title:Producers`,
     loading: $localize`:@@runs.detail.producers.loading:Loading producers`,
     empty: $localize`:@@runs.detail.producers.empty:No declared producers`,

@@ -28,6 +28,7 @@ import { ErrorPatternComponent } from '../../../../shared/ui/states/error-patter
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
 import { escapeFormatChars } from '../../list/ref-name-display';
 import { attemptAnchorId } from '../evidence/run-evidence-anchors';
+import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from '../run-value-label';
 import { groupAttempts, paginateAttemptGroups } from './attempt-groups';
 import type { AttemptRow } from './attempt-summary';
 
@@ -64,6 +65,7 @@ export class AttemptsTableComponent {
     () => !(this.attempts() ?? []).some((attempt) => attempt.healingCandidate),
   );
   protected readonly display = escapeFormatChars;
+  protected readonly valueLabel = runValueLabel;
   /** Deep-link target identity (`#attempt-<execution_key>-<n>`), shared with the reason links. */
   protected readonly attemptAnchorId = attemptAnchorId;
   protected readonly pages = computed(() =>
@@ -100,6 +102,7 @@ export class AttemptsTableComponent {
     duration: $localize`:@@runs.detail.attempts.duration:Duration`,
     artifacts: $localize`:@@runs.detail.attempts.artifacts:Artifacts`,
     healing: $localize`:@@runs.detail.attempts.healing-candidates:Healing candidates`,
+    notProvided: RUN_DETAIL_NOT_PROVIDED,
     more: $localize`:@@runs.detail.attempts.more:Load more attempts`,
     loadingMore: $localize`:@@runs.detail.attempts.loading-more:Loading more attempts`,
     moreLoaded: $localize`:@@runs.detail.attempts.more-loaded:More attempts loaded`,

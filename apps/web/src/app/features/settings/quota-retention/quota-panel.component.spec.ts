@@ -79,16 +79,35 @@ describe('QuotaPanelComponent', () => {
     return { fixture, harness, root: fixture.nativeElement as HTMLElement };
   }
 
-  it('renders a null metric as unavailable, never zero, with the server reason', async () => {
+  it('renders a null metric as unavailable, never zero, without exposing service diagnostics', async () => {
     const { harness, root } = await render();
     const row = (await harness.metrics())[0];
     expect(row).toBeDefined();
     expect(await row?.text()).toContain('Unavailable');
     expect(await row?.text()).not.toContain('0');
-    expect(root.querySelector('[data-quota-reason]')?.textContent).toContain('egress producer');
+    expect(root.querySelector('[data-quota-reason]')?.textContent?.trim()).toBe(
+      'Not measured yet.',
+    );
+    expect(root.textContent).not.toContain('egress producer');
     expect(root.querySelector('[data-quota-storage]')?.textContent).not.toContain('0');
   });
 
+  it.each(['future_reason_code', 'Storage roll-up of 06.5.2 is not running.', null])(
+    'uses the generic localized explanation for unavailable reason %s',
+    async (reason) => {
+      usageSummary.set({
+        period: '2026-11',
+        project: null,
+        metrics: [metric({ unavailable_reason: reason })],
+        next_cursor: null,
+      });
+      const { root } = await render();
+      expect(root.querySelector('[data-quota-reason]')?.textContent?.trim()).toBe(
+        'Not measured yet.',
+      );
+      if (reason) expect(root.textContent).not.toContain(reason);
+    },
+  );
   it('renders a measured zero as zero rather than unavailable', async () => {
     usageSummary.set({
       period: '2026-11',
@@ -100,6 +119,7 @@ describe('QuotaPanelComponent', () => {
     expect(root.querySelector('[data-quota-used]')?.textContent?.trim()).toBe('0');
     expect(root.querySelector('[data-quota-limit]')?.textContent?.trim()).toBe('100');
     expect(load).toHaveBeenCalledOnce();
+    expect(root.querySelector('[data-quota-reason]')).toBeNull();
   });
 
   it.each(['warn', 'blocked'] as const)('names the served %s state', async (severity) => {

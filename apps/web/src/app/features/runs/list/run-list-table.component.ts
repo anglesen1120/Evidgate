@@ -1,4 +1,4 @@
-import { NgTemplateOutlet } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import {
   CdkFixedSizeVirtualScroll,
   CdkVirtualForOf,
@@ -23,13 +23,13 @@ import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.c
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { DecisionChipComponent } from '../../../shared/ui/verdict/decision-chip.component';
-import { EvidenceBadgeComponent } from '../../../shared/ui/verdict/evidence-badge.component';
 import { escapeFormatChars, escapeFormatLabel } from './ref-name-display';
 
 @Component({
   selector: 'app-run-list-table',
   imports: [
     NgTemplateOutlet,
+    DatePipe,
     RouterLink,
     CdkVirtualScrollViewport,
     CdkFixedSizeVirtualScroll,
@@ -40,7 +40,6 @@ import { escapeFormatChars, escapeFormatLabel } from './ref-name-display';
     StatusPillComponent,
     DataTableValueComponent,
     DecisionChipComponent,
-    EvidenceBadgeComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './run-list-table.component.html',
@@ -57,14 +56,10 @@ export class RunListTableComponent {
     'min-w-0 h-auto box-border p-[var(--eg-space-3)] whitespace-normal text-start font-(weight:--eg-weight-regular) [overflow-wrap:anywhere] [@media(max-width:767px)]:grid [@media(max-width:767px)]:gap-[var(--eg-space-2)] [@media(max-width:767px)]:p-0 before:content-[attr(data-label)] before:text-muted-foreground before:font-[family-name:var(--eg-font-body)] before:font-(weight:--eg-weight-semibold) [@media(min-width:768px)]:before:hidden';
   protected readonly columnClasses =
     'h-auto min-w-0 whitespace-normal p-[var(--eg-space-3)] text-xs font-(weight:--eg-weight-semibold) text-muted-foreground';
-  /**
-   * Header and body rows sit in detached tables, so all three need one identical track template;
-   * character floors keep ids and refs readable before horizontal scrolling. Every breakpoint is an
-   * explicit media query here: Tailwind's `max-[767px]` compiles to `width < 767px`, which would
-   * give a 767 px viewport a visible header above a stacked row.
-   */
+  // Detached header and body tables share tracks with readable floors before local scrolling.
+  // Explicit media queries keep the stacked layout and hidden header aligned at 767 px.
   protected readonly rowClasses =
-    'run-row grid grid-cols-[minmax(calc(19ch_+_var(--eg-space-3)*2),1.2fr)_minmax(0,.8fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(19ch,1fr)_minmax(0,1fr)_minmax(0,1.1fr)] [@media(max-width:767px)]:grid-cols-[minmax(0,1fr)]';
+    'run-row grid grid-cols-[minmax(calc(19ch_+_var(--eg-space-3)*2),1.2fr)_minmax(calc(14ch_+_var(--eg-space-3)*2),.8fr)_minmax(calc(16ch_+_var(--eg-space-3)*2),1fr)_minmax(calc(19ch_+_var(--eg-space-3)*2),1.1fr)_minmax(19ch,1fr)_minmax(14ch,1fr)_minmax(calc(15ch_+_var(--eg-space-3)*2),1fr)] [@media(max-width:767px)]:grid-cols-[minmax(0,1fr)]';
   /**
    * The same escaping for `rerun_label` / `reprocess_label`. Both are caller-written strings shown
    * in the row, so neither may reach the cell as a raw value (a U+202E label would reorder the rest
@@ -110,6 +105,9 @@ export class RunListTableComponent {
     id: $localize`:@@runs.list.column-id:Run id`,
     state: $localize`:@@runs.list.column-state:State`,
     evidence: $localize`:@@runs.list.column-evidence:Evidence`,
+    evidenceUnavailable: $localize`:@@runs.list.evidence-unavailable:Unavailable`,
+    evidenceHint: $localize`:@@runs.list.evidence-hint:Open the run for evidence completeness.`,
+    utc: $localize`:@@runs.list.utc:UTC`,
     decision: $localize`:@@runs.list.column-decision:Decision`,
     ref: $localize`:@@runs.list.column-ref:Ref`,
     scope: $localize`:@@runs.list.column-scope:Run scope`,

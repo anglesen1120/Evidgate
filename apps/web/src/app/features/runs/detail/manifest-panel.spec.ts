@@ -78,19 +78,17 @@ describe('ManifestPanelComponent', () => {
     );
     expect(root.querySelector('app-status-pill')).toBeNull();
   });
-  it('renders a null policy revision as unavailable while the other members stay values', async () => {
+  it('renders a missing policy revision as plain not provided while preserving present values', async () => {
     const run = { ...(ready.body as RunStateDto), policy_revision_id: null };
     const { root } = await render(manifestFromRun(run));
-    expect(root.querySelector('[data-manifest-policy] app-status-pill')?.textContent).toContain(
-      'Status unavailable',
-    );
-    expect(root.querySelectorAll('app-status-pill')).toHaveLength(1);
+    expect(root.querySelector('[data-manifest-policy]')?.textContent).toContain('Not provided');
+    expect(root.querySelector('app-status-pill')).toBeNull();
   });
-  it('renders each absent member as the shared unavailable state, never a value-like placeholder', async () => {
+  it('renders absent facts as plain not provided, never a status or a value-like placeholder', async () => {
     const { root } = await render(UNAVAILABLE_MANIFEST);
-    expect(root.querySelectorAll('app-status-pill')).toHaveLength(5);
+    expect(root.querySelector('app-status-pill')).toBeNull();
     for (const value of root.querySelectorAll('dd'))
-      expect(value.textContent).toContain('Status unavailable');
+      expect(value.textContent).toContain('Not provided');
     expect(root.querySelector('button')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
   });

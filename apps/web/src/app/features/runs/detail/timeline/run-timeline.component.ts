@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/ui/chips/status-pill.component';
 import { RUN_STATE_TONES, type RunState } from '../../../../shared/ui/chips/run-state-tone';
 import { runTimelineSteps, type TimelineStepStatus } from './run-timeline-steps';
+import { RUN_DETAIL_NOT_PROVIDED } from '../run-value-label';
 
 /** Served transitions supply step times; legacy runs retain an explicitly unknown history. */
 @Component({
@@ -47,7 +48,8 @@ export class RunTimelineComponent {
 
   protected readonly copy = {
     title: $localize`:@@runs.detail.timeline:Run state timeline`,
-    stepStatus: $localize`:@@runs.detail.timeline.step-status:Step status`,
+    inferred: $localize`:@@runs.detail.timeline.inferred:Inferred from current state`,
+    notProvided: RUN_DETAIL_NOT_PROVIDED,
     historyUnavailable: $localize`:@@runs.detail.timeline.history-unavailable:History unavailable for this run`,
     historyEmpty: $localize`:@@runs.detail.timeline.history-empty:No state changes recorded yet`,
     afterCancelNote: $localize`:@@runs.detail.timeline.after-cancel-note:Events that arrive after cancel are kept as evidence and never complete the run.`,
@@ -75,6 +77,8 @@ export class RunTimelineComponent {
 
   protected stepTone(status: TimelineStepStatus, state: RunState): StatusTone {
     if (status === 'current') return RUN_STATE_TONES[state];
-    return status === 'reached' ? 'success' : 'neutral';
+    return status === 'reached' && this.stateHistory() !== null && state !== 'created'
+      ? 'success'
+      : 'neutral';
   }
 }

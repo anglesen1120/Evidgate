@@ -1,10 +1,12 @@
 import { InteractivityChecker } from '@angular/cdk/a11y';
 import { provideZonelessChangeDetection, signal, type WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute } from '@angular/router';
 import { SessionStore } from '../../../core/session/session.store';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
 import { FakeMembersStore, lastAdmin, role } from './members-page.test-fixtures';
+import { routes } from './members.routes';
 
 describe('Members page (09.7.1-T2)', () => {
   let store: FakeMembersStore;
@@ -16,6 +18,7 @@ describe('Members page (09.7.1-T2)', () => {
       imports: [MembersPage],
       providers: [
         provideZonelessChangeDetection(),
+        { provide: ActivatedRoute, useValue: { snapshot: { data: {} } } },
         {
           provide: SessionStore,
           useValue: {
@@ -46,6 +49,21 @@ describe('Members page (09.7.1-T2)', () => {
     return value;
   }
 
+  it('marks the standalone members route as the page-heading owner', () => {
+    expect(
+      routes.find((route) => route.component === MembersPage)?.data?.['pageHeadingLevel'],
+    ).toBe(1);
+  });
+
+  it.each([1, 2])('uses heading level %s supplied by its route', async (level) => {
+    TestBed.overrideProvider(ActivatedRoute, {
+      useValue: { snapshot: { data: { pageHeadingLevel: level } } },
+    });
+    const { root } = await render();
+    const heading = root.querySelector(`header h${level}`);
+    expect(heading?.textContent?.trim()).toBe('Members and roles');
+    expect(root.querySelector(`header h${level === 1 ? 2 : 1}`)).toBeNull();
+  });
   it('renders ready members, pending status, role names and a semantic org-wide matrix', async () => {
     const { root } = await render();
     expect(root.querySelectorAll('[data-members-row]')).toHaveLength(3);

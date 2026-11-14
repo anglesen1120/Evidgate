@@ -8,6 +8,16 @@
     font-family: var(--eg-font-body);
   }
 
+  a[hlmBtn] {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button.spartan-button {
+    color: inherit;
+    background-color: transparent;
+  }
+
   button[hlmBtn],
   button[hlmTabsTrigger] {
     cursor: pointer;

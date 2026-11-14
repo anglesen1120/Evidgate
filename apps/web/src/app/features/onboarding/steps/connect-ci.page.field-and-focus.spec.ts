@@ -55,6 +55,7 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
   const tokens = signal<readonly IngestTokenView[]>([]);
   const refreshFailure = signal<'unavailable' | null>(null);
   const createCiBinding = vi.fn<OnboardingDataService['createCiBinding']>();
+  const createIngestToken = vi.fn<OnboardingDataService['createIngestToken']>();
   const refresh = vi.fn<(orgId: string, projectId: string) => Promise<void>>();
 
   beforeEach(async () => {
@@ -62,6 +63,7 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
     bindings.set([]);
     tokens.set([]);
     refreshFailure.set(null);
+    createIngestToken.mockReset();
     createCiBinding
       .mockReset()
       .mockResolvedValue({ binding: BINDING, binding_challenge: 'challenge-shown-once' });
@@ -76,7 +78,7 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
         provideZonelessChangeDetection(),
         {
           provide: OnboardingDataService,
-          useValue: { createCiBinding, createIngestToken: vi.fn(), rotateIngestToken: vi.fn() },
+          useValue: { createCiBinding, createIngestToken, rotateIngestToken: vi.fn() },
         },
         {
           provide: OnboardingStore,
@@ -169,18 +171,22 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
     await fill({ 'connect-oidc-repo-name': ' acme/api ' });
     // The edited field answers for itself: its reason and its invalidity go.
     expect(field('connect-oidc-repo-name').getAttribute('aria-invalid')).toBeNull();
-    expect(field('connect-oidc-repo-name').hasAttribute('aria-describedby')).toBe(false);
+    expect(field('connect-oidc-repo-name').getAttribute('aria-describedby')).toBe(
+      'connect-repo-name-hint',
+    );
     expect(root.querySelector('#connect-repo-name-error')?.textContent?.trim()).toBe('');
     // The field the visitor did not touch keeps its reason, and the alert keeps the rows it spoke.
     expect(field('connect-oidc-repo-id').getAttribute('aria-invalid')).toBe('true');
     expect(field('connect-oidc-repo-id').getAttribute('aria-describedby')).toBe(
-      'connect-repo-id-error',
+      'connect-repo-id-hint connect-repo-id-error',
     );
     expect(root.querySelector('#connect-repo-id-error')?.textContent).toContain(
       'No such repository ID.',
     );
     const alert = root.querySelector<HTMLElement>('[data-testid="connect-ci-details"]')!;
     expect(alert.textContent).toContain('That repository is not visible to the app.');
+    expect(alert.textContent).toContain('Repository (owner/repo):');
+    expect(alert.textContent).not.toContain('/repository_full_name');
 
     // An edited field that is still invalid stays invalid, now for its own reason.
     await fill({ 'connect-oidc-repo-id': 'abc' });
@@ -195,16 +201,67 @@ describe('ConnectCiPage field reasons and re-read focus', () => {
     }
   });
 
-  it('associates a field error id only while that reason is shown', () => {
-    // Nothing is refused yet, so nothing describes a control with an error nobody renders text in.
-    expect(field('connect-oidc-repo-id').hasAttribute('aria-describedby')).toBe(false);
-    expect(field('connect-oidc-repo-name').hasAttribute('aria-describedby')).toBe(false);
-    expect(field('connect-token-name').hasAttribute('aria-describedby')).toBe(false);
+  it('associates initial hints without an error id before validation or refusal', () => {
+    expect(field('connect-oidc-repo-id').getAttribute('aria-describedby')).toBe(
+      'connect-repo-id-hint',
+    );
+    expect(field('connect-oidc-repo-name').getAttribute('aria-describedby')).toBe(
+      'connect-repo-name-hint',
+    );
+    expect(field('connect-token-name').getAttribute('aria-describedby')).toBe(
+      'connect-token-name-hint',
+    );
     expect(field('connect-oidc-refs').getAttribute('aria-describedby')).toBe('connect-refs-hint');
     expect(field('connect-oidc-workflows').getAttribute('aria-describedby')).toBe(
       'connect-workflows-hint',
     );
   });
+
+  it('focuses the first invalid OIDC field after an empty submit', async () => {
+    const submitButton = root.querySelector<HTMLButtonElement>(
+      '[data-testid="connect-oidc-submit"]',
+    );
+    submitButton?.focus();
+    await submit();
+    expect(document.activeElement).toBe(field('connect-oidc-repo-id'));
+    expect(field('connect-oidc-repo-id').getAttribute('aria-invalid')).toBe('true');
+    expect(root.querySelector('#connect-repo-id-error')?.textContent).toContain('Enter a positive');
+    expect(createCiBinding).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['connect-oidc-repo-id', '9007199254740992'],
+    ['connect-oidc-repo-name', 'missing-owner'],
+    ['connect-oidc-refs', ' \n '],
+    ['connect-oidc-workflows', Array.from({ length: 33 }, () => 'workflow').join('\n')],
+  ])('focuses the invalid OIDC control %s instead of a valid earlier field', async (id, value) => {
+    await fillOidc();
+    await fill({ [id]: value });
+    await submit();
+    expect(document.activeElement).toBe(field(id));
+    expect(field(id).getAttribute('aria-invalid')).toBe('true');
+    expect(createCiBinding).not.toHaveBeenCalled();
+  });
+
+  it.each(['', '   ', 'a'.repeat(129)])(
+    'focuses an invalid token name after submit',
+    async (value) => {
+      await fill({ 'connect-token-name': value });
+      const submitButton = root.querySelector<HTMLButtonElement>(
+        '[data-testid="connect-token-submit"]',
+      );
+      submitButton?.focus();
+      const form = root.querySelector('[data-testid="connect-token-panel"] form');
+      form?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(field('connect-token-name'));
+      expect(field('connect-token-name').getAttribute('aria-invalid')).toBe('true');
+      expect(root.querySelector('#connect-token-name-error')?.textContent).toContain(
+        'Enter a token name',
+      );
+      expect(createIngestToken).not.toHaveBeenCalled();
+    },
+  );
 
   it('refresh keeps focus when focused control still enabled', async () => {
     refreshFailure.set('unavailable');

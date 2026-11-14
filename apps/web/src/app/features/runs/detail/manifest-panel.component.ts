@@ -1,13 +1,13 @@
 import { ChangeDetectionStrategy, Component, effect, input, signal } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
-import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { escapeFormatChars } from '../list/ref-name-display';
 import type { ManifestSummary } from './manifest-summary';
+import { RUN_DETAIL_NOT_PROVIDED } from './run-value-label';
 
 @Component({
   selector: 'app-manifest-panel',
-  imports: [StatusPillComponent, HlmButton, HlmCard, HlmCardTitle],
+  imports: [HlmButton, HlmCard, HlmCardTitle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './manifest-panel.component.html',
   host: {
@@ -22,6 +22,7 @@ export class ManifestPanelComponent {
   protected readonly copying = signal(false);
   protected readonly copy = {
     title: $localize`:@@runs.detail.manifest:Manifest summary`,
+    notProvided: RUN_DETAIL_NOT_PROVIDED,
     hash: $localize`:@@runs.detail.manifest-hash:Manifest hash`,
     suite: $localize`:@@runs.detail.suite:Suite revision`,
     policy: $localize`:@@runs.detail.policy:Policy revision`,

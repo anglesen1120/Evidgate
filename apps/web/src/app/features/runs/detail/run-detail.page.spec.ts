@@ -14,7 +14,6 @@ import { RunDataService } from '../data/run-data.service';
 import { RunDetailPage } from './run-detail.page';
 import { revision, revisionPage, deferred } from './run-detail-store.fixtures';
 import { routes } from '../runs.routes';
-
 // Both bodies are validated against the current RunStateDto by fixture-contract.spec.ts.
 const run = ready.body as RunStateDto;
 const refRun = formatted.body as RunStateDto;
@@ -93,13 +92,13 @@ describe('RunDetailPage', () => {
     await tick.promise;
     await harness.fixture.whenStable();
   }
-  it('loads a lazy deep link with its own heading and verbatim header values, no derived verdict', async () => {
+  it('loads a lazy deep link with its own heading, localized purpose and verbatim identifiers, no derived verdict', async () => {
     const { root } = await open();
     expect(get).toHaveBeenCalledWith(run.run_id);
     expect(root.querySelectorAll('h1')).toHaveLength(1);
     expect(root.querySelector('[data-run-id]')?.textContent).toBe(run.run_id);
     expect(root.querySelector('[data-run-version]')?.textContent).toBe(String(run.version));
-    expect(root.querySelector('[data-run-purpose]')?.textContent).toBe(run.purpose);
+    expect(root.querySelector('[data-run-purpose]')?.textContent).toBe('Replay');
     expect(root.querySelector('[data-run-ref] bdi')?.textContent).toBe(run.ref.name);
     expect(root.querySelector('[data-run-evidence-revision] bdi')?.textContent).toBe(
       run.current_evidence_revision_id,
@@ -181,7 +180,7 @@ describe('RunDetailPage', () => {
       run.declared_producers,
     );
   });
-  it('renders attempts from the wire: statuses verbatim, retry chain grouped, no decision', async () => {
+  it('localizes normalized attempt statuses, preserves reporter strings and groups retries without a decision', async () => {
     const { root } = await open();
     expect(listAttempts).toHaveBeenCalledExactlyOnceWith(run.run_id, { limit: 200 });
     const attempts = root.querySelector('app-attempts-table')!;
@@ -189,10 +188,10 @@ describe('RunDetailPage', () => {
     expect(rows).toHaveLength(attemptPage.items.length);
     const chain = rows.filter((r) => r.querySelector('th')?.textContent?.includes('Attempt 2'));
     expect(chain).toHaveLength(1);
-    expect(chain[0]!.querySelector('[data-attempt-normalised]')?.textContent).toContain('passed');
+    expect(chain[0]!.querySelector('[data-attempt-normalised]')?.textContent).toContain('Passed');
     const blocked = rows.find((r) => r.textContent?.includes('BLOCKED_BY_ENV'))!;
-    expect(blocked.querySelector('[data-attempt-normalised]')?.textContent).toContain('blocked');
-    expect(blocked.querySelector('[data-attempt-normalised]')?.textContent).not.toContain('passed');
+    expect(blocked.querySelector('[data-attempt-normalised]')?.textContent).toContain('Blocked');
+    expect(blocked.querySelector('[data-attempt-normalised]')?.textContent).not.toContain('Passed');
     expect(attempts.querySelector('[data-attempts-healing-unavailable]')).not.toBeNull();
     expect(attempts.querySelector('[data-attempts-unavailable]')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
@@ -246,10 +245,11 @@ describe('RunDetailPage', () => {
     );
     expect(root.textContent).not.toContain('PASS');
   });
-  it('renders a null ref kind as the shared unavailable state', async () => {
+  it('renders a missing ref kind as plain not provided rather than a status', async () => {
     get.mockResolvedValue({ ...run, ref: { ...run.ref, kind: null } });
     const { root } = await open();
-    expect(root.querySelector('[data-run-ref-kind]')?.textContent).toContain('Status unavailable');
+    expect(root.querySelector('[data-run-ref-kind]')?.textContent).toContain('Not provided');
+    expect(root.querySelector('[data-run-ref-kind] app-status-pill')).toBeNull();
   });
   it('foreign and missing ids render the same not-found view without echoing either id', async () => {
     get.mockRejectedValue(
@@ -325,8 +325,7 @@ describe('RunDetailPage', () => {
       'sha256:manifest',
     );
     expect(decision.querySelector('[data-decision-evaluator] dd')?.textContent).toBe('1.4.0');
-    expect(decision.querySelector('[data-decision-mode] dd')?.textContent).toBe('live');
-
+    expect(decision.querySelector('[data-decision-mode] dd')?.textContent).toBe('Live evaluation');
     const evidence = root.querySelector('app-evidence-panel')!;
     expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
       'Evidence incomplete',

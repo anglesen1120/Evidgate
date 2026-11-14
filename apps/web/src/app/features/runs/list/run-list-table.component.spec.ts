@@ -1,4 +1,6 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import viLocale from '@angular/common/locales/vi';
+import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
@@ -80,8 +82,8 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(
       [...root.querySelectorAll('[role="columnheader"]')].map((cell) => cell.textContent?.trim()),
     ).toEqual(['Run id', 'State', 'Evidence', 'Decision', 'Ref', 'Run scope', 'Created (UTC)']);
-    expect(root.querySelectorAll('[data-run-evidence] [data-tone="neutral"]')).toHaveLength(5);
-    expect(root.querySelector('[data-run-evidence] [data-tone="success"]')).toBeNull();
+    expect(root.querySelectorAll('[data-run-evidence] .status-pill--neutral')).toHaveLength(5);
+    expect(root.querySelector('[data-run-evidence] .status-pill--success')).toBeNull();
     expect(
       [...root.querySelectorAll('[data-run-decision]')].map((cell) =>
         cell.textContent?.replace(/\s+/g, ' ').trim(),
@@ -101,6 +103,37 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(root.querySelector('[data-run-decision] [title]')?.getAttribute('title')).toBe(
       'The decision could not be read. Try again.',
     );
+  });
+  it('keeps dense state and evidence labels short with the explanation outside the badge', async () => {
+    const { root } = await render([run(1)]);
+    expect(root.querySelector('app-run-state-pill')?.textContent?.trim()).toBe('Complete');
+    const evidence = root.querySelector('[data-run-evidence]');
+    expect(evidence?.querySelector('app-status-pill')?.textContent?.trim()).toBe('Unavailable');
+    expect(evidence?.textContent).toContain('Open the run for evidence completeness.');
+    expect(evidence?.querySelector('app-status-pill')?.textContent).not.toContain('Open the run');
+  });
+  it('formats a short UTC date and time without losing the exact server instant', async () => {
+    const instant = '2026-11-02T18:47:05.130948+07:00';
+    const { root } = await render([run(1, { created_at: instant })]);
+    const time = root.querySelector('time');
+    expect(time?.getAttribute('datetime')).toBe(instant);
+    expect(time?.getAttribute('title')).toBe(instant);
+    expect(time?.textContent?.replace(/\s+/g, ' ').trim()).toBe('11/2/26 11:47 AM UTC');
+    expect(
+      [...root.querySelectorAll('time > span')].every((part) =>
+        part.classList.contains('whitespace-nowrap'),
+      ),
+    ).toBe(true);
+  });
+  it('formats the same UTC instant with Vietnamese date and time conventions', async () => {
+    registerLocaleData(viLocale);
+    TestBed.overrideProvider(LOCALE_ID, { useValue: 'vi' });
+    const instant = '2026-11-02T18:47:05.130948+07:00';
+    const { root } = await render([run(1, { created_at: instant })]);
+    const parts = [...root.querySelectorAll('time > span')];
+    expect(parts[0]?.textContent?.trim()).toBe('2/11/26');
+    expect(parts[1]?.textContent?.trim()).toBe('11:47 UTC');
+    expect(root.querySelector('time')?.getAttribute('title')).toBe(instant);
   });
   it('supplies localized field labels for every stacked record without changing table semantics', async () => {
     const { root } = await render([run(1)]);

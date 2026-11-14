@@ -39,6 +39,7 @@ class CreateProjectStub {
 class ConnectCiStub {
   readonly orgId = input.required<string>();
   readonly projectId = input.required<string>();
+  readonly active = input(true);
 }
 
 @Component({ selector: 'app-onboarding-enable-collection', template: '' })

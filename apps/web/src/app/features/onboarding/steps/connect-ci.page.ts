@@ -6,11 +6,13 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Injector,
   afterRenderEffect,
   computed,
   effect,
   inject,
   input,
+  linkedSignal,
   signal,
   viewChild,
 } from '@angular/core';
@@ -31,6 +33,7 @@ import {
   restoreRefreshFocus,
 } from '../../../shared/a11y/refresh-focus';
 import {
+  focusFieldAfterRender,
   focusRefusalHeading,
   focusWaitingLine,
   requestRefusalFocus,
@@ -45,7 +48,15 @@ import { ConnectionHealthComponent } from '../health/connection-health.component
 import { deriveConnectionHealth, type ConnectionHealth } from '../health/connection-health';
 import { HealthBoundaryClock } from '../health/health-boundary';
 import { OnboardingStore } from '../onboarding.store';
-import { sanitizeLabel } from './default-policy';
+import {
+  MAX_REF_ENTRIES,
+  MAX_TOKEN_NAME_LENGTH,
+  connectionLines,
+  invalidRepositoryId,
+  invalidRepositoryName,
+  invalidTokenName,
+  validConnectionLines,
+} from './connect-ci.validation';
 import { describedBy, fieldDetails, reasonFor } from './field-details';
 import {
   NO_DISMISSED_REASONS,
@@ -53,12 +64,6 @@ import {
   showsFieldReason,
   type DismissedReasons,
 } from './server-reasons';
-
-/** Both OIDC list fields mirror the contract's maxItems limit. */
-const MAX_REF_ENTRIES = 32;
-
-/** The ingest-token name limit in Unicode code points (contract `name` `maxLength: 128`). */
-const MAX_TOKEN_NAME_LENGTH = 128;
 
 @Component({
   selector: 'app-onboarding-connect-ci',
@@ -84,6 +89,7 @@ const MAX_TOKEN_NAME_LENGTH = 128;
 export class ConnectCiPage {
   readonly orgId = input.required<string>();
   readonly projectId = input.required<string>();
+  readonly active = input(true);
   protected readonly store = inject(OnboardingStore);
   protected readonly slot = inject(RevealSlot);
   private readonly data = inject(OnboardingDataService);
@@ -91,6 +97,7 @@ export class ConnectCiPage {
   private readonly destroyRef = inject(DestroyRef);
   private readonly document = inject(DOCUMENT);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   private scopeVersion = 0;
   private readonly healthClock = new HealthBoundaryClock(() => this.store.tokens());
   /** The place a re-read may take, held from the press until the pass that spends it. */
@@ -99,11 +106,7 @@ export class ConnectCiPage {
   private readonly tokenHeading = viewChild<ElementRef<HTMLHeadingElement>>('tokenHeading');
   private readonly failureHeadingRef = viewChild<ElementRef<HTMLElement>>('failureHeadingEl');
   private readonly busyStatusRef = viewChild<ElementRef<HTMLElement>>('busyStatus');
-  /**
-   * Set when a press of this page's own command was refused. The render pass moves focus to the
-   * refusal heading once it exists; a background re-read never sets it, so a refresh that lands on
-   * its own moves nothing.
-   */
+  /** Only this page's own refused command requests a focus handoff. */
   private readonly announceFailure = signal(false);
   protected readonly busy = signal(false);
   protected readonly refreshing = signal(false);
@@ -118,49 +121,36 @@ export class ConnectCiPage {
   );
   protected readonly oidcSubmitted = signal(false);
   protected readonly tokenSubmitted = signal(false);
-  protected readonly repositoryId = signal('');
-  protected readonly repositoryName = signal('');
-  protected readonly refs = signal('');
-  protected readonly workflows = signal('');
-  protected readonly tokenName = signal('');
+  private readonly draftScope = computed(() => ({
+    orgId: this.orgId(),
+    projectId: this.projectId(),
+  }));
+  protected readonly repositoryId = linkedSignal({
+    source: this.draftScope,
+    computation: () => '',
+  });
+  protected readonly repositoryName = linkedSignal({
+    source: this.draftScope,
+    computation: () => '',
+  });
+  protected readonly refs = linkedSignal({ source: this.draftScope, computation: () => '' });
+  protected readonly workflows = linkedSignal({ source: this.draftScope, computation: () => '' });
+  protected readonly tokenName = linkedSignal({ source: this.draftScope, computation: () => '' });
   // Metadata only: this timestamp is safe to retain after a rotation reveal is dismissed.
   protected readonly overlapEndsAt = signal<string | null>(null);
   protected readonly bindingPermitted = computed(() => this.session.has('ci_binding:write'));
   protected readonly tokenPermitted = computed(() => this.session.has('ingest_token:write'));
-  protected readonly repoIdInvalid = computed(
-    () =>
-      !/^\d+$/.test(this.repositoryId().trim()) ||
-      !Number.isSafeInteger(Number(this.repositoryId())) ||
-      Number(this.repositoryId()) <= 0,
+  protected readonly repoIdInvalid = computed(() => invalidRepositoryId(this.repositoryId()));
+  protected readonly repoNameInvalid = computed(() => invalidRepositoryName(this.repositoryName()));
+  protected readonly refsInvalid = computed(() => !validConnectionLines(this.refs()));
+  protected readonly workflowsInvalid = computed(() => !validConnectionLines(this.workflows()));
+  protected readonly tokenNameInvalid = computed(() => invalidTokenName(this.tokenName()));
+  protected readonly details = computed(() =>
+    fieldDetails(this.failure()?.details ?? [], 'connection'),
   );
-  protected readonly repoNameInvalid = computed(
-    () => !/^[^/\s]+\/[^/\s]+$/.test(this.repositoryName().trim()),
-  );
-  protected readonly refsInvalid = computed(() => !this.validLines(this.refs()));
-  protected readonly workflowsInvalid = computed(() => !this.validLines(this.workflows()));
-  protected readonly tokenNameInvalid = computed(() => {
-    const length = [...this.tokenName().trim()].length;
-    return length < 1 || length > MAX_TOKEN_NAME_LENGTH;
-  });
-  /** The refusal's field rows, and the reason per control, both as server text made display-safe. */
-  protected readonly details = computed(() => {
-    // Sanitised before the field lookup, so a control character cannot hide the field it names.
-    const rows = (this.failure()?.details ?? []).map((detail) =>
-      detail.path === undefined
-        ? { ...detail, reason: sanitizeLabel(detail.reason) }
-        : { ...detail, path: sanitizeLabel(detail.path), reason: sanitizeLabel(detail.reason) },
-    );
-    return fieldDetails(rows);
-  });
   /** The reasons the visitor has answered by editing a field; see `server-reasons.ts`. */
   private readonly dismissed = signal<DismissedReasons>(NO_DISMISSED_REASONS);
-  /**
-   * The reason `field` still shows, or `null`.
-   *
-   * A reason is cleared by the first edit of its own field — not by a render, a focus or a later
-   * refill — because the listed refusal describes the values that were submitted, and the visitor
-   * is the one who says a value is no longer the one they meant.
-   */
+  /** Editing a field dismisses its submitted reason, while the alert retains the diagnostics. */
   private serverReason(field: string): string | null {
     if (!showsFieldReason(this.dismissed(), this.failure(), field)) return null;
     return reasonFor(this.details(), field);
@@ -182,6 +172,10 @@ export class ConnectCiPage {
   protected readonly describedBy = describedBy;
 
   protected readonly intro = $localize`:@@onboarding.connect.intro:Choose one connection method. Next becomes available only after the server confirms a binding or token.`;
+  protected readonly requiredFields = $localize`:@@onboarding.fields.required:Fields marked * are required.`;
+  protected readonly repoIdHint = $localize`:@@onboarding.connect.repo-id-hint:Enter the repository's numeric GitHub ID, not its owner/repo name.`;
+  protected readonly repoNameHint = $localize`:@@onboarding.connect.repo-name-hint:Use the GitHub owner and repository name, for example acme/web.`;
+  protected readonly tokenNameHint = $localize`:@@onboarding.connect.token-name-hint:Choose a name that identifies this token in your CI setup.`;
   protected readonly oidcTitle = $localize`:@@onboarding.connect.oidc-title:GitHub Actions (OIDC)`;
   protected readonly oidcHint = $localize`:@@onboarding.connect.oidc-hint:Set the one-time challenge as the repository variable EVIDGATE_BINDING_CHALLENGE. The binding becomes active after the first CI exchange; the browser never exchanges CI credentials.`;
   protected readonly workflowHint = $localize`:@@onboarding.connect.workflow-hint:In your workflow, grant permissions: id-token: write. Pass the GitHub OIDC JWT and EVIDGATE_BINDING_CHALLENGE to your CI-side Evidgate exchange. Keep the challenge out of workflow files and logs.`;
@@ -237,10 +231,7 @@ export class ConnectCiPage {
   protected readonly revealShownLabel = $localize`:@@onboarding.connect.reveal-shown:A one-time value is shown. Save it before leaving this step.`;
   protected readonly truncatedLabel = $localize`:@@onboarding.connect.list-truncated:Showing the first ${CONNECT_LIST_LIMIT}:CONNECT_LIST_LIMIT: entries; more exist, so a newer entry may not appear here.`;
 
-  /**
-   * Connection health of the credentials step 2 already lists: derived from the store's two
-   * lists, never fetched, so the panel describes only what the server answered.
-   */
+  /** Uses only metadata already read for this step, never one-time values. */
   protected readonly health = computed<ConnectionHealth>(() =>
     deriveConnectionHealth({
       bindings: this.store.bindings(),
@@ -250,11 +241,7 @@ export class ConnectCiPage {
       now: this.healthClock.now(),
     }),
   );
-  /**
-   * The credential the CLI quickstart names, as metadata only: prefer an active usable token,
-   * then a rotating token still inside its overlap. `null` keeps the snippet's
-   * "create a token first" branch. The one-time secret is never reachable from here.
-   */
+  /** Prefer usable active metadata, then an unexpired rotating token; never retain the secret. */
   protected readonly quickstartToken = computed<{ name: string; prefix: string } | null>(() => {
     const credentials = this.health().credentials;
     const preferred =
@@ -282,6 +269,7 @@ export class ConnectCiPage {
     effect(() => {
       this.orgId();
       this.projectId();
+      this.active();
       this.scopeVersion += 1;
       this.busy.set(false);
       this.slot.clear();
@@ -290,11 +278,16 @@ export class ConnectCiPage {
     });
     effect((onCleanup) => {
       this.store.tokens();
-      this.healthClock.arm();
+      if (this.active()) this.healthClock.arm();
+      else this.healthClock.stop();
       onCleanup(() => this.healthClock.stop());
     });
-    // Signing out stops the timer too: this step can stay mounted while the session ends.
-    const endOfSession = this.session.onSessionEnd(() => this.healthClock.stop());
+    // A retained step must discard one-time values when its session ends.
+    const endOfSession = this.session.onSessionEnd(() => {
+      this.scopeVersion += 1;
+      this.healthClock.stop();
+      this.slot.clear();
+    });
     // The refusal heading is the page's own focus target: outside both alerts, so the move neither
     // repeats an announcement nor leaves the visitor on `<body>` after a disabled press. The cue is
     // consumed after render, so a refusal whose heading never renders cannot leave it armed.
@@ -354,29 +347,19 @@ export class ConnectCiPage {
     }
   }
 
-  private lines(value: string): string[] {
-    return value
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-  }
-
-  private validLines(value: string): boolean {
-    const count = this.lines(value).length;
-    return count >= 1 && count <= MAX_REF_ENTRIES;
-  }
-
   protected async createBinding(): Promise<void> {
     this.oidcSubmitted.set(true);
-    if (
-      this.busy() ||
-      !this.bindingPermitted() ||
-      this.repoIdInvalid() ||
-      this.repoNameInvalid() ||
-      this.refsInvalid() ||
-      this.workflowsInvalid()
-    )
+    if (this.busy() || !this.bindingPermitted() || !this.active()) return;
+    const invalidId = [
+      this.repoIdInvalid() && 'connect-oidc-repo-id',
+      this.repoNameInvalid() && 'connect-oidc-repo-name',
+      this.refsInvalid() && 'connect-oidc-refs',
+      this.workflowsInvalid() && 'connect-oidc-workflows',
+    ].find((id) => id !== false);
+    if (invalidId) {
+      this.focusInvalid(invalidId);
       return;
+    }
     const orgId = this.orgId();
     const projectId = this.projectId();
     const version = this.scopeVersion;
@@ -386,8 +369,8 @@ export class ConnectCiPage {
           provider: 'github_actions',
           repository_id: Number(this.repositoryId()),
           repository_full_name: this.repositoryName().trim(),
-          allowed_ref_patterns: this.lines(this.refs()),
-          allowed_workflow_refs: this.lines(this.workflows()),
+          allowed_ref_patterns: connectionLines(this.refs()),
+          allowed_workflow_refs: connectionLines(this.workflows()),
         });
         if (!this.isCurrent(version, orgId, projectId)) return;
         this.overlapEndsAt.set(null);
@@ -402,7 +385,11 @@ export class ConnectCiPage {
 
   protected async createToken(): Promise<void> {
     this.tokenSubmitted.set(true);
-    if (this.busy() || !this.tokenPermitted() || this.tokenNameInvalid()) return;
+    if (this.busy() || !this.tokenPermitted() || !this.active()) return;
+    if (this.tokenNameInvalid()) {
+      this.focusInvalid('connect-token-name');
+      return;
+    }
     const orgId = this.orgId();
     const projectId = this.projectId();
     const version = this.scopeVersion;
@@ -422,8 +409,21 @@ export class ConnectCiPage {
     );
   }
 
+  private focusInvalid(id: string): void {
+    const version = this.scopeVersion;
+    const orgId = this.orgId();
+    const projectId = this.projectId();
+    focusFieldAfterRender({
+      injector: this.injector,
+      host: this.host,
+      id,
+      current: () => this.isCurrent(version, orgId, projectId),
+    });
+  }
+
   protected async rotate(token: IngestTokenView): Promise<void> {
-    if (this.busy() || !this.tokenPermitted() || token.status !== 'active') return;
+    if (!this.active() || this.busy() || !this.tokenPermitted() || token.status !== 'active')
+      return;
     const orgId = this.orgId();
     const projectId = this.projectId();
     const version = this.scopeVersion;
@@ -463,6 +463,7 @@ export class ConnectCiPage {
   private isCurrent(version: number, orgId: string, projectId: string): boolean {
     return (
       !this.destroyRef.destroyed &&
+      this.active() &&
       version === this.scopeVersion &&
       this.orgId() === orgId &&
       this.projectId() === projectId

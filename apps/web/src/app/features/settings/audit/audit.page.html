@@ -19,9 +19,6 @@
     }
     <p class="mt-2! text-muted-foreground">{{ copy.description }}</p>
   </div>
-  @if (session.currentOrg(); as org) {
-    <app-audit-export class="min-w-0 max-w-full" [orgId]="org.id" />
-  }
 </header>
 <form
   hlmCard
@@ -33,7 +30,12 @@
   <div class="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
     <div class="grid min-w-0 gap-2">
       <label hlmLabel for="audit-actor">{{ copy.actorType }}</label>
-      <hlm-select name="actorType" [(ngModel)]="draft.actorType" [itemToString]="actorLabel">
+      <hlm-select
+        name="actorType"
+        [ngModel]="draft().actorType"
+        (ngModelChange)="updateDraft({ actorType: $event })"
+        [itemToString]="actorLabel"
+      >
         <hlm-select-trigger
           [buttonId]="'audit-actor'"
           class="w-full min-h-[var(--eg-control-touch)] whitespace-normal"
@@ -58,8 +60,11 @@
         id="audit-action"
         name="action"
         maxlength="128"
-        [(ngModel)]="draft.action"
+        [ngModel]="draft().action"
+        (ngModelChange)="updateDraft({ action: $event })"
+        [aria-describedby]="'audit-action-hint'"
       />
+      <p id="audit-action-hint" class="m-0 text-xs text-muted-foreground">{{ copy.actionHint }}</p>
     </div>
     <div class="grid min-w-0 gap-2">
       <label hlmLabel for="audit-object">{{ copy.objectType }}</label>
@@ -69,8 +74,11 @@
         id="audit-object"
         name="objectType"
         maxlength="64"
-        [(ngModel)]="draft.objectType"
+        [ngModel]="draft().objectType"
+        (ngModelChange)="updateDraft({ objectType: $event })"
+        [aria-describedby]="'audit-object-hint'"
       />
+      <p id="audit-object-hint" class="m-0 text-xs text-muted-foreground">{{ copy.objectHint }}</p>
     </div>
     <div class="grid min-w-0 gap-2">
       <label hlmLabel for="audit-from">{{ copy.from }}</label>
@@ -81,7 +89,8 @@
         name="from"
         type="datetime-local"
         step="1"
-        [(ngModel)]="draft.from"
+        [ngModel]="draft().from"
+        (ngModelChange)="updateDraft({ from: $event })"
         [attr.aria-invalid]="invalidRange()"
         [aria-describedby]="
           invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
@@ -97,7 +106,8 @@
         name="to"
         type="datetime-local"
         step="1"
-        [(ngModel)]="draft.to"
+        [ngModel]="draft().to"
+        (ngModelChange)="updateDraft({ to: $event })"
         [attr.aria-invalid]="invalidRange()"
         [aria-describedby]="
           invalidRange() ? 'audit-date-hint audit-range-error' : 'audit-date-hint'
@@ -131,6 +141,13 @@
     </button>
   </div>
 </form>
+@if (session.currentOrg(); as org) {
+  <app-audit-export
+    class="mb-4 min-w-0 max-w-full"
+    [orgId]="org.id"
+    [hasDraftChanges]="unappliedFilters()"
+  />
+}
 @if (status() === 'error') {
   @if (store.loadError(); as failure) {
     @if (
@@ -158,6 +175,7 @@
   (retry)="reload()"
 >
   <section class="grid min-w-0 gap-3" [attr.aria-busy]="store.paging()">
+    <ng-container [ngTemplateOutlet]="pagination" />
     <app-audit-table [rows]="visibleRows()" />
     @if (pagingAlert(); as failure) {
       <div
@@ -191,42 +209,46 @@
     @if (store.browseCapped()) {
       <p role="status" data-audit-browse-capped>{{ browseCappedText(store.rows().length) }}</p>
     }
-    <nav class="flex flex-wrap gap-3" [attr.aria-label]="copy.pagination">
-      <button
-        hlmBtn
-        [variant]="'outline'"
-        class="min-h-[var(--eg-control-touch)] whitespace-normal"
-        type="button"
-        data-audit-previous
-        [disabled]="offset() === 0 || store.paging()"
-        (click)="previous()"
-      >
-        {{ copy.previous }}
-      </button>
-      <button
-        hlmBtn
-        [variant]="'outline'"
-        class="min-h-[var(--eg-control-touch)] whitespace-normal"
-        type="button"
-        data-audit-next
-        [disabled]="!nextWindow() || store.paging()"
-        (click)="next()"
-      >
-        {{ copy.next }}
-      </button>
-      @if (store.hasMore()) {
+    <ng-container [ngTemplateOutlet]="pagination" />
+    <ng-template #pagination>
+      <p data-audit-row-range>{{ rowRange() }}</p>
+      <nav class="flex flex-wrap gap-3" [attr.aria-label]="copy.pagination">
         <button
           hlmBtn
           [variant]="'outline'"
           class="min-h-[var(--eg-control-touch)] whitespace-normal"
           type="button"
-          data-audit-load-more
-          [disabled]="store.paging()"
-          (click)="loadMore()"
+          data-audit-previous
+          [disabled]="offset() === 0 || store.paging()"
+          (click)="previous()"
         >
-          {{ copy.loadMore }}
+          {{ copy.previous }}
         </button>
-      }
-    </nav>
+        <button
+          hlmBtn
+          [variant]="'outline'"
+          class="min-h-[var(--eg-control-touch)] whitespace-normal"
+          type="button"
+          data-audit-next
+          [disabled]="!nextWindow() || store.paging()"
+          (click)="next()"
+        >
+          {{ copy.next }}
+        </button>
+        @if (store.hasMore()) {
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            class="min-h-[var(--eg-control-touch)] whitespace-normal"
+            type="button"
+            data-audit-load-more
+            [disabled]="store.paging()"
+            (click)="loadMore()"
+          >
+            {{ copy.loadMore }}
+          </button>
+        }
+      </nav>
+    </ng-template>
   </section>
 </app-request-state>

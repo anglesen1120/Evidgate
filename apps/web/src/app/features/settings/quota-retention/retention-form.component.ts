@@ -86,6 +86,12 @@ export class RetentionFormComponent {
         next: next[field],
       }));
   });
+  private readonly artifactInput = viewChild<ElementRef<HTMLInputElement>>('artifactInput');
+  private readonly metadataInput = viewChild<ElementRef<HTMLInputElement>>('metadataInput');
+  protected readonly invalidSubmit = linkedSignal(() => {
+    this.store.policy();
+    return false;
+  });
   private readonly submitButton = viewChild<ElementRef<HTMLButtonElement>>('submitButton');
   private readonly dialog = viewChild<HlmDialog>('confirmationDialog');
 
@@ -108,17 +114,30 @@ export class RetentionFormComponent {
     return [error.message, ...bounds].join(' · ');
   }
 
-  protected submit(): void {
+  protected async submit(): Promise<void> {
     const form = this.form();
     form.markAllAsTouched();
-    if (form.invalid || !this.store.writable() || this.store.saving()) return;
+    if (form.invalid) {
+      this.invalidSubmit.set(true);
+      this.focusInvalid();
+      return;
+    }
+    this.invalidSubmit.set(false);
+    if (!this.store.writable() || this.store.saving()) return;
     const { artifact_days, metadata_days } = form.getRawValue();
     const old = this.store.policy();
     if (artifact_days === null || metadata_days === null || !old) return;
     const body = { artifact_days, metadata_days };
-    if (artifact_days < old.artifact_days || metadata_days < old.metadata_days)
+    if (artifact_days < old.artifact_days || metadata_days < old.metadata_days) {
       this.pending.set(body);
-    else void this.store.save(body);
+    } else if (!(await this.store.save(body)) && this.form() === form) {
+      this.focusInvalid();
+    }
+  }
+
+  private focusInvalid(): void {
+    if (this.fieldError('artifact_days')) this.artifactInput()?.nativeElement.focus();
+    else if (this.fieldError('metadata_days')) this.metadataInput()?.nativeElement.focus();
   }
 
   protected async confirm(): Promise<void> {

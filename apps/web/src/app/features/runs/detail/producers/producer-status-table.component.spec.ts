@@ -64,8 +64,8 @@ describe('ProducerStatusTableComponent', () => {
     const { root } = await render();
     expect(root.querySelector('section#producers[data-producer-status]')).not.toBeNull();
     expect(root.querySelector('tr[data-producer-slot="shard-3"]')).not.toBeNull();
-    expect(root.querySelector('[data-fact="identity"]')?.textContent).toContain('bound');
-    expect(root.querySelector('[data-fact="finalize"]')?.textContent).toContain('finalized');
+    expect(root.querySelector('[data-fact="identity"]')?.textContent).toContain('Bound');
+    expect(root.querySelector('[data-fact="finalize"]')?.textContent).toContain('Finalized');
     expect(root.querySelector('[data-fact="last-sequence"]')?.textContent).toContain('12');
     expect(root.querySelector('[data-fact="count"]')?.textContent).toContain('12 / 12');
     expect(root.querySelectorAll('[data-fact][data-unavailable]')).toHaveLength(0);
@@ -73,17 +73,39 @@ describe('ProducerStatusTableComponent', () => {
     expect(root.textContent).not.toMatch(/PASS|FAIL|Collection complete/);
   });
 
-  it('uses the shared unavailable state for every missing fact, never zero or missing identity', async () => {
+  it('keeps status fallbacks for statuses and plain not provided copy for missing facts', async () => {
     const { root } = await render(
       producerSlotsFromRun({ declared_producers: ['shard-3'], producers: [] }),
     );
     const cells = [...root.querySelectorAll('td[data-fact][data-unavailable]')];
     expect(cells).toHaveLength(4);
-    expect(cells.every((cell) => cell.querySelector('app-status-pill') !== null)).toBe(true);
-    expect(cells.every((cell) => cell.textContent?.includes('Status unavailable'))).toBe(true);
+    expect(cells.slice(0, 2).every((cell) => cell.querySelector('app-status-pill') !== null)).toBe(
+      true,
+    );
+    expect(
+      cells.slice(0, 2).every((cell) => cell.textContent?.includes('Status unavailable')),
+    ).toBe(true);
+    expect(cells.slice(2).every((cell) => cell.querySelector('app-status-pill') === null)).toBe(
+      true,
+    );
+    expect(cells.slice(2).every((cell) => cell.textContent?.includes('Not provided'))).toBe(true);
     expect(root.querySelector('[data-count-mismatch]')).toBeNull();
     expect(root.querySelectorAll('[data-badge]')).toHaveLength(0);
     expect(root.querySelector('[data-state="empty"]')).toBeNull();
+  });
+
+  it('preserves unknown producer codes and caller-written slot identifiers', async () => {
+    const { root } = await render([
+      {
+        ...FINALIZED,
+        producerId: 'bound',
+        identityState: 'future_identity',
+        finalizeStatus: 'future_finalize',
+      },
+    ]);
+    expect(root.querySelector('th[scope="row"] bdi')?.textContent).toBe('bound');
+    expect(root.querySelector('[data-fact="identity"] bdi')?.textContent).toBe('future_identity');
+    expect(root.querySelector('[data-fact="finalize"] bdi')?.textContent).toBe('future_finalize');
   });
 
   it.each([
@@ -100,7 +122,7 @@ describe('ProducerStatusTableComponent', () => {
     const { root } = await render([{ ...FINALIZED, count: null, expected: 12 }]);
     const cell = root.querySelector('[data-fact="count"]');
     expect(cell?.hasAttribute('data-unavailable')).toBe(true);
-    expect(cell?.textContent).toContain('Status unavailable');
+    expect(cell?.textContent).toContain('Not provided');
     expect(root.querySelector('[data-count-mismatch]')).toBeNull();
   });
 
@@ -236,9 +258,10 @@ describe('ProducerStatusTableComponent', () => {
     },
   );
 
-  it('distinguishes an unavailable declaration from an empty declaration', async () => {
+  it('distinguishes an absent declaration with plain not provided from a known empty declaration', async () => {
     const { root } = await render(null);
-    expect(root.querySelector('[data-state="unavailable"] app-status-pill')).not.toBeNull();
+    expect(root.querySelector('[data-state="unavailable"]')?.textContent).toContain('Not provided');
+    expect(root.querySelector('[data-state="unavailable"] app-status-pill')).toBeNull();
     expect(root.querySelector('[data-state="empty"]')).toBeNull();
   });
 

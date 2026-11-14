@@ -87,6 +87,43 @@ describe('RoleMatrixComponent responsive records', () => {
     expect(cells[1]?.querySelector('[data-granted]')).toBeNull();
   });
 
+  it('defaults mobile records to granted roles and explicitly expands the full matrix', async () => {
+    const { fixture, root } = await render();
+    const summary = root.querySelector('[data-members-granted-summary]');
+    expect(summary?.textContent).toContain(MEMBER.invited_email);
+    expect(summary?.textContent).toContain(ROLES[0]?.name);
+    expect(summary?.textContent).not.toContain(ROLES[1]?.name);
+    const button = root.querySelector<HTMLButtonElement>('button[aria-controls]');
+    if (!button) throw new Error('Expected full-matrix disclosure');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(root.querySelector('#members-full-matrix')?.classList.contains('max-md:hidden')).toBe(
+      true,
+    );
+    button.click();
+    await fixture.whenStable();
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    expect(button.textContent).toContain('Show granted roles only');
+    expect(root.querySelector('[data-members-granted-summary]')).toBeNull();
+    expect(root.querySelector('#members-full-matrix')?.classList.contains('max-md:hidden')).toBe(
+      false,
+    );
+    button.click();
+    await fixture.whenStable();
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(root.querySelector('[data-members-granted-summary]')).not.toBeNull();
+  });
+
+  it('names an empty grant set without inventing assigned roles', async () => {
+    const { fixture, root } = await render();
+    fixture.componentRef.setInput('matrix', {
+      columns: ROLES,
+      rows: [{ membership: MEMBER, granted: new Set<string>() }],
+    });
+    await fixture.whenStable();
+    const summary = root.querySelector('[data-members-granted-summary]');
+    expect(summary?.textContent).toContain('No roles assigned');
+    for (const role of ROLES) expect(summary?.textContent).not.toContain(role.name);
+  });
   it('keeps role catalogue unavailability distinct from an empty membership list', async () => {
     const { fixture, root } = await render();
     fixture.componentRef.setInput('matrix', { columns: [], rows: [] });

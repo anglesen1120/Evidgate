@@ -29,6 +29,7 @@ export class QuotaPanelComponent {
   protected readonly projectRowLimit = PROJECT_ROW_LIMIT;
   protected readonly warnClasses = `${BADGE_CLASSES} ${BADGE_TONE_CLASSES.warning}`;
   protected readonly blockedClasses = `${BADGE_CLASSES} ${BADGE_TONE_CLASSES.danger}`;
+  protected readonly notMeasured = $localize`:@@quota.panel.not-measured:Not measured yet.`;
 
   constructor() {
     this.quota.load();
