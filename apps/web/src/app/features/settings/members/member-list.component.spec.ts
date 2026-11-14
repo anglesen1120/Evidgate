@@ -4,6 +4,7 @@ import type { MembershipView, RoleView } from '@evidgate/sdk';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { activeMemberMenuTrigger, memberAction } from './member-actions.test-helpers';
 import { MemberListComponent } from './member-list.component';
+import { MEMBERS_DESKTOP } from './members-page.test-fixtures';
 
 function member(status: string): MembershipView {
   return {
@@ -36,7 +37,7 @@ describe('MemberListComponent', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       imports: [MemberListComponent],
-      providers: [provideZonelessChangeDetection()],
+      providers: [provideZonelessChangeDetection(), MEMBERS_DESKTOP],
     });
     fixture = TestBed.createComponent(MemberListComponent);
     root = fixture.nativeElement as HTMLElement;

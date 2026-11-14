@@ -223,8 +223,8 @@ for (const locale of LOCALES) {
     await expectNoPlaintext(page);
   });
 
-  // Keyboard consent is separate from reveal: Escape cancels safely, then Tab/Enter confirms.
-  test(`keyboard confirmation and reveal: trap, Copy, Escape (${locale})`, async ({
+  // Consent Escape cancels; reveal Escape preserves the irreplaceable value until explicit dismiss.
+  test(`keyboard confirmation and reveal: trap, Copy, Escape, explicit dismiss (${locale})`, async ({
     page,
     context,
   }) => {
@@ -272,6 +272,10 @@ for (const locale of LOCALES) {
     await page.keyboard.press('Shift+Tab');
     await expect.poll(focusInside).toBe(true);
     await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId('reveal-value')).toHaveValue(SECRET);
+    await expect.poll(focusInside).toBe(true);
+    await dialog.getByTestId('reveal-dismiss').click();
     await expect(dialog).not.toBeVisible();
     await expect(opener).toBeFocused();
     await expect(page.getByTestId('reveal-value')).toHaveCount(0);

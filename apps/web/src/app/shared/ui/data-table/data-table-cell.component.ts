@@ -9,7 +9,10 @@ import { DataTableValueComponent } from './data-table-value.component';
   selector: 'app-data-table-cell',
   imports: [NgTemplateOutlet, CopyableIdentifierComponent, DataTableValueComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'eg-table-value block min-w-0' },
+  host: {
+    class: 'eg-table-value block min-w-0',
+    '[attr.data-column-id]': 'column().id',
+  },
   template: `
     @if (column().cellTemplate; as template) {
       <ng-container [ngTemplateOutlet]="template" [ngTemplateOutletContext]="context()" />

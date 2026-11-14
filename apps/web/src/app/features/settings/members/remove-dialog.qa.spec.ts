@@ -11,6 +11,7 @@ import type { Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
 import { RemoveDialogComponent } from './remove-dialog.component';
 import { MembersStore } from './members.store';
+import { MEMBERS_DESKTOP } from './members-page.test-fixtures';
 
 function member(id: string, email: string): MembershipView {
   return {
@@ -85,6 +86,7 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
+        MEMBERS_DESKTOP,
         MembersStore,
         { provide: MembersDataService, useValue: data },
         {

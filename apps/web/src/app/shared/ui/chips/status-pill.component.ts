@@ -17,6 +17,7 @@ export type StatusTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
     }
     <span
       hlmBadge
+      [fullValue]="fullValue()"
       [variant]="'secondary'"
       [class]="badgeClasses()"
       class="status-pill"
@@ -30,9 +31,9 @@ export type StatusTone = 'success' | 'info' | 'warning' | 'danger' | 'neutral';
       <span class="status-pill__label min-w-0 whitespace-nowrap">{{ displayLabel() }}</span>
     </span>
     @if (detail()) {
-      <span class="status-pill__detail block whitespace-normal [overflow-wrap:anywhere]">{{
-        detail()
-      }}</span>
+      <span class="status-pill__detail block whitespace-normal [overflow-wrap:anywhere]">
+        <bdi>{{ detail() }}</bdi>
+      </span>
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -41,6 +42,8 @@ export class StatusPillComponent {
   readonly tone = input.required<StatusTone>();
   readonly label = input.required<string>();
   readonly dimension = input('');
+  /** Complete provenance when the visible label is deliberately abbreviated. */
+  readonly fullValue = input<string | null>(null);
   /** Optional complete explanation, rendered outside the compact badge. */
   readonly detail = input('');
   protected readonly icons = BADGE_ICON_NAMES;

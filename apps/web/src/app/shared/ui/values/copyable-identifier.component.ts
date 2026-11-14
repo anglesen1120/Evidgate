@@ -20,6 +20,7 @@ import type { BrnDialogRef } from '@spartan-ng/brain/dialog';
 
 import { CopyValueButtonComponent, type CopyValueButtonSize } from './copy-value-button.component';
 import { middleTruncate } from './middle-truncate';
+import { escapeFormatChars } from './ref-name-display';
 
 @Component({
   selector: 'app-copyable-identifier',
@@ -31,10 +32,13 @@ import { middleTruncate } from './middle-truncate';
         [class.preview]="truncate()"
         [class.full-value]="!truncate()"
         [attr.aria-hidden]="truncate() ? 'true' : null"
-        >{{ preview() }}</code
       >
+        <bdi [textContent]="preview()"></bdi>
+      </code>
       @if (truncate()) {
-        <span class="sr-only identifier-accessible">{{ accessibleValue() }}</span>
+        <span class="sr-only identifier-accessible">
+          <bdi [textContent]="accessibleValue()"></bdi>
+        </span>
       }
       <span class="actions">
         @if (truncate()) {
@@ -55,7 +59,7 @@ import { middleTruncate } from './middle-truncate';
     </div>
     <ng-template #fullValue>
       <h2 hlmDialogTitle class="full-value-heading">{{ label() }}</h2>
-      <code class="full-value">{{ value() }}</code>
+      <code class="full-value"><bdi [textContent]="displayValue()"></bdi></code>
       <hlm-dialog-footer>
         <button hlmBtn type="button" [variant]="'outline'" hlmDialogClose>{{ closeText }}</button>
         <app-copy-value-button [value]="value()" [label]="label()" [size]="copySize()" />
@@ -138,10 +142,11 @@ export class CopyableIdentifierComponent {
   private dialog: BrnDialogRef<unknown> | undefined;
   protected readonly showText = $localize`:@@shared.values.show-full:Show full`;
   protected readonly closeText = $localize`:@@shared.values.close:Close`;
+  protected readonly displayValue = computed(() => escapeFormatChars(this.value()));
   protected readonly preview = computed(() =>
-    this.truncate() ? middleTruncate(this.value()) : this.value(),
+    this.truncate() ? middleTruncate(this.displayValue()) : this.displayValue(),
   );
-  protected readonly accessibleValue = computed(() => `${this.label()}: ${this.value()}`);
+  protected readonly accessibleValue = computed(() => `${this.label()}: ${this.displayValue()}`);
   protected readonly showLabel = computed(
     () => $localize`:@@shared.values.show-full-label:Show full ${this.label()}:LABEL:`,
   );

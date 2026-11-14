@@ -47,7 +47,7 @@ describe('Attempts table shared presentation', () => {
     ).toBe('1.234');
   });
 
-  it('copies original execution and candidate identifiers while escaping their visible form', async () => {
+  it('escapes execution and candidate format characters and refuses clipboard copying', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
     const executionKey = 'exec\u202e<script>';
@@ -71,14 +71,48 @@ describe('Attempts table shared presentation', () => {
     expect(copy?.classList.contains('shrink-0')).toBe(true);
     identity?.querySelector<HTMLButtonElement>('app-copy-value-button button')?.click();
     await fixture.whenStable();
-    expect(writeText).toHaveBeenLastCalledWith(executionKey);
-    root
-      .querySelector<HTMLButtonElement>('[data-healing-candidate] app-copy-value-button button')
-      ?.click();
+    expect(writeText).not.toHaveBeenCalled();
+    expect(copy?.querySelector('button')?.textContent?.trim()).toBe('Copy failed');
+    expect(copy?.querySelector('[role="status"]')?.textContent).toBe(
+      'Could not copy Execution. Show the full value and copy it manually.',
+    );
+    const candidate = root.querySelector('[data-healing-candidate]');
+    expect(candidate?.querySelector('bdi')?.textContent).toBe('sha256:hash⟨U+202E⟩<script>');
+    candidate?.querySelector<HTMLButtonElement>('app-copy-value-button button')?.click();
     await fixture.whenStable();
-    expect(writeText).toHaveBeenLastCalledWith(candidateHash);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(candidate?.querySelector('button')?.textContent?.trim()).toBe('Copy failed');
+    expect(candidate?.querySelector('app-copy-value-button [role="status"]')?.textContent).toBe(
+      'Could not copy Healing candidate. Show the full value and copy it manually.',
+    );
     expect(root.querySelector('script')).toBeNull();
     expect(root.textContent).not.toContain('\u202e');
+  });
+
+  it('copies ordinary execution and candidate identifiers exactly and announces success', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const executionKey = 'execution-ordinary';
+    const candidateHash = `sha256:${'a'.repeat(64)}`;
+    const { root, fixture } = await render([
+      row({ executionKey, healingCandidate: { candidateHash, mode: 'shadow' } }),
+    ]);
+    const identity = root.querySelector('[data-attempt-identity]');
+    identity?.querySelector<HTMLButtonElement>('app-copy-value-button button')?.click();
+    await fixture.whenStable();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenLastCalledWith(executionKey);
+    expect(identity?.querySelector('app-copy-value-button [role="status"]')?.textContent).toBe(
+      'Execution copied.',
+    );
+    const candidate = root.querySelector('[data-healing-candidate]');
+    candidate?.querySelector<HTMLButtonElement>('app-copy-value-button button')?.click();
+    await fixture.whenStable();
+    expect(writeText).toHaveBeenCalledTimes(2);
+    expect(writeText).toHaveBeenLastCalledWith(candidateHash);
+    expect(candidate?.querySelector('app-copy-value-button [role="status"]')?.textContent).toBe(
+      'Healing candidate copied.',
+    );
   });
 
   it('keeps the full safe identifier available when clipboard permission is denied', async () => {

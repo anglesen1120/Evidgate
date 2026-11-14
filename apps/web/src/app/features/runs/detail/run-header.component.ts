@@ -9,7 +9,7 @@ import { CopyValueButtonComponent } from '../../../shared/ui/values/copy-value-b
 import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { EvidenceBadgeComponent } from '../../../shared/ui/verdict/evidence-badge.component';
 import type { Completeness } from '../../../shared/ui/verdict/verdict-values';
-import { escapeFormatChars } from '../list/ref-name-display';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from './run-value-label';
 
 @Component({

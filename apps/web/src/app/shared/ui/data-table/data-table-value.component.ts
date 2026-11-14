@@ -12,6 +12,8 @@ import {
   viewChild,
 } from '@angular/core';
 
+import { escapeFormatChars } from '../values/ref-name-display';
+
 /** Internal text renderer. Native popovers enter the top layer, outside scroll clipping. */
 @Component({
   selector: 'app-data-table-value',
@@ -44,7 +46,7 @@ import {
       (keydown.enter)="show()"
       (keydown.space)="openFromKeyboard($event)"
       (keydown.escape)="dismiss($event)"
-      >{{ value() }}</span
+      ><bdi>{{ displayValue() }}</bdi></span
     >
     @if (clipped()) {
       <!-- The value span already holds the whole text (clipping is visual only), so it is the
@@ -58,7 +60,7 @@ import {
         (mouseenter)="cancelHide()"
         (mouseleave)="scheduleHide()"
         (keydown.escape)="dismiss($event)"
-        >{{ value() }}</span
+        ><bdi>{{ displayValue() }}</bdi></span
       >
     }
   `,
@@ -69,6 +71,10 @@ export class DataTableValueComponent {
   readonly truncate = input(false);
   readonly fixedRow = input(false);
   readonly nowrap = input(false);
+  protected readonly displayValue = computed(() => {
+    const value = this.value();
+    return typeof value === 'string' ? escapeFormatChars(value) : value;
+  });
   protected readonly singleLine = computed(() => this.truncate() || this.fixedRow());
   protected readonly expanded = signal(false);
   private readonly measuredClipped = signal(false);

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
+import { escapeFormatChars } from '../values/ref-name-display';
 import { isRunState, RUN_STATE_TONES, type RunState } from './run-state-tone';
 import { StatusPillComponent, type StatusTone } from './status-pill.component';
 
@@ -32,7 +33,8 @@ const RUN_STATE_DETAILS: Readonly<Record<RunState, string>> = {
       [tone]="tone()"
       [label]="label()"
       [dimension]="compact() ? '' : dimension"
-      [detail]="showDetail() ? detail() : ''"
+      [fullValue]="unknown() ? detail() : null"
+      [detail]="unknown() || showDetail() ? detail() : ''"
     />
   `,
   host: { class: 'inline-block min-w-0 max-w-full' },
@@ -42,6 +44,12 @@ export class RunStatePillComponent {
   readonly state = input.required<string>();
   readonly compact = input(false);
   readonly showDetail = input(false);
+
+  // An unknown server value is provenance, not optional explanatory copy.
+  protected readonly unknown = computed(() => {
+    const state = this.state();
+    return Boolean(state?.trim()) && !isRunState(state);
+  });
 
   protected readonly dimension = $localize`:@@shared.run-state.dimension:Run status`;
   protected readonly tone = computed<StatusTone>(() => {
@@ -64,6 +72,6 @@ export class RunStatePillComponent {
     }
     return isRunState(state)
       ? `${this.dimension}: ${RUN_STATE_DETAILS[state]}`
-      : $localize`:@@shared.run-state.unknown-detail:Unknown run status: ${state}:state:`;
+      : $localize`:@@shared.run-state.unknown-detail:Unknown run status: ${escapeFormatChars(state)}:state:`;
   });
 }

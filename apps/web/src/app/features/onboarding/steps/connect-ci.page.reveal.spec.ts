@@ -145,6 +145,9 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
     await fixture.whenStable();
     root.querySelector<HTMLButtonElement>('[data-testid="connect-token-rotate"]')!.click();
     await fixture.whenStable();
+    expect(rotateIngestToken).not.toHaveBeenCalled();
+    document.querySelector<HTMLButtonElement>('[data-testid="connect-rotation-confirm"]')!.click();
+    await fixture.whenStable();
     expect(rotateIngestToken).toHaveBeenCalledExactlyOnceWith('token-1');
     expect(slot.current()).toEqual({ source: 'ingest-token-rotation', value: ROTATED });
     expect(root.querySelector('time[datetime="2026-10-27T07:30:00Z"]')).not.toBeNull();
@@ -256,6 +259,11 @@ describe('ConnectCiPage reveal, rotation and metadata boundaries', () => {
         } else {
           rotateIngestToken.mockRejectedValueOnce(uncertain);
           root.querySelector<HTMLButtonElement>('[data-testid="connect-token-rotate"]')!.click();
+          await fixture.whenStable();
+          expect(rotateIngestToken).not.toHaveBeenCalled();
+          document
+            .querySelector<HTMLButtonElement>('[data-testid="connect-rotation-confirm"]')!
+            .click();
           await fixture.whenStable();
         }
         expect(refresh).toHaveBeenCalledExactlyOnceWith('org-1', 'project-1');

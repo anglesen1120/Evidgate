@@ -17,6 +17,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { InviteDialogComponent } from './invite-dialog.component';
 import { MembersStore } from './members.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
+import { MEMBERS_DESKTOP } from './members-page.test-fixtures';
 
 const ROLE_A: RoleView = {
   id: 'role-a',
@@ -106,6 +107,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
+        MEMBERS_DESKTOP,
         MembersStore,
         { provide: MembersDataService, useValue: data },
         {

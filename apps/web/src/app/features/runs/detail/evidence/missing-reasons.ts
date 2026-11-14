@@ -1,5 +1,5 @@
 import type { MissingReason } from '../../../../shared/ui/annotations/missing-reason-list.component';
-import { escapeFormatChars } from '../../list/ref-name-display';
+import { escapeFormatChars } from '../../../../shared/ui/values/ref-name-display';
 import { MISSING_CODES, type MissingCode } from '../decision/decision-view-model';
 import { evidenceHref, type EvidenceTarget } from './run-evidence-anchors';
 import { missingReasonExplanation } from '../reason-explanation';

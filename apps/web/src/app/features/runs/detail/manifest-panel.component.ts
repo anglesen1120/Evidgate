@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { CopyValueButtonComponent } from '../../../shared/ui/values/copy-value-button.component';
 import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
-import { escapeFormatChars } from '../list/ref-name-display';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 import type { ManifestSummary } from './manifest-summary';
 import { RUN_DETAIL_NOT_PROVIDED } from './run-value-label';
 

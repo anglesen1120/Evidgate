@@ -1,4 +1,4 @@
-import { escapeFormatChars } from '../list/ref-name-display';
+import { escapeFormatChars } from '../../../shared/ui/values/ref-name-display';
 
 export const RUN_DETAIL_NOT_PROVIDED = $localize`:@@runs.detail.not-provided:Not provided`;
 

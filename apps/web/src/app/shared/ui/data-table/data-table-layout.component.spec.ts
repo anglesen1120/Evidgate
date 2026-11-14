@@ -356,4 +356,17 @@ describe('Shared table column layout and reflow', () => {
     expect(identifier.label()).toBe('Evidence identity');
     expect(identifier.truncate()).toBe(true);
   });
+
+  it('keeps raw identifiers at the shared value boundary while rendering escaped and isolated text', async () => {
+    const raw = 'sha256:trusted\u202Espoof';
+    fixture.componentRef.setInput('columns', DATA_TABLE_FIXTURE_COLUMNS);
+    fixture.componentRef.setInput('rows', [{ ...dataTableFixtureRows(1)[0]!, hash: raw }]);
+    await fixture.whenStable();
+    const identifier = fixture.debugElement.query(By.directive(CopyableIdentifierComponent))
+      .componentInstance as CopyableIdentifierComponent;
+    expect(identifier.value()).toBe(raw);
+    const rendered = root.querySelector('app-copyable-identifier');
+    expect(rendered?.querySelector('bdi')?.textContent).toContain('⟨U+202E⟩');
+    expect(rendered?.textContent).not.toMatch(/\p{Cf}/u);
+  });
 });

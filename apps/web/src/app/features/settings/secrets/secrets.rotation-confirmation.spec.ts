@@ -205,7 +205,7 @@ describe('Secret rotation explicit consent', () => {
     expect(root.querySelector('#secrets-project-value')?.textContent).toBe('API');
   });
 
-  it.each(['dismiss', 'escape', 'project', 'destroy'])(
+  it.each(['dismiss', 'escape-then-dismiss', 'navigation', 'project', 'destroy'])(
     'clears the one-time value on %s, including the DOM input',
     async (action) => {
       const { fixture, root, slot } = await renderSecretsPage();
@@ -220,9 +220,7 @@ describe('Secret rotation explicit consent', () => {
       expect(
         document.querySelector('time[datetime="2026-10-26T00:00:00Z"]')?.textContent,
       ).toContain('UTC');
-      if (action === 'dismiss')
-        document.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
-      if (action === 'escape')
+      if (action === 'escape-then-dismiss') {
         document.querySelector('[role="dialog"]')?.dispatchEvent(
           new KeyboardEvent('keydown', {
             key: 'Escape',
@@ -231,6 +229,14 @@ describe('Secret rotation explicit consent', () => {
             cancelable: true,
           }),
         );
+        await fixture.whenStable();
+        expect(document.querySelector('[data-testid="reveal-value"]')).toBe(input);
+        expect(slot.current()?.value).toBe('new-full-credential-once');
+        expect(input?.value).toBe('new-full-credential-once');
+      }
+      if (action === 'dismiss' || action === 'escape-then-dismiss')
+        document.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
+      if (action === 'navigation') navigation.next(new NavigationStart(2, '/safe-destination'));
       if (action === 'project') chooseSecretProject(fixture, 'p2');
       if (action === 'destroy') fixture.destroy();
       else {
@@ -247,7 +253,8 @@ describe('Secret rotation explicit consent', () => {
           rotateState: store.rotateState(),
         }),
       ).not.toContain('new-full-credential-once');
-      if (action === 'dismiss' || action === 'escape') expect(document.activeElement).toBe(opener);
+      if (action === 'dismiss' || action === 'escape-then-dismiss')
+        expect(document.activeElement).toBe(opener);
       if (action === 'project') expect(store.load).toHaveBeenLastCalledWith('p2');
     },
   );

@@ -9,6 +9,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { CancelInviteDialogComponent } from './cancel-invite-dialog.component';
 import { MembersStore } from './members.store';
 import { ResendInviteDialogComponent } from './resend-invite-dialog.component';
+import { MEMBERS_DESKTOP } from './members-page.test-fixtures';
 
 const MEMBER: MembershipView = {
   id: 'pending',
@@ -49,6 +50,7 @@ describe('Invite dialogs under a 429 (F12 QA2)', () => {
     cancelInvite.mockRejectedValue(THROTTLED);
     TestBed.configureTestingModule({
       providers: [
+        MEMBERS_DESKTOP,
         MembersStore,
         {
           provide: MembersDataService,

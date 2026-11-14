@@ -125,6 +125,7 @@ describe('ManifestPanelComponent', () => {
     root.querySelector('button')!.click();
     await fixture.whenStable();
     expect(writeText).toHaveBeenCalledWith(manifest.manifestHash);
+    expect(writeText).toHaveBeenCalledTimes(1);
     expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied.');
   });
   it('keeps the copy button enabled and focused while the copy is in flight', async () => {
@@ -165,7 +166,7 @@ describe('ManifestPanelComponent', () => {
     expect(button.getAttribute('aria-busy')).toBe('false');
     expect(document.activeElement).toBe(button);
   });
-  it('escapes format characters in the displayed hash but copies the exact raw hash', async () => {
+  it('escapes format characters in the displayed hash and refuses clipboard copying', async () => {
     const hash = 'sha256:abc\u202edef';
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
@@ -173,9 +174,16 @@ describe('ManifestPanelComponent', () => {
     const displayed = root.querySelector('[data-manifest-hash] bdi');
     expect(displayed?.textContent).toBe('sha256:abc⟨U+202E⟩def');
     expect(displayed?.textContent).not.toContain('\u202e');
-    root.querySelector('button')!.click();
+    const copyButton = root.querySelector<HTMLButtonElement>(
+      '[data-manifest-hash] app-copy-value-button button',
+    );
+    copyButton?.click();
     await fixture.whenStable();
-    expect(writeText).toHaveBeenCalledWith(hash);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(copyButton?.textContent?.trim()).toBe('Copy failed');
+    expect(
+      root.querySelector('[data-manifest-hash] app-copy-value-button [role="status"]')?.textContent,
+    ).toBe('Could not copy Manifest hash. Show the full value and copy it manually.');
   });
   it('offers manual copying when clipboard access fails and clears feedback for a new summary', async () => {
     vi.stubGlobal('navigator', {

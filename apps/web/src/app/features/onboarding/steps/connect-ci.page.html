@@ -419,24 +419,22 @@
               </div>
             </dl>
             @if (token.status === 'active') {
-              <button
-                *appDesktopMutation
-                hlmBtn
-                [variant]="'outline'"
-                class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
-                type="button"
-                data-testid="connect-token-rotate"
-                [attr.aria-label]="rotateNamed(token.name)"
-                [disabled]="busy() || !tokenPermitted()"
-                [attr.aria-describedby]="
+              <app-connect-ci-rotate-confirm
+                [token]="token"
+                [projectName]="store.project()?.slug ?? noneLabel"
+                [scope]="draftScope()"
+                [label]="rotateLabel"
+                [triggerLabel]="rotateNamed(token.name)"
+                [describedBy]="
                   'connect-token-name-' +
                   token.id +
                   (!tokenPermitted() ? ' connect-token-permission' : '')
                 "
-                (click)="rotate(token)"
-              >
-                {{ rotateLabel }}
-              </button>
+                [revealWarning]="revealWarning"
+                [active]="active()"
+                [disabled]="busy() || !tokenPermitted()"
+                (confirmed)="rotate(token, $event)"
+              />
             }
           </li>
         } @empty {

@@ -22,7 +22,7 @@ import { StatusPillComponent } from '../../../../shared/ui/chips/status-pill.com
 import { EmptyPatternComponent } from '../../../../shared/ui/states/empty-pattern.component';
 import { ErrorPatternComponent } from '../../../../shared/ui/states/error-pattern.component';
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
-import { escapeFormatChars } from '../../list/ref-name-display';
+import { escapeFormatChars } from '../../../../shared/ui/values/ref-name-display';
 import { producerAnchorId } from '../evidence/run-evidence-anchors';
 import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from '../run-value-label';
 import type { ProducerSlot, ProducerStatus } from './producer-slots';

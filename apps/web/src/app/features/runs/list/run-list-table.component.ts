@@ -21,7 +21,7 @@ import { DataTableValueComponent } from '../../../shared/ui/data-table/data-tabl
 import { CopyValueButtonComponent } from '../../../shared/ui/values/copy-value-button.component';
 import { middleTruncate } from '../../../shared/ui/values/middle-truncate';
 import { DecisionChipComponent } from '../../../shared/ui/verdict/decision-chip.component';
-import { escapeFormatChars, escapeFormatLabel } from './ref-name-display';
+import { escapeFormatChars, escapeFormatLabel } from '../../../shared/ui/values/ref-name-display';
 
 type RunCell = TemplateRef<DataTableCellContext<RunSummary>>;
 

@@ -10,6 +10,8 @@ import {
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 
+import { hasFormatChars } from './ref-name-display';
+
 export type CopyValueButtonSize = 'sm' | 'lg';
 
 let nextCopyId = 0;
@@ -106,18 +108,27 @@ export class CopyValueButtonComponent {
     this.copying.set(true);
     this.status.set('');
     try {
+      // Copying the original must never hide a character made visible by the display.
+      if (hasFormatChars(value)) {
+        this.copyFailed();
+        return;
+      }
       await navigator.clipboard.writeText(value);
       if (this.destroyRef.destroyed || attempt !== this.attempt || value !== this.value()) return;
       this.result.set('copied');
       this.status.set($localize`:@@shared.values.copy-success:${this.label()}:LABEL: copied.`);
     } catch {
       if (this.destroyRef.destroyed || attempt !== this.attempt || value !== this.value()) return;
-      this.result.set('failed');
-      this.status.set(
-        $localize`:@@shared.values.copy-error:Could not copy ${this.label()}:LABEL:. Show the full value and copy it manually.`,
-      );
+      this.copyFailed();
     } finally {
       if (!this.destroyRef.destroyed && attempt === this.attempt) this.copying.set(false);
     }
+  }
+
+  private copyFailed(): void {
+    this.result.set('failed');
+    this.status.set(
+      $localize`:@@shared.values.copy-error:Could not copy ${this.label()}:LABEL:. Show the full value and copy it manually.`,
+    );
   }
 }

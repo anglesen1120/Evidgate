@@ -5,7 +5,7 @@ import { ActivatedRoute } from '@angular/router';
 import { SessionStore } from '../../../core/session/session.store';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
-import { FakeMembersStore, lastAdmin, role } from './members-page.test-fixtures';
+import { FakeMembersStore, MEMBERS_DESKTOP, lastAdmin, role } from './members-page.test-fixtures';
 import { routes } from './members.routes';
 import { activeMemberMenuTrigger, button } from './member-actions.test-helpers';
 
@@ -19,6 +19,7 @@ describe('Members page (09.7.1-T2)', () => {
       imports: [MembersPage],
       providers: [
         provideZonelessChangeDetection(),
+        MEMBERS_DESKTOP,
         { provide: ActivatedRoute, useValue: { snapshot: { data: {} } } },
         {
           provide: SessionStore,

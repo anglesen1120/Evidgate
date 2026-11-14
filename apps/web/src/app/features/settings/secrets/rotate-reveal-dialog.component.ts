@@ -20,6 +20,7 @@ import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.compon
     <hlm-dialog
       [state]="opened() ? 'open' : 'closed'"
       [restoreFocus]="false"
+      [disableClose]="true"
       [closeOnOutsidePointerEvents]="false"
       (stateChanged)="stateChanged($event)"
       (closed)="restoreFocus()"
@@ -27,6 +28,7 @@ import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.compon
       <hlm-dialog-content
         *hlmDialogPortal
         [showCloseButton]="false"
+        (keydown.escape)="escape($event)"
         class="max-h-[calc(100dvh-var(--eg-space-10))] overflow-y-auto"
       >
         <header hlmDialogHeader>
@@ -93,6 +95,11 @@ export class RotateRevealDialogComponent {
       this.opener = null;
       this.fallback = null;
     }
+  }
+  protected escape(event: Event): void {
+    // The rotated credential cannot be recovered; require an explicit dismiss.
+    event.preventDefault();
+    event.stopPropagation();
   }
   protected stateChanged(state: 'open' | 'closed'): void {
     if (state === 'closed' && this.opened()) this.close();

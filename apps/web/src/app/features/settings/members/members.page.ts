@@ -16,6 +16,7 @@ import { HlmCardTitle } from '@evidgate/ui/card';
 import type { MembershipView } from '@evidgate/sdk';
 import { SessionStore } from '../../../core/session/session.store';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { EditRolesDialogComponent } from './edit-roles-dialog.component';
 import { InviteDialogComponent } from './invite-dialog.component';
 import { MemberListComponent, MEMBERS_COPY } from './member-list.component';
@@ -52,6 +53,7 @@ import { CancelInviteDialogComponent } from './cancel-invite-dialog.component';
 export class MembersPage {
   protected readonly store = inject(MembersStore);
   protected readonly session = inject(SessionStore);
+  private readonly viewport = inject(NarrowMutationPolicy);
   protected readonly copy = MEMBERS_COPY;
   protected readonly pageHeadingSize = 'page' as const;
   protected readonly sectionHeadingSize = 'section' as const;
@@ -142,31 +144,35 @@ export class MembersPage {
     }
   }
   protected openInvite(event: Event): void {
-    if (this.canWrite() && event.currentTarget instanceof HTMLElement) {
+    if (
+      this.viewport.allowsMutation() &&
+      this.canWrite() &&
+      event.currentTarget instanceof HTMLElement
+    ) {
       this.closeDialogs();
       this.inviteDialog()?.open(event.currentTarget);
     }
   }
   protected openRemove(event: { member: MembershipView; opener: HTMLElement }): void {
-    if (this.canWrite()) {
+    if (this.viewport.allowsMutation() && this.canWrite()) {
       this.closeDialogs();
       this.removeDialog()?.open(event.member, event.opener);
     }
   }
   protected openEditRoles(event: { member: MembershipView; opener: HTMLElement }): void {
-    if (this.canWrite()) {
+    if (this.viewport.allowsMutation() && this.canWrite()) {
       this.closeDialogs();
       this.editDialog()?.open(event.member, event.opener);
     }
   }
   protected openResend(event: { member: MembershipView; opener: HTMLElement }): void {
-    if (this.canWrite()) {
+    if (this.viewport.allowsMutation() && this.canWrite()) {
       this.closeDialogs();
       this.resendDialog()?.open(event.member, event.opener);
     }
   }
   protected openCancelInvite(event: { member: MembershipView; opener: HTMLElement }): void {
-    if (this.canWrite()) {
+    if (this.viewport.allowsMutation() && this.canWrite()) {
       this.closeDialogs();
       this.cancelInviteDialog()?.open(event.member, event.opener);
     }

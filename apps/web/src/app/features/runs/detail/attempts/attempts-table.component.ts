@@ -30,7 +30,7 @@ import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pa
 import { CopyValueButtonComponent } from '../../../../shared/ui/values/copy-value-button.component';
 import { DataTableValueComponent } from '../../../../shared/ui/data-table/data-table-value.component';
 import { NumberValueComponent } from '../../../../shared/ui/values/number-value.component';
-import { escapeFormatChars } from '../../list/ref-name-display';
+import { escapeFormatChars } from '../../../../shared/ui/values/ref-name-display';
 import { attemptAnchorId } from '../evidence/run-evidence-anchors';
 import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from '../run-value-label';
 import { groupAttempts, paginateAttemptGroups } from './attempt-groups';

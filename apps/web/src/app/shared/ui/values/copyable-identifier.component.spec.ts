@@ -44,6 +44,49 @@ describe('CopyableIdentifierComponent', () => {
     },
   );
 
+  it.each([
+    ['bidi override', '\u202E', '⟨U+202E⟩'],
+    ['zero-width space', '\u200B', '⟨U+200B⟩'],
+    ['zero-width joiner', '\u200D', '⟨U+200D⟩'],
+    ['astral format tag', '\u{E0001}', '⟨U+E0001⟩'],
+  ])('escapes and isolates %s in every displayed form', async (_, character, token) => {
+    const escaped = `feature/${token}release`;
+    fixture.componentRef.setInput('value', `feature/${character}release`);
+    expect(await harness.previewText()).toBe(escaped);
+    expect(await harness.accessibleValue()).toBe(`Policy hash: ${escaped}`);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('code > bdi')?.textContent).toBe(escaped);
+    expect(host.querySelector('.identifier-accessible > bdi')?.textContent).toBe(
+      `Policy hash: ${escaped}`,
+    );
+    expect(host.textContent).not.toMatch(/\p{Cf}/u);
+    await harness.showFull();
+    expect(await harness.fullText()).toBe(escaped);
+    expect(document.querySelector('[role="dialog"] code > bdi')?.textContent).toBe(escaped);
+    expect(document.querySelector('[role="dialog"]')?.textContent).not.toMatch(/\p{Cf}/u);
+    await harness.closeFull();
+    fixture.componentRef.setInput('truncate', false);
+    expect(await harness.previewText()).toBe(escaped);
+    expect(host.querySelector('code.full-value > bdi')?.textContent).toBe(escaped);
+  });
+
+  it('escapes before applying the long-value middle preview', async () => {
+    const suffix = 'a'.repeat(120);
+    fixture.componentRef.setInput('value', `feature/\u202E${suffix}`);
+    expect(await harness.previewText()).toBe(middleTruncate(`feature/⟨U+202E⟩${suffix}`));
+    expect(await harness.accessibleValue()).toBe(`Policy hash: feature/⟨U+202E⟩${suffix}`);
+  });
+
+  it('isolates ordinary RTL text without changing the identifier', async () => {
+    const ordinary = 'feature/إصلاح';
+    fixture.componentRef.setInput('value', ordinary);
+    expect(await harness.previewText()).toBe(ordinary);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('code > bdi')?.textContent).toBe(ordinary);
+    await harness.showFull();
+    expect(document.querySelector('[role="dialog"] code > bdi')?.textContent).toBe(ordinary);
+  });
+
   it('opens a named top-layer full-value dialog without expanding a fixed-height row', async () => {
     await harness.showFull();
     expect(await harness.fullText()).toBe(value);

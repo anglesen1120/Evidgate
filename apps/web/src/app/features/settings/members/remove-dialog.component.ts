@@ -18,6 +18,7 @@ import type { MembershipView } from '@evidgate/sdk';
 import { createIntent, type Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { MembersStore } from './members.store';
 import { MEMBERS_COPY } from './member-list.component';
 
@@ -99,6 +100,7 @@ import { MEMBERS_COPY } from './member-list.component';
 export class RemoveDialogComponent {
   protected readonly store = inject(MembersStore);
   protected readonly session = inject(SessionStore);
+  protected readonly viewport = inject(NarrowMutationPolicy);
   protected readonly copy = MEMBERS_COPY;
   readonly completed = output<void>();
   protected readonly opened = signal(false);
@@ -164,6 +166,7 @@ export class RemoveDialogComponent {
     const member = this.member();
     if (
       !this.opened() ||
+      !this.viewport.allowsMutation() ||
       !member ||
       this.busy() ||
       !this.retryReady() ||

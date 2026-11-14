@@ -187,12 +187,18 @@ describe('ConnectCiPage Helm controls', () => {
         root,
         '[data-testid="connect-token-rotate"]',
       );
+      rotate.click();
+      await fixture.whenStable();
+      const confirm = requiredElement<HTMLButtonElement>(
+        document.body,
+        '[data-testid="connect-rotation-confirm"]',
+      );
       fixture.debugElement.injector
         .get(RevealSlot)
         .show({ source: 'ingest-token', value: 'test-only-reveal' });
       viewport.setWidth(width);
       for (const form of forms) form.requestSubmit();
-      rotate.click();
+      confirm.click();
       await fixture.whenStable();
       expect(root.querySelector('form')).toBeNull();
       expect(root.querySelector('[data-testid="connect-token-rotate"]')).toBeNull();

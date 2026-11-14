@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  inject,
   input,
   output,
   type TemplateRef,
@@ -13,6 +14,7 @@ import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmDropdownMenuImports } from '@evidgate/ui/dropdown-menu';
 import type { MembershipView } from '@evidgate/sdk';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import {
   DataTableComponent,
   type DataTableColumn,
@@ -231,6 +233,7 @@ export class MemberListComponent {
   readonly resend = output<{ member: MembershipView; opener: HTMLElement }>();
   readonly cancelInvite = output<{ member: MembershipView; opener: HTMLElement }>();
   protected readonly copy = MEMBERS_COPY;
+  protected readonly viewport = inject(NarrowMutationPolicy);
   private readonly statusCell =
     viewChild<TemplateRef<DataTableCellContext<MembershipView>>>('statusCell');
   private readonly rolesCell =
@@ -286,17 +289,24 @@ export class MemberListComponent {
     return $localize`:@@settings.members.more-roles:Show ${count}:count: more roles for ${member.invited_email}:email:`;
   }
   protected requestRemove(member: MembershipView, opener: HTMLElement): void {
-    if (this.canWrite() && member.status !== 'removed') this.remove.emit({ member, opener });
+    if (this.viewport.allowsMutation() && this.canWrite() && member.status !== 'removed')
+      this.remove.emit({ member, opener });
   }
   protected requestEditRoles(member: MembershipView, opener: HTMLElement): void {
-    if (this.canWrite() && (member.status === 'active' || member.status === 'pending'))
+    if (
+      this.viewport.allowsMutation() &&
+      this.canWrite() &&
+      (member.status === 'active' || member.status === 'pending')
+    )
       this.editRoles.emit({ member, opener });
   }
   protected requestResend(member: MembershipView, opener: HTMLElement): void {
-    if (this.canWrite() && member.status === 'pending') this.resend.emit({ member, opener });
+    if (this.viewport.allowsMutation() && this.canWrite() && member.status === 'pending')
+      this.resend.emit({ member, opener });
   }
   protected requestCancelInvite(member: MembershipView, opener: HTMLElement): void {
-    if (this.canWrite() && member.status === 'pending') this.cancelInvite.emit({ member, opener });
+    if (this.viewport.allowsMutation() && this.canWrite() && member.status === 'pending')
+      this.cancelInvite.emit({ member, opener });
   }
 
   // Unknown wire statuses stay literal, never an inherited property of the copy catalogue.

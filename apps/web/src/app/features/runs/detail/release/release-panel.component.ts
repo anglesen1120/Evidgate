@@ -25,7 +25,7 @@ import { ErrorPatternComponent } from '../../../../shared/ui/states/error-patter
 import { ForbiddenPatternComponent } from '../../../../shared/ui/states/forbidden-pattern.component';
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
 import { NotFoundPatternComponent } from '../../../../shared/ui/states/not-found-pattern.component';
-import { escapeFormatChars } from '../../list/ref-name-display';
+import { escapeFormatChars } from '../../../../shared/ui/values/ref-name-display';
 import type {
   ReleaseComponentView,
   ReleaseDetailViewModel,

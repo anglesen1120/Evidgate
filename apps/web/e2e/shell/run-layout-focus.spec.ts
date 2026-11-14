@@ -187,7 +187,7 @@ for (const theme of THEMES) {
     });
   }
 
-  test(`bounded record pages preserve their rows across a layout resize ${theme}`, async ({
+  test(`bounded record pages preserve rows and focused controls across a layout resize ${theme}`, async ({
     page,
   }) => {
     await seedStoredTheme(page, theme);
@@ -202,21 +202,29 @@ for (const theme of THEMES) {
     expect(layout.narrow).toBe(true);
     expect(layout.rowCount).toBe(200);
     const id = await first.getAttribute('data-row-id');
+    await first.getByRole('link').first().focus();
     await page.setViewportSize({ width: 1280, height: 900 });
     expect((await tableGeometry(page)).narrow).toBe(false);
     await expect(first).toHaveAttribute('data-row-id', id ?? '');
     expect((await tableGeometry(page)).rowCount).toBe(200);
+    await expect(first.getByRole('link').first()).toBeFocused();
     const next = page.locator('app-run-list-table nav button').last();
     await next.focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('app-run-list-table [data-row-id]')).toHaveCount(50);
     await expect(page.locator('app-run-list-table nav [role="status"]')).toContainText('201–250');
     const pageId = await first.getAttribute('data-row-id');
+    const copy = first.locator('app-copy-value-button button').first();
+    await copy.focus();
     await page.setViewportSize({ width: STACKED_MAX, height: 900 });
     expect((await tableGeometry(page)).narrow).toBe(true);
     expect((await tableGeometry(page)).rowCount).toBe(50);
     await expect(first).toHaveAttribute('data-row-id', pageId ?? '');
     expect((await tableGeometry(page)).rowOverflow).toBeLessThanOrEqual(1);
+    await expect(first.locator('app-copy-value-button button').first()).toBeFocused();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await expect(first).toHaveAttribute('data-row-id', pageId ?? '');
+    await expect(first.locator('app-copy-value-button button').first()).toBeFocused();
   });
 
   for (const revisions of ['empty', 'unavailable'] as const) {

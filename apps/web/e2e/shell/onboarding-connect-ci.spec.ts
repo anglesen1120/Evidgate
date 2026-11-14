@@ -295,7 +295,7 @@ test.describe('the resume is metadata-only (AC2, AC7)', () => {
 });
 
 test.describe('rotating a token reveals its successor once (AC2)', () => {
-  test('Rotate reveals the new secret and the overlap end, and Dismiss clears the secret', async ({
+  test('Rotate requires consent, Cancel/Escape preserve the token, and Dismiss clears the confirmed secret', async ({
     page,
   }) => {
     await page.goto(onboardingUrl('en', 'onboarding-token'));
@@ -306,6 +306,25 @@ test.describe('rotating a token reveals its successor once (AC2)', () => {
     const rotate = page.locator('[data-testid="connect-token-rotate"]');
     await expect(rotate).toBeEnabled();
     await rotate.click();
+    const consent = page.getByRole('alertdialog');
+    const cancel = page.getByTestId('connect-rotation-cancel');
+    await expect(consent).toBeVisible();
+    await expect(cancel).toBeFocused();
+    await expectNoReveal(page);
+    await cancel.click();
+    await expect(consent).toHaveCount(0);
+    await expect(rotate).toBeFocused();
+    await expectNoReveal(page);
+    await rotate.click();
+    await expect(cancel).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(consent).toHaveCount(0);
+    await expect(rotate).toBeFocused();
+    await expectNoReveal(page);
+    await rotate.click();
+    await expect(cancel).toBeFocused();
+    await consent.getByTestId('connect-rotation-confirm').click();
+    await expect(consent).toHaveCount(0);
 
     await expect(revealValue(page)).toHaveValue(FIXTURE_ROTATED_TOKEN_SECRET);
     await expectSecretOnlyInReveal(page, FIXTURE_ROTATED_TOKEN_SECRET, 'the open rotation reveal');

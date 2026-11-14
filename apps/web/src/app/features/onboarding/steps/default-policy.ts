@@ -51,13 +51,9 @@ export const DEFAULT_ADVISORY_POLICY: Readonly<PolicyRevisionV1> = {
  * override reorders everything rendered after it, which is how a label can make one revision read
  * as another (trojan-source style).
  *
- * `apps/web/src/app/features/runs/list/ref-name-display.ts` solves the same problem for run ref
- * names by ESCAPING each `Cf` into a visible `⟨U+202E⟩` token. That module cannot be imported here
- * — apps/web/lint/rules/no-feature-cross-import.cjs:103 refuses any features/onboarding →
- * features/runs import (W1/T47, the same rule this feature obeys everywhere else) — and step 5
- * does not need the forensic form: the hash and the instant are displayed as identifying metadata,
- * so a format character carries no information here and is removed. The value is still rendered by
- * interpolation only, never as markup.
+ * `shared/ui/values/ref-name-display.ts` exposes visible `Cf` tokens for forensic display.
+ * This sanitizer instead removes control/format characters from identifying metadata;
+ * that removal contract is distinct from escaping and never interprets the value as markup.
  */
 const INVISIBLE_CHARACTERS = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
 

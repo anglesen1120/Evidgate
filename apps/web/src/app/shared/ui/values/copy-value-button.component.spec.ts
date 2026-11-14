@@ -69,6 +69,33 @@ describe('CopyValueButtonComponent', () => {
     expect(status.textContent).not.toContain(original);
   });
 
+  it.each([
+    ['bidi override', 'feature/\u202Erelease'],
+    ['zero-width space', 'feature/\u200Brelease'],
+    ['zero-width joiner', 'feature/\u200Drelease'],
+    ['astral format tag', 'feature/\u{E0001}release'],
+  ])('refuses %s before clipboard access and announces the existing failure', async (_, unsafe) => {
+    fixture.componentRef.setInput('value', unsafe);
+    await harness.copy();
+    expect(writeText).not.toHaveBeenCalled();
+    expect(await harness.visibleText()).toBe('Copy failed');
+    expect(await harness.result()).toBe(
+      'Could not copy Policy hash. Show the full value and copy it manually.',
+    );
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(unsafe);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('button')?.getAttribute('aria-busy'),
+    ).toBe('false');
+  });
+
+  it('copies an ordinary Unicode identifier byte-for-byte', async () => {
+    const ordinary = 'refs/heads/café/إصلاح/🚀';
+    fixture.componentRef.setInput('value', ordinary);
+    await harness.copy();
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(ordinary);
+    expect(await harness.result()).toBe('Policy hash copied.');
+  });
+
   it('accepts an explicit translated action name without changing the copied value', async () => {
     fixture.componentRef.setInput('copyLabel', 'Sao chép mã băm chính sách');
     expect(await harness.actionName()).toBe('Sao chép mã băm chính sách');

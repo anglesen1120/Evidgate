@@ -1,6 +1,8 @@
 // State sheet: docs/design/web/state-sheet.md#status-pills
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { HlmBadge } from '@evidgate/ui/badge';
 
 import { RunStatePillComponent } from './run-state-pill.component';
 import { isRunState, RUN_STATE_TONES, type RunState } from './run-state-tone';
@@ -83,7 +85,6 @@ describe('RunStatePillComponent', () => {
     (state) => {
       expect(isRunState(state)).toBe(false);
       const fixture = TestBed.createComponent(RunStatePillComponent);
-      fixture.componentRef.setInput('showDetail', true);
       fixture.componentRef.setInput('state', state);
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
@@ -94,6 +95,33 @@ describe('RunStatePillComponent', () => {
       expect(root.querySelector('.status-pill--success, .status-pill--danger, img')).toBeNull();
     },
   );
+
+  it('exposes bidi-safe unknown provenance with only the default inputs', async () => {
+    const prefix = 'trạng_thái_lượt_chạy_chưa_từng_được_nhận_diện_ở_máy_chủ_';
+    const state = `${prefix}\u202e<script>\u{e0001}`;
+    const complete = `Unknown run status: ${prefix}⟨U+202E⟩<script>⟨U+E0001⟩`;
+    const fixture = TestBed.createComponent(RunStatePillComponent);
+    fixture.componentRef.setInput('state', state);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const badgeElement = fixture.debugElement.query(By.directive(HlmBadge));
+    if (!badgeElement) {
+      throw new Error('Expected the lifecycle badge');
+    }
+    expect(fixture.componentInstance.showDetail()).toBe(false);
+    expect(fixture.componentInstance.compact()).toBe(false);
+    expect(fixture.componentInstance.state()).toBe(state);
+    expect(root.querySelector('.status-pill__label')?.textContent).toBe('Unknown');
+    expect(root.querySelector('.status-pill--neutral')).not.toBeNull();
+    expect(root.querySelector('.status-pill__detail bdi')?.textContent).toBe(complete);
+    expect(badgeElement.injector.get(HlmBadge).fullValue()).toBe(complete);
+    expect(root.querySelector('[hlmBadge] .sr-only')?.textContent).toBe(complete);
+    expect(root.querySelector('.spartan-badge__full-value')?.textContent?.trim()).toBe(complete);
+    expect(root.textContent).not.toMatch(/\p{Cf}/u);
+    expect(
+      root.querySelector('script, img, .status-pill--success, .status-pill--danger'),
+    ).toBeNull();
+  });
 
   it.each([null, undefined, '', '   '])(
     'does not infer a lifecycle value for missing %s',
@@ -119,5 +147,11 @@ describe('RunStatePillComponent', () => {
     expect(root.querySelector('.status-pill--success')).toBeNull();
     expect(root.querySelector('.status-pill--neutral')).not.toBeNull();
     expect(root.querySelector('.status-pill__label')?.textContent).toBe('Unknown');
+    expect(root.querySelector('.status-pill__detail')?.textContent).toContain('future_state');
+    fixture.componentRef.setInput('state', 'complete');
+    await fixture.whenStable();
+    expect(root.querySelector('.status-pill--neutral')).toBeNull();
+    expect(root.querySelector('.status-pill__label')?.textContent).toBe('Complete');
+    expect(root.querySelector('.status-pill__detail, .spartan-badge__full-value')).toBeNull();
   });
 });

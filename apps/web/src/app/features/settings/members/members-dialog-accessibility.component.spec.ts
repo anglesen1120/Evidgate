@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { SessionStore } from '../../../core/session/session.store';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
-import { FakeMembersStore } from './members-page.test-fixtures';
+import { FakeMembersStore, MEMBERS_DESKTOP } from './members-page.test-fixtures';
 import { activeMemberMenuTrigger, memberAction } from './member-actions.test-helpers';
 
 const dialogs = [
@@ -27,6 +27,7 @@ describe('Members dialog accessibility', () => {
       imports: [MembersPage],
       providers: [
         provideZonelessChangeDetection(),
+        MEMBERS_DESKTOP,
         {
           provide: SessionStore,
           useValue: { currentOrg: signal({ id: 'org1' }), has: () => true },

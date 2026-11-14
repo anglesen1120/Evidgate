@@ -1,6 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmIcon } from '@evidgate/ui/icon';
 
 import { BADGE_ICON_NAMES } from './badge-classes';
@@ -94,6 +95,37 @@ describe('StatusPillComponent', () => {
     expect(badge?.classList.contains('text-[var(--eg-warning-fg)]')).toBe(true);
     // Shared primitive CSS owns line height; merged duplicate utilities are not its contract.
     expect(badge?.classList.contains('spartan-badge')).toBe(true);
+  });
+
+  it('keeps complete-value disclosure optional and forwards subsequent changes', async () => {
+    const fixture = TestBed.createComponent(StatusPillComponent);
+    fixture.componentRef.setInput('tone', 'neutral');
+    fixture.componentRef.setInput('label', 'Unknown');
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const badgeElement = fixture.debugElement.query(By.directive(HlmBadge));
+    if (!badgeElement) {
+      throw new Error('Expected the status badge');
+    }
+    const badge = badgeElement.injector.get(HlmBadge);
+    expect(badge.fullValue()).toBeNull();
+    expect(root.querySelector('.spartan-badge__full-value')).toBeNull();
+
+    const complete = 'Unknown run status: future_state';
+    fixture.componentRef.setInput('fullValue', complete);
+    fixture.componentRef.setInput('detail', complete);
+    await fixture.whenStable();
+    expect(badge.fullValue()).toBe(complete);
+    expect(root.querySelector('.status-pill__label')?.textContent).toBe('Unknown');
+    expect(root.querySelector('[hlmBadge]')?.getAttribute('tabindex')).toBe('0');
+    expect(root.querySelector('.spartan-badge__label')?.getAttribute('aria-hidden')).toBe('true');
+    expect(root.querySelector('[hlmBadge] .sr-only')?.textContent).toBe(complete);
+    expect(root.querySelector('.status-pill__detail bdi')?.textContent).toBe(complete);
+
+    fixture.componentRef.setInput('fullValue', null);
+    await fixture.whenStable();
+    expect(badge.fullValue()).toBeNull();
+    expect(root.querySelector('.spartan-badge__full-value')).toBeNull();
   });
 
   it('replaces the previous supplied tone without retaining success', async () => {

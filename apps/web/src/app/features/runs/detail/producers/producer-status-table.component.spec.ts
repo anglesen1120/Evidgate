@@ -278,8 +278,13 @@ describe('ProducerStatusTableComponent', () => {
     expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(50);
     expect(root.querySelector('[data-producer-scroll] .eg-table-long')).not.toBeNull();
     expect(root.querySelector('.eg-table-layout')).not.toBeNull();
-    expect(root.querySelectorAll('[data-producer-slot] bdi')[49]?.textContent).toContain(
-      slots[49]?.producerId,
+    const identities = [...root.querySelectorAll('[data-producer-slot]')];
+    expect(identities).toHaveLength(50);
+    expect(identities.map((identity) => identity.getAttribute('data-producer-slot'))).toEqual(
+      slots.map((slot) => slot.producerId),
+    );
+    expect(identities.at(-1)?.querySelector(':scope > bdi')?.textContent).toContain(
+      slots.at(-1)?.producerId,
     );
     expect([...root.querySelectorAll('th[data-column-role="number"]')]).toHaveLength(2);
   });
@@ -406,7 +411,7 @@ describe('ProducerStatusTableComponent', () => {
     expect(record?.textContent).toContain('2 stale-epoch events');
     expect(root.querySelector('.eg-table-narrow')).not.toBeNull();
   });
-  it('shows a safe escaped producer identifier but copies the exact original', async () => {
+  it('shows escaped producer format characters and refuses clipboard copying', async () => {
     const producerId = 'shard-\u202e<script>';
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
@@ -414,9 +419,33 @@ describe('ProducerStatusTableComponent', () => {
     expect(root.querySelector('[data-producer-slot] bdi')?.textContent).toBe(
       'shard-⟨U+202E⟩<script>',
     );
-    root.querySelector<HTMLButtonElement>('[data-producer-slot] button')?.click();
+    const copyButton = root.querySelector<HTMLButtonElement>(
+      '[data-producer-slot] app-copy-value-button button',
+    );
+    copyButton?.click();
     await fixture.whenStable();
-    expect(writeText).toHaveBeenCalledWith(producerId);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(copyButton?.textContent?.trim()).toBe('Copy failed');
+    expect(
+      root.querySelector('[data-producer-slot] app-copy-value-button [role="status"]')?.textContent,
+    ).toBe('Could not copy Producer slot. Show the full value and copy it manually.');
     expect(root.querySelector('script')).toBeNull();
+    expect(root.textContent).not.toContain('\u202e');
+  });
+
+  it('copies an ordinary producer identifier exactly and announces success', async () => {
+    const producerId = 'shard-ordinary-49';
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const { fixture, root } = await render([{ ...FINALIZED, producerId }]);
+    const identity = root.querySelector('[data-producer-slot]');
+    expect(identity?.querySelector(':scope > bdi')?.textContent).toBe(producerId);
+    identity?.querySelector<HTMLButtonElement>('app-copy-value-button button')?.click();
+    await fixture.whenStable();
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith(producerId);
+    expect(identity?.querySelector('app-copy-value-button [role="status"]')?.textContent).toBe(
+      'Producer slot copied.',
+    );
   });
 });

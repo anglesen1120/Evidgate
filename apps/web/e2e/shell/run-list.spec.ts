@@ -112,14 +112,20 @@ for (const locale of LOCALES) {
         await expect(rendered.locator('[data-run-rerun]')).toContainText(row.rerun_label);
       if (row.reprocess_label)
         await expect(rendered.locator('[data-run-reprocess]')).toContainText(row.reprocess_label);
-      // Scope labels are isolated in their own `<bdi>` too, so the ref name's is addressed
-      // through its cell rather than by `bdi` alone.
-      await expect(rendered.locator('.scope-cell bdi')).toHaveCount(
-        Number(Boolean(row.rerun_label)) + Number(Boolean(row.reprocess_label)),
+      // Count label wrappers separately from nested preview/screen-reader isolation.
+      // Pin the shared identifier's own isolation as well as the surrounding scope.
+      const scopeCount = Number(Boolean(row.rerun_label)) + Number(Boolean(row.reprocess_label));
+      await expect(rendered.locator('.scope-cell > span > bdi')).toHaveCount(scopeCount);
+      await expect(rendered.locator('.scope-cell app-data-table-value > .value > bdi')).toHaveCount(
+        scopeCount,
       );
       if (row.ref.name?.includes('\u202e')) {
-        await expect(rendered.locator('.ref-cell bdi')).toContainText('⟨U+202E⟩');
-        expect(await rendered.locator('.ref-cell bdi').textContent()).not.toContain('\u202e');
+        await expect(rendered.locator('.ref-cell > bdi')).toHaveCount(1);
+        await expect(rendered.locator('.ref-cell > bdi')).toContainText('⟨U+202E⟩');
+        expect(await rendered.locator('.ref-cell > bdi').textContent()).not.toContain('\u202e');
+        await expect(rendered.locator('.ref-cell app-data-table-value > .value > bdi')).toHaveCount(
+          1,
+        );
       }
     }
     await expect(page.locator('[data-run-loaded-count]')).toContainText(

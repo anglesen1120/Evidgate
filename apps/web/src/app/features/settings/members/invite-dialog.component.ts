@@ -20,6 +20,7 @@ import {
 import { createIntent, type Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { MembersStore } from './members.store';
 import { MEMBERS_COPY } from './member-list.component';
 import { RoleScopePreviewComponent } from './role-scope-preview.component';
@@ -173,6 +174,7 @@ import { InviteRevealComponent } from './invite-reveal.component';
 export class InviteDialogComponent {
   protected readonly store = inject(MembersStore);
   protected readonly session = inject(SessionStore);
+  protected readonly viewport = inject(NarrowMutationPolicy);
   protected readonly copy = MEMBERS_COPY;
   private readonly slot = inject(RevealSlot);
   protected readonly revealing = signal(false);
@@ -295,6 +297,7 @@ export class InviteDialogComponent {
     event?.preventDefault();
     if (
       !this.opened() ||
+      !this.viewport.allowsMutation() ||
       this.revealing() ||
       this.busy() ||
       !this.retryReady() ||

@@ -54,6 +54,7 @@ import { CONNECT_LIST_LIMIT } from '../data/onboarding-progress.service';
 import { CliQuickstartComponent } from '../health/cli-quickstart.component';
 import { ConnectionHealthComponent } from '../health/connection-health.component';
 import { deriveConnectionHealth, type ConnectionHealth } from '../health/connection-health';
+import { CiRotateConfirmComponent, type RotateScope } from './connect-ci-rotate-confirm.component';
 import { HealthBoundaryClock } from '../health/health-boundary';
 import { OnboardingStore } from '../onboarding.store';
 import { createBindingFeedback, createTokenFeedback } from './connect-ci.form-feedback';
@@ -86,6 +87,7 @@ import {
     FieldFeedbackComponent,
     FormErrorSummaryComponent,
     FormRequiredNoteComponent,
+    CiRotateConfirmComponent,
     DesktopMutationDirective,
     DesktopRequiredNoticeComponent,
     HlmAlertImports,
@@ -132,7 +134,7 @@ export class ConnectCiPage {
   protected readonly responseUncertain = computed(
     () => this.failure()?.kind === 'timeout' || this.failure()?.kind === 'network',
   );
-  private readonly draftScope = computed(() => ({
+  protected readonly draftScope = computed(() => ({
     orgId: this.orgId(),
     projectId: this.projectId(),
   }));
@@ -407,13 +409,14 @@ export class ConnectCiPage {
     );
   }
 
-  protected async rotate(token: IngestTokenView): Promise<void> {
+  protected async rotate(token: IngestTokenView, scope: RotateScope): Promise<void> {
     if (
+      scope !== this.draftScope() ||
       !this.policy.allowsMutation() ||
       !this.active() ||
       this.busy() ||
       !this.tokenPermitted() ||
-      token.status !== 'active'
+      !this.store.tokens().some((current) => current.id === token.id && current.status === 'active')
     )
       return;
     const orgId = this.orgId();

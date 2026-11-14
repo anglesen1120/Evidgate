@@ -34,36 +34,59 @@ describe('RotateRevealDialogComponent', () => {
     return { fixture, slot, opener, root: revealRoot() };
   }
 
-  it.each(['dismiss', 'escape', 'close', 'destroy'])(
-    'clears slot and live input on %s',
-    async (action) => {
+  it.each(['dismiss', 'close', 'destroy'])('clears slot and live input on %s', async (action) => {
+    const { fixture, slot, opener, root } = await render();
+    const input = root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]');
+    expect(input?.value).toBe('one-time-rotation-value');
+    expect(root.querySelector('[data-testid="reveal-copy"]')).not.toBeNull();
+    expect(root.textContent).toContain('The previous token keeps working until');
+    expect(root.getAttribute('aria-labelledby')).toBeTruthy();
+    if (action === 'destroy') fixture.destroy();
+    else if (action === 'close') {
+      fixture.componentInstance.close();
+    } else root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
+    expect(slot.current()).toBeNull();
+    expect(input?.value).toBe('');
+    if (action !== 'destroy') {
+      await fixture.whenStable();
+      expect(document.activeElement).toBe(opener);
+    }
+    expect(document.querySelector('[data-testid="reveal-value"]')).toBeNull();
+    expect(document.body.outerHTML).not.toContain('one-time-rotation-value');
+    opener.remove();
+  });
+
+  it.each(['reveal-value', 'reveal-copy', 'reveal-dismiss'])(
+    'ignores Escape from %s until explicit dismissal clears the one-time credential',
+    async (target) => {
       const { fixture, slot, opener, root } = await render();
       const input = root.querySelector<HTMLInputElement>('[data-testid="reveal-value"]');
-      expect(input?.value).toBe('one-time-rotation-value');
-      expect(root.querySelector('[data-testid="reveal-copy"]')).not.toBeNull();
-      expect(root.textContent).toContain('The previous token keeps working until');
-      expect(root.getAttribute('aria-labelledby')).toBeTruthy();
-      if (action === 'destroy') fixture.destroy();
-      else if (action === 'escape') {
-        root.dispatchEvent(
-          new KeyboardEvent('keydown', {
-            key: 'Escape',
-            keyCode: 27,
-            bubbles: true,
-            cancelable: true,
-          }),
-        );
-      } else if (action === 'close') {
-        fixture.componentInstance.close();
-      } else root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
+      const control = root.querySelector<HTMLElement>(`[data-testid="${target}"]`);
+      const dismiss = root.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]');
+      if (!input || !control || !dismiss) throw new Error('Expected reveal controls');
+      control.focus();
+      control.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Escape',
+          keyCode: 27,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      await fixture.whenStable();
+
+      expect(revealRoot()).toBe(root);
+      expect(slot.current()?.value).toBe('one-time-rotation-value');
+      expect(input.value).toBe('one-time-rotation-value');
+      expect(document.activeElement).toBe(control);
+
+      dismiss.click();
       expect(slot.current()).toBeNull();
-      expect(input?.value).toBe('');
-      if (action !== 'destroy') {
-        await fixture.whenStable();
-        expect(document.activeElement).toBe(opener);
-      }
+      expect(input.value).toBe('');
+      await fixture.whenStable();
       expect(document.querySelector('[data-testid="reveal-value"]')).toBeNull();
       expect(document.body.outerHTML).not.toContain('one-time-rotation-value');
+      expect(document.activeElement).toBe(opener);
       opener.remove();
     },
   );

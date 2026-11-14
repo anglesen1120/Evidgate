@@ -56,6 +56,17 @@ export type { DataTableColumn } from './data-table-column';
 export type DataTableDensity = 'default' | 'compact';
 export type DataTableRowId<T> = (row: T) => string | number;
 
+interface DataTableLayoutFocus {
+  readonly source: HTMLElement;
+  readonly rowId: string;
+  readonly columnId: string;
+  readonly control: string;
+  readonly index: number;
+  readonly rowIndex: number;
+}
+
+const ROW_CONTROL_SELECTOR = 'a[href],button,input,select,textarea,[tabindex]';
+
 let nextTableId = 0;
 
 /**
@@ -181,6 +192,7 @@ export class DataTableComponent<T> {
   private readonly scrollElement = viewChild.required<ElementRef<HTMLElement>>('scrollElement');
   private readonly tokenProbe = viewChild.required<ElementRef<HTMLElement>>('tokenProbe');
   private readonly range = signal<ListRange>({ start: 0, end: 0 });
+  private layoutFocus: DataTableLayoutFocus | undefined;
   readonly windowStart = computed(() =>
     this.virtual() ? this.range().start : this.pageIndex() * this.pageSize,
   );
@@ -260,6 +272,9 @@ export class DataTableComponent<T> {
         }
       }
       this.range.set(range);
+      if (this.layoutFocus) {
+        afterNextRender(() => this.restoreLayoutFocus(), { injector: this.injector });
+      }
     });
     viewport.attach(repeater);
     return () => {
@@ -268,12 +283,105 @@ export class DataTableComponent<T> {
     };
   }
 
+  private updateLayout(narrow: boolean): void {
+    if (narrow === this.narrow()) return;
+    const anchor = this.captureLayoutFocus();
+    this.layoutFocus = anchor;
+    if (anchor) this.pageIndex.set(Math.floor(anchor.rowIndex / this.pageSize));
+    this.narrow.set(narrow);
+    if (!anchor) return;
+    afterNextRender(
+      () => {
+        if (this.layoutFocus !== anchor) return;
+        this.restoreLayoutFocus();
+        // A paged record can return to a virtual window far beyond its first rows.
+        const viewport = this.viewport();
+        if (this.layoutFocus === anchor && viewport) {
+          const index = this.rows().findIndex((row) => String(this.rowId()(row)) === anchor.rowId);
+          if (index >= 0) viewport.scrollToIndex(index);
+        }
+      },
+      { injector: this.injector },
+    );
+  }
+
+  private captureLayoutFocus(): DataTableLayoutFocus | undefined {
+    const source = this.document.activeElement;
+    if (!(source instanceof HTMLElement) || !this.scrollElement().nativeElement.contains(source)) {
+      return undefined;
+    }
+    const cell = source.closest<HTMLElement>('app-data-table-cell[data-column-id]');
+    const rowId = cell?.closest<HTMLElement>('[data-row-id]')?.dataset['rowId'];
+    const columnId = cell?.dataset['columnId'];
+    if (!cell || rowId === undefined || columnId === undefined) return undefined;
+    const rowIndex = this.rows().findIndex((row) => String(this.rowId()(row)) === rowId);
+    if (rowIndex < 0) return undefined;
+    const control = this.controlKey(source);
+    let index = 0;
+    for (const candidate of cell.querySelectorAll<HTMLElement>(ROW_CONTROL_SELECTOR)) {
+      if (candidate === source) return { source, rowId, columnId, control, index, rowIndex };
+      if (this.controlKey(candidate) === control) index++;
+    }
+    return undefined;
+  }
+
+  private controlKey(control: HTMLElement): string {
+    const kind =
+      control.getAttribute('role') ??
+      (control.tagName === 'A' ? 'link' : control.tagName.toLowerCase());
+    const action =
+      kind === 'link'
+        ? control.getAttribute('href')
+        : (control.getAttribute('aria-label') ?? control.textContent?.trim());
+    return `${kind}:${action ?? ''}`;
+  }
+
+  private restoreLayoutFocus(): void {
+    const anchor = this.layoutFocus;
+    if (!anchor) return;
+    const active = this.document.activeElement;
+    if (
+      anchor.source.isConnected ||
+      (active instanceof HTMLElement &&
+        active !== this.document.body &&
+        active !== anchor.source &&
+        active.isConnected)
+    ) {
+      this.layoutFocus = undefined;
+      return;
+    }
+    // Compare identifiers as data, never interpolate server values into selectors.
+    for (const cell of this.scrollElement().nativeElement.querySelectorAll<HTMLElement>(
+      'app-data-table-cell[data-column-id]',
+    )) {
+      if (
+        cell.dataset['columnId'] !== anchor.columnId ||
+        cell.closest<HTMLElement>('[data-row-id]')?.dataset['rowId'] !== anchor.rowId
+      )
+        continue;
+      let index = anchor.index;
+      for (const control of cell.querySelectorAll<HTMLElement>(ROW_CONTROL_SELECTOR)) {
+        if (this.controlKey(control) !== anchor.control || index-- !== 0) continue;
+        this.layoutFocus = undefined;
+        if (control.tabIndex >= 0 && !control.matches(':disabled,[aria-disabled="true"]')) {
+          control.focus();
+        }
+        return;
+      }
+      this.layoutFocus = undefined;
+      return;
+    }
+    if (!this.virtual() || !this.rows().some((row) => String(this.rowId()(row)) === anchor.rowId)) {
+      this.layoutFocus = undefined;
+    }
+  }
+
   private measure(): void {
     const scroll = this.scrollElement().nativeElement;
     const probe = this.tokenProbe().nativeElement;
     const viewport = this.viewport();
     const width = this.host.nativeElement.clientWidth;
-    if (width > 0) this.narrow.set(width < 768);
+    if (width > 0) this.updateLayout(width < 768);
     const header = this.host.nativeElement.querySelector('.eg-table-sticky');
     const height = header?.getBoundingClientRect().height ?? 0;
     if (height > 0) this.headerHeight.set(height);
