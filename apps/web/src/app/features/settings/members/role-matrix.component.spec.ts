@@ -107,6 +107,14 @@ describe('RoleMatrixComponent responsive records', () => {
     expect(root.querySelector('#members-full-matrix')?.classList.contains('max-md:hidden')).toBe(
       false,
     );
+    const table = root.querySelector('table');
+    expect(table?.classList.contains('max-md:min-w-0')).toBe(true);
+    expect(table?.classList.contains('max-md:max-w-full')).toBe(true);
+    for (const cell of root.querySelectorAll('tbody th, tbody td')) {
+      expect(cell.classList.contains('max-md:w-full')).toBe(true);
+      expect(cell.classList.contains('max-md:min-w-0')).toBe(true);
+      expect(cell.classList.contains('max-md:max-w-full')).toBe(true);
+    }
     button.click();
     await fixture.whenStable();
     expect(button.getAttribute('aria-expanded')).toBe('false');
@@ -143,18 +151,14 @@ describe('RoleMatrixComponent responsive records', () => {
     fixture.componentRef.setInput('members', [MEMBER]);
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
-    expectTableSemantics(root);
-    expect(root.querySelector('.member-identity > span:last-child')?.textContent).toBe(
+    expect(root.querySelectorAll('[role="table"]')).toHaveLength(1);
+    const identity = root.querySelector('td[data-column-kind="email"]');
+    expect(identity?.querySelector('app-data-table-value')?.textContent).toContain(
       MEMBER.invited_email,
     );
-    expect(
-      Array.from(root.querySelectorAll('tbody .record-label')).map((label) => label.textContent),
-    ).toEqual(['Member', 'Status', 'Organization roles']);
-    for (const cell of root.querySelectorAll('tbody td')) {
-      const headers = cell.getAttribute('headers')?.split(' ') ?? [];
-      expect(headers).toHaveLength(2);
-      for (const id of headers) expect(root.querySelector(`[id="${id}"]`)).not.toBeNull();
-    }
+    expect(identity?.getAttribute('data-column-priority')).toBe('primary');
+    expect(root.querySelectorAll('thead th')).toHaveLength(3);
+    expect(root.querySelector('table')?.classList.contains('eg-table-layout')).toBe(true);
     expect(root.querySelector('.role-name')?.textContent).toBe(ROLES[0]?.name);
     expect(root.querySelector('.mutation')).toBeNull();
   });

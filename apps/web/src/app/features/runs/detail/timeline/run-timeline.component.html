@@ -4,7 +4,7 @@
   aria-labelledby="run-timeline-title"
   data-run-timeline
 >
-  <h2 hlmCardTitle id="run-timeline-title" class="m-0">{{ copy.title }}</h2>
+  <h2 hlmCardTitle [size]="sectionSize" id="run-timeline-title" class="m-0">{{ copy.title }}</h2>
   <ol
     class="m-0 grid list-none gap-(--eg-space-3) p-0"
     aria-labelledby="run-timeline-title"
@@ -12,7 +12,7 @@
   >
     @for (step of steps(); track step.state) {
       <li
-        class="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start gap-x-(--eg-space-3) gap-y-(--eg-space-2) min-[768px]:grid-cols-[12ch_minmax(0,28ch)_minmax(0,1fr)]"
+        class="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start gap-x-(--eg-space-3) gap-y-(--eg-space-2) min-[768px]:grid-cols-[12ch_minmax(0,1fr)]"
         [attr.data-step]="step.state"
         [attr.data-status]="step.status"
         [attr.aria-current]="step.status === 'current' ? 'step' : null"
@@ -25,32 +25,36 @@
           [tone]="stepTone(step.status, step.state)"
           [label]="
             step.status === 'reached' && (stateHistory() === null || step.state === 'created')
-              ? copy.inferred
+              ? copy.inferredShort
               : statusLabel(step.status)
+          "
+          [detail]="
+            step.status === 'reached' && (stateHistory() === null || step.state === 'created')
+              ? copy.inferred
+              : ''
           "
         />
         @if (step.at; as at) {
-          <time
-            class="col-span-full min-w-0 tabular-nums min-[768px]:col-span-1"
-            data-step-time
-            [attr.datetime]="at"
-            >{{ at | date: 'medium' : '+0000' }}</time
-          >
+          <span class="col-span-full min-w-0 tabular-nums" data-step-time>
+            <app-absolute-time [value]="at" />
+          </span>
         }
       </li>
     }
   </ol>
   @if (stateHistory() === null) {
     <p class="m-0 min-w-0" data-step-times>
-      <app-status-pill [tone]="'neutral'" [label]="copy.historyUnavailable" />
+      {{ copy.historyUnavailable }}
     </p>
   } @else if (stateHistory()?.length === 0) {
     <p class="m-0 min-w-0" data-step-times>
-      <app-status-pill [tone]="'neutral'" [label]="copy.historyEmpty" />
+      {{ copy.historyEmpty }}
     </p>
   }
   @if (canceled()) {
     <div
+      hlmAlert
+      role="note"
       class="grid min-w-0 gap-(--eg-space-2) rounded-(--eg-radius-sm) border border-(--eg-info-fg) bg-(--eg-info-bg) p-(--eg-space-3) text-(--eg-info-fg)"
       data-after-cancel-note
     >

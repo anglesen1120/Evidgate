@@ -140,7 +140,20 @@ export function policyReviewPath(
   return revisionId === null ? path : `${path}?revision=${revisionId}`;
 }
 
-/** What the page's own ready contract looks like: rows served, head marked, diff settled. */
+/** Follow the tab/panel association rather than assuming every detail section is visible. */
+export async function showPolicySection(page: Page, content: string): Promise<void> {
+  const panel = page.locator(content).locator('xpath=ancestor::*[@role="tabpanel"][1]');
+  await expect(panel).toHaveCount(1);
+  const triggerId = await panel.getAttribute('aria-labelledby');
+  if (!triggerId) throw new Error('Policy detail panel has no associated tab');
+  const trigger = page.locator(`${PAGE} [id="${triggerId}"]`);
+  await expect(trigger).toHaveRole('tab');
+  await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-selected', 'true');
+  await expect(panel).toBeVisible();
+}
+
+/** Rows and independent project reads settle before inspecting the comparison tab. */
 export async function ready(page: Page, rowCount: number): Promise<void> {
   await expect(page.locator(PHASE)).toHaveAttribute('data-policy-phase', 'ready');
   await expect(page.locator(ROWS)).toHaveCount(rowCount);
@@ -153,6 +166,7 @@ export async function ready(page: Page, rowCount: number): Promise<void> {
     'loading',
   );
   await expect(page.locator(HEAD_READ)).not.toHaveAttribute('data-policy-head-state', 'loading');
+  await showPolicySection(page, DIFF);
   await expect(page.locator(DIFF)).toBeVisible();
   // Options are portalled only while open; the placeholder is not a selectable revision.
   for (const id of ['policy-diff-base', 'policy-diff-target']) {
@@ -179,6 +193,7 @@ export async function visit(
 ): Promise<void> {
   await page.goto(withVariants(policyReviewPath(locale, ORG_ACME, revisionId), variants));
   await expect(page.locator(PAGE)).toBeVisible();
+  await expect(page.locator(`${PAGE} [data-policy-selected-metadata]`)).toBeVisible();
   await ready(page, rowCount);
 }
 

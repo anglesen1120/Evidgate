@@ -30,11 +30,11 @@ export class RunDetailPage {
   }
 
   get headerId(): Locator {
-    return this.detail.locator('app-run-header [data-run-id]');
+    return this.detail.locator('app-run-header [data-run-id] > bdi');
   }
 
   get headerRef(): Locator {
-    return this.detail.locator('app-run-header [data-run-ref]');
+    return this.detail.locator('app-run-header [data-run-ref] > bdi');
   }
 
   get headerVersion(): Locator {
@@ -43,6 +43,10 @@ export class RunDetailPage {
 
   get evidencePanel(): Locator {
     return this.detail.locator('#evidence-panel');
+  }
+
+  get missingReasonCode(): Locator {
+    return this.evidencePanel.locator('[data-evidence-missing] .reason-code code');
   }
 
   get decisionPanel(): Locator {

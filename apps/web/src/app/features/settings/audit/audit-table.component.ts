@@ -1,193 +1,223 @@
-import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, ElementRef, inject, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  computed,
+  inject,
+  input,
+  type TemplateRef,
+  viewChild,
+} from '@angular/core';
 import type { AuditEntryDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmTableImports } from '@evidgate/ui/table';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
-import { rfc3339InstantMs } from '../../../shared/time/rfc3339-instant';
+import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
+import {
+  DataTableComponent,
+  type DataTableColumn,
+} from '../../../shared/ui/data-table/data-table.component';
+import type { DataTableCellContext } from '../../../shared/ui/data-table/data-table-column';
+import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
+import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
 import { supportAccessOf } from './support-access';
 
 @Component({
   selector: 'app-audit-table',
-  imports: [DatePipe, HlmButton, HlmTableImports, HlmTooltip, StatusPillComponent],
+  imports: [
+    AbsoluteTimeComponent,
+    DataTableComponent,
+    DataTableValueComponent,
+    CopyableIdentifierComponent,
+    HlmButton,
+    HlmTooltip,
+    StatusPillComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    <div
-      hlmTableContainer
-      class="table-scroll rounded-md border border-solid border-border bg-card md:max-h-[calc(100dvh-var(--eg-topbar-height)-var(--eg-space-8))] md:overflow-auto focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
-      tabindex="0"
-      role="region"
-      [attr.aria-label]="copy.caption"
-    >
-      <table
-        hlmTable
-        role="table"
-        class="w-full table-auto max-md:block md:min-w-[calc(var(--eg-rail-width)*3)]"
+    <ng-template #timeCell let-row>
+      <app-absolute-time [value]="row.created_at" />
+    </ng-template>
+    <ng-template #actorCell let-row let-stacked="stacked">
+      <div
+        class="grid min-w-0 gap-1"
+        data-audit-row
+        [attr.data-audit-support]="supportOf(row) !== null ? 'true' : 'false'"
       >
-        <caption hlmCaption class="m-0 p-3 text-start text-foreground max-md:block max-md:w-full">
-          {{
-            copy.caption
-          }}
-        </caption>
-        <thead
-          hlmTHead
-          role="rowgroup"
-          class="bg-secondary max-md:sr-only md:sticky md:top-0 md:z-[var(--eg-z-sticky)] [&_th]:whitespace-nowrap"
-        >
-          <tr hlmTr role="row">
-            <th hlmTh role="columnheader" scope="col" class="w-1/6">{{ copy.time }}</th>
-            <th hlmTh role="columnheader" scope="col" class="w-1/5">{{ copy.actor }}</th>
-            <th hlmTh role="columnheader" scope="col" class="w-1/4">{{ copy.action }}</th>
-            <th hlmTh role="columnheader" scope="col" class="w-1/5">{{ copy.object }}</th>
-            <th hlmTh role="columnheader" scope="col" class="w-min">{{ copy.details }}</th>
-          </tr>
-        </thead>
-        <tbody hlmTBody role="rowgroup" class="max-md:block">
-          @for (row of rows(); track row.id) {
-            <tr
-              hlmTr
-              role="row"
-              class="max-md:grid max-md:grid-cols-2 max-md:gap-2 max-md:p-3 [&>td]:align-top [&>td]:whitespace-normal [&>td]:wrap-anywhere [&>th]:align-top [&>th]:whitespace-normal max-md:[&>td]:min-w-0 max-md:[&>td]:p-0 max-md:[&>th]:p-0"
-              data-audit-row
-              [attr.data-audit-support]="supportOf(row) !== null ? 'true' : 'false'"
-            >
-              <th
-                hlmTh
-                role="rowheader"
-                scope="row"
-                class="h-auto text-foreground max-md:order-1 max-md:col-span-2"
-              >
-                <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
-                  copy.time
-                }}</span>
-                @let createdAtMs = instantMs(row.created_at);
-                @if (createdAtMs !== null) {
-                  <time
-                    class="flex flex-wrap gap-x-2 md:block"
-                    [attr.datetime]="row.created_at"
-                    [attr.title]="row.created_at"
+        <app-status-pill [tone]="'neutral'" [label]="actorLabel(row.actor_type)" />
+        @if (supportOf(row)) {
+          <app-status-pill [tone]="'warning'" [label]="copy.support" />
+        }
+        @if (row.actor_id) {
+          <app-copyable-identifier
+            [value]="row.actor_id"
+            [label]="copy.actorId"
+            [truncate]="!stacked"
+          />
+        }
+      </div>
+    </ng-template>
+    <ng-template #objectCell let-row let-stacked="stacked">
+      <div class="grid min-w-0 gap-1">
+        @if (row.object_type) {
+          <app-data-table-value [value]="row.object_type" [truncate]="!stacked" />
+        }
+        @if (row.object_id) {
+          <app-copyable-identifier
+            [value]="row.object_id"
+            [label]="copy.objectId"
+            [truncate]="!stacked"
+          />
+        }
+        @if (!row.object_type && !row.object_id) {
+          <span>{{ copy.absent }}</span>
+        }
+      </div>
+    </ng-template>
+    <ng-template #detailsCell let-row>
+      @if (row.request_id || supportOf(row)) {
+        <details class="min-w-0" data-audit-details>
+          <summary
+            class="min-h-[var(--eg-control-touch)] cursor-pointer content-center text-sm focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring hover:underline"
+          >
+            {{ copy.details }}
+            @if (supportOf(row)) {
+              <app-status-pill [tone]="'warning'" [label]="copy.support" />
+            }
+          </summary>
+          <dl class="m-0 grid min-w-0 gap-2 text-sm">
+            @if (row.request_id) {
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.request }}</dt>
+                <dd class="m-0">
+                  <app-copyable-identifier
+                    [value]="row.request_id"
+                    [label]="copy.request"
+                    [truncate]="false"
+                  />
+                </dd>
+              </div>
+            }
+            @if (supportOf(row); as access) {
+              <div class="min-w-0">
+                <dt class="text-xs text-muted-foreground">{{ copy.support }}</dt>
+                <dd class="m-0">
+                  <button
+                    hlmBtn
+                    [variant]="'ghost'"
+                    type="button"
+                    class="support-access h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal p-0"
+                    [hlmTooltip]="supportDescription(access.grantId)"
+                    [position]="'top'"
                   >
-                    <span class="block whitespace-nowrap">
-                      {{ createdAtMs | date: 'mediumDate' : '+0000' }}
-                    </span>
-                    <span class="block whitespace-nowrap">
-                      {{ createdAtMs | date: 'mediumTime' : '+0000' }}
-                    </span>
-                  </time>
-                } @else {
-                  <span>{{ copy.timeUnavailable }}</span>
-                }
-              </th>
-              <td hlmTd role="cell" class="max-w-[var(--eg-rail-width)] max-md:order-3">
-                <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
-                  copy.actor
-                }}</span>
-                <app-status-pill [tone]="'neutral'" [label]="actorLabel(row.actor_type)" />
-                @if (row.actor_id) {
-                  <span class="block wrap-anywhere">{{ row.actor_id }}</span>
-                }
-              </td>
-              <td hlmTd role="cell" class="max-md:order-2 max-md:col-span-2">
-                <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
-                  copy.action
-                }}</span>
-                <span class="block wrap-anywhere md:whitespace-nowrap">{{ row.action }}</span>
-              </td>
-              <td
-                hlmTd
-                role="cell"
-                class="max-w-[var(--eg-rail-width)] max-md:order-4"
-                [class.max-md:hidden]="!row.object_type && !row.object_id"
-              >
-                <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
-                  copy.object
-                }}</span>
-                @if (row.object_type) {
-                  <span>{{ row.object_type }}</span>
-                }
-                @if (row.object_id) {
-                  <span class="block wrap-anywhere">{{ row.object_id }}</span>
-                }
-                @if (!row.object_type && !row.object_id) {
-                  <span class="max-md:hidden">{{ copy.absent }}</span>
-                }
-              </td>
-              <td
-                hlmTd
-                role="cell"
-                class="max-w-[var(--eg-rail-width)] max-md:order-5 max-md:col-span-2"
-                [class.max-md:hidden]="!row.request_id && !supportOf(row)"
-              >
-                @if (row.request_id || supportOf(row)) {
-                  <details data-audit-details>
-                    <summary
-                      class="min-h-[var(--eg-control-touch)] cursor-pointer content-center text-sm focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring hover:underline"
-                    >
-                      {{ copy.details }}
-                      @if (supportOf(row)) {
-                        <app-status-pill [tone]="'warning'" [label]="copy.support" />
-                      }
-                    </summary>
-                    <dl class="m-0 grid gap-2 text-sm">
-                      @if (row.request_id) {
-                        <div>
-                          <dt class="text-xs text-muted-foreground">{{ copy.request }}</dt>
-                          <dd class="m-0 wrap-anywhere">{{ row.request_id }}</dd>
-                        </div>
-                      }
-                      @if (supportOf(row); as access) {
-                        <div>
-                          <dt class="text-xs text-muted-foreground">{{ copy.support }}</dt>
-                          <dd class="m-0">
-                            <button
-                              hlmBtn
-                              [variant]="'ghost'"
-                              type="button"
-                              class="support-access h-auto min-h-[var(--eg-control-touch)] max-w-full whitespace-normal p-0"
-                              [hlmTooltip]="supportDescription(access.grantId)"
-                              [position]="'top'"
-                            >
-                              <app-status-pill [tone]="'warning'" [label]="copy.support" />
-                            </button>
-                            <span class="block wrap-anywhere text-xs text-muted-foreground">
-                              {{ supportDescription(access.grantId) }}
-                            </span>
-                          </dd>
-                        </div>
-                      }
-                    </dl>
-                  </details>
-                } @else {
-                  <span class="max-md:hidden">{{ copy.absent }}</span>
-                }
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
+                    <app-status-pill [tone]="'warning'" [label]="copy.support" />
+                  </button>
+                  <span class="block wrap-anywhere text-xs text-muted-foreground">
+                    {{ supportDescription(access.grantId) }}
+                  </span>
+                  @if (access.grantId; as grantId) {
+                    <app-copyable-identifier
+                      [value]="grantId"
+                      [label]="copy.supportGrant"
+                      [truncate]="false"
+                    />
+                  }
+                </dd>
+              </div>
+            }
+          </dl>
+        </details>
+      } @else {
+        <span>{{ copy.absent }}</span>
+      }
+    </ng-template>
+    <app-data-table
+      [columns]="columns()"
+      [rows]="rows()"
+      [rowId]="rowId"
+      [caption]="copy.caption"
+    />
   `,
 })
 export class AuditTableComponent {
   readonly rows = input.required<readonly AuditEntryDto[]>();
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly supportOf = supportAccessOf;
-  protected readonly instantMs = rfc3339InstantMs;
   protected readonly copy = {
     caption: $localize`:@@settings.audit.caption:Audit activity`,
     time: $localize`:@@settings.audit.time:Time (UTC)`,
-    timeUnavailable: $localize`:@@settings.audit.time-unavailable:Time unavailable`,
     actor: $localize`:@@settings.audit.actor:Actor`,
     action: $localize`:@@settings.audit.action:Action`,
+    actorId: $localize`:@@settings.audit.actor-id:Audit actor id`,
+    objectId: $localize`:@@settings.audit.object-id:Audit object id`,
+    supportGrant: $localize`:@@settings.audit.support-grant:Support grant id`,
     object: $localize`:@@settings.audit.object:Object`,
     request: $localize`:@@settings.audit.request:Request id`,
     support: $localize`:@@settings.audit.support:Support access`,
     details: $localize`:@@settings.audit.details:Event details`,
     absent: $localize`:@@settings.audit.absent:—`,
   };
+  private readonly timeCell =
+    viewChild<TemplateRef<DataTableCellContext<AuditEntryDto>>>('timeCell');
+  private readonly actorCell =
+    viewChild<TemplateRef<DataTableCellContext<AuditEntryDto>>>('actorCell');
+  private readonly objectCell =
+    viewChild<TemplateRef<DataTableCellContext<AuditEntryDto>>>('objectCell');
+  private readonly detailsCell =
+    viewChild<TemplateRef<DataTableCellContext<AuditEntryDto>>>('detailsCell');
+  protected readonly rowId = (row: AuditEntryDto): string => row.id;
+  protected readonly columns = computed<readonly DataTableColumn<AuditEntryDto>[]>(() => {
+    const time = this.timeCell();
+    const actor = this.actorCell();
+    const object = this.objectCell();
+    const details = this.detailsCell();
+    if (!time || !actor || !object || !details) return [];
+    return [
+      {
+        id: 'actor',
+        header: this.copy.actor,
+        role: 'identity',
+        kind: 'identifier',
+        priority: 'secondary',
+        cell: (row) => row.actor_id ?? '',
+        cellTemplate: actor,
+      },
+      {
+        id: 'action',
+        header: this.copy.action,
+        role: 'identity',
+        priority: 'primary',
+        overflow: 'truncate',
+        cell: (row) => row.action,
+      },
+      {
+        id: 'object',
+        header: this.copy.object,
+        role: 'identity',
+        kind: 'identifier',
+        priority: 'secondary',
+        cell: (row) => row.object_id ?? '',
+        cellTemplate: object,
+      },
+      {
+        id: 'time',
+        header: this.copy.time,
+        role: 'date',
+        cell: (row) => row.created_at,
+        cellTemplate: time,
+      },
+      {
+        id: 'details',
+        header: this.copy.details,
+        role: 'actions',
+        priority: 'secondary',
+        cell: () => this.copy.details,
+        cellTemplate: details,
+      },
+    ];
+  });
 
   protected actorLabel(actorType: string): string {
     return Object.hasOwn(AUDIT_ACTOR_TYPE_LABELS, actorType)
@@ -202,7 +232,7 @@ export class AuditTableComponent {
   }
 
   resetScroll(): void {
-    const region = this.element.nativeElement.querySelector<HTMLElement>('.table-scroll');
+    const region = this.element.nativeElement.querySelector<HTMLElement>('[hlmTableContainer]');
     if (region) {
       region.scrollLeft = 0;
       region.scrollTop = 0;

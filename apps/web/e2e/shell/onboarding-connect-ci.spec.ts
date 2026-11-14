@@ -27,6 +27,7 @@
 //    through the same two renders, since the in-process backend offers no network seam to count.
 import { expect, test, type Page } from '@playwright/test';
 
+import { stepButton } from './onboarding-keyboard';
 import {
   connectCiPage,
   expectCurrentStep,
@@ -45,7 +46,6 @@ import {
   revealValue,
   seedQueryWith,
   shell,
-  stepItem,
   writeVariantToggle,
 } from './onboarding-support';
 import { withVariant } from './support';
@@ -165,13 +165,13 @@ test.describe('the token path reveals its secret exactly once (AC2, §8)', () =>
     await createToken(page);
     await expect(revealValue(page)).toHaveValue(FIXTURE_TOKEN_SECRET);
 
-    // Leaving and re-entering the step destroys the page component, and the `RevealSlot` is
-    // component-scoped, so the revisited step cannot hold the value the first one was given.
-    await stepItem(page, 1).locator('button').click();
+    // Leaving clears the retained page's scoped slot; returning cannot recover a one-time value
+    // from the server's metadata.
+    await stepButton(page, 1).click();
     await expectCurrentStep(page, 1);
     await expectNoReveal(page);
     await expectSecretAbsent(page, FIXTURE_TOKEN_SECRET, 'step 1');
-    await stepItem(page, 2).locator('button').click();
+    await stepButton(page, 2).click();
     await expectCurrentStep(page, 2);
     await expect(connectCiPage(page)).toBeVisible();
     await expectNoReveal(page);
@@ -203,12 +203,13 @@ test.describe('the OIDC path reveals the challenge once (AC2, §8)', () => {
     // server with input every client validator accepted: no field reported an error.
     await expect(ciError(page)).toHaveCount(0);
     for (const id of [
-      'connect-repo-id-error',
-      'connect-repo-name-error',
-      'connect-refs-error',
-      'connect-workflows-error',
+      'connect-oidc-repo-id',
+      'connect-oidc-repo-name',
+      'connect-oidc-refs',
+      'connect-oidc-workflows',
     ]) {
-      await expect(page.locator(`#${id}`)).toHaveText('');
+      await expect(page.locator(`#${id}`)).not.toHaveAttribute('aria-invalid', 'true');
+      await expect(page.locator(`#${id}-error`)).toHaveCount(0);
     }
     // The form still shows what it posted (`createCiBinding`'s body is built from these values at
     // submit time), and the repository is not editable behind the open reveal.
@@ -414,11 +415,11 @@ test.describe('a refused create shows the server error verbatim (§8, 00 §9.2)'
     // create again is a user submit, never a timer or a remount.
     await expect(error.locator('button')).toHaveCount(0);
 
-    // A step change and a reload must not re-send it: a remounted page starts from the server's
-    // metadata, and neither render a create can produce comes back.
-    await stepItem(page, 1).locator('button').click();
+    // Leaving clears attempt feedback without replaying a command; the retained draft and
+    // reloaded metadata never reconstruct a create answer.
+    await stepButton(page, 1).click();
     await expectCurrentStep(page, 1);
-    await stepItem(page, 2).locator('button').click();
+    await stepButton(page, 2).click();
     await expectCurrentStep(page, 2);
     await expect(ciError(page)).toHaveCount(0);
     await expectNoReveal(page);

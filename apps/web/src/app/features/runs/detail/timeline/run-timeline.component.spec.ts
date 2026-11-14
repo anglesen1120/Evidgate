@@ -58,9 +58,7 @@ describe('RunTimelineComponent', () => {
   it('binds labels and status into compact aligned tracks rather than opposite card edges', async () => {
     const { root } = await render('complete');
     const row = root.querySelector('ol > li');
-    expect(
-      row?.classList.contains('min-[768px]:grid-cols-[12ch_minmax(0,28ch)_minmax(0,1fr)]'),
-    ).toBe(true);
+    expect(row?.classList.contains('min-[768px]:grid-cols-[12ch_minmax(0,1fr)]')).toBe(true);
     expect(row?.classList.contains('justify-between')).toBe(false);
     expect(row?.children[0]?.hasAttribute('data-step-label')).toBe(true);
     expect(row?.children[1]?.hasAttribute('data-step-status')).toBe(true);
@@ -132,7 +130,7 @@ describe('RunTimelineComponent', () => {
     expect(root.querySelector('[data-after-cancel-count]')?.textContent).toContain(
       '3 events arrived after cancel (informational)',
     );
-    expect(note?.getAttribute('role')).toBeNull();
+    expect(note?.getAttribute('role')).toBe('note');
     expect(root.querySelector('[role="alert"]')).toBeNull();
     expect(note?.className).toContain('eg-info');
     expect(note?.className).not.toContain('eg-warning');
@@ -173,9 +171,7 @@ describe('RunTimelineComponent', () => {
   it('shows unknown history copy without inventing any step times', async () => {
     const { root } = await render('collecting');
     const line = root.querySelector('[data-step-times]');
-    expect(line?.querySelector('app-status-pill')?.textContent).toBe(
-      'History unavailable for this run',
-    );
+    expect(line?.textContent?.trim()).toBe('History unavailable for this run');
     expect(root.querySelector('time')).toBeNull();
   });
 
@@ -196,16 +192,16 @@ describe('RunTimelineComponent', () => {
       { from_state: 'collecting', to_state: 'complete', occurred_at: '2026-11-07T10:02:00Z' },
     ];
     const { root } = await render('complete', null, history);
-    const times = [...root.querySelectorAll<HTMLTimeElement>('[data-step-time]')];
+    const times = [...root.querySelectorAll<HTMLTimeElement>('[data-step-time] time')];
     expect(times).toHaveLength(3);
     expect(times.map((time) => time.tagName)).toEqual(['TIME', 'TIME', 'TIME']);
     expect(times.map((time) => time.getAttribute('datetime'))).toEqual(
       history.map((transition) => transition.occurred_at),
     );
     expect(times.map((time) => time.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
-      'Nov 7, 2026, 10:00:00 AM',
-      'Nov 7, 2026, 10:01:00 AM',
-      'Nov 7, 2026, 10:02:00 AM',
+      'Nov 7, 2026, 10:00:00 AM UTC',
+      'Nov 7, 2026, 10:01:00 AM UTC',
+      'Nov 7, 2026, 10:02:00 AM UTC',
     ]);
     expect(root.querySelector('[data-step="created"] time')).toBeNull();
     expect(root.querySelector('[data-step="queued"] time')).toBeNull();

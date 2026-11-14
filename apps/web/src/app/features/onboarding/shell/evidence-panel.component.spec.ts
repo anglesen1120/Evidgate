@@ -49,7 +49,7 @@ describe('EvidencePanelComponent', () => {
   });
 
   it('keeps the resource card named and read-only without adding keyboard stops', () => {
-    const panel = root.querySelector('aside');
+    const panel = root.querySelector('section[aria-labelledby="onboarding-evidence-title"]');
     expect(panel?.getAttribute('data-slot')).toBe('card');
     expect(panel?.getAttribute('aria-labelledby')).toBe(root.querySelector('h2')?.id);
     expect(root.querySelector('button, a, [tabindex]')).toBeNull();
@@ -79,7 +79,7 @@ describe('EvidencePanelComponent', () => {
     expect(root.querySelector('dl')?.textContent).toContain(PROJECT.id);
     expect(root.querySelector('[data-resource-state="empty"]')).toBeNull();
     expect(root.textContent).not.toContain('will appear here');
-    expect(root.querySelector('aside')?.getAttribute('aria-labelledby')).toBe(
+    expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
       'onboarding-evidence-title',
     );
   });

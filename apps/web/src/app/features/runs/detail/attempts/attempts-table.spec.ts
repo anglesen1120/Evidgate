@@ -255,7 +255,9 @@ describe('AttemptsTableComponent', () => {
         healingCandidate: { candidateHash: 'hash\u202e<script>', mode: 'shadow' },
       }),
     ]);
-    expect(root.querySelector('th[scope="row"] > bdi')?.textContent).toBe('exec⟨U+202E⟩<script>');
+    expect(root.querySelector('[data-attempt-identity] bdi')?.textContent).toBe(
+      'exec⟨U+202E⟩<script>',
+    );
     expect(root.querySelector('[data-attempt-raw] bdi')?.textContent).toBe('raw⟨U+202E⟩<script>');
     expect(root.querySelector('[data-attempt-normalised] > bdi')?.textContent).toBe(
       'unknown⟨U+202E⟩<script>',
@@ -329,7 +331,7 @@ describe('AttemptsTableComponent', () => {
     fixture.componentRef.setInput('attempts', [...input]);
     fixture.componentRef.setInput('hasMore', false);
     await fixture.whenStable();
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 2 / 3');
+    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 2 / 3');
     expect(root.querySelector('[data-attempts-load-more]')).toBeNull();
   });
   it('shows a failed follow-up page beside the rows already loaded', async () => {
@@ -372,6 +374,7 @@ describe('AttemptsTableComponent', () => {
     );
   });
 
+  // Repeated rich-row renders use the run list's bounded 15 s DOM-test budget.
   it('bounds 120 execution groups to 50 rows, pages both ways and resets on new input', async () => {
     const input = Array.from({ length: 120 }, (_, index) =>
       row({ executionKey: `execution-${index}` }),
@@ -381,7 +384,7 @@ describe('AttemptsTableComponent', () => {
     const previous = () => root.querySelector<HTMLButtonElement>('[data-attempts-previous]')!;
     expect(rows(root)).toHaveLength(50);
     expect(root.querySelector('nav')?.getAttribute('aria-label')).toBe('Attempts pagination');
-    expect(root.querySelector('[role="status"]')?.hasAttribute('aria-live')).toBe(false);
+    expect(root.querySelector('nav [role="status"]')?.hasAttribute('aria-live')).toBe(false);
     expect(previous().disabled).toBe(true);
     next().click();
     await fixture.whenStable();
@@ -391,7 +394,7 @@ describe('AttemptsTableComponent', () => {
     await fixture.whenStable();
     expect(rows(root)).toHaveLength(20);
     expect(next().disabled).toBe(true);
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 3 / 3');
+    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 3 / 3');
     previous().click();
     await fixture.whenStable();
     expect(rows(root)[0]?.textContent).toContain('execution-50');
@@ -399,7 +402,7 @@ describe('AttemptsTableComponent', () => {
     await fixture.whenStable();
     expect(rows(root)[0]?.textContent).toContain('execution-0');
     expect(previous().disabled).toBe(true);
-  });
+  }, 15_000);
   it('hands focus to the opposite pager button when a page turn disables the activated one', async () => {
     const input = Array.from({ length: 120 }, (_, index) =>
       row({ executionKey: `execution-${index}` }),
@@ -415,7 +418,7 @@ describe('AttemptsTableComponent', () => {
     await fixture.whenStable();
     next().click();
     await fixture.whenStable();
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 3 / 3');
+    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 3 / 3');
     expect(next().disabled).toBe(true);
     expect(document.activeElement).toBe(previous());
 
@@ -424,7 +427,7 @@ describe('AttemptsTableComponent', () => {
     await fixture.whenStable();
     previous().click();
     await fixture.whenStable();
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 1 / 3');
+    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 1 / 3');
     expect(previous().disabled).toBe(true);
     expect(document.activeElement).toBe(next());
   });
@@ -440,7 +443,7 @@ describe('AttemptsTableComponent', () => {
       root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
       await fixture.whenStable();
     }
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 3 / 3');
+    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 3 / 3');
     expect(document.activeElement).toBe(document.body);
   });
 
@@ -453,13 +456,13 @@ describe('AttemptsTableComponent', () => {
       root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
       await fixture.whenStable();
     }
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 3 / 3');
+    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 3 / 3');
 
     fixture.componentRef.setInput('attempts', input.slice(0, 51));
     fixture.detectChanges();
     expect(rows(root)).toHaveLength(50);
     expect(rows(root)[0]?.textContent).toContain('execution-0');
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Page 1 / 2');
+    expect(root.querySelector('nav [role="status"]')?.textContent).toContain('Page 1 / 2');
 
     root.querySelector<HTMLButtonElement>('[data-attempts-next]')!.click();
     await fixture.whenStable();

@@ -3,18 +3,21 @@
 // the element that holds focus by its own identity (role + accessible name, id, data hook), never by
 // counting Tab stops.
 //
-// Since S146 (09.3.1-T4/T2.2) the run detail reads the manifest members and the attempts keyset from
-// the wire, so the manifest copy button (F-RUN-01) is a real stop of this walk. The attempts pager
-// (F-RUN-02) needs more than 50 rows to appear, which no corpus page has, so it stays pinned at
-// component level: `attempts-table.spec.ts` ("hands focus to the opposite pager button when a page
-// turn disables the activated one"); the load-more control is walked in `run-detail.spec.ts`.
-// Everything the browser can render is walked here: the list, its filters, the virtual table, the
-// paging error, and the `Load more` append (F-RUN-03).
+// Runs uses named local scrollers only when content actually overflows, bounded rich-row
+// pages, and explicit copy/full-value controls. The walk keeps those approved controls in
+// DOM order, verifies their exact navigation/copy budget, and never permits anonymous stops.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import runList from '../../../../fixtures/web-api/run-list/input.json';
 import runListPage2 from '../../../../fixtures/web-api/run-list-page-2/input.json';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import { activeElement, localePath, ORG_ACME, PROJECT_STOREFRONT, withVariants } from './support';
+import { RUN_FILTER_SUMMARY, RUN_RECORDS } from './run-list.support';
+import {
+  auditRunTabStops,
+  tabThroughNarrowRunRecords,
+  tabThroughRunControls,
+  tabThroughTableScroller,
+} from './run-table-keyboard.support';
 
 /** The grant set that holds `run:read`; the default G1 session grants no run code. */
 const RUN_READ_GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
@@ -65,12 +68,25 @@ async function enterMain(page: Page): Promise<void> {
   await expect(page.locator('#main-content')).toBeFocused();
 }
 
+/** The native disclosure is an intentional stop before the six filter controls. */
+async function enterFilterDisclosure(page: Page): Promise<void> {
+  await page.keyboard.press('Tab');
+  const summary = page.locator(RUN_FILTER_SUMMARY);
+  await expect(summary).toBeFocused();
+  await expectFocusRing(summary, '2px');
+  const disclosure = page.locator('[data-run-filter-disclosure]');
+  if ((await disclosure.getAttribute('open')) === null) await page.keyboard.press('Enter');
+  await expect(disclosure).toHaveAttribute('open', '');
+}
+
 test('the list, a row and the way back are keyboard-reachable and identifiable', async ({
   page,
 }) => {
   await page.goto(listAddress('?fixture.variant.listRuns=runs'));
   await listIsReady(page);
   await enterMain(page);
+  await enterFilterDisclosure(page);
+  await auditRunTabStops(page.locator('app-run-list-page'), 'list-to-detail/list');
 
   for (const selector of FILTER_STOPS) {
     await page.keyboard.press('Tab');
@@ -78,11 +94,8 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
     await expectFocusRing(page.locator(selector), '2px');
   }
 
-  // One stop for the plain table: its own scroll wrapper, under its own name.
-  await page.keyboard.press('Tab');
-  const region = page.getByRole('region', { name: 'Project runs' });
-  await expect(region).toBeFocused();
-  await expectFocusRing(region, '-2px');
+  // Overflow adds exactly one named local-scroller stop, never a redundant wrapper stop.
+  await tabThroughTableScroller(page, page.locator('app-run-list-table'));
 
   await page.keyboard.press('Tab');
   const firstRow = page.getByRole('link', { name: FIRST_RUN });
@@ -95,6 +108,7 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
     'data-run-detail-status',
     'ready',
   );
+  await auditRunTabStops(page.locator('app-run-detail-page'), 'list-to-detail/detail-evidence');
   // A path change hands focus to the route's own region, so the visitor starts inside the page.
   expect((await activeElement(page)).id).toBe('main-content');
 
@@ -103,14 +117,12 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(back).toBeFocused();
   expect((await back.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
 
-  // The attempts table's scroll region follows the header. The default attempts page (seven rows,
-  // no further cursor) has no pager or load-more button, so the region is the last stop of that
-  // section.
+  await tabThroughRunControls(page, page.locator('app-run-header').first(), 2);
   await page.keyboard.press('Tab');
   const attemptsRegion = page.getByRole('region', { name: 'Attempts table' });
   await expect(attemptsRegion).toBeFocused();
   await expect(page.locator('app-attempts-table [data-attempt-row]')).toHaveCount(7);
-  await expect(page.locator('app-attempts-table button')).toHaveCount(0);
+  await tabThroughRunControls(page, page.locator('app-attempts-table tbody'), 7);
 
   // Evidence and the latest live decision are tabs: only the selected tab is a Tab stop, the arrow
   // keys move inside the list, and the selected panel is the next stop. The hidden panel leaves the
@@ -143,21 +155,16 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(evidencePanel).toBeFocused();
   await expect(evidencePanel).toHaveAttribute('tabindex', '0');
 
-  // The selected panel's revision picker is a combobox (the page is pinned to a frozen revision,
-  // so it is a real stop of the walk), then the manifest panel's copy button ends the page.
+  // The revision picker precedes the peer timeline/context area, then manifest provenance.
   await page.keyboard.press('Tab');
   await expect(page.getByRole('combobox', { name: 'Evidence revision' })).toBeFocused();
-
-  await page.keyboard.press('Tab');
+  await expect(page.locator('app-evidence-panel app-copy-value-button button')).toHaveCount(0);
+  await tabThroughRunControls(page, page.locator('app-run-header').last(), 4);
+  await tabThroughRunControls(page, page.locator('app-manifest-panel'), 3);
   const copy = page.getByRole('button', { name: 'Copy full manifest hash' });
-  await expect(copy).toBeFocused();
   expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
-
-  // The producer table's scroll region is the section's only stop. The run's bound release sits
-  // below it, and its component digest copy button is the last stop of the page; a run with more
-  // than one release adds its selector before that button.
-  await page.keyboard.press('Tab');
-  await expect(page.locator('[data-producer-scroll]')).toBeFocused();
+  await tabThroughTableScroller(page, page.locator('#producers'));
+  await tabThroughRunControls(page, page.locator('#producers'), 2);
   await page.keyboard.press('Tab');
   const digest = page.getByRole('button', {
     name: 'Copy full digest for component web',
@@ -170,7 +177,7 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('the selected tab panel is a stop of its own when the decision has no control', async ({
+test('the selected panel precedes its three decision provenance copy controls', async ({
   page,
 }) => {
   await page.goto(
@@ -198,22 +205,26 @@ test('the selected tab panel is a stop of its own when the decision has no contr
   const decision = page.getByRole('tab', { name: 'Latest live decision' });
   await expect(decision).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('[data-decision-mismatch]')).toHaveCount(0);
-  await expect(page.locator('app-decision-view a[href], app-decision-view button')).toHaveCount(0);
+  await expect(page.locator('app-decision-view a[href]')).toHaveCount(0);
+  await expect(page.locator('app-decision-view app-copy-value-button button')).toHaveCount(3);
 
-  // With no control inside, the panel itself is the only stop between the tab list and the
-  // manifest panel; the hidden evidence panel is out of the order.
+  // The panel remains its own stop; its three provenance actions follow, and hidden evidence
+  // never enters the order.
   const panel = page.getByRole('tabpanel');
   await expect(panel).toHaveCount(1);
   await expect(panel).toHaveAttribute('tabindex', '0');
+  await auditRunTabStops(panel, 'decision-provenance-panel');
   await expect(page.locator('[role="tabpanel"][hidden]')).toHaveAttribute('tabindex', '-1');
   await page.keyboard.press('Tab');
   await expect(panel).toBeFocused();
   await expectFocusRing(panel, '2px');
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Copy full manifest hash' })).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
-  await expect(panel).toBeFocused();
-  await expectNoA11yViolations(page, 'run detail, decision panel without controls');
+  await tabThroughRunControls(page, page.locator('app-decision-view'), 3);
+  const copies = page.locator('app-decision-view app-copy-value-button button');
+  for (const target of [copies.nth(1), copies.first(), panel]) {
+    await page.keyboard.press('Shift+Tab');
+    await expect(target).toBeFocused();
+  }
+  await expectNoA11yViolations(page, 'run detail, decision panel and provenance controls');
 });
 
 test('a filter change keeps the focus that asked for it, and Clear restores the table order', async ({
@@ -222,6 +233,7 @@ test('a filter change keeps the focus that asked for it, and Clear restores the 
   await page.goto(listAddress('?fixture.variant.listRuns=runs'));
   await listIsReady(page);
   await enterMain(page);
+  await enterFilterDisclosure(page);
 
   // The three selects are comboboxes reached and left by Tab alone; their option lists are a
   // portaled overlay opened with Enter or an arrow key, so the value this walk sets is the text
@@ -265,70 +277,51 @@ test('a filter change keeps the focus that asked for it, and Clear restores the 
     runList.body.items.length,
   );
   await expect(clear).toBeFocused();
-  // The tab order from the controls is intact afterwards: the table, then its rows.
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('region', { name: 'Project runs' })).toBeFocused();
+  await auditRunTabStops(page.locator('app-run-list-page'), 'filter-clear');
+  // The tab order survives the re-read, including only an actually overflowing scroller.
+  await tabThroughTableScroller(page, page.locator('app-run-list-table'));
   await page.keyboard.press('Tab');
   await expect(page.locator('app-run-list-table [data-run-row] a').first()).toBeFocused();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('the 250-row table keeps both scroll axes on named stops and the visitor inside it', async ({
+test('the 250-row narrow records keep every fact reachable and preserve focus on a page turn', async ({
   page,
 }) => {
-  // Stay above the stacked-record breakpoint but below the desktop table minimum.
   await page.setViewportSize({ width: 800, height: 800 });
   await page.goto(listAddress('?fixture.variant.listRuns=250-rows'));
   await listIsReady(page);
-  await expect(page.locator('app-run-list-table [data-run-row]').first()).toBeVisible();
-  // Both scroll axes have named stops. Truncated values can add their own tooltip stops.
-  await expect(
-    page.locator('app-run-list-table :is([role="region"], [role="rowgroup"])[tabindex="0"]'),
-  ).toHaveCount(2);
-
+  const records = page.locator(RUN_RECORDS);
+  await expect(records).toHaveCount(200);
+  await expect(records.first().locator('dt')).toHaveCount(7);
+  await expect(records.first().locator('dd')).toHaveCount(7);
+  await expect(page.locator('app-run-list-table .scroll[tabindex="0"]')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(800);
   await enterMain(page);
+  await enterFilterDisclosure(page);
+  await auditRunTabStops(page.locator('app-run-list-page'), '250-records/first-page');
   for (const selector of FILTER_STOPS) {
     await page.keyboard.press('Tab');
     await expect(page.locator(selector)).toBeFocused();
   }
-
-  const region = page.locator('app-run-list-table .table-scroll');
+  await tabThroughNarrowRunRecords(page, page.locator('app-run-list-table .eg-table-records'), 200);
+  const pager = page.locator('app-run-list-table nav');
+  const previous = pager.getByRole('button').first();
+  const next = pager.getByRole('button').last();
+  await expect(previous).toBeDisabled();
   await page.keyboard.press('Tab');
-  await expect(region).toBeFocused();
-  await expect(region).toHaveAccessibleName('Project runs');
-  await expectFocusRing(region, '-2px');
-
-  // The region is the only way to the last columns: the viewport is exactly as wide as the table,
-  // so keyboard scrolling has to happen on the wrapper, and it must actually move.
-  const scrollLeft = () => region.evaluate((node) => node.scrollLeft);
-  expect(await scrollLeft()).toBe(0);
-  await page.keyboard.press('ArrowRight');
-  expect(await scrollLeft()).toBeGreaterThan(0);
-  await page.keyboard.press('End');
-  const reach = await region.evaluate((node) => node.scrollWidth - node.clientWidth);
-  expect(await scrollLeft()).toBe(reach);
-  await page.keyboard.press('Home');
-  expect(await scrollLeft()).toBe(0);
-
-  await page.keyboard.press('Tab');
-  const scroller = page.locator('app-run-list-table cdk-virtual-scroll-viewport');
-  await expect(scroller).toBeFocused();
-  await expect(scroller).toHaveAccessibleName('Project runs rows');
-  await expectFocusRing(scroller, '-2px');
-
-  await page.keyboard.press('Tab');
-  await expect(page.locator('app-run-list-table [data-run-row] a').first()).toBeFocused();
-
-  // Scrolling the window past the rendered range never drops focus to the document: the guard moves
-  // it to the viewport that is still on screen.
-  await page.keyboard.press('Shift+Tab');
-  await expect(scroller).toBeFocused();
-  await page.keyboard.press('End');
-  await expect(scroller).toBeFocused();
-  await expect(page.locator('app-run-list-table [data-run-row]').last()).toBeInViewport();
+  await expect(next).toBeFocused();
+  await expect(next).toHaveAccessibleName(/\S/);
+  await page.keyboard.press('Enter');
+  await expect(records).toHaveCount(50);
+  await expect(next).toBeDisabled();
+  await auditRunTabStops(page.locator('app-run-list-page'), '250-records/last-page');
+  await expect(previous).toBeFocused();
   expect((await activeElement(page)).tag).not.toBe('body');
-
-  await expectNoA11yViolations(page, 'run list, 250 rows');
+  await page.keyboard.press('Shift+Tab');
+  await expect(records.last().locator('app-copy-value-button button')).toBeFocused();
+  await expect(records.last()).toBeInViewport();
+  await expectNoA11yViolations(page, 'run list, 250 labelled records');
 });
 
 test('a retried 503 hands focus to the page heading instead of dropping it to body', async ({
@@ -344,14 +337,14 @@ test('a retried 503 hands focus to the page heading instead of dropping it to bo
   await expect(retry).toBeEnabled();
 
   await enterMain(page);
-  // The panel is behind the filter form; focus must cross it without ever resting on body.
-  for (let press = 0; press < FILTER_STOPS.length + 1; press++) {
-    if (await page.evaluate(() => document.activeElement?.closest('app-retry-after') !== null)) {
-      break;
-    }
+  await enterFilterDisclosure(page);
+  await auditRunTabStops(page.locator('app-run-list-page'), 'retry-503');
+  // The newly introduced disclosure is explicit; the six filter stops keep their exact order.
+  for (const selector of FILTER_STOPS) {
     await page.keyboard.press('Tab');
-    expect((await activeElement(page)).tag).not.toBe('body');
+    await expect(page.locator(selector)).toBeFocused();
   }
+  await page.keyboard.press('Tab');
   await expect(retry).toBeFocused();
 
   // The retry destroys the panel that held focus. The shared replacement hands the visitor's place
@@ -376,23 +369,24 @@ test('Load more appends the next page and leaves focus on the row it appended', 
   // for a real press. The latency keeps the follow observable while it is in flight.
   await page.goto(listAddress('?fixture.variant.listRuns=page-1-full&fixture.latency=1000'));
   await listIsReady(page);
-  const rows = page.locator('app-run-list-table [data-run-row]');
+  const rows = page.locator(RUN_RECORDS);
   await expect(rows).toHaveCount(FULL_PAGE_ROWS);
   // Below 200 rows the table renders every row, so each one is a real Tab stop of this walk.
   await expect(page.locator('app-run-list-table cdk-virtual-scroll-viewport')).toHaveCount(0);
 
   await enterMain(page);
+  await enterFilterDisclosure(page);
+  await auditRunTabStops(page.locator('app-run-list-page'), 'load-more/first-page');
   for (const selector of FILTER_STOPS) {
     await page.keyboard.press('Tab');
     await expect(page.locator(selector)).toBeFocused();
   }
-  await page.keyboard.press('Tab');
-  await expect(page.getByRole('region', { name: 'Project runs' })).toBeFocused();
+  await tabThroughTableScroller(page, page.locator('app-run-list-table'));
 
-  // The rows are the table's own stops in server order; the paging section follows the table.
+  // Each served row has its navigation link, one original-ID copy action and only measured
+  // full-value disclosures. The paging control follows every one of those controls.
   for (let row = 0; row < FULL_PAGE_ROWS; row++) {
-    await page.keyboard.press('Tab');
-    await expect(rows.nth(row).locator('a')).toBeFocused();
+    await tabThroughRunControls(page, rows.nth(row), 1, 1);
   }
   const loadMore = page.locator('[data-run-load-more]');
   await page.keyboard.press('Tab');
@@ -413,10 +407,22 @@ test('Load more appends the next page and leaves focus on the row it appended', 
   await expect(rows).toHaveCount(FULL_PAGE_ROWS + runListPage2.body.items.length);
   await expect(loadMore).toHaveCount(0);
   const appended = rows.nth(FULL_PAGE_ROWS);
-  await expect(appended).toHaveAttribute('data-run-id', runListPage2.body.items[0]!.run_id);
+  await expect(appended).toHaveAttribute('data-row-id', runListPage2.body.items[0]!.run_id);
   const appendedLink = appended.locator('a');
   await expect(appendedLink).toBeFocused();
+  await auditRunTabStops(page.locator('app-run-list-page'), 'load-more/appended');
   expect((await activeElement(page)).tag).toBe('a');
+  for (const control of await appended.locator('button, [tabindex="0"]').all()) {
+    await page.keyboard.press('Tab');
+    await expect(control).toBeFocused();
+    if (
+      (await control.getAttribute('role')) === 'button' ||
+      (await control.evaluate((element) => element.matches('[hlmBadge].spartan-badge--clipped')))
+    ) {
+      await page.keyboard.press('Escape');
+      await expect(control).toBeFocused();
+    }
+  }
 
   await page.keyboard.press('Tab');
   await expect(rows.nth(FULL_PAGE_ROWS + 1).locator('a')).toBeFocused();

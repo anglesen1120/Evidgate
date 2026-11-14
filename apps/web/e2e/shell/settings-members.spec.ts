@@ -20,6 +20,13 @@
 // (`core/session/effective-permissions.source.ts`), and `membership:write` alone decides whether the
 // invite and remove controls exist at all.
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import {
+  expectIntactWords,
+  MEMBER_ROWS,
+  memberRow,
+  openMemberAction,
+  openMemberMenu,
+} from './member-controls';
 
 import createInviteExists from '../../../../fixtures/web-api/membership-create-invite-exists/input.json';
 import membershipCreateOk from '../../../../fixtures/web-api/membership-create-ok/input.json';
@@ -119,9 +126,6 @@ const INVITED_EMAIL = membershipCreateOk.body.invited_email;
 /** The role whose scope preview the invite case opens. */
 const TENANT_ADMIN_ROLE_ID = tenantAdminRoleId();
 
-/** The rows `[data-members-row]` of the page, in DOM order — one spelling for every case. */
-const MEMBER_ROWS = 'app-members-page [data-members-row]';
-
 /** The tab's own phase hook, awaited before any content claim (loading → ready). */
 async function expectMembersReady(page: Page): Promise<void> {
   const host = page.locator('app-members-page');
@@ -151,10 +155,11 @@ test.describe('AC2: the last-admin refusal is the server text, never a client pr
       // The page renders the corpus page whole: the count is the fixture's, not a sample.
       await expect(page.locator(MEMBER_ROWS)).toHaveCount(MEMBERSHIPS.length);
 
-      const row = page.locator(`${MEMBER_ROWS}[data-membership-id="${SOLE_ADMIN.id}"]`);
+      const row = memberRow(page, SOLE_ADMIN.id);
       await expect(row).toHaveCount(1);
-      await expect(row.locator('[data-members-remove]')).toHaveCount(1);
-      await row.locator('[data-members-remove]').click();
+      await openMemberMenu(page, row);
+      await expect(page.locator('[data-members-remove]')).toHaveCount(1);
+      await page.locator('[data-members-remove]').click();
 
       const dialog = page.locator('[data-members-dialog="remove"][data-state="open"]');
       await expect(dialog).toBeVisible();
@@ -169,7 +174,10 @@ test.describe('AC2: the last-admin refusal is the server text, never a client pr
       // Refused, not optimistically applied: the dialog stays open and the guarded row stays put.
       await expect(dialog).toBeVisible();
       await expect(row).toHaveCount(1);
-      await expect(row).toHaveAttribute('data-members-status', 'active');
+      await expect(row.locator('[data-members-row]')).toHaveAttribute(
+        'data-members-status',
+        'active',
+      );
       await expect(page.locator(MEMBER_ROWS)).toHaveCount(MEMBERSHIPS.length);
       await expectMembersReady(page);
     });
@@ -183,15 +191,26 @@ test.describe('AC2: the last-admin refusal is the server text, never a client pr
       await expectMembersReady(page);
 
       const removable = MEMBERSHIPS.filter((membership) => membership.status !== 'removed');
-      const removeControls = page.locator('app-members-page [data-members-remove]');
-      await expect(removeControls).toHaveCount(removable.length);
+      let offered = 0;
+      for (const membership of removable) {
+        await openMemberMenu(page, memberRow(page, membership.id));
+        const remove = page.locator('[data-members-remove]');
+        await expect(remove).toHaveCount(1);
+        offered += await remove.count();
+        await page.keyboard.press('Escape');
+      }
+      expect(offered).toBe(removable.length);
 
       const removedId = removedMembership().id;
-      const removed = page.locator(`${MEMBER_ROWS}[data-membership-id="${removedId}"]`);
+      const removed = memberRow(page, removedId);
       await expect(removed).toHaveCount(1);
-      await expect(removed).toHaveAttribute('data-members-status', 'removed');
+      await expect(removed.locator('[data-members-row]')).toHaveAttribute(
+        'data-members-status',
+        'removed',
+      );
       // The row is audit history (02.1.2 §8): it is listed, and its action cell stays empty.
       await expect(removed.locator('[data-members-remove]')).toHaveCount(0);
+      await expect(removed.locator('[data-members-actions]')).toHaveCount(0);
     });
   }
 });
@@ -211,8 +230,8 @@ test.describe('removal: the 204 closes the dialog and announces the change', () 
         throw new Error('fixtures/web-api/memberships-list holds no other active member');
       }
 
-      const row = page.locator(`${MEMBER_ROWS}[data-membership-id="${target.id}"]`);
-      await row.locator('[data-members-remove]').click();
+      const row = memberRow(page, target.id);
+      await openMemberAction(page, row, 'remove');
       const dialog = page.locator('[data-members-dialog="remove"][data-state="open"]');
       await expect(dialog).toBeVisible();
       await dialog.locator('[data-members-submit]').click();
@@ -243,6 +262,7 @@ test.describe('a membership:read session never sees an action it may not use', (
       // (00 §5.6 W5, the same rule the tab strip follows).
       await expect(page.locator('app-members-page [data-members-invite-open]')).toHaveCount(0);
       await expect(page.locator('app-members-page [data-members-remove]')).toHaveCount(0);
+      await expect(page.locator('app-members-page [data-members-actions]')).toHaveCount(0);
       await expect(page.locator('[data-members-dialog]')).toHaveCount(0);
       await expect(page.locator('app-members-page [data-role-preview]')).toHaveCount(0);
     });
@@ -346,8 +366,8 @@ test.describe('a pending invitation is cancelled, not removed', () => {
       if (pending === undefined) {
         throw new Error('fixtures/web-api/memberships-list holds no pending invitation');
       }
-      const row = page.locator(`${MEMBER_ROWS}[data-membership-id="${pending.id}"]`);
-      await row.locator('[data-members-remove]').click();
+      const row = memberRow(page, pending.id);
+      await openMemberAction(page, row, 'remove');
       const dialog = page.locator('[data-members-dialog="remove"][data-state="open"]');
       await expect(dialog).toBeVisible();
       await dialog.locator('[data-members-submit]').click();
@@ -422,7 +442,7 @@ test.describe('members matrix responsive records', () => {
         const statuses = matrix.locator('tbody td > span:last-child');
         expect(await statuses.count()).toBeGreaterThan(0);
         for (const header of await matrix.locator('thead th').all()) {
-          await expect(header).toHaveCSS('white-space', 'nowrap');
+          await expectIntactWords(header);
         }
         for (const status of await statuses.all()) {
           await expect(status).toHaveCSS('overflow-wrap', 'normal');
@@ -443,6 +463,12 @@ test.describe('members matrix responsive records', () => {
         }
         for (const width of [390, 360]) {
           await page.setViewportSize({ width, height: 844 });
+          const expand = page.locator('[aria-controls="members-full-matrix"]');
+          if ((await expand.getAttribute('aria-expanded')) === 'false') {
+            await expect(page.locator('[data-members-granted-summary]')).toBeVisible();
+            await expand.click();
+          }
+          await expect(expand).toHaveAttribute('aria-expanded', 'true');
           const cells = matrix.locator('tbody td');
           for (const cell of await cells.all()) {
             await expect(cell).toHaveCSS('display', 'grid');
@@ -451,7 +477,7 @@ test.describe('members matrix responsive records', () => {
             await expect(cell.locator('.record-label')).not.toHaveAttribute('aria-hidden');
           }
           const identity = matrix.locator('tbody th').first();
-          await expect(identity.locator('span:last-child')).toHaveText(
+          await expect(identity.locator('app-data-table-value')).toHaveText(
             MEMBERSHIPS[0]?.invited_email ?? '',
           );
           expect(

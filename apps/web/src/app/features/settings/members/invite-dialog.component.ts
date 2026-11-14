@@ -106,17 +106,33 @@ import { InviteRevealComponent } from './invite-reveal.component';
               </fieldset>
               <app-role-scope-preview [preview]="store.preview(previewId())" />
               @if (store.inviteState().error; as error) {
+                <div class="sr-only" id="members-invite-error-label">{{ copy.inviteRefused }}</div>
                 <div
+                  #errorSummary
                   hlmAlert
                   [variant]="'destructive'"
                   id="members-invite-error"
                   class="grid gap-2 whitespace-pre-wrap"
                   data-members-error
-                  role="alert"
+                  role="group"
+                  tabindex="-1"
+                  aria-labelledby="members-invite-error-label"
+                  [attr.aria-describedby]="'members-invite-error-message members-invite-error-code'"
                 >
-                  <p>{{ error.message }}</p>
-                  <code data-members-error-code>{{ error.code }}</code>
+                  <p id="members-invite-error-message">{{ error.message }}</p>
+                  <code id="members-invite-error-code" data-members-error-code>{{
+                    error.code
+                  }}</code>
                 </div>
+                <p class="text-sm text-muted-foreground">
+                  {{
+                    editableRefusal()
+                      ? copy.correctInvitation
+                      : error.retryable
+                        ? copy.fixedInvitation
+                        : copy.restartInvitation
+                  }}
+                </p>
                 @if (error.kind === 'rate_limited' || error.kind === 'unavailable') {
                   <app-retry-after
                     [kind]="error.kind"
@@ -138,7 +154,12 @@ import { InviteRevealComponent } from './invite-reveal.component';
                 [variant]="'default'"
                 type="submit"
                 data-members-submit
-                [disabled]="busy() || !retryReady() || !session.has('membership:write')"
+                [disabled]="
+                  busy() ||
+                  !retryReady() ||
+                  (!!store.inviteState().error && !store.inviteState().error?.retryable) ||
+                  !session.has('membership:write')
+                "
               >
                 {{ busy() ? copy.submitting : copy.send }}
               </button>
@@ -165,10 +186,18 @@ export class InviteDialogComponent {
     () => this.inFlight() || this.store.inviteState().phase === 'submitting',
   );
   protected readonly retryReady = signal(true);
-  // Freeze a failed attempt's payload as well as its intent; closing starts a different attempt.
+  protected readonly editableRefusal = computed(() => {
+    const error = this.store.inviteState().error;
+    return (
+      error?.kind === 'validation' || (error?.kind === 'conflict' && error.code === 'invite_exists')
+    );
+  });
+  // Only an authoritative, correctable refusal permits a different payload and a new intent.
   protected readonly locked = computed(
-    () => this.busy() || this.store.inviteState().phase === 'failed',
+    () => this.busy() || (this.store.inviteState().phase === 'failed' && !this.editableRefusal()),
   );
+  private readonly focusRequest = signal<{ generation: number; error: boolean } | null>(null);
+  private readonly errorSummary = viewChild<ElementRef<HTMLElement>>('errorSummary');
   private readonly dialog = viewChild<unknown, ElementRef<HTMLElement>>('dialog', {
     read: ElementRef,
   });
@@ -180,7 +209,15 @@ export class InviteDialogComponent {
   constructor() {
     inject(DestroyRef).onDestroy(() => this.close());
     afterRenderEffect(() => {
-      if (this.opened() && !this.revealing()) this.emailInput()?.nativeElement.focus();
+      const request = this.focusRequest();
+      if (!request || request.generation !== this.generation || !this.opened() || this.revealing())
+        return;
+      const target = request.error
+        ? this.errorSummary()?.nativeElement
+        : this.emailInput()?.nativeElement;
+      if (!target || (target instanceof HTMLInputElement && target.disabled)) return;
+      target.focus();
+      this.focusRequest.set(null);
     });
     effect((onCleanup) => {
       const seconds = this.store.inviteState().error?.retryAfterSeconds;
@@ -209,11 +246,12 @@ export class InviteDialogComponent {
     this.slot.clear();
     this.revealing.set(false);
     this.opened.set(true);
-    this.emailInput()?.nativeElement.focus();
+    this.focusRequest.set({ generation: this.generation, error: false });
   }
 
   close(): void {
     this.generation++;
+    this.focusRequest.set(null);
     this.slot.clear();
     this.dialog()
       ?.nativeElement.querySelectorAll<HTMLInputElement>('input[readonly]')
@@ -233,15 +271,25 @@ export class InviteDialogComponent {
   }
 
   protected updateEmail(event: Event): void {
-    if (event.target instanceof HTMLInputElement) this.email.set(event.target.value);
+    if (this.locked() || !(event.target instanceof HTMLInputElement)) return;
+    if (event.target.value === this.email()) return;
+    this.beginCorrection();
+    this.email.set(event.target.value);
   }
   protected toggle(id: string, checked: boolean): void {
     if (this.locked()) return;
+    if (this.selected().has(id) === checked) return;
+    this.beginCorrection();
     const roles = new Set(this.selected());
     if (checked) roles.add(id);
     else roles.delete(id);
     this.selected.set(roles);
     this.previewId.set(id);
+  }
+  private beginCorrection(): void {
+    if (!this.editableRefusal()) return;
+    this.intent = null;
+    this.store.resetMutations();
   }
   protected async submit(event: Event | void, form: HTMLFormElement): Promise<void> {
     event?.preventDefault();
@@ -250,6 +298,7 @@ export class InviteDialogComponent {
       this.revealing() ||
       this.busy() ||
       !this.retryReady() ||
+      (!!this.store.inviteState().error && !this.store.inviteState().error?.retryable) ||
       !this.session.has('membership:write') ||
       !form.reportValidity()
     )
@@ -259,7 +308,11 @@ export class InviteDialogComponent {
     this.inFlight.set(true);
     try {
       const issued = await this.store.invite(this.email(), [...this.selected()], this.intent);
-      if (!issued) return;
+      if (!issued) {
+        if (this.opened() && generation === this.generation)
+          this.focusRequest.set({ generation, error: true });
+        return;
+      }
       // Late responses may update the list, but must never reopen a dismissed credential.
       if (generation === this.generation) {
         if (issued.inviteToken !== null)

@@ -4,6 +4,7 @@ import type { PolicyActivationStateDto } from '@evidgate/sdk';
 
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { SessionStore } from '../../../core/session/session.store';
+import { provideDesktopOnboardingViewport } from '../onboarding-viewport.testing';
 import { DEFAULT_ADVISORY_POLICY } from './default-policy';
 import { EnableCollectionPage } from './enable-collection.page';
 import {
@@ -56,6 +57,7 @@ describe('EnableCollectionPage scope changes', () => {
       imports: [EnableCollectionHost],
       providers: [
         provideZonelessChangeDetection(),
+        provideDesktopOnboardingViewport(),
         {
           provide: OnboardingDataService,
           useValue: { createPolicyRevision, activatePolicy, readPolicyActivation },

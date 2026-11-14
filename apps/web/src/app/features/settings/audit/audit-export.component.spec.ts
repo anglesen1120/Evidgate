@@ -339,6 +339,10 @@ describe('AuditExportComponent', () => {
       '2026-10-20T00:00:00.000Z',
       '2026-10-21T00:00:00.000Z',
     ]);
+    for (const time of times) {
+      expect(time.textContent).toContain('UTC');
+      expect(time.textContent).not.toContain(time.getAttribute('datetime'));
+    }
     root.querySelector<HTMLButtonElement>('[data-audit-export]')!.click();
     await fixture.whenStable();
     expect(data.list).toHaveBeenCalledTimes(2);
@@ -353,6 +357,26 @@ describe('AuditExportComponent', () => {
       });
     }
   });
+  it.each(['en-US', 'vi'])(
+    'formats applied export bounds in %s without changing UTC filter precision',
+    async (locale) => {
+      TestBed.resetTestingModule();
+      registerLocaleData(viLocale);
+      configure(locale);
+      const store = TestBed.inject(AuditStore);
+      const from = '2026-10-20T07:30:00.125+07:00';
+      const to = '2026-10-21T07:30:00.125+07:00';
+      await store.load('org1', { actorType: '', action: '', objectType: '', from, to });
+      const { root } = await render();
+      const times = root.querySelectorAll('time');
+      expect([...times].map((time) => time.getAttribute('datetime'))).toEqual([from, to]);
+      expect(times).toHaveLength(2);
+      expect(times[0]?.textContent).toContain(locale === 'vi' ? '20 thg 10' : 'Oct 20, 2026');
+      expect(times[0]?.textContent).toContain('UTC');
+      expect(root.textContent).toContain('From (inclusive');
+      expect(root.textContent).toContain('To (exclusive');
+    },
+  );
   it('blocks export with an associated explanation until draft filters are applied', async () => {
     const { fixture, root } = await render();
     fixture.componentRef.setInput('hasDraftChanges', true);

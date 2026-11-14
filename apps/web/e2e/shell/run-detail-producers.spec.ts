@@ -32,7 +32,7 @@ async function producersOf(
 /** The slot id of every rendered row, in document order. */
 async function slotIds(producers: Locator): Promise<string[]> {
   const slots = await producers
-    .locator('tr[data-producer-slot]')
+    .locator('[data-producer-slot]')
     .evaluateAll((rows) => rows.map((row) => row.getAttribute('data-producer-slot')));
   return slots.map((slot) => {
     if (slot === null) throw new Error('a producer row carries no slot id');
@@ -61,25 +61,27 @@ for (const locale of LOCALES) {
   }) => {
     const producers = await producersOf(page, 'ready', locale);
     await expect(producers.getByRole('heading', { level: 2 })).toHaveText(/\S/);
-    await expect(producers.locator('tr[data-producer-slot]')).toHaveCount(DECLARED.length);
+    await expect(producers.locator('[data-row-id]')).toHaveCount(DECLARED.length);
     expect(await slotIds(producers), 'the rows left the declared order').toEqual([...DECLARED]);
 
     for (const slot of DECLARED) {
-      const row = producers.locator(`tr[data-producer-slot="${slot}"]`);
-      await expect(row.locator('td[data-fact]')).toHaveCount(FACTS.length);
-      await expect(row.locator('td[data-fact][data-unavailable]')).toHaveCount(0);
+      const row = producers.locator(`[data-row-id]:has([data-producer-slot="${slot}"])`);
+      await expect(row.locator('[data-fact]')).toHaveCount(FACTS.length);
+      await expect(row.locator('[data-fact][data-unavailable]')).toHaveCount(0);
       await expect(
-        page.locator(`tr[data-producer-slot="${slot}"] #producer-${slot}`),
+        row.locator(`#producer-${slot}`),
         'the row carries no anchor of its own',
       ).toHaveCount(1);
     }
     const served = readyFixture.body.producers[0];
     if (served === undefined) throw new Error('the run-detail fixture serves no producer');
-    const first = producers.locator(`tr[data-producer-slot="${served.producer_id}"]`);
-    expect(await text(first.locator('td[data-fact="last-sequence"]'))).toBe(
+    const first = producers.locator(
+      `[data-row-id]:has([data-producer-slot="${served.producer_id}"])`,
+    );
+    expect(await text(first.locator('[data-fact="last-sequence"]'))).toBe(
       String(served.last_sequence),
     );
-    expect(await text(first.locator('td[data-fact="count"]'))).toBe(
+    expect(await text(first.locator('[data-fact="count"]'))).toBe(
       `${served.count} / ${served.expected}`,
     );
     await expect(producers.locator('[data-badge]')).toHaveCount(0);
@@ -91,20 +93,21 @@ for (const locale of LOCALES) {
   }) => {
     const producers = await producersOf(page, 'slot-states', locale);
     expect(await slotIds(producers)).toEqual(['shard-1', 'shard-2', 'shard-3']);
-    const row = (slot: string) => producers.locator(`tr[data-producer-slot="${slot}"]`);
+    const row = (slot: string) =>
+      producers.locator(`[data-row-id]:has([data-producer-slot="${slot}"])`);
 
-    expect(await text(row('shard-1').locator('td[data-fact="count"]'))).toBe('1 / 1');
+    expect(await text(row('shard-1').locator('[data-fact="count"]'))).toBe('1 / 1');
     await expect(row('shard-1').locator('[data-count-mismatch], [data-badge]')).toHaveCount(0);
 
-    expect(await text(row('shard-2').locator('td[data-fact="count"]'))).toContain('7 / 9');
+    expect(await text(row('shard-2').locator('[data-fact="count"]'))).toContain('7 / 9');
     await expect(row('shard-2').locator('[data-count-mismatch]')).toBeVisible();
     await expect(row('shard-2').locator('[data-badge]')).toHaveCount(0);
 
-    expect(await text(row('shard-3').locator('td[data-fact="count"]'))).toBe('5 / 5');
+    expect(await text(row('shard-3').locator('[data-fact="count"]'))).toBe('5 / 5');
     await expect(row('shard-3').locator('[data-badge="stale-epoch"]')).toBeVisible();
     await expect(row('shard-3').locator('[data-count-mismatch]')).toHaveCount(0);
 
-    await expect(producers.locator('td[data-fact][data-unavailable]')).toHaveCount(0);
+    await expect(producers.locator('[data-fact][data-unavailable]')).toHaveCount(0);
     // The badge and the mismatch are informational: no completeness or decision claim appears.
     await expect(producers.locator('[data-completeness]')).toHaveCount(0);
     await expectNoA11yViolations(page, 'run detail, producer slot states');
@@ -115,7 +118,7 @@ for (const locale of LOCALES) {
   }) => {
     const producers = await producersOf(page, 'no-producers', locale);
     await expect(producers.locator('[data-state="empty"]')).toBeVisible();
-    await expect(producers.locator('tr[data-producer-slot]')).toHaveCount(0);
+    await expect(producers.locator('[data-row-id]')).toHaveCount(0);
     await expect(producers.locator('table')).toHaveCount(0);
     // An empty declaration is a fact about the run, not a failed read: no error state, no retry.
     await expect(producers.locator('[data-state="error"]')).toHaveCount(0);
@@ -124,12 +127,12 @@ for (const locale of LOCALES) {
     await expectNoA11yViolations(page, 'run detail, producers empty state');
   });
 
-  test(`a fifty-slot run scrolls inside its wrapper, not the page, at 320px (${locale})`, async ({
+  test(`a fifty-slot run retains all six labelled facts without sideways scrolling at 320px (${locale})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     const producers = await producersOf(page, 'many-producers', locale);
-    await expect(producers.locator('tr[data-producer-slot]')).toHaveCount(50);
+    await expect(producers.locator('li[data-row-id]')).toHaveCount(50);
 
     const slots = await slotIds(producers);
     expect(slots[0], 'the first slot is not the first shard').toBe('shard-1');
@@ -140,7 +143,11 @@ for (const locale of LOCALES) {
       'the slots are not in shard-index order',
     ).toEqual(Array.from({ length: 50 }, (_slot, index) => index + 1));
 
-    expect(await tableWrapperOverflows(producers), 'the table wrapper does not scroll').toBe(true);
+    await expect(producers.locator('li[data-row-id] dt')).toHaveCount(300);
+    await expect(producers.locator('li[data-row-id] dd')).toHaveCount(300);
+    expect(await tableWrapperOverflows(producers), 'stacked facts need no sideways scroller').toBe(
+      false,
+    );
     expect(
       await producers.evaluate((section) => section.scrollWidth > section.clientWidth),
       'the producers section overflows its own column at 320px',
@@ -152,28 +159,42 @@ for (const locale of LOCALES) {
     await expectNoA11yViolations(page, 'run detail, producers table at 320px');
   });
 
-  test(`the table is one keyboard stop and a producer anchor lands on its row (${locale})`, async ({
+  test(`the scroller and copy controls are reachable and a producer anchor focuses its row (${locale})`, async ({
     page,
   }) => {
     const producers = await producersOf(page, 'many-producers', locale);
-    // The manifest panel's own copy control, named structurally so the case reads no copy.
-    const copyHash = page.locator('app-manifest-panel').getByRole('button');
-    await expect(copyHash).toHaveCount(1);
-    await copyHash.focus();
-    await expect(copyHash).toBeFocused();
-
-    // The table's own scroll wrapper is the section's only stop, so the walk reaches it from the
-    // panel above and leaves the section in one more press.
-    await page.keyboard.press('Tab');
-    const scroller = producers.locator('[tabindex="0"]');
+    const manifestCopies = page.locator('app-manifest-panel app-copy-value-button button');
+    await expect(manifestCopies).toHaveCount(3);
+    await manifestCopies.first().focus();
+    await expect(manifestCopies.first()).toBeFocused();
+    for (const copy of (await manifestCopies.all()).slice(1)) {
+      await page.keyboard.press('Tab');
+      await expect(copy).toBeFocused();
+      await expect(copy).toHaveAccessibleName(/^(Copy|Sao chép) /);
+    }
+    const scroller = producers.locator('.scroll[tabindex="0"]');
     await expect(scroller).toHaveCount(1);
+    await page.keyboard.press('Tab');
     await expect(scroller).toBeFocused();
+    await expect(scroller).toHaveAttribute('role', 'region');
+    await expect(scroller).toHaveAccessibleName(/\S/);
+    const producerCopies = producers.locator('app-copy-value-button button');
+    await expect(producerCopies).toHaveCount(50);
+    for (const copy of await producerCopies.all()) {
+      await page.keyboard.press('Tab');
+      await expect(copy).toBeFocused();
+      await expect(copy).toHaveAccessibleName(/^(Copy|Sao chép) /);
+    }
     await page.keyboard.press('Tab');
     expect((await activeElement(page)).tag).toBe('body');
+    for (const copy of (await producerCopies.all()).reverse()) {
+      await page.keyboard.press('Shift+Tab');
+      await expect(copy).toBeFocused();
+    }
     await page.keyboard.press('Shift+Tab');
     await expect(scroller).toBeFocused();
     await page.keyboard.press('Shift+Tab');
-    await expect(copyHash).toBeFocused();
+    await expect(manifestCopies.last()).toBeFocused();
 
     // `#producer-<slot>` is the documented anchor: a deep link lands on, and focuses, that row.
     await page.goto(`${runDetailPath({ locale, run: 'many-producers' })}#producer-shard-42`);

@@ -31,7 +31,7 @@ async function openTimeline(page: Page, run: RunStateVariant): Promise<void> {
 /** The `datetime` of each dated step, in the order the served history renders them. */
 async function datedSteps(page: Page): Promise<(string | null)[]> {
   return page
-    .locator('[data-timeline-steps] [data-step-time]')
+    .locator('[data-timeline-steps] [data-step-time] time')
     .evaluateAll((steps) => steps.map((step) => step.getAttribute('datetime')));
 }
 
@@ -45,13 +45,13 @@ test('a served history dates its recorded steps and shows no unknown-history not
   await expect(timeline.locator('[data-step-times]')).toHaveCount(0);
   await expect(timeline).not.toContainText(HISTORY_UNAVAILABLE);
 
-  const times = timeline.locator('[data-step-time]');
+  const times = timeline.locator('[data-step-time] time');
   await expect(times).toHaveCount(SERVED_TIMES.length);
   expect(await datedSteps(page)).toEqual([...SERVED_TIMES]);
 
   // The creation row is never served, so the implicit first step stays reached without a time.
   await expect(timeline.locator('[data-step="created"] [data-step-time]')).toHaveCount(0);
-  await expect(timeline.locator('[data-step="complete"] [data-step-time]')).toHaveAttribute(
+  await expect(timeline.locator('[data-step="complete"] [data-step-time] time')).toHaveAttribute(
     'datetime',
     SERVED_TIMES[2],
   );

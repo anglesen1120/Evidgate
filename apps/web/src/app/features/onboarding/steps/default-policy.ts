@@ -43,16 +43,6 @@ export const DEFAULT_ADVISORY_POLICY: Readonly<PolicyRevisionV1> = {
   gating_refs: { default_branch: false },
 };
 
-/** The `sha256:` prefix the contract gives a revision hash (07.1.1-T2 canonical hashing). */
-const HASH_PREFIX = 'sha256:';
-
-/**
- * How much of the digest a chip shows. The full hash stays available in the response body; the
- * screen only needs enough to tell two revisions apart, and the run list uses the same kind of
- * abbreviation (a chip, never a claimed complete digest — state sheet "Hash chip").
- */
-const HASH_ABBREVIATION_LENGTH = 12;
-
 /**
  * The characters a server-provided label must not carry into the page: Unicode controls
  * (`Cc` — C0/C1, which includes the ESC character a CI caller can smuggle into a name), format
@@ -77,20 +67,6 @@ const INVISIBLE_CHARACTERS = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
  */
 export function sanitizeLabel(value: string): string {
   return value.replace(INVISIBLE_CHARACTERS, '');
-}
-
-/**
- * A revision hash as the terminal panel shows it: `sha256:` plus the first 12 hex characters and
- * an ellipsis, or the whole (sanitised) value when it is already that short. Sanitising happens
- * first, so an invisible character can never be counted as one of the shown characters.
- */
-export function abbreviatePolicyHash(hash: string): string {
-  const clean = sanitizeLabel(hash).trim();
-  const prefix = clean.startsWith(HASH_PREFIX) ? HASH_PREFIX : '';
-  const digest = prefix === '' ? clean : clean.slice(HASH_PREFIX.length);
-  return digest.length <= HASH_ABBREVIATION_LENGTH
-    ? clean
-    : `${prefix}${digest.slice(0, HASH_ABBREVIATION_LENGTH)}…`;
 }
 
 /**
@@ -142,10 +118,9 @@ export function sanitizedIdentifier(value: unknown): string | null {
   return clean === '' ? null : clean;
 }
 
-/** {@link abbreviatePolicyHash} for a member the answer may not carry. */
+/** Preserve the full provenance value; only a presentation component may shorten its preview. */
 export function policyHashLabel(value: unknown): string | null {
-  const clean = sanitizedIdentifier(value);
-  return clean === null ? null : abbreviatePolicyHash(clean);
+  return sanitizedIdentifier(value);
 }
 
 /**

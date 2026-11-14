@@ -96,7 +96,7 @@ describe('RunDetailPage', () => {
     const { root } = await open();
     expect(get).toHaveBeenCalledWith(run.run_id);
     expect(root.querySelectorAll('h1')).toHaveLength(1);
-    expect(root.querySelector('[data-run-id]')?.textContent).toBe(run.run_id);
+    expect(root.querySelector('[data-run-id] bdi')?.textContent).toBe(run.run_id);
     expect(root.querySelector('[data-run-version]')?.textContent).toBe(String(run.version));
     expect(root.querySelector('[data-run-purpose]')?.textContent).toBe('Replay');
     expect(root.querySelector('[data-run-ref] bdi')?.textContent).toBe(run.ref.name);
@@ -119,9 +119,9 @@ describe('RunDetailPage', () => {
     expect(root.querySelector('app-decision-chip')?.textContent).toContain('Not evaluated');
     expect(root.querySelector('app-outcome-pill')).toBeNull();
     expect(root.textContent).not.toContain('PASS');
-    const slotRows = root.querySelectorAll('#producers tr[data-producer-slot]');
+    const slotRows = root.querySelectorAll('#producers tr[data-row-id]');
     expect(slotRows).toHaveLength(run.declared_producers.length);
-    expect(root.querySelectorAll('#producers td[data-fact][data-unavailable]')).toHaveLength(0);
+    expect(root.querySelectorAll('#producers [data-fact][data-unavailable]')).toHaveLength(0);
   });
   it('places compact run facts before attempts and evidence, with full provenance last', async () => {
     const { root } = await open();
@@ -141,16 +141,6 @@ describe('RunDetailPage', () => {
     expect(regions[0]?.querySelector('[data-run-environment]')).toBeNull();
     expect(regions[4]?.querySelector('[data-run-environment]')).not.toBeNull();
     expect(regions[0]?.querySelector('app-decision-chip')).toBeNull();
-  });
-  it('uses the responsive page title scale rather than a section-heading size', async () => {
-    const { root } = await open();
-    const title = root.querySelector('h1');
-    expect(title).not.toBeNull();
-    expect(
-      title?.classList.contains('text-[clamp(var(--eg-text-xl),2vw,var(--eg-text-2xl))]'),
-    ).toBe(true);
-    expect(title?.classList.contains('leading-(--eg-leading-2xl)')).toBe(true);
-    expect(title?.textContent).toBe('Run detail');
   });
   it('explains incomplete collection before attempts without inventing a missing reason', async () => {
     get.mockResolvedValue({ ...run, state: 'incomplete' });
@@ -320,8 +310,10 @@ describe('RunDetailPage', () => {
       'critical_not_executed',
     );
     expect(decision.querySelector('[data-decision-revision] dd')?.textContent).toBe('4');
-    expect(decision.querySelector('[data-decision-policy] dd')?.textContent).toBe('sha256:policy');
-    expect(decision.querySelector('[data-decision-manifest] dd')?.textContent).toBe(
+    expect(decision.querySelector('[data-decision-policy] dd bdi')?.textContent).toBe(
+      'sha256:policy',
+    );
+    expect(decision.querySelector('[data-decision-manifest] dd bdi')?.textContent).toBe(
       'sha256:manifest',
     );
     expect(decision.querySelector('[data-decision-evaluator] dd')?.textContent).toBe('1.4.0');

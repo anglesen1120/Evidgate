@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -14,28 +13,38 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
+import { HlmSelectImports } from '@evidgate/ui/select';
 
 import type { ApiError } from '../../core/http/api-error';
 import { SessionStore } from '../../core/session/session.store';
-import { HEALING_SWITCH_COPY, modeLabel as healingModeLabel } from './healing-switch.copy';
+import { DesktopMutationDirective } from '../../shared/ui/narrow/desktop-mutation.directive';
+import { NarrowMutationPolicy } from '../../shared/ui/narrow/narrow-mutation-policy';
+import {
+  HEALING_SWITCH_COPY,
+  modeLabel as healingModeLabel,
+  scopeLabel,
+} from './healing-switch.copy';
 import type { SettableMode, SwitchScope } from './healing-switch.store';
 import { reasonExceedsLimit } from './reason-limit';
 
 /** `unavailable` is an observation, never a value this editor may offer. */
 const SETTABLE_MODES: readonly SettableMode[] = ['enabled', 'shadow', 'disabled'];
 
-function isSettableMode(value: string | undefined): value is SettableMode {
+function isSettableMode(value: unknown): value is SettableMode {
   return value === 'enabled' || value === 'shadow' || value === 'disabled';
 }
 
-/**
- * One scope of the healing switch: its stored row, and — for tenant and project only — the mode
- * editor. A blocking ancestor keeps the editor focusable so the note that names it stays
- * discoverable, while the store refuses every write such a change would send.
- */
+/** One scope editor; the hierarchy owns stored facts, and viewport policy never grants access. */
 @Component({
   selector: 'app-switch-scope-control',
-  imports: [DatePipe, HlmButton, HlmCardImports, HlmInput, HlmLabel],
+  imports: [
+    HlmButton,
+    HlmCardImports,
+    HlmInput,
+    HlmLabel,
+    HlmSelectImports,
+    DesktopMutationDirective,
+  ],
   templateUrl: './switch-scope-control.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
@@ -53,6 +62,11 @@ export class SwitchScopeControl {
   protected readonly copy = HEALING_SWITCH_COPY;
   protected readonly modeLabel = healingModeLabel;
   protected readonly modes = SETTABLE_MODES;
+  protected readonly subsectionHeadingSize = 'subsection' as const;
+  protected readonly saveVariant = computed(() =>
+    this.scope() === 'project' ? 'default' : 'outline',
+  );
+  private readonly narrowPolicy = inject(NarrowMutationPolicy);
   private readonly session = inject(SessionStore);
 
   protected readonly selectedMode = linkedSignal<HealingSwitchView | null, SettableMode>({
@@ -94,8 +108,6 @@ export class SwitchScopeControl {
     return this.editable() ? this.copy.modeHint : this.copy.readOnly;
   });
 
-  // `hlmInput` carries `aria-describedby` as an input whose host binding writes the attribute last,
-  // so the template binds the input: an `attr.` binding here is overwritten with nothing.
   protected readonly describedBy = computed(() => {
     const ids: string[] = [];
     if (this.note().length > 0) ids.push(this.noteId());
@@ -111,54 +123,32 @@ export class SwitchScopeControl {
     return ids.join(' ');
   });
 
-  protected title(): string {
-    switch (this.scope()) {
-      case 'system':
-        return this.copy.scopeSystem;
-      case 'tenant':
-        return this.copy.scopeTenant;
-      default: {
-        const name = this.projectName();
-        return name.length === 0 ? this.copy.scopeProject : `${this.copy.scopeProject}: ${name}`;
-      }
-    }
-  }
-
-  /** A null field is either a redacted system row or a value nobody recorded; say which. */
-  protected fieldValue(value: string | null): string {
-    if (value !== null) return value;
-    return this.scope() === 'system' ? this.copy.redacted : this.copy.notProvided;
-  }
-
-  /** A malformed timestamp renders as an em dash instead of making `DatePipe` throw. */
-  protected readonly changedAt = computed(() => {
-    const stored = this.row();
-    if (stored === null) return null;
-    const at = new Date(stored.at);
-    return Number.isNaN(at.getTime()) ? null : at;
-  });
+  protected readonly title = computed(() => scopeLabel(this.scope(), this.projectName()));
 
   protected errorText(error: ApiError): string {
     return error.kind === 'payload_too_large' ? this.copy.reasonTooLarge : error.message;
   }
 
-  protected modeChanged(event: Event): void {
-    const select = event.target;
-    if (!(select instanceof HTMLSelectElement)) return;
-    if (!this.writable() || this.saving() || !isSettableMode(select.value)) {
-      select.value = this.selectedMode();
-      return;
-    }
-    this.selectedMode.set(select.value);
+  protected modeChanged(value: unknown): void {
+    if (!this.narrowPolicy.allowsMutation() || !this.writable() || this.saving()) return;
+    if (isSettableMode(value)) this.selectedMode.set(value);
   }
 
   protected reasonChanged(event: Event): void {
+    if (!this.narrowPolicy.allowsMutation() || !this.writable() || this.saving()) return;
     const value = (event.target as HTMLTextAreaElement | null)?.value ?? '';
     this.reason.set(value);
   }
 
   protected submit(): void {
-    if (!this.writable() || this.saving() || this.reasonTooLong()) return;
+    if (
+      !this.narrowPolicy.allowsMutation() ||
+      !this.writable() ||
+      this.saving() ||
+      this.reasonTooLong()
+    ) {
+      return;
+    }
     const reason = this.reason().trim();
     this.submitted.emit({ mode: this.selectedMode(), reason: reason.length === 0 ? null : reason });
   }

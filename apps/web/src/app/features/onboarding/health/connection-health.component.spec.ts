@@ -145,7 +145,7 @@ describe('ConnectionHealthComponent', () => {
     setMetadata('bindings', [{ ...BINDING, status: 'pending_verification' }]);
     await fixture.whenStable();
     expect(root.getAttribute('data-health-state')).toBe('pending');
-    expect(root.textContent).toContain('Pending verification');
+    expect(root.textContent).toContain('Awaiting CI');
     expect(root.textContent).toContain(
       'Not usable until the first CI exchange verifies this binding.',
     );

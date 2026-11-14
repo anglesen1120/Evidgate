@@ -58,9 +58,12 @@ describe('OnboardingShellComponent', () => {
     expect(button('next').getAttribute('data-slot')).toBe('button');
     expect(button('back').getAttribute('data-slot')).toBe('button');
     expect(
-      root.querySelector('#onboarding-step-title')?.closest('section')?.getAttribute('data-slot'),
+      root
+        .querySelector('#onboarding-step-title')
+        ?.closest('[data-slot="card"]')
+        ?.getAttribute('data-slot'),
     ).toBe('card');
-    expect(root.querySelector('[aria-current="step"] button')?.getAttribute('type')).toBe('button');
+    expect(root.querySelector('button[aria-current="step"]')?.getAttribute('type')).toBe('button');
     expect(button('next').disabled).toBe(true);
     expect(button('next').getAttribute('aria-describedby')).toBe('onboarding-next-reason');
     expect(root.querySelector('#onboarding-next-reason')?.textContent?.trim()).not.toBe('');
@@ -167,11 +170,11 @@ describe('OnboardingShellComponent', () => {
     const stepper = root.querySelector('[data-testid="onboarding-stepper"]')!;
     expect(stepper.tagName).toBe('OL');
     expect(stepper.querySelectorAll(':scope > li')).toHaveLength(5);
-    expect(root.querySelector('[aria-current="step"]')?.getAttribute('data-testid')).toBe(
+    expect(stepper.querySelector('[aria-current="step"]')?.getAttribute('data-testid')).toBe(
       'onboarding-step-2',
     );
     const first = root.querySelector<HTMLButtonElement>(
-      '[data-testid="onboarding-step-1"] button',
+      '[data-testid="onboarding-select-step-1"]',
     )!;
     expect(first.disabled).toBe(false);
     expect(first.parentElement?.getAttribute('data-done')).toBe('true');
@@ -180,7 +183,7 @@ describe('OnboardingShellComponent', () => {
     expect(store.selectStep).toHaveBeenCalledWith(1);
     expect(store.viewStep()).toBe(1);
     expect(
-      root.querySelector<HTMLButtonElement>('[data-testid="onboarding-step-3"] button')?.disabled,
+      root.querySelector<HTMLButtonElement>('[data-testid="onboarding-select-step-3"]')?.disabled,
     ).toBe(true);
     expect(root.querySelector('[data-testid="onboarding-evidence-panel"]')).not.toBeNull();
   });

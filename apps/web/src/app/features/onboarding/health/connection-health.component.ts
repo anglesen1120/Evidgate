@@ -30,7 +30,13 @@ import type {
       aria-labelledby="connection-health-title"
     >
       <header class="flex flex-wrap items-center justify-between gap-(--eg-space-3)">
-        <h3 hlmCardTitle id="connection-health-title">{{ title }}</h3>
+        <h3
+          hlmCardTitle
+          [size]="subsectionHeadingSize"
+          class="m-0"
+          id="connection-health-title"
+          [textContent]="title"
+        ></h3>
         <app-status-pill [tone]="tones[health().state]" [label]="stateLabels[health().state]" />
       </header>
       <p>{{ reasonLabels[health().reason] }}</p>
@@ -97,6 +103,7 @@ export class ConnectionHealthComponent {
   readonly tokens = input.required<readonly IngestTokenView[]>();
   readonly bindingsTruncated = input(false);
   readonly tokensTruncated = input(false);
+  protected readonly subsectionHeadingSize = 'subsection' as const;
 
   protected readonly rows = computed(() => {
     const tokens = new Map(this.tokens().map((token) => [token.id, token]));
@@ -143,7 +150,7 @@ export class ConnectionHealthComponent {
     string
   > = {
     active: $localize`:@@onboarding.health.status-active:Active`,
-    pending_verification: $localize`:@@onboarding.health.status-pending:Pending verification`,
+    pending_verification: $localize`:@@onboarding.health.status-awaiting:Awaiting CI`,
     disabled: $localize`:@@onboarding.health.status-disabled:Disabled`,
     rotated: $localize`:@@onboarding.health.status-rotated:Rotated`,
     expired: $localize`:@@onboarding.health.status-expired:Expired`,

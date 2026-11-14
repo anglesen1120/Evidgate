@@ -12,6 +12,7 @@ import {
 import { ActivatedRoute } from '@angular/router';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmAlertImports } from '@evidgate/ui/alert';
+import { HlmCardTitle } from '@evidgate/ui/card';
 import type { MembershipView } from '@evidgate/sdk';
 import { SessionStore } from '../../../core/session/session.store';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
@@ -30,6 +31,7 @@ import { CancelInviteDialogComponent } from './cancel-invite-dialog.component';
   imports: [
     HlmButton,
     HlmAlertImports,
+    HlmCardTitle,
     RequestStateComponent,
     MemberListComponent,
     RoleMatrixComponent,
@@ -51,6 +53,8 @@ export class MembersPage {
   protected readonly store = inject(MembersStore);
   protected readonly session = inject(SessionStore);
   protected readonly copy = MEMBERS_COPY;
+  protected readonly pageHeadingSize = 'page' as const;
+  protected readonly sectionHeadingSize = 'section' as const;
   protected readonly ownsPageHeading =
     inject(ActivatedRoute, { optional: true })?.snapshot.data['pageHeadingLevel'] === 1;
   protected readonly canWrite = computed(() => this.session.has('membership:write'));

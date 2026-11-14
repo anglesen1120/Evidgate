@@ -2,8 +2,11 @@ import { expect, test, type Page } from '@playwright/test';
 import { chooseScope, expectScopeValue, scopeControl } from './scope-controls';
 import readyFixture from '../../../../fixtures/web-api/run-detail/input.json';
 import {
+  ENABLE_GRANTS_TOGGLE,
   expectCurrentStep,
+  onboardingPath,
   onboardingUrl,
+  seedQueryWith,
   type OnboardingSeed,
   type StepNumber,
 } from './onboarding-support';
@@ -67,14 +70,28 @@ const FLOWS: readonly Flow[] = [
   ...ONBOARDING.map(({ step, seed }): Flow => ({
     name: `onboarding step ${step}`,
     async open(page, locale) {
-      await page.goto(onboardingUrl(locale, seed));
+      await page.goto(
+        step === 5
+          ? withVariant(onboardingPath(locale), seedQueryWith(seed, [ENABLE_GRANTS_TOGGLE]))
+          : onboardingUrl(locale, seed),
+      );
       await expectCurrentStep(page, step);
       await expect(page.locator('#onboarding-step-title')).toBeVisible();
       if (step === 2) {
         await expect(page.locator('[data-testid="connect-ci-page"]')).toBeVisible();
       }
       if (step === 5) {
-        await expect(page.locator('[data-testid="enable-collection-confirm"]')).toBeVisible();
+        const collection = page.getByTestId('enable-collection');
+        const confirm = collection.getByTestId('enable-collection-confirm');
+        await expect(collection.getByTestId('enable-collection-policy-preview')).toBeVisible();
+        const viewport = page.viewportSize();
+        expect(viewport, 'the contrast/reflow matrix sets a fixed viewport').not.toBeNull();
+        if (viewport !== null && viewport.width < 768) {
+          await expect(collection.getByRole('note')).toBeVisible();
+          await expect(confirm).toHaveCount(0);
+        } else {
+          await expect(confirm).toBeVisible();
+        }
       }
     },
   })),

@@ -1,6 +1,8 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { stubLayoutApis } from '../../../shared/testing/layout.testing';
+import { CopyValueButtonComponent } from '../../../shared/ui/values/copy-value-button.component';
 import { ManifestPanelComponent } from './manifest-panel.component';
 import type { RunStateDto } from '@evidgate/sdk';
 import ready from '../../../../../../../fixtures/web-api/run-detail/input.json';
@@ -51,14 +53,18 @@ describe('ManifestPanelComponent', () => {
     expect(root.querySelector('app-status-pill')).toBeNull();
   });
   it('labels its Helm card and keeps the full hash selectable with polite copy feedback', async () => {
-    const { root } = await render(manifest);
+    const { root, fixture } = await render(manifest);
     const panel = root.querySelector('section');
     expect(panel?.getAttribute('data-slot')).toBe('card');
     expect(panel?.getAttribute('aria-labelledby')).toBe('manifest-title');
     expect(root.querySelector('#manifest-title')?.textContent).toBe('Manifest summary');
     expect(root.querySelector('[data-manifest-hash] bdi')?.textContent).toBe(manifest.manifestHash);
     expect(root.querySelector('[role="status"]')?.getAttribute('aria-live')).toBe('polite');
-    expect(root.querySelector('button')?.classList.contains('whitespace-normal')).toBe(true);
+    expect(root.querySelector('app-copy-value-button')).not.toBeNull();
+    const hashCopy = fixture.debugElement
+      .query(By.directive(CopyValueButtonComponent))
+      .injector.get(CopyValueButtonComponent);
+    expect(hashCopy.size()).toBe('lg');
   });
   it('renders the getRun fixture manifest verbatim, shard names as declared on the wire', async () => {
     const run = ready.body as RunStateDto;
@@ -119,7 +125,7 @@ describe('ManifestPanelComponent', () => {
     root.querySelector('button')!.click();
     await fixture.whenStable();
     expect(writeText).toHaveBeenCalledWith(manifest.manifestHash);
-    expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied');
+    expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied.');
   });
   it('keeps the copy button enabled and focused while the copy is in flight', async () => {
     let settle!: () => void;
@@ -155,7 +161,7 @@ describe('ManifestPanelComponent', () => {
 
     settle();
     await fixture.whenStable();
-    expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied');
+    expect(root.querySelector('[role="status"]')?.textContent).toBe('Manifest hash copied.');
     expect(button.getAttribute('aria-busy')).toBe('false');
     expect(document.activeElement).toBe(button);
   });
@@ -178,10 +184,12 @@ describe('ManifestPanelComponent', () => {
     const { root, fixture } = await render(manifest);
     root.querySelector('button')!.click();
     await fixture.whenStable();
-    expect(root.querySelector('[role="status"]')?.textContent).toContain('Copy failed.');
+    expect(root.querySelector('[role="status"]')?.textContent).toContain(
+      'Could not copy Manifest hash.',
+    );
     expect(root.querySelector('[data-manifest-hash] bdi')?.textContent).toBe(manifest.manifestHash);
     fixture.componentRef.setInput('summary', UNAVAILABLE_MANIFEST);
     await fixture.whenStable();
-    expect(root.querySelector('[role="status"]')?.textContent).toBe('');
+    expect(root.querySelector('[role="status"]')).toBeNull();
   });
 });

@@ -2,17 +2,21 @@
   <div class="min-w-0 flex-1 basis-[var(--eg-rail-width)]">
     @if (ownsPageHeading) {
       <h1
+        hlmCardTitle
+        [size]="pageHeadingSize"
         #heading
         tabindex="-1"
-        class="m-0 font-[family-name:var(--eg-font-display)] text-xl md:text-2xl focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
+        class="m-0 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
       >
         {{ copy.title }}
       </h1>
     } @else {
       <h2
+        hlmCardTitle
+        [size]="sectionHeadingSize"
         #heading
         tabindex="-1"
-        class="m-0 font-[family-name:var(--eg-font-display)] text-xl md:text-2xl focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
+        class="m-0 focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring"
       >
         {{ copy.title }}
       </h2>
@@ -26,7 +30,9 @@
   (ngSubmit)="apply()"
   aria-labelledby="audit-filters-title"
 >
-  <h3 hlmCardTitle id="audit-filters-title" class="m-0 text-base">{{ copy.filters }}</h3>
+  <h3 hlmCardTitle [size]="subsectionHeadingSize" id="audit-filters-title" class="m-0">
+    {{ copy.filters }}
+  </h3>
   <div class="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
     <div class="grid min-w-0 gap-2">
       <label hlmLabel for="audit-actor">{{ copy.actorType }}</label>

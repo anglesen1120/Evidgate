@@ -54,8 +54,8 @@
   }
 
   .eg-table-layout [data-column-role='identity'] {
-    min-inline-size: 12ch;
-    max-inline-size: 32ch;
+    min-inline-size: calc(12ch + var(--eg-space-4) * 2);
+    max-inline-size: calc(32ch + var(--eg-space-4) * 2);
   }
 
   .eg-table-layout [data-column-role='identity'][data-column-priority='primary'],
@@ -71,14 +71,16 @@
 
   .eg-table-layout [data-column-role='text'] {
     min-inline-size: 12ch;
-    max-inline-size: 32ch;
+    max-inline-size: calc(32ch + var(--eg-space-4) * 2);
   }
 
   .eg-table-layout [data-column-role='status'] {
+    min-inline-size: calc(20ch + var(--eg-space-4) * 3);
     inline-size: 1%;
-    max-inline-size: 24ch;
+    max-inline-size: calc(24ch + var(--eg-space-4) * 2);
   }
 
+  /* Utility budgets are cell widths; complete numeric values can grow them intrinsically. */
   .eg-table-layout [data-column-role='number'] {
     min-inline-size: 8ch;
     inline-size: 1%;
@@ -88,12 +90,13 @@
   }
 
   .eg-table-layout [data-column-role='date'] {
-    min-inline-size: 18ch;
-    max-inline-size: 26ch;
+    min-inline-size: calc(18ch + var(--eg-space-4) * 2);
+    max-inline-size: calc(26ch + var(--eg-space-4) * 2);
     inline-size: 1%;
   }
 
   .eg-table-layout [data-column-role='actions'] {
+    min-inline-size: calc(var(--eg-control-touch) + var(--eg-space-4) * 2);
     inline-size: 1%;
     text-align: end;
     white-space: nowrap;
@@ -105,14 +108,28 @@
 
   .eg-table-layout [data-column-kind='identifier'][data-column-priority='secondary'],
   .eg-table-layout [data-column-kind='branch'][data-column-priority='secondary'] {
-    min-inline-size: 12ch;
-    max-inline-size: 28ch;
+    min-inline-size: calc(12ch + var(--eg-space-4) * 2);
+    max-inline-size: calc(28ch + var(--eg-space-4) * 2);
+  }
+
+  /* Reserve complete fixed-length previews, not recoverable ellipsis cells. */
+  .eg-table-layout:not(.eg-table-virtual)
+    [data-column-kind='identifier'][data-column-priority='primary']:has(
+      .identifier,
+      app-copyable-identifier
+    ) {
+    min-inline-size: calc(32ch + var(--eg-space-4) * 2);
+  }
+
+  /* Recoverable previews must not inflate a native table's intrinsic minimum width. */
+  .eg-table-layout [data-column-overflow='truncate'] app-data-table-value.eg-table-value {
+    contain: inline-size;
   }
 
   .eg-table-layout [data-column-kind='email'],
   .eg-table-layout [data-column-kind='url'] {
-    min-inline-size: 20ch;
-    max-inline-size: 36ch;
+    min-inline-size: calc(20ch + var(--eg-space-4) * 2);
+    max-inline-size: calc(36ch + var(--eg-space-4) * 2);
   }
 
   .eg-table-layout td[data-column-priority='secondary'] > .eg-table-value {

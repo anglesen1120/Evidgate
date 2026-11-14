@@ -1,10 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 
+import { NarrowMutationPolicy } from '../narrow/narrow-mutation-policy';
 import { DataTableCellComponent } from './data-table-cell.component';
 import { resolveTableColumns } from './data-table-column';
 import type { DataTableColumn } from './data-table-column';
 
-/** Read-only facts retain their labels and full values, rather than hiding low-priority columns. */
+/** Container stacking preserves facts; only the viewport policy can hide mutation controls. */
 @Component({
   selector: 'app-data-table-records',
   imports: [DataTableCellComponent],
@@ -36,8 +37,12 @@ export class DataTableRecordsComponent<T> {
   readonly rows = input.required<readonly T[]>();
   readonly rowId = input.required<(row: T) => string | number>();
   readonly caption = input.required<string>();
+  private readonly viewport = inject(NarrowMutationPolicy);
   protected readonly inspectionColumns = computed(() => {
-    const columns = resolveTableColumns(this.columns()).filter((column) => !column.mutates);
+    const mutationLocked = this.viewport.narrow();
+    const columns = resolveTableColumns(this.columns()).filter(
+      (column) => !mutationLocked || !column.mutates,
+    );
     return [
       ...columns.filter((column) => column.priority === 'primary'),
       ...columns.filter((column) => column.priority !== 'primary'),

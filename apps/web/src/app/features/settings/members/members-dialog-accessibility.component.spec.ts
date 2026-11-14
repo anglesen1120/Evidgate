@@ -5,6 +5,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
 import { FakeMembersStore } from './members-page.test-fixtures';
+import { activeMemberMenuTrigger, memberAction } from './member-actions.test-helpers';
 
 const dialogs = [
   ['invite', '[data-members-invite-open]', 'Invite member'],
@@ -15,9 +16,9 @@ const dialogs = [
 ] as const;
 
 function required<T extends Element>(selector: string): T {
-  const element = document.body.querySelector<T>(selector);
+  const element = document.body.querySelector<T>(selector) ?? memberAction(document.body, selector);
   if (!element) throw new Error(`Missing element: ${selector}`);
-  return element;
+  return element as T;
 }
 
 describe('Members dialog accessibility', () => {
@@ -48,9 +49,10 @@ describe('Members dialog accessibility', () => {
     async (kind, selector, label) => {
       const fixture = TestBed.createComponent(MembersPage);
       await fixture.whenStable();
-      const opener = required<HTMLButtonElement>(selector);
-      opener.focus();
-      opener.click();
+      const action = required<HTMLButtonElement>(selector);
+      const opener = kind === 'invite' ? action : activeMemberMenuTrigger();
+      action.focus();
+      action.click();
       await fixture.whenStable();
       const content = required<HTMLElement>(`[data-members-dialog="${kind}"]`);
       const modal = content.closest('[role="dialog"]');

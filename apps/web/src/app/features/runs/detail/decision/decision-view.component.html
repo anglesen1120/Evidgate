@@ -7,8 +7,9 @@
 >
   <h2
     hlmCardTitle
+    [size]="sectionSize"
     id="decision-title"
-    class="m-0 font-(family-name:--eg-font-display) text-(length:--eg-text-xl) leading-(--eg-leading-xl)"
+    class="m-0"
     [textContent]="copy.title"
   ></h2>
 
@@ -108,10 +109,7 @@
       }
 
       <div class="grid min-w-0 gap-(--eg-space-3)">
-        <h3
-          class="m-0 font-(family-name:--eg-font-display) text-(length:--eg-text-md) font-(weight:--eg-weight-semibold) leading-(--eg-leading-md)"
-          id="decision-reasons-title"
-        >
+        <h3 hlmCardTitle [size]="subsectionSize" class="m-0" id="decision-reasons-title">
           {{ copy.reasons }}
         </h3>
         @if (decision.reasons.length === 0) {
@@ -161,6 +159,7 @@
             <code
               ><bdi>{{ decision.policyHash }}</bdi></code
             >
+            <app-copy-value-button [value]="decision.policyHash" [label]="copy.policyHash" />
           </dd>
         </div>
         <div class="col-span-full" data-decision-manifest>
@@ -169,6 +168,7 @@
             <code
               ><bdi>{{ decision.manifestHash }}</bdi></code
             >
+            <app-copy-value-button [value]="decision.manifestHash" [label]="copy.manifestHash" />
           </dd>
         </div>
         <div class="col-span-full" data-decision-evaluator>
@@ -185,6 +185,7 @@
             <code
               ><bdi>{{ decision.evaluationId }}</bdi></code
             >
+            <app-copy-value-button [value]="decision.evaluationId" [label]="copy.evaluationId" />
           </dd>
         </div>
       </dl>

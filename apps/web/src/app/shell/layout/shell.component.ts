@@ -130,7 +130,10 @@ export class ShellComponent {
           () => {
             const main = this.main()?.nativeElement;
             if (moveFocus) main?.focus();
-            const heading = main?.querySelector('h1')?.textContent?.trim();
+            let route = this.router.routerState.snapshot.root;
+            while (route.firstChild !== null) route = route.firstChild;
+            // Route metadata stays accurate while an asynchronous page changes loading headings.
+            const heading = route.title ?? main?.querySelector('h1')?.textContent?.trim();
             this.document.title = heading ? `${heading} · Evidgate` : this.brandLabel;
           },
           { injector: this.injector },

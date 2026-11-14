@@ -1,213 +1,155 @@
 <section
-  class="grid min-w-0 gap-4"
+  class="grid min-w-0 gap-(--eg-space-7)"
   aria-labelledby="quota-title"
   [attr.aria-busy]="quota.loadState() === 'loading'"
 >
-  <header class="grid gap-2">
-    <h2 id="quota-title" class="text-lg font-semibold" i18n="@@quota.panel.title">
-      Quota & retention
-    </h2>
-    <p class="text-muted-foreground" i18n="@@quota.panel.description">
-      Organization-wide counters and limits supplied by the service. Quota state does not change
-      recorded test outcomes.
-    </p>
+  <header class="grid min-w-0 gap-(--eg-space-3)">
+    <h2 hlmCardTitle [size]="sectionSize" id="quota-title">{{ copy.title }}</h2>
+    <p class="eg-type-body m-0 max-w-[65ch] text-muted-foreground">{{ copy.description }}</p>
   </header>
   @if (quota.loadState() === 'loading' || quota.loadState() === 'idle') {
-    <p
-      role="status"
-      class="min-h-(--eg-space-12) text-muted-foreground"
-      i18n="@@quota.panel.loading"
-    >
-      Loading usage summary…
-    </p>
+    <app-loading-pattern [label]="copy.loading" [layout]="loadingLayout" [bare]="true" />
   } @else if (quota.usageSummary(); as summary) {
-    <p class="text-muted-foreground">
-      <span i18n="@@quota.panel.period">Billing period</span>:
-      <span data-quota-period>{{ summary.period }}</span>
+    <p class="m-0 text-muted-foreground">
+      {{ copy.period }}: <span data-quota-period>{{ summary.period }}</span>
     </p>
-    @if (summary.metrics.length === 0) {
-      <p role="status" data-quota-empty i18n="@@quota.panel.empty">
-        No usage counters were supplied for this period.
-      </p>
+    @if (summary.next_cursor) {
+      <app-inline-feedback
+        data-quota-projects-more
+        [title]="copy.incomplete"
+        [announcement]="off"
+      />
     }
-    <div class="grid min-w-0 gap-4 min-[768px]:grid-cols-2">
+    @if (summary.metrics.length === 0) {
+      <p class="m-0" role="status" data-quota-empty>{{ copy.empty }}</p>
+    }
+    <div class="grid min-w-0 gap-(--eg-space-7)">
       @for (metric of summary.metrics; track metric.metric; let index = $index) {
         <section
           hlmCard
-          class="min-w-0 gap-3 p-4 wrap-anywhere"
+          class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
           [attr.data-quota-metric]="metric.metric"
           [attr.aria-labelledby]="'quota-metric-' + index"
         >
-          <h3 [id]="'quota-metric-' + index" class="font-semibold">
+          <h3 hlmCardTitle [size]="subsectionSize" [id]="'quota-metric-' + index">
             {{ metricLabel(metric.metric) }}
           </h3>
-          <dl class="grid grid-cols-2 gap-3">
-            <div>
-              <dt class="text-sm text-muted-foreground" i18n="@@quota.panel.used">Used</dt>
-              <dd class="m-0 text-lg font-semibold" data-quota-used>
+          <dl
+            class="m-0 grid min-w-0 gap-(--eg-space-5) [grid-template-columns:repeat(auto-fit,minmax(min(100%,30ch),1fr))]"
+          >
+            <div class="grid min-w-0 gap-(--eg-space-2) md:text-end">
+              <dt class="text-muted-foreground">{{ copy.used }}</dt>
+              <dd class="m-0 font-semibold tabular-nums" data-quota-used>
                 @if (metric.used === null) {
-                  <span i18n="@@quota.panel.unavailable">Unavailable</span>
+                  {{ copy.unavailable }}
                 } @else {
-                  {{ metric.used | number: '1.0-6' }}
+                  <app-number-value [value]="metric.used" />
                 }
               </dd>
             </div>
-            <div>
-              <dt class="text-sm text-muted-foreground" i18n="@@quota.panel.limit">Limit</dt>
-              <dd class="m-0 text-lg font-semibold" data-quota-limit>
+            <div class="grid min-w-0 gap-(--eg-space-2) md:text-end">
+              <dt class="text-muted-foreground">{{ copy.limit }}</dt>
+              <dd class="m-0 font-semibold tabular-nums" data-quota-limit>
                 @if (metric.limit === null) {
-                  <span i18n="@@quota.panel.unavailable">Unavailable</span>
+                  {{ copy.unavailable }}
                 } @else {
-                  {{ metric.limit | number: '1.0-6' }}
+                  <app-number-value [value]="metric.limit" />
                 }
               </dd>
             </div>
           </dl>
           @if (metric.used === null) {
-            <p data-quota-reason class="text-sm text-muted-foreground">
-              {{ notMeasured }}
-            </p>
-          }
-          @if (metric.used !== null) {
-            @if (metric.blocked_at) {
-              <span
-                hlmBadge
-                [variant]="'outline'"
-                [class]="blockedClasses"
-                i18n="@@quota.panel.blocked"
-                >Limit reached</span
-              >
-            } @else if (metric.warned_at) {
-              <span hlmBadge [variant]="'outline'" [class]="warnClasses" i18n="@@quota.panel.warned"
-                >Approaching limit</span
-              >
-            }
+            <p data-quota-reason class="m-0 text-muted-foreground">{{ copy.notMeasured }}</p>
+          } @else if (metric.blocked_at) {
+            <app-status-pill [tone]="dangerTone" [label]="copy.blocked" />
+          } @else if (metric.warned_at) {
+            <app-status-pill [tone]="warningTone" [label]="copy.warned" />
           }
           @if (metric.warned_at || metric.blocked_at) {
-            <dl class="grid gap-2 text-sm text-muted-foreground">
+            <dl class="m-0 grid gap-(--eg-space-3)">
               @if (metric.warned_at) {
                 <div>
-                  <dt i18n="@@quota.panel.warned-at">Warning recorded</dt>
-                  <dd class="m-0">
-                    <time [attr.datetime]="metric.warned_at">{{ metric.warned_at }}</time>
-                  </dd>
+                  <dt class="text-muted-foreground">{{ copy.warnedAt }}</dt>
+                  <dd class="m-0"><app-absolute-time [value]="metric.warned_at" /></dd>
                 </div>
               }
               @if (metric.blocked_at) {
                 <div>
-                  <dt i18n="@@quota.panel.blocked-at">Block recorded</dt>
-                  <dd class="m-0">
-                    <time [attr.datetime]="metric.blocked_at">{{ metric.blocked_at }}</time>
-                  </dd>
+                  <dt class="text-muted-foreground">{{ copy.blockedAt }}</dt>
+                  <dd class="m-0"><app-absolute-time [value]="metric.blocked_at" /></dd>
                 </div>
               }
             </dl>
           }
           @if (metric.projects.length > 0) {
-            <div class="grid min-w-0 gap-2" data-quota-projects>
-              <h4 class="m-0 text-sm font-semibold" i18n="@@quota.panel.projects">Per project</h4>
-              <dl class="m-0 grid min-w-0 gap-3">
-                @for (
-                  project of metric.projects.slice(0, projectRowLimit);
-                  track project.project_id
-                ) {
-                  <div class="grid min-w-0 gap-1" data-quota-project-row>
-                    <dt class="m-0 text-sm font-mono" data-quota-project>
-                      {{ project.project_id }}
-                    </dt>
-                    <dd class="m-0 grid grid-cols-2 gap-3 text-sm">
-                      <span class="grid gap-1" data-quota-project-used>
-                        <span class="text-muted-foreground" i18n="@@quota.panel.project-used"
-                          >Used</span
-                        >
-                        <span>{{ project.used | number: '1.0-6' }}</span>
-                      </span>
-                      <span class="grid gap-1" data-quota-project-limit>
-                        <span class="text-muted-foreground" i18n="@@quota.panel.project-limit"
-                          >Limit</span
-                        >
-                        @if (project.limit === null) {
-                          <span i18n="@@quota.panel.project-unavailable">Unavailable</span>
-                        } @else {
-                          <span>{{ project.limit | number: '1.0-6' }}</span>
-                        }
-                      </span>
-                    </dd>
-                    @if (project.blocked_at) {
-                      <dd class="m-0">
-                        <span
-                          hlmBadge
-                          [variant]="'outline'"
-                          [class]="blockedClasses"
-                          i18n="@@quota.panel.project-blocked"
-                          >Limit reached</span
-                        >
-                      </dd>
-                    } @else if (project.warned_at) {
-                      <dd class="m-0">
-                        <span
-                          hlmBadge
-                          [variant]="'outline'"
-                          [class]="warnClasses"
-                          i18n="@@quota.panel.project-warned"
-                          >Approaching limit</span
-                        >
-                      </dd>
-                    }
-                  </div>
-                }
-              </dl>
-              @if (metric.projects.length > projectRowLimit) {
-                <p class="m-0 text-sm text-muted-foreground" data-quota-projects-more>
-                  <span i18n="@@quota.panel.projects-truncated"
-                    >Further project counters are not shown:</span
-                  >
-                  <span>{{ metric.projects.length - projectRowLimit }}</span>
-                </p>
-              }
-            </div>
+            <section class="grid min-w-0 gap-(--eg-space-4)" data-quota-projects>
+              <h4 class="m-0 text-sm font-semibold">{{ copy.projects }}</h4>
+              <app-data-table
+                [columns]="columns()"
+                [rows]="metric.projects"
+                [rowId]="projectId"
+                [caption]="metricLabel(metric.metric) + ' · ' + copy.projectCaption"
+              />
+            </section>
           }
         </section>
       }
     </div>
   } @else {
-    <div hlmCard class="grid gap-3 p-4" data-quota-unavailable>
-      <p role="status" i18n="@@quota.panel.summary-unavailable">
-        Usage summary unavailable. Try loading it again.
-      </p>
-      <button
-        hlmBtn
-        type="button"
-        class="min-h-(--eg-control-touch) w-fit max-w-full"
-        (click)="quota.reload()"
-        i18n="@@quota.panel.retry"
-      >
-        Reload usage
-      </button>
-    </div>
+    <app-inline-feedback
+      data-quota-unavailable
+      [tone]="destructive"
+      [title]="copy.failed"
+      [actionLabel]="copy.retry"
+      (action)="quota.reload()"
+    />
   }
   <section
     hlmCard
-    class="grid min-w-0 gap-3 p-4"
+    class="grid min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
     aria-labelledby="quota-storage-title"
     data-quota-storage
   >
-    <h3 id="quota-storage-title" class="font-semibold" i18n="@@quota.panel.storage-title">
-      Daily storage counters
-    </h3>
-    <p class="text-sm text-muted-foreground" i18n="@@quota.panel.storage-reason">
-      Daily storage and egress counters are unavailable because the service does not expose a read
-      for them.
-    </p>
-    <dl class="grid gap-3 min-[768px]:grid-cols-2">
+    <h3 hlmCardTitle [size]="subsectionSize" id="quota-storage-title">{{ copy.storageTitle }}</h3>
+    <p class="m-0 max-w-[65ch] text-muted-foreground">{{ copy.storageReason }}</p>
+    <dl class="m-0 grid gap-(--eg-space-4) md:grid-cols-2">
       <div>
-        <dt class="text-muted-foreground" i18n="@@quota.panel.storage-bytes">Stored bytes</dt>
-        <dd class="m-0" i18n="@@quota.panel.unavailable">Unavailable</dd>
+        <dt class="text-muted-foreground">{{ copy.storedBytes }}</dt>
+        <dd class="m-0">{{ copy.unavailable }}</dd>
       </div>
       <div>
-        <dt class="text-muted-foreground" i18n="@@quota.panel.egress-bytes">Egress bytes</dt>
-        <dd class="m-0" i18n="@@quota.panel.unavailable">Unavailable</dd>
+        <dt class="text-muted-foreground">{{ copy.egressBytes }}</dt>
+        <dd class="m-0">{{ copy.unavailable }}</dd>
       </div>
     </dl>
   </section>
 </section>
+<ng-template #usedCell let-row>
+  <span data-quota-project-used><app-number-value [value]="row.used" /></span>
+</ng-template>
+<ng-template #limitCell let-row>
+  <span data-quota-project-limit>
+    @if (row.limit === null) {
+      {{ copy.unavailable }}
+    } @else {
+      <app-number-value [value]="row.limit" />
+    }
+  </span>
+</ng-template>
+<ng-template #stateCell let-row>
+  <div class="grid min-w-0 gap-(--eg-space-3)">
+    @if (row.blocked_at) {
+      <app-status-pill [tone]="dangerTone" [label]="copy.blocked" />
+    } @else if (row.warned_at) {
+      <app-status-pill [tone]="warningTone" [label]="copy.warned" />
+    } @else {
+      <span>{{ copy.noAlert }}</span>
+    }
+    @if (row.warned_at) {
+      <span>{{ copy.warnedAt }}: <app-absolute-time [value]="row.warned_at" /></span>
+    }
+    @if (row.blocked_at) {
+      <span>{{ copy.blockedAt }}: <app-absolute-time [value]="row.blocked_at" /></span>
+    }
+  </div>
+</ng-template>

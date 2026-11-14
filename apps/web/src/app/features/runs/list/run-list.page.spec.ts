@@ -219,10 +219,7 @@ describe('RunListPage', () => {
     const title = root.querySelector('h1');
     expect(title).not.toBeNull();
     if (title) {
-      expect(
-        title.classList.contains('text-[length:clamp(var(--eg-text-xl),2vw,var(--eg-text-2xl))]'),
-      ).toBe(true);
-      expect(title.classList.contains('leading-[var(--eg-leading-2xl)]')).toBe(true);
+      expect(title.getAttribute('data-title-size')).toBe('page');
       expect(title.textContent).toBe('Runs');
     }
   });

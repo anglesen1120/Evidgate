@@ -4,7 +4,7 @@
   aria-labelledby="release-title"
   data-release-panel
 >
-  <h2 hlmCardTitle id="release-title" class="m-0">{{ copy.title }}</h2>
+  <h2 hlmCardTitle [size]="sectionSize" id="release-title" class="m-0">{{ copy.title }}</h2>
 
   @if (releases().length === 0) {
     <p class="m-0 text-muted-foreground" data-release-unbound>{{ copy.unbound }}</p>
@@ -81,7 +81,7 @@
               </div>
               <div>
                 <dt>{{ copy.version }}</dt>
-                <dd data-release-version>{{ loaded.version }}</dd>
+                <dd data-release-version><app-number-value [value]="loaded.version" /></dd>
               </div>
               <div>
                 <dt>{{ copy.boundRun }}</dt>
@@ -95,52 +95,12 @@
                 {{ copy.noComponents }}
               </p>
             } @else {
-              <table
-                hlmTable
-                class="w-full table-fixed border-collapse [&_th]:whitespace-normal [&_th]:wrap-anywhere [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_th]:align-top [&_td]:align-top [&_bdi]:block"
-              >
-                <caption hlmCaption class="sr-only">
-                  {{
-                    copy.components
-                  }}
-                </caption>
-                <thead hlmTHead>
-                  <tr hlmTr>
-                    <th hlmTh scope="col">{{ copy.component }}</th>
-                    <th hlmTh scope="col">{{ copy.digest }}</th>
-                    <th hlmTh scope="col">{{ copy.environment }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (component of components(); track component.componentKey) {
-                    <tr hlmTr data-release-component>
-                      <th hlmTh scope="row" class="min-w-0">
-                        <bdi>{{ display(component.componentKey) }}</bdi>
-                        @if (boundKeys().has(component.componentKey)) {
-                          <app-status-pill [tone]="'info'" [label]="copy.bound" />
-                        }
-                      </th>
-                      <td hlmTd class="min-w-0">
-                        <bdi data-release-digest>{{ display(component.digest) }}</bdi>
-                        <button
-                          hlmBtn
-                          [variant]="'outline'"
-                          type="button"
-                          class="min-h-(--eg-control-touch) h-auto whitespace-normal text-start transition-none"
-                          [attr.aria-label]="copyDigestLabel(component.componentKey)"
-                          [attr.aria-busy]="copying() === component.componentKey"
-                          (click)="copyDigest(component)"
-                        >
-                          {{ copy.copyDigest }}
-                        </button>
-                      </td>
-                      <td hlmTd class="min-w-0">
-                        <bdi>{{ display(component.environmentRevisionId) }}</bdi>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+              <app-data-table
+                [columns]="columns()"
+                [rows]="components()"
+                [rowId]="rowId"
+                [caption]="copy.components"
+              />
             }
           } @else {
             <p class="m-0 text-muted-foreground" data-release-unbound>{{ copy.unbound }}</p>
@@ -156,3 +116,31 @@
     [textContent]="copyStatus()"
   ></p>
 </section>
+
+<ng-template #componentCell let-component>
+  <div class="grid min-w-0 justify-items-start gap-(--eg-space-2)" data-release-component>
+    <bdi>{{ display(component.componentKey) }}</bdi>
+    @if (boundKeys().has(component.componentKey)) {
+      <app-status-pill [tone]="'info'" [label]="copy.bound" />
+    }
+  </div>
+</ng-template>
+<ng-template #digestCell let-component>
+  <div class="grid min-w-0 justify-items-start gap-(--eg-space-2)">
+    <bdi data-release-digest>{{ display(component.digest) }}</bdi>
+    <button
+      hlmBtn
+      [variant]="'outline'"
+      type="button"
+      class="min-h-(--eg-control-touch) h-auto whitespace-normal text-start transition-none"
+      [attr.aria-label]="copyDigestLabel(component.componentKey)"
+      [attr.aria-busy]="copying() === component.componentKey"
+      (click)="copyDigest(component)"
+    >
+      {{ copy.copyDigest }}
+    </button>
+  </div>
+</ng-template>
+<ng-template #environmentCell let-component>
+  <bdi>{{ display(component.environmentRevisionId) }}</bdi>
+</ng-template>

@@ -10,6 +10,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { OnboardingStore } from '../onboarding.store';
 import { TOKEN } from '../onboarding.store.test-support';
+import { provideDesktopOnboardingViewport } from '../onboarding-viewport.testing';
 import { ConnectCiPage } from '../steps/connect-ci.page';
 import { CreateProjectPage } from '../steps/create-project.page';
 import { EnableCollectionPage } from '../steps/enable-collection.page';
@@ -57,6 +58,7 @@ describe('onboarding session connection drafts', () => {
       imports: [OnboardingShellComponent],
       providers: [
         provideZonelessChangeDetection(),
+        provideDesktopOnboardingViewport(),
         { provide: OnboardingStore, useValue: store },
         { provide: OnboardingDataService, useValue: { createIngestToken } },
         {
@@ -117,8 +119,8 @@ describe('onboarding session connection drafts', () => {
     ).not.toBeNull();
     await press('[data-testid="onboarding-back"]');
     expectDrafts();
-    await press('[data-testid="onboarding-step-4"] button');
-    await press('[data-testid="onboarding-step-2"] button');
+    await press('[data-testid="onboarding-select-step-4"]');
+    await press('[data-testid="onboarding-select-step-2"]');
     expectDrafts();
     expect(
       fixture.debugElement.query(By.directive(ConnectCiPage)).injector.get(ConnectCiPage),

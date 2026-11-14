@@ -23,7 +23,8 @@ const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
     @if (project(); as project) {
       <h1
         hlmCardTitle
-        class="m-0 min-w-0 max-w-full font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
+        [size]="pageHeadingSize"
+        class="min-w-0 max-w-full"
         id="project-overview-heading"
         [textContent]="project.name"
       ></h1>
@@ -35,7 +36,8 @@ const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
       @if (nextSteps().length > 0) {
         <div class="grid min-w-0 gap-(--eg-space-3)">
           <h2
-            class="m-0 text-base font-semibold"
+            hlmCardTitle
+            [size]="sectionHeadingSize"
             id="project-next-steps"
             i18n="@@shell.overview.next-steps"
           >
@@ -60,7 +62,8 @@ const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
     } @else {
       <h1
         hlmCardTitle
-        class="m-0 min-w-0 max-w-full font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
+        [size]="pageHeadingSize"
+        class="min-w-0 max-w-full"
         id="project-overview-heading"
         i18n="@@shell.overview.no-project"
       >
@@ -70,6 +73,8 @@ const NEXT_STEP_IDS = ['runs', 'onboarding', 'authoring'];
   </section>`,
 })
 export class ProjectOverviewPage {
+  readonly pageHeadingSize = 'page' as const;
+  readonly sectionHeadingSize = 'section' as const;
   private readonly session = inject(SessionStore);
   private readonly nav = inject(NavViewService);
   readonly nextSteps = computed(() =>

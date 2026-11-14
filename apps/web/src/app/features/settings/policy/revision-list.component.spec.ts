@@ -1,3 +1,5 @@
+import { formatDate, registerLocaleData } from '@angular/common';
+import localeVi from '@angular/common/locales/vi';
 import { LOCALE_ID } from '@angular/core';
 import { ComponentHarness } from '@angular/cdk/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
@@ -6,6 +8,7 @@ import type { PolicyRevisionSummaryDto } from '@evidgate/sdk';
 import { rootElement } from './policy-reads.test-support';
 import { RevisionListComponent } from './revision-list.component';
 
+registerLocaleData(localeVi);
 const row: PolicyRevisionSummaryDto = {
   id: '3e496610-072b-4d48-a789-6d423838c603',
   revision_no: 3,
@@ -25,7 +28,7 @@ class LoadMoreHarness extends ComponentHarness {
 }
 describe('RevisionListComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
-  it('renders revision metadata, raw state, localized creation time and head marker', () => {
+  it('renders localized state, UTC creation time, full recoverable hash and head marker', () => {
     TestBed.configureTestingModule({ providers: [{ provide: LOCALE_ID, useValue: 'vi' }] });
     const fixture = TestBed.createComponent(RevisionListComponent);
     fixture.componentRef.setInput('rows', [row]);
@@ -36,18 +39,16 @@ describe('RevisionListComponent', () => {
     expect(revision?.dataset['revisionNo']).toBe('3');
     expect(revision?.dataset['revisionState']).toBe(row.state);
     expect(revision?.hasAttribute('data-policy-head')).toBe(true);
-    expect(revision?.textContent).toContain(row.state);
-    expect(revision?.textContent).toContain(row.hash.slice(0, 12));
-    expect(root.querySelector('time')?.textContent).toBe(
-      new Intl.DateTimeFormat('vi', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(new Date(row.created_at)),
+    expect(revision?.textContent).toContain('Active');
+    expect(revision?.querySelector('.identifier-accessible')?.textContent).toContain(row.hash);
+    expect(root.querySelector('time')?.textContent?.trim()).toBe(
+      `${formatDate(row.created_at, 'medium', 'vi', 'UTC')} UTC`,
     );
+    expect(root.querySelector('time')?.getAttribute('datetime')).toBe(row.created_at);
     expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
       'policy-revisions-title',
     );
-    expect(root.querySelector('code')?.getAttribute('aria-label')).toBe(row.hash);
+    expect(root.querySelector('app-copy-value-button')).not.toBeNull();
   });
   it('shows a labelled empty state and bounded load-more action only when available', () => {
     const fixture = TestBed.createComponent(RevisionListComponent);
@@ -77,5 +78,23 @@ describe('RevisionListComponent', () => {
     await action.activate();
     expect(more).toHaveBeenCalledTimes(1);
     expect(document.activeElement?.textContent).toContain('Load more');
+  });
+  it('makes selection keyboard-operable and exposes the selected detail relationship', () => {
+    const fixture = TestBed.createComponent(RevisionListComponent);
+    const selected = vi.fn();
+    fixture.componentInstance.selected.subscribe(selected);
+    fixture.componentRef.setInput('rows', [row]);
+    fixture.componentRef.setInput('selectedId', row.id);
+    fixture.detectChanges();
+    const action = rootElement(fixture).querySelector<HTMLButtonElement>('[data-policy-select]');
+    expect(action?.tagName).toBe('BUTTON');
+    expect(action?.getAttribute('aria-pressed')).toBe('true');
+    expect(action?.getAttribute('aria-controls')).toBe('policy-selected-detail');
+    action?.click();
+    expect(selected).toHaveBeenCalledExactlyOnceWith(row.id);
+    fixture.componentRef.setInput('busy', true);
+    fixture.detectChanges();
+    action?.click();
+    expect(selected).toHaveBeenCalledTimes(1);
   });
 });

@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
 import { activeElement, LOCALES, type ShellLocale } from './support';
 import { runDetailPath } from './run-detail.support';
+import { tabThroughRunControls, tabThroughTableScroller } from './run-table-keyboard.support';
 
 const COPY: Record<
   ShellLocale,
@@ -93,15 +94,31 @@ test('the unbound regions add no keyboard stops', async ({ page }) => {
   await page.goto(runDetailPath({ run: 'canceled' }));
   await ready(page);
   await expect(page.locator('app-run-timeline button, app-release-panel button')).toHaveCount(0);
-  const copyHash = page.getByRole('button', { name: 'Copy full manifest hash' });
-  await copyHash.focus();
-  await page.keyboard.press('Tab');
-  await expect(page.locator('[data-producer-scroll]')).toBeFocused();
+  const manifest = page.locator('app-manifest-panel');
+  const copies = manifest.locator('app-copy-value-button button');
+  await expect(copies).toHaveCount(3);
+  await copies.first().focus();
+  for (const copy of (await copies.all()).slice(1)) {
+    await page.keyboard.press('Tab');
+    await expect(copy).toBeFocused();
+  }
+  const producers = page.locator('#producers');
+  await tabThroughTableScroller(page, producers);
+  await tabThroughRunControls(page, producers, 2);
   await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');
+  const producerCopies = producers.locator('app-copy-value-button button');
+  for (const copy of (await producerCopies.all()).reverse()) {
+    await page.keyboard.press('Shift+Tab');
+    await expect(copy).toBeFocused();
+  }
+  const scroller = producers.locator('.scroll[tabindex="0"]');
+  if (await scroller.count()) {
+    await page.keyboard.press('Shift+Tab');
+    await expect(scroller).toBeFocused();
+  }
   await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Shift+Tab');
-  await expect(copyHash).toBeFocused();
+  await expect(copies.last()).toBeFocused();
   await expectNoA11yViolations(page, 'unbound release and timeline');
 });
 
@@ -113,9 +130,15 @@ test('release selector and digest buttons are keyboard stops after the producer 
   const release = page.locator('app-release-panel');
   const selectors = release.getByRole('group').getByRole('button');
   await expect(release.locator('[data-release-digest]')).toBeVisible();
-  await page.getByRole('button', { name: 'Copy full manifest hash' }).focus();
-  await page.keyboard.press('Tab');
-  await expect(page.locator('[data-producer-scroll]')).toBeFocused();
+  const manifestCopies = page.locator('app-manifest-panel app-copy-value-button button');
+  await expect(manifestCopies).toHaveCount(3);
+  await manifestCopies.first().focus();
+  for (const copy of (await manifestCopies.all()).slice(1)) {
+    await page.keyboard.press('Tab');
+    await expect(copy).toBeFocused();
+  }
+  await tabThroughTableScroller(page, page.locator('#producers'));
+  await tabThroughRunControls(page, page.locator('#producers'), 2);
   await page.keyboard.press('Tab');
   await expect(selectors.nth(0)).toBeFocused();
   await page.keyboard.press('Tab');

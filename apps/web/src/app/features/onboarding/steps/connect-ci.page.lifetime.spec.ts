@@ -6,6 +6,7 @@ import { SessionStore } from '../../../core/session/session.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { OnboardingStore } from '../onboarding.store';
 import { TOKEN } from '../onboarding.store.test-support';
+import { provideDesktopOnboardingViewport } from '../onboarding-viewport.testing';
 import { ConnectCiPage } from './connect-ci.page';
 
 function required<T extends Element>(root: HTMLElement, selector: string): T {
@@ -34,6 +35,7 @@ describe('ConnectCiPage command lifetime boundaries', () => {
       imports: [ConnectCiPage],
       providers: [
         provideZonelessChangeDetection(),
+        provideDesktopOnboardingViewport(),
         { provide: OnboardingDataService, useValue: { createIngestToken } },
         {
           provide: OnboardingStore,

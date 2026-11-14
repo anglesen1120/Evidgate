@@ -5,6 +5,7 @@ import type { PolicyActivationDto, PolicyRevisionDto } from '@evidgate/sdk';
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { ApiRequestError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
+import { provideDesktopOnboardingViewport } from '../onboarding-viewport.testing';
 import { DEFAULT_ADVISORY_POLICY } from './default-policy';
 import { EnableCollectionPage } from './enable-collection.page';
 import {
@@ -42,6 +43,7 @@ describe('EnableCollectionPage', () => {
       imports: [EnableCollectionPage],
       providers: [
         provideZonelessChangeDetection(),
+        provideDesktopOnboardingViewport(),
         {
           provide: OnboardingDataService,
           useValue: { createPolicyRevision, activatePolicy, readPolicyActivation },
@@ -98,9 +100,7 @@ describe('EnableCollectionPage', () => {
       'project-1',
       DEFAULT_ADVISORY_POLICY,
     );
-    // The call's own tuple is typed, so the arguments are read instead of matched with `expect.any`
-    // (an `any` the lint config refuses): one call, the wizard's project, the appended revision, and
-    // a minted non-empty key — the same key the retry case below pins.
+    // Inspect the typed tuple without introducing an untyped matcher.
     expect(activatePolicy).toHaveBeenCalledTimes(1);
     const [calledProject, calledRevision, calledIntent] = activatePolicy.mock.calls[0]!;
     expect(calledProject).toBe('project-1');
@@ -110,16 +110,16 @@ describe('EnableCollectionPage', () => {
 
     const enabled = root.querySelector('[data-testid="enable-collection-enabled"]');
     expect(enabled).not.toBeNull();
-    // The confirm is replaced by the terminal panel, never shown beside it as still pending.
     expect(confirmButton(root)).toBeNull();
     expect(enabled!.textContent).toContain('Project enabled and collecting');
     expect(enabled!.textContent).toContain('advisory mode');
     expect(enabled!.textContent).toContain('Advisory');
-    // Revision number comes from the appended revision, the hash is abbreviated, and the instant is
-    // rendered from the answer as a machine-readable time element.
+    // Revision and full hash come from the answer; the instant stays machine-readable.
     const values = Array.from(enabled!.querySelectorAll('dd')).map((dd) => dd.textContent?.trim());
     expect(values).toContain('1');
-    expect(enabled!.textContent).toContain('sha256:9f2c1d7b4a6e…');
+    expect(enabled!.querySelector('[data-testid="enable-policy-hash"]')?.textContent?.trim()).toBe(
+      ACTIVATION.hash,
+    );
     expect(enabled!.querySelector('time')?.getAttribute('datetime')).toBe(ACTIVATION.activated_at);
     // No verdict language anywhere: step 5 reports collection, not a release decision (FR-09-1).
     expect(root.textContent).not.toMatch(/\bPASS\b|\bFAIL\b/);
@@ -213,7 +213,6 @@ describe('EnableCollectionPage', () => {
     expect(activatePolicy).toHaveBeenCalledTimes(2);
     const [first, second] = activatePolicy.mock.calls.map(([, , intent]) => intent);
     expect(second!.idempotencyKey).toBe(first!.idempotencyKey);
-    // The identical body is what the server replays against, on both attempts.
     expect(createPolicyRevision.mock.calls.map(([, body]) => body)).toEqual([
       DEFAULT_ADVISORY_POLICY,
     ]);
@@ -272,7 +271,7 @@ describe('EnableCollectionPage', () => {
       expect(root.textContent).not.toContain('Project enabled and collecting');
       if (kind === 'validation') {
         expect(error!.textContent).toContain('Mode:');
-        expect(error!.textContent).not.toContain('/mode');
+        expect(error!.textContent).toContain('/mode');
         expect(error!.textContent).toContain('invalid_value');
       }
       // None of these is retryable in the contract, so no retry action is offered.
@@ -281,8 +280,7 @@ describe('EnableCollectionPage', () => {
   );
 
   it('never renders bidi or control characters a server label carries', async () => {
-    // U+202E (right-to-left override) and U+009B (C1 control) inside the digest, i.e. inside the
-    // characters the abbreviation shows — a sanitised-after-abbreviation bug would surface here.
+    // Invisible characters are stripped from the complete provenance value before presentation.
     const hostileHash = 'sha256:9f2c\u202E\u009B1d7b4a6e8f0a';
     activatePolicy.mockResolvedValue({ ...ACTIVATION, hash: hostileHash });
     submit(root);
@@ -291,8 +289,10 @@ describe('EnableCollectionPage', () => {
     const enabled = root.querySelector('[data-testid="enable-collection-enabled"]')!;
     expect(enabled.textContent).not.toContain('\u202E');
     expect(enabled.textContent).not.toContain('\u009B');
-    expect(enabled.textContent).toContain('sha256:9f2c1d7b4a6e…');
-    // The label is still interpolated text inside `<bdi>`, never markup.
+    expect(enabled.querySelector('[data-testid="enable-policy-hash"]')?.textContent?.trim()).toBe(
+      'sha256:9f2c1d7b4a6e8f0a',
+    );
+    // Provenance stays interpolated text, never markup.
     expect(enabled.querySelector('code')?.innerHTML).not.toContain('&lt;');
   });
 
@@ -350,7 +350,7 @@ describe('EnableCollectionPage', () => {
     expect(error.textContent).not.toContain('\u202E');
     expect(error.textContent).not.toContain('\u200E');
     expect(error.textContent).toContain('Submitted value: number_too_long');
-    expect(error.textContent).not.toContain('/latewindow');
+    expect(error.textContent).toContain('/latewindow');
   });
 
   it('disables the confirm while a retryable Retry-After window is still open', async () => {

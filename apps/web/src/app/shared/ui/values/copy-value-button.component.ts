@@ -10,6 +10,8 @@ import {
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 
+export type CopyValueButtonSize = 'sm' | 'lg';
+
 let nextCopyId = 0;
 
 @Component({
@@ -21,7 +23,8 @@ let nextCopyId = 0;
       hlmBtn
       type="button"
       [variant]="'ghost'"
-      [size]="'sm'"
+      [size]="size()"
+      [attr.data-copy-size]="size()"
       [attr.aria-label]="actionLabel()"
       [attr.aria-describedby]="statusId"
       [attr.aria-disabled]="copying() || !value()"
@@ -51,6 +54,10 @@ let nextCopyId = 0;
       white-space: normal;
       overflow-wrap: anywhere;
     }
+    button[data-copy-size='lg'] {
+      min-block-size: var(--eg-control-touch);
+      min-inline-size: var(--eg-control-touch);
+    }
     @media (pointer: coarse) {
       button {
         min-block-size: var(--eg-control-touch);
@@ -63,6 +70,8 @@ export class CopyValueButtonComponent {
   readonly value = input.required<string>();
   readonly label = input.required<string>();
   readonly copyLabel = input<string>();
+  /** `lg` reserves a 44px target on every pointer; `sm` keeps the compact default. */
+  readonly size = input<CopyValueButtonSize>('sm');
   protected readonly statusId = `copy-value-status-${++nextCopyId}`;
   protected readonly status = signal('');
   protected readonly copying = signal(false);

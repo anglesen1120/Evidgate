@@ -23,6 +23,7 @@ import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
 import { HlmSelectImports } from '@evidgate/ui/select';
+import { PageHeaderImports } from '../../../shared/ui/page-header';
 import { RequestStateComponent } from '../../../shared/ui/states/request-state.component';
 import { RunListTableComponent } from './run-list-table.component';
 import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
@@ -38,6 +39,7 @@ import { EMPTY_RUN_LIST_FILTERS, RunListStore } from './run-list.store';
     HlmInput,
     HlmLabel,
     HlmSelectImports,
+    PageHeaderImports,
     RequestStateComponent,
     RunListTableComponent,
   ],

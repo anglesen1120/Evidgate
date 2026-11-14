@@ -4,13 +4,17 @@ import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type { UsageSummaryDto, UsageSummaryMetricDto, UsageSummaryProjectDto } from '@evidgate/sdk';
 
+import { By } from '@angular/platform-browser';
+import { provideLayoutTestStubs } from '../../../shared/testing/layout.testing';
+import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
 import { QuotaPanelComponent } from './quota-panel.component';
 import { QuotaStore, type QuotaLoadState } from './quota.store';
 
+provideLayoutTestStubs();
 class QuotaPanelHarness extends ComponentHarness {
   static hostSelector = 'app-quota-panel';
   readonly metrics = this.locatorForAll('[data-quota-metric]');
-  readonly projectRows = this.locatorForAll('[data-quota-project-row]');
+  readonly projectRows = this.locatorForAll('app-data-table [data-row-id]');
   readonly retry = this.locatorFor('button');
 }
 
@@ -138,9 +142,9 @@ describe('QuotaPanelComponent', () => {
       next_cursor: null,
     });
     const { root } = await render();
-    expect(root.textContent).toContain(
-      severity === 'blocked' ? 'Limit reached' : 'Approaching limit',
-    );
+    expect(root.textContent).toContain(severity === 'blocked' ? 'Limit reached' : 'Near limit');
+    expect(root.querySelector('time')?.textContent).toContain('UTC');
+    expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-11-01T00:00:00Z');
   });
 
   it('announces loading without presenting stale counters', async () => {
@@ -198,10 +202,10 @@ describe('QuotaPanelComponent', () => {
     expect(unavailable).toContain('Unavailable');
     expect(unavailable).not.toContain('0');
     expect(root.querySelectorAll('[data-quota-project-used]')[1]?.textContent).toContain('0');
-    expect(await rows[1]?.text()).toContain('Approaching limit');
+    expect(await rows[1]?.text()).toContain('Near limit');
   });
 
-  it('renders the first project rows and counts the ones it leaves out', async () => {
+  it('makes all returned project rows inspectable through the shared table', async () => {
     usageSummary.set({
       period: '2026-11',
       project: null,
@@ -217,9 +221,13 @@ describe('QuotaPanelComponent', () => {
       ],
       next_cursor: null,
     });
-    const { harness, root } = await render();
-    expect(await harness.projectRows()).toHaveLength(5);
-    expect(root.querySelector('[data-quota-projects-more]')?.textContent).toContain('2');
+    const { fixture, harness, root } = await render();
+    expect(await harness.projectRows()).toHaveLength(7);
+    expect(root.querySelector('[data-row-id="project-6"]')).not.toBeNull();
+    const table = fixture.debugElement.query(By.directive(DataTableComponent))
+      .componentInstance as DataTableComponent<UsageSummaryProjectDto>;
+    expect(table.rows()).toHaveLength(7);
+    expect(root.textContent).not.toContain('additional projects');
   });
 
   it('derives the metric ids from the row index rather than the served metric key', async () => {
@@ -238,5 +246,41 @@ describe('QuotaPanelComponent', () => {
     expect(sections[1]?.querySelector('h3')?.id).toBe('quota-metric-1');
     expect(sections[0]?.getAttribute('aria-labelledby')).toBe('quota-metric-0');
     expect(sections[1]?.getAttribute('aria-labelledby')).toBe('quota-metric-1');
+  });
+  it('keeps exact fractions, large counters and measurement labels without compact notation', async () => {
+    usageSummary.set({
+      period: '2026-11',
+      project: null,
+      next_cursor: null,
+      metrics: [metric({ used: 123456789.1234, limit: 987654321, unavailable_reason: null })],
+    });
+    const { root } = await render();
+    expect(root.querySelector('[data-quota-used]')?.textContent?.trim()).toBe('123,456,789.1234');
+    expect(root.querySelector('[data-quota-limit]')?.textContent?.trim()).toBe('987,654,321');
+  });
+  it('passes every row beyond the 200-row rendering boundary to the shared bounded renderer', async () => {
+    const projects = Array.from({ length: 201 }, (_unused, index) =>
+      project({ project_id: `project-${index}` }),
+    );
+    usageSummary.set({
+      period: '2026-11',
+      project: null,
+      metrics: [metric({ projects })],
+      next_cursor: 'next-page',
+    });
+    const { fixture, root } = await render();
+    const table = fixture.debugElement.query(By.directive(DataTableComponent))
+      .componentInstance as DataTableComponent<UsageSummaryProjectDto>;
+    expect(table.rows()).toHaveLength(201);
+    expect(root.querySelector('[data-quota-projects-more]')?.textContent).toContain(
+      'All counters returned',
+    );
+    const next = Array.from(
+      root.querySelectorAll<HTMLButtonElement>('app-data-table nav button'),
+    ).find((button) => button.textContent?.includes('Next'));
+    expect(next).toBeDefined();
+    next?.click();
+    await fixture.whenStable();
+    expect(root.querySelector('[data-row-id="project-200"]')).not.toBeNull();
   });
 });

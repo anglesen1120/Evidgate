@@ -10,6 +10,7 @@ import { beforeEach, vi } from 'vitest';
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { ApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
+import { provideDesktopOnboardingViewport } from '../onboarding-viewport.testing';
 import { DEFAULT_ADVISORY_POLICY } from './default-policy';
 import { EnableCollectionPage } from './enable-collection.page';
 
@@ -148,6 +149,7 @@ export function createActivationReadContext() {
       imports: [EnableCollectionPage],
       providers: [
         provideZonelessChangeDetection(),
+        provideDesktopOnboardingViewport(),
         {
           provide: OnboardingDataService,
           useValue: { createPolicyRevision, activatePolicy, readPolicyActivation },

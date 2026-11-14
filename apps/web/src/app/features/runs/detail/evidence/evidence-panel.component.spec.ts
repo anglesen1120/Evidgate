@@ -473,4 +473,23 @@ describe('EvidencePanelComponent', () => {
     link.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
   });
+  it('copies the pinned evaluation reference without substituting the newer live evaluation', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const pinned = revision({ evaluation_id: 'evaluation-3' });
+    const { root, fixture } = await render({
+      decision: evaluated(),
+      pinnedRevision: 3,
+      pinned,
+    });
+    root
+      .querySelector<HTMLButtonElement>('[data-evidence-evaluation] app-copy-value-button button')
+      ?.click();
+    await fixture.whenStable();
+    expect(writeText).toHaveBeenCalledWith('evaluation-3');
+    expect(fixture.componentInstance.pinnedRevision()).toBe(3);
+    fixture.componentRef.setInput('pinned', revision({ evaluation_id: null }));
+    await fixture.whenStable();
+    expect(root.querySelector('[data-evidence-evaluation] app-copy-value-button')).toBeNull();
+  });
 });

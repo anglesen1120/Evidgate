@@ -4,20 +4,27 @@
     class="run-summary gap-(--eg-space-5) p-(--eg-space-5)"
     aria-labelledby="run-summary-title"
   >
-    <h2 hlmCardTitle id="run-summary-title" class="m-0 flex flex-wrap gap-(--eg-space-3)">
+    <h2
+      hlmCardTitle
+      [size]="sectionSize"
+      id="run-summary-title"
+      class="m-0 flex flex-wrap gap-(--eg-space-3)"
+    >
       {{ copy.id }}
       <bdi class="font-mono font-(weight:--eg-weight-regular)">{{ display(run().run_id) }}</bdi>
     </h2>
+    <app-copy-value-button [value]="run().run_id" [label]="copy.id" />
     <dl>
       <div>
         <dt>{{ copy.state }}</dt>
-        <dd><app-run-state-pill [state]="run().state" /></dd>
+        <dd><app-run-state-pill [state]="run().state" [compact]="true" /></dd>
       </div>
       <div>
         <dt>{{ copy.ref }}</dt>
         <dd>
           @if (run().ref.name; as ref) {
             <bdi>{{ display(ref) }}</bdi>
+            <app-copy-value-button [value]="ref" [label]="copy.ref" />
           } @else {
             <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
@@ -28,7 +35,7 @@
       </div>
       <div>
         <dt>{{ copy.completeness }}</dt>
-        <dd><app-evidence-badge [completeness]="runCompleteness()" /></dd>
+        <dd><app-evidence-badge [completeness]="runCompleteness()" [compact]="true" /></dd>
       </div>
     </dl>
     @if (run().state === 'incomplete' || runCompleteness() === 'incomplete') {
@@ -56,21 +63,28 @@
     class="gap-(--eg-space-5) p-(--eg-space-5)"
     aria-labelledby="run-environment-title"
   >
-    <h2 hlmCardTitle id="run-environment-title" class="m-0">{{ copy.context }}</h2>
+    <h2
+      hlmCardTitle
+      [size]="sectionSize"
+      id="run-environment-title"
+      class="m-0"
+      [textContent]="copy.context"
+    ></h2>
     <dl>
       <div>
         <dt>{{ copy.id }}</dt>
         <dd data-run-id>
           <bdi class="font-mono">{{ display(run().run_id) }}</bdi>
+          <app-copy-value-button [value]="run().run_id" [label]="copy.id" />
         </dd>
       </div>
       <div>
         <dt>{{ copy.state }}</dt>
-        <dd><app-run-state-pill [state]="run().state" /></dd>
+        <dd><app-run-state-pill [state]="run().state" [compact]="true" /></dd>
       </div>
       <div>
         <dt>{{ copy.version }}</dt>
-        <dd data-run-version>{{ run().version }}</dd>
+        <dd data-run-version><app-number-value [value]="run().version" /></dd>
       </div>
       <div>
         <dt>{{ copy.purpose }}</dt>
@@ -84,6 +98,7 @@
           @let ref = run().ref.name;
           @if (ref !== null) {
             <bdi>{{ display(ref) }}</bdi>
+            <app-copy-value-button [value]="ref" [label]="copy.ref" />
           } @else {
             <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
@@ -107,7 +122,7 @@
         <dt>{{ copy.pr }}</dt>
         <dd>
           @if (run().ref.pr_number !== null) {
-            {{ run().ref.pr_number }}
+            <app-number-value [value]="run().ref.pr_number" />
           } @else {
             <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
@@ -119,6 +134,7 @@
           @let head = run().ref.head_sha;
           @if (head !== null) {
             <bdi class="font-mono">{{ display(head) }}</bdi>
+            <app-copy-value-button [value]="head" [label]="copy.head" />
           } @else {
             <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
@@ -130,6 +146,7 @@
           @let base = run().ref.base_sha;
           @if (base !== null) {
             <bdi class="font-mono">{{ display(base) }}</bdi>
+            <app-copy-value-button [value]="base" [label]="copy.base" />
           } @else {
             <span class="text-muted-foreground">{{ copy.notProvided }}</span>
           }
@@ -162,6 +179,7 @@
           @let revision = run().current_evidence_revision_id;
           @if (revision !== null) {
             <bdi class="font-mono">{{ display(revision) }}</bdi>
+            <app-copy-value-button [value]="revision" [label]="copy.evidence" />
           } @else {
             <span>{{ copy.none }}</span>
           }
@@ -171,9 +189,13 @@
         <dt>{{ copy.environment }}</dt>
         <dd data-run-environment>
           <bdi class="font-mono">{{ display(run().environment.environment_key) }}</bdi>
+          <app-copy-value-button
+            [value]="run().environment.environment_key"
+            [label]="copy.environment"
+          />
           <span data-run-environment-revision
-            >{{ copy.revision }} {{ run().environment.revision_no }}</span
-          >
+            >{{ copy.revision }} <app-number-value [value]="run().environment.revision_no"
+          /></span>
         </dd>
       </div>
     </dl>

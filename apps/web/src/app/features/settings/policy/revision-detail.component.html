@@ -1,0 +1,135 @@
+@switch (phase()) {
+  @case ('empty') {
+    <p class="m-0 text-muted-foreground">{{ copy.empty }}</p>
+  }
+  @case ('loading') {
+    <app-loading-pattern [label]="copy.loading" [layout]="loadingLayout" [bare]="true" />
+  }
+  @case ('error') {
+    <app-inline-feedback
+      [tone]="destructive"
+      [title]="error()?.message ?? copy.failure"
+      [actionLabel]="copy.retry"
+      (action)="retry()"
+    />
+  }
+  @case ('ready') {
+    @if (revision(); as revision) {
+      <section
+        hlmCard
+        class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
+        aria-labelledby="policy-selected-title"
+        data-policy-selected-metadata
+      >
+        <h3 hlmCardTitle [size]="subsectionSize" id="policy-selected-title">
+          {{ copy.title }} · {{ copy.revision }} {{ revision.revision_no }}
+        </h3>
+        <dl class="m-0 grid min-w-0 gap-(--eg-space-5) [&_dt]:text-muted-foreground [&_dd]:m-0">
+          <div>
+            <dt>{{ copy.id }}</dt>
+            <dd>
+              <app-copyable-identifier [value]="revision.id" [label]="copy.id" [truncate]="false" />
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.hash }}</dt>
+            <dd>
+              <app-copyable-identifier
+                [value]="revision.hash"
+                [label]="copy.hash"
+                [truncate]="false"
+              />
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.state }}</dt>
+            <dd><app-policy-revision-state [state]="revision.state" /></dd>
+          </div>
+          <div>
+            <dt>{{ copy.rawState }}</dt>
+            <dd>
+              <code class="font-mono wrap-anywhere">{{ revision.state }}</code>
+            </dd>
+          </div>
+          <div>
+            <dt>{{ copy.created }}</dt>
+            <dd><app-absolute-time [value]="revision.created_at" /></dd>
+          </div>
+          <div>
+            <dt>{{ copy.createdBy }}</dt>
+            <dd>
+              <app-copyable-identifier
+                [value]="revision.created_by"
+                [label]="copy.createdBy"
+                [truncate]="false"
+              />
+            </dd>
+          </div>
+        </dl>
+        <p class="m-0 max-w-[65ch] text-muted-foreground">{{ copy.immutable }}</p>
+      </section>
+      <section
+        hlmCard
+        class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
+        aria-labelledby="policy-values-title"
+      >
+        <h3 hlmCardTitle [size]="subsectionSize" id="policy-values-title">{{ copy.values }}</h3>
+        @if (fields().length === 0) {
+          <p class="m-0 text-muted-foreground">{{ copy.noValues }}</p>
+        }
+        <dl class="m-0 grid min-w-0 gap-(--eg-space-5)" data-policy-values>
+          @for (field of fields(); track field.key) {
+            <div class="grid min-w-0 gap-(--eg-space-3)" [attr.data-policy-field]="field.key">
+              <dt>
+                <span class="font-semibold">{{ field.label }}</span>
+                <code class="block font-mono text-xs text-muted-foreground wrap-anywhere">{{
+                  field.key
+                }}</code>
+              </dt>
+              <dd class="m-0 min-w-0">
+                @if (typeof field.value === 'number') {
+                  <app-number-value [value]="field.value" />
+                } @else {
+                  <pre class="m-0 whitespace-pre-wrap font-mono wrap-anywhere">{{
+                    field.value | json
+                  }}</pre>
+                }
+              </dd>
+            </div>
+          }
+        </dl>
+      </section>
+      @for (group of groups(); track group.key) {
+        <section
+          hlmCard
+          class="min-w-0 gap-(--eg-space-5) p-(--eg-space-5)"
+          [attr.aria-labelledby]="'policy-' + group.key"
+          [attr.data-policy-reference-group]="group.key"
+        >
+          <h3 hlmCardTitle [size]="subsectionSize" [id]="'policy-' + group.key">
+            {{ group.label }}
+          </h3>
+          @if (group.rows; as rows) {
+            @if (rows.length > 0) {
+              <app-data-table
+                [rows]="rows"
+                [columns]="referenceColumns"
+                [rowId]="referenceId"
+                [caption]="group.label"
+              />
+            } @else {
+              <p class="m-0">{{ copy.noReferences }}</p>
+            }
+          } @else if (group.value === undefined) {
+            <p class="m-0 text-muted-foreground">{{ copy.notSupplied }}</p>
+          } @else {
+            <pre class="m-0 whitespace-pre-wrap font-mono wrap-anywhere">{{
+              group.value | json
+            }}</pre>
+          }
+          <p class="m-0 max-w-[65ch] text-muted-foreground">{{ copy.referenceNote }}</p>
+        </section>
+      }
+    }
+  }
+}

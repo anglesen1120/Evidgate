@@ -1,24 +1,43 @@
-<header class="mb-4 grid min-w-0 gap-2">
-  <h2
-    #heading
-    id="heading"
-    tabindex="-1"
-    class="m-0 font-[family-name:var(--eg-font-display)] text-xl md:text-2xl focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-offset-[var(--eg-focus-offset)] focus-visible:outline-ring"
-  >
-    {{ copy.title }}
-  </h2>
-  <p class="text-muted-foreground">{{ copy.description }}</p>
+<header class="mb-(--eg-space-7) grid min-w-0 gap-(--eg-space-5)">
+  <div class="grid min-w-0 gap-(--eg-space-3)">
+    <h2
+      hlmCardTitle
+      [size]="sectionSize"
+      #heading
+      id="heading"
+      tabindex="-1"
+      class="focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-offset-[var(--eg-focus-offset)] focus-visible:outline-ring"
+    >
+      {{ copy.title }}
+    </h2>
+    <p class="eg-type-body max-w-[65ch] text-muted-foreground">{{ copy.description }}</p>
+  </div>
+  @if (canWrite()) {
+    <app-desktop-required-notice data-policy-narrow-notice />
+    <button
+      *appDesktopMutation
+      type="button"
+      hlmBtn
+      class="min-h-(--eg-control-touch) w-fit max-w-full justify-self-start whitespace-normal md:justify-self-end"
+      data-policy-publish-open
+      [disabled]="store.phase() !== 'ready' || store.publishing() || !selectedRevisionId()"
+      (click)="openPublish($event)"
+    >
+      {{ copy.publish }}
+    </button>
+  }
 </header>
-<app-policy-summary
-  [activation]="store.reads.activation()"
-  [head]="store.reads.head()"
-  [busy]="store.reads.busy() || store.phase() === 'loading'"
-  [waiting]="store.reads.waiting()"
-  (retry)="retryReads()"
-/>
+@if (store.phase() !== 'ready' && store.revisions().length === 0) {
+  <app-policy-summary
+    [activation]="store.reads.activation()"
+    [head]="store.reads.head()"
+    [busy]="store.reads.busy() || store.phase() === 'loading'"
+    [waiting]="store.reads.waiting()"
+    (retry)="retryReads()"
+  />
+}
 <form
-  hlmCard
-  class="mb-4 flex flex-row flex-wrap items-end gap-3 p-4"
+  class="mb-(--eg-space-7) flex min-w-0 flex-row flex-wrap items-end gap-(--eg-space-4)"
   (submit)="openRevision($event)"
 >
   <div class="grid min-w-0 flex-1 basis-[var(--eg-rail-width)] gap-2">
@@ -46,25 +65,6 @@
     {{ copy.open }}
   </button>
 </form>
-<div class="mb-4 flex flex-wrap items-center justify-end gap-3">
-  @if (canWrite()) {
-    <button
-      type="button"
-      hlmBtn
-      class="hidden min-h-[var(--eg-control-touch)] whitespace-normal md:inline-flex"
-      data-policy-publish-open
-      [disabled]="
-        store.phase() !== 'ready' || store.publishing() || !(targetId() || store.headRevisionId())
-      "
-      (click)="openPublish($event)"
-    >
-      {{ copy.publish }}
-    </button>
-  }
-</div>
-@if (canWrite()) {
-  <p class="mb-3! text-muted-foreground md:hidden" data-policy-narrow-notice>{{ copy.narrow }}</p>
-}
 <div role="status">
   @if (published(); as result) {
     <p
@@ -137,10 +137,60 @@
       [rows]="store.revisions()"
       [headId]="store.headRevisionId()"
       [hasMore]="store.hasMore()"
+      [selectedId]="selectedRevisionId()"
+      (selected)="selectRevision($event)"
       [busy]="paging() || store.phase() === 'loading' || store.publishing()"
       (loadMore)="loadMore()"
     />
-    <app-revision-diff (targetChanged)="targetId.set($event)" />
+    <div id="policy-selected-detail" class="min-w-0">
+      <hlm-tabs [tab]="valuesTab" class="min-w-0 gap-(--eg-space-5)">
+        <hlm-tabs-list
+          [variant]="'line'"
+          [attr.aria-label]="copy.detailTabs"
+          class="h-auto w-full flex-wrap justify-start"
+        >
+          <button
+            type="button"
+            [hlmTabsTrigger]="valuesTab"
+            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+          >
+            {{ copy.values }}
+          </button>
+          <button
+            type="button"
+            [hlmTabsTrigger]="compareTab"
+            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+          >
+            {{ copy.compare }}
+          </button>
+          <button
+            type="button"
+            [hlmTabsTrigger]="activationTab"
+            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+          >
+            {{ copy.activation }}
+          </button>
+        </hlm-tabs-list>
+        <section [hlmTabsContent]="valuesTab" class="min-w-0">
+          <app-policy-revision-detail [revisionId]="selectedRevisionId()" />
+        </section>
+        <section [hlmTabsContent]="compareTab" class="min-w-0">
+          <app-revision-diff
+            [selectedRevisionId]="selectedRevisionId()"
+            (targetChanged)="selectRevision($event)"
+          />
+        </section>
+        <section [hlmTabsContent]="activationTab" class="min-w-0">
+          <app-policy-summary
+            [activation]="store.reads.activation()"
+            [head]="store.reads.head()"
+            [busy]="store.reads.busy() || store.phase() === 'loading'"
+            [waiting]="store.reads.waiting()"
+            (retry)="retryReads()"
+          />
+        </section>
+      </hlm-tabs>
+    </div>
   </div>
 }
 @if (canWrite()) {

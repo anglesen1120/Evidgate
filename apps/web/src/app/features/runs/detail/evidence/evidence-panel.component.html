@@ -7,9 +7,10 @@
 >
   <h2
     hlmCardTitle
+    [size]="sectionSize"
     id="evidence-title"
     tabindex="-1"
-    class="m-0 scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] font-(family-name:--eg-font-display) text-(length:--eg-text-xl) leading-(--eg-leading-xl) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+    class="m-0 scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
     [textContent]="copy.title"
   ></h2>
 
@@ -107,10 +108,7 @@
   }
 
   <div class="grid min-w-0 gap-(--eg-space-3)" data-evidence-missing>
-    <h3
-      class="m-0 text-(length:--eg-text-md) font-(weight:--eg-weight-semibold) leading-(--eg-leading-md)"
-      id="evidence-missing-title"
-    >
+    <h3 hlmCardTitle [size]="subsectionSize" class="m-0" id="evidence-missing-title">
       {{ copy.missingTitle }}
     </h3>
     @if (missing() !== null) {
@@ -125,12 +123,13 @@
       class="grid min-w-0 gap-(--eg-space-2) border-0 border-t border-solid border-(--eg-border) pt-(--eg-space-5)"
       data-evidence-evaluation
     >
-      <h3 class="m-0 text-(length:--eg-text-sm) font-(weight:--eg-weight-semibold)">
+      <h3 hlmCardTitle [size]="subsectionSize" class="m-0">
         {{ copy.evaluationReference }}
       </h3>
       <p class="m-0">
         @if (revision.evaluation_id; as evaluationId) {
           <bdi class="font-(family-name:--eg-font-mono) wrap-anywhere">{{ evaluationId }}</bdi>
+          <app-copy-value-button [value]="evaluationId" [label]="copy.evaluationReference" />
         } @else {
           {{ copy.noEvaluation }}
         }

@@ -21,6 +21,7 @@ import type { PublishedRevision } from '../../../core/data/policy-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
 import { ConflictDialogComponent } from '../../../shared/ui/conflict/conflict-dialog.component';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import {
   conflictFromError,
   type ConflictField,
@@ -163,6 +164,7 @@ const MAX_CONFLICT_FIELDS = 100;
 export class PublishDialogComponent {
   protected readonly store = inject(PolicyStore);
   protected readonly session = inject(SessionStore);
+  protected readonly mutationPolicy = inject(NarrowMutationPolicy);
   readonly completed = output<PublishedRevision>();
   readonly reloaded = output<void>();
   protected readonly opened = signal(false);
@@ -208,7 +210,13 @@ export class PublishDialogComponent {
     inject(DestroyRef).onDestroy(() => this.close());
   }
   async open(revisionId: string, opener: HTMLElement): Promise<void> {
-    if (!this.session.has('policy:write') || this.busy() || this.opened() || this.conflictOpen())
+    if (
+      !this.mutationPolicy.allowsMutation() ||
+      !this.session.has('policy:write') ||
+      this.busy() ||
+      this.opened() ||
+      this.conflictOpen()
+    )
       return;
     const generation = ++this.generation;
     this.opener = opener;
@@ -260,8 +268,7 @@ export class PublishDialogComponent {
     if (state === 'closed' && this.opened()) this.requestClose();
   }
   protected async submit(): Promise<void> {
-    if (!this.opened() || this.busy() || this.seedFailed() || !this.session.has('policy:write'))
-      return;
+    if (!this.canSubmit()) return;
     this.localError.set(null);
     this.serverError.set(null);
     // Pretty-printing must not reject a body that fits the compact wire limit.
@@ -313,6 +320,15 @@ export class PublishDialogComponent {
         if (this.opened()) this.focusTextarea();
       }
     }
+  }
+  private canSubmit(): boolean {
+    return (
+      this.mutationPolicy.allowsMutation() &&
+      this.opened() &&
+      !this.busy() &&
+      !this.seedFailed() &&
+      this.session.has('policy:write')
+    );
   }
 
   // The conflict envelope carries metadata, not the current body. Read that revision once

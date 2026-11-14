@@ -52,7 +52,7 @@ describe('AuditTableComponent', () => {
     const { root } = await render([
       row('actor', { actor_type: actorType as AuditEntryDto['actor_type'] }),
     ]);
-    expect(root.querySelector('tbody td app-status-pill')?.textContent?.trim()).toBe(label);
+    expect(root.querySelector('[data-audit-row] app-status-pill')?.textContent?.trim()).toBe(label);
   });
   it.each(['future_actor', 'constructor', '__proto__'])(
     'keeps an unknown actor type verbatim: %s',
@@ -60,7 +60,9 @@ describe('AuditTableComponent', () => {
       const { root } = await render([
         row('unknown', { actor_type: actorType as AuditEntryDto['actor_type'] }),
       ]);
-      expect(root.querySelector('tbody td app-status-pill')?.textContent?.trim()).toBe(actorType);
+      expect(root.querySelector('[data-audit-row] app-status-pill')?.textContent?.trim()).toBe(
+        actorType,
+      );
       expect(root.querySelector('[data-audit-support="true"]')).toBeNull();
     },
   );
@@ -121,9 +123,9 @@ describe('AuditTableComponent', () => {
     const first = rows[0];
     const second = rows[1];
     if (!first || !second) throw new Error('Expected ordinary and support rows');
-    expect(first.getAttribute('data-audit-support')).not.toBe('true');
+    expect(first.querySelector('[data-audit-support="true"]')).toBeNull();
     expect(first.querySelector('.support-access')).toBeNull();
-    expect(second.getAttribute('data-audit-support')).toBe('true');
+    expect(second.querySelector('[data-audit-support="true"]')).not.toBeNull();
     const chip = supportTrigger(root);
     expect(chip.textContent).toContain('Support access');
     expect(chip.tabIndex).toBe(0);
@@ -170,50 +172,71 @@ describe('AuditTableComponent', () => {
     expect(root.textContent).toContain(long);
     expect(root.querySelector('b')).toBeNull();
   });
-  it('keeps UTC datetime exact, formats time on two unbroken lines, and uses a bounded sticky table', async () => {
+  it('keeps exact UTC instants and role-based bounded scan values in the shared table', async () => {
     const { root } = await render([row('ordinary')]);
-    expect(root.querySelector('tbody td:nth-of-type(3)')?.textContent).toContain('—');
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-25T00:00:00Z');
-    const time = root.querySelector('time');
-    expect(time?.getAttribute('title')).toBe('2026-10-25T00:00:00Z');
-    expect(time?.textContent).toContain('Oct 25, 2026');
-    expect(time?.textContent?.replace(/\s/g, ' ')).toContain('12:00:00 AM');
-    const parts = [...(time?.querySelectorAll('span') ?? [])];
-    expect(parts).toHaveLength(2);
-    expect(parts.every((part) => part.classList.contains('whitespace-nowrap'))).toBe(true);
-    const region = root.querySelector('[role="region"]');
-    expect(
-      region?.classList.contains(
-        'md:max-h-[calc(100dvh-var(--eg-topbar-height)-var(--eg-space-8))]',
-      ),
-    ).toBe(true);
-    expect(root.querySelector('thead')?.classList.contains('md:sticky')).toBe(true);
-    expect(root.querySelector('thead')?.classList.contains('md:top-0')).toBe(true);
-    expect(root.querySelector('table')?.classList.contains('table-auto')).toBe(true);
-    expect(
-      root.querySelector('table')?.classList.contains('md:min-w-[calc(var(--eg-rail-width)*3)]'),
-    ).toBe(true);
-    expect(root.querySelector('caption')?.textContent).toContain('Audit activity');
-    expect(root.querySelector('caption')?.classList.contains('max-md:block')).toBe(true);
-    expect(root.querySelector('caption')?.classList.contains('max-md:w-full')).toBe(true);
-    expect(root.querySelectorAll('thead th[scope="col"]')).toHaveLength(5);
-    expect(root.querySelector<HTMLElement>('[role="region"]')?.tabIndex).toBe(0);
-    expect(root.querySelector('table')?.getAttribute('role')).toBe('table');
-    expect(root.querySelectorAll('tbody [role="cell"]')).toHaveLength(4);
-    const labels = [...root.querySelectorAll('tbody span[aria-hidden="true"]')].map((item) =>
-      item.textContent?.trim(),
+    expect(root.querySelector('time')?.textContent).toContain('Oct 25, 2026');
+    expect(root.querySelector('time')?.textContent?.replace(/\s/g, ' ')).toContain('12:00:00 AM');
+    expect(root.querySelector('time')?.textContent).toContain('UTC');
+    expect(root.querySelector('table')?.classList.contains('eg-table-layout')).toBe(true);
+    expect(root.querySelectorAll('thead th')).toHaveLength(5);
+    expect(root.querySelector('th[data-column-priority="primary"]')?.textContent?.trim()).toBe(
+      'Action',
     );
-    expect(labels).toEqual(['Time (UTC)', 'Actor', 'Action', 'Object']);
-    expect(root.querySelector('[data-audit-row]')?.classList.contains('max-md:grid')).toBe(true);
+    expect(root.querySelector('th[data-column-role="date"]')?.textContent?.trim()).toBe(
+      'Time (UTC)',
+    );
+    expect(root.querySelectorAll('[role="table"]')).toHaveLength(1);
+    expect(root.querySelector('app-data-table')?.textContent).toContain('Audit activity');
+    expect(
+      root.querySelector('td[data-column-priority="primary"] app-data-table-value'),
+    ).not.toBeNull();
+    expect(
+      root.querySelector('td[data-column-role="identity"] app-copyable-identifier'),
+    ).not.toBeNull();
+    expect(root.textContent).toContain('—');
+  });
+  it('renders every labelled audit fact with full values in a narrow container', async () => {
+    const width = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: Element,
+    ) {
+      return this.tagName === 'APP-DATA-TABLE' ? 480 : 0;
+    });
+    try {
+      const actor = 'actor-'.repeat(40);
+      const object = 'object-'.repeat(40);
+      const request = 'request-'.repeat(40);
+      const action = 'project.very-long-action-'.repeat(15);
+      const { root } = await render([
+        row('narrow', {
+          actor_id: actor,
+          object_id: object,
+          request_id: request,
+          action,
+        }),
+      ]);
+      const records = root.querySelector('app-data-table-records');
+      expect(records).not.toBeNull();
+      expect(root.querySelector('table')).toBeNull();
+      for (const value of [actor, object, request, action])
+        expect(records?.textContent).toContain(value);
+      const labels = [...root.querySelectorAll('.eg-table-fact > dt')].map(
+        (label) => label.textContent,
+      );
+      expect(labels).toEqual(['Action', 'Actor', 'Object', 'Time (UTC)', 'Event details']);
+      expect(root.querySelector('time')?.textContent).toContain('UTC');
+      expect(root.querySelector('[data-audit-details]')).not.toBeNull();
+    } finally {
+      width.mockRestore();
+    }
   });
   it.each([['not-a-date'], [''], ['2026-02-30T00:00:00Z']])(
     'invents no instant for the unusable timestamp %j',
     async (createdAt) => {
       const { root } = await render([row('unusable', { created_at: createdAt })]);
       expect(root.querySelector('time')).toBeNull();
-      const cell = root.querySelector('tbody th[scope="row"]');
-      expect(cell?.textContent).toContain('Time unavailable');
-      expect(root.querySelector('[data-audit-row]')?.textContent).toContain('project.updated');
+      expect(root.querySelector('app-absolute-time')?.textContent).toContain('Time unavailable');
+      expect(root.textContent).toContain('project.updated');
     },
   );
   it('renders a server instant that carries a numeric offset in UTC', async () => {
@@ -229,7 +252,7 @@ describe('AuditTableComponent', () => {
       row('with-request', { request_id: 'request-visible-in-details' }),
       row('empty', { request_id: null, object_type: null, object_id: null }),
     ]);
-    const rows = root.querySelectorAll('[data-audit-row]');
+    const rows = root.querySelectorAll('tbody tr');
     const disclosure = rows[0]?.querySelector<HTMLDetailsElement>('details');
     expect(disclosure?.open).toBe(false);
     expect(disclosure?.querySelector('summary')?.textContent).toContain('Event details');
@@ -239,12 +262,8 @@ describe('AuditTableComponent', () => {
     disclosure.open = true;
     expect(disclosure.open).toBe(true);
     expect(rows[1]?.querySelector('details')).toBeNull();
-    expect(rows[1]?.querySelector('td:nth-of-type(3)')?.classList.contains('max-md:hidden')).toBe(
-      true,
-    );
-    expect(rows[1]?.querySelector('td:nth-of-type(4)')?.classList.contains('max-md:hidden')).toBe(
-      true,
-    );
+    expect(rows[1]?.textContent).toContain('—');
+    expect(rows[1]?.querySelector('[hidden]')).toBeNull();
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(2);
   });
 });

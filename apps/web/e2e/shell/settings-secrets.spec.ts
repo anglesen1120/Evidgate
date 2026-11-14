@@ -12,8 +12,8 @@
 // terminal page, focus back on the section heading.
 // Reminder dates are pinned with a browser clock, not compared to the machine's changing calendar.
 // No source-text assertions or mock UI.
-// Project changes during an overlay are injected as a DOM change event: the focus trap prevents
-// reaching the background picker, but a scope-change event must still clear the reveal immediately.
+// Project changes during an overlay use the Helm picker's public DOM events: the focus trap
+// prevents reaching the background picker, but a scope change must still clear the reveal.
 // All selectors use component/data hooks, IDs or roles; localized text is asserted, never selected.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
@@ -21,6 +21,7 @@ import rotation from '../../../../fixtures/web-api/ingest-token-rotate/input.jso
 import conflict from '../../../../fixtures/web-api/ingest-token-rotate-conflict/input.json';
 import rateLimited from '../../../../fixtures/web-api/ingest-token-rotate-rate-limited/input.json';
 import references from '../../../../fixtures/web-api/ingest-tokens-list-settings/input.json';
+import projects from '../../../../fixtures/web-api/projects-list/input.json';
 import ciBindings from '../../../../fixtures/web-api/ci-bindings-list-settings/input.json';
 import ciBindingsPageOne from '../../../../fixtures/web-api/ci-bindings-list-settings-page-1/input.json';
 import ciBindingsPageTwo from '../../../../fixtures/web-api/ci-bindings-list-settings-page-2/input.json';
@@ -84,10 +85,40 @@ function rotateButton(page: Page): Locator {
   return page.locator(`${PAGE} [data-rotate][data-reference-id="${TARGET.id}"]`);
 }
 
+function projectName(id: string): string {
+  const project = projects.body.items.find((candidate) => candidate.id === id);
+  if (project === undefined) throw new Error(`The fixture has no project ${id}`);
+  return project.name;
+}
+
+async function rotationConfirmation(page: Page): Promise<Locator> {
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAccessibleName(/\S/u);
+  await expect(dialog).toHaveAccessibleDescription(/\S/u);
+  await expect(dialog.locator('dd').nth(0)).toHaveText(TARGET.name);
+  await expect(dialog.locator('dd').nth(1)).toHaveText(projectName(PROJECT_STOREFRONT));
+  await expect(dialog.locator('dd').nth(2).locator('code')).toHaveText(TARGET.prefix);
+  await expect(dialog.locator('dd').nth(3).locator('code')).toHaveText(TARGET.scopes);
+  await expect(page.getByTestId('reveal-value')).toHaveCount(0);
+  await expectNoPlaintext(page);
+  await waitForDialogAnimations(page, '[role="alertdialog"]');
+  await expect(dialog.locator('[data-rotation-cancel]')).toBeFocused();
+  return dialog;
+}
+
+async function approveRotation(page: Page): Promise<void> {
+  const confirmation = await rotationConfirmation(page);
+  await confirmation.locator('[data-rotation-confirm-submit]').click();
+  await expect(confirmation).not.toBeVisible();
+}
+
 async function ready(page: Page): Promise<void> {
   await expect(page.locator(PAGE)).toBeVisible();
   await expect(page.locator(ROWS)).toHaveCount(references.body.items.length);
-  await expect(page.locator('#secrets-project')).toHaveValue(PROJECT_STOREFRONT);
+  await expect(page.locator('#secrets-project')).toHaveRole('combobox');
+  await expect(page.locator('#secrets-project')).toHaveText(projectName(PROJECT_STOREFRONT));
+  await expect(page.locator('#secrets-project-value')).toHaveText(projectName(PROJECT_STOREFRONT));
 }
 
 async function visit(
@@ -101,9 +132,15 @@ async function visit(
   await ready(page);
 }
 
-async function reveal(page: Page): Promise<Locator> {
+async function reveal(page: Page, confirmationA11yLabel?: string): Promise<Locator> {
   await expectNoPlaintext(page);
   await rotateButton(page).click();
+  const confirmation = await rotationConfirmation(page);
+  if (confirmationA11yLabel !== undefined) {
+    await expectNoA11yViolations(page, confirmationA11yLabel);
+  }
+  await confirmation.locator('[data-rotation-confirm-submit]').click();
+  await expect(confirmation).not.toBeVisible();
   const dialog = page.locator(DIALOG);
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId('reveal-value')).toHaveValue(SECRET);
@@ -126,21 +163,28 @@ for (const locale of LOCALES) {
     await visit(page, locale);
     for (const [index, reference] of references.body.items.entries()) {
       const row = page.locator(ROWS).nth(index);
-      await expect(row.getByRole('heading')).toHaveText(reference.name);
+      await expect(row.getByRole('heading')).toContainText(reference.name);
+      await row.locator('[data-secret-inspect]').click();
+      const detail = page.locator('[data-secret-detail]');
+      await expect(detail.getByRole('heading')).toHaveText(reference.name);
       await expect(row.locator('code').filter({ hasText: reference.prefix })).toHaveText(
         reference.prefix,
       );
-      await expect(row.locator('dl > div').first().locator('code')).toHaveText(reference.scopes);
+      await expect(detail.locator('dl > div').first().locator('code')).toHaveText(reference.scopes);
       await expect(
         row.locator('app-status-pill').first().locator('.status-pill__label'),
       ).toHaveText(STATUS[locale][reference.status as keyof (typeof STATUS)['en']]);
-      for (const date of [
+      const dates = [
         reference.expires_at,
         reference.overlap_ends_at,
         reference.last_used_at,
         reference.created_at,
-      ]) {
-        if (date !== null) await expect(row.locator(`time[datetime="${date}"]`)).toHaveText(date);
+      ].filter((date) => date !== null);
+      await expect(detail.locator('time')).toHaveCount(dates.length);
+      for (const date of new Set(dates)) {
+        const times = detail.locator(`time[datetime="${date}"]`);
+        await expect(times).toHaveCount(dates.filter((candidate) => candidate === date).length);
+        for (const time of await times.all()) await expect(time).toContainText('UTC');
       }
       await expect(row.locator('[data-rotate]')).toHaveCount(reference.status === 'active' ? 1 : 0);
     }
@@ -179,13 +223,27 @@ for (const locale of LOCALES) {
     await expectNoPlaintext(page);
   });
 
-  // AC3 / T3.2 and keyboard a11y: Enter, initial focus, full wrap, Copy, Escape, focus restoration.
-  test(`keyboard reveal: trap, Copy, Escape (${locale})`, async ({ page, context }) => {
+  // Keyboard consent is separate from reveal: Escape cancels safely, then Tab/Enter confirms.
+  test(`keyboard confirmation and reveal: trap, Copy, Escape (${locale})`, async ({
+    page,
+    context,
+  }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await visit(page, locale);
     const opener = rotateButton(page);
     await opener.focus();
     await page.keyboard.press('Enter');
+    const cancelled = await rotationConfirmation(page);
+    await page.keyboard.press('Escape');
+    await expect(cancelled).not.toBeVisible();
+    await expect(opener).toBeFocused();
+    await expectNoPlaintext(page);
+    await page.keyboard.press('Enter');
+    const confirmation = await rotationConfirmation(page);
+    await page.keyboard.press('Tab');
+    await expect(confirmation.locator('[data-rotation-confirm-submit]')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(confirmation).not.toBeVisible();
     const dialog = page.locator(DIALOG);
     await expect(dialog).toBeVisible();
     await expect(dialog.getByTestId('reveal-value')).toHaveValue(SECRET);
@@ -224,6 +282,7 @@ for (const locale of LOCALES) {
   test(`rotate 409 is verbatim, with no reveal (${locale})`, async ({ page }) => {
     await visit(page, locale, SECRETS_WRITE_GRANTS, [SECRETS_ROTATE_CONFLICT]);
     await rotateButton(page).click();
+    await approveRotation(page);
     const alert = page.locator(PAGE).getByRole('alert');
     await expect(alert.locator('p')).toHaveText(conflict.body.error.message);
     await expect(alert.locator('code')).toHaveText(conflict.body.error.code);
@@ -236,6 +295,7 @@ for (const locale of LOCALES) {
   test(`rotate 429 shows Retry-After and blocks early retry (${locale})`, async ({ page }) => {
     await visit(page, locale, SECRETS_WRITE_GRANTS, [SECRETS_ROTATE_RATE_LIMITED]);
     await rotateButton(page).click();
+    await approveRotation(page);
     const alert = page.locator(PAGE).getByRole('alert');
     await expect(alert.locator('p')).toHaveText(rateLimited.body.error.message);
     await expect(alert.locator('code')).toHaveText(rateLimited.body.error.code);
@@ -256,7 +316,7 @@ for (const locale of LOCALES) {
   test(`360px is inspection-only (${locale})`, async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 800 });
     await visit(page, locale);
-    const narrowNotice = page.locator(`${PAGE} > p[class~="md:hidden"]`);
+    const narrowNotice = page.locator(`${PAGE} app-desktop-required-notice`);
     await expect(narrowNotice).toBeVisible();
     await expect(narrowNotice).not.toBeEmpty();
     await expect(page.locator(`${PAGE} [data-rotate]:visible`)).toHaveCount(0);
@@ -275,12 +335,16 @@ for (const locale of LOCALES) {
   test(`project scope change closes and erases reveal (${locale})`, async ({ page }) => {
     await visit(page, locale);
     const dialog = await reveal(page);
-    await page.locator('#secrets-project').evaluate((element, projectId) => {
-      const select = element as HTMLSelectElement;
-      select.value = projectId;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    }, PROJECT_CHECKOUT);
-    await expect(page.locator('#secrets-project')).toHaveValue(PROJECT_CHECKOUT);
+    await page.locator('#secrets-project').evaluate((button: HTMLButtonElement) => button.click());
+    await page
+      .getByRole('option', {
+        name: projectName(PROJECT_CHECKOUT),
+        exact: true,
+        includeHidden: true,
+      })
+      .evaluate((option: HTMLElement) => option.click());
+    await expect(page.locator('#secrets-project')).toHaveText(projectName(PROJECT_CHECKOUT));
+    await expect(page.locator('#secrets-project-value')).toHaveText(projectName(PROJECT_CHECKOUT));
     await expect(dialog).not.toBeVisible();
     await expect(page.getByTestId('reveal-value')).toHaveCount(0);
     await expectNoPlaintext(page);
@@ -312,7 +376,7 @@ for (const locale of LOCALES) {
         await expect(picker).toHaveAccessibleName(/\S/u);
       }
       await expectNoA11yViolations(page, `Secrets list ${locale} ${theme}`);
-      const dialog = await reveal(page);
+      const dialog = await reveal(page, `Secrets rotation confirmation ${locale} ${theme}`);
       await expectNoA11yViolations(page, `Secrets open reveal ${locale} ${theme}`);
       await dialog.getByTestId('reveal-dismiss').click();
       await expect(dialog).not.toBeVisible();
@@ -401,8 +465,9 @@ for (const locale of LOCALES) {
     const section = page.locator(CI_SECTION);
     const toggles = section.locator('[data-ci-show-all]');
     await expect(toggles).toHaveCount(2);
-    // Traverse actual Tab stops from the project picker to both overflow controls.
-    await page.locator('#secrets-project').focus();
+    // The reference directory has its own filter/inspection stops. The CI section's first
+    // keyboard boundary remains one Tab from its heading to the first allowlist control.
+    await section.locator('#ci-bindings-heading').focus();
     await page.keyboard.press('Tab');
     await expect(toggles.nth(0)).toBeFocused();
     await page.keyboard.press('Enter');

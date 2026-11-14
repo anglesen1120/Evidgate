@@ -23,7 +23,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
 export interface FieldDetail {
   /** The path without its JSON-pointer prefix or index: `/repository_id[0]` → `repository_id`. */
   readonly field: string;
-  /** Sanitized diagnostics stay available without exposing a raw pointer in the UI. */
+  /** Sanitized diagnostic pointer; render only as escaped, bidi-isolated text. */
   readonly path: string;
   readonly reason: string;
   readonly message: string;
@@ -63,10 +63,4 @@ export function fieldDetails(
 /** The first localized field message; the summary retains every server reason. */
 export function reasonFor(details: readonly FieldDetail[], field: string): string | null {
   return details.find((detail) => detail.field === field)?.message ?? null;
-}
-
-/** Include only description IDs that resolve in the current rendered state. */
-export function describedBy(...ids: readonly (string | null | undefined)[]): string | null {
-  const present = ids.filter((id): id is string => typeof id === 'string' && id !== '');
-  return present.length === 0 ? null : present.join(' ');
 }

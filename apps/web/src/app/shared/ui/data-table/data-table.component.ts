@@ -1,4 +1,4 @@
-import { formatNumber, NgTemplateOutlet } from '@angular/common';
+import { DOCUMENT, formatNumber, NgTemplateOutlet } from '@angular/common';
 import { ArrayDataSource } from '@angular/cdk/collections';
 import {
   CdkFixedSizeVirtualScroll,
@@ -18,6 +18,7 @@ import {
   CdkTable,
 } from '@angular/cdk/table';
 import {
+  afterNextRender,
   afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
@@ -25,6 +26,7 @@ import {
   effect,
   ElementRef,
   inject,
+  Injector,
   input,
   linkedSignal,
   LOCALE_ID,
@@ -171,6 +173,10 @@ export class DataTableComponent<T> {
     return $localize`:@@shared.data-table.loaded-range:Loaded records ${start}:start:–${end}:end: of ${loaded}:loaded:`;
   });
   private readonly locale = inject(LOCALE_ID);
+  private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
+  private readonly previousButton = viewChild<ElementRef<HTMLButtonElement>>('previousPage');
+  private readonly nextButton = viewChild<ElementRef<HTMLButtonElement>>('nextPage');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly scrollElement = viewChild.required<ElementRef<HTMLElement>>('scrollElement');
   private readonly tokenProbe = viewChild.required<ElementRef<HTMLElement>>('tokenProbe');
@@ -215,8 +221,28 @@ export class DataTableComponent<T> {
   }
 
   protected movePage(delta: number): void {
+    const source = (delta < 0 ? this.previousButton() : this.nextButton())?.nativeElement;
+    const owned = source !== undefined && this.document.activeElement === source;
     this.pageIndex.update((page) => Math.max(0, Math.min(page + delta, this.pageCount() - 1)));
     this.scrollElement().nativeElement.scrollTop = 0;
+    if (!owned) return;
+    // A boundary disables the activated button; restore its place only if the
+    // visitor has not deliberately moved focus elsewhere before the render.
+    afterNextRender(
+      () => {
+        if (!source?.disabled) return;
+        const active: unknown = this.document.activeElement;
+        const lost =
+          !(active instanceof HTMLElement) ||
+          active === this.document.body ||
+          !active.isConnected ||
+          active === source;
+        if (!lost) return;
+        const target = (delta < 0 ? this.nextButton() : this.previousButton())?.nativeElement;
+        if (target?.isConnected && !target.disabled) target.focus();
+      },
+      { injector: this.injector },
+    );
   }
 
   private attachViewport(viewport: CdkVirtualScrollViewport): () => void {

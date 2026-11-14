@@ -1,4 +1,8 @@
 import { signal } from '@angular/core';
+import type { ComponentFixture } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { HlmSelect } from '@evidgate/ui/select';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { TestBed } from '@angular/core/testing';
 import type { CiBindingView, IngestTokenView } from '@evidgate/sdk';
 import { vi } from 'vitest';
@@ -8,6 +12,9 @@ import bindingData from '../../../../../../../fixtures/web-api/ci-bindings-list-
 import type { CiBindingsPhase, RotationResult, RotationState } from './secrets.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { SecretsPage } from './secrets.page';
+import { provideLayoutTestStubs, stubLayoutApis } from '../../../shared/testing/layout.testing';
+
+provideLayoutTestStubs();
 
 export const base = fixtureData.body.items[0] as IngestTokenView;
 export const failure: ApiError = {
@@ -52,8 +59,27 @@ export class FakeSecretsStore {
     this.rotateState.set({ phase: 'idle', tokenId: null, error: null });
   }
 }
+export const SECRET_DESKTOP_PROVIDER = {
+  provide: NarrowMutationPolicy,
+  useValue: { canMutate: () => true, narrow: () => false, allowsMutation: () => true },
+};
+
+export function chooseSecretProject(fixture: ComponentFixture<unknown>, id: string): void {
+  const picker = fixture.debugElement.query(By.directive(HlmSelect));
+  if (!picker) throw new Error('Expected project picker');
+  picker.triggerEventHandler('valueChange', id);
+}
+
+export async function confirmRotation(fixture: ComponentFixture<unknown>): Promise<void> {
+  await fixture.whenStable();
+  const button = document.querySelector<HTMLButtonElement>('[data-rotation-confirm-submit]');
+  if (!button) throw new Error('Expected rotation confirmation');
+  button.click();
+  await fixture.whenStable();
+}
 
 export async function renderSecretsPage() {
+  stubLayoutApis();
   const fixture = TestBed.createComponent(SecretsPage);
   fixture.detectChanges();
   await fixture.whenStable();

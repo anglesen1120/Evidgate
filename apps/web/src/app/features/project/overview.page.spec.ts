@@ -72,6 +72,10 @@ describe('ProjectOverviewPage', () => {
   it('shows the current project name and slug exactly as the server sent them', () => {
     const root = renderWith(PROJECT);
 
+    expect(root.querySelector('h1')?.getAttribute('data-title-size')).toBe('page');
+    expect(root.querySelector('#project-next-steps')?.getAttribute('data-title-size')).toBe(
+      'section',
+    );
     expect(root.querySelector('h1')?.textContent?.trim()).toBe(PROJECT.name);
     expect(root.querySelector('.slug')?.textContent?.trim()).toBe(PROJECT.slug);
   });

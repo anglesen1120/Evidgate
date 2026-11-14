@@ -36,6 +36,27 @@ describe('CopyValueButtonComponent', () => {
     vi.restoreAllMocks();
   });
 
+  it('keeps the compact Helm button size by default', () => {
+    const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      'button',
+    )!;
+    expect(fixture.componentInstance.size()).toBe('sm');
+    expect(button.classList.contains('spartan-button-size-sm')).toBe(true);
+    expect(button.getAttribute('data-copy-size')).toBe('sm');
+  });
+
+  it('uses the large Helm size with a 44px token minimum on both target dimensions', () => {
+    fixture.componentRef.setInput('size', 'lg');
+    fixture.detectChanges();
+    const button = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      'button',
+    )!;
+    expect(button.classList.contains('spartan-button-size-lg')).toBe(true);
+    expect(button.getAttribute('data-copy-size')).toBe('lg');
+    expect(getComputedStyle(button).minBlockSize).toBe('var(--eg-control-touch)');
+    expect(getComputedStyle(button).minInlineSize).toBe('var(--eg-control-touch)');
+  });
+
   it('names the action, copies the unmodified value and announces its context', async () => {
     expect(await harness.actionName()).toBe('Copy Policy hash');
     await harness.copy();

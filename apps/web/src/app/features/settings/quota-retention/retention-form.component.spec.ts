@@ -34,7 +34,7 @@ describe('RetentionFormComponent', () => {
     ['14', '', 'retention-metadata'],
     ['30', '29', 'retention-metadata'],
   ])(
-    'blocks invalid integer or ordered windows %s / %s and focuses %s',
+    'blocks invalid integer or ordered windows %s / %s with a focused linked summary for %s',
     async (artifact, metadata, field) => {
       const h = mountRetention();
       await h.load();
@@ -42,10 +42,12 @@ describe('RetentionFormComponent', () => {
       submit(h.root);
       await h.settle();
       expect(h.root.querySelector('[aria-invalid="true"]')).not.toBeNull();
+      const summary = h.root.querySelector<HTMLElement>('#retention-validation-error');
+      expect(document.activeElement).toBe(summary);
+      const link = summary?.querySelector<HTMLAnchorElement>(`a[href="#${field}"]`);
+      expect(link).not.toBeNull();
+      link?.click();
       expect(document.activeElement).toBe(h.root.querySelector(`#${field}`));
-      expect(
-        h.root.querySelector('#retention-validation-error[role="alert"]')?.textContent,
-      ).toContain('Retention was not saved');
       expect(document.querySelector('[role="dialog"]')).toBeNull();
       h.http.expectNone((request) => request.method === 'PUT');
     },
@@ -153,7 +155,7 @@ describe('RetentionFormComponent', () => {
         expect(h.root.querySelector('#retention-artifact')?.getAttribute('aria-invalid')).toBe(
           'true',
         );
-        expect(document.activeElement).toBe(h.root.querySelector('#retention-artifact'));
+        expect(document.activeElement).toBe(h.root.querySelector('#retention-validation-error'));
       }
     },
   );
@@ -162,7 +164,8 @@ describe('RetentionFormComponent', () => {
     const h = mountRetention(['project:read']);
     await h.load();
     expect(h.root.querySelector('#retention-read-only')?.textContent).toContain('Read only');
-    expect(await (await (await h.harness()).artifact()).getProperty('readOnly')).toBe(true);
+    expect(h.root.querySelector('[data-retention-current]')?.textContent).toContain('14');
+    expect(h.root.querySelector('input')).toBeNull();
     expect(h.root.querySelector('[data-retention-save]')).toBeNull();
     expect(await h.store.save({ artifact_days: 30, metadata_days: 90 })).toBe(false);
     h.http.expectNone((request) => request.method === 'PUT');

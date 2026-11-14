@@ -63,6 +63,7 @@
   <nav class="eg-table-pagination" [attr.aria-label]="pagesLabel()">
     <span role="status" [attr.aria-live]="'polite'">{{ pageLabel() }}</span>
     <button
+      #previousPage
       hlmBtn
       type="button"
       [variant]="'outline'"
@@ -72,6 +73,7 @@
       {{ previousLabel }}
     </button>
     <button
+      #nextPage
       hlmBtn
       type="button"
       [variant]="'outline'"
@@ -173,14 +175,8 @@
   @if (body && rows().length === 0) {
     <table hlmTable class="empty-table" role="presentation">
       <tr hlmTr role="presentation">
-        <td
-          hlmTd
-          role="presentation"
-          [class]="cellClasses"
-          [attr.colspan]="columns().length || 1"
-          i18n="@@shared.data-table.no-rows"
-        >
-          No rows
+        <td hlmTd role="presentation" [class]="cellClasses" [attr.colspan]="columns().length || 1">
+          <ng-container i18n="@@shared.data-table.no-rows">No rows</ng-container>
         </td>
       </tr>
     </table>

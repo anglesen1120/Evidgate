@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, formatNumber } from '@angular/common';
 import {
   afterNextRender,
   afterRenderEffect,
@@ -10,6 +10,7 @@ import {
   Injector,
   input,
   linkedSignal,
+  LOCALE_ID,
   output,
   untracked,
   viewChild,
@@ -26,6 +27,9 @@ import {
 import { EmptyPatternComponent } from '../../../../shared/ui/states/empty-pattern.component';
 import { ErrorPatternComponent } from '../../../../shared/ui/states/error-pattern.component';
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
+import { CopyValueButtonComponent } from '../../../../shared/ui/values/copy-value-button.component';
+import { DataTableValueComponent } from '../../../../shared/ui/data-table/data-table-value.component';
+import { NumberValueComponent } from '../../../../shared/ui/values/number-value.component';
 import { escapeFormatChars } from '../../list/ref-name-display';
 import { attemptAnchorId } from '../evidence/run-evidence-anchors';
 import { RUN_DETAIL_NOT_PROVIDED, runValueLabel } from '../run-value-label';
@@ -44,6 +48,9 @@ import type { AttemptRow } from './attempt-summary';
     HlmCard,
     HlmCardTitle,
     HlmTableImports,
+    CopyValueButtonComponent,
+    DataTableValueComponent,
+    NumberValueComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './attempts-table.component.html',
@@ -51,6 +58,17 @@ import type { AttemptRow } from './attempt-summary';
 })
 export class AttemptsTableComponent {
   readonly attempts = input.required<AttemptRow[] | null>();
+  protected readonly sectionSize = 'section' as const;
+  protected readonly columnRole = {
+    identity: 'identity',
+    text: 'text',
+    status: 'status',
+    number: 'number',
+  } as const;
+  protected readonly identifierKind = 'identifier' as const;
+  protected readonly primaryColumn = 'primary' as const;
+  protected readonly scanOverflow = 'truncate' as const;
+  private readonly locale = inject(LOCALE_ID);
   /** The first page's request state; `ready` with `null` attempts is the unavailable state. */
   readonly status = input<'loading' | 'ready' | 'error'>('ready');
   /** The first page's failure (`status` = error) or the failed follow-up page (`ready`). */
@@ -257,8 +275,8 @@ export class AttemptsTableComponent {
   protected duration(milliseconds: number | null | undefined): string | null {
     if (milliseconds == null || !Number.isFinite(milliseconds) || milliseconds < 0) return null;
     return milliseconds < 1000
-      ? `${milliseconds} ms`
-      : `${(milliseconds / 1000).toFixed(2).replace(/\.?0+$/, '')} s`;
+      ? `${formatNumber(milliseconds, this.locale, '1.0-20')} ms`
+      : `${formatNumber(milliseconds / 1000, this.locale, '1.0-2')} s`;
   }
 
   protected turnPage(delta: number): void {

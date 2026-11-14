@@ -6,7 +6,13 @@ import { SessionStore } from '../../../core/session/session.store';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
 import { SecretsPage } from './secrets.page';
 import { SecretsStore, type RotationResult } from './secrets.store';
-import { base, FakeSecretsStore, renderSecretsPage as render } from './secrets-page.testing';
+import {
+  base,
+  FakeSecretsStore,
+  renderSecretsPage as render,
+  confirmRotation,
+  SECRET_DESKTOP_PROVIDER,
+} from './secrets-page.testing';
 const failure: ApiError = {
   kind: 'conflict',
   status: 409,
@@ -50,6 +56,7 @@ describe('SecretsPage sinks and interleavings', () => {
     window.sessionStorage.clear();
     TestBed.configureTestingModule({
       providers: [
+        SECRET_DESKTOP_PROVIDER,
         {
           provide: SessionStore,
           useValue: {
@@ -86,6 +93,7 @@ describe('SecretsPage sinks and interleavings', () => {
 
     const { fixture, root, slot } = await render();
     rotateButtons(root)[0]?.click();
+    await confirmRotation(fixture);
     await fixture.whenStable();
     fixture.detectChanges();
     // The value reaches exactly one place: the reveal slot of the mounted page.
@@ -121,6 +129,7 @@ describe('SecretsPage sinks and interleavings', () => {
     const original = store.rows();
     const { fixture, root, slot } = await render();
     rotateButtons(root)[0]?.click();
+    await confirmRotation(fixture);
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -151,6 +160,7 @@ describe('SecretsPage sinks and interleavings', () => {
     if (!first || !second) throw new Error('Expected two Rotate buttons');
 
     first.click();
+    await confirmRotation(fixture);
     fixture.detectChanges();
     expect(store.rotate).toHaveBeenCalledExactlyOnceWith('row-a');
     // Both rows are locked for the duration of the one request, not only the pressed one.

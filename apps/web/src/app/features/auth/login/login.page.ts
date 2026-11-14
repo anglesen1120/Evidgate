@@ -80,7 +80,9 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
       >
         <h1
           #loginHeading
-          class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold) focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-(--eg-focus-offset) focus-visible:outline-ring min-[900px]:text-2xl"
+          hlmCardTitle
+          [size]="pageHeadingSize"
+          class="min-w-0 focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-offset-(--eg-focus-offset) focus-visible:outline-ring"
           id="login-heading"
           tabindex="-1"
           [textContent]="heading"
@@ -95,7 +97,7 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
         <header hlmCardHeader class="gap-(--eg-space-3) p-0">
           <h2
             hlmCardTitle
-            class="m-0 font-(family-name:--eg-font-display) text-lg"
+            [size]="subsectionHeadingSize"
             id="provider-heading"
             [textContent]="welcome"
           ></h2>
@@ -186,7 +188,7 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
       >
         <h2
           hlmCardTitle
-          class="m-0 font-(family-name:--eg-font-display) text-lg"
+          [size]="subsectionHeadingSize"
           id="destination-heading"
           [textContent]="destinationHeading"
         ></h2>
@@ -199,6 +201,8 @@ import { LOGIN_EXTENSION_LOADER } from './login-extension';
   `,
 })
 export class LoginPage {
+  protected readonly pageHeadingSize = 'page' as const;
+  protected readonly subsectionHeadingSize = 'subsection' as const;
   protected readonly auth = inject(AuthFlow);
   protected readonly theme = inject(ThemeService);
   private readonly document = inject(DOCUMENT);

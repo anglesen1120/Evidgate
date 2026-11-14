@@ -215,6 +215,21 @@ describe('RemoveDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     expect(root.querySelector('[data-members-error-code]')?.textContent?.trim()).toBe('last_admin');
     expect(dialogOpen()).toBe(true);
     expect(completed).toBe(0);
+    await fixture.whenStable();
+    const summary = root.querySelector<HTMLElement>('[data-members-error]')!;
+    expect(document.activeElement).toBe(summary);
+    expect(summary.getAttribute('role')).toBe('group');
+    expect(summary.getAttribute('aria-describedby')).toBe(
+      'members-remove-error-message members-remove-error-code',
+    );
+    expect(root.querySelector('[role="alert"]')).toBeNull();
+    summary.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    await fixture.whenStable();
+    expect(dialogOpen()).toBe(false);
+    expect(document.activeElement).toBe(opener);
+    expect(root.querySelector('[data-members-error]')).toBeNull();
   });
 
   it('the server message is rendered as text, never as markup', async () => {

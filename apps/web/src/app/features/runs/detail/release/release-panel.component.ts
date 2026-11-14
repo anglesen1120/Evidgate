@@ -6,10 +6,17 @@ import {
   input,
   output,
   signal,
+  TemplateRef,
+  viewChild,
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
-import { HlmTableImports } from '@evidgate/ui/table';
+import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
+import type {
+  DataTableCellContext,
+  DataTableColumn,
+} from '../../../../shared/ui/data-table/data-table-column';
+import { NumberValueComponent } from '../../../../shared/ui/values/number-value.component';
 
 import type { ApiError } from '../../../../core/http/api-error';
 import { StatusPillComponent } from '../../../../shared/ui/chips/status-pill.component';
@@ -32,7 +39,8 @@ import type {
     HlmButton,
     HlmCard,
     HlmCardTitle,
-    HlmTableImports,
+    DataTableComponent,
+    NumberValueComponent,
     StatusPillComponent,
     RetryAfterComponent,
     LoadingPatternComponent,
@@ -44,10 +52,18 @@ import type {
   templateUrl: './release-panel.component.html',
   host: {
     class:
-      'block min-w-0 text-foreground wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-5) [&_dl]:grid-cols-1 min-[768px]:[&_dl]:grid-cols-2 [&_dl>div]:min-w-0 [&_dt]:mb-(--eg-space-2) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:grid [&_dd]:justify-items-start [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full [&_bdi]:font-mono [&_table]:w-full [&_table]:table-fixed [&_table]:border-collapse [&_th]:text-start [&_th]:align-top [&_th]:font-normal [&_td]:align-top [&_td]:font-mono',
+      'block min-w-0 text-foreground wrap-anywhere [&_dl]:m-0 [&_dl]:grid [&_dl]:gap-(--eg-space-5) [&_dl]:grid-cols-1 min-[768px]:[&_dl]:grid-cols-2 [&_dl>div]:min-w-0 [&_dt]:mb-(--eg-space-2) [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0 [&_dd]:grid [&_dd]:justify-items-start [&_dd]:gap-(--eg-space-2) [&_bdi]:max-w-full [&_bdi]:font-mono',
   },
 })
 export class ReleasePanelComponent {
+  protected readonly sectionSize = 'section' as const;
+  protected readonly rowId = (component: ReleaseComponentView) => component.componentKey;
+  private readonly componentCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ReleaseComponentView>>>('componentCell');
+  private readonly digestCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ReleaseComponentView>>>('digestCell');
+  private readonly environmentCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ReleaseComponentView>>>('environmentCell');
   readonly releases = input<readonly { releaseId: string; name: string | null }[]>([]);
   readonly selectedReleaseId = input<string | null>(null);
   readonly selectRelease = output<string>();
@@ -87,6 +103,38 @@ export class ReleasePanelComponent {
   protected readonly components = computed<readonly ReleaseComponentView[]>(
     () => this.release()?.components ?? [],
   );
+  protected readonly columns = computed<readonly DataTableColumn<ReleaseComponentView>[]>(() => [
+    {
+      id: 'component',
+      header: this.copy.component,
+      cell: this.rowId,
+      role: 'identity',
+      kind: 'name',
+      priority: 'primary',
+      overflow: 'wrap',
+      cellTemplate: this.componentCell(),
+    },
+    {
+      id: 'digest',
+      header: this.copy.digest,
+      cell: (component) => this.display(component.digest),
+      role: 'identity',
+      kind: 'identifier',
+      priority: 'secondary',
+      overflow: 'wrap',
+      cellTemplate: this.digestCell(),
+    },
+    {
+      id: 'environment',
+      header: this.copy.environment,
+      cell: (component) => this.display(component.environmentRevisionId),
+      role: 'identity',
+      kind: 'identifier',
+      priority: 'secondary',
+      overflow: 'wrap',
+      cellTemplate: this.environmentCell(),
+    },
+  ]);
   /** The component keys `bound_runs` bound to the run being viewed, re-read per `runId`. */
   protected readonly boundKeys = computed<ReadonlySet<string>>(() => {
     const release = this.release();

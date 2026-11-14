@@ -12,6 +12,7 @@ import { HlmAlertImports } from '@evidgate/ui/alert';
 import { HlmButton } from '@evidgate/ui/button';
 import { AuditStore } from './audit.store';
 import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
+import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 
 // Let navigation consume the object URL before releasing it on the next task.
 function revokeDeferred(url: string): void {
@@ -20,7 +21,7 @@ function revokeDeferred(url: string): void {
 
 @Component({
   selector: 'app-audit-export',
-  imports: [HlmAlertImports, HlmButton],
+  imports: [HlmAlertImports, HlmButton, AbsoluteTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'block min-w-0 max-w-full',
@@ -51,7 +52,7 @@ function revokeDeferred(url: string): void {
             <dt class="text-muted-foreground">{{ copy.from }}</dt>
             <dd class="m-0">
               @if (store.filters().from; as from) {
-                <time [attr.datetime]="from">{{ from }}</time>
+                <app-absolute-time [value]="from" />
               } @else {
                 {{ copy.unbounded }}
               }
@@ -61,7 +62,7 @@ function revokeDeferred(url: string): void {
             <dt class="text-muted-foreground">{{ copy.to }}</dt>
             <dd class="m-0">
               @if (store.filters().to; as to) {
-                <time [attr.datetime]="to">{{ to }}</time>
+                <app-absolute-time [value]="to" />
               } @else {
                 {{ copy.unbounded }}
               }

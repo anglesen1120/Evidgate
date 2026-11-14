@@ -22,6 +22,8 @@ import {
 import { combineLatest, distinctUntilChanged, filter, map } from 'rxjs';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
+import { HlmLabel } from '@evidgate/ui/label';
+import { HlmSelectImports } from '@evidgate/ui/select';
 
 import {
   ErrorPatternComponent,
@@ -43,6 +45,8 @@ import { StepPendingComponent } from './step-pending.component';
     HlmButton,
     RouterLink,
     HlmCardImports,
+    HlmLabel,
+    HlmSelectImports,
     CreateProjectPage,
     ConnectCiPage,
     EnableCollectionPage,
@@ -61,6 +65,21 @@ export class OnboardingShellComponent {
   protected readonly store = inject(OnboardingStore);
   protected readonly outlineVariant = 'outline';
   protected readonly ghostVariant = 'ghost';
+  protected readonly pageHeadingSize = 'page' as const;
+  protected readonly sectionHeadingSize = 'section' as const;
+  protected readonly stepDetailsLabel = $localize`:@@onboarding.shell.step-details:Step details`;
+  protected readonly stepSelectLabel = $localize`:@@onboarding.shell.step-select:Setup step`;
+  protected readonly completedCount = computed(() => {
+    const done = this.store.done();
+    let completed = 0;
+    for (const step of this.steps) if (done[step.number]) completed += 1;
+    return completed;
+  });
+  protected readonly progressText = computed(() => {
+    const completed = this.completedCount();
+    const total = this.steps.length;
+    return $localize`:@@onboarding.shell.progress-count:${completed}:COMPLETED: of ${total}:TOTAL: steps complete`;
+  });
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly injector = inject(Injector);
@@ -318,6 +337,11 @@ export class OnboardingShellComponent {
     this.announceCreatedStep.set(false);
     this.focusedToken = this.store.focusToken();
     heading.focus();
+  }
+
+  protected selectStep(value: unknown): void {
+    const step = this.steps.find((candidate) => candidate.number === value);
+    if (step && this.canSelect(step.number)) this.store.selectStep(step.number);
   }
 
   protected canSelect(step: StepNumber): boolean {

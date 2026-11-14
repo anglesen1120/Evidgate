@@ -42,6 +42,8 @@ import { SuiteWarningListComponent } from './suite-warning-list.component';
   },
 })
 export class SuiteCompositionComponent {
+  protected readonly pageHeadingSize = 'page' as const;
+  protected readonly sectionHeadingSize = 'section' as const;
   protected readonly store = inject(SuiteCompositionStore);
   private readonly params = toSignal(inject(ActivatedRoute).paramMap);
   private readonly stateHeading = viewChild<ElementRef<HTMLHeadingElement>>('stateHeading');

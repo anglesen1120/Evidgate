@@ -42,7 +42,10 @@ describe('DecisionViewComponent', () => {
     }).compileComponents();
   });
 
-  afterEach(() => TestBed.resetTestingModule());
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.unstubAllGlobals();
+  });
 
   function render(inputs: {
     decision?: DecisionViewModel | null;
@@ -93,15 +96,15 @@ describe('DecisionViewComponent', () => {
     ).toEqual(['critical_not_executed', 'expected_count_zero', 'critical_not_executed']);
     expect(text(root, '[data-decision-revision] dd')).toBe('4');
     expect(text(root, '[data-decision-evaluation-id] dt')).toBe('Evaluation ID');
-    expect(text(root, '[data-decision-evaluation-id] dd')).toBe(
+    expect(text(root, '[data-decision-evaluation-id] dd bdi')).toBe(
       '018f0000-0000-7000-8000-0000000e0002',
     );
     expect(
       root.querySelector('[data-decision-evaluation-id] dd bdi')?.textContent?.trim(),
       'the evaluation id must be isolated from the surrounding direction',
     ).toBe('018f0000-0000-7000-8000-0000000e0002');
-    expect(text(root, '[data-decision-policy] dd')).toBe('sha256:policy-hash');
-    expect(text(root, '[data-decision-manifest] dd')).toBe('sha256:manifest-hash');
+    expect(text(root, '[data-decision-policy] dd bdi')).toBe('sha256:policy-hash');
+    expect(text(root, '[data-decision-manifest] dd bdi')).toBe('sha256:manifest-hash');
     expect(text(root, '[data-decision-evaluator] dd')).toBe('1.4.0');
     expect(text(root, '[data-decision-mode] dd')).toBe('Live evaluation');
     expect(text(root, '[data-decision-status] dd')).toBe('Evaluated');
@@ -230,6 +233,7 @@ describe('DecisionViewComponent', () => {
     const { root } = render({ decision: EVALUATED, error: failure({ kind, status }) });
     expect(root.querySelector('app-decision-chip')).toBeNull();
     expect(root.querySelector('[data-decision-policy]')).toBeNull();
+    expect(root.querySelector('app-copy-value-button')).toBeNull();
     expect(root.querySelector('[data-decision-stale]')).toBeNull();
     expect(root.textContent).not.toContain('sha256:policy');
     expect(root.textContent).not.toContain('critical_not_executed');
@@ -310,5 +314,20 @@ describe('DecisionViewComponent', () => {
     });
     expect(root.querySelector('.decision-reason-list img')).toBeNull();
     expect(text(root, '.decision-reason-list li')).toBe('<img src=x onerror="alert(1)">');
+  });
+  it('copies the exact served policy, manifest and evaluation identifiers', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const { root, fixture } = render({ decision: EVALUATED });
+    await fixture.whenStable();
+    for (const [selector, expected] of [
+      ['[data-decision-policy]', 'sha256:policy-hash'],
+      ['[data-decision-manifest]', 'sha256:manifest-hash'],
+      ['[data-decision-evaluation-id]', '018f0000-0000-7000-8000-0000000e0002'],
+    ]) {
+      root.querySelector<HTMLButtonElement>(`${selector} app-copy-value-button button`)?.click();
+      await fixture.whenStable();
+      expect(writeText).toHaveBeenLastCalledWith(expected);
+    }
   });
 });

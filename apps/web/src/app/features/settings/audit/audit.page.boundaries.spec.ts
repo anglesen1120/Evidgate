@@ -72,7 +72,7 @@ describe('AuditPage boundary browsing and export scope', () => {
       const seen: string[] = [];
       for (let page = 0; page < Math.ceil(count / 25); page++) {
         seen.push(
-          ...Array.from(root.querySelectorAll('[data-audit-row] time')).map(
+          ...Array.from(root.querySelectorAll('[data-row-id] time')).map(
             (time) => time.getAttribute('datetime') ?? '',
           ),
         );

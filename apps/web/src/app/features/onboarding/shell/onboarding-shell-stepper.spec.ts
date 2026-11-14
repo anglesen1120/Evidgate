@@ -5,9 +5,11 @@ import { mountShell } from './onboarding-shell.spec-support';
 
 /** The steps carrying an `aria-current` marker, in stepper order. */
 function currentSteps(root: HTMLElement): (string | null)[] {
-  return Array.from(root.querySelectorAll('[data-testid="onboarding-stepper"] > li'))
-    .filter((step) => step.hasAttribute('aria-current'))
-    .map((step) => step.getAttribute('data-testid'));
+  return Array.from(
+    root.querySelectorAll(
+      '[data-testid="onboarding-stepper"] [data-testid^="onboarding-step-"][aria-current="step"]',
+    ),
+  ).map((step) => step.getAttribute('data-testid'));
 }
 
 describe('the onboarding stepper current step', () => {
@@ -25,5 +27,26 @@ describe('the onboarding stepper current step', () => {
     expect(
       root.querySelector('[data-testid="onboarding-step-1"]')?.hasAttribute('aria-current'),
     ).toBe(false);
+  });
+  it('derives numeric progress only from confirmed resources, not the viewed step', async () => {
+    const { fixture, root, store } = await mountShell();
+    const progress = root.querySelector('[role="progressbar"]')!;
+    expect(progress.getAttribute('aria-valuenow')).toBe('0');
+    expect(progress.getAttribute('aria-valuemax')).toBe('5');
+    store.viewStep.set(4);
+    await fixture.whenStable();
+    expect(progress.getAttribute('aria-valuenow')).toBe('0');
+    store.done.update((done) => ({ ...done, 1: true, 2: true }));
+    await fixture.whenStable();
+    expect(progress.getAttribute('aria-valuenow')).toBe('2');
+    expect(root.querySelector('[data-testid="onboarding-progress-count"]')?.textContent).toContain(
+      '2 of 5',
+    );
+    const details = root.querySelector('[aria-labelledby="onboarding-details-title"]')!;
+    const ledger = root.querySelector('app-onboarding-evidence-panel')!;
+    expect(details.contains(ledger)).toBe(false);
+    expect(details.nextElementSibling).toBe(ledger);
+    expect(root.querySelector('hlm-select')).not.toBeNull();
+    expect(root.querySelectorAll('nav button[aria-current="step"]')).toHaveLength(1);
   });
 });

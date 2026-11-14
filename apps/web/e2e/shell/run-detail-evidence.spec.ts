@@ -155,9 +155,9 @@ for (const locale of LOCALES) {
       'data-tone',
       'warning',
     );
-    await expect(page.locator('#evidence-panel [data-evidence-missing] .reason-code')).toHaveText(
-      INCOMPLETE_REVISION.missing,
-    );
+    await expect(
+      page.locator('#evidence-panel [data-evidence-missing] .reason-code code'),
+    ).toHaveText(INCOMPLETE_REVISION.missing);
     await expect(page.locator('#evidence-panel [data-evidence-selected]')).toContainText(
       String(INCOMPLETE_REVISION.revision_no),
     );
@@ -185,7 +185,9 @@ for (const locale of LOCALES) {
       'success',
     );
     await expect(decision.locator('[data-decision-no-reasons]')).toBeVisible();
-    await expect(decision.locator('[data-decision-mode] dd')).toHaveText('live');
+    await expect(decision.locator('[data-decision-mode] dd')).toHaveText(
+      locale === 'vi' ? 'Đánh giá trực tiếp' : 'Live evaluation',
+    );
     await expect(decision.locator('[data-decision-revision] dd')).toHaveText(
       String(OLDEST_REVISION.revision_no),
     );
@@ -241,9 +243,9 @@ for (const locale of LOCALES) {
       'data-tone',
       'warning',
     );
-    await expect(page.locator('#evidence-panel [data-evidence-missing] .reason-code')).toHaveText(
-      INCOMPLETE_REVISION.missing,
-    );
+    await expect(
+      page.locator('#evidence-panel [data-evidence-missing] .reason-code code'),
+    ).toHaveText(INCOMPLETE_REVISION.missing);
     await expect(page.locator('#evidence-panel [data-evidence-evaluation]')).toContainText(
       String(INCOMPLETE_REVISION.evaluation_id),
     );
@@ -347,9 +349,9 @@ for (const locale of LOCALES) {
 
       await page.goto(detailPath(locale, 'evaluated-fail-missing-shard'));
       await ready(page);
-      await expect(page.locator('#evidence-panel [data-evidence-missing] .reason-code')).toHaveText(
-        INCOMPLETE_REVISION.missing,
-      );
+      await expect(
+        page.locator('#evidence-panel [data-evidence-missing] .reason-code code'),
+      ).toHaveText(INCOMPLETE_REVISION.missing);
       await expectNoA11yViolations(page, `run detail incomplete evidence ${locale}/${theme}`);
 
       await page.goto(

@@ -1,3 +1,4 @@
+import { BreakpointObserver, type BreakpointState } from '@angular/cdk/layout';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -7,6 +8,9 @@ import {
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { BehaviorSubject } from 'rxjs';
+
+import { DESKTOP_MUTATION_QUERY } from '../narrow/narrow-mutation-policy';
 
 import { CopyableIdentifierComponent } from '../values/copyable-identifier.component';
 import type { DataTableCellContext, DataTableColumn } from './data-table-column';
@@ -17,11 +21,22 @@ import type { DataTableFixtureRow } from './data-table.fixture';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: '<ng-template #cell let-row>{{ row.note }}</ng-template>',
+  template: `
+    <ng-template #cell let-row>{{ row.note }}</ng-template>
+    <ng-template #action let-row>
+      <button type="button" data-test-mutation (click)="calls.push(row.id)">
+        {{ actionLabel }}
+      </button>
+    </ng-template>
+  `,
 })
 class CellTemplateHost {
   readonly template =
     viewChild.required<TemplateRef<DataTableCellContext<DataTableFixtureRow>>>('cell');
+  readonly actionTemplate =
+    viewChild.required<TemplateRef<DataTableCellContext<DataTableFixtureRow>>>('action');
+  readonly actionLabel = 'Actions';
+  readonly calls: string[] = [];
 }
 
 const columns = DATA_TABLE_FIXTURE_COLUMNS.map((column) => {
@@ -34,10 +49,29 @@ describe('Shared table column layout and reflow', () => {
   let fixture: ComponentFixture<DataTableComponent<DataTableFixtureRow>>;
   let root: HTMLElement;
 
+  let viewportWidth: number;
+  let viewportStates: BehaviorSubject<BreakpointState>;
   beforeEach(async () => {
+    viewportWidth = 1280;
+    viewportStates = new BehaviorSubject<BreakpointState>({
+      matches: true,
+      breakpoints: { [DESKTOP_MUTATION_QUERY]: true },
+    });
     await TestBed.configureTestingModule({
       imports: [DataTableComponent, CellTemplateHost],
-      providers: [provideZonelessChangeDetection()],
+      providers: [
+        provideZonelessChangeDetection(),
+        {
+          provide: BreakpointObserver,
+          useValue: {
+            observe: (query: string) => {
+              expect(query).toBe(DESKTOP_MUTATION_QUERY);
+              return viewportStates.asObservable();
+            },
+            isMatched: (query: string) => query === DESKTOP_MUTATION_QUERY && viewportWidth >= 768,
+          },
+        },
+      ],
     }).compileComponents();
     fixture = TestBed.createComponent(DataTableComponent<DataTableFixtureRow>);
     root = fixture.nativeElement as HTMLElement;
@@ -47,6 +81,25 @@ describe('Shared table column layout and reflow', () => {
     fixture.componentRef.setInput('caption', 'Evidence / Bằng chứng');
     await fixture.whenStable();
   });
+
+  function resizeViewport(width: number): void {
+    viewportWidth = width;
+    const matches = width >= 768;
+    viewportStates.next({ matches, breakpoints: { [DESKTOP_MUTATION_QUERY]: matches } });
+  }
+
+  async function renderActions(width: number): Promise<ComponentFixture<CellTemplateHost>> {
+    resizeViewport(width);
+    vi.spyOn(root, 'clientWidth', 'get').mockReturnValue(Math.min(480, width));
+    const host = TestBed.createComponent(CellTemplateHost);
+    await host.whenStable();
+    fixture.componentRef.setInput('columns', [
+      columns[0]!,
+      { ...columns[3]!, cellTemplate: host.componentInstance.actionTemplate() },
+    ]);
+    await fixture.whenStable();
+    return host;
+  }
 
   it('keeps legacy column inputs while resolving explicit roles, priorities and overflow', () => {
     const legacy: readonly DataTableColumn<DataTableFixtureRow>[] = [
@@ -110,6 +163,7 @@ describe('Shared table column layout and reflow', () => {
   );
 
   it('replaces narrow tables with P1 identity/state then every labelled P2 fact', async () => {
+    resizeViewport(390);
     const orderedColumns: readonly DataTableColumn<DataTableFixtureRow>[] = [
       columns[1]!,
       { ...columns[2]!, role: 'status', header: 'State / Trạng thái' },
@@ -148,7 +202,50 @@ describe('Shared table column layout and reflow', () => {
     expect(root.querySelector('.eg-table-record')).toBeNull();
   });
 
+  it.each([768, 1280, 1440])(
+    'retains working actions in a narrow container at a %spx desktop viewport',
+    async (width) => {
+      const host = await renderActions(width);
+      expect(root.querySelector('.eg-table-record')).not.toBeNull();
+      expect(root.querySelector('.table-semantics')).toBeNull();
+      const actions = root.querySelectorAll<HTMLButtonElement>('[data-test-mutation]');
+      expect(actions).toHaveLength(2);
+      actions[0]!.click();
+      expect(host.componentInstance.calls).toEqual(['demo-0']);
+      expect(root.querySelector('.eg-table-record')?.textContent).toContain('Mutation');
+      host.destroy();
+    },
+  );
+
+  it.each([390, 767])('applies the shared viewport mutation lock at %spx', async (width) => {
+    const host = await renderActions(width);
+    const record = root.querySelector('.eg-table-record');
+    expect(record).not.toBeNull();
+    expect(record?.textContent).toContain(dataTableFixtureRows(1)[0]!.hash);
+    expect(record?.querySelectorAll('dd')).toHaveLength(1);
+    expect(root.querySelector('[data-test-mutation]')).toBeNull();
+    expect(root.textContent).not.toContain('Mutation');
+    expect(host.componentInstance.calls).toEqual([]);
+    host.destroy();
+  });
+
+  it('restores desktop actions after a phone resize without dropping inspection facts', async () => {
+    const host = await renderActions(1280);
+    resizeViewport(390);
+    await fixture.whenStable();
+    expect(root.querySelector('[data-test-mutation]')).toBeNull();
+    expect(root.querySelector('.eg-table-record')?.textContent).toContain(
+      dataTableFixtureRows(1)[0]!.hash,
+    );
+    resizeViewport(1280);
+    await fixture.whenStable();
+    root.querySelector<HTMLButtonElement>('[data-test-mutation]')!.click();
+    expect(host.componentInstance.calls).toEqual(['demo-0']);
+    host.destroy();
+  });
+
   it('bounds variable-height narrow records at 200 while keeping every loaded record reachable', async () => {
+    resizeViewport(390);
     fixture.componentRef.setInput('rows', dataTableFixtureRows(201));
     fixture.componentInstance.narrow.set(true);
     await fixture.whenStable();
@@ -170,6 +267,54 @@ describe('Shared table column layout and reflow', () => {
     expect(root.querySelector('.eg-table-record')?.getAttribute('data-row-id')).toBe('demo-0');
     expect(root.querySelector('.eg-table-pagination')).toBeNull();
   });
+
+  it('keeps pager focus on interior pages and hands it to the opposite enabled boundary button', async () => {
+    fixture.componentRef.setInput('virtualThreshold', 500);
+    fixture.componentRef.setInput('rows', dataTableFixtureRows(401));
+    await fixture.whenStable();
+    const [previous, next] = root.querySelectorAll<HTMLButtonElement>(
+      '.eg-table-pagination button',
+    );
+    next!.focus();
+    next!.click();
+    await fixture.whenStable();
+    expect(next!.disabled).toBe(false);
+    expect(document.activeElement).toBe(next);
+    next!.click();
+    await fixture.whenStable();
+    expect(next!.disabled).toBe(true);
+    expect(document.activeElement).toBe(previous);
+    previous!.click();
+    await fixture.whenStable();
+    expect(previous!.disabled).toBe(false);
+    expect(document.activeElement).toBe(previous);
+    previous!.click();
+    await fixture.whenStable();
+    expect(previous!.disabled).toBe(true);
+    expect(document.activeElement).toBe(next);
+  });
+
+  it.each([false, true])(
+    'does not steal focus when another control owns it before pager rendering (initially focused: %s)',
+    async (initiallyFocused) => {
+      fixture.componentRef.setInput('virtualThreshold', 500);
+      fixture.componentRef.setInput('rows', dataTableFixtureRows(201));
+      await fixture.whenStable();
+      const next = root.querySelectorAll<HTMLButtonElement>('.eg-table-pagination button')[1]!;
+      const elsewhere = document.createElement('button');
+      document.body.append(elsewhere);
+      try {
+        (initiallyFocused ? next : elsewhere).focus();
+        next.click();
+        elsewhere.focus();
+        await fixture.whenStable();
+        expect(next.disabled).toBe(true);
+        expect(document.activeElement).toBe(elsewhere);
+      } finally {
+        elsewhere.remove();
+      }
+    },
+  );
 
   it('uses bounded pages rather than fixed-height virtual rows for arbitrary cell templates', async () => {
     const host = TestBed.createComponent(CellTemplateHost);

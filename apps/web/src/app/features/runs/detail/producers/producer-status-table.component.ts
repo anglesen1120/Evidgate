@@ -1,7 +1,22 @@
-import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  input,
+  linkedSignal,
+  TemplateRef,
+  viewChild,
+} from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmCard, HlmCardTitle } from '@evidgate/ui/card';
-import { HlmTableImports } from '@evidgate/ui/table';
+import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
+import type {
+  DataTableCellContext,
+  DataTableColumn,
+} from '../../../../shared/ui/data-table/data-table-column';
+import { CopyValueButtonComponent } from '../../../../shared/ui/values/copy-value-button.component';
+import { DataTableValueComponent } from '../../../../shared/ui/data-table/data-table-value.component';
+import { NumberValueComponent } from '../../../../shared/ui/values/number-value.component';
 
 import { StatusPillComponent } from '../../../../shared/ui/chips/status-pill.component';
 import { EmptyPatternComponent } from '../../../../shared/ui/states/empty-pattern.component';
@@ -17,7 +32,10 @@ import type { ProducerSlot, ProducerStatus } from './producer-slots';
   imports: [
     HlmCard,
     HlmCardTitle,
-    HlmTableImports,
+    DataTableComponent,
+    CopyValueButtonComponent,
+    DataTableValueComponent,
+    NumberValueComponent,
     HlmButton,
     StatusPillComponent,
     EmptyPatternComponent,
@@ -33,6 +51,20 @@ export class ProducerStatusTableComponent {
   readonly status = input<ProducerStatus>('ready');
   readonly runAfterCancelEvents = input<number | null>(null);
   readonly targetAnchor = input<string | null>(null);
+  protected readonly sectionSize = 'section' as const;
+  protected readonly rowId = (slot: ProducerSlot) => slot.producerId;
+  private readonly producerCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ProducerSlot>>>('producerCell');
+  private readonly identityCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ProducerSlot>>>('identityCell');
+  private readonly finalizeCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ProducerSlot>>>('finalizeCell');
+  private readonly sequenceCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ProducerSlot>>>('sequenceCell');
+  private readonly countCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ProducerSlot>>>('countCell');
+  private readonly eventsCell =
+    viewChild.required<TemplateRef<DataTableCellContext<ProducerSlot>>>('eventsCell');
 
   // Variable-height badges need bounded pages rather than clipped virtual rows.
   // A fragment selects its page once; ordinary polling preserves the reader's page.
@@ -89,11 +121,70 @@ export class ProducerStatusTableComponent {
     mismatch: $localize`:@@runs.detail.producers.mismatch:Count does not match expected`,
     events: $localize`:@@runs.detail.producers.events:Informational events`,
     noEvents: $localize`:@@runs.detail.producers.no-events:No informational events`,
+    staleEpoch: $localize`:@@runs.detail.producers.stale-epoch-short:Stale epoch`,
+    afterCancel: $localize`:@@runs.detail.producers.after-cancel-short:After cancel`,
     eventNote: $localize`:@@runs.detail.producers.event-note:After-cancel event counts are informational only; a stale-epoch event on a closed shard makes the evidence incomplete.`,
     previous: $localize`:@@runs.detail.producers.previous:Previous producers`,
     next: $localize`:@@runs.detail.producers.next:Next producers`,
     pagination: $localize`:@@runs.detail.producers.pagination:Producer pages`,
   };
+  protected readonly columns = computed<readonly DataTableColumn<ProducerSlot>[]>(() => [
+    {
+      id: 'producer',
+      header: this.copy.producer,
+      cell: this.rowId,
+      role: 'identity',
+      kind: 'identifier',
+      priority: 'primary',
+      overflow: 'truncate',
+      cellTemplate: this.producerCell(),
+    },
+    {
+      id: 'identity',
+      header: this.copy.identity,
+      cell: (slot) => slot.identityState ?? '',
+      role: 'status',
+      priority: 'primary',
+      overflow: 'wrap',
+      cellTemplate: this.identityCell(),
+    },
+    {
+      id: 'finalize',
+      header: this.copy.finalize,
+      cell: (slot) => slot.finalizeStatus ?? '',
+      role: 'status',
+      priority: 'primary',
+      overflow: 'wrap',
+      cellTemplate: this.finalizeCell(),
+    },
+    {
+      id: 'sequence',
+      header: this.copy.lastSequence,
+      cell: (slot) => slot.lastSequence ?? '',
+      role: 'number',
+      priority: 'secondary',
+      overflow: 'wrap',
+      cellTemplate: this.sequenceCell(),
+    },
+    {
+      id: 'count',
+      header: this.copy.count,
+      cell: (slot) => slot.count ?? '',
+      role: 'number',
+      priority: 'secondary',
+      overflow: 'wrap',
+      cellTemplate: this.countCell(),
+    },
+    {
+      id: 'events',
+      header: this.copy.events,
+      cell: () => '',
+      role: 'text',
+      priority: 'secondary',
+      overflow: 'wrap',
+      cellTemplate: this.eventsCell(),
+    },
+  ]);
 
   protected movePage(delta: number): void {
     this.pageIndex.update((page) => Math.max(0, Math.min(page + delta, this.pageCount() - 1)));

@@ -1,10 +1,8 @@
-<header class="mb-[var(--eg-space-5)] grid min-w-0 gap-[var(--eg-space-3)]">
-  <h1
-    class="m-0 font-[family-name:var(--eg-font-display)] text-[length:clamp(var(--eg-text-xl),2vw,var(--eg-text-2xl))] leading-[var(--eg-leading-2xl)] [overflow-wrap:anywhere]"
-    [textContent]="copy.title"
-  ></h1>
-  <p class="m-0 text-muted-foreground [overflow-wrap:anywhere]">{{ copy.description }}</p>
-</header>
+<app-page-header
+  class="mb-(--eg-space-7) block"
+  [title]="copy.title"
+  [description]="copy.description"
+/>
 <details
   hlmCard
   class="mb-[var(--eg-space-5)] block min-w-0 p-[var(--eg-space-5)]"

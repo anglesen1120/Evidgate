@@ -2,6 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { Router, type CanActivateFn } from '@angular/router';
 import type { ApiTokenListResponse } from '@evidgate/sdk';
 import type { Mock } from 'vitest';
+import { By } from '@angular/platform-browser';
+import { HlmSelect } from '@evidgate/ui/select';
+import type { RouterTestingHarness } from '@angular/router/testing';
 import { ApiTokensPage } from './api-tokens.page';
 import { ApiTokensStore } from './api-tokens.store';
 import {
@@ -22,11 +25,10 @@ function clickNext(): void {
   button.click();
 }
 
-function chooseProject(id: string): void {
-  const picker = document.querySelector<HTMLSelectElement>('#api-tokens-project');
+function chooseProject(harness: RouterTestingHarness, id: string): void {
+  const picker = harness.routeDebugElement?.query(By.directive(HlmSelect));
   if (!picker) throw new Error('Missing project picker');
-  picker.value = id;
-  picker.dispatchEvent(new Event('change', { bubbles: true }));
+  picker.triggerEventHandler('valueChange', id);
 }
 
 async function boot(guard?: CanActivateFn) {
@@ -101,7 +103,7 @@ describe('ApiTokensPage navigation boundaries', () => {
     await held.waitUntilHeld();
     held.release(false);
     await settleRouter(h.harness);
-    chooseProject('project-b');
+    chooseProject(h.harness, 'project-b');
     await until(
       h.harness,
       () => h.router.parseUrl(h.router.url).queryParams['project'] === 'project-b',
@@ -140,7 +142,7 @@ describe('ApiTokensPage navigation boundaries', () => {
       held.hold();
       clickNext();
       await held.waitUntilHeld();
-      if (path === 'picker') chooseProject('project-b');
+      if (path === 'picker') chooseProject(h.harness, 'project-b');
       else if (path === 'route') await h.harness.navigateByUrl(`${PAGE_URL}?project=project-b`);
       else h.world.listed.set([project('project-b')]);
       await until(
@@ -159,7 +161,7 @@ describe('ApiTokensPage navigation boundaries', () => {
 
   it('lands the new project Next cursor after a normal picker switch', async () => {
     const h = await boot();
-    chooseProject('project-b');
+    chooseProject(h.harness, 'project-b');
     await until(
       h.harness,
       () =>
@@ -183,7 +185,7 @@ describe('ApiTokensPage navigation boundaries', () => {
     held.hold();
     clickNext();
     await held.waitUntilHeld();
-    chooseProject('project-b');
+    chooseProject(h.harness, 'project-b');
     await until(
       h.harness,
       () => h.store.selectedProject() === 'project-b' && h.store.phase() === 'success',

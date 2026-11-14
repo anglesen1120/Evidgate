@@ -52,14 +52,16 @@ import {
           <p class="eg-type-body m-0 wrap-anywhere">{{ sectionDescription }}</p>
           <p class="eg-type-caption m-0 wrap-anywhere">{{ pageDescription }}</p>
           <p class="eg-type-body m-0 wrap-anywhere">{{ longBranch }}</p>
-          <button
-            hlmBtn
-            class="eg-header-action"
-            type="button"
-            (click)="actionCount.update(increment)"
-          >
-            {{ longAction }}
-          </button>
+          <div class="min-w-0 overflow-x-auto">
+            <button
+              hlmBtn
+              class="eg-header-action"
+              type="button"
+              (click)="actionCount.update(increment)"
+            >
+              {{ longAction }}
+            </button>
+          </div>
         </div>
       </section>
     </section>
@@ -78,7 +80,7 @@ import {
       <app-absolute-time [value]="'2026-11-07T15:10:00.123456+07:00'" />
       <app-absolute-time [value]="'2026-02-30T00:00:00Z'" />
       <app-absolute-time [value]="null" />
-      <div class="min-w-0 max-w-full" style="max-inline-size: 24rem">
+      <div class="min-w-0 max-w-96">
         <app-copyable-identifier [value]="hash" [label]="hashLabel" />
         <app-copyable-identifier [value]="longBranch" [label]="branchLabel" />
       </div>
@@ -100,32 +102,38 @@ import {
       >
         Dialog action order
       </h2>
-      <div hlmDialogFooter>
-        <button hlmBtn [variant]="'outline'" type="button" (click)="actionCount.set(0)">
-          {{ cancel }}
-        </button>
-        <button hlmBtn type="button" (click)="actionCount.update(increment)">
-          {{ longAction }}
-        </button>
+      <div class="min-w-0 overflow-x-auto">
+        <div hlmDialogFooter>
+          <button hlmBtn [variant]="'outline'" type="button" (click)="actionCount.set(0)">
+            {{ cancel }}
+          </button>
+          <button hlmBtn type="button" (click)="actionCount.update(increment)">
+            {{ longAction }}
+          </button>
+        </div>
       </div>
-      <div hlmDialogFooter>
-        <button hlmBtn [variant]="'outline'" type="button" (click)="actionCount.set(0)">
-          {{ cancel }}
-        </button>
-        <button
-          hlmBtn
-          [variant]="'destructive'"
-          type="button"
-          (click)="actionCount.update(increment)"
-        >
-          {{ remove }}
-        </button>
+      <div class="min-w-0 overflow-x-auto">
+        <div hlmDialogFooter>
+          <button hlmBtn [variant]="'outline'" type="button" (click)="actionCount.set(0)">
+            {{ cancel }}
+          </button>
+          <button
+            hlmBtn
+            [variant]="'destructive'"
+            type="button"
+            (click)="actionCount.update(increment)"
+          >
+            {{ remove }}
+          </button>
+        </div>
       </div>
-      <div hlmDialogFooter>
-        <button hlmBtn [variant]="'outline'" type="button" disabled>{{ cancel }}</button>
-        <button hlmBtn type="button" disabled i18n="@@shared.gallery.dialog.submitting">
-          Saving project connection…
-        </button>
+      <div class="min-w-0 overflow-x-auto">
+        <div hlmDialogFooter>
+          <button hlmBtn [variant]="'outline'" type="button" disabled>{{ cancel }}</button>
+          <button hlmBtn type="button" disabled i18n="@@shared.gallery.dialog.submitting">
+            Saving project connection…
+          </button>
+        </div>
       </div>
       <output i18n="@@shared.gallery.local-actions"
         >Local example actions: {{ actionCount() }}</output

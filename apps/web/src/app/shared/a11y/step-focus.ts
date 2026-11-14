@@ -1,9 +1,7 @@
 import {
-  afterNextRender,
   afterRenderEffect,
   effect,
   type ElementRef,
-  type Injector,
   type Signal,
   type WritableSignal,
 } from '@angular/core';
@@ -27,31 +25,6 @@ export function focusWaitingLine(target: FocusTarget): void {
 export function requestRefusalFocus(request: WritableSignal<boolean>, error: unknown): void {
   if (error === null || error === undefined) return;
   request.set(true);
-}
-
-/** What a step tells {@link focusFieldAfterRender} about the control it is looking for. */
-export interface FieldFocusOptions {
-  readonly injector: Injector;
-  readonly host: ElementRef<HTMLElement>;
-  /** The id of the control the refusal belongs to. */
-  readonly id: string;
-  /** Whether the page still shows the scope the validation belonged to. */
-  readonly current: () => boolean;
-}
-
-/**
- * Moves focus to `#id` in the render pass that mounts the flagged control, so a control rendered
- * after validation still receives the place. A page that moved on to another scope drops the move.
- */
-export function focusFieldAfterRender(options: FieldFocusOptions): void {
-  afterNextRender(
-    () => {
-      if (options.current()) {
-        options.host.nativeElement.querySelector<HTMLElement>(`#${options.id}`)?.focus();
-      }
-    },
-    { injector: options.injector },
-  );
 }
 
 /** What a step tells {@link focusRefusalHeading} about the refusal it is showing. */

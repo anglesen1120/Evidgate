@@ -30,7 +30,9 @@ describe('EnableCollectionPage activation read', () => {
     // Every field the panel names comes from the read: project, revision, hash, mode, actor, time.
     expect(enabled!.textContent).toContain('project-1');
     expect(enabled!.textContent).toContain(ACTIVATION_STATE.policy_revision_id);
-    expect(enabled!.textContent).toContain('sha256:9f2c1d7b4a6e…');
+    expect(enabled!.querySelector('[data-testid="enable-policy-hash"]')?.textContent?.trim()).toBe(
+      ACTIVATION_STATE.hash,
+    );
     expect(enabled!.textContent).toContain('Advisory');
     expect(enabled!.textContent).toContain('user-1');
     expect(enabled!.querySelector('time')?.getAttribute('datetime')).toBe(
@@ -112,7 +114,9 @@ describe('EnableCollectionPage activation read', () => {
     expect(enabled.textContent).not.toContain('\u009B');
     // Stripped, not replaced by "unavailable": the identifying values survive without the invisible
     // characters that could make one revision read as another.
-    expect(enabled.textContent).toContain('sha256:9f2c1d7b4a6e…');
+    expect(enabled.querySelector('[data-testid="enable-policy-hash"]')?.textContent?.trim()).toBe(
+      'sha256:9f2c1d7b4a6e8f0a',
+    );
     expect(enabled.textContent).toContain('user-1');
     expect(enabled.textContent).toContain('018f0000-0000-7000-8000-00000000a004');
     // Interpolated text, never markup — and isolated so no member can reorder the row it sits in.

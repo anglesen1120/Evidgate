@@ -1,11 +1,16 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  getDebugNode,
   provideZonelessChangeDetection,
   signal,
   type WritableSignal,
 } from '@angular/core';
 import { InteractivityChecker } from '@angular/cdk/a11y';
+import { By } from '@angular/platform-browser';
+import type { ComponentFixture } from '@angular/core/testing';
+import { HlmSelect } from '@evidgate/ui/select';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { TestBed } from '@angular/core/testing';
 import {
   ActivatedRoute,
@@ -31,7 +36,21 @@ import { SessionStore } from '../../../core/session/session.store';
 import type { Intent } from '../../../core/http/intent';
 import { ApiTokensPage } from './api-tokens.page';
 import { ApiTokensStore } from './api-tokens.store';
+import { provideLayoutTestStubs, stubLayoutApis } from '../../../shared/testing/layout.testing';
 
+provideLayoutTestStubs();
+
+export const TOKEN_DESKTOP_PROVIDER = {
+  provide: NarrowMutationPolicy,
+  useValue: { canMutate: () => true, narrow: () => false, allowsMutation: () => true },
+};
+
+/** A component-output seam also exercises the page's refusal of unlisted project ids. */
+export function chooseTokenProject(fixture: ComponentFixture<unknown>, id: string): void {
+  const picker = fixture.debugElement.query(By.directive(HlmSelect));
+  if (!picker) throw new Error('Missing project picker');
+  picker.triggerEventHandler('valueChange', id);
+}
 /** A session project; only the fields the picker renders vary between fixtures. */
 export function project(id: string, name = 'Storefront'): ProjectDto {
   return {
@@ -90,6 +109,7 @@ export function mount(
     projects?: readonly ProjectDto[];
   } = {},
 ) {
+  stubLayoutApis();
   const permissions = signal(new Set(['api_token:read', 'api_token:write', 'run:read']));
   // The org the URL names above the page; a spec that moves the session to another org is a
   // foreign scope, which is exactly what the URL guard has to notice.
@@ -138,6 +158,7 @@ export function mount(
     imports: [ApiTokensPage],
     providers: [
       provideZonelessChangeDetection(),
+      TOKEN_DESKTOP_PROVIDER,
       provideRouter([]),
       // The page and its store read the URL through one stub so a spec can seed a deep link; the
       // param chain carries the org the URL above the page names.
@@ -281,8 +302,10 @@ export class HeldTransition {
 }
 
 export async function mountAt(routes: Routes, world: RouterWorld): Promise<RouterTestingHarness> {
+  stubLayoutApis();
   TestBed.configureTestingModule({
     providers: [
+      TOKEN_DESKTOP_PROVIDER,
       provideRouter(routes),
       { provide: SessionStore, useValue: world.session },
       {
@@ -323,11 +346,15 @@ export async function settleRouter(harness: RouterTestingHarness): Promise<void>
   }
 }
 
-/** The project ids the picker offers, in render order; empty while the page renders no picker. */
+/** Helm does not instantiate closed portal options; verify the picker and its public store scope. */
 export function offeredProjects(): readonly string[] {
-  return Array.from(
-    document.querySelectorAll<HTMLOptionElement>('#api-tokens-project option'),
-    (option) => option.value,
+  const page = document.querySelector('app-api-tokens-page');
+  if (!page?.querySelector('#api-tokens-project')) return [];
+  return (
+    getDebugNode(page)
+      ?.injector.get(ApiTokensStore)
+      .session.projects()
+      .map((project) => project.id) ?? []
   );
 }
 

@@ -55,6 +55,22 @@ describe('CopyableIdentifierComponent', () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
+  it('forwards the requested large copy target to the scan row and full-value dialog', async () => {
+    expect(fixture.componentInstance.copySize()).toBe('sm');
+    fixture.componentRef.setInput('copySize', 'lg');
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const inlineCopy = root.querySelector<HTMLButtonElement>('app-copy-value-button button')!;
+    expect(inlineCopy.classList.contains('spartan-button-size-lg')).toBe(true);
+    expect(inlineCopy.getAttribute('data-copy-size')).toBe('lg');
+    await harness.showFull();
+    const dialogCopy = document.querySelector<HTMLButtonElement>(
+      '[role="dialog"] app-copy-value-button button',
+    )!;
+    expect(dialogCopy.classList.contains('spartan-button-size-lg')).toBe(true);
+    expect(dialogCopy.getAttribute('data-copy-size')).toBe('lg');
+  });
+
   it('supports Escape and returns focus to the full-value action', async () => {
     const trigger = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
       'button',

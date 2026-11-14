@@ -10,10 +10,11 @@ import {
 import { HlmDialogImports } from '@evidgate/ui/dialog';
 import { ConnectStepRevealComponent } from '../../../shared/ui/reveal/connect-step-reveal.component';
 import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
+import { AbsoluteTimeComponent } from '../../../shared/time/absolute-time.component';
 
 @Component({
   selector: 'app-rotate-reveal-dialog',
-  imports: [HlmDialogImports, ConnectStepRevealComponent],
+  imports: [HlmDialogImports, ConnectStepRevealComponent, AbsoluteTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <hlm-dialog
@@ -44,7 +45,7 @@ import { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
             />
             @if (overlap(); as date) {
               <p class="m-0 text-sm text-muted-foreground">
-                {{ overlapLabel }} <time [attr.datetime]="date">{{ date }}</time>
+                {{ overlapLabel }} <app-absolute-time [value]="date" />
               </p>
             }
           }

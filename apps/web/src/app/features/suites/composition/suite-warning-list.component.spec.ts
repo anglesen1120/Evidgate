@@ -137,6 +137,7 @@ describe('SuiteWarningListComponent', () => {
     expect(section?.getAttribute('data-slot')).toBe('card');
     expect(section?.getAttribute('aria-label')).toBe('Suite warnings');
     expect(root.querySelector('h2')?.getAttribute('data-slot')).toBe('card-title');
+    expect(root.querySelector('h2')?.getAttribute('data-title-size')).toBe('section');
     expect(itemTexts(root)).toEqual([warning]);
     expect(root.querySelector('button, a, input, [tabindex]')).toBeNull();
   });

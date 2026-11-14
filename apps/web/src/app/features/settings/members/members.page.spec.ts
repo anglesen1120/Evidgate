@@ -7,6 +7,7 @@ import { MembersPage } from './members.page';
 import { MembersStore } from './members.store';
 import { FakeMembersStore, lastAdmin, role } from './members-page.test-fixtures';
 import { routes } from './members.routes';
+import { activeMemberMenuTrigger, button } from './member-actions.test-helpers';
 
 describe('Members page (09.7.1-T2)', () => {
   let store: FakeMembersStore;
@@ -43,11 +44,6 @@ describe('Members page (09.7.1-T2)', () => {
     await fixture.whenStable();
     return { fixture, root: document.body };
   }
-  function button(root: ParentNode, selector: string): HTMLButtonElement {
-    const value = root.querySelector<HTMLButtonElement>(selector);
-    if (!value) throw new Error(`Missing button: ${selector}`);
-    return value;
-  }
 
   it('marks the standalone members route as the page-heading owner', () => {
     expect(
@@ -68,7 +64,7 @@ describe('Members page (09.7.1-T2)', () => {
     const { root } = await render();
     expect(root.querySelectorAll('[data-members-row]')).toHaveLength(3);
     expect(root.textContent).toContain('owner@example.test');
-    expect(root.textContent).toContain('Pending invitation');
+    expect(root.textContent).toContain('Invited');
     expect(root.textContent).toContain(role.name);
     const matrix = root.querySelector('table[data-members-matrix]');
     expect(matrix?.querySelector('caption')?.textContent?.trim()).toBe(
@@ -90,14 +86,15 @@ describe('Members page (09.7.1-T2)', () => {
     granted.set(true);
     fixture.detectChanges();
     expect(root.querySelector('[data-members-invite-open]')).not.toBeNull();
-    expect(root.querySelectorAll('[data-members-remove]')).toHaveLength(2);
-    expect(root.querySelectorAll('[data-members-edit-open]')).toHaveLength(2);
+    expect(root.querySelectorAll('[data-members-actions]')).toHaveLength(2);
+    expect(button(root, '[data-members-edit-open]').hasAttribute('hlmDropdownMenuItem')).toBe(true);
     expect(root.querySelector('app-edit-roles-dialog')).not.toBeNull();
   });
 
   it('opens row role editing, announces success and closes editing when the organization switches', async () => {
     const { fixture, root } = await render();
     const opener = button(root, '[data-members-edit-open]');
+    const returnTarget = activeMemberMenuTrigger();
     opener.click();
     fixture.detectChanges();
     await fixture.whenStable();
@@ -113,9 +110,9 @@ describe('Members page (09.7.1-T2)', () => {
     fixture.detectChanges();
     expect(store.changeRoles).toHaveBeenCalledTimes(1);
     expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
-    expect(document.activeElement).toBe(opener);
+    expect(document.activeElement).toBe(returnTarget);
     expect(root.textContent).toContain('Membership updated.');
-    opener.click();
+    button(root, '[data-members-edit-open]').click();
     fixture.detectChanges();
     await fixture.whenStable();
     expect(
@@ -192,7 +189,7 @@ describe('Members page (09.7.1-T2)', () => {
     fixture.detectChanges();
     button(dialog, '[data-members-submit]').click();
     fixture.detectChanges();
-    const row = root.querySelector('[data-membership-id="owner"]')!;
+    const row = root.querySelector('[data-row-id="owner"]')!;
     expect(row.querySelector('.role-name')?.textContent?.trim()).toBe(role.name);
     expect(root.querySelector('[data-members-matrix] [data-granted="true"]')).not.toBeNull();
     store.members.update((members) =>
@@ -298,6 +295,7 @@ describe('Members page (09.7.1-T2)', () => {
   it('returns focus to the invoking row button on Escape; success focuses the list heading', async () => {
     const { fixture, root } = await render();
     const opener = button(root, '[data-members-remove]');
+    const returnTarget = activeMemberMenuTrigger();
     opener.focus();
     opener.click();
     fixture.detectChanges();
@@ -308,8 +306,8 @@ describe('Members page (09.7.1-T2)', () => {
     );
     fixture.detectChanges();
     expect(dialog.isConnected && dialog.getAttribute('data-state') === 'open').toBe(false);
-    expect(document.activeElement).toBe(opener);
-    opener.click();
+    expect(document.activeElement).toBe(returnTarget);
+    button(root, '[data-members-remove]').click();
     fixture.detectChanges();
     await fixture.whenStable();
     button(root, '[data-members-dialog="remove"] [data-members-submit]').click();
@@ -339,9 +337,18 @@ describe('Members page (09.7.1-T2)', () => {
     expect(preview?.textContent).toContain('live catalogue: 1');
   });
 
-  it('validates email and reuses an invitation intent on retry; a closed dialog starts a new intent', async () => {
+  it('validates email and preserves intent on uncertain retry; reopening starts a new intent', async () => {
     store.invite.mockImplementation(() => {
-      store.inviteState.set({ phase: 'failed', error: { ...lastAdmin, code: 'invite_exists' } });
+      store.inviteState.set({
+        phase: 'failed',
+        error: {
+          ...lastAdmin,
+          kind: 'unavailable',
+          status: 503,
+          code: 'unavailable',
+          retryable: true,
+        },
+      });
       return Promise.resolve(null);
     });
     const { fixture, root } = await render();
@@ -366,9 +373,9 @@ describe('Members page (09.7.1-T2)', () => {
     form.dispatchEvent(new Event('submit', { cancelable: true }));
     await fixture.whenStable();
     fixture.detectChanges();
-    expect(dialog.querySelector('[data-members-error-code]')?.textContent).toBe('invite_exists');
+    expect(dialog.querySelector('[data-members-error-code]')?.textContent).toBe('unavailable');
     expect(email.getAttribute('aria-describedby')).toBe('members-invite-error');
-    expect(dialog.querySelector('#members-invite-error')?.getAttribute('role')).toBe('alert');
+    expect(dialog.querySelector('#members-invite-error')?.getAttribute('role')).toBe('group');
     expect(store.invite.mock.calls[0]?.slice(0, 2)).toEqual(['invite@example.test', [role.id]]);
     form.dispatchEvent(new Event('submit', { cancelable: true }));
     await fixture.whenStable();

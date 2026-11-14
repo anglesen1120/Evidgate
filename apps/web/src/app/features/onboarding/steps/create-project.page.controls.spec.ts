@@ -5,22 +5,26 @@ import { Router } from '@angular/router';
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { SessionStore } from '../../../core/session/session.store';
 import { OnboardingStore } from '../onboarding.store';
+import { OnboardingViewport } from '../onboarding-viewport.testing';
 import { CreateProjectPage } from './create-project.page';
 import { requiredElement } from './step-controls.testing';
 
 describe('CreateProjectPage Helm controls', () => {
   let fixture: ComponentFixture<CreateProjectPage>;
   let root: HTMLElement;
+  let viewport: OnboardingViewport;
   const permitted = signal(true);
   const createProject = vi.fn<OnboardingDataService['createProject']>();
 
   beforeEach(async () => {
     permitted.set(true);
+    viewport = new OnboardingViewport();
     createProject.mockReset();
     await TestBed.configureTestingModule({
       imports: [CreateProjectPage],
       providers: [
         provideZonelessChangeDetection(),
+        viewport.provider,
         { provide: OnboardingDataService, useValue: { createProject } },
         { provide: OnboardingStore, useValue: {} },
         { provide: SessionStore, useValue: { has: () => permitted() } },
@@ -39,7 +43,7 @@ describe('CreateProjectPage Helm controls', () => {
       expect(field.getAttribute('data-slot')).toBe('input');
       expect(field.required).toBe(true);
       expect(field.labels?.item(0)?.htmlFor).toBe(id);
-      expect(field.labels?.item(0)?.textContent).toContain('*');
+      expect(field.labels?.item(0)?.textContent).not.toContain('*');
       field.focus();
       expect(document.activeElement).toBe(field);
       expect(field.tabIndex).toBe(0);
@@ -49,11 +53,11 @@ describe('CreateProjectPage Helm controls', () => {
     expect(submit.disabled).toBe(false);
   });
 
-  it('explains the required marker once without adding it to accessible label text', () => {
-    expect(root.textContent?.match(/Fields marked \* are required\./g)).toHaveLength(1);
-    for (const label of root.querySelectorAll('label')) {
-      expect(label.querySelector('[aria-hidden="true"]')?.textContent).toBe('*');
-    }
+  it('states requiredness once without unexplained label markers', () => {
+    expect(root.textContent?.match(/All fields required unless marked optional\./g)).toHaveLength(
+      1,
+    );
+    expect(root.querySelector('label [aria-hidden="true"]')).toBeNull();
   });
 
   it('maps visible validation into the Helm invalid state and its description', async () => {
@@ -99,4 +103,49 @@ describe('CreateProjectPage Helm controls', () => {
     expect(document.activeElement).toBe(status);
     expect(submit.disabled).toBe(true);
   });
+  it('focuses a linked summary after a failed submit and never on correction', async () => {
+    requiredElement<HTMLFormElement>(root, 'form').requestSubmit();
+    await fixture.whenStable();
+    const summary = requiredElement<HTMLElement>(root, '#onboarding-project-errors');
+    expect(document.activeElement).toBe(summary);
+    expect(summary.querySelectorAll('a')).toHaveLength(2);
+    const link = requiredElement<HTMLAnchorElement>(summary, 'a[href="#onboarding-project-name"]');
+    link.click();
+    const name = requiredElement<HTMLInputElement>(root, '#onboarding-project-name');
+    expect(document.activeElement).toBe(name);
+    name.value = 'Storefront';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(name);
+    expect(summary.querySelector('a[href="#onboarding-project-name"]')).toBeNull();
+    expect(createProject).not.toHaveBeenCalled();
+  });
+
+  it.each([320, 390, 767])(
+    'keeps drafts read-only at %ipx and guards a stale desktop submit',
+    async (width) => {
+      for (const name of ['name', 'slug']) {
+        const field = requiredElement<HTMLInputElement>(root, `[name="${name}"]`);
+        field.value = 'retained-project';
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      await fixture.whenStable();
+      const form = requiredElement<HTMLFormElement>(root, 'form');
+      viewport.setWidth(width);
+      form.requestSubmit();
+      await fixture.whenStable();
+      expect(root.querySelector('form')).toBeNull();
+      expect(root.querySelector('app-desktop-required-notice')?.textContent).toMatch(/desktop/i);
+      expect(root.querySelector('dl')?.textContent).toContain('retained-project');
+      expect(createProject).not.toHaveBeenCalled();
+      viewport.setWidth(768);
+      await fixture.whenStable();
+      expect(requiredElement<HTMLInputElement>(root, '[name="name"]').value).toBe(
+        'retained-project',
+      );
+      expect(requiredElement<HTMLInputElement>(root, '[name="slug"]').value).toBe(
+        'retained-project',
+      );
+    },
+  );
 });

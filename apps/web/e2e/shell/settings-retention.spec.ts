@@ -122,37 +122,55 @@ for (const locale of LOCALES) {
       page,
     }) => {
       await page.goto(path(locale, 'ok', false));
-      await expect(page.locator('#retention-artifact')).toHaveValue('14');
+      const facts = page.locator(`${FORM} [data-retention-current]`);
+      await expect(facts.locator('dd').nth(0)).toHaveText('14');
+      await expect(facts.locator('dd').nth(1)).toHaveText('90');
       await expect(page.locator('#retention-read-only')).toBeVisible();
-      await expect(page.locator('#retention-artifact')).toHaveAttribute('readonly');
+      await expect(page.locator(`${FORM} input`)).toHaveCount(0);
+      expect(await putCount(page)).toBe(0);
       await expect(page.locator('[data-retention-save]')).toHaveCount(0);
     });
 
     for (const theme of THEMES) {
-      test(`retention and warning reflow at 320px in ${theme}`, async ({ page }) => {
+      test(`retention inspection reflows at 320px and resize closes the warning in ${theme}`, async ({
+        page,
+      }) => {
         await seedStoredTheme(page, theme);
-        await page.setViewportSize({ width: 320, height: 800 });
+        await page.setViewportSize({ width: 1440, height: 900 });
         await page.goto(path(locale));
         await expect(page.locator('#retention-artifact')).toHaveValue('14');
         await expect(page.locator(FORM)).toContainText(
           locale === 'vi' ? 'Lưu giữ dự án' : 'Project retention',
         );
-        expect(
-          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-        ).toBe(true);
-        await expectNoA11yViolations(page, `retention ${locale} ${theme} 320px`);
         const size = await page.locator('[data-retention-save]').boundingBox();
         expect(size?.height).toBeGreaterThanOrEqual(44);
         await enterDays(page, '#retention-artifact', '7');
         await tabTo(page, '[data-retention-save]');
         await page.keyboard.press('Enter');
-        await expect(page.getByRole('dialog')).toBeVisible();
-        // The dialog fades in; axe would otherwise read colours blended by the entrance opacity.
+        const dialog = page.getByRole('dialog');
+        await expect(dialog).toBeVisible();
         await waitForDialogAnimations(page, '[role="dialog"]');
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
-        await expectNoA11yViolations(page, `retention dialog ${locale} ${theme} 320px`);
+        await expectNoA11yViolations(page, `retention dialog ${locale} ${theme} desktop`);
+
+        await page.setViewportSize({ width: 320, height: 800 });
+        await expect(dialog).not.toBeVisible();
+        await expect(page.locator(`${FORM} input, ${FORM} [data-retention-save]`)).toHaveCount(0);
+        await expect(page.locator(`${FORM} app-desktop-required-notice`)).toBeVisible();
+        const facts = page.locator(`${FORM} [data-retention-current]`);
+        await expect(facts.locator('dd').nth(0)).toHaveText('14');
+        await expect(facts.locator('dd').nth(1)).toHaveText('90');
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        ).toBe(true);
+        await expectNoA11yViolations(page, `retention ${locale} ${theme} 320px`);
+        expect(await putCount(page)).toBe(0);
+
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await expect(page.locator('#retention-artifact')).toHaveValue('7');
+        expect(await putCount(page)).toBe(0);
       });
     }
   });

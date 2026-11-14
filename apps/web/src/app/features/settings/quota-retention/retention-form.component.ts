@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   ElementRef,
   inject,
   linkedSignal,
@@ -20,11 +21,28 @@ import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmDialog, HlmDialogImports } from '@evidgate/ui/dialog';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
+import { HlmSelectImports } from '@evidgate/ui/select';
+import { createFormFeedback } from '../../../shared/forms/form-feedback';
+import { FieldFeedbackComponent } from '../../../shared/forms/field-feedback.component';
+import { FormErrorSummaryComponent } from '../../../shared/forms/form-error-summary.component';
+import { FormRequiredNoteComponent } from '../../../shared/forms/form-requirement.component';
+import {
+  DesktopMutationDirective,
+  DesktopRequiredNoticeComponent,
+  NarrowMutationPolicy,
+} from '../../../shared/ui/narrow';
+import { InlineFeedbackComponent } from '../../../shared/ui/states/inline-feedback.component';
+import { LoadingPatternComponent } from '../../../shared/ui/states/loading-pattern.component';
+import { NumberValueComponent } from '../../../shared/ui/values/number-value.component';
 
 import { RETENTION_COPY } from './retention-form-copy';
 import { RetentionStore } from './retention.store';
 
 type RetentionField = keyof RetentionPolicy;
+type RetentionForm = FormGroup<{
+  artifact_days: FormControl<number | null>;
+  metadata_days: FormControl<number | null>;
+}>;
 
 const integer = (control: AbstractControl): ValidationErrors | null =>
   control.value === null || Number.isInteger(control.value) ? null : { integer: true };
@@ -44,7 +62,23 @@ const orderedWindows = (group: AbstractControl): ValidationErrors | null => {
 
 @Component({
   selector: 'app-retention-form',
-  imports: [ReactiveFormsModule, HlmButton, HlmCardImports, HlmDialogImports, HlmInput, HlmLabel],
+  imports: [
+    ReactiveFormsModule,
+    HlmButton,
+    HlmCardImports,
+    HlmDialogImports,
+    HlmInput,
+    HlmLabel,
+    HlmSelectImports,
+    FieldFeedbackComponent,
+    FormErrorSummaryComponent,
+    FormRequiredNoteComponent,
+    DesktopMutationDirective,
+    DesktopRequiredNoticeComponent,
+    InlineFeedbackComponent,
+    LoadingPatternComponent,
+    NumberValueComponent,
+  ],
   providers: [RetentionStore],
   templateUrl: './retention-form.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -53,6 +87,14 @@ const orderedWindows = (group: AbstractControl): ValidationErrors | null => {
 export class RetentionFormComponent {
   protected readonly store = inject(RetentionStore);
   protected readonly copy = RETENTION_COPY;
+  protected readonly mutationPolicy = inject(NarrowMutationPolicy);
+  protected readonly sectionSize = 'section' as const;
+  protected readonly subsectionSize = 'subsection' as const;
+  protected readonly loadingLayout = 'form' as const;
+  protected readonly destructive = 'destructive' as const;
+  protected readonly success = 'success' as const;
+  protected readonly projectLabel = (value: unknown): string =>
+    this.store.session.projects().find((row) => row.id === value)?.name ?? this.copy.project;
   protected readonly form = linkedSignal(() => {
     const policy = this.store.policy();
     return new FormGroup(
@@ -68,6 +110,29 @@ export class RetentionFormComponent {
       },
       { validators: orderedWindows },
     );
+  });
+  protected readonly feedback = linkedSignal(() => {
+    const form = this.form();
+    return createFormFeedback([
+      {
+        id: 'retention-artifact',
+        label: this.copy.artifact,
+        describedBy: 'retention-hint',
+        error: () => this.fieldError('artifact_days', form),
+      },
+      {
+        id: 'retention-metadata',
+        label: this.copy.metadata,
+        describedBy: 'retention-hint',
+        error: () => this.fieldError('metadata_days', form),
+      },
+    ]);
+  });
+  protected readonly artifactField = computed(() => this.feedback().fields[0]);
+  protected readonly metadataField = computed(() => this.feedback().fields[1]);
+  private readonly lastAttempt = linkedSignal(() => {
+    this.form();
+    return null as RetentionPolicy | null;
   });
   protected readonly pending = linkedSignal({
     source: () => ({ scope: this.store.scope(), policy: this.store.policy() }),
@@ -86,23 +151,22 @@ export class RetentionFormComponent {
         next: next[field],
       }));
   });
-  private readonly artifactInput = viewChild<ElementRef<HTMLInputElement>>('artifactInput');
-  private readonly metadataInput = viewChild<ElementRef<HTMLInputElement>>('metadataInput');
-  protected readonly invalidSubmit = linkedSignal(() => {
-    this.store.policy();
-    return false;
-  });
+  constructor() {
+    effect(() => {
+      if (!this.mutationPolicy.canMutate()) this.pending.set(null);
+    });
+  }
   private readonly submitButton = viewChild<ElementRef<HTMLButtonElement>>('submitButton');
   private readonly dialog = viewChild<HlmDialog>('confirmationDialog');
 
-  protected fieldError(field: RetentionField): string | null {
-    const form = this.form();
+  private fieldError(field: RetentionField, form: RetentionForm): string | null {
     const control = form.controls[field];
-    if (control.invalid && (control.touched || control.dirty)) return this.copy.integer;
+    if (control.invalid) return this.copy.integer;
     if (field === 'metadata_days' && form.hasError('orderedWindows')) return this.copy.crossRule;
     const error = this.store.writeError();
     if (
       error?.kind !== 'validation' ||
+      control.value !== this.lastAttempt()?.[field] ||
       !error.details.some((detail) => detail.path === field || detail.path === `/${field}`)
     )
       return null;
@@ -114,42 +178,58 @@ export class RetentionFormComponent {
     return [error.message, ...bounds].join(' · ');
   }
 
+  protected refreshFeedback(): void {
+    this.feedback().fields.forEach((field) => field.refresh());
+  }
+
+  protected selectProject(value: unknown): void {
+    if (typeof value === 'string' && !this.store.saving()) this.store.selectProject(value);
+  }
+
   protected async submit(): Promise<void> {
+    if (!this.mutationPolicy.allowsMutation() || !this.store.writable() || this.store.saving())
+      return;
     const form = this.form();
     form.markAllAsTouched();
-    if (form.invalid) {
-      this.invalidSubmit.set(true);
-      this.focusInvalid();
-      return;
-    }
-    this.invalidSubmit.set(false);
-    if (!this.store.writable() || this.store.saving()) return;
+    form.updateValueAndValidity();
+    if (!this.feedback().submit()) return;
     const { artifact_days, metadata_days } = form.getRawValue();
     const old = this.store.policy();
     if (artifact_days === null || metadata_days === null || !old) return;
     const body = { artifact_days, metadata_days };
     if (artifact_days < old.artifact_days || metadata_days < old.metadata_days) {
       this.pending.set(body);
-    } else if (!(await this.store.save(body)) && this.form() === form) {
-      this.focusInvalid();
+    } else {
+      this.lastAttempt.set(body);
+      if (!(await this.store.save(body)) && this.form() === form) this.feedback().submit();
     }
-  }
-
-  private focusInvalid(): void {
-    if (this.fieldError('artifact_days')) this.artifactInput()?.nativeElement.focus();
-    else if (this.fieldError('metadata_days')) this.metadataInput()?.nativeElement.focus();
   }
 
   protected async confirm(): Promise<void> {
     const body = this.pending();
     const scope = this.store.scope();
-    if (!body || !scope || this.store.saving()) return;
-    await this.store.save(body);
+    if (
+      !this.mutationPolicy.allowsMutation() ||
+      !this.store.writable() ||
+      !body ||
+      !scope ||
+      this.store.saving()
+    )
+      return;
+    const form = this.form();
+    this.lastAttempt.set(body);
+    const saved = await this.store.save(body);
     // A settled write can arrive after the user moved to another organization and opened that
     // organization's own warning; only the confirmation this write was opened for may go away.
     const current = this.store.scope();
-    if (this.pending() === body && current?.org === scope.org && current.project === scope.project)
+    if (
+      this.pending() === body &&
+      current?.org === scope.org &&
+      current.project === scope.project
+    ) {
       this.pending.set(null);
+      if (!saved && this.form() === form) this.feedback().submit();
+    }
   }
 
   protected cancel(): void {

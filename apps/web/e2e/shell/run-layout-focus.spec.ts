@@ -9,10 +9,9 @@ import {
   withVariants,
 } from './support';
 
-// 766 and 767 are the last stacked widths and 768 the first table width: a one-pixel gap between
-// the two halves of the breakpoint is exactly what the boundary cases exist to catch.
+// Exercise both sides of the shared table's 768 px available-width breakpoint,
+// including the neighbouring viewport widths that exposed the old boundary gap.
 const WIDTHS = [320, 766, 767, 768, 1280] as const;
-/** Up to and including this width the run table stacks; from 768 px every part of it is a table. */
 const STACKED_MAX = 767;
 const GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
 
@@ -44,70 +43,55 @@ async function navigatePin(page: Page, revision: number): Promise<void> {
     .toBe(String(revision));
 }
 
-/** A measured rectangle, in CSS pixels, relative to the viewport. */
 interface Box {
   x: number;
   width: number;
   height: number;
 }
 
-/** Everything the browser answers about the run table at the current viewport width. */
 interface TableGeometry {
-  header: Box;
-  headerPosition: string;
+  narrow: boolean;
+  header: Box | null;
   headerCells: Box[];
   cells: Box[];
-  cellDisplays: string[];
   labels: string[];
   labelDisplays: string[];
   row: Box;
-  /** The height the component measures its virtual row size from. */
-  probeHeight: number;
-  /** The whole-list size the virtual scroller asserts, or null without a virtual viewport. */
-  spacerHeight: number | null;
+  rowOverflow: number;
+  fieldOverflow: number[];
   rowCount: number;
   documentWidth: number;
 }
 
-async function tableGeometry(page: Page): Promise<TableGeometry> {
-  return page.locator('app-run-list-table').evaluate((table): TableGeometry => {
-    const header = table.querySelector('table');
-    const headerCells = [...table.querySelectorAll('[role="columnheader"]')];
-    const row = table.querySelector('[data-run-row]');
-    if (!(header instanceof HTMLElement) || !(row instanceof HTMLElement)) {
-      throw new Error('Run table header and body are required');
-    }
-    const cells = [...row.querySelectorAll('[data-label]')];
+/** Native table cells and labelled records retain the same column facts. */
+async function tableGeometry(page: Page, selector = 'app-run-list-table'): Promise<TableGeometry> {
+  const host = page.locator(selector);
+  const narrow = (await host.evaluate((element) => element.clientWidth)) < 768;
+  await expect(host.locator(narrow ? 'li[data-row-id]' : 'tr[data-row-id]').first()).toBeVisible();
+  return host.evaluate((root, narrow): TableGeometry => {
+    const row = root.querySelector(narrow ? 'li[data-row-id]' : 'tr[data-row-id]');
+    if (!(row instanceof HTMLElement)) throw new Error('A served table record is required');
     const box = (element: Element): Box => {
       const rect = element.getBoundingClientRect();
       return { x: rect.x, width: rect.width, height: rect.height };
     };
-    const spacer = table.querySelector('cdk-virtual-scroll-viewport .cdk-virtual-scroll-spacer');
+    const header = root.querySelector('thead tr');
+    const cells = [...row.querySelectorAll<HTMLElement>(narrow ? 'dd' : ':scope > td')];
+    const labels = [...row.querySelectorAll('dt')];
     return {
-      header: box(header),
-      headerPosition: getComputedStyle(header).position,
-      headerCells: headerCells.map(box),
+      narrow,
+      header: header ? box(header) : null,
+      headerCells: [...root.querySelectorAll('[role="columnheader"]')].map(box),
       cells: cells.map(box),
-      cellDisplays: cells.map((cell) => getComputedStyle(cell).display),
-      labels: cells.map((cell) => getComputedStyle(cell, '::before').content),
-      labelDisplays: cells.map((cell) => getComputedStyle(cell, '::before').display),
+      labels: labels.map((label) => label.textContent?.trim() ?? ''),
+      labelDisplays: labels.map((label) => getComputedStyle(label).display),
       row: box(row),
-      probeHeight: Number.parseFloat(
-        getComputedStyle(table.querySelector('.row-probe') ?? row).height,
-      ),
-      // The spacer is the size the virtual scroller asserts the whole list has: itemSize × rows.
-      spacerHeight:
-        spacer instanceof HTMLElement ? Number.parseFloat(getComputedStyle(spacer).height) : null,
-      rowCount:
-        Number(table.querySelector('[role="table"]')?.getAttribute('aria-rowcount') ?? '1') - 1,
+      rowOverflow: row.scrollWidth - row.clientWidth,
+      fieldOverflow: cells.map((cell) => cell.scrollWidth - cell.clientWidth),
+      rowCount: root.querySelectorAll('[data-row-id]').length,
       documentWidth: document.documentElement.scrollWidth,
     };
-  });
-}
-
-/** How far the virtual scroller's total size is from rows × the row height the browser renders. */
-function virtualSizeDrift(layout: TableGeometry): number {
-  return Math.abs((layout.spacerHeight ?? 0) - layout.rowCount * layout.probeHeight);
+  }, narrow);
 }
 
 for (const theme of THEMES) {
@@ -121,85 +105,91 @@ for (const theme of THEMES) {
           'data-run-list-status',
           'ready',
         );
-        const row = page.locator('app-run-list-table [data-run-row]').first();
-        await expect(row).toBeVisible();
         const layout = await tableGeometry(page);
-        expect(layout.headerCells).toHaveLength(7);
         expect(layout.cells).toHaveLength(7);
         expect(layout.documentWidth).toBeLessThanOrEqual(width);
-        if (width <= STACKED_MAX) {
-          // One layout per width: the hidden header, the stacked cells, the collapsed row grid and
-          // the row height the virtual viewport measures all have to agree on the same answer.
-          expect.soft(layout.header.width, JSON.stringify(layout)).toBeLessThanOrEqual(1);
-          expect.soft(layout.headerPosition).toBe('absolute');
-          expect.soft(layout.cellDisplays).toEqual(Array(7).fill('grid'));
-          expect.soft(layout.labels.every((label) => label !== 'none')).toBe(true);
+        expect(layout.rowOverflow).toBeLessThanOrEqual(1);
+        if (layout.narrow) {
+          expect.soft(layout.header).toBeNull();
+          expect.soft(layout.headerCells).toHaveLength(0);
+          expect.soft(layout.labels).toHaveLength(7);
+          expect.soft(layout.labels.every((label) => label.length > 0)).toBe(true);
+          expect.soft(layout.labelDisplays.every((display) => display !== 'none')).toBe(true);
           expect.soft(new Set(layout.cells.map((cell) => Math.round(cell.x))).size).toBe(1);
-          if (variant === '250-rows') {
-            expect.soft(layout.row.height, JSON.stringify(layout)).toBeGreaterThanOrEqual(792);
-            expect.soft(layout.probeHeight).toBeGreaterThanOrEqual(792);
-            expect.soft(Math.abs(layout.row.height - layout.probeHeight)).toBeLessThanOrEqual(1);
-          }
+          for (const overflow of layout.fieldOverflow) expect(overflow).toBeLessThanOrEqual(1);
         } else {
-          expect.soft(layout.header.width, JSON.stringify(layout)).toBeGreaterThan(1);
-          expect.soft(layout.cellDisplays.every((display) => display !== 'grid')).toBe(true);
+          expect.soft(layout.header?.width ?? 0, JSON.stringify(layout)).toBeGreaterThan(1);
+          expect.soft(layout.headerCells).toHaveLength(7);
           expect.soft(new Set(layout.cells.map((cell) => Math.round(cell.x))).size).toBe(7);
-          if (variant === '250-rows') {
-            // The measured row size is the fixed table row, not the stacked card height.
-            expect.soft(layout.row.height, JSON.stringify(layout)).toBeLessThanOrEqual(200);
-            expect.soft(Math.abs(layout.row.height - layout.probeHeight)).toBeLessThanOrEqual(1);
-          }
+          expect.soft(layout.row.height, JSON.stringify(layout)).toBeLessThanOrEqual(200);
           for (let column = 0; column < layout.headerCells.length; column++) {
-            const headerCell = layout.headerCells[column];
-            const bodyCell = layout.cells[column];
-            if (!headerCell || !bodyCell) throw new Error('Seven paired cells are required');
-            expect(Math.abs(headerCell.x - bodyCell.x)).toBeLessThanOrEqual(1);
-            expect(Math.abs(headerCell.width - bodyCell.width)).toBeLessThanOrEqual(1);
+            const header = layout.headerCells[column];
+            const body = layout.cells[column];
+            if (!header || !body) throw new Error('Seven paired cells are required');
+            expect(Math.abs(header.x - body.x)).toBeLessThanOrEqual(1);
+            expect(Math.abs(header.width - body.width)).toBeLessThanOrEqual(1);
           }
-          expect(layout.labelDisplays.every((display) => display === 'none')).toBe(true);
+          expect(layout.labelDisplays).toHaveLength(0);
         }
         if (variant === '250-rows') {
-          // The viewport sizes the whole list from the row it measured: a hardcoded or stale item
-          // size leaves this spacer wrong even while the rendered row looks correct.
-          expect.soft(layout.spacerHeight, JSON.stringify(layout)).not.toBeNull();
-          expect.soft(virtualSizeDrift(layout)).toBeLessThanOrEqual(2);
+          expect(layout.rowCount).toBe(200);
+          await expect(page.locator('app-run-list-table cdk-virtual-scroll-viewport')).toHaveCount(
+            0,
+          );
+          await expect(page.locator('app-run-list-table nav [role="status"]')).toContainText(
+            '1–200',
+          );
         }
       });
     }
 
     test(`shared table header and body align ${width}px ${theme}`, async ({ page }) => {
+      await seedStoredTheme(page, theme);
       await page.setViewportSize({ width, height: 900 });
       await page.goto(localePath('en', '/dev/ui-gallery'));
-      await page.evaluate((value) => {
-        document.documentElement.dataset['theme'] = value;
-      }, theme);
-      const table = page.locator('[data-demo="table-small"]');
-      await expect(table.locator('.body-table tr').first()).toBeVisible();
-      const geometry = async () =>
-        table.evaluate((root) => {
-          const cells = (selector: string) =>
-            [...root.querySelectorAll(`${selector} tr:first-child > .cell`)].map((cell) => {
-              const rect = cell.getBoundingClientRect();
-              return { x: rect.x, width: rect.width };
-            });
-          return { header: cells('.header-table'), body: cells('.body-table') };
-        });
-      for (const scrollTop of [0, 200]) {
-        await table.locator('.scroll').evaluate((element, value) => {
-          element.scrollTop = value;
-        }, scrollTop);
-        const metrics = await geometry();
-        expect(metrics.header).toHaveLength(4);
-        expect(metrics.body).toHaveLength(4);
-        expect(metrics.header).toEqual(metrics.body);
+      const selector = '[data-demo="table-small"]';
+      const table = page.locator(selector);
+      const layout = await tableGeometry(page, selector);
+      if (layout.narrow) {
+        expect(layout.headerCells).toHaveLength(0);
+        const expectedLabels = ['Evidence identity', 'Context', 'Attempts'];
+        if (width >= 768) expectedLabels.splice(1, 0, 'Mutation');
+        expect(layout.cells).toHaveLength(expectedLabels.length);
+        expect(layout.labels).toEqual(expectedLabels);
+        for (const overflow of layout.fieldOverflow) expect(overflow).toBeLessThanOrEqual(1);
+      } else {
+        const geometry = () =>
+          table.evaluate((root) => {
+            const cells = (selector: string) =>
+              [...root.querySelectorAll(selector)].map((cell) => {
+                const rect = cell.getBoundingClientRect();
+                return { x: rect.x, width: rect.width };
+              });
+            return {
+              header: cells('.header-table thead tr:first-child > th'),
+              body: cells('.body-table tbody tr:first-child > td'),
+            };
+          });
+        for (const scrollTop of [0, 200]) {
+          await table.locator('.scroll').evaluate((element, value) => {
+            element.scrollTop = value;
+          }, scrollTop);
+          const metrics = await geometry();
+          expect(metrics.header).toHaveLength(4);
+          expect(metrics.body).toHaveLength(4);
+          expect(metrics.header).toEqual(metrics.body);
+        }
       }
+      expect(layout.rowOverflow).toBeLessThanOrEqual(1);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         width,
       );
     });
   }
 
-  test(`the virtual row size follows the breakpoint across a resize ${theme}`, async ({ page }) => {
+  test(`bounded record pages preserve their rows across a layout resize ${theme}`, async ({
+    page,
+  }) => {
     await seedStoredTheme(page, theme);
     await page.setViewportSize({ width: STACKED_MAX, height: 900 });
     await page.goto(listPath('250-rows'));
@@ -207,25 +197,26 @@ for (const theme of THEMES) {
       'data-run-list-status',
       'ready',
     );
-    await expect(page.locator('app-run-list-table [data-run-row]').first()).toBeVisible();
-    // The whole-list size is the only observable of the item size the viewport actually uses, and
-    // it must be re-measured when the row changes height, not only read once at startup.
-    await expect
-      .poll(async () => virtualSizeDrift(await tableGeometry(page)))
-      .toBeLessThanOrEqual(2);
-    expect((await tableGeometry(page)).probeHeight).toBeGreaterThanOrEqual(792);
-    await page.setViewportSize({ width: STACKED_MAX + 1, height: 900 });
-    await expect.poll(async () => (await tableGeometry(page)).probeHeight).toBeLessThanOrEqual(200);
-    await expect
-      .poll(async () => virtualSizeDrift(await tableGeometry(page)))
-      .toBeLessThanOrEqual(2);
+    const first = page.locator('app-run-list-table [data-row-id]').first();
+    const layout = await tableGeometry(page);
+    expect(layout.narrow).toBe(true);
+    expect(layout.rowCount).toBe(200);
+    const id = await first.getAttribute('data-row-id');
+    await page.setViewportSize({ width: 1280, height: 900 });
+    expect((await tableGeometry(page)).narrow).toBe(false);
+    await expect(first).toHaveAttribute('data-row-id', id ?? '');
+    expect((await tableGeometry(page)).rowCount).toBe(200);
+    const next = page.locator('app-run-list-table nav button').last();
+    await next.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('app-run-list-table [data-row-id]')).toHaveCount(50);
+    await expect(page.locator('app-run-list-table nav [role="status"]')).toContainText('201–250');
+    const pageId = await first.getAttribute('data-row-id');
     await page.setViewportSize({ width: STACKED_MAX, height: 900 });
-    await expect
-      .poll(async () => (await tableGeometry(page)).probeHeight)
-      .toBeGreaterThanOrEqual(792);
-    await expect
-      .poll(async () => virtualSizeDrift(await tableGeometry(page)))
-      .toBeLessThanOrEqual(2);
+    expect((await tableGeometry(page)).narrow).toBe(true);
+    expect((await tableGeometry(page)).rowCount).toBe(50);
+    await expect(first).toHaveAttribute('data-row-id', pageId ?? '');
+    expect((await tableGeometry(page)).rowOverflow).toBeLessThanOrEqual(1);
   });
 
   for (const revisions of ['empty', 'unavailable'] as const) {

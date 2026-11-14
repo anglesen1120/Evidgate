@@ -188,6 +188,9 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     expect(root.querySelector('[data-members-error-code]')?.textContent?.trim()).toBe(
       'unavailable',
     );
+    expect(input().disabled).toBe(true);
+    setEmail('not-the-retried-payload@example.test');
+    toggleRole('role-b', true);
     submitButton().click();
     await flush();
     expect(data.invites).toHaveLength(2);
@@ -213,7 +216,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     expect(data.invites[1]?.intent).not.toBe(data.invites[0]?.intent);
   });
 
-  it('after a refusal the address and role choices are frozen until the dialog closes', async () => {
+  it('focuses one persistent summary after invite_exists and permits correction under a fresh intent', async () => {
     data.outcomes.push(() =>
       Promise.reject(
         refusal('conflict', 409, 'invite_exists', 'An invitation is already pending.', false),
@@ -222,12 +225,56 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     await open();
     setEmail('new@example.test');
     submitButton().click();
-    await flush();
-    fixture.detectChanges();
-    expect(input().disabled).toBe(true);
+    await fixture.whenStable();
+    const summary = root.querySelector<HTMLElement>('[data-members-error]')!;
+    expect(document.activeElement).toBe(summary);
+    expect(summary.getAttribute('role')).toBe('group');
+    expect(summary.getAttribute('aria-describedby')).toBe(
+      'members-invite-error-message members-invite-error-code',
+    );
+    expect(root.querySelector('[role="alert"]')).toBeNull();
+    expect(input().disabled).toBe(false);
     expect(
       root.querySelector<HTMLButtonElement>('hlm-checkbox button[role="checkbox"]')?.disabled,
-    ).toBe(true);
+    ).toBe(false);
+    expect(submitButton().disabled).toBe(true);
+    submitButton().click();
+    expect(data.invites).toHaveLength(1);
+    input().focus();
+    setEmail('corrected@example.test');
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(input());
+    expect(summary.isConnected).toBe(false);
+    expect(submitButton().disabled).toBe(false);
+    submitButton().click();
+    await fixture.whenStable();
+    expect(data.invites).toHaveLength(2);
+    expect(data.invites[1]?.intent).not.toBe(data.invites[0]?.intent);
+    expect(data.invites[1]?.body.email).toBe('corrected@example.test');
+  });
+
+  it('does not refocus the email on unrelated renders and restores the opener on refusal Escape', async () => {
+    data.outcomes.push(() =>
+      Promise.reject(refusal('unavailable', 503, 'unavailable', 'Try again shortly.', true)),
+    );
+    await open();
+    const role = root.querySelector<HTMLButtonElement>('hlm-checkbox button[role="checkbox"]')!;
+    role.focus();
+    toggleRole('role-a', true);
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(role);
+    setEmail('new@example.test');
+    submitButton().click();
+    await fixture.whenStable();
+    const summary = root.querySelector<HTMLElement>('[data-members-error]')!;
+    expect(document.activeElement).toBe(summary);
+    expect(input().disabled).toBe(true);
+    summary.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    await fixture.whenStable();
+    expect(root.querySelector('[data-members-dialog][data-state="open"]')).toBeNull();
+    expect(document.activeElement).toBe(opener);
   });
 
   it('a 409 invite_exists renders the server message as text, never as markup', async () => {
@@ -409,11 +456,31 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
     expect(document.getElementById(descriptionId!)).toBe(
       root.querySelector('[data-members-error]'),
     );
+    expect(document.activeElement).toBe(root.querySelector('[data-members-error]'));
     fixture.componentInstance.close();
     await fixture.whenStable();
     await open();
     expect(input().getAttribute('aria-describedby')).toBeNull();
     expect(document.getElementById('members-invite-error')).toBeNull();
     expect(root.querySelector('app-connect-step-reveal')).toBeNull();
+  });
+  it('does not move focus or recreate a summary when a dismissed attempt fails late', async () => {
+    // The pinned ES2022 lib does not provide Promise.withResolvers.
+    let fail!: (error: unknown) => void;
+    data.outcomes.push(
+      () =>
+        new Promise((_, reject) => {
+          fail = reject;
+        }),
+    );
+    await open();
+    setEmail('new@example.test');
+    submitButton().click();
+    fixture.componentInstance.close();
+    opener.focus();
+    fail(refusal('unavailable', 503, 'unavailable', 'Try again shortly.', true));
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(opener);
+    expect(root.querySelector('[data-members-error]')).toBeNull();
   });
 });

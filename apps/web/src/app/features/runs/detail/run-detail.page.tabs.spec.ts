@@ -189,22 +189,31 @@ describe('RunDetailPage evidence and decision tabs', () => {
     expect(root.querySelector<HTMLElement>('[role="tabpanel"][hidden]')).toBe(evidencePanel);
   });
 
-  it('keeps the decision panel a Tab stop when the decision renders no control', async () => {
-    getDecision.mockResolvedValue(liveBody({ evidence_revision: 3 }));
-    const { root, harness, decision } = await open();
-    decision.click();
-    await harness.fixture.whenStable();
-    const decisionPanel = root
-      .querySelector('app-decision-view')
-      ?.closest<HTMLElement>('[role="tabpanel"]');
-    if (!decisionPanel) throw new Error('Decision panel was not rendered');
-    expect(root.querySelector('[data-decision-mismatch]')).toBeNull();
-    expect(decisionPanel.querySelector('a[href], button, select, textarea')).toBeNull();
-    expect(decisionPanel.hidden).toBe(false);
-    expect(decisionPanel.getAttribute('tabindex')).toBe('0');
-    expect(decisionPanel.tabIndex).toBe(0);
-    expect(root.querySelector<HTMLElement>('[role="tabpanel"][hidden]')).not.toBe(decisionPanel);
-  });
+  it.each([
+    ['not evaluated', null, 0],
+    ['evaluated', liveBody({ evidence_revision: 3 }), 3],
+  ] as const)(
+    'keeps the decision panel a Tab stop for a %s decision',
+    async (_state, body, copies) => {
+      getDecision.mockResolvedValue(body);
+      const { root, harness, decision } = await open();
+      decision.click();
+      await harness.fixture.whenStable();
+      const decisionPanel = root
+        .querySelector('app-decision-view')
+        ?.closest<HTMLElement>('[role="tabpanel"]');
+      if (!decisionPanel) throw new Error('Decision panel was not rendered');
+      expect(root.querySelector('[data-decision-mismatch]')).toBeNull();
+      expect(decisionPanel.querySelectorAll('app-copy-value-button button')).toHaveLength(copies);
+      if (copies === 0) {
+        expect(decisionPanel.querySelector('a[href], button, select, textarea')).toBeNull();
+      }
+      expect(decisionPanel.hidden).toBe(false);
+      expect(decisionPanel.getAttribute('tabindex')).toBe('0');
+      expect(decisionPanel.tabIndex).toBe(0);
+      expect(root.querySelector<HTMLElement>('[role="tabpanel"][hidden]')).not.toBe(decisionPanel);
+    },
+  );
 
   it('supports arrow, Home and End keyboard selection with roving focus', async () => {
     const { harness, evidence, decision } = await open();

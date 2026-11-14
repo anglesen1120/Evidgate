@@ -19,6 +19,7 @@ import { ForbiddenPatternComponent } from '../../../../shared/ui/states/forbidde
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
 import { NotFoundPatternComponent } from '../../../../shared/ui/states/not-found-pattern.component';
 import { patternForError } from '../../../../shared/ui/states/state-pattern';
+import { CopyValueButtonComponent } from '../../../../shared/ui/values/copy-value-button.component';
 import type { DecisionViewModel } from './decision-view-model';
 import { refusesAccess } from './decision-refusal';
 import { runValueLabel } from '../run-value-label';
@@ -43,12 +44,15 @@ import { decisionReasonExplanation } from '../reason-explanation';
     ForbiddenPatternComponent,
     LoadingPatternComponent,
     NotFoundPatternComponent,
+    CopyValueButtonComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './decision-view.component.html',
   host: { class: 'block min-w-0' },
 })
 export class DecisionViewComponent {
+  protected readonly sectionSize = 'section' as const;
+  protected readonly subsectionSize = 'subsection' as const;
   /** `null` while the first read is in flight, so the region has a loading state of its own. */
   readonly decision = input<DecisionViewModel | null>(null);
   readonly shadowIgnored = input(false);

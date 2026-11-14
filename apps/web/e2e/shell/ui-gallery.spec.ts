@@ -10,11 +10,15 @@
 // width the user can never see.
 //
 // Defects this file finds in `shared/ui` are REPORTED, not fixed (the task owns `shell/**` only).
+//
+// The table has two anatomies: below a 768px container it renders stacked records, at or above it a
+// single real table (header row + body rows in one grid). So the 360px reflow budget covers the
+// narrow end, table mechanics are asserted at the narrowest width where the table renders, and
+// value clipping is asserted on the fixed-layout (virtual) table, whose equal column shares clip
+// every value regardless of the container width.
 import { expect, test, type Page } from '@playwright/test';
 
 import { localePath, LOCALES, THEMES } from './support';
-
-const HASH_OF_FIRST_ROW = 'sha256:demo-evidence-0-0123456789abcdef';
 
 /** `/dev/ui-gallery` is review-only and has no shell, so a theme is just the attribute on `<html>`. */
 async function openGallery(
@@ -24,7 +28,11 @@ async function openGallery(
 ): Promise<void> {
   await page.goto(localePath(locale, '/dev/ui-gallery'));
   await expect(page.locator('h1').first()).toBeVisible();
-  await expect(page.locator('[data-demo="table-small"] .body-table tr').first()).toBeVisible();
+  // Below the 768px breakpoint the table renders as stacked records, so readiness is the first
+  // data row of either anatomy inside the scroll box, not a `<tbody>` row.
+  await expect(
+    page.locator('[data-demo="table-small"] :is(tbody tr, li.eg-table-record)').first(),
+  ).toBeVisible();
   await page.evaluate((choice) => {
     if (choice === 'light') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', choice);
@@ -57,8 +65,9 @@ async function tableMetrics(page: Page): Promise<{
   return page.evaluate(() => {
     const root = document.querySelector('[data-demo="table-small"]') as HTMLElement;
     const scroll = root.querySelector('.scroll') as HTMLElement;
-    const header = root.querySelector('.header-table') as HTMLElement;
-    const bodyRow = root.querySelector('.body-table tr') as HTMLElement;
+    // One table, one grid: the header row's first cell is the sticky element (`thead th` carries
+    // the sticky rule) and the body's first row is the first `tbody` row.
+    const header = root.querySelector('thead tr > *') as HTMLElement;
     const box = (element: Element) => {
       const rect = element.getBoundingClientRect();
       return {
@@ -70,8 +79,8 @@ async function tableMetrics(page: Page): Promise<{
         height: Math.round(rect.height * 100) / 100,
       };
     };
-    const cells = (table: Element) =>
-      Array.from(table.querySelectorAll('tr:first-child > .cell')).map((cell) => {
+    const cells = (selector: string) =>
+      Array.from(root.querySelectorAll(selector)).map((cell) => {
         const rect = cell.getBoundingClientRect();
         return {
           left: Math.round(rect.left * 100) / 100,
@@ -87,8 +96,8 @@ async function tableMetrics(page: Page): Promise<{
         clientHeight: scroll.clientHeight,
       },
       header: box(header),
-      headerCells: cells(header),
-      bodyCells: cells(bodyRow),
+      headerCells: cells('thead tr > *'),
+      bodyCells: cells('tbody tr:first-child > *'),
       scrollbarWidth: scroll.offsetWidth - scroll.clientWidth,
       viewportWidth: window.innerWidth,
     };
@@ -144,7 +153,10 @@ test.describe('the gallery never scrolls sideways (T7, 360px)', () => {
 
 for (const locale of LOCALES) {
   test.describe(`table mechanics, ${locale} bundle (T7)`, () => {
-    test.use({ viewport: { width: 360, height: 800 } });
+    // Below its 768px container breakpoint the table renders as stacked records (approved
+    // redesign), so table mechanics are asserted at the narrowest width where the table itself
+    // renders; the 360px reflow budget above still covers the narrow end.
+    test.use({ viewport: { width: 900, height: 800 } });
 
     test('the small table really scrolls and its header sticks above the body', async ({
       page,
@@ -179,20 +191,19 @@ for (const locale of LOCALES) {
     test('a clipped value opens a native popover in the top layer, unclipped', async ({ page }) => {
       await openGallery(page, locale, 'light');
 
-      const values = page.locator('[data-demo="table-small"] .body-table .value.clipped');
+      // The virtual table is the fixed-layout one: its columns get an equal share of the box, so the
+      // whole hash does not fit and every rendered value is clipped. The plain table gives the
+      // identity column its content width, so nothing there is clipped.
+      const values = page.locator('[data-demo="table-virtual"] .body-table .value.clipped');
       expect(
         await values.count(),
-        'the hash column is truncated, so at least the visible rows are clipped',
+        'the fixed-layout hash column is narrower than the whole value',
       ).toBeGreaterThan(0);
 
-      // Scroll the table to its end, then use a cell that is still visible there: a popover whose
-      // anchor is scrolled out of the box would be positioned off-screen for the wrong reason.
-      const scroll = page.locator('[data-demo="table-small"] .scroll');
-      await scroll.evaluate((element) => {
-        element.scrollTop = element.scrollHeight;
-      });
-
-      const value = values.last();
+      const value = values.first();
+      // Bring the anchor into the viewport: the popover is placed next to it, and the hit test below
+      // has to land on painted pixels.
+      await value.scrollIntoViewIfNeeded();
       const cell = value.locator('..');
       const popover = cell.locator('.full-value');
       await value.focus();
@@ -240,11 +251,17 @@ for (const locale of LOCALES) {
 }
 
 test.describe('a clipped value in the accessibility tree (T7 report item)', () => {
-  test.use({ viewport: { width: 360, height: 800 } });
+  // Table mode: the cell/`td` exposure below is the table anatomy the report measured.
+  test.use({ viewport: { width: 900, height: 800 } });
 
   test('counts the copies Chromium exposes, closed and open', async ({ page }) => {
     await openGallery(page, 'en', 'light');
-    const cell = page.locator('[data-demo="table-small"] .body-table tr:first-child td').first();
+    // The fixed-layout table truncates its text column, so this cell holds the clipped-value
+    // anatomy: `.value` (customary clipping, full text) plus the `.full-value` popover. The identity
+    // column renders the copyable-identifier component instead, with its own disclosure dialog.
+    const cell = page.locator('[data-demo="table-virtual"] tbody tr:first-child > td').nth(1);
+    const fullValue = ((await cell.locator('.value').textContent()) ?? '').trim();
+    expect(fullValue, 'the value cell carries text').not.toBe('');
 
     // The DOM contract first: one visible value (the accessible copy) and one popover that is
     // hidden from assistive technology and not rendered until it opens.
@@ -253,7 +270,7 @@ test.describe('a clipped value in the accessibility tree (T7 report item)', () =
         Array.from(element.querySelectorAll('span')).filter(
           (span) => (span.textContent ?? '').trim() === value,
         ).length,
-      HASH_OF_FIRST_ROW,
+      fullValue,
     );
     expect(domCopies, 'visible span + aria-hidden popover').toBe(2);
 
@@ -262,11 +279,13 @@ test.describe('a clipped value in the accessibility tree (T7 report item)', () =
     // and tooltip nodes.
     const exposures = (snapshot: string) => {
       const lines = snapshot.split('\n');
-      const name = lines.filter((line) => /^\s*-\s+cell\b/.test(line)).join(' ');
+      // A name with punctuation is quoted by the snapshot (`- 'cell "…"'`), so the role token may sit
+      // behind a quote character.
+      const name = lines.filter((line) => /^\s*-\s+'?cell\b/.test(line)).join(' ');
       return {
-        nameCopies: name.split(HASH_OF_FIRST_ROW).length - 1,
+        nameCopies: name.split(fullValue).length - 1,
         tooltipCopies: lines.filter((line) => /^\s*-\s+tooltip/.test(line)).length,
-        rawCopies: snapshot.split(HASH_OF_FIRST_ROW).length - 1,
+        rawCopies: snapshot.split(fullValue).length - 1,
       };
     };
 

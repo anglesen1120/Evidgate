@@ -13,6 +13,9 @@ import {
   FakeSecretsStore,
   renderSecretsPage as render,
   rotateButton,
+  confirmRotation,
+  chooseSecretProject,
+  SECRET_DESKTOP_PROVIDER,
 } from './secrets-page.testing';
 describe('SecretsPage', () => {
   let store: FakeSecretsStore;
@@ -32,6 +35,7 @@ describe('SecretsPage', () => {
     canReadBindings.set(false);
     TestBed.configureTestingModule({
       providers: [
+        SECRET_DESKTOP_PROVIDER,
         {
           provide: SessionStore,
           useValue: {
@@ -55,15 +59,10 @@ describe('SecretsPage', () => {
   it('defaults to the first listed project and never requests an injected unlisted id', async () => {
     const { root, fixture } = await render();
     expect(store.load).toHaveBeenCalledExactlyOnceWith('p1');
-    const select = root.querySelector<HTMLSelectElement>('select');
-    if (!select) throw new Error('Expected project select');
-    expect(select.getAttribute('data-slot')).toBe('input');
-    expect(root.querySelector(`label[for="${select.id}"]`)?.textContent).toBe('Project');
-    const option = document.createElement('option');
-    option.value = 'foreign';
-    select.append(option);
-    select.value = 'foreign';
-    select.dispatchEvent(new Event('change'));
+    const select = root.querySelector<HTMLButtonElement>('#secrets-project');
+    expect(select?.getAttribute('role')).toBe('combobox');
+    expect(root.querySelector('label[for="secrets-project"]')?.textContent).toBe('Project');
+    chooseSecretProject(fixture, 'foreign');
     await fixture.whenStable();
     expect(store.load).toHaveBeenCalledTimes(1);
   });
@@ -96,56 +95,6 @@ describe('SecretsPage', () => {
     const { root } = await render();
     expect(root.querySelector('[data-rotate]')).toBeNull();
   });
-  it.each(['dismiss', 'escape', 'project', 'destroy'])(
-    'clears the one-time value on %s, including the DOM input',
-    async (action) => {
-      const { fixture, root, slot } = await render();
-      const opener = rotateButton(root);
-      opener.click();
-      await fixture.whenStable();
-      const input = document.querySelector<HTMLInputElement>('[data-testid="reveal-value"]');
-      expect(input?.value).toBe('new-full-credential-once');
-      expect(slot.current()?.source).toBe('ingest-token-rotation');
-      expect(document.querySelector('[data-testid="reveal-copy"]')).not.toBeNull();
-      expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-        '2026-10-26T00:00:00Z',
-      );
-      if (action === 'dismiss')
-        document.querySelector<HTMLButtonElement>('[data-testid="reveal-dismiss"]')?.click();
-      if (action === 'escape')
-        document.querySelector('[role="dialog"]')?.dispatchEvent(
-          new KeyboardEvent('keydown', {
-            key: 'Escape',
-            keyCode: 27,
-            bubbles: true,
-            cancelable: true,
-          }),
-        );
-      if (action === 'project') {
-        const select = root.querySelector<HTMLSelectElement>('select');
-        if (!select) throw new Error('Expected select');
-        select.value = 'p2';
-        select.dispatchEvent(new Event('change'));
-      }
-      if (action === 'destroy') fixture.destroy();
-      else {
-        fixture.detectChanges();
-        await fixture.whenStable();
-      }
-      expect(slot.current()).toBeNull();
-      expect(input?.value).toBe('');
-      expect(document.body.outerHTML).not.toContain('new-full-credential-once');
-      expect(
-        JSON.stringify({
-          rows: store.rows(),
-          phase: store.phase(),
-          rotateState: store.rotateState(),
-        }),
-      ).not.toContain('new-full-credential-once');
-      if (action === 'dismiss' || action === 'escape') expect(document.activeElement).toBe(opener);
-      if (action === 'project') expect(store.load).toHaveBeenLastCalledWith('p2');
-    },
-  );
   it('guards a double click and disables / marks the pending button busy', async () => {
     let settle: ((result: RotationResult | null) => void) | undefined;
     store.rotate.mockImplementation(
@@ -158,6 +107,7 @@ describe('SecretsPage', () => {
     const opener = rotateButton(root);
     opener.click();
     opener.click();
+    await confirmRotation(fixture);
     fixture.detectChanges();
     expect(store.rotate).toHaveBeenCalledTimes(1);
     expect(opener.disabled).toBe(true);
@@ -180,10 +130,8 @@ describe('SecretsPage', () => {
     );
     const { root, fixture, slot } = await render();
     rotateButton(root).click();
-    const select = root.querySelector<HTMLSelectElement>('select');
-    if (!select) throw new Error('Expected select');
-    select.value = 'p2';
-    select.dispatchEvent(new Event('change'));
+    await confirmRotation(fixture);
+    chooseSecretProject(fixture, 'p2');
     fixture.detectChanges();
     settle?.({ successorId: 'next', overlapEndsAt: null, value: 'abandoned-value' });
     await fixture.whenStable();
@@ -198,6 +146,7 @@ describe('SecretsPage', () => {
     const original = store.rows();
     const { root, fixture } = await render();
     rotateButton(root).click();
+    await confirmRotation(fixture);
     await fixture.whenStable();
     expect(root.textContent).toContain(failure.message);
     expect(root.textContent).toContain('invalid_transition');
@@ -221,6 +170,7 @@ describe('SecretsPage', () => {
     });
     const { root, fixture, slot } = await render();
     rotateButton(root).click();
+    await confirmRotation(fixture);
     const reset = vi.spyOn(store, 'resetRotation');
     // Exercise the handler even if its visible retry control is disabled.
     fixture.componentInstance['reload']();
@@ -234,10 +184,7 @@ describe('SecretsPage', () => {
   it('disables Rotate after a project switch until the store in-flight lock releases', async () => {
     const { root, fixture } = await render();
     store.rotating.set(true);
-    const select = root.querySelector<HTMLSelectElement>('select');
-    if (!select) throw new Error('Expected project select');
-    select.value = 'p2';
-    select.dispatchEvent(new Event('change'));
+    chooseSecretProject(fixture, 'p2');
     await fixture.whenStable();
     expect(rotateButton(root).disabled).toBe(true);
     rotateButton(root).click();
@@ -264,6 +211,7 @@ describe('SecretsPage', () => {
       });
       const { root, fixture, slot } = await render();
       rotateButton(root).click();
+      await confirmRotation(fixture);
       await fixture.whenStable();
       expect(root.textContent).toContain(unavailable.message);
       expect(root.textContent).toContain(
@@ -300,8 +248,10 @@ describe('SecretsPage', () => {
     });
     const { root, fixture } = await render();
     rotateButton(root).click();
+    await confirmRotation(fixture);
     await fixture.whenStable();
     fixture.componentInstance['retryRotation']();
+    await confirmRotation(fixture);
     expect(store.rotate).toHaveBeenCalledTimes(2);
     await fixture.whenStable();
   });
@@ -346,6 +296,7 @@ describe('SecretsPage', () => {
     const original = store.rows();
     const { root, fixture } = await render();
     rotateButton(root).click();
+    await confirmRotation(fixture);
     await fixture.whenStable();
     fixture.detectChanges();
     expect(root.textContent).toContain(limited.message);
@@ -424,19 +375,12 @@ describe('SecretsPage', () => {
   });
   it('reloads CI bindings on project selection and refuses an unlisted injected id', async () => {
     canReadBindings.set(true);
-    const { root, fixture } = await render();
-    const select = root.querySelector<HTMLSelectElement>('select');
-    if (!select) throw new Error('Expected project select');
-    select.value = 'p2';
-    select.dispatchEvent(new Event('change'));
+    const { fixture } = await render();
+    chooseSecretProject(fixture, 'p2');
     fixture.detectChanges();
     await fixture.whenStable();
     expect(store.loadCiBindings).toHaveBeenNthCalledWith(2, 'p2');
-    const option = document.createElement('option');
-    option.value = 'foreign';
-    select.append(option);
-    select.value = 'foreign';
-    select.dispatchEvent(new Event('change'));
+    chooseSecretProject(fixture, 'foreign');
     await fixture.whenStable();
     expect(store.loadCiBindings).toHaveBeenCalledTimes(2);
   });

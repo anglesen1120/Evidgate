@@ -15,7 +15,7 @@ import { HlmCard, HlmCardTitle, HlmCardDescription } from '@evidgate/ui/card';
   >
     <h1
       hlmCardTitle
-      class="m-0 font-(family-name:--eg-font-display) text-xl font-(weight:--eg-weight-bold)"
+      [size]="pageHeadingSize"
       id="no-organization-heading"
       [textContent]="heading"
     ></h1>
@@ -29,6 +29,7 @@ import { HlmCard, HlmCardTitle, HlmCardDescription } from '@evidgate/ui/card';
   </section>`,
 })
 export class NoOrganizationPage {
+  readonly pageHeadingSize = 'page' as const;
   readonly heading = $localize`:@@shell.page.no-organization.heading:No organization yet`;
   readonly explanation = $localize`:@@shell.page.no-organization.explanation:Organization setup will be available with onboarding.`;
   readonly action = $localize`:@@shell.page.no-organization.action:Back to workspace`;

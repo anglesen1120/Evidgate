@@ -67,6 +67,9 @@ export class AuditPage {
    */
   protected readonly ownsPageHeading =
     inject(ActivatedRoute).snapshot.data['pageHeadingLevel'] === 1;
+  protected readonly pageHeadingSize = 'page' as const;
+  protected readonly sectionHeadingSize = 'section' as const;
+  protected readonly subsectionHeadingSize = 'subsection' as const;
   protected readonly draft = signal<AuditFilters>({ ...EMPTY_AUDIT_FILTERS });
   protected readonly invalidRange = signal(false);
   protected readonly offset = signal(0);

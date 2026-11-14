@@ -18,6 +18,7 @@ import runListPage2 from '../../../../fixtures/web-api/run-list-page-2/input.jso
 import runListUnavailable from '../../../../fixtures/web-api/run-list-unavailable/input.json';
 import type { FixtureCallRecord } from '../../src/app/core/dev-fixtures/fixture-request-log';
 import { expectNoA11yViolations } from '../a11y/axe-scan';
+import { openRunFilters, RUN_RECORDS } from './run-list.support';
 import {
   localePath,
   LOCALES,
@@ -39,7 +40,7 @@ const VARIANTS = {
   forbidden: '?fixture.variant.listRuns=forbidden',
   unavailable: '?fixture.variant.listRuns=unavailable',
 } as const;
-const ROWS = 'app-run-list-table [data-run-row]';
+const ROWS = RUN_RECORDS;
 /**
  * `?fixture.variant.listPermissions=settings-policy-readonly` — the corpus grant set that holds
  * `run:read` (with `project:read` and `organization:read`). The default `permissions-list` is the
@@ -87,20 +88,20 @@ for (const locale of LOCALES) {
     await expect(page.locator(ROWS)).toHaveCount(runList.body.items.length);
     await expect(page.locator('app-run-list-page h1')).toHaveCount(1);
     await expect(page.locator('app-run-list-table [role="columnheader"]')).toHaveCount(7);
-    await expect(page.locator(`${ROWS} [data-run-evidence] [data-tone="neutral"]`)).toHaveCount(
+    await expect(page.locator(`${ROWS} [data-run-evidence] .status-pill--neutral`)).toHaveCount(
       runList.body.items.length,
     );
-    await expect(page.locator(`${ROWS} [data-run-evidence] [data-tone="success"]`)).toHaveCount(0);
+    await expect(page.locator(`${ROWS} [data-run-evidence] .status-pill--success`)).toHaveCount(0);
     await expect(page.locator('app-outcome-pill')).toHaveCount(0);
     for (const row of runList.body.items) {
-      const rendered = page.locator(`${ROWS}[data-run-id="${row.run_id}"]`);
+      const rendered = page.locator(`${ROWS}[data-row-id="${row.run_id}"]`);
       // An omitted decision is unavailable; only an explicit null means not evaluated.
       const decision = 'decision' in row ? row.decision : undefined;
       await expect(rendered.locator('[data-run-decision]')).toContainText(
         decision === undefined
           ? locale === 'vi'
-            ? 'Quyết định chưa khả dụng'
-            : 'Decision unavailable'
+            ? 'Không khả dụng'
+            : 'Unavailable'
           : (decision ?? (locale === 'vi' ? 'Chưa đánh giá' : 'Not evaluated')),
       );
       await expect(rendered.locator('time')).toHaveAttribute('datetime', row.created_at);
@@ -232,31 +233,44 @@ for (const locale of LOCALES) {
     await expect(page.locator(ROWS)).toHaveCount(2);
   });
 
-  test(`250 runs use a bounded CDK window that reaches the last record (${locale})`, async ({
+  test(`250 runs use bounded loaded-record pages that reach the last record (${locale})`, async ({
     page,
   }) => {
     await page.goto(withVariants(path(locale), [VARIANTS.large]));
     await ready(page);
-    const viewport = page.locator('app-run-list-table cdk-virtual-scroll-viewport');
-    await expect(viewport).toBeVisible();
+    await expect(page.locator('app-run-list-table cdk-virtual-scroll-viewport')).toHaveCount(0);
     await expect(page.locator('app-run-list-table [role="table"]')).toHaveAttribute(
       'aria-rowcount',
       '251',
     );
-    await expect.poll(() => page.locator(ROWS).count()).toBeGreaterThan(0);
-    expect(await page.locator(ROWS).count()).toBeLessThan(100);
-    await viewport.focus();
-    await expect(viewport).toBeFocused();
-    await viewport.evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-    });
+    await expect(page.locator(ROWS)).toHaveCount(200);
+    const expectedIds = runList250.body.items.map((row) => row.run_id);
+    const ids = () =>
+      page.locator(ROWS).evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id')));
+    expect(await ids()).toEqual(expectedIds.slice(0, 200));
+    const pager = page.locator('app-run-list-table nav');
+    await expect(pager.getByRole('button')).toHaveCount(2);
+    const next = pager.getByRole('button').last();
+    await next.focus();
+    await expect(next).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator(ROWS)).toHaveCount(50);
+    expect(await ids()).toEqual(expectedIds.slice(200));
+    await expect(pager.getByRole('button').first()).toBeFocused();
     const last = runList250.body.items[runList250.body.items.length - 1]!;
-    await expect(page.locator(`${ROWS}[data-run-id="${last.run_id}"]`)).toBeVisible();
-    expect(await page.locator(ROWS).count()).toBeLessThan(100);
+    const lastRecord = page.locator(`${ROWS}[data-row-id="${last.run_id}"]`);
+    await lastRecord.locator('a').focus();
+    await expect(lastRecord).toBeInViewport();
+    await expect(next).toBeDisabled();
+    await pager.getByRole('button').first().focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator(ROWS)).toHaveCount(200);
+    await expect(next).toBeFocused();
+    expect(await ids()).toEqual(expectedIds.slice(0, 200));
   });
 
   for (const mode of ['runs', 'large'] as const) {
-    test(`run identifiers stay unwrapped and columns align at tablet widths (${locale}, ${mode})`, async ({
+    test(`run identifiers and column facts remain contained across tablet widths (${locale}, ${mode})`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: 768, height: 800 });
@@ -265,45 +279,65 @@ for (const locale of LOCALES) {
       const row = page.locator(ROWS).first();
       await expect(row).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
-      for (const width of [768, 800, 900]) {
+      for (const width of [768, 800, 900, 1280]) {
         await page.setViewportSize({ width, height: 800 });
-        const geometry = await row.evaluate((element) => {
-          const cell = element.querySelector<HTMLElement>('.identifier');
-          const id = cell?.querySelector('abbr');
-          const header = element.closest('[role="table"]')?.querySelector('thead tr');
-          if (!cell || !id || !header) throw new Error('Run table geometry is unavailable');
-          const range = document.createRange();
-          range.selectNodeContents(id);
-          const text = range.getBoundingClientRect();
-          const bounds = cell.getBoundingClientRect();
-          const style = getComputedStyle(cell);
-          const headings = [...header.children].map((entry) => entry.getBoundingClientRect());
-          return {
-            lines: range.getClientRects().length,
-            fits:
-              text.left >= bounds.left + parseFloat(style.paddingLeft) - 1 &&
-              text.right <= bounds.right - parseFloat(style.paddingRight) + 1,
-            alignment: [...element.children].map((entry, index) => {
-              const body = entry.getBoundingClientRect();
-              const heading = headings[index];
-              if (!heading) throw new Error('Run column heading is missing');
-              return Math.max(Math.abs(body.x - heading.x), Math.abs(body.width - heading.width));
-            }),
-          };
-        });
-        expect(geometry.lines, `${width}px identifier line count`).toBe(1);
-        expect(geometry.fits, `${width}px identifier fits inside cell padding`).toBe(true);
-        expect(geometry.alignment).toHaveLength(7);
-        for (const difference of geometry.alignment) expect(difference).toBeLessThanOrEqual(1);
+        const host = page.locator('app-run-list-table app-data-table');
+        const narrow = (await host.evaluate((element) => element.clientWidth)) < 768;
+        await expect(row).toHaveJSProperty('tagName', narrow ? 'LI' : 'TR');
+        if (narrow) {
+          await expect(row.locator('dt')).toHaveCount(7);
+          await expect(row.locator('dd')).toHaveCount(7);
+          const fields = await row.locator('dd').evaluateAll((entries) =>
+            entries.map((entry) => ({
+              x: entry.getBoundingClientRect().x,
+              overflow: entry.scrollWidth - entry.clientWidth,
+            })),
+          );
+          expect(new Set(fields.map((field) => Math.round(field.x))).size).toBe(1);
+          for (const field of fields) expect(field.overflow).toBeLessThanOrEqual(1);
+          await expect(row.locator('[data-run-row] a')).toHaveText(
+            (await row.getAttribute('data-row-id')) ?? '',
+          );
+        } else {
+          const geometry = await row.evaluate((element) => {
+            const cell = element.querySelector<HTMLElement>('.identifier');
+            const id = cell?.querySelector('a');
+            const header = element.closest('[role="table"]')?.querySelector('thead tr');
+            if (!cell || !id || !header) throw new Error('Run table geometry is unavailable');
+            const tableCell = cell.closest('td');
+            if (!tableCell) throw new Error('The identifier has no containing table cell');
+            const range = document.createRange();
+            range.selectNodeContents(id);
+            const text = range.getBoundingClientRect();
+            const bounds = cell.getBoundingClientRect();
+            const cellBounds = tableCell.getBoundingClientRect();
+            const headings = [...header.children].map((entry) => entry.getBoundingClientRect());
+            return {
+              lines: range.getClientRects().length,
+              fits:
+                text.left >= bounds.left - 1 &&
+                text.right <= bounds.right + 1 &&
+                text.left >= cellBounds.left - 1 &&
+                text.right <= cellBounds.right + 1,
+              alignment: [...element.children].map((entry, index) => {
+                const body = entry.getBoundingClientRect();
+                const heading = headings[index];
+                if (!heading) throw new Error('Run column heading is missing');
+                return Math.max(Math.abs(body.x - heading.x), Math.abs(body.width - heading.width));
+              }),
+            };
+          });
+          expect(geometry.lines, `${width}px identifier line count`).toBe(1);
+          expect(geometry.fits, `${width}px identifier fits inside its cell`).toBe(true);
+          expect(geometry.alignment).toHaveLength(7);
+          for (const difference of geometry.alignment) expect(difference).toBeLessThanOrEqual(1);
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+          width,
+        );
       }
       await page.setViewportSize({ width: 767, height: 800 });
-      expect(
-        await row.evaluate((element) => {
-          const first = element.children[0]?.getBoundingClientRect();
-          const second = element.children[1]?.getBoundingClientRect();
-          return first !== undefined && second !== undefined && second.top >= first.bottom;
-        }),
-      ).toBe(true);
+      await expect(row.locator('dt')).toHaveCount(7);
       expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
         true,
       );
@@ -322,7 +356,7 @@ test('cursor pages preserve server ordering and append without offset pagination
   expect(
     await page
       .locator(ROWS)
-      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-run-id'))),
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-row-id'))),
   ).toEqual(allRows.map((row) => row.run_id));
   await expect(page.locator('[data-run-load-more]')).toHaveCount(0);
   // Unfiltered, the note is a plain count, never the "filtered from" phrasing.
@@ -371,6 +405,7 @@ for (const locale of LOCALES) {
       await page.setViewportSize({ width: 390, height: 800 });
       await page.goto(withVariants(path(locale), [VARIANTS.runs]));
       await ready(page);
+      await openRunFilters(page);
       await page.locator('#run-state').focus();
       await page.keyboard.press('Tab');
       await expect(page.locator('#run-decision')).toBeFocused();
@@ -392,20 +427,20 @@ for (const locale of LOCALES) {
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true);
-      const table = page.locator('app-run-list-table').getByRole('table');
+      const table = page.locator('app-run-list-table .eg-table-narrow');
       expect(await table.evaluate((element) => getComputedStyle(element).minInlineSize)).toBe(
         '0px',
       );
       const firstRow = page.locator(ROWS).first();
-      await expect(firstRow.locator('[data-label]')).toHaveCount(7);
+      await expect(firstRow.locator('dt')).toHaveCount(7);
       expect(await firstRow.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
         true,
       );
       expect(
         await firstRow
-          .locator('[data-label]')
+          .locator('dt')
           .first()
-          .evaluate((element) => getComputedStyle(element, '::before').content),
+          .evaluate((element) => getComputedStyle(element).display),
       ).not.toBe('none');
       // The option list is a portaled overlay that exists only while the combobox is open; the
       // keyboard opens it and Tab dismisses it without committing.

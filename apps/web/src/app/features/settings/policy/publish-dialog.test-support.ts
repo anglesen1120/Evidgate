@@ -4,6 +4,7 @@ import type { PolicyRevisionDto } from '@evidgate/sdk';
 import { expect, vi } from 'vitest';
 import type { ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
+import { NarrowMutationPolicy } from '../../../shared/ui/narrow';
 import { rootElement } from './policy-reads.test-support';
 import { PolicyStore, type PublishResult } from './policy.store';
 import { PublishDialogComponent } from './publish-dialog.component';
@@ -54,6 +55,10 @@ export function configurePublishDialog(store: FakePolicyStore, canWrite: () => b
   TestBed.configureTestingModule({
     providers: [
       { provide: PolicyStore, useValue: store },
+      {
+        provide: NarrowMutationPolicy,
+        useValue: { canMutate: () => true, narrow: () => false, allowsMutation: () => true },
+      },
       {
         provide: SessionStore,
         useValue: { has: (code: string) => code === 'policy:write' && canWrite() },

@@ -65,6 +65,17 @@ describe('SuiteCompositionComponent', () => {
     return { harness, root };
   }
 
+  it('uses stable shared page and section roles without changing semantic heading levels', async () => {
+    const { root } = await open();
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+    expect(root.querySelector('h1')?.getAttribute('data-title-size')).toBe('page');
+    expect(
+      [...root.querySelectorAll('h2[hlmCardTitle]')].map((heading) =>
+        heading.getAttribute('data-title-size'),
+      ),
+    ).toEqual(['section', 'section', 'section', 'section']);
+  });
+
   it('renders fixture members at their case revision and variant intersections', async () => {
     const { root } = await open();
     expect(getRevision).toHaveBeenCalledExactlyOnceWith(revision.id);

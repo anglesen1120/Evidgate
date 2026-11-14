@@ -31,7 +31,8 @@
     >
       <h3
         hlmCardTitle
-        class="m-0 text-lg text-inherit focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+        [size]="subsectionHeadingSize"
+        class="m-0 text-inherit focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
         id="enable-enabled-heading"
         tabindex="-1"
         #enabledHeadingTarget
@@ -42,12 +43,12 @@
       <!-- Only an advisory server value gets the not-gating sentence: any other mode is reported
            as the wire value below and never described as advisory or as gating on its behalf. -->
       @if (advisoryMode()) {
-        <p
-          class="grid min-w-0 gap-(--eg-space-3) rounded-sm border border-solid border-input bg-muted p-(--eg-space-4) text-(--eg-neutral-fg) font-(weight:--eg-weight-semibold)"
+        <app-inline-feedback
+          [tone]="'info'"
+          [title]="notGatingCopy"
+          [announcement]="'off'"
           data-testid="enable-collection-terminal-advisory"
-        >
-          {{ notGatingCopy }}
-        </p>
+        />
       }
       <dl
         class="grid min-w-0 gap-(--eg-space-4) p-0 min-[768px]:grid-cols-2 min-[1280px]:grid-cols-3"
@@ -82,9 +83,9 @@
           <dt>{{ hashLabel }}</dt>
           <dd>
             @if (enabledHash(); as hash) {
-              <code
-                ><bdi>{{ hash }}</bdi></code
-              >
+              <code class="font-mono select-text wrap-anywhere" data-testid="enable-policy-hash">
+                <bdi>{{ hash }}</bdi>
+              </code>
             } @else {
               {{ unavailableLabel }}
             }
@@ -143,25 +144,26 @@
     >
       <h3
         hlmCardTitle
-        class="m-0 text-lg text-inherit focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
+        [size]="subsectionHeadingSize"
+        class="m-0 text-inherit focus:outline-solid focus:outline-(length:--eg-focus-width) focus:outline-offset-(--eg-focus-offset) focus:outline-ring"
         id="enable-preview-heading"
       >
         {{ previewHeading }}
       </h3>
-      <p
-        class="grid min-w-0 gap-(--eg-space-3) rounded-sm border border-solid border-input bg-muted p-(--eg-space-4) text-(--eg-neutral-fg) font-(weight:--eg-weight-semibold)"
+      <app-inline-feedback
+        [tone]="'info'"
+        [title]="notGatingCopy"
+        [announcement]="'off'"
         data-testid="enable-collection-not-gating"
-      >
-        {{ notGatingCopy }}
-      </p>
+      />
       <!-- The replacement hazard is visible before confirmation and describes the button. -->
-      <p
-        class="rounded-sm border border-solid border-(--eg-warning-fg) bg-(--eg-warning-bg) px-(--eg-space-4) py-(--eg-space-3) font-(weight:--eg-weight-semibold) text-(--eg-warning-fg)"
+      <app-inline-feedback
+        [tone]="'warning'"
+        [title]="replacesActiveCopy"
+        [announcement]="'off'"
         id="enable-replaces-warning"
         data-testid="enable-collection-replaces-active"
-      >
-        {{ replacesActiveCopy }}
-      </p>
+      />
       <dl
         class="grid min-w-0 gap-(--eg-space-4) p-0 min-[768px]:grid-cols-2 min-[1280px]:grid-cols-3"
       >
@@ -213,7 +215,11 @@
           {{ retryReadLabel }}
         </button>
       }
+      @if (permitted()) {
+        <app-desktop-required-notice />
+      }
       <button
+        *appDesktopMutation
         hlmBtn
         class="h-auto min-h-(--eg-control-touch) max-w-full justify-self-start whitespace-normal wrap-anywhere"
         data-testid="enable-collection-confirm"
@@ -283,12 +289,12 @@
         </button>
       }
       @if (responseUncertain()) {
-        <p
-          class="grid min-w-0 gap-(--eg-space-3) rounded-sm border border-solid border-input bg-muted p-(--eg-space-4) text-(--eg-neutral-fg)"
+        <app-inline-feedback
+          [tone]="'warning'"
+          [title]="uncertainLabel"
+          [announcement]="'off'"
           data-testid="enable-collection-response-uncertain"
-        >
-          {{ uncertainLabel }}
-        </p>
+        />
       }
       @if (details().length > 0) {
         <!-- One labelled alert speaks the sanitized field-level reasons the shared error omits. -->
@@ -302,7 +308,14 @@
           <p id="enable-details-label" class="text-destructive">{{ detailsLabel }}</p>
           <ul class="text-destructive">
             @for (detail of details(); track $index) {
-              <li>{{ detail.message }}</li>
+              <li>
+                {{ detail.message }}
+                @if (detail.path) {
+                  <code class="font-mono wrap-anywhere"
+                    ><bdi>{{ detail.path }}</bdi></code
+                  >
+                }
+              </li>
             }
           </ul>
         </div>

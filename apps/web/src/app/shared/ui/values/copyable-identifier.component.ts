@@ -18,7 +18,7 @@ import {
 } from '@evidgate/ui/dialog';
 import type { BrnDialogRef } from '@spartan-ng/brain/dialog';
 
-import { CopyValueButtonComponent } from './copy-value-button.component';
+import { CopyValueButtonComponent, type CopyValueButtonSize } from './copy-value-button.component';
 import { middleTruncate } from './middle-truncate';
 
 @Component({
@@ -50,7 +50,7 @@ import { middleTruncate } from './middle-truncate';
             {{ showText }}
           </button>
         }
-        <app-copy-value-button [value]="value()" [label]="label()" />
+        <app-copy-value-button [value]="value()" [label]="label()" [size]="copySize()" />
       </span>
     </div>
     <ng-template #fullValue>
@@ -58,7 +58,7 @@ import { middleTruncate } from './middle-truncate';
       <code class="full-value">{{ value() }}</code>
       <hlm-dialog-footer>
         <button hlmBtn type="button" [variant]="'outline'" hlmDialogClose>{{ closeText }}</button>
-        <app-copy-value-button [value]="value()" [label]="label()" />
+        <app-copy-value-button [value]="value()" [label]="label()" [size]="copySize()" />
       </hlm-dialog-footer>
     </ng-template>
   `,
@@ -131,6 +131,8 @@ export class CopyableIdentifierComponent {
   readonly value = input.required<string>();
   readonly label = input.required<string>();
   readonly truncate = input(true);
+  /** Applies the copy target size in both the scan row and its full-value dialog. */
+  readonly copySize = input<CopyValueButtonSize>('sm');
   private readonly fullValue = viewChild.required<TemplateRef<unknown>>('fullValue');
   private readonly dialogs = inject(HlmDialogService);
   private dialog: BrnDialogRef<unknown> | undefined;

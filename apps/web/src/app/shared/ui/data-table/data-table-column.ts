@@ -38,7 +38,7 @@ export interface ResolvedDataTableColumn<T> extends DataTableColumn<T> {
 const COLUMN_WIDTH: Readonly<Record<HlmTableColumnRole, number>> = {
   identity: 28,
   text: 32,
-  status: 12,
+  status: 24,
   number: 8,
   date: 18,
   actions: 6,

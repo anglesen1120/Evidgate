@@ -18,6 +18,12 @@ describe('API token revocation confirmation', () => {
     const dialog = control('[data-api-revoke-dialog]');
     expect(dialog.textContent).toContain(ROW.name);
     expect(dialog.textContent).toContain(ROW.prefix);
+    expect(dialog.textContent).toContain('Storefront');
+    for (const permission of ROW.permissions) expect(dialog.textContent).toContain(permission);
+    expect(dialog.querySelector(`time[datetime="${ROW.expires_at}"]`)?.textContent).toContain(
+      'UTC',
+    );
+    expect(document.activeElement).toBe(dialog.querySelector('[data-api-revoke-cancel]'));
     dialog.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
     );

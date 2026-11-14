@@ -81,7 +81,9 @@ let nextQuickstartId = 0;
   host: { 'data-testid': 'cli-quickstart', class: 'block min-w-0' },
   template: `
     <section hlmCard class="gap-(--eg-space-4) p-(--eg-space-6)" [attr.aria-labelledby]="headingId">
-      <h3 hlmCardTitle [id]="headingId">{{ heading }}</h3>
+      <h3 hlmCardTitle [size]="subsectionHeadingSize" class="m-0" [id]="headingId">
+        {{ heading }}
+      </h3>
       <p hlmCardDescription class="m-0" [id]="hintId">{{ hint }}</p>
       <pre
         #snippetControl
@@ -122,6 +124,7 @@ export class CliQuickstartComponent {
   readonly binding = input<QuickstartInput['binding']>(null);
 
   protected readonly outlineVariant = 'outline';
+  protected readonly subsectionHeadingSize = 'subsection' as const;
   protected readonly heading = $localize`:@@onboarding.quickstart.title:CLI quickstart`;
   protected readonly hint = $localize`:@@onboarding.quickstart.hint:Replace the API URL placeholder with your API root, without /v1. Run these commands with your CI variables and credentials injected. This snippet contains metadata only, not credentials.`;
   protected readonly copyLabel = $localize`:@@onboarding.quickstart.copy:Copy CLI quickstart commands`;
