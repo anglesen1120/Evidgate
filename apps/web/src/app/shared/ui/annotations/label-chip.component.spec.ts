@@ -28,44 +28,64 @@ describe('LabelChip (FR-09-2/3/4)', () => {
     }).compileComponents();
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
 
-  it('uses noninteractive Helm badges without clipping long healed metadata', () => {
+  it('keeps a short status chip and a complete copyable candidate outside it', async () => {
     const fixture = TestBed.createComponent(LabelChip);
+    const value = hash.repeat(3);
     fixture.componentRef.setInput('kind', 'healed');
-    fixture.componentRef.setInput('candidateHash', hash.repeat(3));
-    fixture.detectChanges();
+    fixture.componentRef.setInput('candidateHash', value);
+    await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('.label-healed')?.getAttribute('data-slot')).toBe('badge');
-    const candidate = root.querySelector('.candidate-hash');
-    expect(candidate?.getAttribute('data-variant')).toBe('outline');
-    expect(candidate?.classList.contains('whitespace-pre-wrap')).toBe(true);
-    expect(candidate?.classList.contains('max-w-full')).toBe(true);
-    expect(candidate?.classList.contains('h-auto')).toBe(true);
-    expect(candidate?.classList.contains('min-h-[var(--eg-space-6)]')).toBe(true);
-    expect(candidate?.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
-    expect(candidate?.classList.contains('h-5')).toBe(false);
-    expect(root.querySelector('[tabindex], [role="button"], [role="alert"]')).toBeNull();
+    const badge = root.querySelector('.label-healed');
+    expect(badge?.getAttribute('data-slot')).toBe('badge');
+    expect(badge?.textContent?.trim()).toBe('Healed');
+    const candidate = root.querySelector('.candidate-hash code');
+    expect(candidate?.textContent).toBe(value);
+    expect(candidate?.classList.contains('full-value')).toBe(true);
+    expect(candidate?.closest('[hlmBadge]')).toBeNull();
+    expect(root.querySelector('button')?.getAttribute('aria-label')).toBe('Copy Candidate hash');
+    expect(
+      root.querySelector('[title], [aria-haspopup], [role="button"], [role="alert"]'),
+    ).toBeNull();
   });
 
   it.each([
     { kind: 'flaky', candidateHash: '', text: 'Flaky' },
-    { kind: 'healed', candidateHash: hash, text: 'Healed with candidate' },
-    { kind: 'healed', candidateHash: '', text: 'Candidate hash unavailable' },
+    { kind: 'healed', candidateHash: hash, text: 'Healed' },
+    { kind: 'healed', candidateHash: '', text: 'Unavailable' },
     { kind: 'unknown', candidateHash: '', text: 'Label unavailable' },
-  ])('allows the "$text" badge to grow when its text wraps', ({ kind, candidateHash, text }) => {
-    const fixture = TestBed.createComponent(LabelChip);
-    fixture.componentRef.setInput('kind', kind);
-    fixture.componentRef.setInput('candidateHash', candidateHash);
-    fixture.detectChanges();
-    const root = fixture.nativeElement as HTMLElement;
-    const badge = root.querySelector('.label');
-    expect(badge?.textContent?.trim()).toBe(text);
-    expect(badge?.classList.contains('h-auto')).toBe(true);
-    expect(badge?.classList.contains('h-5')).toBe(false);
-    expect(badge?.classList.contains('whitespace-normal')).toBe(true);
-    expect(badge?.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
-  });
+  ])(
+    'keeps the "$text" chip single-line with complete metadata outside',
+    async ({ kind, candidateHash, text }) => {
+      const fixture = TestBed.createComponent(LabelChip);
+      fixture.componentRef.setInput('kind', kind);
+      fixture.componentRef.setInput('candidateHash', candidateHash);
+      await fixture.whenStable();
+      const root = fixture.nativeElement as HTMLElement;
+      const badge = root.querySelector('.label');
+      expect(badge?.textContent?.trim()).toBe(text);
+      expect(badge?.classList.contains('h-auto')).toBe(true);
+      expect(badge?.classList.contains('h-5')).toBe(false);
+      expect(badge?.classList.contains('whitespace-nowrap')).toBe(true);
+      expect(badge?.classList.contains('min-h-[var(--eg-space-7)]')).toBe(true);
+      expect(badge?.classList.contains('max-w-[min(100%,24ch)]')).toBe(true);
+      expect(badge?.classList.contains('rounded-(--eg-radius-sm)')).toBe(true);
+      expect(badge?.querySelector('hlm-icon')?.getAttribute('aria-hidden')).toBe('true');
+      const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(text);
+      expect([...graphemes].length).toBeLessThanOrEqual(20);
+      if (kind === 'healed') {
+        const detail = root.querySelector('.candidate-description, .candidate-unavailable');
+        expect(detail?.textContent?.trim()).toBe(
+          candidateHash ? 'Healed with candidate' : 'Candidate hash unavailable',
+        );
+        expect(detail?.closest('[hlmBadge]')).toBeNull();
+      }
+    },
+  );
 
   describe.each<LabelKind>(['flaky', 'healed'])('%s label', (kind) => {
     it.each(states)('covers the %s state without changing the original outcome', (state) => {
@@ -79,7 +99,7 @@ describe('LabelChip (FR-09-2/3/4)', () => {
       expect(root.querySelector('.original-failure')?.textContent).toBe(originalFailure);
       expect(root.querySelector('script')).toBeNull();
       if (kind === 'flaky') {
-        expect(root.querySelector('.label-flaky')?.textContent).toBe('Flaky');
+        expect(root.querySelector('.label-flaky')?.textContent?.trim()).toBe('Flaky');
         expect(root.querySelector('.label-explanation')?.textContent).toContain(
           'It never overrides attempt #1 or the stored has_failures outcome.',
         );
@@ -93,17 +113,24 @@ describe('LabelChip (FR-09-2/3/4)', () => {
           expect(root.querySelector('.candidate-hash, .label-healed')).toBeNull();
           expect(root.textContent).not.toContain('Healed');
         } else {
-          expect(root.querySelector('.label-healed')?.textContent).toBe('Healed with candidate');
-          expect(root.querySelector('.candidate-hash')?.textContent).toBe(hash);
+          expect(root.querySelector('.label-healed')?.textContent?.trim()).toBe('Healed');
+          expect(root.querySelector('.candidate-description')?.textContent?.trim()).toBe(
+            'Healed with candidate',
+          );
+          expect(root.querySelector('.candidate-hash code')?.textContent).toBe(hash);
         }
       }
-      // Hover/focus/active/disabled/loading/error/success introduce no control or fetch lifecycle.
-      expect(
-        root.querySelector('[tabindex], [role="button"], [aria-disabled], button, a'),
-      ).toBeNull();
-      expect(
-        root.querySelector('[role="status"], [aria-busy="true"], [class*="success"]'),
-      ).toBeNull();
+      // Only the supplied candidate's copy action is interactive; labels do not change outcomes.
+      const buttons = root.querySelectorAll('button');
+      expect(buttons).toHaveLength(kind === 'healed' && state !== 'empty' ? 1 : 0);
+      buttons.forEach((button) =>
+        expect(button.getAttribute('aria-label')).toBe('Copy Candidate hash'),
+      );
+      expect(root.querySelector('a, [tabindex], [role="button"], [aria-busy="true"]')).toBeNull();
+      root
+        .querySelectorAll('[role="status"]')
+        .forEach((status) => expect(status.textContent).toBe(''));
+      expect(root.querySelector('[class*="success"]')).toBeNull();
       expect(root.textContent).not.toMatch(/\b(PASS|FAIL|complete)\b/);
     });
   });
@@ -118,7 +145,7 @@ describe('LabelChip (FR-09-2/3/4)', () => {
       fixture.componentRef.setInput('originalFailure', originalFailure);
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
-      expect(root.querySelector('.candidate-block .candidate-hash')?.textContent).toBe(hash);
+      expect(root.querySelector('.candidate-block .candidate-hash code')?.textContent).toBe(hash);
       expect(root.querySelector('.candidate-block .label-mode')?.textContent).toBe(
         mode === 'shadow' ? 'Shadow evaluation' : 'Official evaluation',
       );
@@ -141,7 +168,7 @@ describe('LabelChip (FR-09-2/3/4)', () => {
           'Original failure unavailable',
         );
       } else {
-        expect(root.querySelector('.label-flaky')?.textContent).toBe('Flaky');
+        expect(root.querySelector('.label-flaky')?.textContent?.trim()).toBe('Flaky');
       }
     });
 
@@ -193,9 +220,29 @@ describe('LabelChip (FR-09-2/3/4)', () => {
     fixture.componentRef.setInput('originalFailure', longFailure);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('.candidate-hash')?.textContent).toBe(longHash);
+    expect(root.querySelector('.candidate-hash code')?.textContent).toBe(longHash);
     expect(root.querySelector('.original-failure')?.textContent).toBe(longFailure);
     expect(root.querySelector('.candidate-block')).not.toBeNull();
-    expect(root.querySelector('svg, [title]')).toBeNull();
+    expect(root.querySelector('svg[onload], script, [onerror], [title]')).toBeNull();
+  });
+
+  it('copies the complete candidate without rewriting the original failure', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const fixture = TestBed.createComponent(LabelChip);
+    const value = ` \n${hash.repeat(3)}\t `;
+    fixture.componentRef.setInput('kind', 'healed');
+    fixture.componentRef.setInput('candidateHash', value);
+    fixture.componentRef.setInput('originalFailure', originalFailure);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const copy = root.querySelector<HTMLButtonElement>('button[aria-label="Copy Candidate hash"]');
+    if (!copy) throw new Error('Expected the named candidate-hash copy action');
+    copy.click();
+    await fixture.whenStable();
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(value);
+    expect(root.querySelector('.candidate-hash code')?.textContent).toBe(value);
+    expect(root.querySelector('.original-failure')?.textContent).toBe(originalFailure);
+    expect(root.querySelector('[role="status"]')?.textContent).toContain('copied');
   });
 });

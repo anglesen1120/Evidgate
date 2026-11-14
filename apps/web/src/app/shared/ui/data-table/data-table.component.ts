@@ -1,4 +1,4 @@
-import { NgTemplateOutlet } from '@angular/common';
+import { formatNumber, NgTemplateOutlet } from '@angular/common';
 import { ArrayDataSource } from '@angular/cdk/collections';
 import {
   CdkFixedSizeVirtualScroll,
@@ -24,26 +24,32 @@ import {
   computed,
   effect,
   ElementRef,
+  inject,
   input,
+  linkedSignal,
+  LOCALE_ID,
   signal,
   viewChild,
 } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
 import type { ListRange } from '@angular/cdk/collections';
-import { HlmTable, HlmTableContainer, HlmTd, HlmTh, HlmTr } from '@evidgate/ui/table';
+import { HlmButton } from '@evidgate/ui/button';
+import {
+  HlmTable,
+  HlmTableColumn,
+  HlmTableContainer,
+  HlmTd,
+  HlmTh,
+  HlmTr,
+} from '@evidgate/ui/table';
 import { hlm } from '@evidgate/ui/utils';
 
-import { DataTableValueComponent } from './data-table-value.component';
+import { DataTableCellComponent } from './data-table-cell.component';
+import { resolveTableColumns } from './data-table-column';
+import type { DataTableColumn } from './data-table-column';
+import { DataTableRecordsComponent } from './data-table-records.component';
 
-export interface DataTableColumn<T> {
-  readonly id: string;
-  /** Already localized by the caller. */
-  readonly header: string;
-  readonly cell: (row: T) => string | number;
-  readonly align?: 'start' | 'end';
-  readonly truncate?: boolean;
-  readonly mutates?: boolean;
-}
+export type { DataTableColumn } from './data-table-column';
 
 export type DataTableDensity = 'default' | 'compact';
 export type DataTableRowId<T> = (row: T) => string | number;
@@ -54,14 +60,13 @@ let nextTableId = 0;
  * Render-only, signal-fed CDK table; never fetches, sorts, selects or mutates rows.
  * Caption, column labels and row values are already localized by the caller.
  *
- * Above virtualThreshold, a CDK fixed-size viewport owns windowing. Wrapped cells
- * are clipped to the fixed row height by design: variable-height rows require
- * cursor pagination of <=200 rows instead (ADR-0008 rule 8).
+ * Fixed-size rows always use recoverable one-line previews. Narrow records and
+ * custom variable-height cells use bounded pages of already loaded rows instead;
+ * callers retain their server cursor and never receive invented totals or cursors.
  *
- * A header-only CDK table remains outside the translated virtual content wrapper,
- * but inside the local horizontal scroll container. That named scroll region wraps
- * a semantic table; presentation tables combine their rows under that table role.
- * No grid keyboard interaction is implied. Coarse pointers use default density.
+ * A header-only table sits outside the translated virtual window. Ordinary mode
+ * uses one native table so utility columns size intrinsically. Both keep the
+ * header inside the named local scroller, without implying grid interaction.
  */
 @Component({
   selector: 'app-data-table',
@@ -79,7 +84,10 @@ let nextTableId = 0;
     CdkRow,
     CdkVirtualScrollViewport,
     CdkFixedSizeVirtualScroll,
-    DataTableValueComponent,
+    DataTableCellComponent,
+    DataTableRecordsComponent,
+    HlmButton,
+    HlmTableColumn,
     HlmTable,
     HlmTableContainer,
     HlmTd,
@@ -90,9 +98,10 @@ let nextTableId = 0;
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:
-      'block min-w-0 bg-card font-sans text-sm text-foreground [--eg-table-row:var(--eg-row-default)] [--eg-table-inset:var(--eg-space-3)] [&.compact]:[--eg-table-row:var(--eg-row-compact)] [&.compact]:[--eg-table-inset:var(--eg-space-2)] pointer-coarse:[&.compact]:[--eg-table-row:var(--eg-row-default)]',
+      'block min-w-0 bg-card font-sans text-sm text-foreground [--eg-table-row:var(--eg-row-default)] [--eg-table-inset:var(--eg-space-3)] [&.compact]:[--eg-table-row:var(--eg-row-compact)] [&.compact]:[--eg-table-inset:var(--eg-space-2)] pointer-coarse:[&.compact]:[--eg-table-row:var(--eg-row-default)] pointer-coarse:[&.compact]:[--eg-table-inset:var(--eg-space-3)]',
     '[class.compact]': 'rowHeight() === "compact"',
     '[class.virtual]': 'virtual()',
+    '[style.--eg-table-header-height.px]': 'headerHeight()',
   },
 })
 export class DataTableComponent<T> {
@@ -104,24 +113,73 @@ export class DataTableComponent<T> {
   readonly virtualThreshold = input(200);
 
   readonly captionId = `eg-data-table-${nextTableId++}-caption`;
+  readonly narrow = signal(false);
+  readonly virtual = computed(
+    () =>
+      !this.narrow() &&
+      !this.columns().some((column) => column.cellTemplate) &&
+      this.rows().length > this.virtualThreshold(),
+  );
+  readonly resolvedColumns = computed(() =>
+    resolveTableColumns(this.columns(), this.virtual() ? this.rows() : []),
+  );
   readonly columnIds = computed(() => this.columns().map((column) => column.id));
-  readonly virtual = computed(() => this.rows().length > this.virtualThreshold());
   readonly emptyData: readonly T[] = [];
+  readonly viewport = viewChild(CdkVirtualScrollViewport);
+  readonly itemSize = signal(44);
+  protected readonly headerHeight = signal(44);
+  readonly horizontalScrolls = signal(false);
+  readonly viewportScrolls = signal(false);
+  protected readonly pageSize = 200;
+  protected readonly pageCount = computed(() =>
+    Math.max(1, Math.ceil(this.rows().length / this.pageSize)),
+  );
+  protected readonly pageIndex = linkedSignal<number, number>({
+    source: this.pageCount,
+    computation: (pages, previous) => Math.min(previous?.value ?? 0, pages - 1),
+  });
+  protected readonly paged = computed(() => !this.virtual() && this.pageCount() > 1);
+  protected readonly pageRows = computed(() => {
+    const rows = this.rows();
+    if (!this.paged()) return rows;
+    const start = this.pageIndex() * this.pageSize;
+    return rows.slice(start, start + this.pageSize);
+  });
   protected readonly cellClasses =
-    'box-border min-w-0 h-[var(--eg-table-row)] px-[var(--eg-space-4)] py-[var(--eg-table-inset)] align-top whitespace-normal [overflow-wrap:anywhere] border-b border-border text-start [&.numeric]:text-right [&.numeric]:tabular-nums max-md:data-[eg-mutate]:hidden';
+    'box-border min-w-0 h-[var(--eg-table-row)] px-[var(--eg-space-4)] py-[var(--eg-table-inset)] align-top whitespace-normal [overflow-wrap:anywhere] border-b border-border [&.numeric]:text-right [&.numeric]:tabular-nums';
   protected readonly bodyCellClasses = computed(() =>
     hlm(this.cellClasses, this.virtual() ? 'py-0 border-b-0 shadow-sm' : ''),
   );
-  readonly viewport = viewChild(CdkVirtualScrollViewport);
+  protected readonly virtualMinWidth = computed(() => {
+    const widths = this.resolvedColumns().flatMap((column) =>
+      column.virtualWidth === null ? ['9.5rem'] : [column.virtualWidth],
+    );
+    return this.virtual() ? `max(40rem, calc(${widths.join(' + ') || '0px'}))` : null;
+  });
+  protected readonly probeText = 'Ág';
+  protected readonly previousLabel = $localize`:@@shared.data-table.previous:Previous records`;
+  protected readonly nextLabel = $localize`:@@shared.data-table.next:Next records`;
+  protected readonly pagesLabel = computed(() => {
+    const caption = this.caption();
+    return $localize`:@@shared.data-table.pages:${caption}:caption: — loaded record pages`;
+  });
+  protected readonly pageLabel = computed(() => {
+    const total = this.rows().length;
+    const start = formatNumber(this.pageIndex() * this.pageSize + 1, this.locale);
+    const end = formatNumber(Math.min((this.pageIndex() + 1) * this.pageSize, total), this.locale);
+    const loaded = formatNumber(total, this.locale);
+    return $localize`:@@shared.data-table.loaded-range:Loaded records ${start}:start:–${end}:end: of ${loaded}:loaded:`;
+  });
+  private readonly locale = inject(LOCALE_ID);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly scrollElement = viewChild.required<ElementRef<HTMLElement>>('scrollElement');
   private readonly tokenProbe = viewChild.required<ElementRef<HTMLElement>>('tokenProbe');
   private readonly range = signal<ListRange>({ start: 0, end: 0 });
-  readonly itemSize = signal(44);
-  readonly horizontalScrolls = signal(false);
-  readonly viewportScrolls = signal(false);
-  readonly windowStart = computed(() => (this.virtual() ? this.range().start : 0));
+  readonly windowStart = computed(() =>
+    this.virtual() ? this.range().start : this.pageIndex() * this.pageSize,
+  );
   private readonly visibleRows = computed(() =>
-    this.virtual() ? this.rows().slice(this.range().start, this.range().end) : this.rows(),
+    this.virtual() ? this.rows().slice(this.range().start, this.range().end) : this.pageRows(),
   );
   private readonly rowsObservable = toObservable(this.rows);
   readonly dataSource = new ArrayDataSource(toObservable(this.visibleRows));
@@ -130,87 +188,97 @@ export class DataTableComponent<T> {
   constructor() {
     effect((onCleanup) => {
       const viewport = this.viewport();
-      if (!viewport) return;
-      const repeater: CdkVirtualScrollRepeater<T> = {
-        dataStream: this.rowsObservable,
-        measureRangeSize: (range) => (range.end - range.start) * this.itemSize(),
-      };
-      // The public CDK repeater contract lets the table render the bounded window
-      // itself, without a second cdkVirtualFor renderer or private CDK APIs.
-      const subscription = viewport.renderedRangeStream.subscribe((range) => {
-        const active = document.activeElement;
-        if (active instanceof HTMLElement && viewport.elementRef.nativeElement.contains(active)) {
-          const row = active.closest('[data-row-id]');
-          const index = Number(row?.getAttribute('aria-rowindex')) - 2;
-          if (row && (index < range.start || index >= range.end)) {
-            // Only restore focus when that row leaves the window; overlapping
-            // windows must not steal focus from a still-visible clipped value.
-            viewport.elementRef.nativeElement.focus({ preventScroll: true });
-          }
-        }
-        this.range.set(range);
-      });
-      viewport.attach(repeater);
-      onCleanup(() => {
-        subscription.unsubscribe();
-        viewport.detach();
-      });
+      if (viewport) onCleanup(this.attachViewport(viewport));
     });
-
-    const measure = () => {
-      const scroll = this.scrollElement().nativeElement;
-      const probe = this.tokenProbe().nativeElement;
-      const viewport = this.viewport();
-      // CSS resolves --eg-row-* (including coarse-pointer density) into pixels.
-      // jsdom has no token/layout resolution: these fallbacks mirror tokens.css.
-      const pixels = Number.parseFloat(getComputedStyle(probe).height);
-      this.itemSize.set(pixels > 0 ? pixels : this.rowHeight() === 'compact' ? 40 : 44);
-      this.horizontalScrolls.set(
-        scroll.clientWidth > 0 &&
-          (scroll.scrollWidth > scroll.clientWidth || scroll.scrollHeight > scroll.clientHeight),
-      );
-      if (viewport) {
-        const element = viewport.elementRef.nativeElement;
-        viewport.checkViewportSize();
-        this.viewportScrolls.set(
-          element.clientHeight > 0 && element.scrollHeight > element.clientHeight,
-        );
-      }
-    };
-
     afterRenderEffect((onCleanup) => {
-      // Observation follows element lifetime, not polling or column refreshes.
       const scroll = this.scrollElement().nativeElement;
       const probe = this.tokenProbe().nativeElement;
       const viewport = this.viewport();
+      this.narrow();
       if (typeof ResizeObserver === 'undefined') return;
-      const observer = new ResizeObserver(measure);
+      const observer = new ResizeObserver(() => this.measure());
+      observer.observe(this.host.nativeElement);
       observer.observe(scroll);
       observer.observe(probe);
+      const header = this.host.nativeElement.querySelector('.eg-table-sticky');
+      if (header) observer.observe(header);
       if (viewport) observer.observe(viewport.elementRef.nativeElement);
       onCleanup(() => observer.disconnect());
     });
-
     afterRenderEffect(() => {
       this.rowHeight();
       this.rows();
       this.columns();
-      measure();
+      this.measure();
     });
+    afterRenderEffect(() => this.demoteVirtualSections());
+  }
 
-    afterRenderEffect(() => {
-      // Virtual mode: the viewport carries role="rowgroup". CDK's native-table template
-      // hard-codes `<tbody role="rowgroup">` (and thead/tfoot) on the body table inside it,
-      // which would nest a rowgroup in a rowgroup; demote those sections so the rows are owned
-      // by the viewport's group. CDK creates those sections once per table, so this runs again
-      // only when the viewport itself appears. Non-virtual tables keep CDK's rowgroup untouched.
-      const viewport = this.viewport();
-      if (!viewport) return;
-      for (const section of viewport.elementRef.nativeElement.querySelectorAll(
-        'thead[role="rowgroup"], tbody[role="rowgroup"], tfoot[role="rowgroup"]',
-      )) {
-        section.setAttribute('role', 'presentation');
+  protected movePage(delta: number): void {
+    this.pageIndex.update((page) => Math.max(0, Math.min(page + delta, this.pageCount() - 1)));
+    this.scrollElement().nativeElement.scrollTop = 0;
+  }
+
+  private attachViewport(viewport: CdkVirtualScrollViewport): () => void {
+    const repeater: CdkVirtualScrollRepeater<T> = {
+      dataStream: this.rowsObservable,
+      measureRangeSize: (range) => (range.end - range.start) * this.itemSize(),
+    };
+    const subscription = viewport.renderedRangeStream.subscribe((range) => {
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && viewport.elementRef.nativeElement.contains(active)) {
+        const row = active.closest('[data-row-id]');
+        const index = Number(row?.getAttribute('aria-rowindex')) - 2;
+        if (row && (index < range.start || index >= range.end)) {
+          viewport.elementRef.nativeElement.focus({ preventScroll: true });
+        }
       }
+      this.range.set(range);
     });
+    viewport.attach(repeater);
+    return () => {
+      subscription.unsubscribe();
+      viewport.detach();
+    };
+  }
+
+  private measure(): void {
+    const scroll = this.scrollElement().nativeElement;
+    const probe = this.tokenProbe().nativeElement;
+    const viewport = this.viewport();
+    const width = this.host.nativeElement.clientWidth;
+    if (width > 0) this.narrow.set(width < 768);
+    const header = this.host.nativeElement.querySelector('.eg-table-sticky');
+    const height = header?.getBoundingClientRect().height ?? 0;
+    if (height > 0) this.headerHeight.set(height);
+    // The probe includes line height and insets, so text resizing grows the
+    // virtual stride instead of clipping a 200% line into a 44px row.
+    const pixels = Number.parseFloat(getComputedStyle(probe).height);
+    const minimum = this.rowHeight() === 'compact' ? 40 : 44;
+    this.itemSize.set(pixels > 0 ? Math.max(minimum, pixels) : minimum);
+    this.horizontalScrolls.set(
+      !this.narrow() &&
+        scroll.clientWidth > 0 &&
+        (scroll.scrollWidth > scroll.clientWidth || scroll.scrollHeight > scroll.clientHeight),
+    );
+    if (viewport) {
+      const element = viewport.elementRef.nativeElement;
+      viewport.checkViewportSize();
+      this.viewportScrolls.set(
+        element.clientHeight > 0 && element.scrollHeight > element.clientHeight,
+      );
+    }
+  }
+
+  private demoteVirtualSections(): void {
+    const viewport = this.viewport();
+    if (!viewport) return;
+    // The viewport owns the virtual rowgroup; CDK's native sections must not nest
+    // another rowgroup inside it. Ordinary tables retain CDK's native semantics.
+    for (const section of viewport.elementRef.nativeElement.querySelectorAll(
+      'thead[role="rowgroup"], tbody[role="rowgroup"], tfoot[role="rowgroup"]',
+    )) {
+      section.setAttribute('role', 'presentation');
+    }
   }
 }

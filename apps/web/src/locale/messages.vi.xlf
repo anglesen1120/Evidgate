@@ -357,6 +357,10 @@
           <context context-type="linenumber">36,42</context>
         </context-group>
       </trans-unit>
+      <trans-unit id="shared.label-chip.short-healed" datatype="html"><source>Healed</source><target>Đã chữa</target></trans-unit>
+      <trans-unit id="shared.label-chip.short-unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="shared.label-chip.candidate-hash" datatype="html"><source>Candidate hash</source><target>Mã băm ứng viên</target></trans-unit>
+      <trans-unit id="shared.missing-reason-list.code" datatype="html"><source>Reason code</source><target>Mã lý do</target></trans-unit>
       <trans-unit id="shared.missing-reason-list.label" datatype="html">
         <source>Missing evidence reasons</source>
         <target>Lý do thiếu bằng chứng</target>
@@ -555,14 +559,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/chips/run-state-pill.component.ts</context>
           <context context-type="linenumber">41</context>
-        </context-group>
-      </trans-unit>
-      <trans-unit id="shared.status-pill.unavailable" datatype="html">
-        <source>Status unavailable</source>
-        <target>Chưa có trạng thái</target>
-        <context-group purpose="location">
-          <context context-type="sourcefile">src/app/shared/ui/chips/status-pill.component.ts</context>
-          <context context-type="linenumber">35</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.conflict.title" datatype="html">
@@ -802,7 +798,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="shared.data-table.no-rows" datatype="html">
-        <source> No rows </source>
+        <source>No rows</source>
         <target>Không có dữ liệu</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/data-table/data-table.component.html</context>
@@ -818,7 +814,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.introduction" datatype="html">
-        <source> Render-only examples of evidence, decisions and their independent states. </source>
+        <source>Render-only examples of evidence, decisions and their independent states.</source>
         <target>Các ví dụ chỉ hiển thị về bằng chứng, quyết định và trạng thái độc lập của chúng.</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
@@ -975,6 +971,30 @@
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
           <context context-type="linenumber">201,205</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.menu-request-patterns" datatype="html">
+        <source> Request state replacements </source>
+        <target> Các trạng thái thay thế nội dung yêu cầu </target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">10,19</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.menu-conflict-open" datatype="html">
+        <source> Review conflict example </source>
+        <target> Xem ví dụ xung đột </target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">23,29</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="shared.gallery.menu-retry-after" datatype="html">
+        <source> Retry eligibility </source>
+        <target> Điều kiện thử lại </target>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/shared/ui/gallery/ui-gallery.component.html</context>
+          <context context-type="linenumber">30,32</context>
         </context-group>
       </trans-unit>
       <trans-unit id="shared.gallery.retry-count" datatype="html">
@@ -1290,7 +1310,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="shared.decision-chip.dimension" datatype="html">
-        <source>Decision:</source>
+        <source>Decision: </source>
         <target>Quyết định:</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
@@ -1298,7 +1318,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="shared.decision-chip.unavailable" datatype="html">
-        <source> Decision unavailable </source>
+        <source>Decision unavailable</source>
         <target>Quyết định chưa khả dụng</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/decision-chip.component.ts</context>
@@ -1314,7 +1334,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="shared.evidence-badge.dimension" datatype="html">
-        <source>Completeness:</source>
+        <source>Completeness: </source>
         <target>Độ đầy đủ:</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/evidence-badge.component.ts</context>
@@ -1346,7 +1366,7 @@
         </context-group>
       </trans-unit>
       <trans-unit id="shared.outcome-pill.dimension" datatype="html">
-        <source>Outcome:</source>
+        <source>Outcome: </source>
         <target>Kết quả kiểm thử:</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/verdict/outcome-pill.component.ts</context>
@@ -3358,6 +3378,108 @@
       <trans-unit id="settings.members.show-granted-only" datatype="html"><source>Show granted roles only</source><target>Chỉ xem vai trò đã cấp</target></trans-unit>
       <trans-unit id="shell.overview.choose-next-step" datatype="html"><source> Choose a next step for this project. </source><target>Chọn bước tiếp theo cho dự án này.</target></trans-unit>
       <trans-unit id="shell.overview.next-steps" datatype="html"><source> Next steps </source><target>Bước tiếp theo</target></trans-unit>
+      <trans-unit id="shared.forms.error-summary.title" datatype="html"><source>There is a problem</source><target>Có thông tin cần sửa</target></trans-unit>
+      <trans-unit id="shared.forms.field.optional" datatype="html"><source>(optional)</source><target>(không bắt buộc)</target></trans-unit>
+      <trans-unit id="shared.forms.field.required" datatype="html"><source>(required)</source><target>(bắt buộc)</target></trans-unit>
+      <trans-unit id="shared.forms.required-note.mostly-optional" datatype="html"><source>All fields optional unless marked required.</source><target>Tất cả trường đều không bắt buộc, trừ trường được đánh dấu là bắt buộc.</target></trans-unit>
+      <trans-unit id="shared.forms.required-note.mostly-required" datatype="html"><source>All fields required unless marked optional.</source><target>Tất cả trường đều bắt buộc, trừ trường được đánh dấu là không bắt buộc.</target></trans-unit>
+      <trans-unit id="shared.gallery.actions.cancel" datatype="html"><source>Cancel</source><target>Huỷ</target></trans-unit>
+      <trans-unit id="shared.gallery.actions.connect-long" datatype="html"><source>Connect project and inspect recorded evidence</source><target>Kết nối dự án và xem bằng chứng đã ghi nhận</target></trans-unit>
+      <trans-unit id="shared.gallery.actions.remove" datatype="html"><source>Remove the example project connection</source><target>Xoá kết nối dự án trong ví dụ</target></trans-unit>
+      <trans-unit id="shared.gallery.bare-states.empty-description" datatype="html"><source>Open the feature tree to inspect the cases awaiting evidence.</source><target>Mở cây tính năng để xem các ca đang chờ bằng chứng.</target></trans-unit>
+      <trans-unit id="shared.gallery.bare-states.empty-title" datatype="html"><source>No evidence yet</source><target>Chưa có bằng chứng</target></trans-unit>
+      <trans-unit id="shared.gallery.bare-states.error-message" datatype="html"><source>The request could not reach the server. Your evidence has not been replaced.</source><target>Yêu cầu không kết nối được với máy chủ. Bằng chứng của bạn chưa bị thay thế.</target></trans-unit>
+      <trans-unit id="shared.gallery.bare-states.loading" datatype="html"><source>Loading the recorded examples</source><target>Đang tải các ví dụ đã ghi nhận</target></trans-unit>
+      <trans-unit id="shared.gallery.bare-states.title" datatype="html"><source> Bare states inside a card </source><target>Trạng thái trần trong thẻ</target></trans-unit>
+      <trans-unit id="shared.gallery.dialog.submitting" datatype="html"><source> Saving project connection… </source><target>Đang lưu kết nối dự án…</target></trans-unit>
+      <trans-unit id="shared.gallery.dialog.title" datatype="html"><source> Dialog action order </source><target>Thứ tự nút trong hộp thoại</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.error" datatype="html"><source>Evidence could not be saved</source><target>Không lưu được bằng chứng</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.error-description" datatype="html"><source>The request did not reach the server. Your evidence has not been replaced.</source><target>Yêu cầu không kết nối được với máy chủ. Bằng chứng của bạn chưa bị thay thế.</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.info" datatype="html"><source>A recorded note stays visible after saving.</source><target>Ghi chú đã ghi nhận vẫn hiển thị sau khi lưu.</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.long-action" datatype="html"><source>Review every recorded attempt</source><target>Xem lại mọi lần thử đã ghi nhận</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.long-warning" datatype="html"><source>Some supplied evidence was replaced before this review began</source><target>Một số bằng chứng đã cung cấp đã bị thay thế trước khi bắt đầu đánh giá này</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.long-warning-description" datatype="html"><source>Review every previously supplied attempt and its immutable revision before recording a new decision.</source><target>Hãy xem lại mọi lần thử đã cung cấp trước đó và phiên bản bất biến của nó trước khi ghi nhận quyết định mới.</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.retries" datatype="html"><source>Local example retries: <x id="INTERPOLATION" equiv-text="{{ retryCount() }}"/></source><target>Số lần thử lại trong ví dụ: <x id="INTERPOLATION" equiv-text="{{ retryCount() }}"/></target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.retry" datatype="html"><source>Try again</source><target>Thử lại</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.success" datatype="html"><source>Project connection saved</source><target>Đã lưu kết nối dự án</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.success-description" datatype="html"><source>The recorded attempt keeps its original evidence.</source><target>Lần thử đã ghi nhận giữ nguyên bằng chứng gốc.</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.title" datatype="html"><source> Inline feedback tones </source><target>Sắc thái phản hồi nội tuyến</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.warning" datatype="html"><source>This example keeps an unsaved draft.</source><target>Ví dụ này đang giữ một bản nháp chưa lưu.</target></trans-unit>
+      <trans-unit id="shared.gallery.feedback.warning-description" datatype="html"><source>Nothing shown here is sent to a server.</source><target>Không nội dung nào ở đây được gửi tới máy chủ.</target></trans-unit>
+      <trans-unit id="shared.gallery.fields.edit" datatype="html"><source>Edit project connection</source><target>Sửa kết nối dự án</target></trans-unit>
+      <trans-unit id="shared.gallery.fields.hint" datatype="html"><source>Use the key shown on the project connection card.</source><target>Dùng khoá hiển thị trên thẻ kết nối dự án.</target></trans-unit>
+      <trans-unit id="shared.gallery.fields.label" datatype="html"><source>Project key</source><target>Khoá dự án</target></trans-unit>
+      <trans-unit id="shared.gallery.fields.readable" datatype="html"><source>A recorded run keeps its original evidence identifier.</source><target>Lượt chạy đã ghi nhận giữ nguyên định danh bằng chứng gốc.</target></trans-unit>
+      <trans-unit id="shared.gallery.fields.required-error" datatype="html"><source>Enter the project key to continue.</source><target>Hãy nhập khoá dự án để tiếp tục.</target></trans-unit>
+      <trans-unit id="shared.gallery.fields.submit" datatype="html"><source>Save project key</source><target>Lưu khoá dự án</target></trans-unit>
+      <trans-unit id="shared.gallery.fields.title" datatype="html"><source> Field feedback and narrow notices </source><target>Phản hồi theo trường và thông báo màn hình hẹp</target></trans-unit>
+      <trans-unit id="shared.gallery.headings.page-description" datatype="html"><source>Inspect recorded runs and project connection details.</source><target>Xem các lượt chạy đã ghi nhận và thông tin kết nối dự án.</target></trans-unit>
+      <trans-unit id="shared.gallery.headings.section-description" datatype="html"><source>Every supplied attempt remains available for inspection.</source><target>Có thể xem mọi lần thử đã được cung cấp.</target></trans-unit>
+      <trans-unit id="shared.gallery.headings.section-title" datatype="html"><source>Recorded attempts</source><target>Các lần thử đã ghi nhận</target></trans-unit>
+      <trans-unit id="shared.gallery.headings.subsection-title" datatype="html"><source>Connection health</source><target>Tình trạng kết nối</target></trans-unit>
+      <trans-unit id="shared.gallery.local-actions" datatype="html"><source>Local example actions: <x id="INTERPOLATION" equiv-text="{{ actionCount() }}"/></source><target>Số thao tác trong ví dụ: <x id="INTERPOLATION" equiv-text="{{ actionCount() }}"/></target></trans-unit>
+      <trans-unit id="shared.gallery.records.caption" datatype="html"><source>Recorded examples: every supplied fact, already-loaded rows</source><target>Ví dụ đã ghi nhận: mọi thông tin đã cung cấp, các bản ghi đã tải</target></trans-unit>
+      <trans-unit id="shared.gallery.records.description" datatype="html"><source> The standalone renderer keeps every supplied fact, label and full value; it never hides a column or invents a total. </source><target>Trình hiển thị độc lập giữ mọi thông tin, nhãn và giá trị đầy đủ; không ẩn cột và không tự tạo tổng.</target></trans-unit>
+      <trans-unit id="shared.gallery.records.title" datatype="html"><source> Stacked records for narrow screens </source><target>Bản ghi xếp dọc cho màn hình hẹp</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.attempts" datatype="html"><source>Attempts</source><target>Số lần thử</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.badge" datatype="html"><source> Permission and role labels </source><target>Nhãn quyền và vai trò</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.caption" datatype="html"><source> Role-bound Helm columns with a long status label and a machine identifier </source><target>Cột Helm theo vai trò với nhãn trạng thái dài và định danh máy</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.date" datatype="html"><source>Recorded (UTC)</source><target>Thời điểm ghi nhận (UTC)</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.identity" datatype="html"><source>Evidence identity</source><target>Định danh bằng chứng</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.long-role" datatype="html"><source>Project administrator and evidence approver for this environment</source><target>Quản trị viên dự án và người xác nhận bằng chứng cho môi trường này</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.long-status" datatype="html"><source>Review blocked until supplied evidence is complete</source><target>Đánh giá bị chặn cho tới khi bằng chứng đã cung cấp đầy đủ</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.long-status-detail" datatype="html"><source>The complete explanation stays outside the compact chip so the table row keeps its height.</source><target>Giải thích đầy đủ nằm ngoài chip thu gọn để hàng bảng giữ nguyên chiều cao.</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.note" datatype="html"><source>Context</source><target>Ngữ cảnh</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.short-role" datatype="html"><source>Reviewer</source><target>Người đánh giá</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.status" datatype="html"><source>Status</source><target>Trạng thái</target></trans-unit>
+      <trans-unit id="shared.gallery.roles.title" datatype="html"><source> Column roles and long in-cell chips </source><target>Vai trò cột và chip dài trong ô</target></trans-unit>
+      <trans-unit id="shared.gallery.values.branch" datatype="html"><source>Branch</source><target>Nhánh</target></trans-unit>
+      <trans-unit id="shared.gallery.values.hash" datatype="html"><source>Policy hash</source><target>Mã băm chính sách</target></trans-unit>
+      <trans-unit id="shared.gallery.values.requests" datatype="html"><source>requests</source><target>yêu cầu</target></trans-unit>
+      <trans-unit id="shared.gallery.values.title" datatype="html"><source> Times, numbers and identifiers </source><target>Thời gian, số và định danh</target></trans-unit>
+      <trans-unit id="shared.narrow.desktop-required.description" datatype="html"><source>Use a wider screen to make changes. You can still inspect information, copy values and navigate.</source><target>Hãy dùng màn hình rộng hơn để thay đổi. Bạn vẫn có thể xem thông tin, sao chép giá trị và điều hướng.</target></trans-unit>
+      <trans-unit id="shared.narrow.desktop-required.title" datatype="html"><source>Desktop required</source><target>Cần dùng máy tính</target></trans-unit>
+      <trans-unit id="shared.data-table.loaded-range" datatype="html"><source>Loaded records <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> of <x id="loaded" equiv-text="loaded"/></source><target>Bản ghi đã tải <x id="start" equiv-text="start"/>–<x id="end" equiv-text="end"/> trên <x id="loaded" equiv-text="loaded"/></target></trans-unit>
+      <trans-unit id="shared.data-table.next" datatype="html"><source>Next records</source><target>Bản ghi tiếp</target></trans-unit>
+      <trans-unit id="shared.data-table.pages" datatype="html"><source><x id="caption" equiv-text="caption"/> — loaded record pages</source><target>Các trang bản ghi đã tải của <x id="caption" equiv-text="caption"/></target></trans-unit>
+      <trans-unit id="shared.data-table.previous" datatype="html"><source>Previous records</source><target>Bản ghi trước</target></trans-unit>
+      <trans-unit id="shared.decision-chip.short-unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="shared.decision-chip.unknown-detail" datatype="html"><source>Unknown release decision: <x id="state" equiv-text="state"/></source><target>Quyết định phát hành chưa rõ: <x id="state" equiv-text="state"/></target></trans-unit>
+      <trans-unit id="shared.evidence-badge.short.complete" datatype="html"><source>Complete</source><target>Đủ</target></trans-unit>
+      <trans-unit id="shared.evidence-badge.short.incomplete" datatype="html"><source>Incomplete</source><target>Thiếu</target></trans-unit>
+      <trans-unit id="shared.evidence-badge.short.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="shared.evidence-badge.unknown-detail" datatype="html"><source>Unknown evidence status: <x id="state" equiv-text="state"/></source><target>Trạng thái bằng chứng chưa rõ: <x id="state" equiv-text="state"/></target></trans-unit>
+      <trans-unit id="shared.hash-chip.copy" datatype="html"><source>Copy hash</source><target>Sao chép mã băm</target></trans-unit>
+      <trans-unit id="shared.hash-chip.label" datatype="html"><source>Hash</source><target>Mã băm</target></trans-unit>
+      <trans-unit id="shared.outcome-pill.short.all-passed" datatype="html"><source>All tests passed</source><target>Tất cả đạt</target></trans-unit>
+      <trans-unit id="shared.outcome-pill.short.has-failures" datatype="html"><source>Has failures</source><target>Có lỗi</target></trans-unit>
+      <trans-unit id="shared.outcome-pill.short.no-results" datatype="html"><source>No results</source><target>Chưa có kết quả</target></trans-unit>
+      <trans-unit id="shared.outcome-pill.short.unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="shared.outcome-pill.unknown-detail" datatype="html"><source>Unknown test outcome: <x id="state" equiv-text="state"/></source><target>Kết quả kiểm thử chưa rõ: <x id="state" equiv-text="state"/></target></trans-unit>
+      <trans-unit id="shared.run-state.short-unavailable" datatype="html"><source>Unavailable</source><target>Không khả dụng</target></trans-unit>
+      <trans-unit id="shared.run-state.short-unknown" datatype="html"><source>Unknown</source><target>Chưa rõ</target></trans-unit>
+      <trans-unit id="shared.run-state.short.canceled" datatype="html"><source>Canceled</source><target>Đã huỷ</target></trans-unit>
+      <trans-unit id="shared.run-state.short.collecting" datatype="html"><source>Collecting</source><target>Đang thu thập</target></trans-unit>
+      <trans-unit id="shared.run-state.short.complete" datatype="html"><source>Complete</source><target>Hoàn tất</target></trans-unit>
+      <trans-unit id="shared.run-state.short.created" datatype="html"><source>Created</source><target>Tạo mới</target></trans-unit>
+      <trans-unit id="shared.run-state.short.incomplete" datatype="html"><source>Incomplete</source><target>Chưa đủ</target></trans-unit>
+      <trans-unit id="shared.run-state.short.queued" datatype="html"><source>Queued</source><target>Đang chờ</target></trans-unit>
+      <trans-unit id="shared.run-state.short.running" datatype="html"><source>Running</source><target>Đang chạy</target></trans-unit>
+      <trans-unit id="shared.run-state.unknown-detail" datatype="html"><source>Unknown run status: <x id="state" equiv-text="state"/></source><target>Trạng thái lượt chạy chưa rõ: <x id="state" equiv-text="state"/></target></trans-unit>
+      <trans-unit id="shared.status-pill.unavailable" datatype="html"><source>Status unavailable</source><target>Chưa có trạng thái</target></trans-unit>
+      <trans-unit id="shared.values.close" datatype="html"><source>Close</source><target>Đóng</target></trans-unit>
+      <trans-unit id="shared.values.copied" datatype="html"><source>Copied</source><target>Đã sao chép</target></trans-unit>
+      <trans-unit id="shared.values.copy" datatype="html"><source>Copy</source><target>Sao chép</target></trans-unit>
+      <trans-unit id="shared.values.copy-error" datatype="html"><source>Could not copy <x id="LABEL" equiv-text="this.label()"/>. Show the full value and copy it manually.</source><target>Không thể sao chép <x id="LABEL" equiv-text="this.label()"/>. Hãy hiển thị toàn bộ giá trị rồi sao chép thủ công.</target></trans-unit>
+      <trans-unit id="shared.values.copy-failed" datatype="html"><source>Copy failed</source><target>Sao chép thất bại</target></trans-unit>
+      <trans-unit id="shared.values.copy-label" datatype="html"><source>Copy <x id="LABEL" equiv-text="this.label()"/></source><target>Sao chép <x id="LABEL" equiv-text="this.label()"/></target></trans-unit>
+      <trans-unit id="shared.values.copy-success" datatype="html"><source><x id="LABEL" equiv-text="this.label()"/> copied.</source><target>Đã sao chép <x id="LABEL" equiv-text="this.label()"/>.</target></trans-unit>
+      <trans-unit id="shared.values.copying" datatype="html"><source>Copying…</source><target>Đang sao chép…</target></trans-unit>
+      <trans-unit id="shared.values.number-unavailable" datatype="html"><source>Number unavailable</source><target>Không có số liệu</target></trans-unit>
+      <trans-unit id="shared.values.show-full" datatype="html"><source>Show full</source><target>Xem đầy đủ</target></trans-unit>
+      <trans-unit id="shared.values.show-full-label" datatype="html"><source>Show full <x id="LABEL" equiv-text="this.label()"/></source><target>Xem đầy đủ <x id="LABEL" equiv-text="this.label()"/></target></trans-unit>
+      <trans-unit id="shared.values.time-unavailable" datatype="html"><source>Time unavailable</source><target>Không có thời gian</target></trans-unit>
+      <trans-unit id="shared.values.utc" datatype="html"><source>UTC</source><target>UTC</target></trans-unit>
     </body>
   </file>
 </xliff>

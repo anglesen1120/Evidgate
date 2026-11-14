@@ -41,6 +41,10 @@ import {
 import { DecisionChipComponent, EvidenceBadgeComponent, OutcomePillComponent } from '../verdict';
 import { ConnectStepRevealComponent } from '../reveal/connect-step-reveal.component';
 import { RevealSlot } from '../reveal/one-time-reveal.slot';
+import { PageHeaderComponent } from '../page-header/page-header.component';
+import { GalleryCompositionComponent } from './gallery-composition.component';
+import { GalleryStatesComponent } from './gallery-states.component';
+import { GalleryTablesComponent } from './gallery-tables.component';
 
 /** Isolated specimens; only explicit commands change local demo state. No API calls. */
 @Component({
@@ -69,6 +73,10 @@ import { RevealSlot } from '../reveal/one-time-reveal.slot';
     ConflictDialogComponent,
     RetryAfterComponent,
     RequestStateComponent,
+    PageHeaderComponent,
+    GalleryCompositionComponent,
+    GalleryStatesComponent,
+    GalleryTablesComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './ui-gallery.component.html',
@@ -76,6 +84,8 @@ import { RevealSlot } from '../reveal/one-time-reveal.slot';
   host: { class: 'block min-w-0 bg-background text-foreground font-sans text-base' },
 })
 export class UiGalleryComponent {
+  protected readonly galleryTitle = $localize`:@@shared.gallery.title:Shared UI state gallery`;
+  protected readonly galleryIntroduction = $localize`:@@shared.gallery.introduction:Render-only examples of evidence, decisions and their independent states.`;
   protected readonly reveal = inject(RevealSlot);
   private readonly injector = inject(Injector);
   private readonly revealOpener = viewChild<ElementRef<HTMLButtonElement>>('revealOpener');

@@ -66,4 +66,37 @@ describe('LoadingPatternComponent', () => {
     fixture.detectChanges();
     expect(root.querySelector('h2')?.textContent).toContain('Loading evidence');
   });
+
+  it.each([
+    ['form', 7],
+    ['cards', 4],
+  ] as const)('reserves %s geometry with decorative Helm skeletons only', (layout, count) => {
+    fixture.componentRef.setInput('layout', layout);
+    fixture.componentRef.setInput('bare', true);
+    fixture.componentRef.setInput('label', 'Đang tải cấu hình lưu trữ…');
+    fixture.detectChanges();
+    expect(root.querySelector('[data-slot="card"]')).toBeNull();
+    expect(root.querySelector('.loading-pattern__skeleton')).toBeNull();
+    expect(root.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(count);
+    for (const skeleton of root.querySelectorAll('[data-slot="skeleton"]')) {
+      expect(skeleton.getAttribute('aria-hidden')).toBe('true');
+    }
+    expect(root.querySelector('.loading-pattern__structure')?.getAttribute('aria-hidden')).toBe(
+      'true',
+    );
+    expect(root.querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(root.querySelector('[role="status"]')?.getAttribute('aria-busy')).toBe('true');
+    expect(root.querySelector('h2')?.textContent?.trim()).toBe('Đang tải cấu hình lưu trữ…');
+    expect(root.querySelector('button, input, [tabindex]')).toBeNull();
+  });
+
+  it('retains shrinkable stacked card placeholders before the existing 768px breakpoint', () => {
+    fixture.componentRef.setInput('layout', 'cards');
+    fixture.detectChanges();
+    const geometry = root.querySelector('.loading-pattern__structure');
+    expect(geometry?.classList.contains('min-w-0')).toBe(true);
+    expect(geometry?.classList.contains('min-[768px]:grid-cols-2')).toBe(true);
+    expect(geometry?.className).not.toContain('overflow-hidden');
+    expect(root.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
+  });
 });

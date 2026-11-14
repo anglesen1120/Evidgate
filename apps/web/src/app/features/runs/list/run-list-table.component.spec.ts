@@ -85,24 +85,27 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(root.querySelectorAll('[data-run-evidence] .status-pill--neutral')).toHaveLength(5);
     expect(root.querySelector('[data-run-evidence] .status-pill--success')).toBeNull();
     expect(
-      [...root.querySelectorAll('[data-run-decision]')].map((cell) =>
-        cell.textContent?.replace(/\s+/g, ' ').trim(),
-      ),
+      [...root.querySelectorAll('[data-run-decision]')].map((cell) => ({
+        dimension: cell.querySelector('.verdict__label')?.textContent?.trim(),
+        value: cell.querySelector('.verdict__value')?.textContent?.trim(),
+      })),
     ).toEqual([
-      'Decision:PASS',
-      'Decision:FAIL',
-      'Decision:INCONCLUSIVE',
-      'Decision:Not evaluated',
-      'Decision: Decision unavailable',
+      { dimension: 'Decision:', value: 'PASS' },
+      { dimension: 'Decision:', value: 'FAIL' },
+      { dimension: 'Decision:', value: 'INCONCLUSIVE' },
+      { dimension: 'Decision:', value: 'Not evaluated' },
+      { dimension: 'Decision:', value: 'Unavailable' },
     ]);
     expect(root.querySelector('app-outcome-pill')).toBeNull();
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-27T00:00:00Z');
     expect(root.querySelector('abbr')?.getAttribute('aria-label')).toBe(run(1).run_id);
     expect(root.querySelectorAll('[data-run-decision] [data-tone="pending"]')).toHaveLength(1);
     expect(root.querySelectorAll('[data-run-decision] [data-tone="neutral"]')).toHaveLength(1);
-    expect(root.querySelector('[data-run-decision] [title]')?.getAttribute('title')).toBe(
+    expect(root.querySelector('[data-run-decision] .verdict__detail')?.textContent?.trim()).toBe(
       'The decision could not be read. Try again.',
     );
+    expect(root.querySelector('[data-run-decision] [hlmBadge] .verdict__detail')).toBeNull();
+    expect(root.querySelector('[data-run-decision] [title]')).toBeNull();
   });
   it('keeps dense state and evidence labels short with the explanation outside the badge', async () => {
     const { root } = await render([run(1)]);

@@ -1,35 +1,41 @@
 <main
-  class="gallery grid gap-4 p-3 sm:p-6 wrap-anywhere [&>header>h1]:m-0 [&>header>h1]:mb-3 [&>header>h1]:text-2xl [&>section>h2]:m-0 [&>section>h2]:mb-3 [&>section>h2]:text-xl [&_.evaluation-grid_h3]:m-0 [&_.evaluation-grid_h3]:mb-2 [&_.evaluation-grid_h3]:text-lg [&>header>p]:m-0 [&>header>p]:mb-3 [&>header>p]:text-muted-foreground [&>section>p]:m-0 [&>section>p]:mb-3 [&>section>p]:text-muted-foreground"
+  class="gallery grid gap-4 p-3 sm:p-6 wrap-anywhere [&>section>h2]:m-0 [&>section>h2]:mb-3 [&>section>h2]:text-xl [&_.evaluation-grid_h3]:m-0 [&_.evaluation-grid_h3]:mb-2 [&_.evaluation-grid_h3]:text-lg [&>section>p]:m-0 [&>section>p]:mb-3 [&>section>p]:text-muted-foreground"
 >
-  <header>
-    <h1 i18n="@@shared.gallery.title">Shared UI state gallery</h1>
-    <p i18n="@@shared.gallery.introduction">
-      Render-only examples of evidence, decisions and their independent states.
-    </p>
+  <app-page-header
+    class="block min-w-0"
+    [title]="galleryTitle"
+    [description]="galleryIntroduction"
+    [titleId]="'gallery-page-heading'"
+  >
     <button
       hlmBtn
+      appPageHeaderActions
       [variant]="'outline'"
       [hlmDropdownMenuTrigger]="examplesMenu"
       [attr.data-demo]="'examples-menu'"
-      i18n="@@shared.gallery.request-patterns"
+      i18n="@@shared.gallery.menu-request-patterns"
     >
       Request state replacements
     </button>
-    <ng-template #examplesMenu>
-      <div hlmDropdownMenu>
-        <button
-          hlmDropdownMenuItem
-          (triggered)="openConflict()"
-          i18n="@@shared.gallery.conflict-open"
-        >
-          Review conflict example
-        </button>
-        <a hlmDropdownMenuItem [href]="'#gallery-retry-after'" i18n="@@shared.gallery.retry-after">
-          Retry eligibility
-        </a>
-      </div>
-    </ng-template>
-  </header>
+  </app-page-header>
+  <ng-template #examplesMenu>
+    <div hlmDropdownMenu>
+      <button
+        hlmDropdownMenuItem
+        (triggered)="openConflict()"
+        i18n="@@shared.gallery.menu-conflict-open"
+      >
+        Review conflict example
+      </button>
+      <a
+        hlmDropdownMenuItem
+        [href]="'#gallery-retry-after'"
+        i18n="@@shared.gallery.menu-retry-after"
+      >
+        Retry eligibility
+      </a>
+    </div>
+  </ng-template>
 
   <section
     class="min-w-0 border-0 border-t border-solid border-border py-4"
@@ -384,4 +390,8 @@
       />
     </div>
   </section>
+
+  <app-gallery-composition />
+  <app-gallery-tables />
+  <app-gallery-states />
 </main>

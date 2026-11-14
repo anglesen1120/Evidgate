@@ -31,7 +31,7 @@ describe('RunHeaderComponent', () => {
     expect(root.querySelectorAll('dt')).toHaveLength(3);
     expect(root.querySelector('app-run-state-pill')).not.toBeNull();
     expect(root.querySelector('app-evidence-badge')?.textContent).toContain(
-      'Evidence status unavailable',
+      'Completeness: Unavailable',
     );
     expect(root.querySelector('app-decision-chip, app-outcome-pill')).toBeNull();
     expect(root.querySelector('[data-run-environment]')).toBeNull();

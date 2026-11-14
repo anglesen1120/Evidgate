@@ -23,3 +23,62 @@
     @apply rounded-b-md px-(--card-spacing) [.border-t]:pt-(--card-spacing);
   }
 }
+
+@layer utilities {
+  .eg-type-page-title,
+  .eg-type-section-title,
+  .eg-type-subsection-title {
+    margin: var(--eg-space-0);
+    font-family: var(--eg-font-display);
+    font-weight: var(--eg-weight-semibold);
+  }
+
+  .eg-type-page-title {
+    font-size: var(--eg-text-2xl);
+    line-height: var(--eg-leading-2xl);
+  }
+
+  .eg-type-section-title {
+    font-size: var(--eg-text-xl);
+    line-height: var(--eg-leading-xl);
+  }
+
+  .eg-type-subsection-title {
+    font-size: var(--eg-text-lg);
+    line-height: var(--eg-leading-lg);
+  }
+
+  .eg-type-body,
+  .eg-type-caption {
+    margin: var(--eg-space-0);
+    font-family: var(--eg-font-body);
+    font-weight: var(--eg-weight-regular);
+  }
+
+  .eg-type-body {
+    font-size: var(--eg-text-md);
+    line-height: var(--eg-leading-md);
+  }
+
+  .eg-type-caption {
+    font-size: var(--eg-text-xs);
+    line-height: var(--eg-leading-xs);
+  }
+
+  .eg-header-action {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    block-size: auto;
+    min-block-size: var(--eg-control-md);
+    padding-block: var(--eg-space-2);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  @media (pointer: coarse) {
+    .eg-header-action {
+      min-inline-size: var(--eg-control-touch);
+      min-block-size: var(--eg-control-touch);
+    }
+  }
+}

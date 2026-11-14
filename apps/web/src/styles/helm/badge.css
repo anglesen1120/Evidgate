@@ -1,6 +1,52 @@
 @layer components {
   .spartan-badge {
-    @apply h-5 gap-1 rounded-4xl border border-transparent px-2 py-0.5 text-xs font-medium transition-all has-data-[icon=inline-end]:pe-1.5 has-data-[icon=inline-start]:ps-1.5 [&>hlm-icon]:text-[length:--spacing(3)];
+    @apply h-auto min-w-0 flex-nowrap gap-[var(--eg-space-1)] rounded-(--eg-radius-sm) border border-transparent px-[var(--eg-space-3)] py-[var(--eg-space-1)] font-semibold;
+    min-block-size: var(--eg-space-7);
+    max-inline-size: min(100%, 24ch);
+    font-size: var(--eg-text-xs);
+    line-height: var(--eg-leading-xs);
+  }
+
+  .spartan-badge__label {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .spartan-badge__label > * {
+    white-space: nowrap;
+  }
+
+  .spartan-badge > hlm-icon {
+    flex-shrink: 0;
+    inline-size: var(--eg-space-4);
+    block-size: var(--eg-space-4);
+  }
+
+  .spartan-badge--clipped {
+    cursor: help;
+  }
+
+  .spartan-badge__full-value {
+    @apply box-border m-auto overflow-auto rounded-(--eg-radius-sm) border border-input bg-card text-foreground;
+    max-inline-size: calc(100% - var(--eg-space-5) * 2);
+    max-block-size: calc(100% - var(--eg-space-5) * 2);
+    padding: var(--eg-space-4);
+    font-size: var(--eg-text-sm);
+    line-height: var(--eg-leading-sm);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  @media (pointer: coarse) {
+    .spartan-badge--clipped,
+    a.spartan-badge,
+    button.spartan-badge {
+      min-block-size: var(--eg-control-touch);
+      min-inline-size: var(--eg-control-touch);
+    }
   }
 
   .spartan-badge-variant-default {

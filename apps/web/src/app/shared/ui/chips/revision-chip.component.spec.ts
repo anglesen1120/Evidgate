@@ -87,7 +87,7 @@ describe('RevisionChipComponent', () => {
     expect(root.querySelector('.identity-chip__label')).toBeNull();
   });
 
-  it('keeps long untrusted ids and localized context in the wrapping structure', () => {
+  it('keeps long untrusted ids and context intact inside the recoverable single-line structure', () => {
     const fixture = TestBed.createComponent(RevisionChipComponent);
     const revision = '<img src=x onerror=alert(1)>'.repeat(20);
     const label = 'Phiên bản chính sách đối chiếu đã được lưu giữ '.repeat(8);

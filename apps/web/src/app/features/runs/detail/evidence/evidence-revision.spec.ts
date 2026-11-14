@@ -113,7 +113,7 @@ describe('Run detail evidence revision', () => {
       'Selected evidence revision: 3',
     );
     expect(panel(root).querySelector('[data-evidence-completeness]')?.textContent).toContain(
-      'Evidence complete',
+      'Completeness: Complete',
     );
     expect(panel(root).querySelector('.reason-empty')?.textContent?.trim()).toBe(
       'No missing evidence reasons reported',
@@ -148,7 +148,7 @@ describe('Run detail evidence revision', () => {
     expect(panel(root).querySelector('[data-evidence-search-older]')).not.toBeNull();
     // No data is invented for a pin that is not on a loaded page, even though the decision is.
     expect(panel(root).querySelector('[data-evidence-completeness]')?.textContent).toContain(
-      'Evidence status unavailable',
+      'Completeness: Unavailable',
     );
 
     (panel(root).querySelector('[data-evidence-load-older]') as HTMLButtonElement).click();
@@ -177,7 +177,7 @@ describe('Run detail evidence revision', () => {
       'Selected evidence revision: 9',
     );
     expect(panel(root).querySelector('[data-evidence-completeness]')?.textContent).toContain(
-      'Evidence status unavailable',
+      'Completeness: Unavailable',
     );
     // The newest revision is not substituted for the missing pin.
     expect(panel(root).querySelector('[data-evidence-missing]')?.textContent).toContain(
@@ -199,7 +199,7 @@ describe('Run detail evidence revision', () => {
     expect(evidence.querySelector('app-error-pattern')?.textContent).toContain('request-detail');
     // The decision's revision is still pinnable, so its own evidence stays available.
     expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
-      'Evidence incomplete',
+      'Completeness: Incomplete',
     );
     expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
       'missing_shard',

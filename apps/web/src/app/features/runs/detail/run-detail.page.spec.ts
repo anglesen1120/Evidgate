@@ -114,7 +114,7 @@ describe('RunDetailPage', () => {
       'Environment',
     );
     expect(root.querySelector('app-evidence-badge')?.textContent).toContain(
-      'Evidence status unavailable',
+      'Completeness: Unavailable',
     );
     expect(root.querySelector('app-decision-chip')?.textContent).toContain('Not evaluated');
     expect(root.querySelector('app-outcome-pill')).toBeNull();
@@ -328,7 +328,7 @@ describe('RunDetailPage', () => {
     expect(decision.querySelector('[data-decision-mode] dd')?.textContent).toBe('Live evaluation');
     const evidence = root.querySelector('app-evidence-panel')!;
     expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
-      'Evidence incomplete',
+      'Completeness: Incomplete',
     );
     expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
       'missing_shard',
@@ -341,7 +341,7 @@ describe('RunDetailPage', () => {
     const evidence = root.querySelector('app-evidence-panel')!;
     expect(evidence.textContent).toContain('No live evaluation recorded for this revision');
     expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
-      'Evidence status unavailable',
+      'Completeness: Unavailable',
     );
     expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
       'Missing evidence reasons unavailable',
@@ -404,7 +404,7 @@ describe('RunDetailPage', () => {
 
     const evidence = root.querySelector('app-evidence-panel')!;
     expect(evidence.querySelector('[data-evidence-completeness]')?.textContent).toContain(
-      'Evidence status unavailable',
+      'Completeness: Unavailable',
     );
     expect(evidence.querySelector('[data-evidence-missing]')?.textContent).toContain(
       'Missing evidence reasons unavailable',
@@ -427,7 +427,7 @@ describe('RunDetailPage', () => {
     expect(evidence?.querySelector('#evidence-title')?.textContent?.trim()).toBe('Evidence');
     // No decision answer yet: the region shows its own neutral state, never a verdict.
     expect(evidence?.querySelector('[data-evidence-completeness]')?.textContent).toContain(
-      'Evidence status unavailable',
+      'Completeness: Unavailable',
     );
     expect(root.textContent).not.toContain('PASS');
     decision.resolve(pendingBody());

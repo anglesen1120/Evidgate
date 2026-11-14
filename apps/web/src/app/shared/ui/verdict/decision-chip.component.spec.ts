@@ -37,12 +37,12 @@ describe('DecisionChipComponent', () => {
       expect(badge?.getAttribute('data-slot')).toBe('badge');
       expect(badge?.classList.contains(`bg-[var(--eg-${tone}-bg)]`)).toBe(true);
       expect(badge?.classList.contains(`text-[var(--eg-${tone}-fg)]`)).toBe(true);
-      expect(root.querySelector('.verdict__label')?.textContent).toBe('Decision:');
+      expect(root.querySelector('.verdict__label')?.textContent?.trim()).toBe('Decision:');
       expect(root.querySelector('.verdict__value')?.textContent).toBe(label);
       expect(
         root.querySelector('[tabindex], [role], [aria-disabled], button, a, [aria-busy]'),
       ).toBeNull();
-      expect(root.querySelector('svg, [data-icon="check"]')).toBeNull();
+      expect(badge?.querySelector('hlm-icon')?.getAttribute('aria-hidden')).toBe('true');
     },
   );
 
@@ -50,16 +50,16 @@ describe('DecisionChipComponent', () => {
     [undefined, 'pending', 'Not evaluated'],
     [null, 'pending', 'Not evaluated'],
     ['pending', 'pending', 'Not evaluated'],
-    ['unavailable', 'neutral', 'Decision unavailable'],
-    ['unknown', 'neutral', 'Decision unavailable'],
-    ['pass', 'neutral', 'Decision unavailable'],
-    ['fail', 'neutral', 'Decision unavailable'],
-    ['PASS ', 'neutral', 'Decision unavailable'],
-    ['', 'neutral', 'Decision unavailable'],
-    ['PASS FAIL', 'neutral', 'Decision unavailable'],
-    ['run-123', 'neutral', 'Decision unavailable'],
-    ['<img src=x onerror=alert(1)>', 'neutral', 'Decision unavailable'],
-    ['x'.repeat(512), 'neutral', 'Decision unavailable'],
+    ['unavailable', 'neutral', 'Unavailable'],
+    ['unknown', 'neutral', 'Unavailable'],
+    ['pass', 'neutral', 'Unavailable'],
+    ['fail', 'neutral', 'Unavailable'],
+    ['PASS ', 'neutral', 'Unavailable'],
+    ['', 'neutral', 'Unavailable'],
+    ['PASS FAIL', 'neutral', 'Unavailable'],
+    ['run-123', 'neutral', 'Unavailable'],
+    ['<img src=x onerror=alert(1)>', 'neutral', 'Unavailable'],
+    ['x'.repeat(512), 'neutral', 'Unavailable'],
   ])('renders %s as %s with no release verdict', (value, tone, label) => {
     const fixture = TestBed.createComponent(DecisionChipComponent);
     fixture.componentRef.setInput('decision', value);
@@ -112,9 +112,12 @@ describe('DecisionChipComponent', () => {
     fixture.componentRef.setInput('decision', 'unavailable');
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('[data-tone="neutral"]')?.getAttribute('title')).toBe(
+    expect(fixture.componentInstance.detail()).toBe('The decision could not be read. Try again.');
+    expect(root.querySelector('.verdict__detail')?.textContent?.trim()).toBe(
       'The decision could not be read. Try again.',
     );
+    expect(root.querySelector('[hlmBadge] .verdict__detail')).toBeNull();
+    expect(root.querySelector('[title], [popover]')).toBeNull();
     fixture.componentRef.setInput('decision', null);
     await fixture.whenStable();
     expect(root.querySelector('[title]')).toBeNull();
@@ -133,7 +136,7 @@ describe('DecisionChipComponent', () => {
     await fixture.whenStable();
     const unavailableValue = root.querySelector('.verdict__value');
     expect(unavailableValue).not.toBe(pendingValue);
-    expect(unavailableValue?.textContent?.trim()).toBe('Decision unavailable');
+    expect(unavailableValue?.textContent?.trim()).toBe('Unavailable');
     expect(root.querySelector('[data-tone="neutral"]')).not.toBeNull();
     expect(root.innerHTML).not.toMatch(/PASS|FAIL|pending/);
 
@@ -144,42 +147,53 @@ describe('DecisionChipComponent', () => {
     expect(root.querySelector('[data-tone="pending"]')).not.toBeNull();
   });
 
-  it('keeps the longest verdict whole in the wrapping value structure', () => {
+  it('keeps the longest canonical verdict on one line with a decorative warning icon', () => {
     const fixture = TestBed.createComponent(DecisionChipComponent);
     fixture.componentRef.setInput('decision', 'INCONCLUSIVE');
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-
-    expect(root.querySelector('span.verdict > span.verdict__value')?.textContent).toBe(
-      'INCONCLUSIVE',
-    );
-    expect(root.querySelector('[title], [hidden], [aria-hidden]')).toBeNull();
-    const value = root.querySelector<HTMLElement>('.verdict__value');
-    expect(value).not.toBeNull();
-    if (value) {
-      expect(value.classList.contains('whitespace-normal')).toBe(true);
-      expect(value.classList.contains('[overflow-wrap:anywhere]')).toBe(true);
-    }
+    const value = root.querySelector('.verdict__value');
+    expect(value?.textContent).toBe('INCONCLUSIVE');
+    expect(value?.classList.contains('whitespace-nowrap')).toBe(true);
+    expect(root.querySelector('[title], [popover]')).toBeNull();
+    expect(root.querySelector('[hlmBadge] .verdict__label')).toBeNull();
+    expect(root.querySelector('hlm-icon')?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('keeps unavailable decisions out of the tab order while allowing hover explanation and Escape', async () => {
+  it('renders read-failure detail outside the badge, not as an unconditional tooltip', async () => {
     const fixture = TestBed.createComponent(DecisionChipComponent);
     fixture.componentRef.setInput('decision', 'unavailable');
+    fixture.componentRef.setInput('showDetail', true);
     await fixture.whenStable();
     const root = fixture.nativeElement as HTMLElement;
-    const badge = root.querySelector<HTMLElement>('.verdict--decision');
-    expect(root.querySelector('[tabindex]')).toBeNull();
-    expect(badge?.getAttribute('title')).toBe(fixture.componentInstance.explanation());
-    badge?.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
-    await vi.waitFor(() => expect(document.querySelector('[role="tooltip"]')).not.toBeNull());
-    await fixture.whenStable();
-    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
+    expect(root.querySelector('.verdict__detail')?.textContent?.trim()).toBe(
       'The decision could not be read. Try again.',
     );
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    await vi.waitFor(() => {
-      fixture.detectChanges();
-      expect(document.querySelector('[role="tooltip"]')).toBeNull();
-    });
+    expect(root.querySelector('[hlmBadge] .verdict__detail')).toBeNull();
+    expect(root.querySelector('[title], [popover], [tabindex]')).toBeNull();
+    fixture.componentRef.setInput('decision', 'pending');
+    await fixture.whenStable();
+    expect(root.querySelector('.verdict__value')?.textContent).toBe('Not evaluated');
+    expect(root.querySelector('.verdict__detail')?.textContent?.trim()).toBe('Not evaluated');
+    expect(root.querySelector('hlm-icon svg path')?.getAttribute('d')).toBe('M12 6v6l4 2');
+    expect(root.querySelector('.animate-spin')).toBeNull();
+  });
+
+  it('preserves unknown release provenance only in the external escaped detail', async () => {
+    const fixture = TestBed.createComponent(DecisionChipComponent);
+    fixture.componentRef.setInput('decision', '<img src=x onerror=alert(1)>');
+    fixture.componentRef.setInput('showDetail', true);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('.verdict__value')?.textContent?.trim()).toBe('Unavailable');
+    expect(root.querySelector('.verdict__detail')?.textContent).toContain('<img src=x');
+    expect(fixture.componentInstance.tone()).toBe('neutral');
+    expect(root.querySelector('img, [data-tone="success"]')).toBeNull();
+    const dimension = root.querySelector('.verdict__label')!;
+    expect(dimension.classList.contains('sr-only')).toBe(false);
+    expect(root.querySelector('[hlmBadge]')?.contains(dimension)).toBe(false);
+    fixture.componentRef.setInput('compact', true);
+    await fixture.whenStable();
+    expect(dimension.classList.contains('sr-only')).toBe(true);
   });
 });

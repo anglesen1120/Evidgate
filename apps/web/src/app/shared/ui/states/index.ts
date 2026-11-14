@@ -5,3 +5,6 @@ export { ForbiddenPatternComponent } from './forbidden-pattern.component';
 export { NotFoundPatternComponent } from './not-found-pattern.component';
 export { patternForError } from './state-pattern';
 export { RequestStateComponent } from './request-state.component';
+export { InlineFeedbackComponent } from './inline-feedback.component';
+export type { InlineFeedbackTone } from './inline-feedback.component';
+export type { LoadingPatternLayout } from './loading-pattern.component';

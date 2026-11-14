@@ -4,6 +4,16 @@ import { isRunState, RUN_STATE_TONES, type RunState } from './run-state-tone';
 import { StatusPillComponent, type StatusTone } from './status-pill.component';
 
 const RUN_STATE_LABELS: Readonly<Record<RunState, string>> = {
+  created: $localize`:@@shared.run-state.short.created:Created`,
+  queued: $localize`:@@shared.run-state.short.queued:Queued`,
+  running: $localize`:@@shared.run-state.short.running:Running`,
+  collecting: $localize`:@@shared.run-state.short.collecting:Collecting`,
+  complete: $localize`:@@shared.run-state.short.complete:Complete`,
+  incomplete: $localize`:@@shared.run-state.short.incomplete:Incomplete`,
+  canceled: $localize`:@@shared.run-state.short.canceled:Canceled`,
+};
+
+const RUN_STATE_DETAILS: Readonly<Record<RunState, string>> = {
   created: $localize`:@@shared.run-state.created:Created`,
   queued: $localize`:@@shared.run-state.queued:Queued`,
   running: $localize`:@@shared.run-state.running:Running`,
@@ -18,7 +28,12 @@ const RUN_STATE_LABELS: Readonly<Record<RunState, string>> = {
   selector: 'app-run-state-pill',
   imports: [StatusPillComponent],
   template: `
-    <app-status-pill [tone]="tone()" [label]="label()" [dimension]="compact() ? '' : dimension" />
+    <app-status-pill
+      [tone]="tone()"
+      [label]="label()"
+      [dimension]="compact() ? '' : dimension"
+      [detail]="showDetail() ? detail() : ''"
+    />
   `,
   host: { class: 'inline-block min-w-0 max-w-full' },
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -26,6 +41,7 @@ const RUN_STATE_LABELS: Readonly<Record<RunState, string>> = {
 export class RunStatePillComponent {
   readonly state = input.required<string>();
   readonly compact = input(false);
+  readonly showDetail = input(false);
 
   protected readonly dimension = $localize`:@@shared.run-state.dimension:Run status`;
   protected readonly tone = computed<StatusTone>(() => {
@@ -35,8 +51,19 @@ export class RunStatePillComponent {
   protected readonly label = computed(() => {
     const state = this.state();
     if (!state?.trim()) {
+      return $localize`:@@shared.run-state.short-unavailable:Unavailable`;
+    }
+    return isRunState(state)
+      ? RUN_STATE_LABELS[state]
+      : $localize`:@@shared.run-state.short-unknown:Unknown`;
+  });
+  readonly detail = computed(() => {
+    const state = this.state();
+    if (!state?.trim()) {
       return $localize`:@@shared.run-state.unavailable:Run status unavailable`;
     }
-    return isRunState(state) ? RUN_STATE_LABELS[state] : state;
+    return isRunState(state)
+      ? `${this.dimension}: ${RUN_STATE_DETAILS[state]}`
+      : $localize`:@@shared.run-state.unknown-detail:Unknown run status: ${state}:state:`;
   });
 }

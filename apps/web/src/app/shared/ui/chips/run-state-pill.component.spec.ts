@@ -50,7 +50,9 @@ describe('RunStatePillComponent', () => {
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
       expect(root.querySelector('.status-pill__label')?.textContent).toBe(label);
-      expect(root.querySelector('.status-pill__dimension')?.textContent).toBe('Run status:');
+      expect(root.querySelector('.status-pill__dimension')?.textContent?.trim()).toBe(
+        'Run status:',
+      );
       expect(root.querySelector(`.status-pill--${tone}`)).not.toBeNull();
       const badge = root.querySelector('[hlmBadge]');
       expect(badge?.getAttribute('data-slot')).toBe('badge');
@@ -72,19 +74,22 @@ describe('RunStatePillComponent', () => {
     expect(root.querySelector('.status-pill--success')).not.toBeNull();
     fixture.componentRef.setInput('state', 'future_state');
     fixture.detectChanges();
-    expect(root.textContent?.trim()).toBe('future_state');
+    expect(root.querySelector('.status-pill__label')?.textContent).toBe('Unknown');
     expect(root.querySelector('.status-pill--neutral')).not.toBeNull();
   });
 
   it.each(['future_state', '__proto__', 'constructor', '<img src=x onerror=alert(1)>'])(
-    'preserves unknown value %s verbatim with a neutral tone',
+    'preserves unknown value %s outside a short neutral badge',
     (state) => {
       expect(isRunState(state)).toBe(false);
       const fixture = TestBed.createComponent(RunStatePillComponent);
+      fixture.componentRef.setInput('showDetail', true);
       fixture.componentRef.setInput('state', state);
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
-      expect(root.querySelector('.status-pill__label')?.textContent).toBe(state);
+      expect(root.querySelector('.status-pill__label')?.textContent).toBe('Unknown');
+      expect(root.querySelector('.status-pill__detail')?.textContent).toContain(state);
+      expect(fixture.componentInstance.detail()).toContain(state);
       expect(root.querySelector('.status-pill--neutral')).not.toBeNull();
       expect(root.querySelector('.status-pill--success, .status-pill--danger, img')).toBeNull();
     },
@@ -97,7 +102,8 @@ describe('RunStatePillComponent', () => {
       fixture.componentRef.setInput('state', state);
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;
-      expect(root.querySelector('.status-pill__label')?.textContent).toBe('Run status unavailable');
+      expect(root.querySelector('.status-pill__label')?.textContent).toBe('Unavailable');
+      expect(fixture.componentInstance.detail()).toBe('Run status unavailable');
       expect(root.querySelector('.status-pill--neutral')).not.toBeNull();
       expect(root.innerHTML).not.toMatch(/\b(?:PASS|FAIL|Complete)\b/);
     },
@@ -112,6 +118,6 @@ describe('RunStatePillComponent', () => {
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('.status-pill--success')).toBeNull();
     expect(root.querySelector('.status-pill--neutral')).not.toBeNull();
-    expect(root.querySelector('.status-pill__label')?.textContent).toBe('future_state');
+    expect(root.querySelector('.status-pill__label')?.textContent).toBe('Unknown');
   });
 });

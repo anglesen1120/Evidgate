@@ -10,10 +10,23 @@ export interface DataTableFixtureRow {
 }
 
 export const DATA_TABLE_FIXTURE_COLUMNS: readonly DataTableColumn<DataTableFixtureRow>[] = [
-  { id: 'hash', header: 'Evidence identity', cell: (row) => row.hash, truncate: true },
-  { id: 'note', header: 'Context', cell: (row) => row.note },
-  { id: 'attempts', header: 'Attempts', cell: (row) => row.attempts, align: 'end' },
-  { id: 'mutation', header: 'Mutation', cell: (row) => row.mutation, mutates: true },
+  {
+    id: 'hash',
+    header: 'Evidence identity',
+    cell: (row) => row.hash,
+    role: 'identity',
+    kind: 'identifier',
+    truncate: true,
+  },
+  { id: 'note', header: 'Context', cell: (row) => row.note, role: 'text' },
+  { id: 'attempts', header: 'Attempts', cell: (row) => row.attempts, role: 'number', align: 'end' },
+  {
+    id: 'mutation',
+    header: 'Mutation',
+    cell: (row) => row.mutation,
+    role: 'actions',
+    mutates: true,
+  },
 ];
 
 export function dataTableFixtureRows(count: number): readonly DataTableFixtureRow[] {

@@ -170,6 +170,38 @@ describe('DataTableValueComponent', () => {
     vi.useRealTimers();
   });
 
+  it('forces fixed-row narratives into recoverable one-line previews and detects vertical text loss', async () => {
+    fixture.componentRef.setInput('truncate', false);
+    fixture.componentRef.setInput('fixedRow', true);
+    await fixture.whenStable();
+    expect(value.classList.contains('truncate')).toBe(true);
+    vi.spyOn(value, 'clientWidth', 'get').mockReturnValue(100);
+    vi.spyOn(value, 'scrollWidth', 'get').mockReturnValue(100);
+    vi.spyOn(value, 'clientHeight', 'get').mockReturnValue(20);
+    vi.spyOn(value, 'scrollHeight', 'get').mockReturnValue(40);
+    measure();
+    await fixture.whenStable();
+    expect(value.getAttribute('role')).toBe('button');
+    expect(value.getAttribute('tabindex')).toBe('0');
+    expect(root.querySelector('[popover]')?.textContent).toBe(fixture.componentInstance.value());
+    expect(root.classList.contains('overflow-hidden')).toBe(false);
+  });
+
+  it('supports Enter and Space disclosure without scrolling the page, then Escape dismissal', async () => {
+    await clip();
+    value.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await fixture.whenStable();
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(value.getAttribute('aria-expanded')).toBe('true');
+    value.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await fixture.whenStable();
+    expect(value.getAttribute('aria-expanded')).toBe('false');
+    const space = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true });
+    value.dispatchEvent(space);
+    expect(space.defaultPrevented).toBe(true);
+    expect(show).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     'default',
     'hover',

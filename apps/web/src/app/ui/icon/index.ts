@@ -17,6 +17,11 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       class="size-full"
     >
       @switch (name()) {
+        @case ('lucideActivity') {
+          <path
+            [attr.d]="'M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2'"
+          ></path>
+        }
         @case ('lucideCheck') {
           <path [attr.d]="'M20 6 9 17l-5-5'"></path>
         }
@@ -32,9 +37,16 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
         @case ('lucideChevronUp') {
           <path [attr.d]="'m18 15-6-6-6 6'"></path>
         }
+        @case ('lucideCircle') {
+          <circle [attr.cx]="'12'" [attr.cy]="'12'" [attr.r]="'10'"></circle>
+        }
         @case ('lucideCircleCheck') {
           <circle [attr.cx]="'12'" [attr.cy]="'12'" [attr.r]="'10'"></circle>
           <path [attr.d]="'m9 12 2 2 4-4'"></path>
+        }
+        @case ('lucideClock') {
+          <path [attr.d]="'M12 6v6l4 2'"></path>
+          <circle [attr.cx]="'12'" [attr.cy]="'12'" [attr.r]="'10'"></circle>
         }
         @case ('lucideInfo') {
           <circle [attr.cx]="'12'" [attr.cy]="'12'" [attr.r]="'10'"></circle>
@@ -68,12 +80,15 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 })
 export class HlmIcon {
   readonly name = input.required<
+    | 'lucideActivity'
     | 'lucideCheck'
     | 'lucideChevronDown'
     | 'lucideChevronLeft'
     | 'lucideChevronRight'
     | 'lucideChevronUp'
+    | 'lucideCircle'
     | 'lucideCircleCheck'
+    | 'lucideClock'
     | 'lucideInfo'
     | 'lucideLoader2'
     | 'lucideOctagonX'

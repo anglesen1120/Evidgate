@@ -24,9 +24,13 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
     expect(Array.from(row?.children ?? []).map((element) => element.tagName.toLowerCase())).toEqual(
       ['app-evidence-badge', 'app-outcome-pill', 'app-decision-chip'],
     );
-    expect(row?.querySelector('app-evidence-badge')?.textContent).toContain('Evidence incomplete');
-    expect(row?.querySelector('app-outcome-pill')?.textContent).toContain('No results');
-    expect(row?.querySelector('app-decision-chip')?.textContent).toContain('Not evaluated');
+    expect(row?.querySelector('app-evidence-badge')?.textContent).toMatch(
+      /Completeness:\s*Incomplete/,
+    );
+    expect(row?.querySelector('app-outcome-pill')?.textContent).toMatch(/Outcome:\s*No results/);
+    expect(row?.querySelector('app-decision-chip')?.textContent).toMatch(
+      /Decision:\s*Not evaluated/,
+    );
   });
 
   it('never paints incomplete evidence and a pending decision as success', () => {
@@ -65,8 +69,11 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
         ?.getAttribute('aria-rowcount'),
     ).toBe('13');
     expect(
-      root.querySelectorAll('[data-demo="table-small"] .body-table [role="row"]'),
+      root.querySelectorAll('[data-demo="table-small"] .body-table [data-row-id]'),
     ).toHaveLength(12);
+    expect(
+      root.querySelectorAll('[data-demo="table-small"] .body-table [aria-rowindex="1"]'),
+    ).toHaveLength(1);
     expect(
       root
         .querySelector('[data-demo=\"table-virtual\"] [role=\"table\"]')

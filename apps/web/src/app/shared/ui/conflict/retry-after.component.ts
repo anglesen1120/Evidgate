@@ -58,7 +58,7 @@ import { HlmButton } from '@evidgate/ui/button';
       <button
         hlmBtn
         [variant]="'outline'"
-        class="justify-self-start"
+        class="h-auto min-h-(--eg-control-md) min-w-0 max-w-full justify-self-start whitespace-normal py-(--eg-space-2) pointer-coarse:min-h-(--eg-control-touch) pointer-coarse:min-w-(--eg-control-touch)"
         type="button"
         [disabled]="!retryEligible() || busy()"
         [attr.aria-busy]="busy()"

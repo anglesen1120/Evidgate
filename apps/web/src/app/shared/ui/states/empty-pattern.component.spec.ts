@@ -117,4 +117,31 @@ describe('EmptyPatternComponent', () => {
       expect(element.getAttribute('style')).toBe('transition: none !important;');
     }
   });
+
+  it('renders bare inside an existing card without another boundary or changing its action', () => {
+    fixture.componentRef.setInput('bare', true);
+    fixture.componentRef.setInput('actionLabel', 'Tạo ca kiểm thử');
+    fixture.detectChanges();
+    expect(root.querySelector('[data-slot="card"]')).toBeNull();
+    expect(root.querySelector('section')?.classList.contains('state-panel--bare')).toBe(true);
+    expect(root.querySelector('h2')?.textContent).toBe('No test cases yet');
+    expect(root.querySelector('section')?.className).not.toContain('min-h-');
+    const action = vi.fn();
+    fixture.componentInstance.action.subscribe(action);
+    root.querySelector('button')?.click();
+    expect(action).toHaveBeenCalledTimes(1);
+    fixture.componentRef.setInput('actionHref', '/features');
+    fixture.detectChanges();
+    expect(root.querySelector('a')?.getAttribute('href')).toBe('/features');
+  });
+
+  it('retains complete long localized copy in the shrinkable bare section', () => {
+    const text = 'Chưa có đích cài đặt nào cho quyền hiện tại. '.repeat(15);
+    fixture.componentRef.setInput('bare', true);
+    fixture.componentRef.setInput('description', text);
+    fixture.detectChanges();
+    expect(root.querySelector('.state-panel__description')?.textContent).toBe(text);
+    expect(root.querySelector('section')?.classList.contains('min-w-0')).toBe(true);
+    expect(root.querySelector('section')?.classList.contains('wrap-anywhere')).toBe(true);
+  });
 });
