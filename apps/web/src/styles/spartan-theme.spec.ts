@@ -149,6 +149,25 @@ describe('Spartan theme contract', () => {
     expect(buttons).toContain('aria-expanded:bg-muted aria-expanded:text-foreground');
   });
 
+  it.each([
+    ['default', 'text-primary-foreground'],
+    ['outline', 'text-foreground'],
+    ['secondary', 'text-secondary-foreground'],
+    ['destructive', 'text-destructive'],
+  ])('gives the %s surface its own foreground', (variant, foreground) => {
+    const buttons = postcss.parse(source('helm/button.css'));
+    const utilities: string[] = [];
+    buttons.walkRules((rule) => {
+      if (!rule.selectors.includes(`.spartan-button-variant-${variant}`)) return;
+      rule.walkAtRules('apply', (apply) => {
+        utilities.push(...apply.params.split(/\s+/));
+      });
+    });
+    // A variant that paints a surface but inherits its colour drops below AA in a toned notice.
+    expect(utilities.some((utility) => utility.startsWith('bg-'))).toBe(true);
+    expect(utilities).toContain(foreground);
+  });
+
   it('maps outline controls and card boundaries to their distinct semantic borders', () => {
     const buttons = source('helm/button.css');
     const outline = buttons.match(/\.spartan-button-variant-outline\s*\{([^}]+)\}/)?.[1];

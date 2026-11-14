@@ -125,6 +125,15 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
       ),
     ).toBe(true);
   });
+  it.each([['not-a-date'], ['']])(
+    'refuses to render an unusable server time %j instead of failing the row',
+    async (createdAt) => {
+      const { root } = await render([run(1, { created_at: createdAt })]);
+      expect(root.querySelector('time')).toBeNull();
+      const cell = root.querySelector('td[data-label="Created (UTC)"]');
+      expect(cell?.textContent?.trim()).toBe('Time unavailable');
+    },
+  );
   it('formats the same UTC instant with Vietnamese date and time conventions', async () => {
     registerLocaleData(viLocale);
     TestBed.overrideProvider(LOCALE_ID, { useValue: 'vi' });

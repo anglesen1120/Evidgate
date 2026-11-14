@@ -206,6 +206,24 @@ describe('AuditTableComponent', () => {
     expect(labels).toEqual(['Time (UTC)', 'Actor', 'Action', 'Object']);
     expect(root.querySelector('[data-audit-row]')?.classList.contains('max-md:grid')).toBe(true);
   });
+  it.each([['not-a-date'], [''], ['2026-02-30T00:00:00Z']])(
+    'invents no instant for the unusable timestamp %j',
+    async (createdAt) => {
+      const { root } = await render([row('unusable', { created_at: createdAt })]);
+      expect(root.querySelector('time')).toBeNull();
+      const cell = root.querySelector('tbody th[scope="row"]');
+      expect(cell?.textContent).toContain('Time unavailable');
+      expect(root.querySelector('[data-audit-row]')?.textContent).toContain('project.updated');
+    },
+  );
+  it('renders a server instant that carries a numeric offset in UTC', async () => {
+    const instant = '2026-10-25T07:30:00+07:00';
+    const { root } = await render([row('offset', { created_at: instant })]);
+    const time = root.querySelector('time');
+    expect(time?.getAttribute('datetime')).toBe(instant);
+    expect(time?.textContent).toContain('Oct 25, 2026');
+    expect(time?.textContent).toContain('12:30:00');
+  });
   it('keeps mobile metadata closed per row and omits empty request, support and object values', async () => {
     const { root } = await render([
       row('with-request', { request_id: 'request-visible-in-details' }),

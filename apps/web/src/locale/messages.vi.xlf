@@ -2475,6 +2475,8 @@
       </trans-unit>
       <trans-unit id="settings.audit.caption" datatype="html"><source>Audit activity</source><target>Hoạt động kiểm toán</target></trans-unit>
       <trans-unit id="settings.audit.time" datatype="html"><source>Time (UTC)</source><target>Thời gian (UTC)</target></trans-unit>
+      <trans-unit id="runs.list.time-unavailable" datatype="html"><source>Time unavailable</source><target>Không đọc được thời gian</target></trans-unit>
+      <trans-unit id="settings.audit.time-unavailable" datatype="html"><source>Time unavailable</source><target>Không đọc được thời gian</target></trans-unit>
       <trans-unit id="settings.audit.actor" datatype="html"><source>Actor</source><target>Chủ thể thực hiện</target></trans-unit>
       <trans-unit id="settings.audit.action" datatype="html"><source>Action</source><target>Hành động</target></trans-unit>
       <trans-unit id="settings.audit.object" datatype="html"><source>Object</source><target>Đối tượng</target></trans-unit>

@@ -288,9 +288,7 @@ export class ConnectCiPage {
       this.healthClock.stop();
       this.slot.clear();
     });
-    // The refusal heading is the page's own focus target: outside both alerts, so the move neither
-    // repeats an announcement nor leaves the visitor on `<body>` after a disabled press. The cue is
-    // consumed after render, so a refusal whose heading never renders cannot leave it armed.
+    // Refusal focus is consumed after render so a missing heading cannot leave it armed.
     focusRefusalHeading({
       request: this.announceFailure,
       heading: this.failureHeadingRef,
@@ -375,7 +373,6 @@ export class ConnectCiPage {
         if (!this.isCurrent(version, orgId, projectId)) return;
         this.overlapEndsAt.set(null);
         this.slot.show({ source: 'binding-challenge', value: response.binding_challenge });
-        await this.store.refresh(orgId, projectId);
       },
       version,
       orgId,
@@ -401,7 +398,6 @@ export class ConnectCiPage {
         if (!this.isCurrent(version, orgId, projectId)) return;
         this.overlapEndsAt.set(null);
         this.slot.show({ source: 'ingest-token', value: response.secret });
-        await this.store.refresh(orgId, projectId);
       },
       version,
       orgId,
@@ -433,7 +429,6 @@ export class ConnectCiPage {
         if (!this.isCurrent(version, orgId, projectId)) return;
         this.slot.show({ source: 'ingest-token-rotation', value: response.secret });
         this.overlapEndsAt.set(response.overlap_ends_at ?? null);
-        await this.store.refresh(orgId, projectId);
       },
       version,
       orgId,
@@ -483,6 +478,10 @@ export class ConnectCiPage {
     this.failure.set(null);
     try {
       await action();
+      // A stale answer still means the server committed: the one-time value stays dropped, and the
+      // metadata of the scope the command was issued in is reconciled instead of going missing.
+      if (!this.destroyRef.destroyed && this.orgId() === orgId && this.projectId() === projectId)
+        await this.store.refresh(orgId, projectId);
     } catch (error: unknown) {
       if (!isApiRequestError(error)) throw error;
       if (this.isCurrent(version, orgId, projectId)) {

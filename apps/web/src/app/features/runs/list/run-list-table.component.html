@@ -184,16 +184,21 @@
     </div>
   </td>
   <td hlmTd role="cell" [class]="cellClasses" [attr.data-label]="copy.created">
-    <time
-      class="block tabular-nums [overflow-wrap:normal]"
-      [attr.datetime]="row.created_at"
-      [attr.title]="row.created_at"
-    >
-      <span class="block whitespace-nowrap">{{ row.created_at | date: 'shortDate' : 'UTC' }}</span
-      >{{ ' '
-      }}<span class="block whitespace-nowrap"
-        >{{ row.created_at | date: 'shortTime' : 'UTC' }} {{ copy.utc }}</span
+    @let createdAtMs = instantMs(row.created_at);
+    @if (createdAtMs !== null) {
+      <time
+        class="block tabular-nums [overflow-wrap:normal]"
+        [attr.datetime]="row.created_at"
+        [attr.title]="row.created_at"
       >
-    </time>
+        <span class="block whitespace-nowrap">{{ createdAtMs | date: 'shortDate' : 'UTC' }}</span
+        >{{ ' '
+        }}<span class="block whitespace-nowrap"
+          >{{ createdAtMs | date: 'shortTime' : 'UTC' }} {{ copy.utc }}</span
+        >
+      </time>
+    } @else {
+      <span>{{ copy.timeUnavailable }}</span>
+    }
   </td>
 </ng-template>

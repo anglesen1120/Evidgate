@@ -4,6 +4,7 @@ import type { AuditEntryDto } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
 import { HlmTableImports } from '@evidgate/ui/table';
 import { HlmTooltip } from '@evidgate/ui/tooltip';
+import { rfc3339InstantMs } from '../../../shared/time/rfc3339-instant';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
 import { supportAccessOf } from './support-access';
@@ -62,18 +63,23 @@ import { supportAccessOf } from './support-access';
                 <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
                   copy.time
                 }}</span>
-                <time
-                  class="flex flex-wrap gap-x-2 md:block"
-                  [attr.datetime]="row.created_at"
-                  [attr.title]="row.created_at"
-                >
-                  <span class="block whitespace-nowrap">
-                    {{ row.created_at | date: 'mediumDate' : '+0000' }}
-                  </span>
-                  <span class="block whitespace-nowrap">
-                    {{ row.created_at | date: 'mediumTime' : '+0000' }}
-                  </span>
-                </time>
+                @let createdAtMs = instantMs(row.created_at);
+                @if (createdAtMs !== null) {
+                  <time
+                    class="flex flex-wrap gap-x-2 md:block"
+                    [attr.datetime]="row.created_at"
+                    [attr.title]="row.created_at"
+                  >
+                    <span class="block whitespace-nowrap">
+                      {{ createdAtMs | date: 'mediumDate' : '+0000' }}
+                    </span>
+                    <span class="block whitespace-nowrap">
+                      {{ createdAtMs | date: 'mediumTime' : '+0000' }}
+                    </span>
+                  </time>
+                } @else {
+                  <span>{{ copy.timeUnavailable }}</span>
+                }
               </th>
               <td hlmTd role="cell" class="max-w-[var(--eg-rail-width)] max-md:order-3">
                 <span class="block text-xs text-muted-foreground md:hidden" aria-hidden="true">{{
@@ -169,9 +175,11 @@ export class AuditTableComponent {
   readonly rows = input.required<readonly AuditEntryDto[]>();
   private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly supportOf = supportAccessOf;
+  protected readonly instantMs = rfc3339InstantMs;
   protected readonly copy = {
     caption: $localize`:@@settings.audit.caption:Audit activity`,
     time: $localize`:@@settings.audit.time:Time (UTC)`,
+    timeUnavailable: $localize`:@@settings.audit.time-unavailable:Time unavailable`,
     actor: $localize`:@@settings.audit.actor:Actor`,
     action: $localize`:@@settings.audit.action:Action`,
     object: $localize`:@@settings.audit.object:Object`,

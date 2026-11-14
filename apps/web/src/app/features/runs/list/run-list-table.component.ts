@@ -19,6 +19,7 @@ import { RouterLink } from '@angular/router';
 import type { RunSummary } from '@evidgate/sdk';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmTableImports } from '@evidgate/ui/table';
+import { rfc3339InstantMs } from '../../../shared/time/rfc3339-instant';
 import { RunStatePillComponent } from '../../../shared/ui/chips/run-state-pill.component';
 import { StatusPillComponent } from '../../../shared/ui/chips/status-pill.component';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
@@ -52,6 +53,7 @@ export class RunListTableComponent {
   private readonly probe = viewChild<ElementRef<HTMLElement>>('rowProbe');
   private readonly viewport = viewChild(CdkVirtualScrollViewport);
   protected readonly displayRef = escapeFormatChars;
+  protected readonly instantMs = rfc3339InstantMs;
   protected readonly cellClasses =
     'min-w-0 h-auto box-border p-[var(--eg-space-3)] whitespace-normal text-start font-(weight:--eg-weight-regular) [overflow-wrap:anywhere] [@media(max-width:767px)]:grid [@media(max-width:767px)]:gap-[var(--eg-space-2)] [@media(max-width:767px)]:p-0 before:content-[attr(data-label)] before:text-muted-foreground before:font-[family-name:var(--eg-font-body)] before:font-(weight:--eg-weight-semibold) [@media(min-width:768px)]:before:hidden';
   protected readonly columnClasses =
@@ -112,6 +114,7 @@ export class RunListTableComponent {
     ref: $localize`:@@runs.list.column-ref:Ref`,
     scope: $localize`:@@runs.list.column-scope:Run scope`,
     created: $localize`:@@runs.list.column-created:Created (UTC)`,
+    timeUnavailable: $localize`:@@runs.list.time-unavailable:Time unavailable`,
     unverified: $localize`:@@runs.list.unverified-ref:Unverified ref`,
     unavailableRef: $localize`:@@runs.list.ref-unavailable:Ref unavailable`,
     original: $localize`:@@runs.list.original:Original run`,
