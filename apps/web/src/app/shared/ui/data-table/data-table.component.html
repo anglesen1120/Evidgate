@@ -163,7 +163,8 @@
         hlmTr
         cdk-header-row
         *cdkHeaderRowDef="columnIds()"
-        class="eg-table-sticky border-0"
+        class="border-0"
+        [class.eg-table-sticky]="virtual() || flow() === 'bounded'"
         role="row"
         aria-rowindex="1"
       ></tr>

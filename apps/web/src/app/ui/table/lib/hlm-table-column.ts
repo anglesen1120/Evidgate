@@ -1,4 +1,7 @@
 import { Directive, input } from '@angular/core';
+import type { DataTableColumnWidth } from './table-column-width';
+
+export type { DataTableColumnWidth } from './table-column-width';
 
 export type HlmTableColumnRole = 'identity' | 'status' | 'text' | 'number' | 'date' | 'actions';
 export type HlmTableColumnKind = 'name' | 'identifier' | 'branch' | 'email' | 'url';
@@ -13,6 +16,9 @@ export type HlmTableColumnOverflow = 'truncate' | 'wrap';
     '[attr.data-column-kind]': 'kind()',
     '[attr.data-column-priority]': 'priority()',
     '[attr.data-column-overflow]': 'overflow()',
+    '[style.min-inline-size]': 'width()?.min ?? null',
+    '[style.inline-size]': 'width()?.preferred ?? null',
+    '[style.max-inline-size]': 'width()?.max ?? null',
   },
 })
 export class HlmTableColumn {
@@ -20,4 +26,5 @@ export class HlmTableColumn {
   readonly kind = input<HlmTableColumnKind>('name', { alias: 'columnKind' });
   readonly priority = input<HlmTableColumnPriority>('secondary', { alias: 'columnPriority' });
   readonly overflow = input<HlmTableColumnOverflow>('wrap', { alias: 'columnOverflow' });
+  readonly width = input<DataTableColumnWidth>();
 }

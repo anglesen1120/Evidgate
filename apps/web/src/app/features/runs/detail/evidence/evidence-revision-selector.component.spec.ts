@@ -57,6 +57,18 @@ describe('EvidenceRevisionSelectorComponent', () => {
     expect(root.querySelector('#evidence-pin-help')?.textContent).toContain('stays pinned');
   });
 
+  it('sizes the revision control to content above the narrow breakpoint without clipping the pin', async () => {
+    const { root, harness } = await render();
+    const select = root.querySelector('hlm-select');
+    expect(select?.classList.contains('w-full')).toBe(true);
+    expect(select?.classList.contains('max-w-full')).toBe(true);
+    expect(select?.classList.contains('min-[768px]:w-fit')).toBe(true);
+    expect(await (await harness.trigger()).text()).toContain('Revision 4');
+    expect(root.querySelector('[role="combobox"]')?.classList.contains('whitespace-normal')).toBe(
+      true,
+    );
+  });
+
   it.each([
     ['vi', '2026-01-02T03:04:05Z', '03:04 02/01/2026'],
     ['vi-VN', '2026-01-02T03:04:05Z', '03:04 02/01/2026'],

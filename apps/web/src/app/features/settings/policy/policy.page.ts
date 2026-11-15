@@ -104,6 +104,8 @@ export class PolicyPage {
     revision: $localize`:@@settings.policy.revision:Revision`,
     values: $localize`:@@settings.policy.values-title:Policy values`,
     compare: $localize`:@@settings.policy.diff-title:Compare revisions`,
+    valuesTab: $localize`:@@settings.policy.tab.values:Values`,
+    compareTab: $localize`:@@settings.policy.tab.compare:Compare`,
     activation: $localize`:@@settings.policy.activation:Activation`,
     detailTabs: $localize`:@@settings.policy.detail-tabs:Selected revision details`,
   };

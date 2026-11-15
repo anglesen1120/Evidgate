@@ -87,6 +87,44 @@ describe('RoleMatrixComponent responsive records', () => {
     expect(cells[1]?.querySelector('[data-granted]')).toBeNull();
   });
 
+  it('uses intrinsic headers and boolean values instead of generic workflow-status minima', async () => {
+    const { root } = await render();
+    const headers = root.querySelectorAll<HTMLElement>('thead th[data-column-role="status"]');
+    expect(headers).toHaveLength(ROLES.length);
+    for (const header of headers) {
+      expect(header.style.getPropertyValue('min-inline-size')).toBe('max-content');
+      expect(header.style.getPropertyValue('inline-size')).toBe('1%');
+      expect(header.style.getPropertyValue('max-inline-size')).toBe('none');
+      expect(header.classList.contains('md:whitespace-nowrap')).toBe(true);
+    }
+    for (const cell of root.querySelectorAll<HTMLElement>('tbody td')) {
+      expect(cell.style.getPropertyValue('min-inline-size')).toBe('0px');
+      expect(cell.style.getPropertyValue('inline-size')).toBe('');
+      expect(cell.style.getPropertyValue('max-inline-size')).toBe('none');
+      expect(cell.querySelector('span.md\\:whitespace-nowrap')).not.toBeNull();
+    }
+  });
+
+  it('keeps nine complete comparison role names without character-count width guesses', async () => {
+    const { fixture, root } = await render();
+    const roles = Array.from({ length: 9 }, (_, index) => ({
+      ...ROLES[0]!,
+      id: `comparison-${index}`,
+      name: index === 8 ? 'Fully preserved organization role label' : `Role ${index}`,
+    }));
+    fixture.componentRef.setInput('matrix', {
+      columns: roles,
+      rows: [{ membership: MEMBER, granted: new Set(['comparison-0']) }],
+    });
+    await fixture.whenStable();
+    const headers = [...root.querySelectorAll<HTMLElement>('thead th[data-column-role="status"]')];
+    expect(headers.map((header) => header.textContent)).toEqual(roles.map((role) => role.name));
+    expect(root.querySelectorAll('tbody td')).toHaveLength(9);
+    for (const header of headers)
+      expect(header.style.getPropertyValue('min-inline-size')).toBe('max-content');
+    expectTableSemantics(root);
+  });
+
   it('defaults mobile records to granted roles and explicitly expands the full matrix', async () => {
     const { fixture, root } = await render();
     const summary = root.querySelector('[data-members-granted-summary]');

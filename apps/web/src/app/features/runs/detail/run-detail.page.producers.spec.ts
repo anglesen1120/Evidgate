@@ -119,7 +119,10 @@ describe('RunDetailPage producer region', () => {
     );
     expect(text('shard-3', 'identity')).toBe('Unbound');
     expect(text('shard-3', 'last-sequence')).toBe('4');
-    expect(text('shard-3', 'count')).toBe('4 (expected not set)');
+    const openCount = row('shard-3')?.querySelector('[data-fact="count"]');
+    expect(openCount?.querySelector('app-number-value')?.textContent).toBe('4');
+    expect(openCount?.querySelector('app-status-pill')?.textContent).toContain('Expected unset');
+    expect(openCount?.getAttribute('aria-label')).toBe('4 served, expected count not set yet');
     expect(row('shard-3')?.querySelectorAll('[data-fact][data-unavailable]')).toHaveLength(0);
     expect(root.querySelector('#producers [data-completeness]')).toBeNull();
   });

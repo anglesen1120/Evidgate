@@ -102,6 +102,21 @@ describe('MemberListComponent', () => {
     memberAction(root, '[data-members-edit-open]');
     expect(document.body.querySelectorAll('[role="menuitem"]')).toHaveLength(4);
   });
+  it.each(['active', 'pending'])(
+    'keeps %s member menu labels unwrapped and start aligned',
+    async (status) => {
+      await render([member(status)], true);
+      const menu = memberAction(root, '[data-members-remove]')?.closest('hlm-dropdown-menu');
+      if (!menu) throw new Error('Expected member actions menu');
+      expect(menu.classList.contains('min-w-max')).toBe(true);
+      for (const layout of ['justify-start', 'text-start', 'whitespace-nowrap'])
+        expect(menu.classList.contains(`[&_button]:${layout}`)).toBe(true);
+      expect(menu.querySelectorAll('[role="menuitem"]')).toHaveLength(status === 'pending' ? 4 : 2);
+      expect(menu.querySelector('[data-members-remove]')?.getAttribute('data-variant')).toBe(
+        'destructive',
+      );
+    },
+  );
   it.each([360, 376, 480, 767])(
     'renders complete read-only labelled records at a %spx narrow viewport',
     async (width) => {

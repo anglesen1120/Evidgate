@@ -15,11 +15,43 @@ describe('CopyableIdentifierComponent', () => {
   let harness: CopyableIdentifierHarness;
   let clipboard: PropertyDescriptor | undefined;
   let writeText: Mock<(value: string) => Promise<void>>;
+  let observer: {
+    observe: Mock<ResizeObserver['observe']>;
+    unobserve: Mock<ResizeObserver['unobserve']>;
+    disconnect: Mock<ResizeObserver['disconnect']>;
+  };
+  let measure: (() => void) | undefined;
+
+  async function setPreviewWidth(clientWidth: number, scrollWidth: number): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const preview = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      'code > bdi',
+    )!;
+    vi.spyOn(preview, 'clientWidth', 'get').mockReturnValue(clientWidth);
+    vi.spyOn(preview, 'scrollWidth', 'get').mockReturnValue(scrollWidth);
+    expect(measure).toBeDefined();
+    measure!();
+    await fixture.whenStable();
+  }
 
   beforeEach(async () => {
     clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
     writeText = vi.fn<(value: string) => Promise<void>>().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    measure = undefined;
+    observer = {
+      observe: vi.fn<ResizeObserver['observe']>(),
+      unobserve: vi.fn<ResizeObserver['unobserve']>(),
+      disconnect: vi.fn<ResizeObserver['disconnect']>(),
+    };
+    vi.stubGlobal(
+      'ResizeObserver',
+      vi.fn(function (callback: ResizeObserverCallback) {
+        measure = () => callback([], observer);
+        return observer;
+      }),
+    );
     await TestBed.configureTestingModule({
       imports: [CopyableIdentifierComponent],
       providers: [provideZonelessChangeDetection()],
@@ -38,6 +70,7 @@ describe('CopyableIdentifierComponent', () => {
     if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
     else Reflect.deleteProperty(navigator, 'clipboard');
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it.each(['light', 'dark'])(
@@ -151,17 +184,18 @@ describe('CopyableIdentifierComponent', () => {
     expect(await harness.fullText()).toBe('feature/checkout-banner');
   });
 
-  it('keeps a short compact identifier complete and preserves normal callers', async () => {
-    fixture.componentRef.setInput('value', 'run-123');
+  it.each([false, true])('keeps a short identifier complete with compact=%s', async (compact) => {
     expect(fixture.componentInstance.compact()).toBe(false);
-    fixture.componentRef.setInput('compact', true);
+    fixture.componentRef.setInput('value', 'run-123');
+    fixture.componentRef.setInput('compact', compact);
     expect(await harness.previewText()).toBe('run-123');
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('.compact-head')?.textContent).toBe('run-123');
-    expect(root.querySelector('.compact-tail')).toBeNull();
-    expect(root.querySelectorAll('button')).toHaveLength(2);
-    expect(root.querySelector('[aria-haspopup="dialog"]')?.getAttribute('title')).toBe(
-      'Show full Policy hash',
+    expect(root.querySelector('.preview-head')?.textContent).toBe('run-123');
+    expect(root.querySelector('.preview-tail')).toBeNull();
+    expect(root.querySelectorAll('button')).toHaveLength(compact ? 1 : 2);
+    expect(root.querySelector('[aria-haspopup="dialog"]') !== null).toBe(!compact);
+    expect(root.querySelector('app-copy-value-button button')?.getAttribute('aria-label')).toBe(
+      'Copy Policy hash',
     );
   });
 
@@ -187,8 +221,8 @@ describe('CopyableIdentifierComponent', () => {
       root.style.inlineSize = '136px';
       expect(await harness.previewText()).toBe('0198a000…000d001');
       expect(root.querySelector('code > bdi')).not.toBeNull();
-      expect(root.querySelector('.compact-head')?.textContent).toBe('0198a000');
-      expect(root.querySelector('.compact-tail')?.textContent).toBe('000d001');
+      expect(root.querySelector('.preview-head')?.textContent).toBe('0198a000');
+      expect(root.querySelector('.preview-tail')?.textContent).toBe('000d001');
       expect(await harness.accessibleValue()).toBe(`Policy hash: ${id}`);
       expect(getComputedStyle(root.querySelector('.identifier')!).flexWrap).toBe('nowrap');
       expect(getComputedStyle(root.querySelector('.actions')!).flexWrap).toBe('nowrap');
@@ -200,8 +234,114 @@ describe('CopyableIdentifierComponent', () => {
     },
   );
 
-  it('copies the complete compact identifier rather than either preview segment', async () => {
+  it.each([
+    {
+      kind: 'wide glyphs',
+      identifier: '漢字識別子測試寬字元',
+      display: '漢字識別子測試寬字元',
+      unsafe: false,
+    },
+    { kind: 'escaped format token', identifier: '\u202E', display: '⟨U+202E⟩', unsafe: true },
+  ])(
+    'marks physical clipping of $kind without a second ellipsis',
+    async ({ identifier, display, unsafe }) => {
+      fixture.componentRef.setInput('compact', true);
+      fixture.componentRef.setInput('value', identifier);
+      expect(await harness.previewText()).toBe(display);
+      const root = fixture.nativeElement as HTMLElement;
+      const preview = root.querySelector('code > bdi')!;
+      expect(preview.classList.contains('preview-elided')).toBe(false);
+      expect(getComputedStyle(preview).textOverflow).toBe('ellipsis');
+      expect(getComputedStyle(root.querySelector('code')!).textOverflow).toBe('clip');
+      expect(root.querySelector('.preview-tail')).toBeNull();
+      expect(root.querySelector('[aria-haspopup="dialog"]')).toBeNull();
+      await setPreviewWidth(128, 192);
+      expect(observer.observe).toHaveBeenCalledWith(preview);
+      expect(root.querySelector('[aria-haspopup="dialog"]')?.getAttribute('title')).toBe(
+        'Show full Policy hash',
+      );
+      const copy = root.querySelector<HTMLButtonElement>('app-copy-value-button button')!;
+      copy.click();
+      await fixture.whenStable();
+      if (unsafe) expect(writeText).not.toHaveBeenCalled();
+      else expect(writeText).toHaveBeenCalledExactlyOnceWith(identifier);
+      expect(root.textContent).not.toMatch(/\p{Cf}/u);
+      await harness.showFull();
+      expect(await harness.fullText()).toBe(display);
+      await harness.closeFull();
+      expect(document.activeElement).toBe(copy);
+      await setPreviewWidth(240, 192);
+      expect(root.querySelector('[aria-haspopup="dialog"]')).toBeNull();
+      expect(root.querySelector('app-copy-value-button button')).toBe(copy);
+    },
+  );
+
+  it('observes only non-grid compact previews and disconnects for recycled values', async () => {
+    expect(ResizeObserver).not.toHaveBeenCalled();
     fixture.componentRef.setInput('compact', true);
+    fixture.componentRef.setInput('value', 'run-123');
+    await fixture.whenStable();
+    expect(observer.observe).toHaveBeenCalledOnce();
+    fixture.componentRef.setInput('value', value);
+    await fixture.whenStable();
+    expect(observer.disconnect).toHaveBeenCalledOnce();
+    expect(ResizeObserver).toHaveBeenCalledOnce();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[aria-haspopup="dialog"]'),
+    ).not.toBeNull();
+  });
+
+  it('disconnects a compact preview observer when its owner is destroyed', async () => {
+    fixture.componentRef.setInput('compact', true);
+    fixture.componentRef.setInput('value', 'run-123');
+    await fixture.whenStable();
+    expect(observer.observe).toHaveBeenCalledOnce();
+    fixture.destroy();
+    expect(observer.disconnect).toHaveBeenCalledOnce();
+  });
+
+  describe.each([false, true])('middle preview with compact=%s', (compact) => {
+    it.each([
+      { kind: 'hash', identifier: value, budget: 192.6 },
+      { kind: 'hash', identifier: value, budget: 43.5 },
+      {
+        kind: 'branch',
+        identifier: 'refs/heads/feature/checkout-accessibility-improvement-2026-11-15',
+        budget: 192.6,
+      },
+      {
+        kind: 'branch',
+        identifier: 'refs/heads/feature/checkout-accessibility-improvement-2026-11-15',
+        budget: 43.5,
+      },
+    ])(
+      'reserves both ends of a $kind at a $budget px inline budget',
+      async ({ identifier, budget }) => {
+        fixture.componentRef.setInput('compact', compact);
+        fixture.componentRef.setInput('value', identifier);
+        const root = fixture.nativeElement as HTMLElement;
+        root.style.inlineSize = `${budget}px`;
+        expect(await harness.previewText()).toBe(middleTruncate(identifier, compact ? 16 : 32));
+        const preview = root.querySelector('code.preview')!;
+        const parts = preview.querySelector('bdi')!;
+        const head = parts.querySelector('.preview-head')!;
+        const tail = parts.querySelector('.preview-tail')!;
+        expect(head.textContent).toBe(identifier.slice(0, compact ? 8 : 16));
+        expect(tail.textContent).toBe(identifier.slice(compact ? -7 : -15));
+        expect(getComputedStyle(preview).textOverflow).toBe('clip');
+        expect(getComputedStyle(parts).display).toBe('grid');
+        expect(getComputedStyle(parts).gridTemplateColumns).toBe(
+          'minmax(0, 1fr) auto minmax(0, 1fr)',
+        );
+        expect(getComputedStyle(tail).justifyContent).toBe('flex-end');
+        expect(getComputedStyle(tail.firstElementChild!).flexShrink).toBe('0');
+        expect(await harness.accessibleValue()).toBe(`Policy hash: ${identifier}`);
+      },
+    );
+  });
+
+  it.each([false, true])('copies the complete original in compact=%s', async (compact) => {
+    fixture.componentRef.setInput('compact', compact);
     fixture.detectChanges();
     (fixture.nativeElement as HTMLElement)
       .querySelector<HTMLButtonElement>('app-copy-value-button button')!
@@ -213,15 +353,21 @@ describe('CopyableIdentifierComponent', () => {
     ).toBe('Policy hash copied.');
   });
 
-  it.each([
-    ['bidi override', '\u202E', '⟨U+202E⟩'],
-    ['zero-width space', '\u200B', '⟨U+200B⟩'],
-    ['zero-width joiner', '\u200D', '⟨U+200D⟩'],
-    ['astral format tag', '\u{E0001}', '⟨U+E0001⟩'],
-  ])(
-    'refuses %s and keeps escaped full-value recovery in compact mode',
-    async (_, character, token) => {
-      fixture.componentRef.setInput('compact', true);
+  it.each(
+    [false, true].flatMap((compact) =>
+      (
+        [
+          ['bidi override', '\u202E', '⟨U+202E⟩'],
+          ['zero-width space', '\u200B', '⟨U+200B⟩'],
+          ['zero-width joiner', '\u200D', '⟨U+200D⟩'],
+          ['astral format tag', '\u{E0001}', '⟨U+E0001⟩'],
+        ] as const
+      ).map(([kind, character, token]) => ({ compact, kind, character, token })),
+    ),
+  )(
+    'refuses $kind and keeps escaped full-value recovery with compact=$compact',
+    async ({ compact, character, token }) => {
+      fixture.componentRef.setInput('compact', compact);
       fixture.componentRef.setInput('value', `feature/${character}release`);
       fixture.detectChanges();
       const root = fixture.nativeElement as HTMLElement;

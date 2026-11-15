@@ -2790,16 +2790,6 @@
 <trans-unit id="runs.detail.release.environment" datatype="html"><source>Environment revision</source><target>Phiên bản môi trường</target></trans-unit>
 <trans-unit id="runs.detail.release.bound" datatype="html"><source>Bound</source><target>Đã gắn</target></trans-unit>
 <trans-unit id="runs.detail.release.no-components" datatype="html"><source>This release declares no components</source><target>Bản phát hành này không khai báo thành phần nào</target></trans-unit>
-<trans-unit id="runs.detail.release.copy-digest" datatype="html"><source>Copy full digest</source><target>Sao chép toàn bộ mã băm</target></trans-unit>
-<trans-unit id="runs.detail.release.copy-failed" datatype="html"><source>Copy failed. Select and copy the full digest shown above.</source><target>Không thể sao chép. Hãy chọn và sao chép toàn bộ mã băm ở trên.</target></trans-unit>
-<trans-unit id="runs.detail.release.copy-digest-for" datatype="html">
-        <source>Copy full digest for component <x id="key" equiv-text="componentKey"/></source>
-        <target>Sao chép toàn bộ mã băm của thành phần <x id="key"/></target>
-      </trans-unit>
-<trans-unit id="runs.detail.release.copied-for" datatype="html">
-        <source>Digest copied for component <x id="key" equiv-text="componentKey"/></source>
-        <target>Đã sao chép mã băm của thành phần <x id="key"/></target>
-      </trans-unit>
 <trans-unit id="runs.detail.producers.title" datatype="html"><source>Producers</source><target>Nguồn gửi dữ liệu</target></trans-unit>
 <trans-unit id="runs.detail.producers.loading" datatype="html"><source>Loading producers</source><target>Đang tải nguồn gửi dữ liệu</target></trans-unit>
 <trans-unit id="runs.detail.producers.empty" datatype="html"><source>No declared producers</source><target>Không có nguồn gửi dữ liệu được khai báo</target></trans-unit>
@@ -2809,7 +2799,6 @@
 <trans-unit id="runs.detail.producers.finalize" datatype="html"><source>Finalize status</source><target>Trạng thái chốt dữ liệu</target></trans-unit>
 <trans-unit id="runs.detail.producers.last-sequence" datatype="html"><source>Last sequence</source><target>Số thứ tự cuối cùng</target></trans-unit>
 <trans-unit id="runs.detail.producers.count" datatype="html"><source>Count / expected</source><target>Số lượng / dự kiến</target></trans-unit>
-<trans-unit id="runs.detail.producers.open-slot" datatype="html"><source>(expected not set)</source><target>(chưa đặt số dự kiến)</target></trans-unit>
 <trans-unit id="runs.detail.producers.open-count" datatype="html"><source><x id="count" equiv-text="count"/> served, expected count not set yet</source><target><x id="count"/> đã nhận, chưa đặt số dự kiến</target></trans-unit>
 <trans-unit id="runs.detail.producers.mismatch" datatype="html"><source>Count does not match expected</source><target>Số lượng không khớp dự kiến</target></trans-unit>
 <trans-unit id="runs.detail.producers.events" datatype="html"><source>Informational events</source><target>Sự kiện chỉ mang tính thông tin</target></trans-unit>
@@ -3396,7 +3385,7 @@
 <trans-unit id="shared.gallery.records.title" datatype="html"><source> Stacked records for narrow screens </source><target>Bản ghi xếp dọc cho màn hình hẹp</target></trans-unit>
 <trans-unit id="shared.gallery.roles.attempts" datatype="html"><source>Attempts</source><target>Số lần thử</target></trans-unit>
 <trans-unit id="shared.gallery.roles.badge" datatype="html"><source> Permission and role labels </source><target>Nhãn quyền và vai trò</target></trans-unit>
-<trans-unit id="shared.gallery.roles.caption" datatype="html"><source> Role-bound Helm columns with a long status label and a machine identifier </source><target>Cột Helm theo vai trò với nhãn trạng thái dài và định danh máy</target></trans-unit>
+<trans-unit id="shared.gallery.roles.caption" datatype="html"><source>Role-bound Helm columns with a long status label and a machine identifier</source><target>Cột Helm theo vai trò với nhãn trạng thái dài và định danh máy</target></trans-unit>
 <trans-unit id="shared.gallery.roles.date" datatype="html"><source>Recorded (UTC)</source><target>Thời điểm ghi nhận (UTC)</target></trans-unit>
 <trans-unit id="shared.gallery.roles.identity" datatype="html"><source>Evidence identity</source><target>Định danh bằng chứng</target></trans-unit>
 <trans-unit id="shared.gallery.roles.long-role" datatype="html"><source>Project administrator and evidence approver for this environment</source><target>Quản trị viên dự án và người xác nhận bằng chứng cho môi trường này</target></trans-unit>
@@ -3555,6 +3544,13 @@
       <trans-unit id="settings.secrets.no-matches" datatype="html"><source>No references match these filters</source><target>Không có tham chiếu khớp với các bộ lọc này</target></trans-unit>
       <trans-unit id="settings.secrets.search" datatype="html"><source>Search name or prefix</source><target>Tìm theo tên hoặc tiền tố</target></trans-unit>
       <trans-unit id="settings.secrets.summary" datatype="html"><source>Reference summary</source><target>Tổng quan tham chiếu</target></trans-unit>
+      <trans-unit id="runs.detail.decision-tab-compact" datatype="html"><source>Live decision</source><target>Quyết định</target></trans-unit>
+      <trans-unit id="runs.detail.producers.count-mismatch-short" datatype="html"><source>Mismatch</source><target>Không khớp</target></trans-unit>
+      <trans-unit id="runs.detail.producers.expected-unset" datatype="html"><source>Expected unset</source><target>Chưa có dự kiến</target></trans-unit>
+      <trans-unit id="runs.detail.release.digest-for" datatype="html"><source>Digest for component <x id="key" equiv-text="componentKey"/></source><target>Mã băm của thành phần <x id="key" equiv-text="componentKey"/></target></trans-unit>
+      <trans-unit id="settings.policy.tab.compare" datatype="html"><source>Compare</source><target>So sánh</target></trans-unit>
+      <trans-unit id="settings.policy.tab.values" datatype="html"><source>Values</source><target>Giá trị</target></trans-unit>
+      <trans-unit id="shell.nav.quota-short" datatype="html"><source>Usage &amp; credits</source><target>Sử dụng và tín dụng AI</target></trans-unit>
     </body>
   </file>
 </xliff>

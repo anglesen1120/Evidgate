@@ -1,10 +1,18 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import type { MembershipView, RoleView } from '@evidgate/sdk';
 import { HlmButton } from '@evidgate/ui/button';
-import { HlmTableImports } from '@evidgate/ui/table';
+import { HlmTableImports, type DataTableColumnWidth } from '@evidgate/ui/table';
 import { HlmCardTitle } from '@evidgate/ui/card';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { MEMBERS_COPY } from './member-list.component';
+
+const ROLE_HEADER_WIDTH: DataTableColumnWidth = {
+  min: 'max-content',
+  preferred: '1%',
+  max: 'none',
+};
+// Leave body inline size responsive so the narrow full-record alternative can fill its row.
+const ROLE_VALUE_WIDTH: DataTableColumnWidth = { min: '0px', max: 'none' };
 
 @Component({
   selector: 'app-role-matrix',
@@ -79,8 +87,10 @@ import { MEMBERS_COPY } from './member-list.component';
                 <th
                   hlmTh
                   [hlmTableColumn]="statusRole"
+                  [width]="roleHeaderWidth"
                   role="columnheader"
                   scope="col"
+                  class="md:whitespace-nowrap"
                   [id]="'matrix-role-' + role.id"
                   [textContent]="role.name"
                 ></th>
@@ -110,6 +120,7 @@ import { MEMBERS_COPY } from './member-list.component';
                   <td
                     hlmTd
                     [hlmTableColumn]="statusRole"
+                    [width]="roleValueWidth"
                     role="cell"
                     class="role-grant px-3 py-2 max-md:w-full max-md:min-w-0 max-md:max-w-full"
                     [attr.headers]="
@@ -121,7 +132,7 @@ import { MEMBERS_COPY } from './member-list.component';
                       >{{ role.name }}</span
                     >
                     <span
-                      class="data-[granted=true]:font-semibold"
+                      class="data-[granted=true]:font-semibold md:whitespace-nowrap"
                       [attr.data-granted]="row.granted.has(role.id) ? 'true' : null"
                     >
                       {{ row.granted.has(role.id) ? copy.granted : copy.notGranted }}
@@ -149,6 +160,8 @@ export class RoleMatrixComponent {
   protected readonly statusRole = 'status' as const;
   protected readonly emailKind = 'email' as const;
   protected readonly primaryPriority = 'primary' as const;
+  protected readonly roleHeaderWidth = ROLE_HEADER_WIDTH;
+  protected readonly roleValueWidth = ROLE_VALUE_WIDTH;
   protected readonly fullMatrix = signal(false);
   protected readonly grantedRows = computed(() =>
     this.matrix().rows.map((row) => ({

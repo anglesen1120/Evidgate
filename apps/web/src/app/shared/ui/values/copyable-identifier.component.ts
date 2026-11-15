@@ -1,11 +1,14 @@
 import {
+  afterRenderEffect,
   ChangeDetectionStrategy,
   Component,
   computed,
   DestroyRef,
+  ElementRef,
   effect,
   inject,
   input,
+  signal,
   TemplateRef,
   viewChild,
 } from '@angular/core';
@@ -20,7 +23,7 @@ import { HlmIcon } from '@evidgate/ui/icon';
 import type { BrnDialogRef } from '@spartan-ng/brain/dialog';
 
 import { CopyValueButtonComponent, type CopyValueButtonSize } from './copy-value-button.component';
-import { middleTruncate, middleTruncateParts } from './middle-truncate';
+import { middleTruncateParts } from './middle-truncate';
 import { escapeFormatChars } from './ref-name-display';
 
 @Component({
@@ -41,18 +44,22 @@ import { escapeFormatChars } from './ref-name-display';
         [class.full-value]="!showPreview()"
         [attr.aria-hidden]="showPreview() ? 'true' : null"
       >
-        @if (compact()) {
-          <bdi class="compact-value" [class.compact-elided]="compactParts().trailing !== ''">
-            <span class="compact-head" [textContent]="compactParts().leading"></span>
-            @if (compactParts().trailing) {
+        @if (showPreview()) {
+          <bdi
+            #previewValue
+            class="preview-value"
+            [class.preview-elided]="previewParts().trailing !== ''"
+          >
+            <span class="preview-head" [textContent]="previewParts().leading"></span>
+            @if (previewParts().trailing) {
               <span>…</span>
-              <span class="compact-tail"
-                ><span [textContent]="compactParts().trailing"></span
+              <span class="preview-tail"
+                ><span [textContent]="previewParts().trailing"></span
               ></span>
             }
           </bdi>
         } @else {
-          <bdi [textContent]="preview()"></bdi>
+          <bdi [textContent]="displayValue()"></bdi>
         }
       </code>
       @if (showPreview()) {
@@ -61,7 +68,7 @@ import { escapeFormatChars } from './ref-name-display';
         </span>
       }
       <span class="actions">
-        @if (showPreview()) {
+        @if (showFullAction()) {
           <button
             hlmBtn
             type="button"
@@ -81,6 +88,7 @@ import { escapeFormatChars } from './ref-name-display';
           </button>
         }
         <app-copy-value-button
+          #copyAction
           [value]="value()"
           [label]="label()"
           [size]="copySize()"
@@ -121,29 +129,34 @@ import { escapeFormatChars } from './ref-name-display';
     .compact .actions {
       flex: none;
     }
-    .compact .preview {
-      text-overflow: clip;
-    }
-    .compact-value {
+    .preview-value {
       display: block;
-      max-inline-size: 16ch;
+      max-inline-size: 32ch;
       overflow: hidden;
     }
-    .compact-elided {
+    .compact .preview-value {
+      max-inline-size: 16ch;
+    }
+    .preview-value:not(.preview-elided) {
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .preview-elided {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     }
-    .compact-head,
-    .compact-tail {
+    .preview-head,
+    .preview-tail {
       min-inline-size: 0;
       overflow: hidden;
       white-space: nowrap;
     }
-    .compact-tail {
+    /* End-align the suffix so clipping removes its inner edge, not its last glyph. */
+    .preview-tail {
       display: flex;
       justify-content: flex-end;
     }
-    .compact-tail > span {
+    .preview-tail > span {
       flex: none;
     }
     .icon-action {
@@ -169,7 +182,7 @@ import { escapeFormatChars } from './ref-name-display';
       min-inline-size: 0;
       overflow: hidden;
       white-space: nowrap;
-      text-overflow: ellipsis;
+      text-overflow: clip;
     }
     .full-value {
       display: block;
@@ -213,14 +226,24 @@ export class CopyableIdentifierComponent {
   /** Applies the copy target size in both the scan row and its full-value dialog. */
   readonly copySize = input<CopyValueButtonSize>('sm');
   private readonly fullValue = viewChild.required<TemplateRef<unknown>>('fullValue');
+  private readonly previewValue = viewChild<ElementRef<HTMLElement>>('previewValue');
+  private readonly copyAction = viewChild.required<
+    CopyValueButtonComponent,
+    ElementRef<HTMLElement>
+  >('copyAction', { read: ElementRef });
+  private readonly measuredClipped = signal(false);
   private readonly dialogs = inject(HlmDialogService);
   private dialog: BrnDialogRef<unknown> | undefined;
   protected readonly showText = $localize`:@@shared.values.show-full:Show full`;
   protected readonly closeText = $localize`:@@shared.values.close:Close`;
   protected readonly displayValue = computed(() => escapeFormatChars(this.value()));
-  protected readonly compactParts = computed(() => middleTruncateParts(this.displayValue(), 16));
-  protected readonly preview = computed(() =>
-    this.truncate() ? middleTruncate(this.displayValue()) : this.displayValue(),
+  protected readonly previewParts = computed(() =>
+    middleTruncateParts(this.displayValue(), this.compact() ? 16 : 32),
+  );
+  protected readonly showFullAction = computed(
+    () =>
+      this.showPreview() &&
+      (!this.compact() || this.previewParts().trailing !== '' || this.measuredClipped()),
   );
   protected readonly accessibleValue = computed(() => `${this.label()}: ${this.displayValue()}`);
   protected readonly showLabel = computed(
@@ -228,6 +251,22 @@ export class CopyableIdentifierComponent {
   );
 
   constructor() {
+    afterRenderEffect((onCleanup) => {
+      const element = this.previewValue()?.nativeElement;
+      if (!this.compact() || !element || this.previewParts().trailing) {
+        this.measuredClipped.set(false);
+        return;
+      }
+      const measure = () =>
+        this.measuredClipped.set(
+          element.clientWidth > 0 && element.scrollWidth > element.clientWidth,
+        );
+      measure();
+      if (typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(measure);
+      observer.observe(element);
+      onCleanup(() => observer.disconnect());
+    });
     effect(() => {
       this.value();
       this.label();
@@ -243,6 +282,11 @@ export class CopyableIdentifierComponent {
     this.dialog = this.dialogs.open(this.fullValue(), {
       ariaLabel: this.label(),
       showCloseButton: false,
+      // A fitting compact preview may lose its disclosure while the dialog is open.
+      restoreFocus:
+        this.compact() && !this.previewParts().trailing
+          ? (this.copyAction().nativeElement.querySelector<HTMLButtonElement>('button') ?? true)
+          : true,
     });
   }
 }

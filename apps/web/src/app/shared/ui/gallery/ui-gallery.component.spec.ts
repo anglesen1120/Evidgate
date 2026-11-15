@@ -87,6 +87,14 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
         .querySelector('[data-demo=\"table-empty\"] [role=\"table\"]')
         ?.getAttribute('aria-rowcount'),
     ).toBe('1');
+    // The column-role specimen uses the shared table too: one component, roles and budgets, no
+    // hand-built table that can hide a column at a narrow width.
+    expect(root.querySelectorAll('app-data-table')).toHaveLength(4);
+    expect(
+      root.querySelectorAll('[data-demo="gallery-column-roles"] tbody tr[data-row-id]'),
+    ).toHaveLength(2);
+    expect(root.querySelector('[data-demo="gallery-column-roles"] app-hash-chip')).not.toBeNull();
+    expect(root.querySelector('[data-demo="gallery-column-roles"] app-status-pill')).not.toBeNull();
   });
 
   it('includes every request pattern and both native retry eligibility states', async () => {

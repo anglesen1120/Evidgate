@@ -165,13 +165,33 @@ test('the list, a row and the way back are keyboard-reachable and identifiable',
   expect((await copy.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
   await tabThroughTableScroller(page, page.locator('#producers'));
   await tabThroughRunControls(page, page.locator('#producers'), 2);
-  await page.keyboard.press('Tab');
-  const digest = page.getByRole('button', {
-    name: 'Copy full digest for component web',
-    exact: true,
-  });
-  await expect(digest).toBeFocused();
-  expect((await digest.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  const release = page.locator('app-release-panel');
+  await expect(release.locator('.actions button')).toHaveCount(4);
+  for (const [hook, label, value] of [
+    ['data-release-digest', 'Digest for component web', `sha256:${'a'.repeat(64)}`],
+    [
+      'data-release-environment',
+      'Environment revision',
+      /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/,
+    ],
+  ] as const) {
+    const field = release.locator(`[${hook}]`);
+    const disclosure = field.getByRole('button', { name: `Show full ${label}`, exact: true });
+    const copyButton = field.getByRole('button', { name: `Copy ${label}`, exact: true });
+    await page.keyboard.press('Tab');
+    await expect(disclosure).toBeFocused();
+    await page.keyboard.press('Enter');
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.locator('code.full-value bdi')).toHaveText(value);
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(disclosure).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(copyButton).toBeFocused();
+    if (hook === 'data-release-digest') {
+      expect((await copyButton.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
+  }
   await page.keyboard.press('Tab');
   expect((await activeElement(page)).tag).toBe('body');
   await expect(page.getByRole('dialog')).toHaveCount(0);

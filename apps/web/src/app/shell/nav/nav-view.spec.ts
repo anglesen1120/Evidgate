@@ -208,6 +208,19 @@ describe('NavViewService (09.1.1-T4.1)', () => {
     expect(linkOf(view, 'quota')).toEqual(['/orgs', 'o-1', 'usage']);
   });
 
+  it('projects a separate short label without replacing the complete accessible label', async () => {
+    await authenticatedWithProject();
+    const quota = view
+      .groups()
+      .flatMap((group) => group.items)
+      .find((item) => item.id === 'quota');
+    const registryRow = NAV_ENTRIES.find((entry) => entry.id === 'quota');
+    expect(quota?.label).toBe(registryRow?.label);
+    expect(quota?.shortLabel).toBe('Usage & credits');
+    expect(quota?.shortLabel).toBe(registryRow?.shortLabel);
+    expect(quota?.link).toEqual(['/orgs', 'o-1', 'usage']);
+  });
+
   it('renders the labels and icons the registry declares', async () => {
     await authenticatedWithProject();
 

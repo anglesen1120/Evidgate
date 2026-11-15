@@ -127,7 +127,7 @@ import {
         Field feedback and narrow notices
       </h2>
       <app-form-required-note [convention]="'mostly-optional'" />
-      <form class="grid min-w-0 gap-3" novalidate (submit)="submitSpecimen($event)">
+      <form class="grid min-w-0 max-w-md gap-3" novalidate (submit)="submitSpecimen($event)">
         <app-form-error-summary [summaryId]="'gallery-form-errors'" [feedback]="feedback" />
         <div class="grid min-w-0 gap-2">
           <label hlmLabel [for]="field.id">
@@ -145,12 +145,20 @@ import {
           />
           <app-field-feedback [field]="field" />
         </div>
-        <button hlmBtn type="submit">{{ submitLabel }}</button>
+        <div class="flex flex-wrap items-center gap-2">
+          <button hlmBtn type="submit">{{ submitLabel }}</button>
+        </div>
       </form>
       <app-desktop-required-notice />
       <p class="eg-type-body m-0 wrap-anywhere">{{ readableFact }}</p>
       <ng-container *appDesktopMutation>
-        <button hlmBtn [variant]="'outline'" type="button" (click)="guardedMutation()">
+        <button
+          hlmBtn
+          class="justify-self-start"
+          [variant]="'outline'"
+          type="button"
+          (click)="guardedMutation()"
+        >
           {{ editLabel }}
         </button>
       </ng-container>

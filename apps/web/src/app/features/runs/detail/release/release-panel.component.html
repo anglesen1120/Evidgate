@@ -10,25 +10,37 @@
     <p class="m-0 text-muted-foreground" data-release-unbound>{{ copy.unbound }}</p>
   } @else {
     @if (releases().length > 1) {
-      <div
-        role="group"
-        [attr.aria-label]="copy.selectLabel"
-        class="flex min-w-0 flex-wrap gap-(--eg-space-2)"
-      >
-        @for (binding of releases(); track binding.releaseId) {
+      <div class="grid min-w-0 gap-(--eg-space-3)">
+        <label hlmLabel for="release-choice">{{ copy.selectLabel }}</label>
+        <hlm-select
+          class="block w-full min-w-0 max-w-full min-[768px]:w-fit"
+          [value]="selectedReleaseId()"
+          (valueChange)="chooseRelease($event)"
+        >
           <button
             hlmBtn
+            brnSelectTrigger
             type="button"
-            [variant]="selectedReleaseId() === binding.releaseId ? 'secondary' : 'outline'"
-            [attr.aria-pressed]="selectedReleaseId() === binding.releaseId"
-            class="min-h-(--eg-control-touch) h-auto max-w-full min-w-0 whitespace-normal text-start transition-none"
-            (click)="selectRelease.emit(binding.releaseId)"
+            id="release-choice"
+            [variant]="'outline'"
+            [attr.aria-describedby]="'release-choice-name'"
+            class="flex min-h-(--eg-control-touch) w-full min-w-0 justify-between gap-(--eg-space-3) text-start transition-none"
           >
-            <bdi class="wrap-anywhere">{{
-              display(binding.name?.trim() || binding.releaseId)
-            }}</bdi>
+            <bdi class="min-w-0 truncate">{{ selectedReleaseLabel() }}</bdi>
+            <hlm-icon [name]="'lucideChevronDown'" class="shrink-0" />
           </button>
-        }
+          <hlm-select-content *hlmSelectPortal [aria-label]="copy.selectLabel" class="animate-none">
+            @for (binding of releases(); track binding.releaseId) {
+              <hlm-select-item
+                [value]="binding.releaseId"
+                class="min-h-(--eg-control-touch) whitespace-normal wrap-anywhere"
+              >
+                <bdi>{{ releaseLabel(binding) }}</bdi>
+              </hlm-select-item>
+            }
+          </hlm-select-content>
+        </hlm-select>
+        <p id="release-choice-name" class="sr-only">{{ selectedReleaseLabel() }}</p>
       </div>
     }
     @switch (status()) {
@@ -100,6 +112,8 @@
                 [rows]="components()"
                 [rowId]="rowId"
                 [caption]="copy.components"
+                [flow]="'page'"
+                [fitToContainer]="true"
               />
             }
           } @else {
@@ -109,38 +123,32 @@
       }
     }
   }
-  <p
-    class="m-0 min-h-(--eg-leading-sm) text-muted-foreground"
-    role="status"
-    [attr.aria-live]="'polite'"
-    [textContent]="copyStatus()"
-  ></p>
 </section>
 
 <ng-template #componentCell let-component>
-  <div class="grid min-w-0 justify-items-start gap-(--eg-space-2)" data-release-component>
+  <div class="flex min-w-0 flex-wrap items-center gap-(--eg-space-2)" data-release-component>
     <bdi>{{ display(component.componentKey) }}</bdi>
     @if (boundKeys().has(component.componentKey)) {
       <app-status-pill [tone]="'info'" [label]="copy.bound" />
     }
   </div>
 </ng-template>
-<ng-template #digestCell let-component>
-  <div class="grid min-w-0 justify-items-start gap-(--eg-space-2)">
-    <bdi data-release-digest>{{ display(component.digest) }}</bdi>
-    <button
-      hlmBtn
-      [variant]="'outline'"
-      type="button"
-      class="min-h-(--eg-control-touch) h-auto whitespace-normal text-start transition-none"
-      [attr.aria-label]="copyDigestLabel(component.componentKey)"
-      [attr.aria-busy]="copying() === component.componentKey"
-      (click)="copyDigest(component)"
-    >
-      {{ copy.copyDigest }}
-    </button>
-  </div>
+<ng-template #digestCell let-component let-stacked="stacked">
+  <app-copyable-identifier
+    data-release-digest
+    [value]="component.digest"
+    [label]="digestLabel(component.componentKey)"
+    [copySize]="'lg'"
+    [compact]="!stacked"
+    [truncate]="!stacked"
+  />
 </ng-template>
-<ng-template #environmentCell let-component>
-  <bdi>{{ display(component.environmentRevisionId) }}</bdi>
+<ng-template #environmentCell let-component let-stacked="stacked">
+  <app-copyable-identifier
+    data-release-environment
+    [value]="component.environmentRevisionId"
+    [label]="copy.environment"
+    [compact]="!stacked"
+    [truncate]="!stacked"
+  />
 </ng-template>

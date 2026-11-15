@@ -112,10 +112,10 @@ let nextTableId = 0;
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class:
-      'block min-w-0 bg-card font-sans text-sm text-foreground [--eg-table-row:var(--eg-row-default)] [--eg-table-inset:var(--eg-space-3)] [&.compact]:[--eg-table-row:var(--eg-row-compact)] [&.compact]:[--eg-table-inset:var(--eg-space-2)] pointer-coarse:[&.compact]:[--eg-table-row:var(--eg-row-default)] pointer-coarse:[&.compact]:[--eg-table-inset:var(--eg-space-3)]',
+      'isolate block min-w-0 bg-card font-sans text-sm text-foreground [--eg-table-row:var(--eg-row-default)] [--eg-table-inset:var(--eg-space-3)] [&.compact]:[--eg-table-row:var(--eg-row-compact)] [&.compact]:[--eg-table-inset:var(--eg-space-2)] pointer-coarse:[&.compact]:[--eg-table-row:var(--eg-row-default)] pointer-coarse:[&.compact]:[--eg-table-inset:var(--eg-space-3)]',
     '[class.compact]': 'rowHeight() === "compact"',
     '[class.virtual]': 'virtual()',
-    '[style.--eg-table-header-height.px]': 'headerHeight()',
+    '[style.--eg-table-header-height.px]': 'flow() === "page" && !virtual() ? 0 : headerHeight()',
   },
 })
 export class DataTableComponent<T> {
@@ -125,7 +125,7 @@ export class DataTableComponent<T> {
   readonly caption = input.required<string>();
   readonly rowHeight = input<DataTableDensity>('default');
   readonly virtualThreshold = input(200);
-  /** Page flow removes the ordinary table's inner row cap; virtual windows keep their contract. */
+  /** Page flow has no inner row cap or sticky header; virtual windows keep their contract. */
   readonly flow = input<DataTableFlow>('bounded');
   /** Opt ordinary tables into record reflow when readable columns cannot fit their container. */
   readonly fitToContainer = input(false);
@@ -199,7 +199,6 @@ export class DataTableComponent<T> {
   private readonly range = signal<ListRange>({ start: 0, end: 0 });
   private layoutFocus: DataTableLayoutFocus | undefined;
   private fitColumns: readonly DataTableColumn<T>[] | undefined;
-  private fitRows: readonly T[] | undefined;
   private fitFont = '';
   private fitProbeWidth = 0;
   private minimumFitWidth = 0;
@@ -392,50 +391,12 @@ export class DataTableComponent<T> {
     const viewport = this.viewport();
     const width = this.host.nativeElement.clientWidth;
     const probeStyle = getComputedStyle(probe);
-    const columns = this.columns();
-    const rows = this.rows();
-    const probeWidth = this.fitToContainer() ? Number.parseFloat(probeStyle.width) || 0 : 0;
-    // An immutable prefix cannot reduce the required width. Keep fitted records
-    // mounted so a cursor handoff does not focus a transient native-table link.
-    const rowsReplaced =
-      this.minimumFitWidth > 0 &&
-      rows !== this.fitRows &&
-      (this.fitRows === undefined ||
-        rows.length < this.fitRows.length ||
-        this.fitRows.some((row, index) => row !== rows[index]));
-    if (
-      columns !== this.fitColumns ||
-      rowsReplaced ||
-      probeStyle.font !== this.fitFont ||
-      probeWidth !== this.fitProbeWidth
-    ) {
-      this.fitColumns = columns;
-      this.fitFont = probeStyle.font;
-      this.fitProbeWidth = probeWidth;
-      this.minimumFitWidth = 0;
-    }
-    this.fitRows = rows;
-    // Do not turn a fixed-height >200-row virtual list into a variable-height page.
-    const fit =
-      this.fitToContainer() && (this.customCells() || rows.length <= this.virtualThreshold());
-    if (width > 0) {
-      if (
-        fit &&
-        !this.narrow() &&
-        scroll.clientWidth > 0 &&
-        scroll.scrollWidth > scroll.clientWidth + 1
-      ) {
-        // Keep the measured minimum while records replace the table, or each observer
-        // callback would alternate between records and the same overflowing table.
-        this.minimumFitWidth = Math.ceil(scroll.scrollWidth + width - scroll.clientWidth);
-      }
-      this.updateLayout(width < 768 || (fit && width < this.minimumFitWidth));
-    }
+    const fittedRecords = this.needsFittedRecords(scroll, width, probeStyle);
+    if (width > 0) this.updateLayout(width < 768 || fittedRecords);
     const header = this.host.nativeElement.querySelector('.eg-table-sticky');
     const height = header?.getBoundingClientRect().height ?? 0;
     if (height > 0) this.headerHeight.set(height);
-    // The probe includes line height and insets, so text resizing grows the
-    // virtual stride instead of clipping a 200% line into a 44px row.
+    // Text resizing grows the virtual stride rather than clipping a 200% line.
     const pixels = Number.parseFloat(probeStyle.height);
     const minimum = this.rowHeight() === 'compact' ? 40 : 44;
     this.itemSize.set(pixels > 0 ? Math.max(minimum, pixels) : minimum);
@@ -451,6 +412,42 @@ export class DataTableComponent<T> {
         element.clientHeight > 0 && element.scrollHeight > element.clientHeight,
       );
     }
+  }
+
+  private needsFittedRecords(
+    scroll: HTMLElement,
+    width: number,
+    probeStyle: CSSStyleDeclaration,
+  ): boolean {
+    const columns = this.columns();
+    const rows = this.rows();
+    const probeWidth = this.fitToContainer() ? Number.parseFloat(probeStyle.width) || 0 : 0;
+    if (
+      columns !== this.fitColumns ||
+      probeStyle.font !== this.fitFont ||
+      probeWidth !== this.fitProbeWidth
+    ) {
+      this.fitColumns = columns;
+      this.fitFont = probeStyle.font;
+      this.fitProbeWidth = probeWidth;
+      this.minimumFitWidth = 0;
+    }
+    // A row-only change keeps records mounted: do not rebuild up to 200 rich rows
+    // just to rediscover the same minimum. Column or font changes may re-probe.
+    const fit =
+      this.fitToContainer() && (this.customCells() || rows.length <= this.virtualThreshold());
+    if (
+      fit &&
+      !this.narrow() &&
+      scroll.clientWidth > 0 &&
+      scroll.scrollWidth > scroll.clientWidth + 1
+    ) {
+      this.minimumFitWidth = Math.max(
+        this.minimumFitWidth,
+        Math.ceil(scroll.scrollWidth + width - scroll.clientWidth),
+      );
+    }
+    return fit && width < this.minimumFitWidth;
   }
 
   private demoteVirtualSections(): void {

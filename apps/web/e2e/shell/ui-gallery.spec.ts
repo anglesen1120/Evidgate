@@ -59,8 +59,6 @@ async function tableMetrics(page: Page): Promise<{
   header: Box;
   headerCells: readonly { left: number; width: number }[];
   bodyCells: readonly { left: number; width: number }[];
-  scrollbarWidth: number;
-  viewportWidth: number;
 }> {
   return page.evaluate(() => {
     const root = document.querySelector('[data-demo="table-small"]') as HTMLElement;
@@ -98,8 +96,6 @@ async function tableMetrics(page: Page): Promise<{
       header: box(header),
       headerCells: cells('thead tr > *'),
       bodyCells: cells('tbody tr:first-child > *'),
-      scrollbarWidth: scroll.offsetWidth - scroll.clientWidth,
-      viewportWidth: window.innerWidth,
     };
   });
 }
@@ -158,34 +154,29 @@ for (const locale of LOCALES) {
     // renders; the 360px reflow budget above still covers the narrow end.
     test.use({ viewport: { width: 900, height: 800 } });
 
-    test('the small table really scrolls and its header sticks above the body', async ({
+    test('the ordinary specimen flows with the page, the virtual one keeps its window', async ({
       page,
     }) => {
       await openGallery(page, locale, 'light');
-      const scroll = page.locator('[data-demo="table-small"] .scroll');
-      const before = await tableMetrics(page);
+      const metrics = await tableMetrics(page);
 
-      // A reserved viewport of eight rows over twelve rows: the box has somewhere to scroll to, and
-      // a classic scrollbar that takes layout width (the alignment case below depends on it).
-      expect(before.scroll.scrollHeight).toBeGreaterThan(before.scroll.clientHeight);
-      expect(
-        before.scrollbarWidth,
-        'a classic scrollbar gutter is present, so the header and body share the width the user sees',
-      ).toBeGreaterThan(0);
-      expect(before.scroll.scrollWidth).toBeLessThanOrEqual(before.scroll.clientWidth);
+      // Page flow (layout sweep LYT-03): the twelve-row example is not an inner row viewport any
+      // more, so every row is laid out in the document and the page owns the vertical scrollbar.
+      expect(metrics.scroll.scrollHeight).toBeLessThanOrEqual(metrics.scroll.clientHeight + 1);
+      expect(await page.locator('[data-demo="table-small"] tbody tr[data-row-id]').count()).toBe(
+        12,
+      );
+      expect(metrics.scroll.scrollWidth).toBeLessThanOrEqual(metrics.scroll.clientWidth);
+      expect(metrics.headerCells.length).toBe(4);
 
-      await scroll.hover();
-      await page.mouse.wheel(0, 320);
-      await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-
-      const scrolled = await tableMetrics(page);
-      // The header is still pinned to the top of the box it scrolls inside: no gap above it, and it
-      // did not scroll away with the body.
-      expect(Math.abs(scrolled.header.top - scrolled.scroll.top)).toBeLessThanOrEqual(1.5);
-      // And the columns still line up: a sticky header that loses the scrollbar's width drifts by
-      // exactly that width on the last column.
-      expect(scrolled.headerCells).toEqual(scrolled.bodyCells);
-      expect(scrolled.headerCells.length).toBe(4);
+      // The virtual example keeps its bounded window: 250 rows in a viewport of eight is the
+      // contract that window was built for, not a defect.
+      const virtual = await page.evaluate(() => {
+        const root = document.querySelector('[data-demo="table-virtual"]') as HTMLElement;
+        const viewport = root.querySelector('cdk-virtual-scroll-viewport') as HTMLElement;
+        return { scrollHeight: viewport.scrollHeight, clientHeight: viewport.clientHeight };
+      });
+      expect(virtual.scrollHeight).toBeGreaterThan(virtual.clientHeight);
     });
 
     test('a clipped value opens a native popover in the top layer, unclipped', async ({ page }) => {
@@ -320,5 +311,87 @@ test.describe('column alignment at a desktop width (T7)', () => {
     const metrics = await tableMetrics(page);
     expect(metrics.headerCells).toEqual(metrics.bodyCells);
     expect(Math.abs(metrics.header.top - metrics.scroll.top)).toBeLessThanOrEqual(1.5);
+  });
+});
+
+test.describe('layout sweep pins (LYT-03, LYT-06, LYT-07)', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('column budgets bound the identity column and flex the context (LYT-03)', async ({
+    page,
+  }) => {
+    await openGallery(page, 'en', 'light');
+    const widths = await page.evaluate(() => {
+      const table = document.querySelector('[data-demo="table-small"] table') as HTMLElement;
+      const cells = Array.from(table.querySelectorAll('thead th'));
+      const tableWidth = table.getBoundingClientRect().width;
+      const [identity = 0, context = 0, attempts = 0, mutation = 0] = cells.map(
+        (cell) => cell.getBoundingClientRect().width,
+      );
+      return { tableWidth, identity, context, attempts, mutation };
+    });
+
+    // The identity column is bounded, the narrative column takes the spare room, and the utility
+    // columns stay near their content width instead of stretching.
+    expect(widths.identity).toBeLessThan(widths.context);
+    expect(widths.identity).toBeLessThan(widths.tableWidth * 0.4);
+    expect(widths.attempts).toBeLessThan(widths.context);
+    expect(widths.mutation).toBeLessThan(widths.context);
+  });
+
+  test('the short-key form and its actions keep an expected content width (LYT-06)', async ({
+    page,
+  }) => {
+    await openGallery(page, 'en', 'light');
+    const boxes = await page.evaluate(() => {
+      // The section is labelled by `#gallery-fields` (an `h2`), so the form is its sibling.
+      const form = document.querySelector('section[aria-labelledby="gallery-fields"] form');
+      if (!(form instanceof HTMLElement)) throw new Error('Expected the gallery field specimen');
+      const input = form.querySelector('input');
+      const submit = form.querySelector('button[type="submit"]');
+      if (!(input instanceof HTMLElement) || !(submit instanceof HTMLElement)) {
+        throw new Error('Expected the specimen input and submit action');
+      }
+      const section = form.parentElement;
+      if (!(section instanceof HTMLElement)) throw new Error('Expected the specimen section');
+      return {
+        input: input.getBoundingClientRect().width,
+        submit: submit.getBoundingClientRect().width,
+        section: section.getBoundingClientRect().width,
+      };
+    });
+
+    // A short key is entered in a bounded field, and the save action is content-sized, not a band.
+    expect(boxes.input).toBeLessThan(boxes.section);
+    expect(boxes.input).toBeLessThanOrEqual(460);
+    expect(boxes.submit).toBeLessThan(300);
+  });
+
+  test('the role specimen reflows to labelled records instead of hiding columns (LYT-07)', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 768, height: 900 });
+    await openGallery(page, 'en', 'light');
+    const specimen = page.locator('[data-demo="gallery-column-roles"]');
+
+    await expect(specimen.locator('table'), 'no table squeezes columns out of view').toHaveCount(0);
+    await expect(specimen.locator('li.eg-table-record')).toHaveCount(2);
+    await expect(specimen.locator('dt')).toHaveCount(8);
+    await expect(specimen.locator('app-hash-chip')).toHaveCount(2);
+    await expect(specimen.locator('app-status-pill')).toHaveCount(2);
+
+    // The copy utility keeps a one-line label, so its action never wraps into a tall sliver.
+    const copyLines = await specimen
+      .locator('app-copy-value-button button')
+      .first()
+      .evaluate((button) => {
+        const range = document.createRange();
+        range.selectNodeContents(button);
+        return range.getClientRects().length;
+      });
+    expect(copyLines).toBe(1);
+
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect(specimen.locator('dt')).toHaveCount(8);
   });
 });

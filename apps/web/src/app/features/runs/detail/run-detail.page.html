@@ -55,16 +55,17 @@
           <button
             type="button"
             [hlmTabsTrigger]="'evidence'"
-            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+            class="h-auto min-h-(--eg-control-touch) flex-none whitespace-nowrap"
           >
             {{ copy.evidence }}
           </button>
           <button
             type="button"
             [hlmTabsTrigger]="'decision'"
-            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+            class="h-auto min-h-(--eg-control-touch) flex-none whitespace-nowrap"
+            [attr.aria-label]="copy.decision"
           >
-            {{ copy.decision }}
+            {{ copy.decisionTab }}
           </button>
         </div>
         <!-- Brain hardcodes tabindex="0" on every panel and only hides the inactive one, so the

@@ -139,7 +139,7 @@
       @if (!mobile()) {
         @defer (on idle) {
           <app-scope-switcher
-            class="topbar-scope min-w-0 grid-cols-2 basis-[calc(1.5*var(--eg-rail-width))] shrink"
+            class="topbar-scope min-w-0 max-w-[calc(1.5*var(--eg-rail-width))] flex-1 basis-0 grid-cols-2"
             [compact]="true"
             [organizations]="session.organizations()"
             [projects]="session.projects()"
@@ -150,7 +150,7 @@
           />
         } @placeholder {
           <div
-            class="topbar-scope grid min-w-0 basis-[calc(1.5*var(--eg-rail-width))] shrink grid-cols-2 gap-(--eg-space-3)"
+            class="topbar-scope grid min-w-0 max-w-[calc(1.5*var(--eg-rail-width))] flex-1 basis-0 grid-cols-2 gap-(--eg-space-3)"
             aria-hidden="true"
           >
             @for (scope of [session.currentOrg(), session.currentProject()]; track $index) {

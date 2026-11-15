@@ -133,6 +133,45 @@ describe('PolicyPage', () => {
     await fixture.whenStable();
     return { fixture, root: rootElement(fixture) };
   }
+  it('keeps compact authored tab labels with complete accessible names and unbroken targets', async () => {
+    const { fixture, root } = await render();
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Values', 'Compare', 'Activation']);
+    expect(tabs.map((tab) => tab.getAttribute('aria-label') ?? tab.textContent?.trim())).toEqual([
+      'Policy values',
+      'Compare revisions',
+      'Activation',
+    ]);
+    for (const tab of tabs) {
+      expect(tab.classList.contains('whitespace-nowrap')).toBe(true);
+      expect(tab.classList.contains('min-w-max')).toBe(true);
+      expect(tab.classList.contains('flex-auto')).toBe(true);
+    }
+    const compareTab = tabs[1];
+    if (!compareTab) throw new Error('Expected the policy comparison tab');
+    compareTab.click();
+    await fixture.whenStable();
+    expect(compareTab.getAttribute('aria-selected')).toBe('true');
+  });
+  it.each([true, false])(
+    'bounds the UUID lookup by expected content while retaining the full value with write grant %s',
+    async (writable) => {
+      canWrite.set(writable);
+      route.snapshot.queryParamMap = convertToParamMap({ revision: revision.id });
+      const { root } = await render();
+      const input = root.querySelector<HTMLInputElement>('#policy-revision-id');
+      expect(input?.value).toBe(revision.id);
+      expect(input?.getAttribute('maxlength')).toBeNull();
+      expect(input?.classList.contains('font-mono')).toBe(true);
+      const field = input?.parentElement;
+      expect(field?.classList.contains('w-full')).toBe(true);
+      expect(field?.classList.contains('md:w-[40ch]')).toBe(true);
+      expect(field?.classList.contains('md:max-w-full')).toBe(true);
+      expect(field?.classList.contains('flex-1')).toBe(false);
+      expect(field?.classList.contains('max-w-[40ch]')).toBe(false);
+      expect(root.querySelector('[data-policy-open]')).not.toBeNull();
+    },
+  );
   it('uses an h2 heading and shows revision metadata with the activation mode', async () => {
     const { root } = await render();
     expect(root.querySelector('h2#heading')?.textContent).toMatch(/\S/);

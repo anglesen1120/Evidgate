@@ -159,7 +159,7 @@ for (const locale of LOCALES) {
     await expectNoA11yViolations(page, 'run detail, producers table at 320px');
   });
 
-  test(`the scroller and copy controls are reachable and a producer anchor focuses its row (${locale})`, async ({
+  test(`page-flow copy controls remain reachable and a producer anchor focuses its row (${locale})`, async ({
     page,
   }) => {
     const producers = await producersOf(page, 'many-producers', locale);
@@ -172,12 +172,12 @@ for (const locale of LOCALES) {
       await expect(copy).toBeFocused();
       await expect(copy).toHaveAccessibleName(/^(Copy|Sao chép) /);
     }
-    const scroller = producers.locator('.scroll[tabindex="0"]');
+    const scroller = producers.locator('.scroll');
     await expect(scroller).toHaveCount(1);
-    await page.keyboard.press('Tab');
-    await expect(scroller).toBeFocused();
-    await expect(scroller).toHaveAttribute('role', 'region');
-    await expect(scroller).toHaveAccessibleName(/\S/);
+    await expect(scroller).not.toHaveAttribute('tabindex', '0');
+    expect(
+      await scroller.evaluate((element) => element.scrollHeight <= element.clientHeight + 1),
+    ).toBe(true);
     const producerCopies = producers.locator('app-copy-value-button button');
     await expect(producerCopies).toHaveCount(50);
     for (const copy of await producerCopies.all()) {
@@ -191,8 +191,7 @@ for (const locale of LOCALES) {
       await page.keyboard.press('Shift+Tab');
       await expect(copy).toBeFocused();
     }
-    await page.keyboard.press('Shift+Tab');
-    await expect(scroller).toBeFocused();
+    // Page flow deliberately has no inner scrolling-region stop in either direction.
     await page.keyboard.press('Shift+Tab');
     await expect(manifestCopies.last()).toBeFocused();
 

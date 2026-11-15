@@ -1,5 +1,10 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { ComponentFixture, DeferBlockBehavior, TestBed } from '@angular/core/testing';
+import {
+  ComponentFixture,
+  DeferBlockBehavior,
+  DeferBlockState,
+  TestBed,
+} from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { ViewportRuler } from '@angular/cdk/scrolling';
 import type { ProjectDto } from '@evidgate/sdk';
@@ -81,6 +86,28 @@ describe('ShellComponent scope, locale and drawer context', () => {
     await fixture.whenStable();
     expect(scope.querySelectorAll('strong')).toHaveLength(2);
     expect(scope.textContent).toContain(SCOPE_PROJECTS[1].name);
+  });
+
+  it('lets both tablet scope states grow within the remaining toolbar budget', async () => {
+    await resize(768);
+    const expectFlexibleScope = (element: Element | null) => {
+      expect(element?.classList.contains('min-w-0')).toBe(true);
+      expect(element?.classList.contains('flex-1')).toBe(true);
+      expect(element?.classList.contains('basis-0')).toBe(true);
+      expect(element?.classList.contains('max-w-[calc(1.5*var(--eg-rail-width))]')).toBe(true);
+    };
+    expectFlexibleScope(root.querySelector('header .topbar-scope'));
+    const scopeBlocks = await fixture.getDeferBlocks();
+    expect(scopeBlocks).toHaveLength(1);
+    await scopeBlocks[0]!.render(DeferBlockState.Complete);
+    await fixture.whenStable();
+    expectFlexibleScope(root.querySelector('header app-scope-switcher'));
+    expect(root.querySelectorAll('header [role="combobox"]')).toHaveLength(2);
+    expect(root.querySelector('header .locale-toggle')).not.toBeNull();
+    expect(root.querySelector('header .theme-toggle')).not.toBeNull();
+    await resize(767);
+    expect(root.querySelector('header .topbar-scope')).toBeNull();
+    expect(root.querySelector('aside .locale-toggle')).not.toBeNull();
   });
 
   it('keeps one labelled locale control in the topbar, moving it into the mobile drawer', async () => {

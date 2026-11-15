@@ -149,12 +149,12 @@ describe('RunDetailPage release and timeline regions', () => {
     );
     const { root, harness } = await open();
     expect(region(root, '[data-release-name]').textContent).toContain('Web release');
-    const buttons = root.querySelectorAll<HTMLButtonElement>(
-      'app-release-panel [role="group"] button',
-    );
-    expect(buttons).toHaveLength(2);
-    expect(buttons[1]?.textContent).toContain('rel-2');
-    buttons[1]?.click();
+    root.querySelector<HTMLButtonElement>('app-release-panel [role="combobox"]')?.click();
+    await settle(harness);
+    const options = document.querySelectorAll<HTMLElement>('[role="option"]');
+    expect(options).toHaveLength(2);
+    expect(options[1]?.textContent).toContain('rel-2');
+    options[1]?.click();
     await settle(harness);
     expect(getRelease.mock.calls.map(([id]) => id)).toEqual(['rel-1', 'rel-2']);
     expect(region(root, '[data-release-name]').textContent).toContain('API release');
@@ -235,7 +235,9 @@ describe('RunDetailPage release and timeline regions', () => {
       });
     const { root, harness } = await open();
     expect(root.querySelectorAll('[data-release-component]')).toHaveLength(1);
-    root.querySelectorAll<HTMLButtonElement>('app-release-panel [role="group"] button')[1]?.click();
+    root.querySelector<HTMLButtonElement>('app-release-panel [role="combobox"]')?.click();
+    await settle(harness);
+    document.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click();
     await settle(harness);
     expect(root.querySelectorAll('[data-release-component]')).toHaveLength(0);
     expect(region(root, 'app-release-panel app-error-pattern')).not.toBeNull();

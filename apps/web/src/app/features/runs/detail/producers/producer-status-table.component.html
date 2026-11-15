@@ -35,6 +35,8 @@
         [rows]="pageSlots()"
         [rowId]="rowId"
         [caption]="copy.title"
+        [flow]="'page'"
+        [fitToContainer]="true"
       />
       @if (rows.length > pageSize) {
         <nav
@@ -79,12 +81,18 @@
     [id]="producerAnchorId(slot.producerId)"
     [attr.data-producer-slot]="slot.producerId"
     tabindex="-1"
-    class="min-w-0 scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+    class="flex min-w-0 items-center gap-(--eg-space-2) scroll-mt-[calc(var(--eg-topbar-height,calc(2*var(--eg-space-12)))+var(--eg-space-4))] focus-visible:outline-solid focus-visible:outline-(length:--eg-focus-width) focus-visible:outline-ring focus-visible:outline-offset-(--eg-focus-offset)"
+    [class.flex-wrap]="stacked"
   >
-    <bdi class="block min-w-0"
+    <bdi class="block min-w-0 flex-1"
       ><app-data-table-value [value]="display(slot.producerId)" [truncate]="!stacked"
     /></bdi>
-    <app-copy-value-button [value]="slot.producerId" [label]="copy.producer" />
+    <app-copy-value-button
+      class="shrink-0"
+      [value]="slot.producerId"
+      [label]="copy.producer"
+      [iconOnly]="true"
+    />
   </div>
 </ng-template>
 <ng-template #identityCell let-slot>
@@ -131,8 +139,11 @@
     }
   </div>
 </ng-template>
-<ng-template #countCell let-slot>
+<ng-template #countCell let-slot let-stacked="stacked">
   <div
+    class="grid min-w-0 gap-(--eg-space-2)"
+    [class.justify-items-end]="!stacked"
+    [class.justify-items-start]="stacked"
     [attr.data-fact]="'count'"
     [attr.data-unavailable]="slot.count === null ? '' : null"
     [attr.data-open-slot]="slot.count !== null && slot.expected === null ? '' : null"
@@ -141,19 +152,23 @@
     "
   >
     @if (slot.count !== null && slot.expected === null) {
-      <app-number-value [value]="slot.count" />{{ ' '
-      }}<span class="text-muted-foreground" aria-hidden="true">{{ copy.openSlot }}</span>
+      <app-number-value [value]="slot.count" />
+      <app-status-pill
+        [tone]="'neutral'"
+        [label]="copy.expectedUnset"
+        [fullValue]="openCountLabel(slot.count)"
+      />
     } @else if (slot.count !== null && slot.expected !== null) {
       <span class="whitespace-nowrap"
         ><app-number-value [value]="slot.count" /> / <app-number-value [value]="slot.expected"
       /></span>
       @if (slot.count !== slot.expected) {
-        <span
+        <app-status-pill
           data-count-mismatch
-          class="mt-(--eg-space-2) flex items-start gap-(--eg-space-2) rounded-(--eg-radius-md) bg-(--eg-warning-bg) p-(--eg-space-2) text-(--eg-warning-fg)"
-        >
-          <span aria-hidden="true">≠</span><span>{{ copy.mismatch }}</span>
-        </span>
+          [tone]="'warning'"
+          [label]="copy.mismatchShort"
+          [fullValue]="copy.mismatch"
+        />
       }
     } @else {
       <span class="text-muted-foreground">{{ copy.notProvided }}</span>

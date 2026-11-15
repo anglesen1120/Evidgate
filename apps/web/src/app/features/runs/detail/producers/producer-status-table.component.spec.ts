@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { clearTranslations, loadTranslations } from '@angular/localize';
 import { By } from '@angular/platform-browser';
 import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
+import { StatusPillComponent } from '../../../../shared/ui/chips/status-pill.component';
 
 import { stubLayoutApis } from '../../../../shared/testing/layout.testing';
 import { evidenceHref, producerAnchorId } from '../evidence/run-evidence-anchors';
@@ -62,6 +63,29 @@ describe('ProducerStatusTableComponent', () => {
     return { fixture, root: fixture.nativeElement as HTMLElement };
   }
 
+  it('uses page flow and independent readable column budgets, with spare space reserved for notes', async () => {
+    const { fixture, root } = await render();
+    const table = fixture.debugElement.query(By.directive(DataTableComponent))
+      .componentInstance as DataTableComponent<ProducerSlot>;
+    expect(table.flow()).toBe('page');
+    expect(table.fitToContainer()).toBe(true);
+    expect(root.querySelector('.eg-table-long')).toBeNull();
+    expect(table.columns().map((column) => column.width?.preferred)).toEqual([
+      '1%',
+      '1%',
+      '1%',
+      '1%',
+      '1%',
+      'auto',
+    ]);
+    expect(table.columns().find((column) => column.id === 'count')?.width?.min).toBe(
+      'calc(18ch + 2 * var(--eg-space-4))',
+    );
+    const identity = root.querySelector('[data-producer-slot]');
+    expect(identity?.classList.contains('flex')).toBe(true);
+    expect(identity?.querySelector('app-copy-value-button hlm-icon')).not.toBeNull();
+  });
+
   it('shows supplied finalized facts without turning them into a run result', async () => {
     const { root } = await render();
     expect(root.querySelector('section#producers[data-producer-status]')).not.toBeNull();
@@ -113,12 +137,19 @@ describe('ProducerStatusTableComponent', () => {
   it.each([
     { count: 11, expected: 12 },
     { count: 13, expected: 12 },
-  ])('marks mismatched counts with text and an icon: %j', async (counts) => {
-    const { root } = await render([{ ...FINALIZED, ...counts }]);
-    const marker = root.querySelector('[data-count-mismatch]');
-    expect(marker?.textContent).toContain('Count does not match expected');
-    expect(marker?.querySelector('[aria-hidden="true"]')?.textContent).toBe('≠');
-  });
+  ])(
+    'marks mismatched counts with a compact label, full reason and warning icon: %j',
+    async (counts) => {
+      const { fixture, root } = await render([{ ...FINALIZED, ...counts }]);
+      const marker = root.querySelector('[data-count-mismatch]');
+      const pill = fixture.debugElement.query(By.css('[data-count-mismatch]'))
+        .componentInstance as StatusPillComponent;
+      expect(pill.label()).toBe('Mismatch');
+      expect(pill.fullValue()).toBe('Count does not match expected');
+      expect(marker?.querySelector('hlm-icon')).not.toBeNull();
+      expect(marker?.querySelector('.status-pill--warning')).not.toBeNull();
+    },
+  );
 
   it('does not compare or fabricate a count when the count is absent', async () => {
     const { root } = await render([{ ...FINALIZED, count: null, expected: 12 }]);
@@ -129,10 +160,14 @@ describe('ProducerStatusTableComponent', () => {
   });
 
   it('shows the served count of an open slot with an accessible label and no mismatch', async () => {
-    const { root } = await render([{ ...FINALIZED, count: 3, expected: null }]);
+    const { fixture, root } = await render([{ ...FINALIZED, count: 3, expected: null }]);
     const cell = root.querySelector('[data-fact="count"]');
     expect(cell?.hasAttribute('data-unavailable')).toBe(false);
-    expect(cell?.textContent?.replace(/\s+/g, ' ').trim()).toBe('3 (expected not set)');
+    expect(cell?.querySelector('app-number-value')?.textContent).toBe('3');
+    expect(cell?.textContent).toContain('Expected unset');
+    const pill = fixture.debugElement.query(By.css('[data-open-slot] app-status-pill'))
+      .componentInstance as StatusPillComponent;
+    expect(pill.fullValue()).toBe('3 served, expected count not set yet');
     expect(cell?.getAttribute('aria-label')).toBe('3 served, expected count not set yet');
     expect(root.querySelector('[data-count-mismatch]')).toBeNull();
   });
@@ -269,14 +304,18 @@ describe('ProducerStatusTableComponent', () => {
     expect(root.querySelector('[data-state="empty"]')).toBeNull();
   });
 
-  it('uses the shared auto-layout table and local sticky-header scroller for long producer lists', async () => {
+  it('uses the shared page-flow table without a local sticky-header scroller for long producer lists', async () => {
     const slots = Array.from({ length: 50 }, (_, index) => ({
       ...FINALIZED,
       producerId: `shard-${index}-${'long-id'.repeat(20)}`,
     }));
     const { root } = await render(slots);
     expect(root.querySelectorAll('tr[data-row-id]')).toHaveLength(50);
-    expect(root.querySelector('[data-producer-scroll] .eg-table-long')).not.toBeNull();
+    expect(root.querySelector('[data-producer-scroll] .eg-table-long')).toBeNull();
+    expect(root.querySelector('[data-producer-scroll] .eg-table-sticky')).toBeNull();
+    expect(root.querySelector('app-data-table')?.getAttribute('style')).toContain(
+      '--eg-table-header-height: 0px',
+    );
     expect(root.querySelector('.eg-table-layout')).not.toBeNull();
     const identities = [...root.querySelectorAll('[data-producer-slot]')];
     expect(identities).toHaveLength(50);

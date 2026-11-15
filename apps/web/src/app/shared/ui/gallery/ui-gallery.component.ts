@@ -23,6 +23,7 @@ import {
   type StatusTone,
 } from '../chips';
 import { DataTableComponent, type DataTableColumn } from '../data-table';
+import type { DataTableColumnWidth } from '../data-table/data-table-column';
 import {
   DATA_TABLE_FIXTURE_COLUMNS,
   dataTableFixtureRows,
@@ -45,6 +46,17 @@ import { PageHeaderComponent } from '../page-header/page-header.component';
 import { GalleryCompositionComponent } from './gallery-composition.component';
 import { GalleryStatesComponent } from './gallery-states.component';
 import { GalleryTablesComponent } from './gallery-tables.component';
+
+/**
+ * Intrinsic specimen budgets: the identity column stays bounded, the narrative context absorbs
+ * spare room and utility columns keep their content width (no header wrapping, no ribbon tables).
+ */
+const SPECIMEN_COLUMN_WIDTHS: Readonly<Record<string, DataTableColumnWidth>> = {
+  hash: { min: '12ch', preferred: '28ch', max: '36ch' },
+  note: { preferred: 'auto' },
+  attempts: { preferred: '1%' },
+  mutation: { preferred: '1%' },
+};
 
 /** Isolated specimens; only explicit commands change local demo state. No API calls. */
 @Component({
@@ -185,6 +197,7 @@ export class UiGalleryComponent {
     DATA_TABLE_FIXTURE_COLUMNS.map((column) => ({
       ...column,
       header: this.columnHeader(column.id),
+      ...(SPECIMEN_COLUMN_WIDTHS[column.id] ? { width: SPECIMEN_COLUMN_WIDTHS[column.id] } : {}),
     }));
   protected readonly smallRows = dataTableFixtureRows(12);
   protected readonly virtualRows = dataTableFixtureRows(250);

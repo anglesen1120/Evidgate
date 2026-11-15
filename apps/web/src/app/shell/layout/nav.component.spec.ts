@@ -115,6 +115,64 @@ describe('NavComponent', () => {
     },
   );
 
+  it.each(['hover', 'focus'])(
+    'shows a short visible label while retaining full context on %s',
+    async (trigger) => {
+      const fixture = TestBed.createComponent(NavComponent);
+      fixture.componentRef.setInput('groups', [
+        {
+          id: 'settings',
+          label: 'Settings',
+          items: [
+            {
+              id: 'quota',
+              label: 'Usage and credits',
+              shortLabel: 'Usage',
+              icon: 'credit',
+              link: ['/usage'],
+            },
+          ],
+        },
+      ]);
+      attachedRoot = fixture.nativeElement as HTMLElement;
+      document.body.append(attachedRoot);
+      await fixture.whenStable();
+      const link = attachedRoot.querySelector<HTMLAnchorElement>('a')!;
+      expect(link.textContent?.trim()).toBe('Usage');
+      expect(link.getAttribute('aria-label')).toBe('Usage and credits');
+      if (trigger === 'focus') link.focus();
+      else {
+        const event = new Event('pointerenter');
+        Object.defineProperty(event, 'pointerType', { value: 'mouse' });
+        link.dispatchEvent(event);
+      }
+      await vi.waitFor(() =>
+        expect(document.querySelector('[role="tooltip"]')?.textContent?.trim()).toBe(
+          'Usage and credits',
+        ),
+      );
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await vi.waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
+      if (trigger === 'focus') expect(document.activeElement).toBe(link);
+    },
+  );
+
+  it('does not add a tooltip when a short label equals the complete label', async () => {
+    const fixture = TestBed.createComponent(NavComponent);
+    fixture.componentRef.setInput('groups', [
+      {
+        ...groups[0],
+        items: [{ ...groups[0]!.items[0]!, shortLabel: 'Overview' }],
+      },
+    ]);
+    attachedRoot = fixture.nativeElement as HTMLElement;
+    document.body.append(attachedRoot);
+    await fixture.whenStable();
+    attachedRoot.querySelector<HTMLAnchorElement>('a')!.focus();
+    await fixture.whenStable();
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+  });
+
   it('keeps expanded navigation labels visible without a redundant tooltip', async () => {
     const fixture = TestBed.createComponent(NavComponent);
     fixture.componentRef.setInput('groups', groups);

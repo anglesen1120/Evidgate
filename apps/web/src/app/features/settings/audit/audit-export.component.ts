@@ -78,7 +78,7 @@ function revokeDeferred(url: string): void {
       <button
         type="button"
         hlmBtn
-        class="min-h-[var(--eg-control-touch)] whitespace-normal"
+        class="min-h-[var(--eg-control-touch)] w-fit max-w-full justify-self-start whitespace-normal"
         data-audit-export
         [disabled]="running() || !orgId() || hasDraftChanges()"
         [attr.aria-describedby]="

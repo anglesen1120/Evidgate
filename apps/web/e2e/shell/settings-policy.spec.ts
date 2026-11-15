@@ -82,6 +82,13 @@ for (const locale of LOCALES) {
     expect(field.y + field.height).toBeCloseTo(action.y + action.height, 0);
     expect(field.x + field.width).toBeLessThan(action.x);
     expect(field.width).toBeGreaterThan(action.width);
+    expect(field.width).toBeLessThanOrEqual(420);
+    await expect(page.locator('#policy-revision-id')).toHaveValue(HEAD_ID);
+    expect(
+      await page
+        .locator('#policy-revision-id')
+        .evaluate((input) => input.scrollWidth <= input.clientWidth),
+    ).toBe(true);
   });
   // AC3: the served list, its head marking, the mode chip and the diff panel's own state.
   test(`revision list, head marking, mode chip and diff state (${locale})`, async ({ page }) => {

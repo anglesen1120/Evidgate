@@ -1,17 +1,20 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  type TemplateRef,
+  viewChild,
+} from '@angular/core';
 import { HlmBadge } from '@evidgate/ui/badge';
 import { HlmCard, HlmCardContent, HlmCardHeader } from '@evidgate/ui/card';
-import {
-  HlmTable,
-  HlmTableColumn,
-  HlmTableContainer,
-  HlmTd,
-  HlmTh,
-  HlmTr,
-} from '@evidgate/ui/table';
 
 import { HashChipComponent, StatusPillComponent } from '../chips';
-import { DataTableRecordsComponent, type DataTableColumn } from '../data-table';
+import {
+  DataTableComponent,
+  DataTableRecordsComponent,
+  type DataTableCellContext,
+  type DataTableColumn,
+} from '../data-table';
 
 interface GalleryRecord {
   readonly id: string;
@@ -41,14 +44,9 @@ function records(count: number): readonly GalleryRecord[] {
     HlmCard,
     HlmCardContent,
     HlmCardHeader,
-    HlmTable,
-    HlmTableColumn,
-    HlmTableContainer,
-    HlmTd,
-    HlmTh,
-    HlmTr,
     HashChipComponent,
     StatusPillComponent,
+    DataTableComponent,
     DataTableRecordsComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -65,46 +63,22 @@ function records(count: number): readonly GalleryRecord[] {
       >
         Column roles and long in-cell chips
       </h2>
-      <div hlmTableContainer class="min-w-0 overflow-x-auto">
-        <table hlmTable class="w-full">
-          <caption
-            class="px-(--eg-space-4) py-(--eg-space-3) text-start text-muted-foreground"
-            i18n="@@shared.gallery.roles.caption"
-          >
-            Role-bound Helm columns with a long status label and a machine identifier
-          </caption>
-          <thead>
-            <tr hlmTr>
-              <th hlmTh scope="col" [hlmTableColumn]="'identity'" [columnPriority]="'primary'">
-                {{ identityLabel }}
-              </th>
-              <th hlmTh scope="col" [hlmTableColumn]="'status'" [columnPriority]="'primary'">
-                {{ statusLabel }}
-              </th>
-              <th hlmTh scope="col" [hlmTableColumn]="'number'">{{ attemptsLabel }}</th>
-              <th hlmTh scope="col" [hlmTableColumn]="'date'">{{ dateLabel }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (record of specimens; track record.id) {
-              <tr hlmTr>
-                <td hlmTd [hlmTableColumn]="'identity'" [columnPriority]="'primary'">
-                  <app-hash-chip [value]="record.hash" [abbreviate]="18" />
-                </td>
-                <td hlmTd [hlmTableColumn]="'status'" [columnPriority]="'primary'">
-                  <app-status-pill
-                    [tone]="'info'"
-                    [label]="longStatusLabel"
-                    [detail]="longStatusDetail"
-                  />
-                </td>
-                <td hlmTd [hlmTableColumn]="'number'">{{ record.attempts }}</td>
-                <td hlmTd [hlmTableColumn]="'date'">{{ record.recordedAt }}</td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+      <app-data-table
+        [columns]="roleColumns()"
+        [rows]="specimens"
+        [rowId]="recordId"
+        [caption]="roleCaption"
+        [flow]="'page'"
+        [fitToContainer]="true"
+        [attr.data-demo]="'gallery-column-roles'"
+      >
+        <ng-template #hashCell let-row>
+          <app-hash-chip [value]="row.hash" [abbreviate]="18" />
+        </ng-template>
+        <ng-template #statusCell>
+          <app-status-pill [tone]="'info'" [label]="longStatusLabel" [detail]="longStatusDetail" />
+        </ng-template>
+      </app-data-table>
       <section hlmCard class="min-w-0" aria-labelledby="gallery-role-badge">
         <div hlmCardHeader>
           <h3
@@ -148,6 +122,51 @@ function records(count: number): readonly GalleryRecord[] {
 })
 export class GalleryTablesComponent {
   protected readonly identityLabel = $localize`:@@shared.gallery.roles.identity:Evidence identity`;
+  protected readonly roleCaption = $localize`:@@shared.gallery.roles.caption:Role-bound Helm columns with a long status label and a machine identifier`;
+  protected readonly hashCell =
+    viewChild<TemplateRef<DataTableCellContext<GalleryRecord>>>('hashCell');
+  protected readonly statusCell =
+    viewChild<TemplateRef<DataTableCellContext<GalleryRecord>>>('statusCell');
+  /** Role-bound columns with intrinsic budgets, so narrow containers reflow instead of hiding one. */
+  protected readonly roleColumns = computed<readonly DataTableColumn<GalleryRecord>[]>(() => {
+    const hash = this.hashCell();
+    const status = this.statusCell();
+    return [
+      {
+        id: 'hash',
+        header: this.identityLabel,
+        cell: (record) => record.hash,
+        role: 'identity',
+        kind: 'identifier',
+        truncate: true,
+        width: { min: '18ch', preferred: '26ch', max: '32ch' },
+        ...(hash ? { cellTemplate: hash } : {}),
+      },
+      {
+        id: 'status',
+        header: this.statusLabel,
+        cell: () => this.longStatusLabel,
+        role: 'status',
+        width: { preferred: '1%' },
+        ...(status ? { cellTemplate: status } : {}),
+      },
+      {
+        id: 'attempts',
+        header: this.attemptsLabel,
+        cell: (record) => record.attempts,
+        role: 'number',
+        align: 'end',
+        width: { preferred: '1%' },
+      },
+      {
+        id: 'recordedAt',
+        header: this.dateLabel,
+        cell: (record) => record.recordedAt,
+        role: 'date',
+        width: { preferred: '1%' },
+      },
+    ];
+  });
   protected readonly statusLabel = $localize`:@@shared.gallery.roles.status:Status`;
   protected readonly attemptsLabel = $localize`:@@shared.gallery.roles.attempts:Attempts`;
   protected readonly dateLabel = $localize`:@@shared.gallery.roles.date:Recorded (UTC)`;

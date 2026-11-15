@@ -101,6 +101,30 @@ describe('Shared table column layout and reflow', () => {
     return host;
   }
 
+  it('isolates sticky descendants below app chrome and disables native sticky offsets in page flow', async () => {
+    expect(root.classList.contains('isolate')).toBe(true);
+    expect(root.querySelector('tr.eg-table-sticky')).not.toBeNull();
+    expect(root.style.getPropertyValue('--eg-table-header-height')).not.toBe('0px');
+    fixture.componentRef.setInput('flow', 'page');
+    await fixture.whenStable();
+    expect(root.querySelector('tr.eg-table-sticky')).toBeNull();
+    expect(root.querySelector('.eg-table-long')).toBeNull();
+    expect(root.style.getPropertyValue('--eg-table-header-height')).toBe('0px');
+    fixture.componentRef.setInput('flow', 'bounded');
+    await fixture.whenStable();
+    expect(root.querySelector('tr.eg-table-sticky')).not.toBeNull();
+    expect(root.style.getPropertyValue('--eg-table-header-height')).not.toBe('0px');
+  });
+
+  it('retains the virtual header and its offset when page flow is requested', async () => {
+    fixture.componentRef.setInput('rows', dataTableFixtureRows(201));
+    fixture.componentRef.setInput('flow', 'page');
+    await fixture.whenStable();
+    expect(fixture.componentInstance.virtual()).toBe(true);
+    expect(root.querySelector('tr.eg-table-sticky')).not.toBeNull();
+    expect(root.style.getPropertyValue('--eg-table-header-height')).not.toBe('0px');
+  });
+
   it('applies native width budgets independently of narrow-record priority and clears removed budgets', async () => {
     const budgeted: readonly DataTableColumn<DataTableFixtureRow>[] = [
       {

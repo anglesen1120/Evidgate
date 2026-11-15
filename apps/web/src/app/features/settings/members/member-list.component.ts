@@ -179,7 +179,9 @@ export const MEMBERS_COPY = {
           {{ copy.actions }}<span class="sr-only"> {{ member.invited_email }}</span>
         </button>
         <ng-template #actionsMenu>
-          <hlm-dropdown-menu>
+          <hlm-dropdown-menu
+            class="min-w-max [&_button]:justify-start [&_button]:text-start [&_button]:whitespace-nowrap"
+          >
             @if (member.status === 'active' || member.status === 'pending') {
               <button
                 hlmDropdownMenuItem

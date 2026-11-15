@@ -130,6 +130,17 @@ describe('AuditExportComponent', () => {
     expect(data.list).not.toHaveBeenCalled();
     expect(click).not.toHaveBeenCalled();
   });
+  it('keeps the CSV utility content-sized and start-aligned without losing its scope', async () => {
+    const { root } = await render();
+    const action = root.querySelector<HTMLButtonElement>('[data-audit-export]');
+    if (!action) throw new Error('Expected export action');
+    expect(action.classList.contains('w-fit')).toBe(true);
+    expect(action.classList.contains('max-w-full')).toBe(true);
+    expect(action.classList.contains('justify-self-start')).toBe(true);
+    expect(action.classList.contains('min-h-[var(--eg-control-touch)]')).toBe(true);
+    expect(action.getAttribute('aria-describedby')).toBe('audit-export-scope-title');
+    expect(data.list).not.toHaveBeenCalled();
+  });
   it('fetches exactly 50 pages of a 15,000 row fixture, downloads once and persistently announces the exact cap', async () => {
     data.rows = Array.from({ length: 15_000 }, (_, index) => entry(index));
     const { fixture, root } = await render();

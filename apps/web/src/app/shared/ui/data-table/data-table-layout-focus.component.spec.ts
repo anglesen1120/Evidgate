@@ -170,7 +170,7 @@ describe('Shared table focus across record reflow', () => {
     expect(root.querySelector('[role="table"]')).not.toBeNull();
   });
 
-  it.each(['columns', 'font', 'font metrics', 'rows'] as const)(
+  it.each(['columns', 'font', 'font metrics'] as const)(
     'rechecks the measured minimum after its %s changes without losing focus',
     async (source) => {
       let minimum = 1152;
@@ -186,14 +186,6 @@ describe('Shared table focus across record reflow', () => {
           columns.map((column) => ({
             ...column,
             width: { min: '8ch' },
-          })),
-        );
-      } else if (source === 'rows') {
-        fixture.componentRef.setInput(
-          'rows',
-          fixture.componentInstance.rows().map((row) => ({
-            ...row,
-            note: 'Short replacement',
           })),
         );
       } else if (source === 'font metrics') {
@@ -225,12 +217,14 @@ describe('Shared table focus across record reflow', () => {
     expect(document.activeElement).toBe(appended);
   });
 
-  it('invalidates an apparent append when an existing middle row was replaced', async () => {
+  it('keeps fitted records mounted when an existing middle row is replaced during append', async () => {
     let minimum = 1152;
     tableMinimum(() => minimum);
     fixture.componentRef.setInput('fitToContainer', true);
     await resize(900);
     const rows = fixture.componentInstance.rows();
+    const first = control(0, 'identity', 'a');
+    const layout = vi.spyOn(fixture.componentInstance.narrow, 'set');
     minimum = 800;
     fixture.componentRef.setInput('rows', [
       rows[0]!,
@@ -238,8 +232,32 @@ describe('Shared table focus across record reflow', () => {
       dataTableFixtureRows(3)[2]!,
     ]);
     await resize(900);
-    expect(fixture.componentInstance.narrow()).toBe(false);
+    expect(fixture.componentInstance.narrow()).toBe(true);
+    expect(layout).not.toHaveBeenCalledWith(false);
+    expect(control(0, 'identity', 'a')).toBe(first);
   });
+
+  it.each(['replacement', 'filter'] as const)(
+    'does not mount a transient native table on a row-only %s',
+    async (source) => {
+      tableMinimum(() => 1152);
+      fixture.componentRef.setInput('fitToContainer', true);
+      await resize(900);
+      const surviving = control(1, 'identity', 'button');
+      surviving.focus();
+      const layout = vi.spyOn(fixture.componentInstance.narrow, 'set');
+      const rows = fixture.componentInstance.rows();
+      fixture.componentRef.setInput(
+        'rows',
+        source === 'filter' ? rows.slice(1) : rows.map((row) => ({ ...row, note: 'Replacement' })),
+      );
+      await resize(900);
+      expect(fixture.componentInstance.narrow()).toBe(true);
+      expect(layout).not.toHaveBeenCalledWith(false);
+      expect(control(source === 'filter' ? 0 : 1, 'identity', 'button')).toBe(surviving);
+      expect(document.activeElement).toBe(surviving);
+    },
+  );
 
   it.each(['a', 'button'])(
     'preserves the second row %s in both directions, including changed link labels',

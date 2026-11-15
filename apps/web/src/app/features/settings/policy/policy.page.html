@@ -40,11 +40,11 @@
   class="mb-(--eg-space-7) flex min-w-0 flex-row flex-wrap items-end gap-(--eg-space-4)"
   (submit)="openRevision($event)"
 >
-  <div class="grid min-w-0 flex-1 basis-[var(--eg-rail-width)] gap-2">
+  <div class="grid w-full min-w-0 gap-2 md:w-[40ch] md:max-w-full">
     <label hlmLabel for="policy-revision-id">{{ copy.revisionId }}</label>
     <input
       hlmInput
-      class="min-h-[var(--eg-control-touch)]"
+      class="min-h-[var(--eg-control-touch)] font-mono"
       id="policy-revision-id"
       type="text"
       autocomplete="off"
@@ -152,21 +152,23 @@
           <button
             type="button"
             [hlmTabsTrigger]="valuesTab"
-            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+            [attr.aria-label]="copy.values"
+            class="min-h-(--eg-control-touch) min-w-max flex-auto whitespace-nowrap"
           >
-            {{ copy.values }}
+            {{ copy.valuesTab }}
           </button>
           <button
             type="button"
             [hlmTabsTrigger]="compareTab"
-            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+            [attr.aria-label]="copy.compare"
+            class="min-h-(--eg-control-touch) min-w-max flex-auto whitespace-nowrap"
           >
-            {{ copy.compare }}
+            {{ copy.compareTab }}
           </button>
           <button
             type="button"
             [hlmTabsTrigger]="activationTab"
-            class="min-h-(--eg-control-touch) min-w-0 whitespace-normal wrap-anywhere"
+            class="min-h-(--eg-control-touch) min-w-max flex-auto whitespace-nowrap"
           >
             {{ copy.activation }}
           </button>

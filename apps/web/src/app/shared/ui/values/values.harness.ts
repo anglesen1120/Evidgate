@@ -25,7 +25,7 @@ export class CopyValueButtonHarness extends ComponentHarness {
 export class CopyableIdentifierHarness extends ComponentHarness {
   static hostSelector = 'app-copyable-identifier';
   private readonly preview = this.locatorFor('code');
-  private readonly disclosure = this.locatorFor('button');
+  private readonly disclosure = this.locatorFor('button[aria-haspopup="dialog"]');
   private readonly accessible = this.locatorFor('.identifier-accessible');
   private readonly fullValue = this.documentRootLocatorFactory().locatorFor('[role="dialog"] code');
   private readonly close = this.documentRootLocatorFactory().locatorFor(
