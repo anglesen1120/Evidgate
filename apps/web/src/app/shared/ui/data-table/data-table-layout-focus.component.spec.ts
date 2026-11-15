@@ -259,6 +259,32 @@ describe('Shared table focus across record reflow', () => {
     },
   );
 
+  it('keeps fitted records mounted while a hidden host replaces rows and becomes visible', async () => {
+    const probe = root.querySelector<HTMLElement>('.token-probe')!;
+    probe.style.width = '20px';
+    probe.style.font = '14px sans-serif';
+    tableMinimum(() => 1152);
+    fixture.componentRef.setInput('fitToContainer', true);
+    await resize(900);
+    const surviving = control(1, 'identity', 'button');
+    const layout = vi.spyOn(fixture.componentInstance.narrow, 'set');
+    probe.style.width = '0px';
+    probe.style.font = '0px sans-serif';
+    await resize(0);
+    fixture.componentRef.setInput('rows', fixture.componentInstance.rows().slice(1));
+    await fixture.whenStable();
+    expect(fixture.componentInstance.narrow()).toBe(true);
+    probe.style.width = '20px';
+    probe.style.font = '14px sans-serif';
+    await resize(900);
+    expect(fixture.componentInstance.narrow()).toBe(true);
+    expect(layout).not.toHaveBeenCalledWith(false);
+    expect(root.querySelector('[role="table"]')).toBeNull();
+    expect(control(0, 'identity', 'button')).toBe(surviving);
+    await resize(1154);
+    expect(fixture.componentInstance.narrow()).toBe(false);
+  });
+
   it.each(['a', 'button'])(
     'preserves the second row %s in both directions, including changed link labels',
     async (selector) => {

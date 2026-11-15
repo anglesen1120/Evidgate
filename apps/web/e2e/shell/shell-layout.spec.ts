@@ -9,7 +9,7 @@ import {
   withVariant,
 } from './support';
 
-// LYT-11/12: real shell geometry, with translated bundles and the normal navigation permissions.
+// Shell geometry stays consistent across translated bundles and permission-filtered navigation.
 for (const locale of LOCALES) {
   for (const width of [768, 1024]) {
     test(`toolbar utilities share one row at ${width}px in ${locale}`, async ({ page }) => {
@@ -110,9 +110,19 @@ async function expectUsageLabel(page: Page, locale: (typeof LOCALES)[number], ac
   expect(geometry.fontSize).toBe(geometry.peerFontSize);
   if (locale === 'vi') {
     await link.focus();
-    await expect(page.getByRole('tooltip')).toHaveText(fullName);
+    const tooltip = page.getByRole('tooltip');
+    await expect(tooltip).toHaveText(fullName);
+    const tooltipId = await tooltip.getAttribute('id');
+    if (!tooltipId) throw new Error('The rendered tooltip has no description target');
+    // Check the settled relationship, not a transient empty description before Brain attaches it.
+    await expect(link).toHaveAttribute('aria-describedby', tooltipId);
+    await expect(tooltip.getByText(fullName, { exact: true })).toBeVisible();
+    await expect(link).toBeFocused();
+    await expect(link).toHaveAccessibleName(fullName);
+    await expect(link).toHaveAccessibleDescription('');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('tooltip')).toHaveCount(0);
+    await expect(link).toHaveAccessibleDescription('');
     await expect(link).toBeFocused();
   }
 }

@@ -4,7 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { UiGalleryComponent } from './ui-gallery.component';
 
-describe('UiGalleryComponent (AC8 / AC9)', () => {
+describe('UiGalleryComponent', () => {
   let root: HTMLElement;
   let fixture: ComponentFixture<UiGalleryComponent>;
 
@@ -95,6 +95,14 @@ describe('UiGalleryComponent (AC8 / AC9)', () => {
     ).toHaveLength(2);
     expect(root.querySelector('[data-demo="gallery-column-roles"] app-hash-chip')).not.toBeNull();
     expect(root.querySelector('[data-demo="gallery-column-roles"] app-status-pill')).not.toBeNull();
+    // The virtual window must stay a virtual window: any `cellTemplate` on its columns flips
+    // `DataTableComponent.customCells` and silently turns the 250-row fixture into a paged table.
+    expect(
+      root.querySelector('[data-demo="table-virtual"] cdk-virtual-scroll-viewport'),
+    ).not.toBeNull();
+    expect(
+      root.querySelectorAll('[data-demo="table-small"] cdk-virtual-scroll-viewport'),
+    ).toHaveLength(0);
   });
 
   it('includes every request pattern and both native retry eligibility states', async () => {

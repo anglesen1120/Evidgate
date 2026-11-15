@@ -183,6 +183,11 @@ export class ReleasePanelComponent {
     return this.display(binding.name?.trim() ? binding.name : binding.releaseId);
   }
 
+  protected readonly releaseItemLabel = (value: unknown): string => {
+    const binding = this.releases().find((release) => release.releaseId === value);
+    return binding ? this.releaseLabel(binding) : '';
+  };
+
   protected chooseRelease(value: unknown): void {
     if (typeof value === 'string' && this.releases().some((row) => row.releaseId === value)) {
       this.selectRelease.emit(value);

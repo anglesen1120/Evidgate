@@ -15,6 +15,7 @@
         <hlm-select
           class="block w-full min-w-0 max-w-full min-[768px]:w-fit"
           [value]="selectedReleaseId()"
+          [itemToString]="releaseItemLabel"
           (valueChange)="chooseRelease($event)"
         >
           <button

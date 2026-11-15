@@ -109,6 +109,9 @@ describe('NavComponent', () => {
         expect(document.querySelector('[role="tooltip"]')?.textContent?.trim()).toBe('Overview');
       });
       expect(link.getAttribute('aria-label')).toBe('Overview');
+      expect(
+        document.querySelector('[role="tooltip"] span')?.getAttribute('aria-hidden'),
+      ).toBeNull();
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await vi.waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
       if (trigger === 'focus') expect(document.activeElement).toBe(link);
@@ -150,6 +153,9 @@ describe('NavComponent', () => {
         expect(document.querySelector('[role="tooltip"]')?.textContent?.trim()).toBe(
           'Usage and credits',
         ),
+      );
+      expect(document.querySelector('[role="tooltip"] span')?.getAttribute('aria-hidden')).toBe(
+        'true',
       );
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await vi.waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());

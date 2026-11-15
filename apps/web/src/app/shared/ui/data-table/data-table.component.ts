@@ -421,17 +421,21 @@ export class DataTableComponent<T> {
   ): boolean {
     const columns = this.columns();
     const rows = this.rows();
-    const probeWidth = this.fitToContainer() ? Number.parseFloat(probeStyle.width) || 0 : 0;
+    // A hidden host or zero-sized probe is not a new usable font measurement.
+    const visible = width > 0 && scroll.clientWidth > 0;
+    const probeWidth =
+      visible && this.fitToContainer() ? Number.parseFloat(probeStyle.width) || 0 : 0;
+    const font = visible && Number.parseFloat(probeStyle.fontSize) > 0 ? probeStyle.font : '';
     if (
       columns !== this.fitColumns ||
-      probeStyle.font !== this.fitFont ||
-      probeWidth !== this.fitProbeWidth
+      (font !== '' && font !== this.fitFont) ||
+      (probeWidth > 0 && probeWidth !== this.fitProbeWidth)
     ) {
-      this.fitColumns = columns;
-      this.fitFont = probeStyle.font;
-      this.fitProbeWidth = probeWidth;
       this.minimumFitWidth = 0;
     }
+    this.fitColumns = columns;
+    if (font !== '') this.fitFont = font;
+    if (probeWidth > 0) this.fitProbeWidth = probeWidth;
     // A row-only change keeps records mounted: do not rebuild up to 200 rich rows
     // just to rediscover the same minimum. Column or font changes may re-probe.
     const fit =

@@ -54,8 +54,10 @@ import { GalleryTablesComponent } from './gallery-tables.component';
 const SPECIMEN_COLUMN_WIDTHS: Readonly<Record<string, DataTableColumnWidth>> = {
   hash: { min: '12ch', preferred: '28ch', max: '36ch' },
   note: { preferred: 'auto' },
-  attempts: { preferred: '1%' },
-  mutation: { preferred: '1%' },
+  // Header-owned minimums: the empty specimen has no body row to size its columns, so
+  // `preferred: '1%'` collapsed the count and action headers into two and three lines.
+  attempts: { min: '12ch', preferred: '15ch' },
+  mutation: { min: '16ch', preferred: '21ch' },
 };
 
 /** Isolated specimens; only explicit commands change local demo state. No API calls. */

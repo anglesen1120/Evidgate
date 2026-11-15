@@ -36,8 +36,10 @@
                 }}</span>
               </a>
               <ng-template #itemLabel>
+                <!-- Expanded short labels already expose the full text as the link name. -->
                 <span
                   class="block max-w-[calc(100vw-var(--eg-nav-rail)-var(--eg-space-8))] whitespace-normal [overflow-wrap:anywhere]"
+                  [attr.aria-hidden]="labelShortened && !collapsed() ? 'true' : null"
                   >{{ item.label }}</span
                 >
               </ng-template>

@@ -39,7 +39,7 @@ const cases = [
   { locale: 'vi', theme: 'dark' },
 ] as const;
 
-describe('UiGalleryComponent axe acceptance (AC8 / AC9)', () => {
+describe('UiGalleryComponent axe acceptance', () => {
   let previousTheme: string | null;
   let previousLang: string | null;
 

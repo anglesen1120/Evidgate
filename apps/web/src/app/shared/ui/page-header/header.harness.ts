@@ -50,7 +50,14 @@ export class HeaderHarness extends ComponentHarness {
   }
 
   async isActionWrappingEnabled(): Promise<boolean> {
-    return (await this.action())?.hasClass('eg-header-action') ?? false;
+    const action = await this.action();
+    return (
+      action !== null &&
+      (await action.hasClass('eg-header-action')) &&
+      (await action.hasClass('box-border')) &&
+      (await action.hasClass('h-auto!')) &&
+      (await action.hasClass('whitespace-normal!'))
+    );
   }
 
   async focusAction(): Promise<void> {

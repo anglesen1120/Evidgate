@@ -125,6 +125,28 @@ for (const locale of LOCALES) {
   });
 }
 
+for (const locale of LOCALES) {
+  test(`release typeahead searches the visible name rather than the id (${locale})`, async ({
+    page,
+  }) => {
+    await page.goto(runDetailPath({ locale, run: 'releases' }));
+    await ready(page);
+    const release = page.locator('app-release-panel');
+    const selector = release.getByRole('combobox');
+    await selector.focus();
+    await openReleaseChooser(page, selector);
+    const target = page.getByRole('option', { name: /^API release/ });
+    await expect(target).toHaveAttribute('data-value', '018f0000-0000-7000-8000-000000000092');
+    await page.keyboard.type('API');
+    await expectActiveOption(selector, target);
+    await expect(release.locator('[data-release-name]')).toContainText('Storefront');
+    await page.keyboard.press('Enter');
+    await expect(selector).toHaveAttribute('aria-expanded', 'false');
+    await expect(selector).toBeFocused();
+    await expect(release.locator('[data-release-name]')).toContainText('API release');
+  });
+}
+
 test('the unbound regions add no keyboard stops', async ({ page }) => {
   await page.goto(runDetailPath({ run: 'canceled' }));
   await ready(page);

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { runDetailPath } from './run-detail.support';
+import { openRunFilters } from './run-list.support';
 import {
   localePath,
   ORG_ACME,
@@ -364,3 +365,51 @@ for (const theme of THEMES) {
     await expect(page.locator('[data-evidence-revision-select]')).toBeFocused();
   });
 }
+
+test('a loading reference filter keeps the fitted run records mounted', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.goto(listPath('250-rows'));
+  const list = page.locator('app-run-list-page');
+  await expect(list).toHaveAttribute('data-run-list-status', 'ready');
+  const table = page.locator('app-run-list-table app-data-table');
+  await page.evaluate(() => document.fonts.ready);
+  await expect(table.locator('.eg-table-narrow')).toBeVisible();
+  await expect(table.locator('.eg-table-record').first()).toBeVisible();
+  await table.evaluate((host) => {
+    host.setAttribute('data-test-native-insertions', '0');
+    host.setAttribute('data-test-saw-loading', 'false');
+    new MutationObserver((mutations) => {
+      let count = Number(host.getAttribute('data-test-native-insertions'));
+      for (const mutation of mutations) {
+        for (const added of mutation.addedNodes) {
+          if (!(added instanceof Element)) continue;
+          count += added.matches('[role="table"]') ? 1 : 0;
+          count += added.querySelectorAll('[role="table"]').length;
+        }
+      }
+      host.setAttribute('data-test-native-insertions', String(count));
+    }).observe(host, { childList: true, subtree: true });
+    const page = host.closest('app-run-list-page');
+    if (!page) throw new Error('Missing owning run list');
+    new MutationObserver((mutations) => {
+      if (
+        page.getAttribute('data-run-list-status') === 'loading' ||
+        mutations.some((mutation) => mutation.oldValue === 'loading')
+      ) {
+        host.setAttribute('data-test-saw-loading', 'true');
+      }
+    }).observe(page, {
+      attributes: true,
+      attributeFilter: ['data-run-list-status'],
+      attributeOldValue: true,
+    });
+  });
+  await openRunFilters(page);
+  await page.locator('#run-ref').fill('feature/batch-000');
+  await page.locator('[data-run-apply]').click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('ref')).toBe('feature/batch-000');
+  await expect(list).toHaveAttribute('data-run-list-status', 'ready');
+  await expect(table).toHaveAttribute('data-test-saw-loading', 'true');
+  await expect(table.locator('.eg-table-narrow')).toBeVisible();
+  await expect(table).toHaveAttribute('data-test-native-insertions', '0');
+});

@@ -6,6 +6,7 @@ import { classes } from '@evidgate/ui/utils';
 })
 export class HeaderActionsDirective {
   constructor() {
-    classes(() => 'eg-header-action');
+    // Independent Helm directives can register their nowrap classes after this one.
+    classes(() => 'eg-header-action box-border h-auto! whitespace-normal!');
   }
 }

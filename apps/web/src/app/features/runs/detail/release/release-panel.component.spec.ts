@@ -1,6 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
+import { BrnSelect } from '@spartan-ng/brain/select';
 import { DataTableComponent } from '../../../../shared/ui/data-table/data-table.component';
 
 import type { ApiError } from '../../../../core/http/api-error';
@@ -208,6 +209,12 @@ describe('ReleasePanelComponent', () => {
     expect(root.querySelector('label')?.textContent).toBe('Releases bound to this run');
     expect(trigger.getAttribute('aria-describedby')).toBe('release-choice-name');
     expect(trigger.textContent?.trim()).toBe('Web⟨U+202E⟩2026');
+    const stringify = fixture.debugElement
+      .query(By.css('hlm-select'))
+      .injector.get(BrnSelect)
+      .itemToString();
+    expect(stringify?.('rel-1')).toBe('Web⟨U+202E⟩2026');
+    expect(stringify?.('rel-2')).toBe('rel-2');
     const selected = vi.fn();
     fixture.componentInstance.selectRelease.subscribe(selected);
     trigger.click();
@@ -236,6 +243,11 @@ describe('ReleasePanelComponent', () => {
         { releaseId: 'rel-2', name },
       ],
     });
+    const stringify = fixture.debugElement
+      .query(By.css('hlm-select'))
+      .injector.get(BrnSelect)
+      .itemToString();
+    expect(stringify?.('rel-2')).toBe('rel-2');
     root.querySelector<HTMLButtonElement>('[role="combobox"]')?.click();
     await fixture.whenStable();
     const options = document.querySelectorAll('[role="option"]');

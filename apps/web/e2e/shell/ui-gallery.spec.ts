@@ -1,6 +1,6 @@
-// 09.1.1-T4.4 (plan 09.1.1 §10 T4, §2 AC6; 00 §5.6 W9; T7 hand-over): the shared-UI data table as
-// it behaves in a real Chromium at the narrow end — 360px is the width the owner reported mid-word
-// breaks and wrapped badges at in earlier design rounds, so it is the width that can regress.
+// The shared-UI data table as it behaves in a real Chromium at the narrow end — 360px is the width
+// the owner reported mid-word breaks and wrapped badges at in earlier design rounds, so it is the
+// width that can regress.
 //
 // Everything here is a layout property jsdom cannot have: real scroll boxes, a classic scrollbar
 // that takes width, a sticky header, the top layer of a native popover, and the accessibility tree
@@ -100,7 +100,7 @@ async function tableMetrics(page: Page): Promise<{
   });
 }
 
-test.describe('the gallery never scrolls sideways (T7, 360px)', () => {
+test.describe('the gallery never scrolls sideways at 360px', () => {
   test.use({ viewport: { width: 360, height: 800 } });
 
   for (const locale of LOCALES) {
@@ -148,7 +148,7 @@ test.describe('the gallery never scrolls sideways (T7, 360px)', () => {
 });
 
 for (const locale of LOCALES) {
-  test.describe(`table mechanics, ${locale} bundle (T7)`, () => {
+  test.describe(`table mechanics, ${locale} bundle`, () => {
     // Below its 768px container breakpoint the table renders as stacked records (approved
     // redesign), so table mechanics are asserted at the narrowest width where the table itself
     // renders; the 360px reflow budget above still covers the narrow end.
@@ -160,7 +160,7 @@ for (const locale of LOCALES) {
       await openGallery(page, locale, 'light');
       const metrics = await tableMetrics(page);
 
-      // Page flow (layout sweep LYT-03): the twelve-row example is not an inner row viewport any
+      // Page flow: the twelve-row example is not an inner row viewport any
       // more, so every row is laid out in the document and the page owns the vertical scrollbar.
       expect(metrics.scroll.scrollHeight).toBeLessThanOrEqual(metrics.scroll.clientHeight + 1);
       expect(await page.locator('[data-demo="table-small"] tbody tr[data-row-id]').count()).toBe(
@@ -241,8 +241,8 @@ for (const locale of LOCALES) {
   });
 }
 
-test.describe('a clipped value in the accessibility tree (T7 report item)', () => {
-  // Table mode: the cell/`td` exposure below is the table anatomy the report measured.
+test.describe('a clipped value in the accessibility tree', () => {
+  // Table mode: the cell/`td` exposure below is the table anatomy a real table exposes.
   test.use({ viewport: { width: 900, height: 800 } });
 
   test('counts the copies Chromium exposes, closed and open', async ({ page }) => {
@@ -303,7 +303,7 @@ test.describe('a clipped value in the accessibility tree (T7 report item)', () =
   });
 });
 
-test.describe('column alignment at a desktop width (T7)', () => {
+test.describe('column alignment at a desktop width', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
 
   test('header and body columns share one grid', async ({ page }) => {
@@ -314,12 +314,10 @@ test.describe('column alignment at a desktop width (T7)', () => {
   });
 });
 
-test.describe('layout sweep pins (LYT-03, LYT-06, LYT-07)', () => {
+test.describe('table specimen layout pins', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test('column budgets bound the identity column and flex the context (LYT-03)', async ({
-    page,
-  }) => {
+  test('column budgets bound the identity column and flex the context', async ({ page }) => {
     await openGallery(page, 'en', 'light');
     const widths = await page.evaluate(() => {
       const table = document.querySelector('[data-demo="table-small"] table') as HTMLElement;
@@ -339,9 +337,7 @@ test.describe('layout sweep pins (LYT-03, LYT-06, LYT-07)', () => {
     expect(widths.mutation).toBeLessThan(widths.context);
   });
 
-  test('the short-key form and its actions keep an expected content width (LYT-06)', async ({
-    page,
-  }) => {
+  test('the short-key form and its actions keep an expected content width', async ({ page }) => {
     await openGallery(page, 'en', 'light');
     const boxes = await page.evaluate(() => {
       // The section is labelled by `#gallery-fields` (an `h2`), so the form is its sibling.
@@ -367,7 +363,7 @@ test.describe('layout sweep pins (LYT-03, LYT-06, LYT-07)', () => {
     expect(boxes.submit).toBeLessThan(300);
   });
 
-  test('the role specimen reflows to labelled records instead of hiding columns (LYT-07)', async ({
+  test('the role specimen reflows to labelled records instead of hiding columns', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 768, height: 900 });
@@ -394,4 +390,46 @@ test.describe('layout sweep pins (LYT-03, LYT-06, LYT-07)', () => {
     await page.setViewportSize({ width: 390, height: 900 });
     await expect(specimen.locator('dt')).toHaveCount(8);
   });
+});
+
+test.describe('heading integrity', () => {
+  for (const locale of LOCALES) {
+    test(`short specimen headers stay on one line: ${locale}`, async ({ page }) => {
+      for (const width of [1440, 1280, 1024]) {
+        await page.setViewportSize({ width, height: 900 });
+        await openGallery(page, locale, 'light');
+        const groups = await page.evaluate(() => {
+          const read = (demo: string) =>
+            Array.from(document.querySelectorAll(`[data-demo="${demo}"] thead th`)).map((cell) => {
+              const range = document.createRange();
+              range.selectNodeContents(cell);
+              return {
+                text: (cell.textContent ?? '').trim(),
+                lines: range.getClientRects().length,
+                height: Math.round(cell.getBoundingClientRect().height),
+              };
+            });
+          return { small: read('table-small'), empty: read('table-empty') };
+        });
+
+        for (const name of ['small', 'empty'] as const) {
+          const headers = groups[name];
+          expect(
+            headers,
+            `${width}px ${locale} ${name}: table mode with four headers`,
+          ).toHaveLength(4);
+          for (const header of headers) {
+            expect(
+              header.lines,
+              `${width}px ${locale} ${name} "${header.text}" must stay on one line`,
+            ).toBe(1);
+            expect(
+              header.height,
+              `${width}px ${locale} ${name} "${header.text}" header height`,
+            ).toBeLessThanOrEqual(48);
+          }
+        }
+      }
+    });
+  }
 });

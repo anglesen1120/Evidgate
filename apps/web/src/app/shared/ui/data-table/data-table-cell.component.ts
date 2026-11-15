@@ -21,6 +21,7 @@ import { DataTableValueComponent } from './data-table-value.component';
         [value]="identifier()"
         [label]="column().header"
         [truncate]="!stacked()"
+        [compact]="virtual()"
       />
     } @else {
       <app-data-table-value
