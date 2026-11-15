@@ -43,7 +43,7 @@ describe('LoadingPatternComponent', () => {
         const region = root.querySelector('[role="status"]');
         expect(region?.getAttribute('aria-live')).toBe('polite');
         expect(region?.getAttribute('aria-busy')).toBe('true');
-        expect(region?.textContent).toContain('Loading evidence');
+        expect(region?.textContent).toContain('Loading…');
         expect(root.querySelector('.loading-pattern__skeleton')?.getAttribute('aria-hidden')).toBe(
           'true',
         );
@@ -64,7 +64,7 @@ describe('LoadingPatternComponent', () => {
     expect(root.querySelector('script')).toBeNull();
     fixture.componentRef.setInput('label', undefined);
     fixture.detectChanges();
-    expect(root.querySelector('h2')?.textContent).toContain('Loading evidence');
+    expect(root.querySelector('h2')?.textContent).toContain('Loading…');
   });
 
   it.each([
@@ -98,5 +98,13 @@ describe('LoadingPatternComponent', () => {
     expect(geometry?.classList.contains('min-[768px]:grid-cols-2')).toBe(true);
     expect(geometry?.className).not.toContain('overflow-hidden');
     expect(root.querySelectorAll('[data-slot="card"]')).toHaveLength(1);
+  });
+
+  it.each([undefined, ''])('uses context-neutral fallback copy for an absent %s label', (label) => {
+    fixture.componentRef.setInput('label', label);
+    fixture.detectChanges();
+    expect(root.querySelector('h2')?.textContent?.trim()).toBe('Loading…');
+    expect(root.querySelector('h2')?.textContent).not.toContain('evidence');
+    expect(root.querySelectorAll('[role="status"]')).toHaveLength(1);
   });
 });

@@ -24,7 +24,7 @@
   }
   @if (overlapEndsAt(); as overlap) {
     <app-inline-feedback [tone]="'info'" [title]="overlapLabel" [announcement]="'off'">
-      <time [attr.datetime]="overlap">{{ overlap | date: 'medium' : '+0000' }}</time>
+      <time [attr.datetime]="overlap">{{ overlap | date: dateTimeFormat : '+0000' }}</time>
     </app-inline-feedback>
   }
   @if (displayFailure(); as error) {
@@ -287,7 +287,7 @@
                 <dt>{{ createdLabel }}</dt>
                 <dd>
                   <time [attr.datetime]="binding.created_at">{{
-                    binding.created_at | date: 'medium' : '+0000'
+                    binding.created_at | date: dateTimeFormat : '+0000'
                   }}</time>
                 </dd>
               </div>
@@ -401,7 +401,9 @@
                 <dt>{{ expiresLabel }}</dt>
                 <dd>
                   @if (token.expires_at; as expiry) {
-                    <time [attr.datetime]="expiry">{{ expiry | date: 'medium' : '+0000' }}</time>
+                    <time [attr.datetime]="expiry">{{
+                      expiry | date: dateTimeFormat : '+0000'
+                    }}</time>
                   } @else {
                     {{ noneLabel }}
                   }
@@ -411,7 +413,7 @@
                 <dt>{{ usedLabel }}</dt>
                 <dd>
                   @if (token.last_used_at; as used) {
-                    <time [attr.datetime]="used">{{ used | date: 'medium' : '+0000' }}</time>
+                    <time [attr.datetime]="used">{{ used | date: dateTimeFormat : '+0000' }}</time>
                   } @else {
                     {{ noneLabel }}
                   }

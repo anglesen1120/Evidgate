@@ -57,6 +57,32 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     expect(root.querySelector('.eg-table-layout')).not.toBeNull();
     expect(root.querySelector('.eg-table-long')).not.toBeNull();
   });
+  it('budgets all seven desktop facts while retaining complete identifier provenance', async () => {
+    const { fixture, root } = await render([run(1)]);
+    const table = fixture.debugElement
+      .query(By.directive(DataTableComponent))
+      .injector.get(DataTableComponent);
+    expect(table.fitToContainer()).toBe(true);
+    const minimums = {
+      id: 'calc(17ch + var(--eg-space-4) * 2)',
+      state: 'calc(12ch + var(--eg-space-4) * 2)',
+      evidence: 'calc(14ch + var(--eg-space-4) * 2)',
+      decision: 'calc(15ch + var(--eg-space-4) * 2)',
+      created: '18ch',
+    };
+    for (const [id, minimum] of Object.entries(minimums)) {
+      expect(table.columns().find((column) => column.id === id)?.width?.min).toBe(minimum);
+      const cells = root.querySelectorAll<HTMLElement>(`th.cdk-column-${id},td.cdk-column-${id}`);
+      expect(cells).toHaveLength(2);
+      for (const cell of cells) {
+        expect(cell.style.getPropertyValue('min-inline-size')).toBe(minimum);
+      }
+    }
+    expect(root.querySelectorAll('[role="columnheader"]')).toHaveLength(7);
+    const identity = root.querySelector('[data-run-row] a');
+    expect(identity?.textContent?.trim()).toBe('018f0000…00000001');
+    expect(identity?.getAttribute('aria-label')).toContain(run(1).run_id);
+  });
   it('keeps the empty table verdict-free with only the header row counted', async () => {
     const { root } = await render([]);
     expect(root.querySelector('[role="table"]')?.getAttribute('aria-rowcount')).toBe('1');
@@ -133,7 +159,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     const { root } = await render([run(1, { created_at: instant })]);
     const time = root.querySelector('time');
     expect(time?.getAttribute('datetime')).toBe(instant);
-    expect(time?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Nov 2, 2026, 11:47:05 AM UTC');
+    expect(time?.textContent?.replace(/\s+/g, ' ').trim()).toBe('11/2/2026, 11:47:05 AM UTC');
   });
   it.each([['not-a-date'], ['']])(
     'refuses to render an unusable server time %j instead of failing the row',
@@ -150,7 +176,7 @@ describe('RunListTableComponent', { timeout: 15_000 }, () => {
     const instant = '2026-11-02T18:47:05.130948+07:00';
     const { root } = await render([run(1, { created_at: instant })]);
     expect(root.querySelector('time')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      `${formatDate(instant, 'medium', 'vi', 'UTC')} UTC`,
+      `${formatDate(instant, 'HH:mm:ss dd/MM/yyyy', 'vi', 'UTC')} UTC`,
     );
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe(instant);
   });

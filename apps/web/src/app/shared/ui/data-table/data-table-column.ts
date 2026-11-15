@@ -12,6 +12,14 @@ export interface DataTableCellContext<T> {
   readonly stacked: boolean;
 }
 
+/** Ordinary-table CSS budgets; record priority and fixed virtual column sizing stay independent. */
+export interface DataTableColumnWidth {
+  readonly min?: string;
+  /** `auto` receives spare room; `1%` keeps a utility column intrinsic. */
+  readonly preferred?: string;
+  readonly max?: string;
+}
+
 export interface DataTableColumn<T> {
   readonly id: string;
   /** Header and values are localized by the caller; identifiers are never credentials. */
@@ -21,6 +29,7 @@ export interface DataTableColumn<T> {
   readonly kind?: HlmTableColumnKind;
   readonly priority?: HlmTableColumnPriority;
   readonly overflow?: HlmTableColumnOverflow;
+  readonly width?: DataTableColumnWidth;
   readonly cellTemplate?: TemplateRef<DataTableCellContext<T>>;
   readonly align?: 'start' | 'end';
   readonly truncate?: boolean;

@@ -6,6 +6,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  LOCALE_ID,
   afterRenderEffect,
   computed,
   effect,
@@ -22,7 +23,6 @@ import { HlmButton } from '@evidgate/ui/button';
 import { HlmCardImports } from '@evidgate/ui/card';
 import { HlmInput } from '@evidgate/ui/input';
 import { HlmLabel } from '@evidgate/ui/label';
-
 import { OnboardingDataService } from '../../../core/data/onboarding-data.service';
 import { isApiRequestError, type ApiError } from '../../../core/http/api-error';
 import { SessionStore } from '../../../core/session/session.store';
@@ -36,6 +36,7 @@ import {
   focusWaitingLine,
   requestRefusalFocus,
 } from '../../../shared/a11y/step-focus';
+import { shortDateFormat } from '../../../shared/time/short-date-format';
 import {
   FieldFeedbackComponent,
   FormErrorSummaryComponent,
@@ -113,6 +114,7 @@ export class ConnectCiPage {
   private readonly document = inject(DOCUMENT);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly policy = inject(NarrowMutationPolicy);
+  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
   private scopeVersion = 0;
   private readonly healthClock = new HealthBoundaryClock(() => this.store.tokens());
   /** The place a re-read may take, held from the press until the pass that spends it. */

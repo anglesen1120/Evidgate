@@ -42,7 +42,7 @@
       <table
         hlmTable
         role="table"
-        class="eg-table-layout min-w-0 w-full border-collapse [@media(max-width:767px)]:block [&_th]:whitespace-normal [&_th]:wrap-anywhere [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_th]:align-top [&_td]:align-top [&_bdi]:block"
+        class="eg-table-layout min-w-0 [min-inline-size:0] w-full border-collapse [@media(max-width:767px)]:block [&_th]:whitespace-normal [&_th]:wrap-normal [&_td]:whitespace-normal [&_td]:wrap-anywhere [&_th]:align-top [&_td]:align-top [&_bdi]:block"
       >
         <caption hlmCaption class="sr-only">
           {{
@@ -65,7 +65,14 @@
             <th hlmTh [hlmTableColumn]="columnRole.text" role="columnheader" scope="col">
               {{ copy.raw }}
             </th>
-            <th hlmTh [hlmTableColumn]="columnRole.status" role="columnheader" scope="col">
+            <th
+              hlmTh
+              [hlmTableColumn]="columnRole.status"
+              [style.--eg-table-column-min]="normalisedWidth.min"
+              class="[@media(min-width:768px)]:[min-inline-size:var(--eg-table-column-min)]"
+              role="columnheader"
+              scope="col"
+            >
               {{ copy.normalised }}
             </th>
             <th hlmTh [hlmTableColumn]="columnRole.number" role="columnheader" scope="col">
@@ -86,7 +93,7 @@
               <tr
                 hlmTr
                 role="row"
-                class="[@media(max-width:767px)]:block [@media(max-width:767px)]:p-(--eg-space-3)"
+                class="[@media(max-width:767px)]:block [@media(max-width:767px)]:p-(--eg-space-3) [@media(max-width:767px)]:[&>*]:[inline-size:100%] [@media(max-width:767px)]:[&>*]:[min-inline-size:0] [@media(max-width:767px)]:[&>*]:[max-inline-size:none] [@media(max-width:767px)]:[&>*]:[block-size:auto]"
                 data-attempt-row
                 [attr.data-pre-healing]="attempt === group.preHealingFailure ? '' : null"
               >
@@ -171,8 +178,9 @@
                 <td
                   hlmTd
                   [hlmTableColumn]="columnRole.status"
+                  [style.--eg-table-column-min]="normalisedWidth.min"
                   role="cell"
-                  class="[@media(max-width:767px)]:block"
+                  class="[@media(max-width:767px)]:block [@media(min-width:768px)]:[min-inline-size:var(--eg-table-column-min)]"
                   data-attempt-normalised
                 >
                   <span

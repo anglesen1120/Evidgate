@@ -276,7 +276,9 @@ describe('AuditPage', () => {
     const fixture = TestBed.createComponent(AuditPage);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
-    expect(root.querySelector('app-loading-pattern')).not.toBeNull();
+    const loading = root.querySelector('app-loading-pattern');
+    expect(loading).not.toBeNull();
+    expect(loading?.textContent).toContain('Loading audit activity…');
     expect(root.querySelector('[data-audit-row]')).toBeNull();
     pending.resolve({ items: [], next_cursor: null });
     await fixture.whenStable();
@@ -336,7 +338,7 @@ describe('AuditPage', () => {
     expect(entryPage.root.querySelector('h1')?.textContent).toContain('Audit log');
     expect(entryPage.root.querySelectorAll('h2')).toHaveLength(0);
   });
-  it('bounds rows to 25 and exposes matching range and paging controls above and below results', async () => {
+  it('bounds rows to 25 and exposes one range and pager below the results', async () => {
     const entries = Array.from({ length: 51 }, (_, index) => entry(`row-${index}`));
     data.list.mockImplementation((_org, query, cursor) => {
       const start = Number(cursor ?? 0);
@@ -351,30 +353,29 @@ describe('AuditPage', () => {
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(25);
     const summaries = () =>
       [...root.querySelectorAll('[data-audit-row-range]')].map((el) => el.textContent);
-    expect(summaries()).toEqual(['Rows 1–25 of 50 loaded.', 'Rows 1–25 of 50 loaded.']);
-    expect(root.querySelectorAll('[data-audit-next]')).toHaveLength(2);
-    expect(root.querySelectorAll('[data-audit-previous]')).toHaveLength(2);
+    expect(summaries()).toEqual(['Rows 1–25 of 50 loaded.']);
+    expect(root.querySelectorAll('[data-audit-next]')).toHaveLength(1);
+    expect(root.querySelectorAll('[data-audit-previous]')).toHaveLength(1);
     const table = root.querySelector('app-audit-table');
     const navs = root.querySelectorAll('nav');
-    if (!table || !navs[0] || !navs[1])
-      throw new Error('Expected table between both paging controls');
-    expect(Boolean(navs[0].compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(
+    expect(navs).toHaveLength(1);
+    const nav = navs[0];
+    if (!table || !nav) throw new Error('Expected the pager below the table');
+    expect(Boolean(nav.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_PRECEDING)).toBe(
       true,
     );
-    expect(Boolean(navs[1].compareDocumentPosition(table) & Node.DOCUMENT_POSITION_PRECEDING)).toBe(
-      true,
-    );
+    expect(nav.closest('[hlmTableContainer]')).toBeNull();
     root.querySelector<HTMLButtonElement>('[data-audit-next]')?.click();
     await fixture.whenStable();
-    expect(summaries()).toEqual(['Rows 26–50 of 50 loaded.', 'Rows 26–50 of 50 loaded.']);
+    expect(summaries()).toEqual(['Rows 26–50 of 50 loaded.']);
     root.querySelector<HTMLButtonElement>('[data-audit-load-more]')?.click();
     await fixture.whenStable();
     root.querySelector<HTMLButtonElement>('[data-audit-next]')?.click();
     await fixture.whenStable();
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(1);
-    expect(summaries()).toEqual(['Rows 51–51 of 51 loaded.', 'Rows 51–51 of 51 loaded.']);
+    expect(summaries()).toEqual(['Rows 51–51 of 51 loaded.']);
     expect(document.activeElement).toBe(root.querySelector('h2'));
-    root.querySelectorAll<HTMLButtonElement>('[data-audit-previous]')[1]?.click();
+    root.querySelector<HTMLButtonElement>('[data-audit-previous]')?.click();
     await fixture.whenStable();
     expect(root.querySelectorAll('[data-audit-row]')).toHaveLength(25);
   });

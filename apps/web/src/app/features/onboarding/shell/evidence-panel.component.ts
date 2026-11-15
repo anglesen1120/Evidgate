@@ -1,6 +1,15 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  LOCALE_ID,
+} from '@angular/core';
 import { HlmCardImports } from '@evidgate/ui/card';
+
+import { shortDateFormat } from '../../../shared/time/short-date-format';
 import type { OnboardingProgress } from '../data/onboarding-progress.service';
 import { activationInstantLabel } from '../steps/default-policy';
 
@@ -77,7 +86,9 @@ import { activationInstantLabel } from '../steps/default-policy';
                 <dt>{{ activatedAtLabel }}</dt>
                 <dd>
                   @if (activatedAt(); as instant) {
-                    <time [attr.datetime]="instant">{{ instant | date: 'medium' : '+0000' }}</time>
+                    <time [attr.datetime]="instant">{{
+                      instant | date: dateTimeFormat : '+0000'
+                    }}</time>
                   } @else {
                     {{ unavailable }}
                   }
@@ -119,6 +130,7 @@ export class EvidencePanelComponent {
   readonly progress = input<OnboardingProgress | null>(null);
   readonly refreshFailed = input(false);
   protected readonly sectionHeadingSize = 'section' as const;
+  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
   protected readonly sourceLabel = $localize`:@@onboarding.evidence.source:Read from server-confirmed resources, not browser completion flags.`;
   protected readonly activatedAt = computed(() =>
     activationInstantLabel(this.activation()?.activated_at),

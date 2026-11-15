@@ -1282,8 +1282,8 @@
         </context-group>
       </trans-unit>
 <trans-unit id="shared.states.loading.label" datatype="html">
-        <source>Loading evidence</source>
-        <target>Đang tải bằng chứng</target>
+        <source>Loading…</source>
+        <target>Đang tải…</target>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/shared/ui/states/loading-pattern.component.ts</context>
           <context context-type="linenumber">20,27</context>
@@ -3453,6 +3453,10 @@
 <trans-unit id="shared.values.show-full-label" datatype="html"><source>Show full <x id="LABEL" equiv-text="this.label()"/></source><target>Xem đầy đủ <x id="LABEL" equiv-text="this.label()"/></target></trans-unit>
 <trans-unit id="shared.values.time-unavailable" datatype="html"><source>Time unavailable</source><target>Không có thời gian</target></trans-unit>
 <trans-unit id="shared.values.utc" datatype="html"><source>UTC</source><target>UTC</target></trans-unit>
+      <trans-unit id="core.http.error.envelope-missing" datatype="html"><source>The API answered <x id="STATUS" equiv-text="status"/> without the 00 §9.2 error envelope.</source><target>API trả về mã trạng thái <x id="STATUS" equiv-text="status"/> mà không có phần lỗi theo mục 00 §9.2.</target></trans-unit>
+      <trans-unit id="core.http.error.network" datatype="html"><source>The request did not reach the API; no response was received.</source><target>Yêu cầu không đến được API; không nhận được phản hồi.</target></trans-unit>
+      <trans-unit id="core.http.error.timeout" datatype="html"><source>The API did not answer within the request deadline; the request may or may not have reached the server.</source><target>API không phản hồi trong thời hạn yêu cầu; yêu cầu có thể đã đến hoặc chưa đến máy chủ.</target></trans-unit>
+      <trans-unit id="core.http.error.unexpected-status" datatype="html"><source>A success status reached the error mapper; read it through the API gateway.</source><target>Mã trạng thái thành công đã được chuyển đến bộ ánh xạ lỗi; hãy đọc phản hồi qua cổng API.</target></trans-unit>
       <trans-unit id="healingswitch.configuration" datatype="html"><source>Configure availability</source><target>Cấu hình trạng thái khả dụng</target></trans-unit>
       <trans-unit id="healingswitch.hierarchy" datatype="html"><source>Scope hierarchy</source><target>Thứ bậc phạm vi</target></trans-unit>
       <trans-unit id="healingswitch.hierarchy-description" datatype="html"><source>Stored scope values in precedence order. A child scope cannot widen availability beyond its parent.</source><target>Các giá trị đã lưu theo thứ tự ưu tiên của phạm vi. Phạm vi con không thể mở rộng trạng thái khả dụng vượt quá phạm vi cha.</target></trans-unit>
@@ -3465,6 +3469,7 @@
       <trans-unit id="onboarding.create.not-set" datatype="html"><source>Not set</source><target>Chưa nhập</target></trans-unit>
       <trans-unit id="onboarding.evidence.source" datatype="html"><source>Read from server-confirmed resources, not browser completion flags.</source><target>Đọc từ tài nguyên được máy chủ xác nhận, không dựa vào cờ hoàn thành của trình duyệt.</target></trans-unit>
       <trans-unit id="onboarding.health.status-awaiting" datatype="html"><source>Awaiting CI</source><target>Chờ CI</target></trans-unit>
+      <trans-unit id="onboarding.shell.loading" datatype="html"><source>Loading project setup</source><target>Đang tải thiết lập dự án</target></trans-unit>
       <trans-unit id="onboarding.shell.progress-count" datatype="html"><source><x id="COMPLETED" equiv-text="completed"/> of <x id="TOTAL" equiv-text="total"/> steps complete</source><target>Đã hoàn thành <x id="COMPLETED" equiv-text="completed"/>/<x id="TOTAL" equiv-text="total"/> bước</target></trans-unit>
       <trans-unit id="onboarding.shell.step-details" datatype="html"><source>Step details</source><target>Chi tiết bước</target></trans-unit>
       <trans-unit id="onboarding.shell.step-select" datatype="html"><source>Setup step</source><target>Bước thiết lập</target></trans-unit>
@@ -3489,10 +3494,15 @@
       <trans-unit id="settings.api-tokens.permissions-more" datatype="html"><source>Show <x id="count" equiv-text="count"/> more permissions for <x id="name" equiv-text="name"/></source><target>Xem thêm <x id="count" equiv-text="count"/> quyền của <x id="name" equiv-text="name"/></target></trans-unit>
       <trans-unit id="settings.api-tokens.search" datatype="html"><source>Search name or prefix</source><target>Tìm theo tên hoặc tiền tố</target></trans-unit>
       <trans-unit id="settings.audit.actor-id" datatype="html"><source>Audit actor id</source><target>ID tác nhân nhật ký kiểm toán</target></trans-unit>
+      <trans-unit id="settings.audit.loading" datatype="html"><source>Loading audit activity…</source><target>Đang tải nhật ký kiểm toán…</target></trans-unit>
       <trans-unit id="settings.audit.object-id" datatype="html"><source>Audit object id</source><target>ID đối tượng kiểm toán</target></trans-unit>
       <trans-unit id="settings.audit.support-grant" datatype="html"><source>Support grant id</source><target>ID cấp quyền hỗ trợ</target></trans-unit>
       <trans-unit id="settings.members.correct-invitation" datatype="html"><source>Correct the email or roles to start a new invitation request.</source><target>Hãy sửa email hoặc vai trò để bắt đầu một yêu cầu mời mới.</target></trans-unit>
+      <trans-unit id="settings.members.email-invalid" datatype="html"><source>Enter a valid email address.</source><target>Nhập địa chỉ email hợp lệ.</target></trans-unit>
+      <trans-unit id="settings.members.email-required" datatype="html"><source>Enter an email address.</source><target>Nhập địa chỉ email.</target></trans-unit>
+      <trans-unit id="settings.members.email-too-long" datatype="html"><source>Use an email address with 320 characters or fewer.</source><target>Địa chỉ email không được vượt quá 320 ký tự.</target></trans-unit>
       <trans-unit id="settings.members.fixed-invitation" datatype="html"><source>Email and roles are fixed for this attempt. Retry uses the same request. Close this dialog to start a new attempt.</source><target>Email và vai trò được giữ nguyên cho lần gửi này. Thử lại sẽ dùng cùng yêu cầu. Đóng hộp thoại để bắt đầu lần gửi mới.</target></trans-unit>
+      <trans-unit id="settings.members.loading" datatype="html"><source>Loading members…</source><target>Đang tải thành viên…</target></trans-unit>
       <trans-unit id="settings.members.invite-refused" datatype="html"><source>Invitation not sent</source><target>Chưa gửi lời mời</target></trans-unit>
       <trans-unit id="settings.members.more-roles" datatype="html"><source>Show <x id="count" equiv-text="count"/> more roles for <x id="email" equiv-text="member.invited_email"/></source><target>Xem thêm <x id="count" equiv-text="count"/> vai trò của <x id="email" equiv-text="member.invited_email"/></target></trans-unit>
       <trans-unit id="settings.members.remove-refused" datatype="html"><source>Member not removed</source><target>Chưa xóa thành viên</target></trans-unit>

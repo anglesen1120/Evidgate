@@ -1,4 +1,4 @@
-import { formatDate, registerLocaleData } from '@angular/common';
+import { registerLocaleData } from '@angular/common';
 import localeVi from '@angular/common/locales/vi';
 import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
@@ -26,10 +26,23 @@ describe.each(['en-US', 'vi'])('AbsoluteTimeComponent (%s)', (locale) => {
     host.setAttribute('data-theme', theme);
     fixture.detectChanges();
     const time = host.querySelector('time')!;
-    const expected = formatDate(Date.UTC(2026, 10, 7, 8, 10, 0, 123), 'medium', locale, 'UTC');
+    const expected = locale === 'vi' ? '08:10:00 07/11/2026' : '11/7/2026, 8:10:00\u202fAM';
     expect(time.textContent).toBe(`${expected} UTC`);
     expect(time.getAttribute('datetime')).toBe(raw);
     expect(host.getAttribute('data-theme')).toBe(theme);
+    fixture.destroy();
+  });
+
+  it('preserves seconds and raw provenance when UTC crosses the year boundary', () => {
+    const fixture = TestBed.createComponent(AbsoluteTimeComponent);
+    const supplied = '2027-01-01T00:15:04+07:00';
+    fixture.componentRef.setInput('value', supplied);
+    fixture.detectChanges();
+    const time = (fixture.nativeElement as HTMLElement).querySelector('time')!;
+    const expected =
+      locale === 'vi' ? '17:15:04 31/12/2026 UTC' : '12/31/2026, 5:15:04\u202fPM UTC';
+    expect(time.textContent).toBe(expected);
+    expect(time.getAttribute('datetime')).toBe(supplied);
     fixture.destroy();
   });
 

@@ -101,6 +101,88 @@ describe('Shared table column layout and reflow', () => {
     return host;
   }
 
+  it('applies native width budgets independently of narrow-record priority and clears removed budgets', async () => {
+    const budgeted: readonly DataTableColumn<DataTableFixtureRow>[] = [
+      {
+        id: 'code',
+        header: 'Action',
+        role: 'text',
+        priority: 'primary',
+        cell: (row) => row.note,
+        width: { min: '8ch', preferred: '1%', max: '16ch' },
+      },
+      {
+        id: 'hash',
+        header: 'Object id',
+        role: 'identity',
+        priority: 'secondary',
+        cell: (row) => row.hash,
+        width: { min: '24ch', preferred: 'auto', max: '32ch' },
+      },
+    ];
+    fixture.componentRef.setInput('columns', budgeted);
+    await fixture.whenStable();
+    for (const [role, expected] of [
+      ['text', ['8ch', '1%', '16ch']],
+      ['identity', ['24ch', 'auto', '32ch']],
+    ] as const) {
+      const cells = root.querySelectorAll<HTMLElement>(`[data-column-role="${role}"]`);
+      expect(cells).toHaveLength(4); // col, header and both loaded rows
+      for (const cell of cells) {
+        expect([
+          cell.style.getPropertyValue('min-inline-size'),
+          cell.style.getPropertyValue('inline-size'),
+          cell.style.getPropertyValue('max-inline-size'),
+        ]).toEqual(expected);
+      }
+    }
+    expect(
+      root.querySelector('th[data-column-role="text"]')?.getAttribute('data-column-priority'),
+    ).toBe('primary');
+    expect(
+      root.querySelector('th[data-column-role="identity"]')?.getAttribute('data-column-priority'),
+    ).toBe('secondary');
+    fixture.componentRef.setInput(
+      'columns',
+      budgeted.map((column) => {
+        const next = { ...column };
+        delete next.width;
+        return next;
+      }),
+    );
+    await fixture.whenStable();
+    for (const cell of root.querySelectorAll<HTMLElement>('[data-column-role]')) {
+      expect(cell.style.getPropertyValue('min-inline-size')).toBe('');
+      expect(cell.style.getPropertyValue('inline-size')).toBe('');
+      expect(cell.style.getPropertyValue('max-inline-size')).toBe('');
+    }
+  });
+
+  it.each(['bounded', 'page'] as const)(
+    'keeps 25 loaded rows and header context in %s flow',
+    async (flow) => {
+      fixture.componentRef.setInput('rows', dataTableFixtureRows(25));
+      fixture.componentRef.setInput('flow', flow);
+      await fixture.whenStable();
+      expect(root.querySelectorAll('tbody [data-row-id]')).toHaveLength(25);
+      expect(root.querySelectorAll('[role="columnheader"]')).toHaveLength(columns.length);
+      expect(root.querySelector('.scroll')?.classList.contains('eg-table-long')).toBe(
+        flow === 'bounded',
+      );
+      expect(root.querySelector('cdk-virtual-scroll-viewport')).toBeNull();
+    },
+  );
+
+  it('retains fixed-height virtualization above 200 despite page-flow and fit opt-ins', async () => {
+    fixture.componentRef.setInput('rows', dataTableFixtureRows(201));
+    fixture.componentRef.setInput('flow', 'page');
+    fixture.componentRef.setInput('fitToContainer', true);
+    await fixture.whenStable();
+    expect(fixture.componentInstance.virtual()).toBe(true);
+    expect(root.querySelector('cdk-virtual-scroll-viewport')).not.toBeNull();
+    expect(root.querySelectorAll('[data-row-id]').length).toBeLessThan(201);
+  });
+
   it('keeps legacy column inputs while resolving explicit roles, priorities and overflow', () => {
     const legacy: readonly DataTableColumn<DataTableFixtureRow>[] = [
       { id: 'hash', header: 'Identity', cell: (row) => row.hash, truncate: true },

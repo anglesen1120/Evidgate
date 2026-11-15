@@ -83,6 +83,7 @@ for (const locale of LOCALES) {
   test(`stored dimensions, decisions and not evaluated runs, isolated refs and scope labels (${locale})`, async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(withVariants(path(locale), [VARIANTS.runs]));
     await ready(page);
     await expect(page.locator(ROWS)).toHaveCount(runList.body.items.length);
@@ -242,6 +243,7 @@ for (const locale of LOCALES) {
   test(`250 runs use bounded loaded-record pages that reach the last record (${locale})`, async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(withVariants(path(locale), [VARIANTS.large]));
     await ready(page);
     await expect(page.locator('app-run-list-table cdk-virtual-scroll-viewport')).toHaveCount(0);
@@ -285,10 +287,31 @@ for (const locale of LOCALES) {
       const row = page.locator(ROWS).first();
       await expect(row).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
-      for (const width of [768, 800, 900, 1280]) {
+      for (const width of [768, 800, 900, 1280, 1440]) {
         await page.setViewportSize({ width, height: 800 });
         const host = page.locator('app-run-list-table app-data-table');
-        const narrow = (await host.evaluate((element) => element.clientWidth)) < 768;
+        await host.evaluate(
+          () =>
+            new Promise<void>((resolve) => {
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+            }),
+        );
+        const narrow = (await host.locator('.eg-table-narrow').count()) > 0;
+        expect(
+          narrow,
+          `${width}px uses ${width < 1280 ? 'readable records' : 'desktop columns'}`,
+        ).toBe(width < 1280);
+        if (width >= 1280) {
+          await expect(
+            host.locator('app-decision-chip [hlmBadge].spartan-badge--clipped'),
+          ).toHaveCount(0);
+        }
+        expect(
+          await host
+            .locator('.scroll')
+            .evaluate((element) => element.scrollWidth - element.clientWidth),
+          `${width}px table has no hidden horizontal facts`,
+        ).toBeLessThanOrEqual(1);
         await expect(row).toHaveJSProperty('tagName', narrow ? 'LI' : 'TR');
         if (narrow) {
           await expect(row.locator('dt')).toHaveCount(7);

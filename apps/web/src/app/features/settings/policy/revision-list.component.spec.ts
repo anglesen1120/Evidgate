@@ -1,4 +1,4 @@
-import { formatDate, registerLocaleData } from '@angular/common';
+import { registerLocaleData } from '@angular/common';
 import localeVi from '@angular/common/locales/vi';
 import { LOCALE_ID } from '@angular/core';
 import { ComponentHarness } from '@angular/cdk/testing';
@@ -41,9 +41,7 @@ describe('RevisionListComponent', () => {
     expect(revision?.hasAttribute('data-policy-head')).toBe(true);
     expect(revision?.textContent).toContain('Active');
     expect(revision?.querySelector('.identifier-accessible')?.textContent).toContain(row.hash);
-    expect(root.querySelector('time')?.textContent?.trim()).toBe(
-      `${formatDate(row.created_at, 'medium', 'vi', 'UTC')} UTC`,
-    );
+    expect(root.querySelector('time')?.textContent?.trim()).toBe('06:00:00 26/10/2026 UTC');
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe(row.created_at);
     expect(root.querySelector('section')?.getAttribute('aria-labelledby')).toBe(
       'policy-revisions-title',

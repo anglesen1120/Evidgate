@@ -17,11 +17,31 @@ import {
   DataTableComponent,
   type DataTableColumn,
 } from '../../../shared/ui/data-table/data-table.component';
-import type { DataTableCellContext } from '../../../shared/ui/data-table/data-table-column';
+import type {
+  DataTableCellContext,
+  DataTableColumnWidth,
+} from '../../../shared/ui/data-table/data-table-column';
 import { DataTableValueComponent } from '../../../shared/ui/data-table/data-table-value.component';
 import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { AUDIT_ACTOR_TYPE_LABELS } from './actor-type-labels';
 import { supportAccessOf } from './support-access';
+
+const IDENTIFIER_WIDTH: DataTableColumnWidth = {
+  min: 'calc(28ch + var(--eg-space-4) * 2)',
+  preferred: 'auto',
+  max: 'calc(40ch + var(--eg-space-4) * 2)',
+};
+const ACTION_WIDTH: DataTableColumnWidth = { min: '12ch', preferred: '1%', max: '20ch' };
+const TIME_WIDTH: DataTableColumnWidth = {
+  min: 'calc(24ch + var(--eg-space-4) * 2)',
+  preferred: '1%',
+  max: 'calc(28ch + var(--eg-space-4) * 2)',
+};
+const DETAILS_WIDTH: DataTableColumnWidth = {
+  min: 'calc(18ch + var(--eg-space-4) * 2)',
+  preferred: '1%',
+  max: 'calc(22ch + var(--eg-space-4) * 2)',
+};
 
 @Component({
   selector: 'app-audit-table',
@@ -37,8 +57,8 @@ import { supportAccessOf } from './support-access';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'block min-w-0' },
   template: `
-    <ng-template #timeCell let-row>
-      <app-absolute-time [value]="row.created_at" />
+    <ng-template #timeCell let-row let-stacked="stacked">
+      <app-absolute-time [value]="row.created_at" [class.whitespace-nowrap]="!stacked" />
     </ng-template>
     <ng-template #actorCell let-row let-stacked="stacked">
       <div
@@ -46,15 +66,18 @@ import { supportAccessOf } from './support-access';
         data-audit-row
         [attr.data-audit-support]="supportOf(row) !== null ? 'true' : 'false'"
       >
-        <app-status-pill [tone]="'neutral'" [label]="actorLabel(row.actor_type)" />
-        @if (supportOf(row)) {
-          <app-status-pill [tone]="'warning'" [label]="copy.support" />
-        }
+        <div class="flex min-w-0 items-center gap-1">
+          <app-status-pill [tone]="'neutral'" [label]="actorLabel(row.actor_type)" />
+          @if (supportOf(row)) {
+            <app-status-pill [tone]="'warning'" [label]="copy.support" />
+          }
+        </div>
         @if (row.actor_id) {
           <app-copyable-identifier
             [value]="row.actor_id"
             [label]="copy.actorId"
             [truncate]="!stacked"
+            [compact]="!stacked"
           />
         }
       </div>
@@ -69,6 +92,7 @@ import { supportAccessOf } from './support-access';
             [value]="row.object_id"
             [label]="copy.objectId"
             [truncate]="!stacked"
+            [compact]="!stacked"
           />
         }
         @if (!row.object_type && !row.object_id) {
@@ -76,13 +100,13 @@ import { supportAccessOf } from './support-access';
         }
       </div>
     </ng-template>
-    <ng-template #detailsCell let-row>
+    <ng-template #detailsCell let-row let-stacked="stacked">
       @if (row.request_id || supportOf(row)) {
         <details class="min-w-0" data-audit-details>
           <summary
             class="min-h-[var(--eg-control-touch)] cursor-pointer content-center text-sm focus-visible:outline-[var(--eg-focus-width)] focus-visible:outline-ring hover:underline"
           >
-            {{ copy.details }}
+            <span [class.whitespace-nowrap]="!stacked">{{ copy.details }}</span>
             @if (supportOf(row)) {
               <app-status-pill [tone]="'warning'" [label]="copy.support" />
             }
@@ -138,6 +162,9 @@ import { supportAccessOf } from './support-access';
       [rows]="rows()"
       [rowId]="rowId"
       [caption]="copy.caption"
+      [rowHeight]="'compact'"
+      [flow]="tableFlow"
+      [fitToContainer]="true"
     />
   `,
 })
@@ -168,6 +195,7 @@ export class AuditTableComponent {
   private readonly detailsCell =
     viewChild<TemplateRef<DataTableCellContext<AuditEntryDto>>>('detailsCell');
   protected readonly rowId = (row: AuditEntryDto): string => row.id;
+  protected readonly tableFlow = 'page' as const;
   protected readonly columns = computed<readonly DataTableColumn<AuditEntryDto>[]>(() => {
     const time = this.timeCell();
     const actor = this.actorCell();
@@ -181,6 +209,7 @@ export class AuditTableComponent {
         role: 'identity',
         kind: 'identifier',
         priority: 'secondary',
+        width: IDENTIFIER_WIDTH,
         cell: (row) => row.actor_id ?? '',
         cellTemplate: actor,
       },
@@ -190,6 +219,7 @@ export class AuditTableComponent {
         role: 'identity',
         priority: 'primary',
         overflow: 'truncate',
+        width: ACTION_WIDTH,
         cell: (row) => row.action,
       },
       {
@@ -198,6 +228,7 @@ export class AuditTableComponent {
         role: 'identity',
         kind: 'identifier',
         priority: 'secondary',
+        width: IDENTIFIER_WIDTH,
         cell: (row) => row.object_id ?? '',
         cellTemplate: object,
       },
@@ -205,6 +236,7 @@ export class AuditTableComponent {
         id: 'time',
         header: this.copy.time,
         role: 'date',
+        width: TIME_WIDTH,
         cell: (row) => row.created_at,
         cellTemplate: time,
       },
@@ -213,6 +245,7 @@ export class AuditTableComponent {
         header: this.copy.details,
         role: 'actions',
         priority: 'secondary',
+        width: DETAILS_WIDTH,
         cell: () => this.copy.details,
         cellTemplate: details,
       },

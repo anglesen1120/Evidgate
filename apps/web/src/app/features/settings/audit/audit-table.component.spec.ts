@@ -1,6 +1,9 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import type { AuditEntryDto } from '@evidgate/sdk';
+import { DataTableComponent } from '../../../shared/ui/data-table/data-table.component';
+import { CopyableIdentifierComponent } from '../../../shared/ui/values/copyable-identifier.component';
 import { AuditTableComponent } from './audit-table.component';
 
 function row(id: string, changes: Partial<AuditEntryDto> = {}): AuditEntryDto {
@@ -175,7 +178,7 @@ describe('AuditTableComponent', () => {
   it('keeps exact UTC instants and role-based bounded scan values in the shared table', async () => {
     const { root } = await render([row('ordinary')]);
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe('2026-10-25T00:00:00Z');
-    expect(root.querySelector('time')?.textContent).toContain('Oct 25, 2026');
+    expect(root.querySelector('time')?.textContent).toContain('10/25/2026');
     expect(root.querySelector('time')?.textContent?.replace(/\s/g, ' ')).toContain('12:00:00 AM');
     expect(root.querySelector('time')?.textContent).toContain('UTC');
     expect(root.querySelector('table')?.classList.contains('eg-table-layout')).toBe(true);
@@ -196,40 +199,106 @@ describe('AuditTableComponent', () => {
     ).not.toBeNull();
     expect(root.textContent).toContain('—');
   });
-  it('renders every labelled audit fact with full values in a narrow container', async () => {
-    const width = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (
-      this: Element,
-    ) {
-      return this.tagName === 'APP-DATA-TABLE' ? 480 : 0;
-    });
-    try {
-      const actor = 'actor-'.repeat(40);
-      const object = 'object-'.repeat(40);
-      const request = 'request-'.repeat(40);
-      const action = 'project.very-long-action-'.repeat(15);
-      const { root } = await render([
-        row('narrow', {
-          actor_id: actor,
-          object_id: object,
-          request_id: request,
-          action,
-        }),
-      ]);
-      const records = root.querySelector('app-data-table-records');
-      expect(records).not.toBeNull();
-      expect(root.querySelector('table')).toBeNull();
-      for (const value of [actor, object, request, action])
-        expect(records?.textContent).toContain(value);
-      const labels = [...root.querySelectorAll('.eg-table-fact > dt')].map(
-        (label) => label.textContent,
-      );
-      expect(labels).toEqual(['Action', 'Actor', 'Object', 'Time (UTC)', 'Event details']);
-      expect(root.querySelector('time')?.textContent).toContain('UTC');
-      expect(root.querySelector('[data-audit-details]')).not.toBeNull();
-    } finally {
-      width.mockRestore();
-    }
+  it('budgets ids independently from the primary action and intrinsic utility columns', async () => {
+    const { fixture, root } = await render([row('budgets')]);
+    const table = fixture.debugElement.query(By.directive(DataTableComponent))
+      .componentInstance as DataTableComponent<AuditEntryDto>;
+    const idWidth = {
+      min: 'calc(28ch + var(--eg-space-4) * 2)',
+      preferred: 'auto',
+      max: 'calc(40ch + var(--eg-space-4) * 2)',
+    };
+    expect(table.columns().map(({ id, width }) => ({ id, width }))).toEqual([
+      { id: 'actor', width: idWidth },
+      { id: 'action', width: { min: '12ch', preferred: '1%', max: '20ch' } },
+      { id: 'object', width: idWidth },
+      {
+        id: 'time',
+        width: {
+          min: 'calc(24ch + var(--eg-space-4) * 2)',
+          preferred: '1%',
+          max: 'calc(28ch + var(--eg-space-4) * 2)',
+        },
+      },
+      {
+        id: 'details',
+        width: {
+          min: 'calc(18ch + var(--eg-space-4) * 2)',
+          preferred: '1%',
+          max: 'calc(22ch + var(--eg-space-4) * 2)',
+        },
+      },
+    ]);
+    const headers = root.querySelectorAll<HTMLElement>('thead th');
+    expect(headers[0]?.style.inlineSize).toBe('auto');
+    expect(headers[1]?.style.inlineSize).toBe('1%');
+    expect(headers[3]?.style.minInlineSize).toBe('calc(24ch + var(--eg-space-4) * 2)');
+    expect(headers[4]?.style.minInlineSize).toBe('calc(18ch + var(--eg-space-4) * 2)');
   });
+  it('uses page flow, compact inline ids and one-line scan utilities for a bounded audit page', async () => {
+    const actor = '0198a000-0000-7000-8000-000000000001';
+    const object = '0198a000-0000-7000-8000-000000000002';
+    const { fixture, root } = await render([
+      row('compact', { actor_id: actor, object_id: object }),
+    ]);
+    const table = fixture.debugElement.query(By.directive(DataTableComponent))
+      .componentInstance as DataTableComponent<AuditEntryDto>;
+    expect(table.flow()).toBe('page');
+    expect(table.fitToContainer()).toBe(true);
+    expect(table.rowHeight()).toBe('compact');
+    expect(root.querySelector('.eg-table-long')).toBeNull();
+    expect(root.querySelector('cdk-virtual-scroll-viewport')).toBeNull();
+    expect(root.querySelector('app-absolute-time')?.classList.contains('whitespace-nowrap')).toBe(
+      true,
+    );
+    expect(root.querySelector('summary span')?.classList.contains('whitespace-nowrap')).toBe(true);
+    const scanIds = fixture.debugElement
+      .queryAll(By.directive(CopyableIdentifierComponent))
+      .map(({ componentInstance }) => componentInstance as CopyableIdentifierComponent)
+      .filter((identifier) => identifier.value() === actor || identifier.value() === object);
+    expect(scanIds).toHaveLength(2);
+    for (const identifier of scanIds) expect(identifier.compact()).toBe(true);
+  });
+  it.each([390, 767])(
+    'renders every labelled fact with full values at %ipx',
+    async (containerWidth) => {
+      const width = vi.spyOn(Element.prototype, 'clientWidth', 'get').mockImplementation(function (
+        this: Element,
+      ) {
+        return this.tagName === 'APP-DATA-TABLE' ? containerWidth : 0;
+      });
+      try {
+        const actor = 'actor-'.repeat(40);
+        const object = 'object-'.repeat(40);
+        const request = 'request-'.repeat(40);
+        const action = 'project.very-long-action-'.repeat(15);
+        const { root } = await render([
+          row('narrow', {
+            actor_id: actor,
+            object_id: object,
+            request_id: request,
+            action,
+          }),
+        ]);
+        const records = root.querySelector('app-data-table-records');
+        expect(records).not.toBeNull();
+        expect(root.querySelector('table')).toBeNull();
+        for (const value of [actor, object, request, action])
+          expect(records?.textContent).toContain(value);
+        expect(records?.querySelector('app-copyable-identifier .preview')).toBeNull();
+        expect(records?.querySelector('app-absolute-time.whitespace-nowrap')).toBeNull();
+        expect(records?.querySelector('summary .whitespace-nowrap')).toBeNull();
+        const labels = [...root.querySelectorAll('.eg-table-fact > dt')].map(
+          (label) => label.textContent,
+        );
+        expect(labels).toEqual(['Action', 'Actor', 'Object', 'Time (UTC)', 'Event details']);
+        expect(root.querySelector('time')?.textContent).toContain('UTC');
+        expect(root.querySelector('[data-audit-details]')).not.toBeNull();
+      } finally {
+        width.mockRestore();
+      }
+    },
+  );
   it.each([['not-a-date'], [''], ['2026-02-30T00:00:00Z']])(
     'invents no instant for the unusable timestamp %j',
     async (createdAt) => {
@@ -244,7 +313,7 @@ describe('AuditTableComponent', () => {
     const { root } = await render([row('offset', { created_at: instant })]);
     const time = root.querySelector('time');
     expect(time?.getAttribute('datetime')).toBe(instant);
-    expect(time?.textContent).toContain('Oct 25, 2026');
+    expect(time?.textContent).toContain('10/25/2026');
     expect(time?.textContent).toContain('12:30:00');
   });
   it('keeps mobile metadata closed per row and omits empty request, support and object values', async () => {

@@ -25,6 +25,7 @@ describe('RetentionFormComponent confirmation lifetime', () => {
     await h.edit('1', '1');
     submit(h.root);
     await h.settle();
+    expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
     expect(document.querySelectorAll('[data-retention-impact]')).toHaveLength(2);
     h.http.expectNone((request) => request.method === 'PUT');
     dialogButton('[data-retention-cancel]').click();
@@ -65,7 +66,7 @@ describe('RetentionFormComponent confirmation lifetime', () => {
       await h.edit('1', '50');
       submit(h.root);
       await h.settle();
-      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
       h.http.expectNone((request) => request.method === 'PUT');
       flush(
         previous,
@@ -75,7 +76,7 @@ describe('RetentionFormComponent confirmation lifetime', () => {
       await previousAttempt.value;
       await h.settle();
       expect(h.store.policy()).toEqual({ artifact_days: 10, metadata_days: 50 });
-      expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+      expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
       h.http.expectNone((request) => request.method === 'PUT');
       dialogButton('[data-retention-confirm]').click();
       flush(await h.take('PUT', 'p-2'), { artifact_days: 1, metadata_days: 50 });

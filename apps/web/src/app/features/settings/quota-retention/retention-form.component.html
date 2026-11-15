@@ -150,6 +150,8 @@
 <hlm-dialog
   #confirmationDialog
   [state]="pending() ? 'open' : 'closed'"
+  [role]="'alertdialog'"
+  [autoFocus]="'[data-retention-cancel]'"
   [restoreFocus]="false"
   [closeOnOutsidePointerEvents]="false"
   (stateChanged)="dialogStateChanged($event)"

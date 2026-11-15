@@ -35,6 +35,48 @@ describe('Attempts table shared presentation', () => {
     expect(root.querySelector('h2')?.getAttribute('data-title-size')).toBe('section');
   });
 
+  it('resets the native logical minimum and budgets the short normalized status', async () => {
+    const { root } = await render([row()]);
+    expect(root.querySelector('table')?.classList.contains('[min-inline-size:0]')).toBe(true);
+    const statuses = root.querySelectorAll<HTMLElement>('[data-column-role="status"]');
+    expect(statuses).toHaveLength(2);
+    const nativeMinimum = '[@media(min-width:768px)]:[min-inline-size:var(--eg-table-column-min)]';
+    for (const cell of statuses) {
+      expect(cell.style.minInlineSize).toBe('');
+      expect(cell.classList.contains(nativeMinimum)).toBe(true);
+      expect(cell.style.getPropertyValue('--eg-table-column-min')).toBe(
+        'calc(14ch + var(--eg-space-4) * 2)',
+      );
+    }
+  });
+
+  it.each([
+    ['recorded', row({ durationMs: 134, artifactCount: 12 })],
+    [
+      'unavailable',
+      row({ durationMs: null, artifactCount: null, rawStatus: 'unknown-'.repeat(20) }),
+    ],
+  ] as const)(
+    'releases every stacked field width and height for %s values',
+    async (_name, attempt) => {
+      const { root } = await render([attempt]);
+      const record = root.querySelector('[data-attempt-row]')!;
+      for (const property of [
+        'inline-size:100%',
+        'min-inline-size:0',
+        'max-inline-size:none',
+        'block-size:auto',
+      ]) {
+        expect(record.classList.contains(`[@media(max-width:767px)]:[&>*]:[${property}]`)).toBe(
+          true,
+        );
+      }
+      expect(record.querySelectorAll('[role="rowheader"], [role="cell"]')).toHaveLength(5);
+      expect(root.querySelector('table')?.classList.contains('[&_th]:wrap-normal')).toBe(true);
+      expect(root.querySelector('table')?.classList.contains('[&_th]:wrap-anywhere')).toBe(false);
+    },
+  );
+
   it('localizes fractional durations and grouped artifact counts in Vietnamese', async () => {
     registerLocaleData(viLocale);
     TestBed.overrideProvider(LOCALE_ID, { useValue: 'vi' });

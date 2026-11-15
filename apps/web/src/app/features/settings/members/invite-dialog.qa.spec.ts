@@ -2,6 +2,7 @@
 // MembersDataService and SessionStore replaced. The existing page spec replaces the whole store, so
 // the dialog-to-store contract (one request per press, intent reuse, payload freeze) had no test.
 
+import { InteractivityChecker } from '@angular/cdk/a11y';
 import { isSignal, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import type {
@@ -116,6 +117,8 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
         },
       ],
     });
+    // JSDOM has no layout; use the dialog accessibility harness's visibility precedent.
+    vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
     store = TestBed.inject(MembersStore);
     await store.load('org1');
     fixture = TestBed.createComponent(InviteDialogComponent);
@@ -446,6 +449,7 @@ describe('InviteDialog through the real MembersStore (09.7.1-T2 QA)', () => {
       Promise.reject(refusal('validation', 422, 'invalid_email', 'Use a valid <email>.', false)),
     );
     await open();
+    expect(document.activeElement).toBe(input());
     expect(input().getAttribute('aria-describedby')).toBeNull();
     setEmail('new@example.test');
     submitButton().click();

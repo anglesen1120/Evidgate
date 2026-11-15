@@ -33,6 +33,7 @@
 </p>
 <app-request-state
   [status]="status()"
+  [loadingLabel]="copy.loading"
   [error]="store.loadError()"
   [empty]="store.members().length === 0"
   [emptyTitle]="copy.emptyTitle"

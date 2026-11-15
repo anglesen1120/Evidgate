@@ -135,6 +135,112 @@ describe('Shared table focus across record reflow', () => {
     return target!;
   }
 
+  function tableMinimum(pixels: () => number): void {
+    const scroll = root.querySelector<HTMLElement>('.scroll')!;
+    vi.spyOn(scroll, 'clientWidth', 'get').mockImplementation(() => width - 2);
+    vi.spyOn(scroll, 'scrollWidth', 'get').mockImplementation(() =>
+      fixture.componentInstance.narrow() ? width - 2 : Math.max(width - 2, pixels()),
+    );
+  }
+
+  it.each(['a', 'button'])(
+    'preserves the second row %s through measured-fit stacking and the exact fit boundary',
+    async (selector) => {
+      tableMinimum(() => 1152);
+      fixture.componentRef.setInput('fitToContainer', true);
+      control(1, 'identity', selector).focus();
+      await resize(900);
+      expect(fixture.componentInstance.narrow()).toBe(true);
+      expect(document.activeElement).toBe(control(1, 'identity', selector));
+      await resize(900);
+      expect(fixture.componentInstance.narrow()).toBe(true);
+      expect(document.activeElement).toBe(control(1, 'identity', selector));
+      await resize(1153);
+      expect(fixture.componentInstance.narrow()).toBe(true);
+      await resize(1154);
+      expect(fixture.componentInstance.narrow()).toBe(false);
+      expect(document.activeElement).toBe(control(1, 'identity', selector));
+    },
+  );
+
+  it('leaves legacy wide-container layout unchanged without the fit opt-in', async () => {
+    tableMinimum(() => 1152);
+    await resize(900);
+    expect(fixture.componentInstance.narrow()).toBe(false);
+    expect(root.querySelector('[role="table"]')).not.toBeNull();
+  });
+
+  it.each(['columns', 'font', 'font metrics', 'rows'] as const)(
+    'rechecks the measured minimum after its %s changes without losing focus',
+    async (source) => {
+      let minimum = 1152;
+      tableMinimum(() => minimum);
+      fixture.componentRef.setInput('fitToContainer', true);
+      await resize(900);
+      expect(fixture.componentInstance.narrow()).toBe(true);
+      control(1, 'identity', 'button').focus();
+      minimum = 800;
+      if (source === 'columns') {
+        fixture.componentRef.setInput(
+          'columns',
+          columns.map((column) => ({
+            ...column,
+            width: { min: '8ch' },
+          })),
+        );
+      } else if (source === 'rows') {
+        fixture.componentRef.setInput(
+          'rows',
+          fixture.componentInstance.rows().map((row) => ({
+            ...row,
+            note: 'Short replacement',
+          })),
+        );
+      } else if (source === 'font metrics') {
+        root.querySelector<HTMLElement>('.token-probe')!.style.width = '20px';
+      } else {
+        root.querySelector<HTMLElement>('.token-probe')!.style.font = '12px sans-serif';
+      }
+      await resize(900);
+      expect(fixture.componentInstance.narrow()).toBe(false);
+      expect(document.activeElement).toBe(control(1, 'identity', 'button'));
+    },
+  );
+
+  it('keeps fitted records mounted when a cursor appends an immutable row prefix', async () => {
+    tableMinimum(() => 1152);
+    fixture.componentRef.setInput('fitToContainer', true);
+    await resize(900);
+    const first = control(0, 'identity', 'a');
+    fixture.componentRef.setInput('rows', [
+      ...fixture.componentInstance.rows(),
+      dataTableFixtureRows(3)[2]!,
+    ]);
+    await fixture.whenStable();
+    expect(fixture.componentInstance.narrow()).toBe(true);
+    expect(control(0, 'identity', 'a')).toBe(first);
+    const appended = control(2, 'identity', 'a');
+    appended.focus();
+    await resize(900);
+    expect(document.activeElement).toBe(appended);
+  });
+
+  it('invalidates an apparent append when an existing middle row was replaced', async () => {
+    let minimum = 1152;
+    tableMinimum(() => minimum);
+    fixture.componentRef.setInput('fitToContainer', true);
+    await resize(900);
+    const rows = fixture.componentInstance.rows();
+    minimum = 800;
+    fixture.componentRef.setInput('rows', [
+      rows[0]!,
+      { ...rows[1]!, note: 'Short replacement' },
+      dataTableFixtureRows(3)[2]!,
+    ]);
+    await resize(900);
+    expect(fixture.componentInstance.narrow()).toBe(false);
+  });
+
   it.each(['a', 'button'])(
     'preserves the second row %s in both directions, including changed link labels',
     async (selector) => {

@@ -54,6 +54,7 @@ import { DataTableRecordsComponent } from './data-table-records.component';
 export type { DataTableColumn } from './data-table-column';
 
 export type DataTableDensity = 'default' | 'compact';
+export type DataTableFlow = 'bounded' | 'page';
 export type DataTableRowId<T> = (row: T) => string | number;
 
 interface DataTableLayoutFocus {
@@ -124,14 +125,18 @@ export class DataTableComponent<T> {
   readonly caption = input.required<string>();
   readonly rowHeight = input<DataTableDensity>('default');
   readonly virtualThreshold = input(200);
+  /** Page flow removes the ordinary table's inner row cap; virtual windows keep their contract. */
+  readonly flow = input<DataTableFlow>('bounded');
+  /** Opt ordinary tables into record reflow when readable columns cannot fit their container. */
+  readonly fitToContainer = input(false);
 
   readonly captionId = `eg-data-table-${nextTableId++}-caption`;
   readonly narrow = signal(false);
+  private readonly customCells = computed(() =>
+    this.columns().some((column) => column.cellTemplate),
+  );
   readonly virtual = computed(
-    () =>
-      !this.narrow() &&
-      !this.columns().some((column) => column.cellTemplate) &&
-      this.rows().length > this.virtualThreshold(),
+    () => !this.narrow() && !this.customCells() && this.rows().length > this.virtualThreshold(),
   );
   readonly resolvedColumns = computed(() =>
     resolveTableColumns(this.columns(), this.virtual() ? this.rows() : []),
@@ -193,6 +198,11 @@ export class DataTableComponent<T> {
   private readonly tokenProbe = viewChild.required<ElementRef<HTMLElement>>('tokenProbe');
   private readonly range = signal<ListRange>({ start: 0, end: 0 });
   private layoutFocus: DataTableLayoutFocus | undefined;
+  private fitColumns: readonly DataTableColumn<T>[] | undefined;
+  private fitRows: readonly T[] | undefined;
+  private fitFont = '';
+  private fitProbeWidth = 0;
+  private minimumFitWidth = 0;
   readonly windowStart = computed(() =>
     this.virtual() ? this.range().start : this.pageIndex() * this.pageSize,
   );
@@ -285,7 +295,7 @@ export class DataTableComponent<T> {
 
   private updateLayout(narrow: boolean): void {
     if (narrow === this.narrow()) return;
-    const anchor = this.captureLayoutFocus();
+    const anchor = this.captureLayoutFocus() ?? this.layoutFocus;
     this.layoutFocus = anchor;
     if (anchor) this.pageIndex.set(Math.floor(anchor.rowIndex / this.pageSize));
     this.narrow.set(narrow);
@@ -381,13 +391,52 @@ export class DataTableComponent<T> {
     const probe = this.tokenProbe().nativeElement;
     const viewport = this.viewport();
     const width = this.host.nativeElement.clientWidth;
-    if (width > 0) this.updateLayout(width < 768);
+    const probeStyle = getComputedStyle(probe);
+    const columns = this.columns();
+    const rows = this.rows();
+    const probeWidth = this.fitToContainer() ? Number.parseFloat(probeStyle.width) || 0 : 0;
+    // An immutable prefix cannot reduce the required width. Keep fitted records
+    // mounted so a cursor handoff does not focus a transient native-table link.
+    const rowsReplaced =
+      this.minimumFitWidth > 0 &&
+      rows !== this.fitRows &&
+      (this.fitRows === undefined ||
+        rows.length < this.fitRows.length ||
+        this.fitRows.some((row, index) => row !== rows[index]));
+    if (
+      columns !== this.fitColumns ||
+      rowsReplaced ||
+      probeStyle.font !== this.fitFont ||
+      probeWidth !== this.fitProbeWidth
+    ) {
+      this.fitColumns = columns;
+      this.fitFont = probeStyle.font;
+      this.fitProbeWidth = probeWidth;
+      this.minimumFitWidth = 0;
+    }
+    this.fitRows = rows;
+    // Do not turn a fixed-height >200-row virtual list into a variable-height page.
+    const fit =
+      this.fitToContainer() && (this.customCells() || rows.length <= this.virtualThreshold());
+    if (width > 0) {
+      if (
+        fit &&
+        !this.narrow() &&
+        scroll.clientWidth > 0 &&
+        scroll.scrollWidth > scroll.clientWidth + 1
+      ) {
+        // Keep the measured minimum while records replace the table, or each observer
+        // callback would alternate between records and the same overflowing table.
+        this.minimumFitWidth = Math.ceil(scroll.scrollWidth + width - scroll.clientWidth);
+      }
+      this.updateLayout(width < 768 || (fit && width < this.minimumFitWidth));
+    }
     const header = this.host.nativeElement.querySelector('.eg-table-sticky');
     const height = header?.getBoundingClientRect().height ?? 0;
     if (height > 0) this.headerHeight.set(height);
     // The probe includes line height and insets, so text resizing grows the
     // virtual stride instead of clipping a 200% line into a 44px row.
-    const pixels = Number.parseFloat(getComputedStyle(probe).height);
+    const pixels = Number.parseFloat(probeStyle.height);
     const minimum = this.rowHeight() === 'compact' ? 40 : 44;
     this.itemSize.set(pixels > 0 ? Math.max(minimum, pixels) : minimum);
     this.horizontalScrolls.set(

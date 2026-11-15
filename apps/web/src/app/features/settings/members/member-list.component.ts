@@ -24,6 +24,7 @@ import type { DataTableCellContext } from '../../../shared/ui/data-table/data-ta
 export const MEMBERS_COPY = {
   title: $localize`:@@settings.members.title:Members and roles`,
   directory: $localize`:@@settings.members.directory:Members and invitations`,
+  loading: $localize`:@@settings.members.loading:Loading members…`,
   description: $localize`:@@settings.members.description:Manage organization membership. The server decides actual access.`,
   member: $localize`:@@settings.members.member:Member`,
   status: $localize`:@@settings.members.status:Status`,
@@ -33,6 +34,9 @@ export const MEMBERS_COPY = {
   invite: $localize`:@@settings.members.invite:Invite member`,
   cancel: $localize`:@@settings.members.cancel:Cancel`,
   email: $localize`:@@settings.members.email:Email`,
+  emailRequired: $localize`:@@settings.members.email-required:Enter an email address.`,
+  emailInvalid: $localize`:@@settings.members.email-invalid:Enter a valid email address.`,
+  emailTooLong: $localize`:@@settings.members.email-too-long:Use an email address with 320 characters or fewer.`,
   optionalRoles: $localize`:@@settings.members.optional-roles:Initial roles (optional)`,
   send: $localize`:@@settings.members.send:Send invitation`,
   resend: $localize`:@@settings.members.resend:Resend invite`,

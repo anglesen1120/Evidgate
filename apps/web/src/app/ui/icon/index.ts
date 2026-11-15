@@ -48,6 +48,17 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
           <path [attr.d]="'M12 6v6l4 2'"></path>
           <circle [attr.cx]="'12'" [attr.cy]="'12'" [attr.r]="'10'"></circle>
         }
+        @case ('lucideCopy') {
+          <rect
+            [attr.width]="14"
+            [attr.height]="14"
+            [attr.x]="8"
+            [attr.y]="8"
+            [attr.rx]="2"
+            [attr.ry]="2"
+          ></rect>
+          <path [attr.d]="'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2'"></path>
+        }
         @case ('lucideInfo') {
           <circle [attr.cx]="'12'" [attr.cy]="'12'" [attr.r]="'10'"></circle>
           <path [attr.d]="'M12 16v-4'"></path>
@@ -55,6 +66,12 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
         }
         @case ('lucideLoader2') {
           <path [attr.d]="'M21 12a9 9 0 1 1-6.219-8.56'"></path>
+        }
+        @case ('lucideMaximize2') {
+          <path [attr.d]="'M15 3h6v6'"></path>
+          <path [attr.d]="'m21 3-7 7'"></path>
+          <path [attr.d]="'m3 21 7-7'"></path>
+          <path [attr.d]="'M9 21H3v-6'"></path>
         }
         @case ('lucideOctagonX') {
           <path [attr.d]="'m15 9-6 6'"></path>
@@ -89,8 +106,10 @@ export class HlmIcon {
     | 'lucideCircle'
     | 'lucideCircleCheck'
     | 'lucideClock'
+    | 'lucideCopy'
     | 'lucideInfo'
     | 'lucideLoader2'
+    | 'lucideMaximize2'
     | 'lucideOctagonX'
     | 'lucideTriangleAlert'
     | 'lucideX'

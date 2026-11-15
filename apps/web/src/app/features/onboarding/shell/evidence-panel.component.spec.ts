@@ -1,4 +1,4 @@
-import { formatDate, registerLocaleData } from '@angular/common';
+import { registerLocaleData } from '@angular/common';
 import localeVi from '@angular/common/locales/vi';
 import { LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -105,9 +105,7 @@ describe('EvidencePanelComponent', () => {
     const instant = '2026-11-04T12:00:00.123456+00:00';
     expect(root.textContent).toContain('Activated at (UTC)');
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe(instant);
-    expect(root.querySelector('time')?.textContent).toBe(
-      formatDate(instant, 'medium', 'en-US', '+0000'),
-    );
+    expect(root.querySelector('time')?.textContent).toBe('11/4/2026, 12:00:00\u202fPM');
     expect(root.textContent).not.toContain(instant);
     expect(root.querySelector('[data-resource-state="empty"]')).toBeNull();
     expect(root.textContent).not.toMatch(/\bPASS\b|\bFAIL\b|enabled and collecting/i);
@@ -198,7 +196,7 @@ describe('EvidencePanelComponent localized activation time', () => {
     const root = fixture.nativeElement as HTMLElement;
     const time = root.querySelector('time');
     expect(time?.getAttribute('datetime')).toBe(instant);
-    expect(time?.textContent).toBe(formatDate(instant, 'medium', 'vi', '+0000'));
-    expect(time?.textContent).not.toBe(formatDate(instant, 'medium', 'vi', '+0700'));
+    expect(time?.textContent).toBe('12:00:00 04/11/2026');
+    expect(time?.textContent).not.toBe('19:00:00 04/11/2026');
   });
 });

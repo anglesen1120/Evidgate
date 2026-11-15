@@ -11,7 +11,7 @@ import {
 
 // Exercise both sides of the shared table's 768 px available-width breakpoint,
 // including the neighbouring viewport widths that exposed the old boundary gap.
-const WIDTHS = [320, 766, 767, 768, 1280] as const;
+const WIDTHS = [320, 766, 767, 768, 1280, 1440] as const;
 const STACKED_MAX = 767;
 const GRANT = '?fixture.variant.listPermissions=settings-policy-readonly';
 
@@ -66,7 +66,14 @@ interface TableGeometry {
 /** Native table cells and labelled records retain the same column facts. */
 async function tableGeometry(page: Page, selector = 'app-run-list-table'): Promise<TableGeometry> {
   const host = page.locator(selector);
-  const narrow = (await host.evaluate((element) => element.clientWidth)) < 768;
+  await page.evaluate(() => document.fonts.ready);
+  await host.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
+  const narrow = (await host.locator('.eg-table-narrow').count()) > 0;
   await expect(host.locator(narrow ? 'li[data-row-id]' : 'tr[data-row-id]').first()).toBeVisible();
   return host.evaluate((root, narrow): TableGeometry => {
     const row = root.querySelector(narrow ? 'li[data-row-id]' : 'tr[data-row-id]');
@@ -106,6 +113,7 @@ for (const theme of THEMES) {
           'ready',
         );
         const layout = await tableGeometry(page);
+        if (width === 1440) expect(layout.narrow).toBe(false);
         expect(layout.cells).toHaveLength(7);
         expect(layout.documentWidth).toBeLessThanOrEqual(width);
         expect(layout.rowOverflow).toBeLessThanOrEqual(1);
@@ -203,7 +211,7 @@ for (const theme of THEMES) {
     expect(layout.rowCount).toBe(200);
     const id = await first.getAttribute('data-row-id');
     await first.getByRole('link').first().focus();
-    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.setViewportSize({ width: 1440, height: 900 });
     expect((await tableGeometry(page)).narrow).toBe(false);
     await expect(first).toHaveAttribute('data-row-id', id ?? '');
     expect((await tableGeometry(page)).rowCount).toBe(200);

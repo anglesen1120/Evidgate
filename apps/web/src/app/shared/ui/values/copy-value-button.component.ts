@@ -9,6 +9,7 @@ import {
   signal,
 } from '@angular/core';
 import { HlmButton } from '@evidgate/ui/button';
+import { HlmIcon } from '@evidgate/ui/icon';
 
 import { hasFormatChars } from './ref-name-display';
 
@@ -18,7 +19,8 @@ let nextCopyId = 0;
 
 @Component({
   selector: 'app-copy-value-button',
-  imports: [HlmButton],
+  imports: [HlmButton, HlmIcon],
+  host: { '[class.icon-only]': 'iconOnly()' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <button
@@ -27,13 +29,20 @@ let nextCopyId = 0;
       [variant]="'ghost'"
       [size]="size()"
       [attr.data-copy-size]="size()"
+      [class.icon-only]="iconOnly()"
+      [attr.title]="iconOnly() ? actionLabel() : null"
       [attr.aria-label]="actionLabel()"
       [attr.aria-describedby]="statusId"
       [attr.aria-disabled]="copying() || !value()"
       [attr.aria-busy]="copying()"
       (click)="copy()"
     >
-      {{ buttonText() }}
+      @if (iconOnly()) {
+        <hlm-icon class="copy-icon" [name]="iconName()" />
+        <span class="sr-only">{{ buttonText() }}</span>
+      } @else {
+        {{ buttonText() }}
+      }
     </button>
     <span
       [id]="statusId"
@@ -48,6 +57,19 @@ let nextCopyId = 0;
     :host {
       display: inline-block;
       max-inline-size: 100%;
+    }
+    :host(.icon-only) {
+      display: inline-flex;
+      flex: none;
+    }
+    button.icon-only {
+      inline-size: var(--eg-control-sm);
+      padding: var(--eg-space-2);
+      white-space: nowrap;
+    }
+    .copy-icon {
+      inline-size: var(--eg-space-5);
+      block-size: var(--eg-space-5);
     }
     button {
       max-inline-size: 100%;
@@ -74,6 +96,7 @@ export class CopyValueButtonComponent {
   readonly copyLabel = input<string>();
   /** `lg` reserves a 44px target on every pointer; `sm` keeps the compact default. */
   readonly size = input<CopyValueButtonSize>('sm');
+  readonly iconOnly = input(false);
   protected readonly statusId = `copy-value-status-${++nextCopyId}`;
   protected readonly status = signal('');
   protected readonly copying = signal(false);
@@ -88,6 +111,12 @@ export class CopyValueButtonComponent {
     if (this.result() === 'copied') return $localize`:@@shared.values.copied:Copied`;
     if (this.result() === 'failed') return $localize`:@@shared.values.copy-failed:Copy failed`;
     return $localize`:@@shared.values.copy:Copy`;
+  });
+  protected readonly iconName = computed(() => {
+    if (this.copying()) return 'lucideLoader2';
+    if (this.result() === 'copied') return 'lucideCheck';
+    if (this.result() === 'failed') return 'lucideOctagonX';
+    return 'lucideCopy';
   });
 
   constructor() {

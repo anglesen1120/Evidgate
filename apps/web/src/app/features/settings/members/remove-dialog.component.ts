@@ -29,6 +29,7 @@ import { MEMBERS_COPY } from './member-list.component';
   template: `
     <hlm-dialog
       [state]="opened() ? 'open' : 'closed'"
+      [role]="'alertdialog'"
       [closeOnOutsidePointerEvents]="false"
       [disableClose]="true"
       [restoreFocus]="false"
@@ -80,7 +81,14 @@ import { MEMBERS_COPY } from './member-list.component';
           }
         </div>
         <footer hlmDialogFooter class="mt-4">
-          <button hlmBtn [variant]="'outline'" #cancelButton type="button" (click)="close()">
+          <button
+            hlmBtn
+            [variant]="'outline'"
+            #cancelButton
+            type="button"
+            data-members-remove-cancel
+            (click)="close()"
+          >
             {{ copy.cancel }}</button
           ><button
             hlmBtn

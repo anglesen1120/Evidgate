@@ -19,7 +19,7 @@
 
   @switch (store.status()) {
     @case ('loading') {
-      <app-loading-pattern />
+      <app-loading-pattern [label]="loadingLabel" />
     }
     @case ('error') {
       @switch (store.failure()) {

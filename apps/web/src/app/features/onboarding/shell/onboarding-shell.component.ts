@@ -69,6 +69,7 @@ export class OnboardingShellComponent {
   protected readonly sectionHeadingSize = 'section' as const;
   protected readonly stepDetailsLabel = $localize`:@@onboarding.shell.step-details:Step details`;
   protected readonly stepSelectLabel = $localize`:@@onboarding.shell.step-select:Setup step`;
+  protected readonly loadingLabel = $localize`:@@onboarding.shell.loading:Loading project setup`;
   protected readonly completedCount = computed(() => {
     const done = this.store.done();
     let completed = 0;

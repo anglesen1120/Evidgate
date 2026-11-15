@@ -14,7 +14,7 @@
   #scrollElement
   hlmTableContainer
   class="scroll min-w-0 rounded-md border border-border focus-visible:outline-[length:var(--eg-focus-width)] focus-visible:outline-solid focus-visible:outline-ring focus-visible:outline-offset-[var(--eg-focus-offset)]"
-  [class.eg-table-long]="!virtual() && !narrow()"
+  [class.eg-table-long]="flow() === 'bounded' && !virtual() && !narrow()"
   [class.eg-table-narrow]="narrow()"
   [attr.tabindex]="horizontalScrolls() ? 0 : null"
   [attr.role]="horizontalScrolls() ? 'region' : null"
@@ -107,6 +107,9 @@
           [columnPriority]="column.priority"
           [columnOverflow]="column.overflow"
           [style.width]="virtual() ? column.virtualWidth : null"
+          [style.min-inline-size]="virtual() ? null : column.width?.min"
+          [style.inline-size]="virtual() ? null : column.width?.preferred"
+          [style.max-inline-size]="virtual() ? null : column.width?.max"
         />
       }
     </colgroup>
@@ -125,6 +128,9 @@
           [columnKind]="column.kind"
           [columnPriority]="column.priority"
           [columnOverflow]="column.overflow"
+          [style.min-inline-size]="virtual() ? null : column.width?.min"
+          [style.inline-size]="virtual() ? null : column.width?.preferred"
+          [style.max-inline-size]="virtual() ? null : column.width?.max"
           [attr.aria-colindex]="index + 1"
           [attr.data-eg-mutate]="column.mutates ? '' : null"
         >
@@ -142,6 +148,9 @@
           [columnKind]="column.kind"
           [columnPriority]="column.priority"
           [columnOverflow]="column.overflow"
+          [style.min-inline-size]="virtual() ? null : column.width?.min"
+          [style.inline-size]="virtual() ? null : column.width?.preferred"
+          [style.max-inline-size]="virtual() ? null : column.width?.max"
           [attr.aria-colindex]="index + 1"
           [attr.data-eg-mutate]="column.mutates ? '' : null"
         >

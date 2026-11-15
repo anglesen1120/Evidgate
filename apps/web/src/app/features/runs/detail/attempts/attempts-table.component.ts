@@ -29,6 +29,7 @@ import { ErrorPatternComponent } from '../../../../shared/ui/states/error-patter
 import { LoadingPatternComponent } from '../../../../shared/ui/states/loading-pattern.component';
 import { CopyValueButtonComponent } from '../../../../shared/ui/values/copy-value-button.component';
 import { DataTableValueComponent } from '../../../../shared/ui/data-table/data-table-value.component';
+import type { DataTableColumnWidth } from '../../../../shared/ui/data-table/data-table-column';
 import { NumberValueComponent } from '../../../../shared/ui/values/number-value.component';
 import { escapeFormatChars } from '../../../../shared/ui/values/ref-name-display';
 import { attemptAnchorId } from '../evidence/run-evidence-anchors';
@@ -68,6 +69,9 @@ export class AttemptsTableComponent {
   protected readonly identifierKind = 'identifier' as const;
   protected readonly primaryColumn = 'primary' as const;
   protected readonly scanOverflow = 'truncate' as const;
+  protected readonly normalisedWidth = {
+    min: 'calc(14ch + var(--eg-space-4) * 2)',
+  } as const satisfies DataTableColumnWidth;
   private readonly locale = inject(LOCALE_ID);
   /** The first page's request state; `ready` with `null` attempts is the unavailable state. */
   readonly status = input<'loading' | 'ready' | 'error'>('ready');

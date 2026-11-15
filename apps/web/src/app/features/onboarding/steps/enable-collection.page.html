@@ -113,7 +113,7 @@
           <dt>{{ activatedAtLabel }}</dt>
           <dd>
             @if (enabledInstant(); as instant) {
-              <time [attr.datetime]="instant">{{ instant | date: 'medium' : '+0000' }}</time>
+              <time [attr.datetime]="instant">{{ instant | date: dateTimeFormat : '+0000' }}</time>
             } @else {
               {{ unavailableLabel }}
             }

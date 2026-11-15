@@ -1,4 +1,3 @@
-import { formatDate } from '@angular/common';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -62,9 +61,7 @@ describe('RevisionDetailComponent', () => {
       revision.hash,
     );
     expect(root.querySelector('time')?.getAttribute('datetime')).toBe(revision.created_at);
-    expect(root.querySelector('time')?.textContent?.trim()).toBe(
-      `${formatDate(revision.created_at, 'medium', 'en-US', 'UTC')} UTC`,
-    );
+    expect(root.querySelector('time')?.textContent?.trim()).toBe('11/1/2026, 3:00:00\u202fAM UTC');
     expect(root.querySelector('[data-policy-field="flaky_budget"]')?.textContent).toContain('0');
     expect(root.querySelector('[data-policy-field="future_field"]')?.textContent).toContain(
       'false',

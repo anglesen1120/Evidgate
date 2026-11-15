@@ -47,3 +47,40 @@ describe.each(['en', 'en-US'])('English short dates (%s)', (locale) => {
     ).toBe('12/31/2026, 5:15\u202fPM');
   });
 });
+
+describe.each(['en', 'en-US', 'vi', 'vi-VN'])('Operational date-times (%s)', (locale) => {
+  const vietnamese = locale.startsWith('vi');
+
+  it('retains the locale clock including seconds with the shared numeric calendar', () => {
+    const expected = vietnamese ? '06:22:59 15/11/2026' : '11/15/2026, 6:22:59\u202fAM';
+    expect(
+      formatDate('2026-11-15T06:22:59Z', shortDateFormat(locale, true, 'medium'), locale, 'UTC'),
+    ).toBe(expected);
+  });
+
+  it('preserves the health panel 24-hour clock without adding a meridiem', () => {
+    const expected = vietnamese ? '13:14:15 15/11/2026' : '11/15/2026, 13:14:15';
+    expect(
+      formatDate('2026-11-15T13:14:15Z', shortDateFormat(locale, true, '24h'), locale, 'UTC'),
+    ).toBe(expected);
+  });
+
+  it('keeps the UTC calendar year and second precision across an offset boundary', () => {
+    const expected = vietnamese ? '17:15:04 31/12/2026' : '12/31/2026, 5:15:04\u202fPM';
+    expect(
+      formatDate(
+        '2027-01-01T00:15:04+07:00',
+        shortDateFormat(locale, true, 'medium'),
+        locale,
+        'UTC',
+      ),
+    ).toBe(expected);
+  });
+
+  it('does not append or convert a clock for date-only values', () => {
+    const expected = vietnamese ? '02/01/2026' : '1/2/2026';
+    expect(formatDate('2026-01-02', shortDateFormat(locale, false, 'medium'), locale)).toBe(
+      expected,
+    );
+  });
+});

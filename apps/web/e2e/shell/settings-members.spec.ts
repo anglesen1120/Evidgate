@@ -163,6 +163,8 @@ test.describe('AC2: the last-admin refusal is the server text, never a client pr
 
       const dialog = page.locator('[data-members-dialog="remove"][data-state="open"]');
       await expect(dialog).toBeVisible();
+      await expect(page.getByRole('alertdialog')).toBeVisible();
+      await expect(dialog.locator('[data-members-remove-cancel]')).toBeFocused();
       await dialog.locator('[data-members-submit]').click();
 
       await expectServerMessage(

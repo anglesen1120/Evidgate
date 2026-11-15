@@ -48,6 +48,7 @@ export class RunListTableComponent {
   protected readonly displayRef = escapeFormatChars;
   protected readonly displayLabel = escapeFormatLabel;
   protected readonly preview = middleTruncate;
+  protected readonly identifierPreviewLength = 17;
   private readonly identityCell = viewChild.required<RunCell>('identityCell');
   private readonly stateCell = viewChild.required<RunCell>('stateCell');
   private readonly evidenceCell = viewChild.required<RunCell>('evidenceCell');
@@ -83,6 +84,7 @@ export class RunListTableComponent {
       kind: 'identifier',
       priority: 'primary',
       overflow: 'truncate',
+      width: { min: `calc(${this.identifierPreviewLength}ch + var(--eg-space-4) * 2)` },
       cellTemplate: this.identityCell(),
     },
     {
@@ -92,6 +94,7 @@ export class RunListTableComponent {
       role: 'status',
       priority: 'primary',
       overflow: 'truncate',
+      width: { min: 'calc(12ch + var(--eg-space-4) * 2)' },
       cellTemplate: this.stateCell(),
     },
     {
@@ -101,6 +104,7 @@ export class RunListTableComponent {
       role: 'status',
       priority: 'primary',
       overflow: 'wrap',
+      width: { min: 'calc(14ch + var(--eg-space-4) * 2)' },
       cellTemplate: this.evidenceCell(),
     },
     {
@@ -110,6 +114,7 @@ export class RunListTableComponent {
       role: 'status',
       priority: 'primary',
       overflow: 'wrap',
+      width: { min: 'calc(15ch + var(--eg-space-4) * 2)' },
       cellTemplate: this.decisionCell(),
     },
     {
@@ -138,6 +143,7 @@ export class RunListTableComponent {
       role: 'date',
       priority: 'secondary',
       overflow: 'wrap',
+      width: { min: '18ch' },
       cellTemplate: this.createdCell(),
     },
   ]);

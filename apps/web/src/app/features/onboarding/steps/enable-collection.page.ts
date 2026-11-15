@@ -9,6 +9,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  LOCALE_ID,
   computed,
   effect,
   inject,
@@ -35,6 +36,7 @@ import {
   focusWaitingLine,
   requestRefusalFocus,
 } from '../../../shared/a11y/step-focus';
+import { shortDateFormat } from '../../../shared/time/short-date-format';
 import { ErrorPatternComponent, InlineFeedbackComponent } from '../../../shared/ui/states';
 import {
   DesktopMutationDirective,
@@ -90,6 +92,7 @@ export class EnableCollectionPage {
   private readonly destroyRef = inject(DestroyRef);
   protected readonly policy = inject(NarrowMutationPolicy);
   protected readonly subsectionHeadingSize = 'subsection' as const;
+  protected readonly dateTimeFormat = shortDateFormat(inject(LOCALE_ID), true, 'medium');
   /** The clock the confirm's and the read's `Retry-After` windows are measured against. */
   private readonly now = inject(READ_CLOCK);
   /** The failed read's window; the runner owns the same rule for the confirm. */

@@ -22,7 +22,10 @@ function required<T extends Element>(selector: string): T {
 }
 
 describe('Members dialog accessibility', () => {
+  let store: FakeMembersStore;
+
   beforeEach(() => {
+    store = new FakeMembersStore();
     TestBed.configureTestingModule({
       imports: [MembersPage],
       providers: [
@@ -35,7 +38,7 @@ describe('Members dialog accessibility', () => {
       ],
     });
     TestBed.overrideComponent(MembersPage, {
-      set: { providers: [{ provide: MembersStore, useValue: new FakeMembersStore() }] },
+      set: { providers: [{ provide: MembersStore, useValue: store }] },
     });
     vi.spyOn(TestBed.inject(InteractivityChecker), 'isVisible').mockReturnValue(true);
   });
@@ -56,7 +59,8 @@ describe('Members dialog accessibility', () => {
       action.click();
       await fixture.whenStable();
       const content = required<HTMLElement>(`[data-members-dialog="${kind}"]`);
-      const modal = content.closest('[role="dialog"]');
+      const role = kind === 'remove' ? 'alertdialog' : 'dialog';
+      const modal = content.closest(`[role="${role}"]`);
       expect(modal?.getAttribute('aria-label')).toBe(label);
       expect(modal?.getAttribute('aria-modal')).toBe('true');
       if (kind !== 'invite') {
@@ -65,6 +69,10 @@ describe('Members dialog accessibility', () => {
         expect(description?.id).toBeTruthy();
         expect(modal?.getAttribute('aria-describedby')).toBe(description?.id);
         expect(document.getElementById(description?.id ?? '')).toBe(description);
+      }
+      if (kind === 'remove') {
+        expect(document.activeElement).toBe(content.querySelector('[data-members-remove-cancel]'));
+        expect(store.remove).not.toHaveBeenCalled();
       }
       expect(document.body.querySelectorAll('.cdk-focus-trap-anchor')).toHaveLength(2);
       expect(content.contains(document.activeElement)).toBe(true);
@@ -83,6 +91,7 @@ describe('Members dialog accessibility', () => {
       expect(escape.defaultPrevented).toBe(true);
       expect(document.body.querySelector('[data-members-dialog][data-state="open"]')).toBeNull();
       expect(document.activeElement).toBe(opener);
+      if (kind === 'remove') expect(store.remove).not.toHaveBeenCalled();
     },
   );
 

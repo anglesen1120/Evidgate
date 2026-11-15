@@ -60,13 +60,14 @@ for (const locale of LOCALES) {
       await enterDays(page, '#retention-artifact', '7');
       await tabTo(page, '[data-retention-save]');
       await page.keyboard.press('Enter');
-      const dialog = page.getByRole('dialog');
+      const dialog = page.getByRole('alertdialog');
       await expect(dialog).toBeVisible();
+      await expect(dialog.locator('[data-retention-cancel]')).toBeFocused();
       await expect(dialog.locator('[data-retention-impact="artifact_days"]')).toContainText('14');
       await expect(dialog.locator('[data-retention-impact="artifact_days"]')).toContainText('7');
       expect(await putCount(page)).toBe(0);
       // The dialog fades in; axe would otherwise read colours blended by the entrance opacity.
-      await waitForDialogAnimations(page, '[role="dialog"]');
+      await waitForDialogAnimations(page, '[role="alertdialog"]');
       await expectNoA11yViolations(page, `retention warning ${locale}`);
       await tabTo(page, '[data-retention-cancel]');
       await page.keyboard.press('Enter');
@@ -97,6 +98,7 @@ for (const locale of LOCALES) {
       await page.keyboard.press('Enter');
       await expect(page.locator('[data-retention-saved]')).toBeVisible();
       await expect(page.getByRole('dialog')).not.toBeVisible();
+      await expect(page.getByRole('alertdialog')).not.toBeVisible();
       expect(await putCount(page)).toBe(1);
     });
 
@@ -147,9 +149,9 @@ for (const locale of LOCALES) {
         await enterDays(page, '#retention-artifact', '7');
         await tabTo(page, '[data-retention-save]');
         await page.keyboard.press('Enter');
-        const dialog = page.getByRole('dialog');
+        const dialog = page.getByRole('alertdialog');
         await expect(dialog).toBeVisible();
-        await waitForDialogAnimations(page, '[role="dialog"]');
+        await waitForDialogAnimations(page, '[role="alertdialog"]');
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);

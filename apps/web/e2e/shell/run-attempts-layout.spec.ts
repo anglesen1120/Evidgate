@@ -1,15 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import attemptsFixture from '../../../../fixtures/web-api/run-attempts/input.json';
 import { runDetailPath } from './run-detail.support';
-import { seedStoredTheme } from './support';
+import { seedStoredTheme, type ShellLocale } from './support';
 
 // The attempts table stacks up to and including 767 px and keeps its columns from 768 px. Both
 // neighbouring widths are covered because the strict max-width utility stops at 766 px, which
 // used to leave a 767 px viewport with a visible header row above stacked records.
-const WIDTHS = [766, 767, 768] as const;
+const WIDTHS = [390, 766, 767, 768] as const;
 const STACKED_MAX = 767;
-
-const ATTEMPTS_PATH = runDetailPath({ attempts: 'ok', revisions: 'ok' });
 
 /** A measured rectangle, in CSS pixels, relative to the viewport. */
 interface Box {
@@ -29,6 +27,10 @@ interface AttemptLayout {
   fieldDisplays: string[];
   labelDisplays: string[];
   fieldBoxes: Box[];
+  recordInnerWidth: number;
+  fieldContentOverflow: number[];
+  fieldMinimums: string[];
+  headerWordsFit: boolean;
   /** Horizontal overflow of the scroll container, 0 when the layout fits its column. */
   containerOverflow: number;
   /** Distance from the table's top to the first record: the header is out of flow when stacked. */
@@ -65,6 +67,19 @@ async function attemptLayout(page: Page): Promise<AttemptLayout> {
       }
       return found;
     };
+    const recordStyle = getComputedStyle(record);
+    const wordFits = (element: Element): boolean => {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        for (const match of (node.textContent ?? '').matchAll(/\S+/gu)) {
+          const range = document.createRange();
+          range.setStart(node, match.index);
+          range.setEnd(node, match.index + match[0].length);
+          if (range.getClientRects().length > 1) return false;
+        }
+      }
+      return true;
+    };
     return {
       tableDisplay: getComputedStyle(table).display,
       headPosition: getComputedStyle(head).position,
@@ -74,14 +89,21 @@ async function attemptLayout(page: Page): Promise<AttemptLayout> {
       fieldDisplays: fields.map((field) => getComputedStyle(field).display),
       labelDisplays: fields.map((field) => getComputedStyle(label(field)).display),
       fieldBoxes: fields.map(box),
+      recordInnerWidth:
+        record.clientWidth -
+        Number.parseFloat(recordStyle.paddingLeft) -
+        Number.parseFloat(recordStyle.paddingRight),
+      fieldContentOverflow: fields.map((field) => field.scrollHeight - field.clientHeight),
+      fieldMinimums: fields.map((field) => getComputedStyle(field).minInlineSize),
+      headerWordsFit: [...head.querySelectorAll('th')].every(wordFits),
       containerOverflow: container.scrollWidth - container.clientWidth,
       firstRecordOffset: box(record).y - box(table).y,
     };
   });
 }
 
-async function openAttempts(page: Page): Promise<void> {
-  await page.goto(ATTEMPTS_PATH);
+async function openAttempts(page: Page, locale: ShellLocale = 'en'): Promise<void> {
+  await page.goto(runDetailPath({ locale, attempts: 'ok', revisions: 'ok' }));
   await expect(page.locator('app-run-detail-page')).toHaveAttribute(
     'data-run-detail-status',
     'ready',
@@ -91,11 +113,13 @@ async function openAttempts(page: Page): Promise<void> {
   );
 }
 
-for (const width of WIDTHS) {
-  test(`attempts table layout at ${width}px`, async ({ page }) => {
+for (const { width, locale } of WIDTHS.flatMap((width) =>
+  (['en', 'vi'] as const).map((locale) => ({ width, locale })),
+)) {
+  test(`attempts table layout at ${width}px (${locale})`, async ({ page }) => {
     await seedStoredTheme(page, 'light');
     await page.setViewportSize({ width, height: 900 });
-    await openAttempts(page);
+    await openAttempts(page, locale);
     const layout = await attemptLayout(page);
     expect(layout.fieldDisplays).toHaveLength(5);
     expect(layout.labelDisplays).toHaveLength(5);
@@ -115,6 +139,21 @@ for (const width of WIDTHS) {
       expect.soft(layout.firstRecordOffset, JSON.stringify(layout)).toBeLessThanOrEqual(2);
       expect.soft(distinct(layout.fieldBoxes.map((field) => field.x))).toBe(1);
       expect.soft(distinct(layout.fieldBoxes.map((field) => field.y))).toBe(5);
+      expect.soft(layout.fieldMinimums).toEqual(Array(5).fill('0px'));
+      for (const field of layout.fieldBoxes) {
+        expect
+          .soft(Math.abs(field.width - layout.recordInnerWidth), JSON.stringify(layout))
+          .toBeLessThanOrEqual(1);
+      }
+      for (const overflow of layout.fieldContentOverflow) {
+        expect.soft(overflow, JSON.stringify(layout)).toBeLessThanOrEqual(1);
+      }
+      for (let index = 1; index < layout.fieldBoxes.length; index++) {
+        const previous = layout.fieldBoxes[index - 1]!;
+        expect
+          .soft(previous.y + previous.height)
+          .toBeLessThanOrEqual(layout.fieldBoxes[index]!.y + 1);
+      }
     } else {
       expect.soft(layout.tableDisplay).toBe('table');
       expect.soft(layout.headPosition).toBe('static');
@@ -126,6 +165,7 @@ for (const width of WIDTHS) {
       expect.soft(layout.firstRecordOffset, JSON.stringify(layout)).toBeGreaterThan(2);
       expect.soft(distinct(layout.fieldBoxes.map((field) => field.y))).toBe(1);
       expect.soft(distinct(layout.fieldBoxes.map((field) => field.x))).toBe(5);
+      expect.soft(layout.headerWordsFit, JSON.stringify(layout)).toBe(true);
     }
   });
 }

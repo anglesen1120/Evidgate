@@ -1,4 +1,4 @@
-import { formatNumber, NgTemplateOutlet } from '@angular/common';
+import { formatNumber } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -32,7 +32,6 @@ const VISIBLE_ROW_LIMIT = 25;
   selector: 'app-audit-page',
   imports: [
     FormsModule,
-    NgTemplateOutlet,
     HlmAlertImports,
     HlmButton,
     HlmCardImports,
@@ -116,6 +115,7 @@ export class AuditPage {
   private readonly locale = inject(LOCALE_ID);
   protected readonly copy = {
     title: $localize`:@@settings.audit.title:Audit log`,
+    loading: $localize`:@@settings.audit.loading:Loading audit activity…`,
     description: $localize`:@@settings.audit.description:Review organization activity and support access. Audit records cannot be edited here.`,
     filters: $localize`:@@settings.audit.filters:Filter activity`,
     actorType: $localize`:@@settings.audit.actor-type:Actor type`,

@@ -371,7 +371,7 @@ describe('AuditExportComponent', () => {
       const times = root.querySelectorAll('time');
       expect([...times].map((time) => time.getAttribute('datetime'))).toEqual([from, to]);
       expect(times).toHaveLength(2);
-      expect(times[0]?.textContent).toContain(locale === 'vi' ? '20 thg 10' : 'Oct 20, 2026');
+      expect(times[0]?.textContent).toContain(locale === 'vi' ? '20/10/2026' : '10/20/2026');
       expect(times[0]?.textContent).toContain('UTC');
       expect(root.textContent).toContain('From (inclusive');
       expect(root.textContent).toContain('To (exclusive');

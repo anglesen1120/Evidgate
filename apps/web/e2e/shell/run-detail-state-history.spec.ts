@@ -58,7 +58,7 @@ test('a served history dates its recorded steps and shows no unknown-history not
 
   // The app's date pipe formats the wire value; the raw ISO string would mean a second format.
   await expect(times.first()).not.toHaveText(SERVED_TIMES[0]);
-  await expect(times.first()).toContainText('Nov 7, 2026');
+  await expect(times.first()).toHaveText('11/7/2026, 8:10:00\u202fAM UTC');
 });
 
 test('an unknown history says so and dates no step', async ({ page }) => {

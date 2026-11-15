@@ -84,7 +84,7 @@ describe('RetentionFormComponent presentation safeguards', () => {
     h.desktop.set(false);
     confirm.click();
     await h.settle();
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
     h.http.expectNone((request) => request.method === 'PUT');
     h.desktop.set(true);
     await h.settle();

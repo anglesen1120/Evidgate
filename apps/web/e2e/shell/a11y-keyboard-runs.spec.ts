@@ -409,7 +409,7 @@ test('Load more appends the next page and leaves focus on the row it appended', 
   const appended = rows.nth(FULL_PAGE_ROWS);
   await expect(appended).toHaveAttribute('data-row-id', runListPage2.body.items[0]!.run_id);
   const appendedLink = appended.locator('a');
-  await expect(appendedLink).toBeFocused();
+  await expect(appendedLink, JSON.stringify(await activeElement(page))).toBeFocused();
   await auditRunTabStops(page.locator('app-run-list-page'), 'load-more/appended');
   expect((await activeElement(page)).tag).toBe('a');
   for (const control of await appended.locator('button, [tabindex="0"]').all()) {
@@ -427,4 +427,24 @@ test('Load more appends the next page and leaves focus on the row it appended', 
   await page.keyboard.press('Tab');
   await expect(rows.nth(FULL_PAGE_ROWS + 1).locator('a')).toBeFocused();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+test('Load more preserves appended-row focus in fitted tablet records', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 900 });
+  await page.goto(listAddress('?fixture.variant.listRuns=page-1-full&fixture.latency=1000'));
+  await listIsReady(page);
+  const rows = page.locator(RUN_RECORDS);
+  await expect(rows).toHaveCount(FULL_PAGE_ROWS);
+  await expect(page.locator('app-run-list-table .eg-table-narrow')).toHaveCount(1);
+  const loadMore = page.locator('[data-run-load-more]');
+  await loadMore.focus();
+  await page.keyboard.press('Enter');
+  await expect(loadMore).toBeFocused();
+  await expect(rows).toHaveCount(FULL_PAGE_ROWS + runListPage2.body.items.length);
+  await expect(loadMore).toHaveCount(0);
+  const appended = rows.nth(FULL_PAGE_ROWS);
+  await expect(appended).toHaveJSProperty('tagName', 'LI');
+  await expect(appended).toHaveAttribute('data-row-id', runListPage2.body.items[0]!.run_id);
+  await expect(appended.locator('a'), JSON.stringify(await activeElement(page))).toBeFocused();
+  await expect(page.locator('app-run-list-table .eg-table-narrow')).toHaveCount(1);
 });

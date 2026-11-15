@@ -1,9 +1,19 @@
+import { FormatWidth, getLocaleTimeFormat } from '@angular/common';
+
 const VI_LOCALE = /^vi(?:[-_]|$)/i;
 
-/** Keep short dates unambiguous while retaining the existing locale order and clock. */
-export function shortDateFormat(locale: string, dateTime = false): string {
-  if (VI_LOCALE.test(locale)) {
-    return dateTime ? 'HH:mm dd/MM/yyyy' : 'dd/MM/yyyy';
-  }
-  return dateTime ? 'M/d/yyyy, h:mm\u202fa' : 'M/d/yyyy';
+/** Share one calendar policy while retaining each surface's existing clock precision. */
+export function shortDateFormat(
+  locale: string,
+  dateTime = false,
+  clock: 'short' | 'medium' | '24h' = 'short',
+): string {
+  const vietnamese = VI_LOCALE.test(locale);
+  const date = vietnamese ? 'dd/MM/yyyy' : 'M/d/yyyy';
+  if (!dateTime) return date;
+  const time =
+    clock === '24h'
+      ? 'HH:mm:ss'
+      : getLocaleTimeFormat(locale, clock === 'medium' ? FormatWidth.Medium : FormatWidth.Short);
+  return vietnamese ? `${time} ${date}` : `${date}, ${time}`;
 }

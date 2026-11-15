@@ -51,7 +51,7 @@ const summaryCards = [0, 1, 2, 3] as const;
         @if (label(); as suppliedLabel) {
           {{ suppliedLabel }}
         } @else {
-          <span i18n="@@shared.states.loading.label">Loading evidence</span>
+          <span i18n="@@shared.states.loading.label">Loading…</span>
         }
       </h2>
       @if (layout() === 'form') {

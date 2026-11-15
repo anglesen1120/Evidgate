@@ -1,4 +1,6 @@
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeVi from '@angular/common/locales/vi';
+import { LOCALE_ID, provideZonelessChangeDetection, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import type { PolicyActivationStateDto } from '@evidgate/sdk';
 
@@ -8,6 +10,8 @@ import { SessionStore } from '../../../core/session/session.store';
 import { OnboardingViewport } from '../onboarding-viewport.testing';
 import { EnableCollectionPage } from './enable-collection.page';
 import { requiredElement } from './step-controls.testing';
+
+registerLocaleData(localeVi);
 
 const ACTIVATION: PolicyActivationStateDto = {
   project_id: 'project-1',
@@ -31,7 +35,7 @@ function unreadable(): ApiRequestError {
   });
 }
 
-describe('EnableCollectionPage Helm controls', () => {
+describe.each(['en-US', 'vi'])('EnableCollectionPage Helm controls (%s)', (locale) => {
   let fixture: ComponentFixture<EnableCollectionPage>;
   let root: HTMLElement;
   let viewport: OnboardingViewport;
@@ -48,6 +52,7 @@ describe('EnableCollectionPage Helm controls', () => {
       imports: [EnableCollectionPage],
       providers: [
         provideZonelessChangeDetection(),
+        { provide: LOCALE_ID, useValue: locale },
         viewport.provider,
         {
           provide: OnboardingDataService,
@@ -136,6 +141,11 @@ describe('EnableCollectionPage Helm controls', () => {
     expect(status.textContent?.trim()).toBe('');
     expect(status.classList).toContain('sr-only');
     expect(root.querySelector('[data-testid="enable-collection-confirm"]')).toBeNull();
+    const time = enabled.querySelector('time');
+    expect(time?.getAttribute('datetime')).toBe(ACTIVATION.activated_at);
+    expect(time?.textContent).toBe(
+      locale === 'vi' ? '01:00:00 27/10/2026' : '10/27/2026, 1:00:00\u202fAM',
+    );
     expect(root.textContent).not.toMatch(/\bPASS\b|\bFAIL\b/);
   });
 

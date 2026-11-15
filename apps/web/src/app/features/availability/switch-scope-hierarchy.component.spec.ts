@@ -1,4 +1,3 @@
-import { formatDate } from '@angular/common';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
@@ -64,9 +63,7 @@ describe('SwitchScopeHierarchy', () => {
     const { fixture, root } = mount(resolution({ tenant: switchRow('tenant', 'shadow', { at }) }));
     await fixture.whenStable();
     const time = root.querySelector(`time[datetime="${at}"]`);
-    expect(time?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-      `${formatDate(at, 'medium', 'en-US', 'UTC')} UTC`.replace(/\s+/g, ' '),
-    );
+    expect(time?.textContent?.replace(/\s+/g, ' ').trim()).toBe('11/14/2026, 7:30:00 AM UTC');
   });
 
   it('does not turn a malformed instant into a local time or invented date', async () => {

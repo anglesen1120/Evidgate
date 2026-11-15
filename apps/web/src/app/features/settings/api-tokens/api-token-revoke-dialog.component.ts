@@ -27,6 +27,7 @@ import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-
   template: `
     <hlm-dialog
       [state]="opened() ? 'open' : 'closed'"
+      [role]="'alertdialog'"
       [closeOnOutsidePointerEvents]="false"
       [disableClose]="true"
       [restoreFocus]="false"

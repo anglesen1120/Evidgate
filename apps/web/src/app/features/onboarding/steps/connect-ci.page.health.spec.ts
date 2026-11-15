@@ -1,4 +1,7 @@
-import type { ComponentFixture } from '@angular/core/testing';
+import { registerLocaleData } from '@angular/common';
+import localeVi from '@angular/common/locales/vi';
+import { LOCALE_ID } from '@angular/core';
+import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import type { IngestTokenView } from '@evidgate/sdk';
 
 import type { RevealSlot } from '../../../shared/ui/reveal/one-time-reveal.slot';
@@ -11,7 +14,9 @@ import {
   createConnectionPageContext,
 } from './connect-ci.page.test-support';
 
-describe('ConnectCiPage health and CLI composition', () => {
+registerLocaleData(localeVi);
+
+describe.each(['en-US', 'vi'])('ConnectCiPage health and CLI composition (%s)', (locale) => {
   const context = createConnectionPageContext();
   const {
     bindings,
@@ -29,6 +34,7 @@ describe('ConnectCiPage health and CLI composition', () => {
   let slot: RevealSlot;
 
   beforeEach(async () => {
+    TestBed.configureTestingModule({ providers: [{ provide: LOCALE_ID, useValue: locale }] });
     await context.mount();
     fixture = context.fixture;
     root = context.root;
@@ -53,6 +59,16 @@ describe('ConnectCiPage health and CLI composition', () => {
     expect(createCiBinding).not.toHaveBeenCalled();
     expect(createIngestToken).not.toHaveBeenCalled();
     expect(rotateIngestToken).not.toHaveBeenCalled();
+  });
+
+  it('renders credential creation through the shared calendar with seconds and raw provenance', async () => {
+    const supplied = '2026-01-01T00:15:04+07:00';
+    bindings.set([{ ...BINDING, created_at: supplied }]);
+    await fixture.whenStable();
+    const time = root.querySelector(`time[datetime="${supplied}"]`);
+    expect(time?.textContent).toBe(
+      locale === 'vi' ? '17:15:04 31/12/2025' : '12/31/2025, 5:15:04\u202fPM',
+    );
   });
 
   it('prefers an active usable token over an earlier rotating token, then falls back to rotating', async () => {

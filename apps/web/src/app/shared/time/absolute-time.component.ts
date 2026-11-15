@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 
 import { rfc3339InstantMs } from './rfc3339-instant';
+import { shortDateFormat } from './short-date-format';
 
 @Component({
   selector: 'app-absolute-time',
@@ -32,12 +33,13 @@ import { rfc3339InstantMs } from './rfc3339-instant';
 export class AbsoluteTimeComponent {
   readonly value = input.required<string | null | undefined>();
   private readonly locale = inject(LOCALE_ID);
+  private readonly dateTimeFormat = shortDateFormat(this.locale, true, 'medium');
   protected readonly utcLabel = $localize`:@@shared.values.utc:UTC`;
   protected readonly unavailable = $localize`:@@shared.values.time-unavailable:Time unavailable`;
   protected readonly display = computed(() => {
     const raw = this.value();
     if (typeof raw !== 'string') return null;
     const instant = rfc3339InstantMs(raw);
-    return instant === null ? null : formatDate(instant, 'medium', this.locale, 'UTC');
+    return instant === null ? null : formatDate(instant, this.dateTimeFormat, this.locale, 'UTC');
   });
 }

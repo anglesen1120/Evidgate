@@ -48,7 +48,7 @@ describe('RetentionFormComponent', () => {
       expect(link).not.toBeNull();
       link?.click();
       expect(document.activeElement).toBe(h.root.querySelector(`#${field}`));
-      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      expect(document.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
       h.http.expectNone((request) => request.method === 'PUT');
     },
   );
@@ -63,7 +63,7 @@ describe('RetentionFormComponent', () => {
       artifact_days: 150,
       metadata_days: 200,
     });
-    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"], [role="alertdialog"]')).toBeNull();
     flush(request, { artifact_days: 150, metadata_days: 200 });
     await h.settle();
     expect(h.root.querySelector('[data-retention-saved]')).not.toBeNull();
@@ -81,7 +81,11 @@ describe('RetentionFormComponent', () => {
       await h.edit(artifact, metadata);
       submit(h.root);
       await h.settle();
-      const dialog = document.querySelector('[role="dialog"]');
+      const dialog = document.querySelector('[role="alertdialog"]');
+      expect(document.querySelector('[role="dialog"]')).toBeNull();
+      await vi.waitFor(() =>
+        expect(document.activeElement).toBe(dialogButton('[data-retention-cancel]')),
+      );
       expect(dialog?.textContent).toContain('Review deletion impact');
       expect(dialog?.querySelector(`[data-retention-impact="${field}"]`)).not.toBeNull();
       expect(dialog?.textContent).toContain('eligible for deletion');
@@ -107,6 +111,31 @@ describe('RetentionFormComponent', () => {
     await h.settle();
     dialogButton('[data-retention-cancel]').click();
     await h.settle();
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(h.root.querySelector('[data-retention-save]')),
+    );
+    expect(h.store.policy()).toEqual(STORED);
+    expect(await (await (await h.harness()).artifact()).getProperty('value')).toBe('7');
+    expect(await (await (await h.harness()).metadata()).getProperty('value')).toBe('60');
+    h.http.expectNone((request) => request.method === 'PUT');
+  });
+
+  it('Escape dismisses the alertdialog and restores Save focus without sending the lowering draft', async () => {
+    const h = mountRetention();
+    await h.load();
+    await h.edit('7', '60');
+    submit(h.root);
+    await h.settle();
+    const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]');
+    if (!dialog) throw new Error('Expected the deletion-impact alertdialog');
+    dialog.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+    await h.settle();
+    await vi.waitFor(() => {
+      expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+      expect(document.activeElement).toBe(h.root.querySelector('[data-retention-save]'));
+    });
     expect(h.store.policy()).toEqual(STORED);
     expect(await (await (await h.harness()).artifact()).getProperty('value')).toBe('7');
     expect(await (await (await h.harness()).metadata()).getProperty('value')).toBe('60');

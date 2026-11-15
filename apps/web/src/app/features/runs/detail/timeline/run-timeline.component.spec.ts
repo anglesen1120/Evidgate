@@ -199,9 +199,9 @@ describe('RunTimelineComponent', () => {
       history.map((transition) => transition.occurred_at),
     );
     expect(times.map((time) => time.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
-      'Nov 7, 2026, 10:00:00 AM UTC',
-      'Nov 7, 2026, 10:01:00 AM UTC',
-      'Nov 7, 2026, 10:02:00 AM UTC',
+      '11/7/2026, 10:00:00 AM UTC',
+      '11/7/2026, 10:01:00 AM UTC',
+      '11/7/2026, 10:02:00 AM UTC',
     ]);
     expect(root.querySelector('[data-step="created"] time')).toBeNull();
     expect(root.querySelector('[data-step="queued"] time')).toBeNull();

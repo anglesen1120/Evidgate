@@ -1,6 +1,8 @@
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
+import { HlmIcon } from '@evidgate/ui/icon';
 import type { Mock } from 'vitest';
 
 import { CopyValueButtonComponent } from './copy-value-button.component';
@@ -55,6 +57,41 @@ describe('CopyValueButtonComponent', () => {
     expect(button.getAttribute('data-copy-size')).toBe('lg');
     expect(getComputedStyle(button).minBlockSize).toBe('var(--eg-control-touch)');
     expect(getComputedStyle(button).minInlineSize).toBe('var(--eg-control-touch)');
+  });
+
+  it('keeps an icon action named, hinted and focusable while announcing its result', async () => {
+    fixture.componentRef.setInput('iconOnly', true);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const button = root.querySelector<HTMLButtonElement>('button')!;
+    const icon = fixture.debugElement.query(By.directive(HlmIcon)).componentInstance as HlmIcon;
+    expect(await harness.actionName()).toBe('Copy Policy hash');
+    expect(button.title).toBe('Copy Policy hash');
+    expect(button.tabIndex).toBe(0);
+    expect(button.classList.contains('spartan-button')).toBe(true);
+    expect(getComputedStyle(button).minBlockSize).toBe('var(--eg-control-sm)');
+    expect(getComputedStyle(button).inlineSize).toBe('var(--eg-control-sm)');
+    expect(root.classList.contains('icon-only')).toBe(true);
+    expect(root.querySelector('hlm-icon')?.getAttribute('aria-hidden')).toBe('true');
+    expect(icon.name()).toBe('lucideCopy');
+    await harness.copy();
+    expect(writeText).toHaveBeenCalledExactlyOnceWith(original);
+    expect(await harness.result()).toBe('Policy hash copied.');
+    expect(icon.name()).toBe('lucideCheck');
+  });
+
+  it('keeps the large minimum target and a visible error icon in icon-only mode', async () => {
+    fixture.componentRef.setInput('iconOnly', true);
+    fixture.componentRef.setInput('size', 'lg');
+    writeText.mockRejectedValueOnce(new Error('Denied'));
+    await harness.copy();
+    const button = (fixture.nativeElement as HTMLElement).querySelector('button')!;
+    const icon = fixture.debugElement.query(By.directive(HlmIcon)).componentInstance as HlmIcon;
+    expect(getComputedStyle(button).minBlockSize).toBe('var(--eg-control-touch)');
+    expect(getComputedStyle(button).minInlineSize).toBe('var(--eg-control-touch)');
+    expect(icon.name()).toBe('lucideOctagonX');
+    expect(button.title).toBe('Copy Policy hash');
+    expect(await harness.result()).toContain('Could not copy Policy hash.');
   });
 
   it('names the action, copies the unmodified value and announces its context', async () => {

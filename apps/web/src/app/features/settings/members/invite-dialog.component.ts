@@ -19,6 +19,13 @@ import {
 } from '@angular/core';
 import { createIntent, type Intent } from '../../../core/http/intent';
 import { SessionStore } from '../../../core/session/session.store';
+import {
+  createFormFeedback,
+  FieldFeedbackComponent,
+  FormErrorSummaryComponent,
+  FormRequiredNoteComponent,
+  type FieldFeedback,
+} from '../../../shared/forms';
 import { RetryAfterComponent } from '../../../shared/ui/conflict/retry-after.component';
 import { NarrowMutationPolicy } from '../../../shared/ui/narrow/narrow-mutation-policy';
 import { MembersStore } from './members.store';
@@ -39,6 +46,9 @@ import { InviteRevealComponent } from './invite-reveal.component';
     RoleScopePreviewComponent,
     RetryAfterComponent,
     InviteRevealComponent,
+    FieldFeedbackComponent,
+    FormErrorSummaryComponent,
+    FormRequiredNoteComponent,
   ],
   providers: [RevealSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -62,11 +72,16 @@ import { InviteRevealComponent } from './invite-reveal.component';
         @if (revealing()) {
           <app-invite-reveal (dismissed)="close()" />
         } @else {
-          <form #form (submit)="submit($event, form)">
+          <form novalidate (submit)="submit($event)">
             <header hlmDialogHeader>
               <h2 hlmDialogTitle id="members-invite-title">{{ copy.invite }}</h2>
             </header>
             <div class="dialog-body grid min-w-0 gap-3 text-sm" [attr.aria-busy]="busy()">
+              <app-form-error-summary
+                [summaryId]="'members-invite-validation-summary'"
+                [feedback]="feedback"
+              />
+              <app-form-required-note />
               <label hlmLabel for="members-invite-email">{{ copy.email }}</label>
               <input
                 hlmInput
@@ -79,9 +94,13 @@ import { InviteRevealComponent } from './invite-reveal.component';
                 autocomplete="email"
                 [value]="email()"
                 [disabled]="locked()"
-                [aria-describedby]="store.inviteState().error ? 'members-invite-error' : null"
+                [aria-describedby]="emailDescribedBy()"
+                [attr.aria-invalid]="emailField.ariaInvalid()"
+                [forceInvalid]="emailField.invalid()"
+                (blur)="emailField.blur()"
                 (input)="updateEmail($event)"
               />
+              <app-field-feedback [field]="emailField" />
               <fieldset
                 class="m-0 min-w-0 rounded-md border border-solid border-border p-2"
                 [disabled]="locked()"
@@ -142,7 +161,7 @@ import { InviteRevealComponent } from './invite-reveal.component';
                     [busy]="busy()"
                     [code]="error.code"
                     [requestId]="error.requestId"
-                    (retry)="submit($event, form)"
+                    (retry)="submit($event)"
                   />
                 }
               }
@@ -204,6 +223,19 @@ export class InviteDialogComponent {
     read: ElementRef,
   });
   private readonly emailInput = viewChild<ElementRef<HTMLInputElement>>('emailInput');
+  protected readonly feedback = createFormFeedback([
+    {
+      id: 'members-invite-email',
+      label: this.copy.email,
+      error: () => this.emailCorrection(),
+    },
+  ]);
+  protected readonly emailField = this.requireEmailField();
+  protected readonly emailDescribedBy = computed(() => {
+    const feedbackId = this.emailField.describedBy();
+    const refusalId = this.store.inviteState().error ? 'members-invite-error' : null;
+    return feedbackId && refusalId ? `${feedbackId} ${refusalId}` : (feedbackId ?? refusalId);
+  });
   private opener: HTMLElement | null = null;
   private intent: Intent | null = null;
   private generation = 0;
@@ -242,6 +274,7 @@ export class InviteDialogComponent {
     this.opener = opener;
     this.intent = null;
     this.email.set('');
+    this.feedback.reset();
     this.selected.set(new Set());
     this.previewId.set('');
     this.store.resetMutations();
@@ -293,7 +326,21 @@ export class InviteDialogComponent {
     this.intent = null;
     this.store.resetMutations();
   }
-  protected async submit(event: Event | void, form: HTMLFormElement): Promise<void> {
+  private requireEmailField(): FieldFeedback {
+    const field = this.feedback.fields[0];
+    if (!field) throw new Error('Missing invitation email feedback');
+    return field;
+  }
+
+  private emailCorrection(): string | null {
+    const email = this.email();
+    if (!email.trim()) return this.copy.emailRequired;
+    if (email.length > 320) return this.copy.emailTooLong;
+    const input = this.emailInput()?.nativeElement;
+    return !input || input.validity.typeMismatch ? this.copy.emailInvalid : null;
+  }
+
+  protected async submit(event: Event | void): Promise<void> {
     event?.preventDefault();
     if (
       !this.opened() ||
@@ -302,10 +349,10 @@ export class InviteDialogComponent {
       this.busy() ||
       !this.retryReady() ||
       (!!this.store.inviteState().error && !this.store.inviteState().error?.retryable) ||
-      !this.session.has('membership:write') ||
-      !form.reportValidity()
+      !this.session.has('membership:write')
     )
       return;
+    if (!this.feedback.submit()) return;
     this.intent ??= createIntent();
     const generation = this.generation;
     this.inFlight.set(true);

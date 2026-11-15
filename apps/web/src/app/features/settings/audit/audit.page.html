@@ -171,6 +171,7 @@
 }
 <app-request-state
   [status]="status()"
+  [loadingLabel]="copy.loading"
   [error]="store.loadError()"
   [empty]="store.rows().length === 0"
   [emptyTitle]="filtered() ? copy.noMatchTitle : copy.emptyTitle"
@@ -181,7 +182,6 @@
   (retry)="reload()"
 >
   <section class="grid min-w-0 gap-3" [attr.aria-busy]="store.paging()">
-    <ng-container [ngTemplateOutlet]="pagination" />
     <app-audit-table [rows]="visibleRows()" />
     @if (pagingAlert(); as failure) {
       <div
@@ -215,46 +215,43 @@
     @if (store.browseCapped()) {
       <p role="status" data-audit-browse-capped>{{ browseCappedText(store.rows().length) }}</p>
     }
-    <ng-container [ngTemplateOutlet]="pagination" />
-    <ng-template #pagination>
-      <p data-audit-row-range>{{ rowRange() }}</p>
-      <nav class="flex flex-wrap gap-3" [attr.aria-label]="copy.pagination">
+    <p data-audit-row-range>{{ rowRange() }}</p>
+    <nav class="flex flex-wrap gap-3" [attr.aria-label]="copy.pagination">
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        class="min-h-[var(--eg-control-touch)] whitespace-normal"
+        type="button"
+        data-audit-previous
+        [disabled]="offset() === 0 || store.paging()"
+        (click)="previous()"
+      >
+        {{ copy.previous }}
+      </button>
+      <button
+        hlmBtn
+        [variant]="'outline'"
+        class="min-h-[var(--eg-control-touch)] whitespace-normal"
+        type="button"
+        data-audit-next
+        [disabled]="!nextWindow() || store.paging()"
+        (click)="next()"
+      >
+        {{ copy.next }}
+      </button>
+      @if (store.hasMore()) {
         <button
           hlmBtn
           [variant]="'outline'"
           class="min-h-[var(--eg-control-touch)] whitespace-normal"
           type="button"
-          data-audit-previous
-          [disabled]="offset() === 0 || store.paging()"
-          (click)="previous()"
+          data-audit-load-more
+          [disabled]="store.paging()"
+          (click)="loadMore()"
         >
-          {{ copy.previous }}
+          {{ copy.loadMore }}
         </button>
-        <button
-          hlmBtn
-          [variant]="'outline'"
-          class="min-h-[var(--eg-control-touch)] whitespace-normal"
-          type="button"
-          data-audit-next
-          [disabled]="!nextWindow() || store.paging()"
-          (click)="next()"
-        >
-          {{ copy.next }}
-        </button>
-        @if (store.hasMore()) {
-          <button
-            hlmBtn
-            [variant]="'outline'"
-            class="min-h-[var(--eg-control-touch)] whitespace-normal"
-            type="button"
-            data-audit-load-more
-            [disabled]="store.paging()"
-            (click)="loadMore()"
-          >
-            {{ copy.loadMore }}
-          </button>
-        }
-      </nav>
-    </ng-template>
+      }
+    </nav>
   </section>
 </app-request-state>

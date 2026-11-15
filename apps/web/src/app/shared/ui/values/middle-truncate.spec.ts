@@ -1,4 +1,4 @@
-import { middleTruncate } from './middle-truncate';
+import { middleTruncate, middleTruncateParts } from './middle-truncate';
 
 describe('middleTruncate', () => {
   it.each(['', 'short-id', 'a'.repeat(32)])('keeps a complete short value: %j', (value) => {
@@ -24,5 +24,23 @@ describe('middleTruncate', () => {
   it('uses a safe default for non-finite budgets and floors fractional budgets', () => {
     expect(middleTruncate('abcdef', Number.NaN)).toBe('abcdef');
     expect(middleTruncate('abcdef', 4.9)).toBe('ab…f');
+  });
+
+  it('exposes intact short content without treating an existing ellipsis as a split', () => {
+    expect(middleTruncateParts('short…id', 16)).toEqual({
+      leading: 'short…id',
+      trailing: '',
+    });
+  });
+
+  it('provides separate head and tail regions for compact clipping', () => {
+    expect(middleTruncateParts('0198a000-0000-7000-8000-00000000d001', 16)).toEqual({
+      leading: '0198a000',
+      trailing: '000d001',
+    });
+    expect(middleTruncateParts('a👩‍💻b👩‍💻c👩‍💻d', 5)).toEqual({
+      leading: 'a👩‍💻',
+      trailing: '👩‍💻d',
+    });
   });
 });

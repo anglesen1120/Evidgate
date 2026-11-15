@@ -16,32 +16,52 @@ import {
   HlmDialogService,
   HlmDialogTitle,
 } from '@evidgate/ui/dialog';
+import { HlmIcon } from '@evidgate/ui/icon';
 import type { BrnDialogRef } from '@spartan-ng/brain/dialog';
 
 import { CopyValueButtonComponent, type CopyValueButtonSize } from './copy-value-button.component';
-import { middleTruncate } from './middle-truncate';
+import { middleTruncate, middleTruncateParts } from './middle-truncate';
 import { escapeFormatChars } from './ref-name-display';
 
 @Component({
   selector: 'app-copyable-identifier',
-  imports: [HlmButton, HlmDialogClose, HlmDialogFooter, HlmDialogTitle, CopyValueButtonComponent],
+  imports: [
+    HlmButton,
+    HlmDialogClose,
+    HlmDialogFooter,
+    HlmDialogTitle,
+    HlmIcon,
+    CopyValueButtonComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="identifier">
+    <div class="identifier" [class.compact]="compact()">
       <code
-        [class.preview]="truncate()"
-        [class.full-value]="!truncate()"
-        [attr.aria-hidden]="truncate() ? 'true' : null"
+        [class.preview]="showPreview()"
+        [class.full-value]="!showPreview()"
+        [attr.aria-hidden]="showPreview() ? 'true' : null"
       >
-        <bdi [textContent]="preview()"></bdi>
+        @if (compact()) {
+          <bdi class="compact-value" [class.compact-elided]="compactParts().trailing !== ''">
+            <span class="compact-head" [textContent]="compactParts().leading"></span>
+            @if (compactParts().trailing) {
+              <span>…</span>
+              <span class="compact-tail"
+                ><span [textContent]="compactParts().trailing"></span
+              ></span>
+            }
+          </bdi>
+        } @else {
+          <bdi [textContent]="preview()"></bdi>
+        }
       </code>
-      @if (truncate()) {
+      @if (showPreview()) {
         <span class="sr-only identifier-accessible">
           <bdi [textContent]="accessibleValue()"></bdi>
         </span>
       }
       <span class="actions">
-        @if (truncate()) {
+        @if (showPreview()) {
           <button
             hlmBtn
             type="button"
@@ -49,12 +69,23 @@ import { escapeFormatChars } from './ref-name-display';
             [variant]="'ghost'"
             [size]="'sm'"
             [attr.aria-label]="showLabel()"
+            [attr.title]="compact() ? showLabel() : null"
+            [class.icon-action]="compact()"
             (click)="showFull()"
           >
-            {{ showText }}
+            @if (compact()) {
+              <hlm-icon class="action-icon" [name]="'lucideMaximize2'" />
+            } @else {
+              {{ showText }}
+            }
           </button>
         }
-        <app-copy-value-button [value]="value()" [label]="label()" [size]="copySize()" />
+        <app-copy-value-button
+          [value]="value()"
+          [label]="label()"
+          [size]="copySize()"
+          [iconOnly]="compact()"
+        />
       </span>
     </div>
     <ng-template #fullValue>
@@ -82,6 +113,47 @@ import { escapeFormatChars } from './ref-name-display';
     }
     .identifier {
       flex-wrap: wrap;
+    }
+    .identifier.compact,
+    .compact .actions {
+      flex-wrap: nowrap;
+    }
+    .compact .actions {
+      flex: none;
+    }
+    .compact .preview {
+      text-overflow: clip;
+    }
+    .compact-value {
+      display: block;
+      max-inline-size: 16ch;
+      overflow: hidden;
+    }
+    .compact-elided {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    }
+    .compact-head,
+    .compact-tail {
+      min-inline-size: 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .compact-tail {
+      display: flex;
+      justify-content: flex-end;
+    }
+    .compact-tail > span {
+      flex: none;
+    }
+    .icon-action {
+      inline-size: var(--eg-control-sm);
+      padding: var(--eg-space-2);
+      white-space: nowrap;
+    }
+    .action-icon {
+      inline-size: var(--eg-space-5);
+      block-size: var(--eg-space-5);
     }
     .actions {
       flex: 0 1 auto;
@@ -135,6 +207,9 @@ export class CopyableIdentifierComponent {
   readonly value = input.required<string>();
   readonly label = input.required<string>();
   readonly truncate = input(true);
+  /** Compact scan rows recover the full value in the dialog instead of expanding. */
+  readonly compact = input(false);
+  protected readonly showPreview = computed(() => this.compact() || this.truncate());
   /** Applies the copy target size in both the scan row and its full-value dialog. */
   readonly copySize = input<CopyValueButtonSize>('sm');
   private readonly fullValue = viewChild.required<TemplateRef<unknown>>('fullValue');
@@ -143,6 +218,7 @@ export class CopyableIdentifierComponent {
   protected readonly showText = $localize`:@@shared.values.show-full:Show full`;
   protected readonly closeText = $localize`:@@shared.values.close:Close`;
   protected readonly displayValue = computed(() => escapeFormatChars(this.value()));
+  protected readonly compactParts = computed(() => middleTruncateParts(this.displayValue(), 16));
   protected readonly preview = computed(() =>
     this.truncate() ? middleTruncate(this.displayValue()) : this.displayValue(),
   );

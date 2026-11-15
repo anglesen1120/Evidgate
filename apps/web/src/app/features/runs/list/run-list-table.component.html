@@ -1,8 +1,14 @@
 <p class="eg-type-caption m-0 mb-(--eg-space-3)" data-run-evidence-hint>{{ copy.evidenceHint }}</p>
-<app-data-table [columns]="columns()" [rows]="rows()" [rowId]="rowId" [caption]="copy.caption" />
+<app-data-table
+  [columns]="columns()"
+  [rows]="rows()"
+  [rowId]="rowId"
+  [caption]="copy.caption"
+  [fitToContainer]="true"
+/>
 
 <ng-template #identityCell let-row let-stacked="stacked">
-  @let visibleId = stacked ? row.run_id : preview(row.run_id);
+  @let visibleId = stacked ? row.run_id : preview(row.run_id, identifierPreviewLength);
   <div
     class="identifier grid gap-(--eg-space-2)"
     [class.min-w-max]="!stacked"
