@@ -24,9 +24,9 @@ const OLDEST_REVISION = REVISIONS[2]!;
 
 const REVISION_TIMESTAMPS: Record<ShellLocale, Readonly<Record<number, string>>> = {
   en: {
-    1: '10/31/26, 8:00\u202fAM',
-    2: '10/31/26, 9:12\u202fAM',
-    3: '10/31/26, 10:30\u202fAM',
+    1: '10/31/2026, 8:00\u202fAM',
+    2: '10/31/2026, 9:12\u202fAM',
+    3: '10/31/2026, 10:30\u202fAM',
   },
   vi: {
     1: '08:00 31/10/2026',

@@ -53,7 +53,7 @@ describe('EvidenceRevisionSelectorComponent', () => {
     expect(await trigger.getAttribute('aria-describedby')).toBe('evidence-pin-help');
     expect(await trigger.getAttribute('aria-expanded')).toBe('false');
     expect(root.querySelector('label')?.getAttribute('for')).toBe(await trigger.getAttribute('id'));
-    expect(await trigger.text()).toBe('Revision 3 · 5/1/26, 10:00\u202fAM UTC');
+    expect(await trigger.text()).toBe('Revision 3 · 5/1/2026, 10:00\u202fAM UTC');
     expect(root.querySelector('#evidence-pin-help')?.textContent).toContain('stays pinned');
   });
 
@@ -62,7 +62,10 @@ describe('EvidenceRevisionSelectorComponent', () => {
     ['vi-VN', '2026-01-02T03:04:05Z', '03:04 02/01/2026'],
     ['vi', '2026-12-31T23:59:59Z', '23:59 31/12/2026'],
     ['vi', '2027-01-01T00:00:00Z', '00:00 01/01/2027'],
-    ['en-US', '2026-01-02T03:04:05Z', '1/2/26, 3:04\u202fAM'],
+    ['en', '2026-01-02T03:04:05Z', '1/2/2026, 3:04\u202fAM'],
+    ['en-US', '2026-01-02T03:04:05Z', '1/2/2026, 3:04\u202fAM'],
+    ['en-US', '2026-12-31T23:59:59Z', '12/31/2026, 11:59\u202fPM'],
+    ['en-US', '2027-01-01T00:00:00Z', '1/1/2027, 12:00\u202fAM'],
   ])(
     'renders exact short dates for %s at %s in the pin and option',
     async (locale, at, dateTime) => {
