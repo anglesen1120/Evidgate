@@ -213,6 +213,7 @@ describe('DataTableComponent', () => {
   });
 
   it('R6: switches only above the 200-row threshold and respects an explicit threshold', async () => {
+    fixture.componentRef.setInput('columns', fixture.componentInstance.columns().slice(0, 1));
     fixture.componentRef.setInput('rows', dataTableFixtureRows(200));
     await fixture.whenStable();
     expect(root.querySelector('cdk-virtual-scroll-viewport')).toBeNull();
