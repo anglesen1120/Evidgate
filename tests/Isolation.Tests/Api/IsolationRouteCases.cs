@@ -162,7 +162,7 @@ public sealed record ListWalk(
 /// foreign request reaches tenancy and the handler instead of stopping at a 400/422 that could hide a leak;
 /// <see cref="ProbeExpect"/> statuses exclude 400/422 for every pair except <see cref="ProbeExpect.NotSuccess"/>.
 /// </remarks>
-public static class IsolationRouteCases
+public static partial class IsolationRouteCases
 {
     /// <summary>
     /// The 00 §9.2 <c>error.code</c> of the pre-tenant login routes' designed answers in this host
@@ -619,6 +619,8 @@ public static class IsolationRouteCases
                 new(HttpMethod.Delete, $"/v1/github/installations/{w.Acme2.InstallationId}"),
                 StatusCodes.Status204NoContent)),
         ]),
+
+        GitRepoBindingCase(),
 
         // ---- Audit (AuditEndpoints.cs:42-46) -------------------------------------------------------------------
         OrgCase("GET", "/v1/orgs/{o}/audit", o => new(HttpMethod.Get, $"/v1/orgs/{o}/audit")),
