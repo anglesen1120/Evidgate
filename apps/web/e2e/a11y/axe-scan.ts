@@ -59,6 +59,12 @@ async function waitForSettledComboboxes(page: Page): Promise<void> {
  */
 export async function axeScan(page: Page, context?: string): Promise<AxeResults> {
   await waitForSettledComboboxes(page);
+  // A prior click can leave unrelated controls partly under sticky chrome. Normalize the
+  // document viewport before measuring target geometry; do not exclude those controls.
+  await page.evaluate(async () => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  });
   await page.addScriptTag({ content: axe.source });
   return page.evaluate(
     async ({ context, options }: { context: string | undefined; options: RunOptions }) => {
